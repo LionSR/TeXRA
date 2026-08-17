@@ -81,10 +81,6 @@ class RegistryTestSource {
   private readonly keyListeners = new Set<(keys: readonly string[]) => void>();
   private readonly onEventByKey = new Map<string, (text: string) => void>();
 
-  has(key: string): boolean {
-    return this.keys.has(key);
-  }
-
   activeKeys(): readonly string[] {
     return [...this.keys];
   }
@@ -138,12 +134,15 @@ describe('GitHub subscription app signals and follow-ups', () => {
     });
 
     try {
-      // Binding a new key defers to the source's keys-changed event; unbind is
-      // the registry-owned emission.
       registry.bind('stream-a' as StreamTabId, 'owner/repo');
+      expect(signal.events).toEqual([
+        { event: 'githubSubscriptionsChanged', payload: undefined },
+      ]);
+
       registry.unbind('stream-a' as StreamTabId, 'owner/repo');
 
       expect(signal.events).toEqual([
+        { event: 'githubSubscriptionsChanged', payload: undefined },
         { event: 'githubSubscriptionsChanged', payload: undefined },
       ]);
     } finally {
@@ -215,6 +214,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
     try {
       registry.bind('stream-a' as StreamTabId, 'owner/repo');
       host.events.length = 0;
+      signal.events.length = 0;
 
       expect(registry.unbind('stream-a' as StreamTabId, 'owner/repo')).toBe(
         true,
