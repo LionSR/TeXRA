@@ -52,6 +52,14 @@ function storageFile(dir: string, key: string): string {
   return path.join(dir, `${encodeURIComponent(key)}.json`);
 }
 
+function journalFile(dir: string, key: string): string {
+  return path.join(dir, `${encodeURIComponent(key)}.jsonl`);
+}
+
+function isJournalFile(target: string): boolean {
+  return target.endsWith('.jsonl');
+}
+
 /** Which of the two stream-log directories a mocked target file lives in. */
 function areaOf(target: string): 'log' | 'summary' | null {
   if (target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
@@ -69,7 +77,7 @@ function writtenLog(
 }
 
 function streamKeyFromFile(target: string): string {
-  return decodeURIComponent(path.basename(target).replace(/\.json$/, ''));
+  return decodeURIComponent(path.basename(target).replace(/\.jsonl?$/, ''));
 }
 
 function notFound(): NodeJS.ErrnoException {
@@ -132,6 +140,19 @@ function writtenSummary(
   streamId: string,
 ): unknown {
   return writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, streamId));
+}
+
+function writtenJournal(
+  writes: ReadonlyMap<string, unknown>,
+  streamId: string,
+): unknown[] {
+  const raw = writes.get(journalFile(STREAM_LOGS_DIR, streamId));
+  if (typeof raw !== 'string') return [];
+  return raw
+    .trimEnd()
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 function runningGroupEntry(
@@ -232,13 +253,27 @@ function mockStorage({
   const deletes: string[] = [];
   const ensuredDirs: string[] = [];
   const writes = new Map<string, unknown>();
+  const journals: Record<string, string> = {};
+  const projectedLogs: Record<string, unknown[]> = {};
 
   vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
     if (target !== STREAM_LOGS_DIR) throw notFound();
-    return Object.keys(logs).map((key) => [
-      `${encodeURIComponent(key)}.json`,
-      FileType.File,
-    ]);
+    return [
+      ...Object.keys(logs).map(
+        (key) =>
+          [`${encodeURIComponent(key)}.json`, FileType.File] as [
+            string,
+            number,
+          ],
+      ),
+      ...Object.keys(journals).map(
+        (key) =>
+          [`${encodeURIComponent(key)}.jsonl`, FileType.File] as [
+            string,
+            number,
+          ],
+      ),
+    ];
   });
 
   // KVStore reads raw strings through StorageFS, so hand back JSON
@@ -252,6 +287,10 @@ function mockStorage({
     }
 
     if (areaOf(target) === 'log') {
+      if (isJournalFile(target)) {
+        if (!Object.hasOwn(journals, key)) throw notFound();
+        return journals[key];
+      }
       if (!Object.hasOwn(logs, key)) throw notFound();
       fullLogReads += 1;
       if (logReadError) throw logReadError;
@@ -271,7 +310,11 @@ function mockStorage({
   vi.spyOn(StorageFS, 'exists').mockImplementation(async (target) => {
     const key = streamKeyFromFile(target);
     if (areaOf(target) === 'summary') return Object.hasOwn(summaries, key);
-    if (areaOf(target) === 'log') return Object.hasOwn(logs, key);
+    if (areaOf(target) === 'log') {
+      return isJournalFile(target)
+        ? Object.hasOwn(journals, key)
+        : Object.hasOwn(logs, key);
+    }
     throw new Error(`Unexpected exists target: ${target}`);
   });
   vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
@@ -281,7 +324,12 @@ function mockStorage({
       return fileStat(summaryMtimes[key] ?? 2);
     }
     if (areaOf(target) === 'log') {
-      if (!Object.hasOwn(logs, key)) throw notFound();
+      if (
+        isJournalFile(target)
+          ? !Object.hasOwn(journals, key)
+          : !Object.hasOwn(logs, key)
+      )
+        throw notFound();
       return fileStat(logMtimes[key] ?? 1);
     }
     throw new Error(`Unexpected stat target: ${target}`);
@@ -318,6 +366,77 @@ function mockStorage({
   };
   vi.spyOn(StorageFS, 'write').mockImplementation(recordWrite);
   vi.spyOn(StorageFS, 'writeAtomic').mockImplementation(recordWrite);
+  vi.spyOn(StorageFS, 'appendFile').mockImplementation(
+    async (target, content) => {
+      if (logWriteError && areaOf(target) === 'log') throw logWriteError;
+      const key = streamKeyFromFile(target);
+      if (
+        pauseLogWriteKey != null &&
+        !pausedLogWriteUsed &&
+        target === journalFile(STREAM_LOGS_DIR, pauseLogWriteKey)
+      ) {
+        pausedLogWriteUsed = true;
+        pausedWriteStarted.resolve();
+        await pausedWriteRelease.promise;
+      }
+      const text =
+        typeof content === 'string'
+          ? content
+          : Buffer.from(content).toString('utf8');
+      journals[key] = (journals[key] ?? '') + text;
+      writes.set(target, journals[key]);
+      // Keep the existing test helper's projected view in sync. This mirror is
+      // intentionally test-only; production retains the immutable legacy file
+      // and replays the journal at read time.
+      const projected =
+        projectedLogs[key] ??
+        (Array.isArray(logs[key]) ? structuredClone(logs[key]) : []);
+      for (const line of text.trimEnd().split('\n')) {
+        if (!line) continue;
+        const record = JSON.parse(line) as {
+          op: string;
+          entry?: StreamLogEntry;
+          id?: string;
+          patch?: Record<string, unknown>;
+          text?: string;
+          settled?: boolean;
+        };
+        if (record.op === 'ensure') continue;
+        if (record.op === 'append' && record.entry) {
+          projected.push(record.entry);
+          continue;
+        }
+        const entry = projected.find(
+          (value): value is Record<string, unknown> =>
+            typeof value === 'object' &&
+            value !== null &&
+            (value as Record<string, unknown>).id === record.id,
+        );
+        if (!entry) continue;
+        if (record.op === 'update' && record.patch) {
+          Object.assign(entry, record.patch);
+          if (record.settled && entry.settlementSeqNo === undefined) {
+            entry.settlementSeqNo =
+              Math.max(
+                projected.length,
+                0,
+                ...projected.map((value) =>
+                  typeof value === 'object' && value !== null
+                    ? (((value as Record<string, unknown>).settlementSeqNo as
+                        number | undefined) ?? 0)
+                    : 0,
+                ),
+              ) + 1;
+          }
+        } else if (record.op === 'appendText') {
+          entry.text = `${entry.text ?? ''}${record.text ?? ''}`;
+        }
+      }
+      projectedLogs[key] = projected;
+      writes.set(storageFile(STREAM_LOGS_DIR, key), projected);
+      await onLogWrite?.(key);
+    },
+  );
   vi.spyOn(StorageFS, 'delete').mockImplementation(async (target) => {
     if (logDeleteError && areaOf(target) === 'log') throw logDeleteError;
     if (
@@ -328,6 +447,12 @@ function mockStorage({
     }
     deletes.push(target);
     writes.delete(target);
+    if (areaOf(target) === 'log') {
+      const key = streamKeyFromFile(target);
+      if (isJournalFile(target)) delete journals[key];
+      else delete logs[key];
+      delete projectedLogs[key];
+    }
   });
 
   return {
@@ -392,6 +517,36 @@ describe('StreamLogStore load', () => {
     const third = await StreamLogStore.open();
     expect(third.keys()).toEqual(['registered-empty']);
     expect(storage.fullLogReads()).toBe(2);
+  });
+
+  it('replays append-only mutations over an unchanged legacy array', async () => {
+    const legacy = [logEntry('alpha', 1, 100)];
+    const storage = mockStorage({
+      logs: { alpha: structuredClone(legacy) },
+      summaries: { alpha: summary(100, 100) },
+    });
+    const first = await StreamLogStore.open();
+    await first.ensureLoaded('alpha');
+    const writer = first.acquireWriter('alpha', 'execution-alpha');
+    writer.update('alpha-1', { level: LOG_LEVELS.ERROR });
+    writer.appendText('alpha-1', ' resumed');
+    writer.close();
+    await first.flush();
+
+    expect(writtenJournal(storage.writes, 'alpha')).toMatchObject([
+      { op: 'update', id: 'alpha-1', settled: false },
+      { op: 'appendText', id: 'alpha-1', text: ' resumed' },
+    ]);
+
+    const reopened = await StreamLogStore.open();
+    await reopened.ensureLoaded('alpha');
+    expect(reopened.get('alpha')?.getRange(0)).toMatchObject([
+      {
+        id: 'alpha-1',
+        level: LOG_LEVELS.ERROR,
+        text: 'alpha entry 1 resumed',
+      },
+    ]);
   });
 
   it('distinguishes another process deletion from a stale local summary', async () => {
@@ -1555,7 +1710,9 @@ describe('StreamLogStore load', () => {
     expect(writtenLog(storage.writes, 'alpha')).toEqual([
       expect.objectContaining({ id: 'alpha-1', seqNo: 1 }),
       unknownFutureEntry,
-      expect.objectContaining({ id: 'alpha-3', seqNo: 2 }),
+      // Legacy rows remain byte-for-byte in the base array; JSONL records
+      // carry their live sequence and are renumbered only when replayed.
+      expect.objectContaining({ id: 'alpha-3', seqNo: 3 }),
       malformedEntry,
       expect.objectContaining({ id: 'alpha-new', seqNo: 3 }),
     ]);

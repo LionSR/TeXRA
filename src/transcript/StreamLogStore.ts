@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import pMap from 'p-map';
 import PQueue from 'p-queue';
@@ -43,6 +44,8 @@ export const STREAM_LOGS_DIR = WORKSPACE_STORAGE_LAYOUT.streamLogs;
 export const STREAM_LOG_SUMMARIES_DIR =
   WORKSPACE_STORAGE_LAYOUT.streamLogSummaries;
 const STREAM_LOG_LOAD_CONCURRENCY = 8;
+const STREAM_LOG_JOURNAL_EXTENSION = '.jsonl';
+const STREAM_LOG_JOURNAL_VERSION = 1;
 const LOG_TAG = 'StreamLogStore';
 const log = createLog(LOG_TAG);
 
@@ -98,6 +101,77 @@ interface StreamLoadResult {
 interface ParsedPersistedEntries {
   entries: StreamLogEntry[];
   preservedRawEntries: StreamLogPreservedRawEntry[];
+}
+
+const StreamLogJournalRecordSchema = z.discriminatedUnion('op', [
+  z.object({
+    version: z.literal(STREAM_LOG_JOURNAL_VERSION),
+    opId: z.uuid(),
+    op: z.literal('ensure'),
+  }),
+  z.object({
+    version: z.literal(STREAM_LOG_JOURNAL_VERSION),
+    opId: z.uuid(),
+    op: z.literal('append'),
+    entry: StreamLogEntrySchema,
+    settled: z.boolean(),
+  }),
+  z.object({
+    version: z.literal(STREAM_LOG_JOURNAL_VERSION),
+    opId: z.uuid(),
+    op: z.literal('update'),
+    id: z.string().min(1),
+    patch: z.looseObject({}),
+    settled: z.boolean(),
+  }),
+  z.object({
+    version: z.literal(STREAM_LOG_JOURNAL_VERSION),
+    opId: z.uuid(),
+    op: z.literal('appendText'),
+    id: z.string().min(1),
+    text: z.string(),
+  }),
+]);
+type StreamLogJournalRecord = z.infer<typeof StreamLogJournalRecordSchema>;
+type StreamLogJournalRecordInput =
+  | { readonly op: 'ensure' }
+  | {
+      readonly op: 'append';
+      readonly entry: StreamLogEntry;
+      readonly settled: boolean;
+    }
+  | {
+      readonly op: 'update';
+      readonly id: string;
+      readonly patch: StreamLogUpdatePatch;
+      readonly settled: boolean;
+    }
+  | { readonly op: 'appendText'; readonly id: string; readonly text: string };
+
+/** Parse append-only records, ignoring only a torn final line after a crash. */
+function parseJsonlEntries(raw: string): unknown[] {
+  const lines = raw.split('\n');
+  const entries: unknown[] = [];
+  for (const [index, line] of lines.entries()) {
+    if (!line) continue;
+    try {
+      entries.push(JSON.parse(line));
+    } catch (error) {
+      if (index === lines.length - 1 && !raw.endsWith('\n')) break;
+      throw error;
+    }
+  }
+  return entries;
+}
+
+function toJournalRecord(
+  record: StreamLogJournalRecordInput,
+): StreamLogJournalRecord {
+  return {
+    version: STREAM_LOG_JOURNAL_VERSION,
+    opId: randomUUID(),
+    ...record,
+  } as StreamLogJournalRecord;
 }
 
 type StreamLogStoreMode =
@@ -176,6 +250,8 @@ interface StreamState {
   pendingLoad?: Promise<void>;
   /** Exact mutation capabilities currently keeping a stream resident. */
   writer?: StreamWriterOwnership;
+  /** Unflushed append-only records, retained until their exact prefix lands. */
+  journalRecords?: StreamLogJournalRecord[];
 }
 
 /**
@@ -489,8 +565,7 @@ export class StreamLogStore {
     if (this.mode.kind === 'ephemeral' || !this.summaries.has(streamId)) {
       return [];
     }
-    const raw = await this.kv().read<unknown[]>(streamId);
-    const parsed = this.parsePersistedEntries(streamId, raw);
+    const parsed = await this.readPersistedEntries(streamId);
     return new StreamLog(parsed.entries, parsed.preservedRawEntries).toJSON();
   }
 
@@ -510,7 +585,7 @@ export class StreamLogStore {
    */
   async hasAuthoritativeStream(streamId: StreamTabId): Promise<boolean> {
     if (this.mode.kind === 'ephemeral') return this.has(streamId);
-    return this.kv().exists(streamId);
+    return this.hasPersistedStream(streamId);
   }
 
   keys(): StreamTabId[] {
@@ -595,6 +670,7 @@ export class StreamLogStore {
     )
       return;
     this.ensureStreamState(streamId).log = new StreamLog();
+    this.queueJournalRecord(streamId, toJournalRecord({ op: 'ensure' }));
     this.summaries.set(streamId, {});
     this.adoptPendingSummaryMeta(streamId);
     this.stateRevision += 1;
@@ -712,15 +788,27 @@ export class StreamLogStore {
       },
       update: (id, patch) => {
         assertOwned();
-        return this.mutateEntry(streamId, (log) => log.update(id, patch));
+        return this.mutateEntry(
+          streamId,
+          (log) => log.update(id, patch),
+          () => toJournalRecord({ op: 'update', id, patch, settled: false }),
+        );
       },
       settle: (id, patch) => {
         assertOwned();
-        return this.mutateEntry(streamId, (log) => log.settle(id, patch));
+        return this.mutateEntry(
+          streamId,
+          (log) => log.settle(id, patch),
+          () => toJournalRecord({ op: 'update', id, patch, settled: true }),
+        );
       },
       appendText: (id, text) => {
         assertOwned();
-        return this.mutateEntry(streamId, (log) => log.appendText(id, text));
+        return this.mutateEntry(
+          streamId,
+          (log) => log.appendText(id, text),
+          () => toJournalRecord({ op: 'appendText', id, text }),
+        );
       },
       close: () => {
         if (closed) return;
@@ -811,7 +899,6 @@ export class StreamLogStore {
     if (state?.pendingLoad) return state.pendingLoad;
     const work = (async () => {
       try {
-        const raw = await this.kv().read<unknown[]>(streamId);
         // If `delete` or `clear` ran during the read, don't resurrect it.
         if (
           this.clearing ||
@@ -820,7 +907,7 @@ export class StreamLogStore {
         ) {
           return;
         }
-        const diskEntries = this.parsePersistedEntries(streamId, raw);
+        const diskEntries = await this.readPersistedEntries(streamId);
         const live = this.streams.get(streamId)?.log;
         if (live && live.size > 0) {
           // A concurrent `append` populated the log during the disk read.
@@ -919,6 +1006,10 @@ export class StreamLogStore {
     const appended = settled
       ? logInstance.appendSettled(entry)
       : logInstance.append(entry);
+    this.queueJournalRecord(
+      streamId,
+      toJournalRecord({ op: 'append', entry: appended, settled }),
+    );
     this.commitChange(streamId, logInstance);
     this.scheduleSave();
     return appended;
@@ -932,6 +1023,7 @@ export class StreamLogStore {
   private mutateEntry(
     streamId: StreamTabId,
     apply: (log: StreamLog) => StreamLogEntry | undefined,
+    journalRecord: () => StreamLogJournalRecord,
   ): StreamLogEntry | undefined {
     this.assertWritableStream(streamId);
     const logInstance = this.streams.get(streamId)?.log;
@@ -940,9 +1032,20 @@ export class StreamLogStore {
     const updated = apply(logInstance);
     if (!updated) return undefined;
 
+    this.queueJournalRecord(streamId, journalRecord());
     this.commitChange(streamId, logInstance);
     this.scheduleSave();
     return updated;
+  }
+
+  private queueJournalRecord(
+    streamId: StreamTabId,
+    record: StreamLogJournalRecord,
+  ): void {
+    if (this.mode.kind !== 'persistent') return;
+    const state = this.ensureStreamState(streamId);
+    state.journalRecords ??= [];
+    state.journalRecords.push(record);
   }
 
   getTimestampRange(streamId: StreamTabId): {
@@ -967,6 +1070,10 @@ export class StreamLogStore {
       if (this.mode.kind !== 'ephemeral') {
         log.info(`Deleting stream: ${streamId}`);
         await this.kv().delete(streamId);
+        await this.kv().deleteWithExtension(
+          streamId,
+          STREAM_LOG_JOURNAL_EXTENSION,
+        );
         await this.deleteSummaryCache(streamId);
       }
       // The summaries map is the progress tab registry. Commit its removal
@@ -1056,11 +1163,23 @@ export class StreamLogStore {
       for (const entry of logInstance.getRange(0, logInstance.head)) {
         if (isRunningGroupEntry(entry)) {
           const existingData = isObject(entry.data) ? entry.data : {};
-          const updated = logInstance.settle(entry.id, {
+          const patch = {
             type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
             data: { ...existingData, status, endTime: now },
-          });
-          if (updated) updatedAny = true;
+          } satisfies StreamLogUpdatePatch;
+          const updated = logInstance.settle(entry.id, patch);
+          if (updated) {
+            this.queueJournalRecord(
+              streamId,
+              toJournalRecord({
+                op: 'update',
+                id: entry.id,
+                patch,
+                settled: true,
+              }),
+            );
+            updatedAny = true;
+          }
           continue;
         }
 
@@ -1070,10 +1189,22 @@ export class StreamLogStore {
         // stuck rendering as an in-progress entry forever (#7276).
         if (isRunningStreamingTextEntry(entry)) {
           const existingData = isObject(entry.data) ? entry.data : {};
-          const updated = logInstance.settle(entry.id, {
+          const patch = {
             data: { ...existingData, status: 'completed' },
-          });
-          if (updated) updatedAny = true;
+          } satisfies StreamLogUpdatePatch;
+          const updated = logInstance.settle(entry.id, patch);
+          if (updated) {
+            this.queueJournalRecord(
+              streamId,
+              toJournalRecord({
+                op: 'update',
+                id: entry.id,
+                patch,
+                settled: true,
+              }),
+            );
+            updatedAny = true;
+          }
           continue;
         }
 
@@ -1092,11 +1223,23 @@ export class StreamLogStore {
                   error:
                     'The previous host stopped before this call completed.',
                 };
-          const updated = logInstance.settle(entry.id, {
+          const patch = {
             level: call.status === 'planned' ? 'info' : 'error',
             data: recoveredCall,
-          });
-          if (updated) updatedAny = true;
+          } satisfies StreamLogUpdatePatch;
+          const updated = logInstance.settle(entry.id, patch);
+          if (updated) {
+            this.queueJournalRecord(
+              streamId,
+              toJournalRecord({
+                op: 'update',
+                id: entry.id,
+                patch,
+                settled: true,
+              }),
+            );
+            updatedAny = true;
+          }
         }
       }
 
@@ -1279,7 +1422,11 @@ export class StreamLogStore {
   private async readPersistentSummaries(): Promise<
     Map<StreamTabId, StreamLogSummary>
   > {
-    const streamIds = await this.kv().listKeys();
+    const [legacyIds, journalIds] = await Promise.all([
+      this.kv().listKeys(),
+      this.kv().listKeysWithExtension(STREAM_LOG_JOURNAL_EXTENSION),
+    ]);
+    const streamIds = [...new Set([...legacyIds, ...journalIds])];
     const results = await pMap(
       streamIds,
       (streamId) => this.loadStreamSummary(streamId as StreamTabId),
@@ -1340,12 +1487,11 @@ export class StreamLogStore {
       return { streamId, summary: persistedSummary };
     }
 
-    const raw = await this.kv().read<unknown[]>(streamId);
-    // `listKeys()` found the stream, but it may have been deleted before the
-    // read completed. Only an existing authoritative `[]` is registration
-    // evidence; KVStore's missing-file `undefined` is not.
-    if (raw === undefined) return null;
-    const entries = this.parsePersistedEntries(streamId, raw);
+    // A discovered file may disappear before its read completes. Recheck the
+    // union so neither a legacy array nor a journal-only empty registration is
+    // resurrected after deletion.
+    if (!(await this.hasPersistedStream(streamId))) return null;
+    const entries = await this.readPersistedEntries(streamId);
     const summary = this.summarizeEntries(entries.entries);
     // Empty transcripts have no timestamps, so their authoritative log file,
     // rather than the optional summary cache, remains the registration marker.
@@ -1363,17 +1509,25 @@ export class StreamLogStore {
       const summary = this.parsePersistedSummary(persisted);
       if (!summary) return undefined;
 
-      const [summaryMtime, logMtime] = await Promise.all([
+      const [summaryMtime, legacyMtime, journalMtime] = await Promise.all([
         this.summaryKv().modifiedAt(streamId),
         this.kv().modifiedAt(streamId),
+        this.kv().modifiedAtWithExtension(
+          streamId,
+          STREAM_LOG_JOURNAL_EXTENSION,
+        ),
       ]);
+      const logMtime = Math.max(
+        legacyMtime ?? -Infinity,
+        journalMtime ?? -Infinity,
+      );
       // A missing log mtime means the authoritative log is gone (deleted, or
       // never written) — orphaned summary, not merely stale. Trusting it here
       // would register a stream that has no log to load, so `ensureLoaded`
       // reads back an empty transcript instead of surfacing it as missing.
       if (
         summaryMtime !== undefined &&
-        (logMtime === undefined || summaryMtime < logMtime)
+        (!Number.isFinite(logMtime) || summaryMtime < logMtime)
       ) {
         return undefined;
       }
@@ -1435,9 +1589,24 @@ export class StreamLogStore {
     expectedGeneration: number = this.writeGeneration,
   ): Promise<void> {
     if (this.shouldSkipWrite(streamId, expectedGeneration)) return;
-    await this.kv().write(streamId, logInstance.toPersistedEntries());
+    const state = this.streams.get(streamId);
+    const records = state?.journalRecords?.slice() ?? [];
+    if (records.length > 0) {
+      await this.kv().appendText(
+        streamId,
+        STREAM_LOG_JOURNAL_EXTENSION,
+        `${records.map((record) => JSON.stringify(record)).join('\n')}\n`,
+      );
+      // A write can resolve after later mutations queue more records. Remove
+      // only the durable snapshot prefix; later records remain dirty.
+      state?.journalRecords?.splice(0, records.length);
+    }
     if (this.shouldSkipWrite(streamId, expectedGeneration)) {
       await this.kv().delete(streamId);
+      await this.kv().deleteWithExtension(
+        streamId,
+        STREAM_LOG_JOURNAL_EXTENSION,
+      );
       await this.deleteSummaryCache(streamId);
       return;
     }
@@ -1452,6 +1621,10 @@ export class StreamLogStore {
     });
     if (this.shouldSkipWrite(streamId, expectedGeneration)) {
       await this.kv().delete(streamId);
+      await this.kv().deleteWithExtension(
+        streamId,
+        STREAM_LOG_JOURNAL_EXTENSION,
+      );
       await this.deleteSummaryCache(streamId);
     }
   }
@@ -1674,6 +1847,71 @@ export class StreamLogStore {
     }
 
     return parsed;
+  }
+
+  /** Read the immutable legacy array plus the append-only mutation overlay. */
+  private async readPersistedEntries(
+    streamId: StreamTabId,
+  ): Promise<ParsedPersistedEntries> {
+    const [legacy, journal] = await Promise.all([
+      this.kv().read<unknown[]>(streamId),
+      this.kv().readText(streamId, STREAM_LOG_JOURNAL_EXTENSION),
+    ]);
+    const base = this.parsePersistedEntries(streamId, legacy);
+    if (journal === undefined) return base;
+
+    const logInstance = new StreamLog(base.entries, base.preservedRawEntries);
+    const seen = new Map<string, string>();
+    for (const raw of parseJsonlEntries(journal)) {
+      const record = StreamLogJournalRecordSchema.parse(raw);
+      const serialized = JSON.stringify(record);
+      const previous = seen.get(record.opId);
+      if (previous !== undefined) {
+        if (previous !== serialized) {
+          throw new Error(
+            `Stream ${streamId}: duplicate journal operation ${record.opId} differs from its first record.`,
+          );
+        }
+        continue;
+      }
+      seen.set(record.opId, serialized);
+      switch (record.op) {
+        case 'ensure':
+          break;
+        case 'append': {
+          const {
+            seqNo: _seqNo,
+            settlementSeqNo: _settlementSeqNo,
+            ...entry
+          } = record.entry;
+          if (record.settled) logInstance.appendSettled(entry);
+          else logInstance.append(entry);
+          break;
+        }
+        case 'update':
+          if (record.settled) {
+            logInstance.settle(record.id, record.patch as StreamLogUpdatePatch);
+          } else {
+            logInstance.update(record.id, record.patch as StreamLogUpdatePatch);
+          }
+          break;
+        case 'appendText':
+          logInstance.appendText(record.id, record.text);
+          break;
+      }
+    }
+    return {
+      entries: logInstance.toJSON(),
+      preservedRawEntries: base.preservedRawEntries,
+    };
+  }
+
+  private async hasPersistedStream(streamId: StreamTabId): Promise<boolean> {
+    const [legacy, journal] = await Promise.all([
+      this.kv().exists(streamId),
+      this.kv().existsWithExtension(streamId, STREAM_LOG_JOURNAL_EXTENSION),
+    ]);
+    return legacy || journal;
   }
 
   private executeWrite(): Promise<void> {

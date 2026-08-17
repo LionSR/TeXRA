@@ -14,12 +14,12 @@ import { isFile } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 import { StorageFS } from '@utils/files/storageFS';
 
-function keyToPath(dir: string, key: string): string {
-  return path.join(dir, `${encodeURIComponent(key)}.json`);
+function keyToPath(dir: string, key: string, extension = '.json'): string {
+  return path.join(dir, `${encodeURIComponent(key)}${extension}`);
 }
 
-function filenameToKey(filename: string): string {
-  return decodeURIComponent(filename.replace(/\.json$/, ''));
+function filenameToKey(filename: string, extension = '.json'): string {
+  return decodeURIComponent(filename.slice(0, -extension.length));
 }
 
 async function withMissingFallback<T>(
@@ -61,6 +61,24 @@ export class KVStore {
     return JSON.parse(raw) as T;
   }
 
+  /** Read a non-JSON storage value without imposing a serialization format. */
+  async readText(key: string, extension: string): Promise<string | undefined> {
+    return withMissingFallback(
+      () => StorageFS.read(keyToPath(this.dir, key, extension)),
+      undefined,
+    );
+  }
+
+  /** Append text to one storage value; callers own record framing. */
+  async appendText(
+    key: string,
+    extension: string,
+    content: string,
+  ): Promise<void> {
+    await StorageFS.ensureDir(this.dir);
+    await StorageFS.appendFile(keyToPath(this.dir, key, extension), content);
+  }
+
   async write<T = unknown>(key: string, value: T): Promise<void> {
     // Ensured on every write, not latched once: `dir` is storage-root
     // relative, so a cached store outlives the root it first saw (workspace
@@ -76,31 +94,55 @@ export class KVStore {
   }
 
   async delete(key: string): Promise<void> {
+    await this.deleteWithExtension(key, '.json');
+  }
+
+  async deleteWithExtension(key: string, extension: string): Promise<void> {
     await withMissingFallback(
-      () => StorageFS.delete(keyToPath(this.dir, key)),
+      () => StorageFS.delete(keyToPath(this.dir, key, extension)),
       undefined,
     );
   }
 
   async exists(key: string): Promise<boolean> {
-    return StorageFS.exists(keyToPath(this.dir, key));
+    return this.existsWithExtension(key, '.json');
+  }
+
+  async existsWithExtension(key: string, extension: string): Promise<boolean> {
+    return StorageFS.exists(keyToPath(this.dir, key, extension));
   }
 
   async modifiedAt(key: string): Promise<number | undefined> {
+    return this.modifiedAtWithExtension(key, '.json');
+  }
+
+  async modifiedAtWithExtension(
+    key: string,
+    extension: string,
+  ): Promise<number | undefined> {
     return withMissingFallback(
-      async () => (await StorageFS.stat(keyToPath(this.dir, key))).mtime,
+      async () =>
+        (await StorageFS.stat(keyToPath(this.dir, key, extension))).mtime,
       undefined,
     );
   }
 
   async listKeys(prefix?: string): Promise<string[]> {
+    return this.listKeysWithExtension('.json', prefix);
+  }
+
+  /** List keys whose files use a caller-owned extension. */
+  async listKeysWithExtension(
+    extension: string,
+    prefix?: string,
+  ): Promise<string[]> {
     const entries = await withMissingFallback(
       () => StorageFS.readDir(this.dir),
       [],
     );
     return entries
-      .filter(([name, type]) => isFile(type) && hasExtension(name, '.json'))
-      .map(([name]) => filenameToKey(name))
+      .filter(([name, type]) => isFile(type) && hasExtension(name, extension))
+      .map(([name]) => filenameToKey(name, extension))
       .filter((key) => !prefix || key.startsWith(prefix));
   }
 
