@@ -76,10 +76,20 @@ export type SessionFactApplierOptions = {
    * The applier passes the incarnation captured when the barrier was set so
    * the host can refuse to delete a deterministic identity that a fresh run
    * re-claimed while the deletion was queued.
+   *
+   * A host that rebuilds retained presentation state must invoke
+   * `beforeRetainedRepair` with its `active`/`failed` outcome before that
+   * rebuild enumerates selectable streams. The callback retires the
+   * provisional removal barrier and replays buffered facts; rebuilding first
+   * would omit the still-live stream because selectable projections hide
+   * provisional removals. Hosts without a selectable-stream repair path may
+   * ignore the optional hook; a retained `active`/`failed` outcome still
+   * retires the barrier through normal promise settlement.
    */
   deleteStream: (
     stream: StreamTabId,
     expectedIncarnation?: number,
+    beforeRetainedRepair?: (outcome: 'active' | 'failed') => void,
   ) =>
     | void
     | DeleteStreamResult
@@ -341,41 +351,51 @@ export class SessionFactApplier {
               streamId,
               expectedIncarnation,
             );
+            let settled = false;
+            const settleDeletion = (
+              outcome: void | DeleteStreamResult | undefined,
+            ): void => {
+              // A prior removeStream fact for the same incarnation owns this
+              // deletion's settlement (the store dedups its delete promise);
+              // only the owning barrier retires the tombstone and replays.
+              if (!created || settled) return;
+              settled = true;
+              this.finishPendingDeletion(streamId, pending);
+              const retired =
+                (outcome === 'active' ||
+                  outcome === 'failed' ||
+                  outcome === 'superseded') &&
+                this.state.retireStreamTombstone(streamId, expectedIncarnation);
+              // A retained deletion still lives: replay the facts buffered
+              // while it was provisional so status/stage/roster/metadata are
+              // not stuck stale. Replay only when the retirement above
+              // actually removed THIS removal's barrier — a superseded
+              // deletion whose identity a fresh run re-claimed (or a newer
+              // deletion B owns) must never replay through that newer
+              // barrier. A committed deletion discards them (the stream is
+              // gone).
+              if ((outcome === 'active' || outcome === 'failed') && retired) {
+                this.replayDeferredFacts(pending.facts);
+              }
+            };
             return Promise.resolve(
-              this.options.deleteStream(streamId, expectedIncarnation),
+              this.options.deleteStream(
+                streamId,
+                expectedIncarnation,
+                settleDeletion,
+              ),
             ).then(
               (outcome) => {
-                // A prior removeStream fact for the same incarnation owns this
-                // deletion's settlement (the store dedups its delete promise);
-                // only the owning barrier retires the tombstone and replays.
-                if (!created) return;
-                this.finishPendingDeletion(streamId, pending);
-                const retired =
-                  (outcome === 'active' ||
-                    outcome === 'failed' ||
-                    outcome === 'superseded') &&
-                  this.state.retireStreamTombstone(
-                    streamId,
-                    expectedIncarnation,
-                  );
-                // A retained deletion still lives: replay the facts buffered
-                // while it was provisional so status/stage/roster/metadata are
-                // not stuck stale. Replay only when the retirement above
-                // actually removed THIS removal's barrier — a superseded
-                // deletion whose identity a fresh run re-claimed (or a newer
-                // deletion B owns) must never replay through that newer
-                // barrier. A committed deletion discards them (the stream is
-                // gone).
-                if ((outcome === 'active' || outcome === 'failed') && retired) {
-                  this.replayDeferredFacts(pending.facts);
-                }
+                settleDeletion(outcome);
               },
               (error) => {
                 // Ambiguous failure: keep the barrier (the stream may have
                 // deleted), but drop the provisional buffer — there is no
                 // outcome to replay against. The error still propagates to the
                 // event-error wrapper.
-                if (created) this.finishPendingDeletion(streamId, pending);
+                if (created && !settled) {
+                  this.finishPendingDeletion(streamId, pending);
+                }
                 throw error;
               },
             );
