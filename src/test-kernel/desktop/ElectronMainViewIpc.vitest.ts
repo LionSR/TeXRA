@@ -106,6 +106,7 @@ async function loadDesktopMainViewIpcModule(electron: {
   mocks.doMock('electron', () => electron);
   mocks.doMock('@platform/platform', () => ({
     platform: () => ({ config: new FakeConfigProvider() }),
+    tryPlatform: () => null,
   }));
   return import(
     moduleFileUrl(desktopSourcePath('main', 'mainViewIpc.ts'))

@@ -74,7 +74,9 @@ export async function getSubscriptionSessionStatus(
   channel: string,
   displayName: string,
 ): Promise<SubscriptionSessionStatus> {
-  platform();
+  // Preserve the post-init contract even for an injected coordinator that
+  // does not itself read platform secrets.
+  void platform();
   const log = createLog(channel);
   try {
     return await getCoordinator().getStatus();
@@ -95,7 +97,9 @@ export async function isSubscriptionSessionRoutable(
   ErrorType: ProviderAuthErrorCtor,
   displayName: string,
 ): Promise<boolean> {
-  platform();
+  // Preserve the post-init contract even for an injected coordinator that
+  // does not itself read platform secrets.
+  void platform();
   const coordinator = getCoordinator();
   try {
     await coordinator.getFreshAccessToken();
