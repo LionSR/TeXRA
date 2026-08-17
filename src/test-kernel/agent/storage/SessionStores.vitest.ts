@@ -514,6 +514,36 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
       expect(session.transcripts.has(stream)).toBe(true);
     });
   });
+
+  it('retains a bulk-deleted identity re-claimed during transcript cleanup', async () => {
+    await withSession(async (session) => {
+      const stream = 'tool@test#bulk-fence' as StreamTabId;
+      session.transcripts.ensureStream(stream);
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots: new StreamSnapshotStore(),
+      });
+
+      let reClaimed = false;
+      const originalDelete = session.transcripts.delete.bind(
+        session.transcripts,
+      );
+      vi.spyOn(session.transcripts, 'delete').mockImplementation(
+        async (streamId, options) => {
+          if (streamId === stream) reClaimed = true;
+          return originalDelete(streamId, options);
+        },
+      );
+
+      const result = await stores.deleteAll({
+        shouldDelete: (streamId) => streamId !== stream || !reClaimed,
+      });
+      expect(result.active).toContain(stream);
+      expect(result.failed).not.toContain(stream);
+      expect(result.deleted).not.toContain(stream);
+      expect(session.transcripts.has(stream)).toBe(true);
+    });
+  });
 });
 
 describe('SessionStores startup sweep', () => {

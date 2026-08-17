@@ -14,7 +14,6 @@ import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import { StreamDeletionSupersededError } from '@transcript/StreamLogStore';
-import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { throwAggregated, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -31,7 +30,6 @@ type ListExecutionStreamReferencesFn = () => Promise<
 
 interface GoalEntryStore {
   forget(stream: StreamTabId): Promise<void>;
-  forgetMany(streams: readonly StreamTabId[]): Promise<void>;
 }
 
 export interface SessionStoresOptions {
@@ -413,9 +411,13 @@ export class SessionStores {
     }
   }
 
-  deleteAll(): Promise<DeleteAllStreamsResult> {
+  deleteAll(options?: {
+    readonly shouldDelete?: (stream: StreamTabId) => boolean;
+  }): Promise<DeleteAllStreamsResult> {
     if (this.pendingDeleteAll) return this.pendingDeleteAll;
-    const pending = this.enqueueDeletion(() => this.deleteAllOnce());
+    const pending = this.enqueueDeletion(() =>
+      this.deleteAllOnce(options?.shouldDelete),
+    );
     this.pendingDeleteAll = pending;
     const finish = (): void => this.finishDeleteAll(pending);
     void pending.then(finish, finish);
@@ -426,7 +428,9 @@ export class SessionStores {
     if (this.pendingDeleteAll === pending) this.pendingDeleteAll = undefined;
   }
 
-  private async deleteAllOnce(): Promise<DeleteAllStreamsResult> {
+  private async deleteAllOnce(
+    shouldDeleteStream?: (stream: StreamTabId) => boolean,
+  ): Promise<DeleteAllStreamsResult> {
     await this.reconcileStagedDeletions(new Set(this.streamLogs.keys()));
     const [persistedStreams, stagedDeletions] = await Promise.all([
       this.snapshots.listPersistedStreams(),
@@ -474,11 +478,18 @@ export class SessionStores {
     const deleted = new Set<StreamTabId>();
     await Promise.all(
       streamsWithoutExecution.map(async (stream) => {
+        const shouldDelete = shouldDeleteStream
+          ? () => shouldDeleteStream(stream)
+          : undefined;
         try {
-          await this.deleteStreamSidecars(stream);
+          await this.deleteStreamSidecars(stream, shouldDelete);
           deleted.add(stream);
           if (canonicalStreams.has(stream)) await this.notifyDeleted(stream);
         } catch (error) {
+          if (error instanceof StreamDeletionSupersededError) {
+            active.add(stream);
+            return;
+          }
           log.warn(
             `Failed to delete stream ${stream}: ${toErrorMessage(error)}`,
             { data: error },
@@ -490,16 +501,23 @@ export class SessionStores {
     await Promise.all(
       [...streamsByExecution].map(async ([executionId, streams]) => {
         let failedAdjacentStreams = new Set<StreamTabId>();
+        const shouldDelete = shouldDeleteStream
+          ? () => streams.every((stream) => shouldDeleteStream(stream))
+          : undefined;
         const outcome = await this.deleteExecutionWithStreamState(
           executionId,
           async () => {
-            const cleanup = await this.deleteAdjacentStreamStates(streams);
+            const cleanup = await this.deleteAdjacentStreamStates(
+              streams,
+              shouldDeleteStream,
+            );
             failedAdjacentStreams = cleanup.failed;
             throwAggregated(
               cleanup.failures,
               'Multiple adjacent cleanups failed',
             );
           },
+          shouldDelete,
         );
 
         if (outcome.kind === 'completed') {
@@ -520,7 +538,10 @@ export class SessionStores {
           await this.notifyCanonicalDeletions(streams, canonicalStreams);
           return;
         }
-        if (outcome.kind === 'superseded') return;
+        if (outcome.kind === 'superseded') {
+          for (const stream of streams) active.add(stream);
+          return;
+        }
         log.warn(
           `Failed to delete streams for execution ${executionId}: ${toErrorMessage(outcome.error)}`,
           { data: outcome.error },
@@ -848,21 +869,19 @@ export class SessionStores {
 
   private async deleteAdjacentStreamStates(
     streams: readonly StreamTabId[],
+    shouldDeleteStream?: (stream: StreamTabId) => boolean,
   ): Promise<{
     failed: Set<StreamTabId>;
     failures: unknown[];
   }> {
     const failed = new Set<StreamTabId>();
     const failures: unknown[] = [];
-    const staged = new Map<StreamTabId, StagedStreamSnapshotDeletion>();
     await Promise.all(
       streams.map(async (stream) => {
         try {
-          staged.set(
+          await this.deleteAdjacentStreamState(
             stream,
-            await this.snapshots.stageDeleteStream(stream, (children) =>
-              this.notifyChildrenDetached(stream, children),
-            ),
+            shouldDeleteStream ? () => shouldDeleteStream(stream) : undefined,
           );
         } catch (error) {
           failed.add(stream);
@@ -870,44 +889,6 @@ export class SessionStores {
         }
       }),
     );
-
-    const transcriptResults = await Promise.all(
-      streams
-        .filter((stream) => !failed.has(stream))
-        .map(async (stream) => {
-          try {
-            await this.streamLogs.delete(stream);
-            return { stream, status: 'fulfilled' as const };
-          } catch (error) {
-            return { stream, status: 'rejected' as const, error };
-          }
-        }),
-    );
-    for (const result of transcriptResults) {
-      if (result.status === 'fulfilled') continue;
-      failed.add(result.stream);
-      failures.push(result.error);
-      try {
-        await staged.get(result.stream)?.rollback();
-      } catch (rollbackError) {
-        failures.push(rollbackError);
-      }
-    }
-
-    const committedStreams = streams.filter((stream) => !failed.has(stream));
-    const cleanup = await Promise.allSettled([
-      ...committedStreams.map((stream) => staged.get(stream)?.commit()),
-      committedStreams.length > 0
-        ? this.goalEntries?.forgetMany(committedStreams)
-        : undefined,
-    ]);
-    for (const result of cleanup) {
-      if (result.status === 'fulfilled') continue;
-      log.warn(
-        `Streams were deleted, but auxiliary cleanup was incomplete: ${toErrorMessage(result.reason)}`,
-        { data: result.reason },
-      );
-    }
     return { failed, failures };
   }
 }

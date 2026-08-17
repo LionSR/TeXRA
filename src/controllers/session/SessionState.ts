@@ -326,6 +326,9 @@ export class SessionState {
     }
     const value: Readonly<SessionStreamMetadata> = {
       ...this.applySummaryMetadata(stored, summary),
+      // A removed, never-read stream has no durable timestamp to recover.
+      // Latch an ordering-only value without recreating its ephemeral record;
+      // removed streams are excluded from the rail and never listed again.
       creationTimestamp:
         firstTimestamp ??
         session?.provisionalCreationTimestamp ??
@@ -629,7 +632,11 @@ export class SessionState {
     // pre-delete enumeration would reintroduce the TOCTOU this barrier exists
     // to close.
     const preExistingEphemeral = this.ephemeralStreamIds();
-    const deletion = await this.stores.deleteAll();
+    const incarnationsAtStart = new Map(this._streamIncarnations);
+    const deletion = await this.stores.deleteAll({
+      shouldDelete: (stream) =>
+        this.incarnationOf(stream) === (incarnationsAtStart.get(stream) ?? 0),
+    });
     const retained = new Set([...deletion.active, ...deletion.failed]);
     const clearIdentity = (stream: StreamTabId): void => {
       this.streamStatus.clearStream(stream);

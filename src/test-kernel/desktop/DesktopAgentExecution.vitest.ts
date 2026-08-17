@@ -487,7 +487,6 @@ async function createBridge(
     snapshots: progressSnapshotStore,
     goalEntries: {
       forget: (stream) => bridgeGoalStore.forget(stream, session),
-      forgetMany: (streams) => bridgeGoalStore.forgetMany(streams, session),
     },
     onCanonicalStreamDeleted: (stream) => {
       session.status.clearStream(stream);

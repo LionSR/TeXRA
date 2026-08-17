@@ -105,8 +105,15 @@ function sessionFactStreamIds(fact: SessionFact): StreamTabId[] {
         : [fact.payload.childStreamId];
     case 'inquiryThreadUpdated':
       return fact.payload.parentStreamId ? [fact.payload.parentStreamId] : [];
-    default:
+    case 'goalStateChanged':
+    case 'clearMissingOutputs':
+    case 'updateQueuedFollowUps':
+    case 'followUpSent':
+    case 'setActiveStream':
+    case 'updateStreamDescription':
       return fact.payload.streamId ? [fact.payload.streamId] : [];
+    default:
+      return assertNever(fact, 'Unhandled session fact stream identity');
   }
 }
 
