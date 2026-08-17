@@ -432,7 +432,7 @@ function createWindow(options: {
           await shell.openExternal(DESKTOP_RELEASES_PAGE_URL);
         }
       },
-    }).catch(reportAsyncError);
+    }).catch(reportBackgroundError);
   }
   const previewHost = createDesktopPreviewHost({
     shell,
@@ -1000,6 +1000,7 @@ function createWindow(options: {
         ...state,
       }),
     onError: reportAsyncError,
+    onBlockedExternalUrl: reportBackgroundError,
   });
   const workspaceIpc = createDesktopWorkspaceIpc(
     { postToRenderer: postToRendererIfAlive },
