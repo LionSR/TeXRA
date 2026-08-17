@@ -52,8 +52,6 @@ export interface ProviderCapabilityKey {
  * (128k → 400k), same split OpenCode uses.
  */
 export const CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT = 272_000;
-export const CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW =
-  CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT + 128_000;
 
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `fullName`. */
 const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;

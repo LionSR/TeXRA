@@ -15,7 +15,6 @@ import {
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import {
   CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
-  CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
   isCodexSubscriptionActive,
   resolveCodexSubscriptionCapabilities,
   resolveCodexSubscriptionProfile,
@@ -78,7 +77,8 @@ describe('provider capabilities', () => {
 
     expect(capabilities).toMatchObject({
       authMode: 'chatgpt-subscription',
-      contextWindow: CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
+      contextWindow:
+        CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT + gpt55Config.maxOutputTokens,
       inputTokenLimit: CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
       inputPrice: 0,
       outputPrice: 0,
@@ -117,9 +117,6 @@ describe('provider capabilities', () => {
           CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT + model.maxOutputTokens,
         inputTokenLimit: CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
       });
-      expect(capabilities?.contextWindow).toBe(
-        CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
-      );
     },
   );
 });
