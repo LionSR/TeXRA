@@ -58,7 +58,6 @@ export type IModelHandler<
   | 'createResponse'
   | 'initializeMessages'
   | 'createRoundMessages'
-  | 'extractResponse'
   | 'extractNormalizedResponse'
   | 'addContinueMessage'
   | 'initializeOutputAndPrefill'
