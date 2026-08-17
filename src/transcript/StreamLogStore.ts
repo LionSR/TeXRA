@@ -204,6 +204,7 @@ export function ephemeralTranscriptWarning(reason: string): string {
 export interface TranscriptWriter {
   readonly streamId: StreamTabId;
   readonly settlementHead: number;
+  reserveSettlement(id: string): void;
   append(entry: StreamLogAppendInput): StreamLogEntry;
   appendSettled(entry: StreamLogAppendInput): StreamLogEntry;
   update(id: string, patch: StreamLogUpdatePatch): StreamLogEntry | undefined;
@@ -854,6 +855,10 @@ export class StreamLogStore {
       get settlementHead() {
         assertOwned();
         return writerState.log?.settlementHead ?? 0;
+      },
+      reserveSettlement: (id) => {
+        assertOwned();
+        this.mutateEntry(streamId, (log) => log.reserveSettlement(id));
       },
       append: (entry) => {
         assertOwned();
