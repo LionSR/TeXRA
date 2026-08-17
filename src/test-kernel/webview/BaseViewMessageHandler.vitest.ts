@@ -8,7 +8,7 @@ import { BaseViewMessageHandler } from '@common/webview/BaseViewMessageHandler';
 import type * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
-  showErrorMessage: vi.fn(),
+  showErrorMessage: vi.fn(async () => undefined),
   logError: vi.fn(),
 }));
 
@@ -31,7 +31,7 @@ class TestMessageHandler extends BaseViewMessageHandler {
       { command: 'test' },
       { webview: {} } as vscode.WebviewView,
       (_message, _handlers, onError) => {
-        onError(new Error('handler failure'));
+        onError?.(new Error('handler failure'));
         return true;
       },
       {},
