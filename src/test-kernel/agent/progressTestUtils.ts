@@ -218,7 +218,7 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
       pendingPlans.delete(requestId);
       events.push({
         event: 'resolvePlanApproval',
-        payload: { approvalId: requestId },
+        payload: { requestId },
       });
       pending.settle(decision);
       return true;
@@ -229,7 +229,7 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
       pendingProposals.delete(requestId);
       events.push({
         event: 'resolveAgentProposal',
-        payload: { proposalId: requestId },
+        payload: { requestId },
       });
       pending.settle(decision);
       return true;
@@ -291,7 +291,7 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
         payload: request,
       });
       return new Promise((resolve) => {
-        pendingPlans.set(request.approvalId, {
+        pendingPlans.set(request.requestId, {
           streamId: request.streamId,
           settle: resolve,
         });
@@ -303,7 +303,7 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
         payload: request,
       });
       return new Promise((resolve) => {
-        pendingProposals.set(request.proposalId, {
+        pendingProposals.set(request.requestId, {
           streamId: request.streamId,
           settle: resolve,
         });
@@ -352,21 +352,21 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
       });
       pending.settle({ action: 'reject' });
     }
-    for (const [approvalId, pending] of pendingPlans) {
+    for (const [requestId, pending] of pendingPlans) {
       if (!match('planApproval', pending.streamId)) continue;
-      pendingPlans.delete(approvalId);
+      pendingPlans.delete(requestId);
       events.push({
         event: 'resolvePlanApproval',
-        payload: { approvalId },
+        payload: { requestId },
       });
       pending.settle({ action: 'reject' });
     }
-    for (const [proposalId, pending] of pendingProposals) {
+    for (const [requestId, pending] of pendingProposals) {
       if (!match('proposal', pending.streamId)) continue;
-      pendingProposals.delete(proposalId);
+      pendingProposals.delete(requestId);
       events.push({
         event: 'resolveAgentProposal',
-        payload: { proposalId },
+        payload: { requestId },
       });
       pending.settle({ action: 'reject' });
     }

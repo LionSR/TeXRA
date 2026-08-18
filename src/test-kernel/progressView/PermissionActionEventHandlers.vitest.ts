@@ -60,7 +60,7 @@ const retryData = {
   model: 'claude-sonnet',
 };
 const proposalData = {
-  proposalId: 'proposal-1',
+  requestId: 'proposal-1',
   streamId: 'stream-1',
   agentCategory: AgentCategory.ToolUse,
   agent: 'researcher',
@@ -72,7 +72,7 @@ const proposalData = {
   rootUserInstruction: null,
 };
 const planData = {
-  approvalId: 'plan-1',
+  requestId: 'plan-1',
   streamId: 'stream-1',
   plan: { objective: 'Finish the refactor and verify it.' },
   goalEnabled: true,
@@ -254,7 +254,7 @@ const actionCases: PermissionCase[] = [
     }),
     calls: [
       call(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
-        proposalId: 'proposal-1',
+        requestId: 'proposal-1',
         action: 'approve',
         model: 'gpt-5',
         agent: 'reviewer',
@@ -274,7 +274,7 @@ const actionCases: PermissionCase[] = [
         initiatingProposalId: 'proposal-1',
       }),
       call(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
-        proposalId: 'proposal-1',
+        requestId: 'proposal-1',
         action: 'approve',
         model: 'gpt-5',
         agent: 'reviewer',
@@ -291,7 +291,7 @@ const actionCases: PermissionCase[] = [
     detail: detail.proposal(decision),
     calls: [
       call(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
-        proposalId: 'proposal-1',
+        requestId: 'proposal-1',
         ...decision,
       }),
     ],
@@ -307,7 +307,7 @@ const actionCases: PermissionCase[] = [
     detail: detail.plan(decision),
     calls: [
       call(PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION, {
-        approvalId: 'plan-1',
+        requestId: 'plan-1',
         ...decision,
       }),
     ],

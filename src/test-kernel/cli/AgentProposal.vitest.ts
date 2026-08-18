@@ -70,7 +70,7 @@ describe('CLI agent proposal approval layout', () => {
 
   it('budgets a compact multi-agent workflow summary and saved script path', () => {
     const payload = {
-      proposalId: 'proposal-1',
+      requestId: 'proposal-1',
       streamId: 'stream-1',
       agent: 'reviewer',
       agentCategory: AgentCategory.Workflow,
