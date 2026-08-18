@@ -1,15 +1,18 @@
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
-import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
+import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import {
-  ProgressStreamProjectionBuilder,
-  type ProjectedStreamRoster,
-} from '@controllers/progressView/backend/ProgressStreamProjectionBuilder';
+  buildStreamInfo,
+  buildStreamInfos,
+} from '@controllers/session/streamInfoUtils';
 import type {
   PresentedStreamId,
   SessionRendererPort,
 } from '@controllers/session/SessionRendererPort';
-import type { StreamBadgeSnapshot } from '@controllers/session/SessionState';
+import type {
+  SessionState,
+  StreamBadgeSnapshot,
+} from '@controllers/session/SessionState';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
@@ -22,15 +25,23 @@ import type {
   ProgressViewOutboundMessage,
   ProgressViewPlacement,
   RoundIndexed,
+  StreamContentRenderPayload,
+  StreamMetadata,
   StreamPhase,
   StreamStage,
   StreamSubstate,
   StreamTabId,
+  StreamTabInfo,
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import type { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
-import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
+import { buildStreamContentRender } from '@shared/streams/streamContentSync';
+import { buildStreamMetadata } from '@shared/streams/streamMetadata';
+import {
+  createFlushableDebounce,
+  mapToRecord,
+  type FlushableDebounce,
+} from '@utils/core';
 
 /** Throttle interval for conversation progress webview pushes (ms). */
 const PROGRESS_THROTTLE_MS = 500;
@@ -53,9 +64,8 @@ export class LitSessionRenderer implements SessionRendererPort {
   >();
 
   constructor(
-    private readonly projections: ProgressStreamProjectionBuilder,
-    private readonly snapshots: StreamSnapshotStore,
-    private readonly followUps: ToolUseFollowUpQueue,
+    private readonly state: SessionState,
+    private readonly getStreamControls: GetProgressStreamControls,
     private readonly webviewBridge: WebviewBridge,
     private readonly send: (message: ProgressViewOutboundMessage) => void,
     private readonly hasTarget: () => boolean,
@@ -197,7 +207,7 @@ export class LitSessionRenderer implements SessionRendererPort {
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
         stream: streamId,
-        rounds: nonEmptyRounds(this.snapshots.getOutputFiles(streamId)),
+        rounds: nonEmptyRounds(this.state.snapshots.getOutputFiles(streamId)),
       }),
     );
   }
@@ -218,7 +228,7 @@ export class LitSessionRenderer implements SessionRendererPort {
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
         stream: streamId,
-        rounds: nonEmptyRounds(this.snapshots.getMissingOutputs(streamId)),
+        rounds: nonEmptyRounds(this.state.snapshots.getMissingOutputs(streamId)),
       });
     });
   }
@@ -228,7 +238,7 @@ export class LitSessionRenderer implements SessionRendererPort {
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
         stream: streamId,
-        rounds: nonEmptyRounds(this.snapshots.getCompileFailures(streamId)),
+        rounds: nonEmptyRounds(this.state.snapshots.getCompileFailures(streamId)),
         reset: true,
       }),
     );
@@ -242,7 +252,7 @@ export class LitSessionRenderer implements SessionRendererPort {
     // Prefer the snapshot store's normalized per-key value when present (fills
     // cache/reasoning zeros); fall back to the event payload.
     const nextUsage =
-      this.snapshots.getRunUsage(streamId).get(storageKey) ?? usage;
+      this.state.snapshots.getRunUsage(streamId).get(storageKey) ?? usage;
     this.sendIfActive(streamId, () =>
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
@@ -277,7 +287,7 @@ export class LitSessionRenderer implements SessionRendererPort {
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
         stream: streamId,
-        messages: this.followUps.getAll(streamId),
+        messages: this.state.followUps.getAll(streamId),
       });
     });
   }
@@ -327,10 +337,7 @@ export class LitSessionRenderer implements SessionRendererPort {
 
     this.webviewBridge.syncStream(stream);
 
-    const projection = this.projections.streamContent(
-      stream,
-      includeActiveState,
-    );
+    const projection = this.buildStreamContent(stream, includeActiveState);
     if (projection) {
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
@@ -339,18 +346,83 @@ export class LitSessionRenderer implements SessionRendererPort {
     }
   }
 
+  /**
+   * Assemble the full SYNC_STREAM_CONTENT render snapshot from `SessionState`.
+   * The payload shape itself is declared once in `buildStreamContentRender`
+   * (shared with trace replay); the category-specific sections are lazy
+   * getters so a workflow render never touches tool-use sources and vice
+   * versa. `undefined` while a stream's run identity is still pending.
+   */
+  private buildStreamContent(
+    stream: StreamTabId,
+    includeActiveState: boolean,
+  ): StreamContentRenderPayload | undefined {
+    const { state, getStreamControls } = this;
+    const existingState = state.getStreamState(stream);
+    const category =
+      state.getStreamMetadata(stream).agentCategory ?? existingState?.category;
+    if (category === undefined) return undefined;
+
+    const executionState = includeActiveState
+      ? state.getOrCreateStreamState(stream, category)
+      : undefined;
+    return buildStreamContentRender(stream, category, {
+      runUsage: mapToRecord(state.snapshots.getRunUsage(stream)),
+      activeState: executionState && {
+        conversationProgress: executionState.conversationProgress,
+        stage: executionState.stage ?? null,
+        badges: { subagents: executionState.subagents },
+      },
+      get outputs() {
+        return {
+          files: state.snapshots.getOutputFiles(stream),
+          missing: state.snapshots.getMissingOutputs(stream),
+          compileFailures: state.snapshots.getCompileFailures(stream),
+        };
+      },
+      get workPlan() {
+        const { todos, plan } = state.snapshots.getWorkPlan(stream);
+        return {
+          todos,
+          plan,
+          queuedFollowUps: state.followUps.getAll(stream),
+        };
+      },
+      get controls() {
+        const controls = getStreamControls(stream);
+        return {
+          bashBypass: controls.bashBypass,
+          toolEditBypass: controls.toolEditBypass,
+          superYoloBypass: controls.superYoloBypass,
+          goal: controls.goalActive
+            ? {
+                active: true as const,
+                status: controls.goalStatus,
+                objective: controls.goalObjective,
+              }
+            : { active: false as const },
+        };
+      },
+    });
+  }
+
   /** Push one stream's metadata patch, optionally re-asserting the selection. */
   updateStreamMetadata(
     streamId: StreamTabId,
     streamStates?: Map<StreamTabId, StreamPhaseState>,
     options?: { activeStream?: PresentedStreamId },
   ): void {
+    const streamInfo = buildStreamInfo(
+      this.state,
+      streamId,
+      options?.activeStream ?? this.getActiveStream(),
+    );
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-      ...this.projections.streamMetadata(
-        streamId,
-        streamStates,
-        options?.activeStream ?? this.getActiveStream(),
+      streamInfo,
+      streamState: this.metadataFor(
+        streamInfo,
+        streamStates ?? this.state.streamStatus.getAllStreamStates(),
       ),
       activeStream: options?.activeStream,
     });
@@ -360,9 +432,11 @@ export class LitSessionRenderer implements SessionRendererPort {
    * Update stream metadata and theme for the webview.
    * Use this for structural updates (initial sync, stream add/remove).
    * For incremental updates, prefer the targeted notifications above.
+   * `projectedStream` selects which tab gets active-tab enrichment (worktree
+   * probe) while `activeStream` is the selection the frontend is told about.
    */
   sendStreamMetadata(
-    projection: ProjectedStreamRoster,
+    projectedStream: PresentedStreamId,
     activeStream: PresentedStreamId,
     theme?: 'dark' | 'light',
   ): void {
@@ -370,16 +444,43 @@ export class LitSessionRenderer implements SessionRendererPort {
 
     if (theme) this.setTheme(theme);
 
+    const streams = buildStreamInfos(this.state, projectedStream);
+    const states = this.state.streamStatus.getAllStreamStates();
+    const streamStates: Record<StreamTabId, StreamMetadata> = {};
+    for (const streamInfo of streams) {
+      streamStates[streamInfo.name] = this.metadataFor(streamInfo, states);
+    }
+
     // Full stream-tabs refresh, carrying the per-stream metadata patch.
     const unsupportedCommands = this.getUnsupportedCommands?.();
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-      streams: projection.streams,
+      streams,
       activeStream,
       unsupportedCommands: unsupportedCommands
         ? [...unsupportedCommands]
         : undefined,
-      streamStates: projection.streamStates,
+      streamStates,
+    });
+  }
+
+  /** Immutable per-stream metadata for one already-built tab info. */
+  private metadataFor(
+    streamInfo: StreamTabInfo,
+    streamStates: Map<StreamTabId, StreamPhaseState>,
+  ): StreamMetadata {
+    const current = this.state.getStreamState(streamInfo.name);
+    const status = streamStates.get(streamInfo.name);
+    return buildStreamMetadata({
+      category: streamInfo.agentCategory,
+      status: status?.phase,
+      substate: status?.substate,
+      userFollowUpSupport: streamInfo.userFollowUpSupport,
+      lastTimestamp: this.state.streamLogs.getTimestampRange(streamInfo.name)
+        .last,
+      conversationProgress: current?.conversationProgress,
+      stage: current?.stage,
+      subagents: current?.subagents,
     });
   }
 
