@@ -1,5 +1,3 @@
-import { setTimeout as sleep } from 'node:timers/promises';
-
 import {
   attachTerminalResultToast,
   runAgent,
@@ -26,7 +24,7 @@ import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
-import { aggregateError, generateExecutionId } from '@utils/core';
+import { aggregateError, generateExecutionId, onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { warnApprovalDenied } from './approval/approvalPrompts';
@@ -50,8 +48,6 @@ import {
 } from './terminalStatus';
 import { attachWorkflowPlainOutput } from './workflowPlainOutput';
 import type { CliContext } from './cliContext';
-
-const CLI_RUN_SHUTDOWN_GRACE_MS = 5_000;
 
 type RunAgentWorkflowOutput = NonNullable<
   RunAgentOptions['openWorkflowOutput']
@@ -398,7 +394,7 @@ export async function executeCliRequest(
   };
   const disposeShutdownStatus = platform().lifecycle.onShutdown(
     SHUTDOWN_PHASE.BEFORE,
-    async () => {
+    async (shutdownDeadline) => {
       shutdownRequested = true;
       launchAbortController.abort();
       // Paired with tryCommitWorkflowOutputPublication: keep this flag read
@@ -429,8 +425,9 @@ export async function executeCliRequest(
       // so no transcript or checkpoint writer can race the lease release.
       // A provider or filesystem operation outside our abortable boundaries
       // must not prevent termination indefinitely before recovery is known to
-      // be possible. Once durable resumability and lease availability have
-      // been established, however, keep shutdown alive until the promised
+      // be possible: the lifecycle host's phase deadline (`shutdownDeadline`)
+      // bounds this wait. Once durable resumability and lease availability
+      // have been established, however, keep shutdown alive until the promised
       // recovery notice has been flushed.
       if (
         resumableCheckpoint &&
@@ -441,26 +438,17 @@ export async function executeCliRequest(
         await shutdownFinalizationDone;
         return;
       }
-      const grace = new AbortController();
-      const graceExpired = sleep(CLI_RUN_SHUTDOWN_GRACE_MS, undefined, {
-        signal: grace.signal,
-      }).catch((error: unknown) => {
-        if (!grace.signal.aborted) throw error;
-      });
-      try {
-        const first = await Promise.race([
-          shutdownFinalizationDone.then(() => 'finalized' as const),
-          graceExpired.then(() => 'expired' as const),
-          ...(options.onInterruptedExecutionFinalized
-            ? [recoveryNoticeStarted.then(() => 'recovery-started' as const)]
-            : []),
-        ]);
-        if (first === 'recovery-started') {
-          await shutdownFinalizationDone;
-        }
-      } finally {
-        grace.abort();
-        await graceExpired;
+      const first = await Promise.race([
+        shutdownFinalizationDone.then(() => 'finalized' as const),
+        new Promise<'deadline'>((resolve) =>
+          onAbort(shutdownDeadline, () => resolve('deadline')),
+        ),
+        ...(options.onInterruptedExecutionFinalized
+          ? [recoveryNoticeStarted.then(() => 'recovery-started' as const)]
+          : []),
+      ]);
+      if (first === 'recovery-started') {
+        await shutdownFinalizationDone;
       }
     },
   );

@@ -1149,6 +1149,14 @@ export function killAllSessionBackgroundProcesses(): void {
   }
 }
 
+/** Visit every live session — for process-shutdown sweeps that must reach
+ * session-keyed registries (e.g. the agent-CLI session stores). */
+export function forEachLiveSession(
+  callback: (session: SessionHandle) => void,
+): void {
+  for (const session of liveSessions) callback(session);
+}
+
 let cachedDefaultSession: SessionHandle | undefined;
 let defaultSessionFallbackWarned = false;
 

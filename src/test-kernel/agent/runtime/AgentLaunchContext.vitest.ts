@@ -529,12 +529,14 @@ describe('AgentLaunchContext', () => {
       );
       expect(detachTrace).toHaveBeenCalledOnce();
       expect(rawDispose).toHaveBeenCalledOnce();
+      // LIFO store unwind: the load-bearing constraint is compensation
+      // ('terminal') strictly before trace detach/disposal.
       expect(order).toEqual([
         'stage',
-        'handler',
         'terminal',
         'detach',
         'raw-trace',
+        'handler',
       ]);
     } finally {
       detachEvents();
