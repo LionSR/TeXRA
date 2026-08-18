@@ -43,9 +43,9 @@ export function createLifecycleHost(
       console.error(`[lifecycle] ${phase} handler failed:`, error);
     });
 
-  // Abort-then-advance: the phase deadline has passed and `signal` has fired;
-  // give the handler one macrotask to observe it and unwind, then report the
-  // laggard and advance without waiting further. The laggard keeps running
+  // Abort-then-advance: wait for settlement, or for the deadline signal plus
+  // one macrotask for the handler to observe its abort and unwind; then report
+  // the laggard and advance without waiting further. The laggard keeps running
   // detached; a late rejection still lands in `onError` via `tracked`.
   async function joinWithDeadline(
     phase: ShutdownPhase,
@@ -64,12 +64,9 @@ export function createLifecycleHost(
     );
     await Promise.race([
       tracked,
-      new Promise<void>((resolve) => onAbort(signal, resolve)),
-    ]);
-    if (settled) return;
-    await Promise.race([
-      tracked,
-      new Promise<void>((resolve) => setTimeout(resolve, 0)),
+      new Promise<void>((resolve) =>
+        onAbort(signal, () => setTimeout(resolve, 0)),
+      ),
     ]);
     if (!settled) {
       onError(

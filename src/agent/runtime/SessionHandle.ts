@@ -1149,11 +1149,8 @@ export function killAllSessionBackgroundProcesses(): void {
   }
 }
 
-/**
- * Visit every live session. For process-shutdown sweeps that must reach
- * session-keyed registries (e.g. the agent-CLI session stores) without those
- * registries keeping their own parallel roster of sessions.
- */
+/** Visit every live session — for process-shutdown sweeps that must reach
+ * session-keyed registries (e.g. the agent-CLI session stores). */
 export function forEachLiveSession(
   callback: (session: SessionHandle) => void,
 ): void {

@@ -56,12 +56,8 @@ import type {
   AgentCliSessionRegistry,
 } from './agentCliSessionRegistry';
 
-/**
- * Session-keyed registry accessor (`codexThreadsFor` /
- * `claudeAgentSessionsFor`). Dispatch and loop resolve it once against the
- * ambient session at their boundary, so registration, lookup, and release all
- * hit the registry owned by the session the child runs under.
- */
+/** Session-keyed registry accessor (`codexThreadsFor`/`claudeAgentSessionsFor`);
+ * dispatch and loop resolve it once against the ambient session. */
 export type AgentCliSessionStoreAccessor = (
   session: SessionHandle,
 ) => AgentCliSessionRegistry;

@@ -11,36 +11,29 @@ import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 // codex/claude registry, so per-session teardown interrupts exactly its own
 // agent-CLI children and a registry dies with its session instead of living
 // as a process singleton.
-const codexThreads = new WeakMap<SessionHandle, AgentCliSessionRegistry>();
-const claudeAgentSessions = new WeakMap<
-  SessionHandle,
-  AgentCliSessionRegistry
->();
-
-function registryFor(
-  registries: WeakMap<SessionHandle, AgentCliSessionRegistry>,
-  session: SessionHandle,
-  persistedSessionKey: string,
-): AgentCliSessionRegistry {
-  let registry = registries.get(session);
-  if (!registry) {
-    registry = new AgentCliSessionRegistry(persistedSessionKey);
-    registries.set(session, registry);
-  }
-  return registry;
+function sessionRegistries(persistedSessionKey: string) {
+  const registries = new WeakMap<SessionHandle, AgentCliSessionRegistry>();
+  return {
+    registries,
+    for: (session: SessionHandle): AgentCliSessionRegistry => {
+      let registry = registries.get(session);
+      if (!registry) {
+        registry = new AgentCliSessionRegistry(persistedSessionKey);
+        registries.set(session, registry);
+      }
+      return registry;
+    },
+  };
 }
+
+const codexThreads = sessionRegistries('codex_thread_id');
+const claudeAgentSessions = sessionRegistries('claude_agent_session_id');
 
 /** The session's registry of live codex threads. */
-export function codexThreadsFor(session: SessionHandle): AgentCliSessionRegistry {
-  return registryFor(codexThreads, session, 'codex_thread_id');
-}
+export const codexThreadsFor = codexThreads.for;
 
 /** The session's registry of live claude-agent sessions. */
-export function claudeAgentSessionsFor(
-  session: SessionHandle,
-): AgentCliSessionRegistry {
-  return registryFor(claudeAgentSessions, session, 'claude_agent_session_id');
-}
+export const claudeAgentSessionsFor = claudeAgentSessions.for;
 
 /**
  * Register host shutdown handlers that stop agent work at teardown: kill the
@@ -56,8 +49,8 @@ export function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => {
     forEachLiveSession((session) => {
-      codexThreads.get(session)?.interruptAll();
-      claudeAgentSessions.get(session)?.interruptAll();
+      codexThreads.registries.get(session)?.interruptAll();
+      claudeAgentSessions.registries.get(session)?.interruptAll();
     });
   });
 }

@@ -639,8 +639,8 @@ function createWindow(options: {
         });
     }
   });
-  // Registered after the execution disposer so LIFO disposal aborts the
-  // presentation signal first, cancelling an in-flight lazy load.
+  // Registered after the execution disposer: LIFO disposal aborts first,
+  // cancelling an in-flight lazy load.
   windowResources.add(() => presentationAbort.abort());
   const getAgentExecution = async (): Promise<DesktopProgressBridge> => {
     if (agentExecution) return agentExecution;
