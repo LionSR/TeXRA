@@ -6,8 +6,6 @@
  *
  * Similar to how GitHub Copilot works - users sign in to the official service.
  */
-import { z } from 'zod';
-
 /**
  * Supabase configuration interface.
  */
@@ -69,23 +67,6 @@ export const DEVICE_AUTH_BASE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions
 export const AUTH_BRIDGE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-bridge`;
 
 /**
- * Base URL for the CI relay token management edge function
- * (texra setup-token / texra auth token).
- */
-export const RELAY_TOKENS_BASE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/relay-tokens`;
-
-/**
- * The relay's tier-config endpoint under a given Supabase base URL. TierService
- * resolves it against its injected base URL; everything else uses the constant.
- */
-export function relayTierConfigUrl(baseUrl: string): string {
-  return `${baseUrl}/functions/v1/relay/tier-config`;
-}
-
-/** Public URL of the relay's tier-config endpoint. */
-export const RELAY_TIER_CONFIG_URL = relayTierConfigUrl(SUPABASE_CONFIG.url);
-
-/**
  * Supported OAuth providers for TeXRA authentication.
  * Users can choose between GitHub and Google during sign-in.
  */
@@ -105,45 +86,6 @@ export function isOAuthProvider(
   value: string | undefined,
 ): value is OAuthProvider {
   return OAUTH_PROVIDERS.includes(value as OAuthProvider);
-}
-
-/**
- * Single source of truth for tier values used in server-side API key access.
- *
- * The relay edge function cannot import this client-side module. Keep the
- * duplicated relay tier constants in sync; parity is enforced by
- * src/test-kernel/supabase/RelaySharedConfigParity.vitest.ts.
- *
- * The schema enum order is: 'free', 'Max', 'Ultra' (ascending privilege).
- */
-export const UserTierSchema = z.enum(['free', 'Max', 'Ultra']);
-export type UserTier = z.infer<typeof UserTierSchema>;
-
-/** Tier constants derived from the schema - use these instead of string literals. */
-export const FREE_TIER: UserTier = 'free';
-export const MAX_TIER: UserTier = 'Max';
-export const ULTRA_TIER: UserTier = 'Ultra';
-
-/** Cache TTL for server-side key access and tier config (5 minutes). */
-export const SERVER_SIDE_CACHE_TTL_MS = 5 * 60 * 1000;
-
-/**
- * Monthly relay spending limits in USD.
- *
- * The relay edge function duplicates these values in its Deno module graph;
- * src/test-kernel/supabase/RelaySharedConfigParity.vitest.ts enforces parity.
- */
-const RELAY_TIER_SPENDING_LIMITS: Record<UserTier, number> = {
-  [FREE_TIER]: 10,
-  [MAX_TIER]: 50,
-  [ULTRA_TIER]: 300,
-};
-
-export function getRelaySpendingLimit(tier: string | undefined): number {
-  // An absent tier denotes an unauthenticated/free request. A present but
-  // malformed tier is accounting data corruption and must fail validation.
-  const parsedTier = UserTierSchema.prefault(FREE_TIER).parse(tier);
-  return RELAY_TIER_SPENDING_LIMITS[parsedTier];
 }
 
 /**

@@ -25,7 +25,6 @@ import {
   type ExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { createAgentProposalTransport } from '@controllers/progressView/backend/agentProposalTransport';
@@ -502,10 +501,6 @@ export class DesktopProgressBridge {
           'Add a provider API key in Models, then use "Retry" on the request.',
         );
       },
-      getUseIncludedModelAccess: () =>
-        getServerSideKeyService().getUseIncludedModelAccess(),
-      setUseIncludedModelAccess: (enabled) =>
-        getServerSideKeyService().setUseIncludedModelAccess(enabled),
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
         this.hostInteractions.isRetryPending(stream, requestId),

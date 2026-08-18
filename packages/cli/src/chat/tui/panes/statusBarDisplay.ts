@@ -25,9 +25,6 @@ import {
   CODING_PLAN_SUBSCRIPTIONS,
 } from '@shared/codingPlanSubscriptions';
 import {
-  spendingQuotaRemainingPercent,
-  spendingQuotaState,
-  type SpendingStatus,
   type SubscriptionUsageSnapshot,
   type SubscriptionUsageProvider,
   type StreamPhase,
@@ -37,7 +34,6 @@ import {
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
-import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import {
   FOREGROUND_OWNERSHIP,
   RUNNING_SESSION,
@@ -136,9 +132,6 @@ export interface StatusBarDisplayInput {
   readonly approvalKind?: ApprovalQueueStatusKind;
   readonly model: string;
   readonly modelAccess: CliModelAccessRoute;
-  /** Latest relay spend snapshot, when the tier config has been fetched with
-   *  auth. Only meaningful while the route is `included`. */
-  readonly relayQuota?: SpendingStatus;
   /** Latest quota snapshot for the subscription serving this model. */
   readonly subscriptionQuota?: SubscriptionUsageSnapshot;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
@@ -244,40 +237,6 @@ function accessModeSegment(access: CliModelAccessRoute): StatusBarSegment {
       };
 }
 
-// Relay spend only constrains the included-access route; a subscription or a
-// personal key spends nothing against the monthly quota, so the warning would
-// be noise there. Thresholds come from `spendingQuotaState` so the CLI and the
-// Settings quota meter warn at the same point.
-function relayQuotaSegment(
-  quota: SpendingStatus | undefined,
-  access: CliModelAccessRoute,
-): StatusBarSegment | undefined {
-  if (quota === undefined || access !== 'included') return undefined;
-  const state = spendingQuotaState(quota);
-  switch (state) {
-    case 'ok':
-      return undefined;
-    case 'warning': {
-      const remaining = spendingQuotaRemainingPercent(quota);
-      return {
-        text: `${INCLUDED_ACCESS.inline} ${remaining}% left`,
-        compactText: `incl. ${remaining}%`,
-        color: COLOR_WARNING,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.relayQuota,
-      };
-    }
-    case 'exhausted':
-      return {
-        text: `${INCLUDED_ACCESS.inline} used up`,
-        compactText: 'incl. 0%',
-        color: COLOR_ERROR,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.relayQuota,
-      };
-    default:
-      return state satisfies never;
-  }
-}
-
 function subscriptionQuotaSegment(
   snapshot: SubscriptionUsageSnapshot | undefined,
 ): StatusBarSegment | undefined {
@@ -381,7 +340,6 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   approvalDepth: 60,
   rootActive: 65,
   subscriptionQuota: 67,
-  relayQuota: 68,
   elapsed: 70,
   // Durable session status: outlives the transient counts above but must
   // still be compactable — a priority-less segment breaks narrow bars (see
@@ -1110,7 +1068,6 @@ export function buildStatusBarDisplay(
     ...[
       rootActiveSegment(input),
       accessModeSegment(input.modelAccess),
-      relayQuotaSegment(input.relayQuota, input.modelAccess),
       subscriptionQuotaSegment(input.subscriptionQuota),
       approvalPolicySegment(input.approvalPolicy),
       locationSegment(input.location),

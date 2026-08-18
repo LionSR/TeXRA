@@ -34,7 +34,6 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import {
-  appendCliApiSwitchHint,
   askApproval,
   classifyCliRetryAction,
   cliRetryApiSwitchDecision,
@@ -157,7 +156,6 @@ const credentialExhaustedRetry: RetryPermission = {
   errorMessage: 'HTTP 429 Too Many Requests',
   errorDetails: {
     exhaustionReason: 'relay-limit',
-    isRelayError: true,
     statusCode: 429,
   },
 };
@@ -874,36 +872,11 @@ describe('buildAgentProposalApprovalContent', () => {
 });
 
 describe('formatRetryRequestMessage', () => {
-  it('shows the API-key switch for exhausted included access', () => {
-    expect(formatRetryRequestMessage(credentialExhaustedRetry)).toContain(
-      '/api personal',
-    );
-  });
-
-  it('recognizes relay monthly-limit text when the relay body is absent', () => {
-    const retry: RetryPermission = {
-      ...credentialExhaustedRetry,
-      errorMessage:
-        'HTTP 429 Too Many Requests – 429 Monthly spending limit reached ($300).',
-      errorDetails: {
-        exhaustionReason: 'relay-limit',
-        isRelayError: false,
-        statusCode: 429,
-      },
-    };
-
-    expect(isCliApiSwitchableRetry(retry)).toBe(true);
-    expect(appendCliApiSwitchHint(retry.errorMessage!)).toContain(
-      '/api personal',
-    );
-  });
-
   it('shows the Moonshot API-key switch for a Kimi Code subscription limit', () => {
     const retry: RetryPermission = {
       ...credentialExhaustedRetry,
       errorDetails: {
         exhaustionReason: 'kimi-code-subscription',
-        isRelayError: false,
         statusCode: 429,
       },
     };
@@ -916,7 +889,6 @@ describe('formatRetryRequestMessage', () => {
     expect(classifyCliRetryAction(retry)).toBe('disable-quota-route:kimiCode');
     expect(cliRetryApiSwitchDecision(retry)).toEqual({
       accepted: true,
-      apiMode: 'personal',
       disableQuotaRoute: 'kimiCode',
     });
   });
@@ -926,7 +898,6 @@ describe('formatRetryRequestMessage', () => {
       ...credentialExhaustedRetry,
       errorDetails: {
         exhaustionReason: 'glm-coding-plan',
-        isRelayError: false,
         statusCode: 429,
       },
     };
@@ -936,7 +907,6 @@ describe('formatRetryRequestMessage', () => {
     );
     expect(cliRetryApiSwitchDecision(retry)).toEqual({
       accepted: true,
-      apiMode: 'personal',
       disableQuotaRoute: 'glmCodingPlan',
     });
     expect(formatRetryRequestMessage(retry)).toContain('regular GLM endpoint');

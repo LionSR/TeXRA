@@ -325,7 +325,7 @@ describe('CLI agents command', () => {
         source: 'remote',
         path: '',
         category: AgentCategory.ToolUse,
-        description: 'Relay-served Lean assistant.',
+        description: 'Account-served Lean assistant.',
         tools: ['delegate_agent', 'lean_diagnostics'],
       },
       args: 'lean',

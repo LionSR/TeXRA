@@ -14,9 +14,9 @@ view; TeXRA does not contribute product settings to VS Code's Settings editor.
 
 The Dashboard groups the current controls by subject:
 
-- **Account** — sign-in status, included usage, telemetry, and subscription
-  access (ChatGPT, Kimi Code, and Copilot).
-- **Models** — access mode, provider keys, and model visibility.
+- **Account** — sign-in status, telemetry, and subscription access (ChatGPT,
+  Grok, Kimi Code, GLM Coding Plan, and Copilot).
+- **Models** — provider keys and model visibility.
 - **Agents** — available agents, active teams, orchestration, and session
   reliability.
 - **Capabilities** — tool availability, permissions, skills, connected coding
@@ -69,11 +69,11 @@ them at the intended project or user scope.
 
 The **Providers & Models** view is the single home for model access, provider
 API keys, provider behavior, model visibility, and retry settings. Account
-connections that stand in for a provider key live in the **Account** group:
-Researcher Access sign-in under **Account & Usage**, and the ChatGPT, Kimi
-Code, and Copilot subscriptions under **Subscriptions**. Included-usage data
-remains visible whenever the signed-in account has usage data, regardless of
-the currently selected access mode.
+connections that stand in for a provider key live in the **Account** group,
+under **Subscriptions**: ChatGPT, Grok, Kimi Code, the GLM Coding Plan, and
+Copilot. Researcher Access sign-in also sits in that group, under **Account &
+Usage** — it unlocks the hosted research-agent catalog and does not supply
+model access.
 
 Saved provider keys currently use each host's secure credential mechanism. They
 are not copied through the shared JSON configuration. Environment-variable keys
@@ -95,8 +95,7 @@ When telemetry is enabled and the user is signed in, TeXRA records model and
 provider names, agent category, token counts, cost, response time, route,
 stream identifier, version, and host. It does not send prompt text, document
 content, or file names. Turning telemetry off stops reporting for runs billed
-through the user's own provider key. Included-access usage is still metered by
-the hosted service.
+through the user's own provider key.
 
 ## File discovery
 

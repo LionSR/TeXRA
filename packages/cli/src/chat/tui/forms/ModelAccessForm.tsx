@@ -7,18 +7,15 @@ import {
 } from '@cli/runtime/apiStatus';
 import {
   buildCliModelAccessItems,
-  cliApiFallbackSelection,
   CLI_MODEL_ACCESS_DESCRIPTION,
   type CliModelAccessSelection,
 } from '@cli/runtime/modelAccessRoute';
 
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
-import type { ApiAccessMode } from '@shared/schemas';
 import { ListForm } from './_shared/ListForm';
 
 interface ModelAccessFormProps {
-  readonly apiMode: ApiAccessMode;
   readonly availableRows?: number;
   readonly onSelect: (value: CliModelAccessSelection) => void;
   readonly onCancel: () => void;
@@ -33,24 +30,21 @@ export function ModelAccessForm(
 ): React.JSX.Element {
   const [status, setStatus] = useState<ModelAccessFormStatus | null>(null);
 
-  useCancellableEffect(
-    (isCancelled) => {
-      setStatus(null);
-      void loadCliModelAccessOverview({ apiMode: props.apiMode })
-        .then((overview) => {
-          if (!isCancelled()) setStatus({ state: 'loaded', overview });
-        })
-        .catch((error: unknown) => {
-          if (!isCancelled()) {
-            setStatus({
-              state: 'failed',
-              message: String(error),
-            });
-          }
-        });
-    },
-    [props.apiMode],
-  );
+  useCancellableEffect((isCancelled) => {
+    setStatus(null);
+    void loadCliModelAccessOverview()
+      .then((overview) => {
+        if (!isCancelled()) setStatus({ state: 'loaded', overview });
+      })
+      .catch((error: unknown) => {
+        if (!isCancelled()) {
+          setStatus({
+            state: 'failed',
+            message: String(error),
+          });
+        }
+      });
+  }, []);
 
   const items = buildCliModelAccessItems(
     status?.state === 'loaded'
@@ -70,7 +64,6 @@ export function ModelAccessForm(
       availableRows={props.availableRows}
       items={items}
       compactVisibleItems={items.length}
-      activeValue={cliApiFallbackSelection(props.apiMode)}
       description={<Text dimColor>{CLI_MODEL_ACCESS_DESCRIPTION}</Text>}
       detail={
         <Box marginTop={1} flexDirection="column">

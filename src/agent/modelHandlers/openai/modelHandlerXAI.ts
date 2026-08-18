@@ -24,8 +24,8 @@ import {
 import type { ChatCompletion } from 'openai/resources/chat/completions';
 
 /**
- * Trusted inference origin for OAuth Bearer tokens. User custom endpoints /
- * relay / OpenRouter must never receive the SuperGrok access token.
+ * Trusted inference origin for OAuth Bearer tokens. User custom endpoints and
+ * OpenRouter must never receive the SuperGrok access token.
  */
 const XAI_SUBSCRIPTION_BASE_URL = 'https://api.x.ai/v1';
 
@@ -35,7 +35,7 @@ const XAI_SUBSCRIPTION_BASE_URL = 'https://api.x.ai/v1';
  * When "Prefer Grok subscription" is on **and** the user is signed in, requests
  * authenticate with the OAuth access token as the SDK `apiKey` (Bearer) against
  * the trusted `api.x.ai` surface only. Prefer-on without a session falls through
- * to the API-key / relay path (preference is not a hard requirement).
+ * to the API-key path (preference is not a hard requirement).
  * EXPERIMENTAL: see docs/proposals/2026-08-04-xai-grok-oauth-subscription.md.
  *
  * Note: the legacy grok-4 generation (deprecated May 2026) rejected the
@@ -126,7 +126,7 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
 
   /**
    * While a subscription request is in flight, report the trusted xAI origin
-   * (never a user custom endpoint or relay) so retries stay on the same surface.
+   * (never a user custom endpoint) so retries stay on the same surface.
    */
   public override getBaseUrl(): string | null {
     if (this.activeCredentialRoute === 'xai-subscription') {
@@ -153,7 +153,7 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     );
     const client = new OpenAI({
       apiKey,
-      // Never send the OAuth token to custom endpoints, OpenRouter, or relay.
+      // Never send the OAuth token to custom endpoints or OpenRouter.
       baseURL: XAI_SUBSCRIPTION_BASE_URL,
       fetch: this.longRunningModelFetch,
       maxRetries: 0,
@@ -163,7 +163,6 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
       this.config,
       client.baseURL,
       'xai-subscription',
-      false,
     );
     return this.rememberClientCredentialRoute(
       client,

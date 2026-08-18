@@ -74,7 +74,6 @@ describe('settings style contracts', () => {
     expect(commonStyles).toContain('.settings-section-heading-title');
 
     for (const component of [
-      'ApiAccessSection.ts',
       'ModelSelectionList.ts',
       'ProviderKeyList.ts',
       'ReliabilitySettingsSection.ts',

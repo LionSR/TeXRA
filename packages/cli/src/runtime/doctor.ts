@@ -193,32 +193,27 @@ async function checkAuth(
   try {
     const profile = await deps.authProfile();
     if (profile.authenticated) {
-      const tier = profile.tier ? `, ${profile.tier}` : '';
       const accountLabel = profile.accountLabel || 'unknown';
-      return pass(
-        'auth',
-        'Included access',
-        `Signed in as ${accountLabel}${tier}.`,
-      );
+      return pass('auth', 'TeXRA account', `Signed in as ${accountLabel}.`);
     }
     if (profile.sessionState === 'transient') {
       return warn(
         'auth',
-        'Included access',
+        'TeXRA account',
         'The authentication service is temporarily unavailable.',
         'Your stored session is intact; retry once the service is reachable rather than signing in again.',
       );
     }
     return warn(
       'auth',
-      'Included access',
+      'TeXRA account',
       'Not signed in.',
-      'Run `texra login` for included access, or add a provider API key with `texra setup` before using `--api-mode personal`.',
+      'Run `texra login` for the hosted research-agent catalog, or add a provider API key with `texra setup`.',
     );
   } catch (error) {
     return failFromError(
       'auth',
-      'Included access',
+      'TeXRA account',
       'Could not read TeXRA sign-in state.',
       error,
     );
@@ -342,7 +337,7 @@ async function checkConfig(
  * record, and what stays on after opting out.
  */
 const USAGE_STILL_RECORDED_NOTE =
-  'Rounds that used included access or a subscription are still recorded, because they meter your plan.';
+  'Rounds that used a subscription are still recorded, because they meter your plan.';
 
 function checkTelemetry(deps: ResolvedDoctorDependencies): DoctorCheck {
   let optOut: UsageLoggingOptOut;

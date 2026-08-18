@@ -29,7 +29,6 @@ import {
   type LogMessageData,
   type LogMessageOf,
 } from '@shared/schemas';
-import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
@@ -92,7 +91,6 @@ const ERROR_DETAIL_FIELDS = [
   'provider',
   'statusCode',
   'statusText',
-  'isRelayError',
   'userRetryable',
   'requestId',
   'rawMessage',
@@ -108,13 +106,10 @@ export function formatErrorTemplate(
     formatDisplayTimestamp(new Date(timestamp));
 
   const errorData: Partial<ErrorLogData> = data ?? {};
-  const isRelayError = errorData.isRelayError === true;
 
   // Build summary text (used for display and duplicate detection)
   const originalSummaryText = (text ?? '').trim() || 'Error occurred';
-  const summaryText = isRelayError
-    ? `${INCLUDED_ACCESS.label}: ${originalSummaryText}`
-    : originalSummaryText;
+  const summaryText = originalSummaryText;
 
   // Build error details from parsed data, skipping null/undefined values and a
   // message that merely duplicates the original summary.
@@ -158,7 +153,6 @@ export function formatErrorTemplate(
   return html`<wa-details appearance="plain" icon-placement="start" class=${classMap({
     'banner-details': true,
     'banner-details--error': true,
-    'banner-details--relay-error': isRelayError,
     'banner-details--no-toggle': !hasDetails,
   })} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${summaryTemplate}${contentTemplate}</wa-details>`;
 }

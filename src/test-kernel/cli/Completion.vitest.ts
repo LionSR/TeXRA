@@ -152,7 +152,6 @@ describe('CLI shell completion', () => {
     expect(directoryValueLine).toContain('--source');
     expect(directoryValueLine).toContain('-s');
     expect(genericValueLine).toContain('--instruction');
-    expect(genericValueLine).toContain('--api-mode');
     expect(bash).toContain(
       '--model|-m) COMPREPLY=( $(compgen -W "$(_texra_models)" -- "$cur") ); return ;;',
     );

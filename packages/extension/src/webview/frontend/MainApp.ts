@@ -364,7 +364,6 @@ export class MainApp extends MainAppBase {
           ${this.renderViewHeader()}
           <div class="main-content">
             <onboarding-welcome-card
-              @welcome-sign-in=${this.onSignInFromBanner}
               @welcome-chatgpt=${() =>
                 postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT)}
               @welcome-api-key=${() =>

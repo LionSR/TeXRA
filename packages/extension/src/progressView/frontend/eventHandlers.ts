@@ -307,7 +307,6 @@ export function handlePermissionAction(
           model: data.model,
           exhaustionReason,
           provider: data.errorDetails?.provider,
-          viaRelay: data.errorDetails?.isRelayError === true || undefined,
           kimiCodeRoutedOnFailure: data.kimiCodeRoutedOnFailure,
         });
         break;

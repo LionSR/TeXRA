@@ -34,19 +34,13 @@ import {
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
 import { ConfigApp } from '@cli/config/runConfigTui';
-import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
-import {
-  activeForm,
-  resetCliState,
-  sessionMeta,
-} from '@cli/chat/tui/state/cliState';
+import { activeForm, resetCliState } from '@cli/chat/tui/state/cliState';
 import {
   API_PROVIDERS,
   type ApiKeyStatus,
   type ApiProvider,
 } from '@model/apiProviders';
 import {
-  AgentCategory,
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_NAME,
   SETTINGS_VIEW_CORE_SETTINGS,
@@ -760,46 +754,6 @@ describe('/config slash command wiring', () => {
     // The key is deleted, so reads fall back to the default identity.
     expect(isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(false);
     expect(props.readValue?.(authorName)).toBe(DEFAULT_GIT_AUTHOR_NAME);
-  });
-
-  it('switches to personal API mode when OpenRouter routing is enabled', async () => {
-    resetCliState({
-      agent: 'chat',
-      category: AgentCategory.ToolUse,
-      model: 'deepseekT',
-      modelSource: 'builtin-default',
-      cwd: '/tmp/workspace',
-      apiMode: 'included',
-      approvalPolicy: 'ask',
-      canDelegate: false,
-      transcriptMode: 'persistent',
-      version: 'test',
-    });
-    const { stores } = makeFakeSettingsStores();
-    const selectedAccessRoutes: CliModelAccessSelection[] = [];
-    registerBuiltinSlashCommands({
-      getConfigStores: () => stores,
-      onModelAccessSelect: (selection) => {
-        selectedAccessRoutes.push(selection);
-        if (selection.kind === 'subscription-preference') return;
-        sessionMeta.set({
-          ...sessionMeta.get(),
-          apiMode: selection.apiMode,
-        });
-      },
-    });
-    openCliSlashCommandForm('config', '');
-
-    const props = renderConfigFormProps();
-    const openRouter = entryByKey(GlobalStateKey.USE_OPENROUTER);
-
-    await props.writeValue?.(openRouter, true);
-
-    expect(selectedAccessRoutes).toEqual([
-      { kind: 'api-fallback', apiMode: 'personal' },
-    ]);
-    expect(sessionMeta.get().apiMode).toBe('personal');
-    expect(invalidateModelOptionsCache).toHaveBeenCalledOnce();
   });
 
   it('invalidates model options when OpenRouter routing is disabled or reset', async () => {

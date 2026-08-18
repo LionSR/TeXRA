@@ -31,9 +31,6 @@ export interface QuotaFallbackRoute {
   /** Direct-key provider the retry should prompt for, when it differs from
    *  the forwarded SDK provider. */
   readonly fallbackApiProvider?: 'openai' | 'xai';
-  /** Whether accepting the switch must also turn off included (relay) access
-   *  so the retry cannot still prefer the relay JWT. */
-  readonly disableIncludedAccess: boolean;
   readonly retryFallbackName: string;
   readonly retrySourceName: string;
 }
@@ -43,7 +40,6 @@ const OAUTH_QUOTA_FALLBACK_ROUTES = Object.freeze([
     id: 'chatgpt',
     exhaustionReason: 'chatgpt-subscription',
     fallbackApiProvider: 'openai',
-    disableIncludedAccess: true,
     retryFallbackName: 'your own OpenAI API key',
     retrySourceName: 'ChatGPT subscription',
   }),
@@ -51,7 +47,6 @@ const OAUTH_QUOTA_FALLBACK_ROUTES = Object.freeze([
     id: 'grok',
     exhaustionReason: 'xai-subscription',
     fallbackApiProvider: 'xai',
-    disableIncludedAccess: true,
     retryFallbackName: 'your own xAI API key',
     retrySourceName: 'Grok subscription',
   }),
@@ -65,7 +60,6 @@ export const QUOTA_FALLBACK_ROUTES: readonly QuotaFallbackRoute[] =
       Object.freeze({
         id: plan.id,
         exhaustionReason: plan.exhaustionReason,
-        disableIncludedAccess: false,
         retryFallbackName: plan.retryFallbackName,
         retrySourceName: plan.retrySourceName,
       }),

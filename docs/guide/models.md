@@ -173,20 +173,22 @@ Expand a provider's row (click the chevron) to toggle streaming or, for provider
 
 You can also place a `.env` file in your workspace with variables like `OPENAI_API_KEY`. TeXRA loads this automatically so you don't need to enter keys every time.
 
-Prefer not to manage keys at all? Researcher Access is free for academics — no API key needed. See
-[Quick Start → Sign in, use ChatGPT, or add a key](./quick-start.md#sign-in-use-chatgpt-or-add-a-key).
+Already paying for a ChatGPT or Grok subscription? Sign in and skip the API key for those models — no key to manage.
+Kimi Code and the GLM Coding Plan also run on a subscription you already pay for, authenticated with a
+plan-specific key instead of a full provider key. See
+[Quick Start → Add a key or connect a subscription](./quick-start.md#add-a-key-or-connect-a-subscription).
 
 ## Customizing the Model List
 
 Choose which models appear in the extension picker from the **Dashboard → Models** tab — toggle them on or off per provider, no JSON required (the choice is saved in the extension).
 
-In the CLI TUI, use `/model` after a chat starts to switch among models that are runnable in the active API mode. Startup also asks for a model when the launcher flow needs one after the agent or team choice.
+In the CLI TUI, use `/model` after a chat starts to switch among the models your current credentials can run. Startup also asks for a model when the launcher flow needs one after the agent or team choice.
 
 For headless CLI runs, list what's available with `texra models list` (or `texra models show <id>` for details), then pick a default for your project by setting the `model` key in `.texra/config.json`, or override per run with `--model <id>`:
 
 <CliModelsHero />
 
-<p class="hero-caption">The id column is exactly what <code>--model</code> takes — the same short ids used in the tables above; <code>--all</code> includes models your current access mode can't run, with the reason.</p>
+<p class="hero-caption">The id column is exactly what <code>--model</code> takes — the same short ids used in the tables above; <code>--all</code> includes models your current credentials can't run, with the reason.</p>
 
 ## Using OpenRouter
 
