@@ -2,8 +2,9 @@
 //
 // Lists the main session plus each resumable tool-use subagent so any route
 // can be continued by its own id. Workflows are excluded — they don't resume
-// (only tool-use agents do). Reads only the in-memory stream tree, which still
-// holds finished subagents for the session, so no exit-time disk I/O is needed.
+// (only tool-use agents do). Reads only the in-memory child rosters, which
+// still hold finished subagents for the session, so no exit-time disk I/O is
+// needed.
 
 import { quote } from 'shell-quote';
 
@@ -21,7 +22,7 @@ import { formatCostUsd } from '@utils/text/stringUtils';
 import {
   childExecutionLabel,
   retainedChildStreamsFor,
-  type ChildStreamEntries,
+  type ChildRosters,
 } from './childExecutions';
 import { streamPreferredUsage } from './subscribeStreamArtifacts';
 import type { StreamSlice } from './cliState';
@@ -34,7 +35,7 @@ export interface ResumeTarget {
 }
 
 export interface ResumeTargetsInput {
-  readonly childStreamEntries: ChildStreamEntries;
+  readonly childRosters: ChildRosters;
   readonly rootExecutionId: string | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
@@ -149,7 +150,7 @@ export function formatResumeUsage(
 /** The main session followed by each resume-eligible subagent (any depth),
  *  deduped by executionId. */
 export function collectResumeTargets({
-  childStreamEntries,
+  childRosters,
   rootExecutionId,
   streams,
 }: ResumeTargetsInput): readonly ResumeTarget[] {
@@ -162,11 +163,7 @@ export function collectResumeTargets({
   }
 
   for (const streamId of streams.keys()) {
-    for (const child of retainedChildStreamsFor(
-      streamId,
-      childStreamEntries,
-      streams,
-    )) {
+    for (const child of retainedChildStreamsFor(streamId, childRosters)) {
       if (seen.has(child.executionId) || child.resumeEligible !== true) {
         continue;
       }

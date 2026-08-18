@@ -9,7 +9,7 @@ import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import { requestCliCompaction } from '@cli/chat/tui/state/compactionRequest';
 import {
   activeSubagentsFor,
-  childStreamEntries,
+  childRosters,
   parentStream,
 } from '@cli/chat/tui/state/childExecutions';
 import {
@@ -108,9 +108,9 @@ export async function showCliSessionStatus(
   const activeStreamId = activeStreamIdSignal.get();
   const streamSlices = streams.get();
   const slice = activeStreamId ? streamSlices.get(activeStreamId) : undefined;
-  const childEntries = childStreamEntries.get();
+  const rosters = childRosters.get();
   const directActiveChildren = activeStreamId
-    ? activeSubagentsFor(activeStreamId, childEntries, streamSlices)
+    ? activeSubagentsFor(activeStreamId, rosters)
     : [];
   let workflowChildren = directActiveChildren;
   if (activeStreamId && directActiveChildren.length === 0) {
@@ -118,11 +118,7 @@ export async function showCliSessionStatus(
       activeStreamId,
       parentStream: parentStream.get(),
     });
-    workflowChildren = activeSubagentsFor(
-      parentOrSelfStreamId,
-      childEntries,
-      streamSlices,
-    );
+    workflowChildren = activeSubagentsFor(parentOrSelfStreamId, rosters);
   }
   const activeChildSessions = workflowChildren.filter((child) =>
     isActivePhase(child.status),

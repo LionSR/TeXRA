@@ -23,7 +23,7 @@ vi.mock('@platform/platform', () => ({
   platform: () => ({ lifecycle: {} }),
 }));
 vi.mock('@cli/chat/tui/state/childExecutions', () => ({
-  childStreamEntries: { get: () => [] },
+  childRosters: { get: () => new Map() },
 }));
 vi.mock('@cli/chat/tui/state/cliState', () => ({
   clearTransientNotice: mocks.clearTransientNotice,

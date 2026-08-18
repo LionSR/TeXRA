@@ -24,6 +24,11 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import {
+  isTerminalOutcomePhase,
+  isTranscriptSettlementPhase,
+  STREAM_TRANSITION_CAUSE,
+} from '@shared/streams/streamStatus';
+import {
   activeStreamId,
   focusStream,
   patchStream,
@@ -32,11 +37,16 @@ import {
   streams,
 } from './cliState';
 import {
+  bindChildStreamState,
+  invalidateChildStreams,
   isChildStreamRemoved,
-  projectChildRoster,
-  setParentStream,
+  unbindChildStreamState,
 } from './childExecutions';
 import { bumpStreamArtifactRevision } from './subscribeStreamArtifacts';
+import {
+  releaseInactiveStreamTranscript,
+  syncStreamLog,
+} from './subscribeStreamLog';
 import { appendLocalAssistantTranscript } from './transcript';
 
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
@@ -58,6 +68,9 @@ class TuiSessionRenderer implements SessionRendererPort {
   clearPendingConversationProgress(_streamId: StreamTabId): void {}
 
   onStreamMetadataChanged(streamId: StreamTabId): void {
+    // A new RUNNING drops the previous run's retained children and surfaces
+    // only through this callback — roster snapshots must re-derive here too.
+    invalidateChildStreams();
     if (isChildStreamRemoved(streamId)) return;
     const metadata = this.state.getStreamMetadata(streamId);
     // Display config comes from the always-resident summary mirror, never from
@@ -98,10 +111,12 @@ class TuiSessionRenderer implements SessionRendererPort {
   }
 
   onParentStreamChanged(
-    childStreamId: StreamTabId,
-    parentStreamId: StreamTabId | null,
+    _childStreamId: StreamTabId,
+    _parentStreamId: StreamTabId | null,
   ): void {
-    setParentStream(childStreamId, parentStreamId);
+    // The applier already landed the edge on `SessionState` metadata; the
+    // CLI's topology snapshot re-derives from there.
+    invalidateChildStreams();
   }
 
   onStreamStatusChanged(
@@ -120,6 +135,9 @@ class TuiSessionRenderer implements SessionRendererPort {
       // reflects a backend timestamp instead of when the TUI received it.
       ...(lastTimestamp !== undefined ? { nowMs: lastTimestamp } : {}),
     });
+    // Roster rows carry phase (`recordChildPhase`); re-derive snapshots so
+    // child rows repaint on phase flips.
+    invalidateChildStreams();
   }
 
   onActiveStreamChanged(streamId: PresentedStreamId): void {
@@ -149,17 +167,13 @@ class TuiSessionRenderer implements SessionRendererPort {
   }
 
   onBadgesChanged(
-    streamId: StreamTabId,
-    badges: Parameters<SessionRendererPort['onBadgesChanged']>[1],
+    _streamId: StreamTabId,
+    _badges: Parameters<SessionRendererPort['onBadgesChanged']>[1],
   ): void {
-    // The shared applier already computed this roster — live rows plus the
-    // finished children it retains for display (phase-merged, 200-capped) —
-    // so project it whole; filtering retained rows out here was the
-    // #9021-class bug (single-substrate plan, U1). `projectChildRoster`
-    // splits by `finishedAt` presence (schema contract): live rows are
-    // active membership, retained rows are display history whose membership
-    // follows the shared roster (cap evictions included).
-    projectChildRoster(streamId, badges.subagents);
+    // The shared applier already landed this roster on `SessionState` — live
+    // rows plus the finished children it retains for display (phase-merged,
+    // 200-capped). The CLI reads it there; only the snapshots re-derive.
+    invalidateChildStreams();
   }
 
   onFilesChanged(streamId: StreamTabId): void {
@@ -275,15 +289,59 @@ export function attachSessionSignalsAdapter({
   snapshots,
 }: AttachSessionSignalsAdapterInit): () => void {
   const state = new SessionState(session);
+  bindChildStreamState(state);
   const renderer = new TuiSessionRenderer(state, snapshots, session);
   const applier = new SessionFactApplier(state, renderer, {
-    deleteStream: removeStream,
+    // Removal fires no renderer-port callback by design; the CLI is the
+    // delete executor in-process, so the roster/tombstone snapshots
+    // re-derive here, same-tick with the applier's removal barrier.
+    deleteStream: (streamId: StreamTabId) => {
+      removeStream(streamId);
+      invalidateChildStreams();
+    },
   });
   const detachSessionFacts = events.subscribeSessionFacts((fact) => {
-    // Status stays on `subscribeStreamStatus`: the CLI owns its focus
-    // reaction there, while the shared applier only updates session facts and
-    // requests lease-aware eviction. The old TUI ignored status facts here.
-    if (fact.type === 'status') return;
+    if (fact.type === 'status') {
+      // CLI status modality runs BEFORE the shared applier sees the fact:
+      // the applier requests transcript eviction for non-active phases, and
+      // the final fold must land while the log is still resident. So the
+      // slice patch lands first (a reused stream still carrying `WAITING`
+      // from the previous turn would otherwise finalize the next run's
+      // first chunks early), THEN the log sync folds under the current
+      // status, THEN lifecycle releases residency for a stream that just
+      // left its active phase.
+      const recognized = setStreamStatusInCliState({
+        streamId: fact.streamId,
+        status: fact.phase,
+        substate: fact.substate,
+      });
+      if (recognized) {
+        syncStreamLog(
+          fact.streamId,
+          isTranscriptSettlementPhase(fact.phase) ? { forceFinal: true } : {},
+        );
+        releaseInactiveStreamTranscript(fact.streamId);
+      }
+      // A completed or user-stopped child returns manual focus to that
+      // child's immediate owner. WAITING, repair events, unrelated streams,
+      // and detached children deliberately leave focus unchanged.
+      if (
+        (fact.cause === STREAM_TRANSITION_CAUSE.LIFECYCLE ||
+          fact.cause === STREAM_TRANSITION_CAUSE.USER_STOP) &&
+        isTerminalOutcomePhase(fact.phase) &&
+        activeStreamId.get() === fact.streamId
+      ) {
+        const ownerStreamId = state.getStreamMetadata(
+          fact.streamId,
+        ).parentStreamId;
+        if (ownerStreamId && !state.isStreamRemoved(ownerStreamId)) {
+          focusStream(ownerStreamId);
+        }
+      }
+      // Roster phase-merge, tombstone gating, and eviction requests.
+      applier.handleSessionFact(fact);
+      return;
+    }
     applier.handleSessionFact(fact);
     if (fact.type === 'setActiveStream') {
       const streamId = fact.payload.streamId;
@@ -308,5 +366,6 @@ export function attachSessionSignalsAdapter({
     detachRunFacts();
     detachSessionFacts();
     applier.dispose();
+    unbindChildStreamState(state);
   };
 }
