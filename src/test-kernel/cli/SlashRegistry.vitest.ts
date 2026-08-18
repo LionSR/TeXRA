@@ -827,15 +827,9 @@ describe('parseSlashInput', () => {
     expect(parseSlashInput('hello world')).toBeUndefined();
   });
 
-  it('accepts the historical clear spelling without treating TeX as commands', () => {
-    expect(parseSlashInput('\\clear')).toEqual({
-      name: 'clear',
-      remainder: '',
-    });
-    expect(parseSlashInput('\\goal')).toEqual({
-      name: 'goal',
-      remainder: '',
-    });
+  it('never treats TeX-style backslash tokens as commands', () => {
+    expect(parseSlashInput('\\clear')).toBeUndefined();
+    expect(parseSlashInput('\\goal')).toBeUndefined();
     expect(parseSlashInput('\\alpha + \\beta')).toBeUndefined();
   });
 

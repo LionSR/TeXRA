@@ -52,18 +52,18 @@ function unavailableAccess(value: string): CliModelAccess {
 }
 
 describe('CLI model JSON record', () => {
-  it('exposes an `id` field aliased to `value` for cross-resource addressability', () => {
+  it('exposes the model id under `id` only, for cross-resource addressability', () => {
     const record = cliModelRecord(model());
 
     expect(record.id).toBe('sonnet46T');
-    // `value` is preserved for backward compatibility with existing scripts.
-    expect(record.value).toBe('sonnet46T');
-    // `id` must appear before `value` so callers using `Object.keys()[0]`
+    // `id` is the single spelling; the internal `value` key does not leak.
+    expect(record).not.toHaveProperty('value');
+    // `id` must appear first so callers using `Object.keys()[0]`
     // (and human readers) see the canonical key first.
     expect(Object.keys(record)[0]).toBe('id');
   });
 
-  it('does not drop any of the upstream model fields', () => {
+  it('does not drop any of the other upstream model fields', () => {
     const m = model({
       provider: 'openai',
       cost: '$1.250/$10.000',
@@ -73,6 +73,7 @@ describe('CLI model JSON record', () => {
     const record = cliModelRecord(m);
 
     for (const key of Object.keys(m)) {
+      if (key === 'value') continue;
       expect(record).toHaveProperty(key);
       expect(record[key as keyof typeof record]).toEqual(
         m[key as keyof ModelOptionData],
@@ -83,14 +84,13 @@ describe('CLI model JSON record', () => {
   it('snapshots the source `value` so post-call mutation does not bleed in', () => {
     // Guards against a future regression where `cliModelRecord` is rewritten
     // to return a reference instead of a copy: mutating `m.value` after the
-    // projection must not change the record's `id` or `value`.
+    // projection must not change the record's `id`.
     const m = model({ value: 'gpt55' });
     const record = cliModelRecord(m);
 
     (m as { value: string }).value = 'mutated-after-call';
 
     expect(record.id).toBe('gpt55');
-    expect(record.value).toBe('gpt55');
   });
 });
 
