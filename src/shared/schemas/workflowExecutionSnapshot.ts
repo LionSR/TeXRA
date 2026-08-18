@@ -68,7 +68,7 @@ const WorkflowExecutionAttemptSchema = z.strictObject({
   startedAt: z.iso.datetime(),
   completedAt: z.iso.datetime().optional(),
 });
-const WorkflowExecutionCallSchema = z.strictObject({
+const WorkflowExecutionCallShape = z.strictObject({
   id: z.string().min(1),
   label: z.string(),
   stageId: z.string().min(1).optional(),
@@ -96,6 +96,23 @@ const WorkflowExecutionCallSchema = z.strictObject({
   costUsd: z.number().nonnegative().optional(),
   timestamps: WorkflowExecutionTimestampsSchema,
 });
+/**
+ * `stageTitle` was removed as a denormalized duplicate of the referenced
+ * stage's title (resolve it with `stageTitleFor` instead). Strip it here,
+ * ahead of the strict shape, so a `meta.json` snapshot persisted before that
+ * removal — e.g. by an interrupted run `hydrate()` must still recover —
+ * keeps parsing instead of failing strictObject's unrecognized-key check.
+ */
+const WorkflowExecutionCallSchema = z.preprocess((value) => {
+  if (value && typeof value === 'object' && 'stageTitle' in value) {
+    const { stageTitle: _stageTitle, ...rest } = value as Record<
+      string,
+      unknown
+    >;
+    return rest;
+  }
+  return value;
+}, WorkflowExecutionCallShape);
 export type WorkflowExecutionCall = z.infer<typeof WorkflowExecutionCallSchema>;
 
 type WorkflowExecutionCounts = Record<WorkflowExecutionCallStatus, number> & {

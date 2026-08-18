@@ -25,13 +25,21 @@ const TERMINAL_ACTIONS = new Set<Action>(['complete', 'finalize']);
  * - _services: Immutable dependencies (propagated by Flow)
  */
 class BaseNode<S = unknown, Svc = unknown> {
-  protected _services: Svc = {} as Svc;
+  protected _services: Svc | undefined;
   protected _successors: Map<Action, BaseNode> = new Map();
 
   /**
    * Get typed services. Override in subclasses for better typing.
+   * Throws rather than returning a fabricated empty object — a node that
+   * reads services before Flow.setServices() propagated them is a real bug,
+   * not a case to paper over.
    */
   get services(): Svc {
+    if (this._services === undefined) {
+      throw new Error(
+        'Node services accessed before Flow.setServices() populated them.',
+      );
+    }
     return this._services;
   }
 
