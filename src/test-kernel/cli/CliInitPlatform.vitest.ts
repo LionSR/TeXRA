@@ -14,9 +14,10 @@ import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import {
-  ClaudeAgentSessions,
-  CodexThreads,
+  claudeAgentSessionsFor,
+  codexThreadsFor,
 } from '@tools/agentCliSessionStores';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { getSetupPlatform } from '@tools/setup/platform';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
@@ -297,11 +298,12 @@ describe('CLI platform init', () => {
     // any live codex / claude_agent session outlived `texra` as orphans.
     // Asserted through the real `registerAgentShutdownHandlers` and its
     // observable effect on shutdown, not by mocking the @agent module.
+    const session = createTestSession();
     const interruptCodex = vi
-      .spyOn(CodexThreads, 'interruptAll')
+      .spyOn(codexThreadsFor(session), 'interruptAll')
       .mockImplementation(() => {});
     const interruptClaude = vi
-      .spyOn(ClaudeAgentSessions, 'interruptAll')
+      .spyOn(claudeAgentSessionsFor(session), 'interruptAll')
       .mockImplementation(() => {});
     mocks.tryPlatform.mockReturnValueOnce(undefined);
 
@@ -318,6 +320,7 @@ describe('CLI platform init', () => {
     } finally {
       interruptCodex.mockRestore();
       interruptClaude.mockRestore();
+      session.dispose();
     }
   });
 
