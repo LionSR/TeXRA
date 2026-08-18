@@ -11,7 +11,6 @@ import {
   getAgentsBySource,
   getVisibleAgent,
   getVisibleAgents,
-  isAgentRegistryReady,
   invalidateRemoteAgentsAfterSignOut,
   loadAgents,
   refresh,
@@ -264,8 +263,7 @@ describe('agent registry', () => {
     }
   });
 
-  it('keeps the registry marked ready when a later refresh fails', async () => {
-    expect(isAgentRegistryReady()).toBe(true);
+  it('keeps the registry serving when a later refresh fails', async () => {
     expect(getAgent('assistant')?.name).toBe('assistant');
 
     useAgentDirectories({
@@ -277,7 +275,6 @@ describe('agent registry', () => {
     try {
       await expect(loadAgents()).rejects.toThrow('refresh failed');
 
-      expect(isAgentRegistryReady()).toBe(true);
       expect(getAgent('assistant')?.name).toBe('assistant');
     } finally {
       useAgentDirectories();

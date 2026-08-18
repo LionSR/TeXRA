@@ -9,8 +9,8 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
-  ClaudeAgentSessions,
-  CodexThreads,
+  claudeAgentSessionsFor,
+  codexThreadsFor,
   registerAgentShutdownHandlers,
 } from '@tools/agentCliSessionStores';
 
@@ -19,7 +19,7 @@ describe('agent shutdown', () => {
     vi.restoreAllMocks();
   });
 
-  it('drains every live session once and interrupts global CLI sessions', async () => {
+  it('drains every live session once and interrupts its agent-CLI sessions', async () => {
     const firstSession = createTestSession();
     const secondSession = createTestSession();
     const compatibilitySession = defaultSession();
@@ -35,11 +35,12 @@ describe('agent shutdown', () => {
       compatibilitySession.executions,
       'killBackgroundProcesses',
     );
+    // Session-keyed registries: only sessions whose registry exists are swept.
     const interruptCodex = vi
-      .spyOn(CodexThreads, 'interruptAll')
+      .spyOn(codexThreadsFor(firstSession), 'interruptAll')
       .mockImplementation(() => {});
     const interruptClaude = vi
-      .spyOn(ClaudeAgentSessions, 'interruptAll')
+      .spyOn(claudeAgentSessionsFor(secondSession), 'interruptAll')
       .mockImplementation(() => {});
 
     try {

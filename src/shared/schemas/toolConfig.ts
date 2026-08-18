@@ -7,7 +7,6 @@ export const DEFAULT_TOOL_CONFIG = {
   autoExtractFigure: false,
   autoExtractTikzFigure: false,
   attachTeXCount: false,
-  attachDiagnostics: false,
   autoCompileInputPdf: false,
 } as const;
 

@@ -12,9 +12,10 @@ import type {
   ChildRunPorts,
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
-import { ClaudeAgentSessions } from '@tools/agentCliSessionStores';
+import { claudeAgentSessionsFor } from '@tools/agentCliSessionStores';
 
 const mocks = vi.hoisted(() => ({
   requestBashApproval: vi.fn(),
@@ -54,6 +55,13 @@ vi.mock('@agent/runtime/RunContext', () => ({
 vi.mock('@agent/runtime/SessionHandle', () => ({
   currentSession: mocks.currentSession,
 }));
+
+// Session-keyed registries: the suite pins one fake session and reads the
+// registry that dispatch resolves for it through the same accessor.
+const testSession = {
+  followUps: { acquire: () => ({ enqueue: vi.fn() }) },
+} as unknown as SessionHandle;
+const ClaudeAgentSessions = claudeAgentSessionsFor(testSession);
 
 vi.mock('@agent/storage', () => ({
   registerExecution: mocks.registerExecution,
@@ -156,9 +164,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     mocks.createChildStream.mockReturnValue(
       createFakeAgentCliChildStream(childStreamId),
     );
-    mocks.currentSession.mockReturnValue({
-      followUps: { acquire: () => ({ enqueue: vi.fn() }) },
-    });
+    mocks.currentSession.mockReturnValue(testSession);
   });
 
   afterEach(() => {

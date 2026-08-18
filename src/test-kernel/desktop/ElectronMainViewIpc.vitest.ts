@@ -606,7 +606,11 @@ describe('desktop main-view IPC', () => {
         ).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
-              message: { command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER },
+              message: {
+                command: MAIN_VIEW_COMMANDS.SET_BANNER,
+                banner: 'login',
+                visible: false,
+              },
             }),
           ]),
         );
@@ -614,10 +618,14 @@ describe('desktop main-view IPC', () => {
       { timeout: 5000 },
     );
     expect(
-      sends.some(
-        ({ message }) =>
-          commandOf(message) === MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
-      ),
+      sends.some(({ message }) => {
+        const record = message as Record<string, unknown>;
+        return (
+          commandOf(message) === MAIN_VIEW_COMMANDS.SET_BANNER &&
+          record.banner === 'login' &&
+          record.visible === true
+        );
+      }),
     ).toBe(false);
   });
 
@@ -668,8 +676,6 @@ describe('desktop main-view IPC', () => {
     expect(startupCommands[teamIndex - 1]).toBe(
       MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
     );
-    expect(startupCommands[teamIndex + 1]).toBe(
-      MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
-    );
+    expect(startupCommands[teamIndex + 1]).toBe(MAIN_VIEW_COMMANDS.SET_BANNER);
   });
 });

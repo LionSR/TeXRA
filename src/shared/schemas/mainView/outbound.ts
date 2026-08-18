@@ -105,21 +105,37 @@ const InstructionTextTranscribedMessageSchema = z.object({
   text: z.string().nullish(),
 });
 
-const ShowApiKeyBannerMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER),
-  provider: z.string().nullish(),
-  requiresKey: z.boolean().nullish(),
-});
+/** The main-view banner surfaces controlled by `SET_BANNER`. */
+const MainViewBannerSchema = z.enum([
+  'apiKey',
+  'agentConfig',
+  'dependency',
+  'gettingStarted',
+  'login',
+  'orchestrator',
+]);
+export type MainViewBanner = z.infer<typeof MainViewBannerSchema>;
 
-const ShowAgentConfigBannerMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER),
-  agentName: z.string().nullish(),
-  customDirSet: z.boolean().nullish(),
-});
-
-const ShowDependencyBannerMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER),
-  missingTools: z.array(z.string()).nullish(),
+/**
+ * One show/hide message for every main-view banner. `data` carries the
+ * banner-specific payload and is meaningful only when `visible` is true.
+ */
+export const SetBannerMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_BANNER),
+  banner: MainViewBannerSchema,
+  visible: z.boolean(),
+  data: z
+    .object({
+      /** apiKey banner */
+      provider: z.string().nullish(),
+      requiresKey: z.boolean().nullish(),
+      /** agentConfig banner */
+      agentName: z.string().nullish(),
+      customDirSet: z.boolean().nullish(),
+      /** dependency banner */
+      missingTools: z.array(z.string()).nullish(),
+    })
+    .nullish(),
 });
 
 const SetSelectedAgentMessageSchema = z.object({
@@ -156,18 +172,7 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   commandOnly(MAIN_VIEW_COMMANDS.RECORDING_STARTED),
   commandOnly(MAIN_VIEW_COMMANDS.RECORDING_STOPPED),
   commandOnly(MAIN_VIEW_COMMANDS.RECORDING_ERROR),
-  ShowApiKeyBannerMessageSchema,
-  commandOnly(MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER),
-  ShowAgentConfigBannerMessageSchema,
-  commandOnly(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER),
-  ShowDependencyBannerMessageSchema,
-  commandOnly(MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER),
-  commandOnly(MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER),
-  commandOnly(MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER),
-  commandOnly(MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER),
-  commandOnly(MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER),
-  commandOnly(MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER),
-  commandOnly(MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER),
+  SetBannerMessageSchema,
   SetSelectedAgentMessageSchema,
   SetOnboardingFunnelMessageSchema,
 ]);

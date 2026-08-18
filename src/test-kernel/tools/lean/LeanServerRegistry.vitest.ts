@@ -4,7 +4,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
-  clearLeanServerRegistry,
   isLeanServerActive,
   listLeanServers,
   registerLeanServer,
@@ -28,7 +27,7 @@ function makeServer(partial: Partial<LeanServerInfo>): LeanServerInfo {
 }
 
 afterEach(() => {
-  clearLeanServerRegistry();
+  for (const server of listLeanServers()) unregisterLeanServer(server.id);
 });
 
 describe('leanServerRegistry', () => {

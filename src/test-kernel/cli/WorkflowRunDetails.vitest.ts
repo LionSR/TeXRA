@@ -161,18 +161,18 @@ describe('selectWorkflowRunDetailLines', () => {
     ]);
   });
 
-  it('renders a normalized rN round and sanitizes terminal controls', () => {
+  it('renders a typed round and sanitizes terminal controls', () => {
     const lines = selectWorkflowRunDetailLines(
       {
         taskGroups: projectTaskGroupsFromStreamLog([
           {
             seqNo: 1,
-            id: 'legacy-r3',
+            id: 'round-3',
             type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
             level: LOG_LEVELS.INFO,
             timestamp: 0,
             text: 'r3',
-            data: { status: STREAM_PHASE.RUNNING },
+            data: { status: STREAM_PHASE.RUNNING, kind: 'round', index: 3 },
           },
         ]),
         outputFilesByRound: {},
