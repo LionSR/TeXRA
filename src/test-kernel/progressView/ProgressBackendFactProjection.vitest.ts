@@ -131,10 +131,7 @@ describe('ProgressBackend', () => {
     seedHistoryStreams(backend, 20);
 
     backend.renderer.sendStreamMetadata(
-      backend.projections.streamRoster(
-        backend.presentation.activeStream,
-        backend.state.streamStatus.getAllStreamStates(),
-      ),
+      backend.presentation.activeStream,
       backend.presentation.activeStream,
     );
 
@@ -305,10 +302,7 @@ describe('ProgressBackend', () => {
     messages.length = 0;
 
     backend.renderer.sendStreamMetadata(
-      backend.projections.streamRoster(
-        backend.presentation.activeStream,
-        backend.state.streamStatus.getAllStreamStates(),
-      ),
+      backend.presentation.activeStream,
       backend.presentation.activeStream,
     );
     const fullSync = fullSyncFrom(messages);
