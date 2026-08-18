@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -12,7 +13,6 @@ import {
   getProviderKeyUrl,
   getProviderStreaming,
   getUseOpenRouter,
-  setProviderStreaming,
 } from '@utils/config/providerConfig';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
@@ -185,7 +185,10 @@ describe('OpenRouter streaming', () => {
     });
 
     expect(getProviderStreaming('openRouter')).toBe(false);
-    await setProviderStreaming('openRouter', true);
+    await platform().globalState.update(
+      GlobalStateKey.STREAMING_OPENROUTER,
+      true,
+    );
     expect(getProviderStreaming('openrouter')).toBe(true);
   });
 });

@@ -448,9 +448,9 @@ function createWindow(options: {
   const refreshDesktopAuthSurfaces = async () => {
     const authenticated = await SupabaseClient.isAuthenticated();
     ipcRef.current?.postToRenderer({
-      command: authenticated
-        ? MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER
-        : MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
+      command: MAIN_VIEW_COMMANDS.SET_BANNER,
+      banner: 'login',
+      visible: !authenticated,
     });
     await settingsIpcRef.current?.refreshAuthDependentData({
       deferAgentCatalogRefresh: teamSignInPending,

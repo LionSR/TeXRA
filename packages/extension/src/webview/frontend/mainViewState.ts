@@ -174,7 +174,7 @@ export const dependencyBanner$ = trackedSignal<DependencyBannerState>(() => ({
   visible: false,
 }));
 export const gettingStartedVisible$ = trackedSignal(() => false);
-// Session-only: the host re-sends SHOW_GETTING_STARTED_BANNER on file
+// Session-only: the host re-sends the getting-started SET_BANNER on file
 // refreshes, so dismissal is tracked separately and never persisted.
 export const gettingStartedDismissed$ = trackedSignal(() => false);
 export const sessionHintDismissed$ = trackedSignal(() => true);
