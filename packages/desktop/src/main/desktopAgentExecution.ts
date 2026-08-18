@@ -856,9 +856,13 @@ export class DesktopProgressBridge {
             try {
               await this.options.host.openPath(file);
             } catch (error) {
-              await this.options.host.showErrorMessage(
-                `Full output could not be opened: ${toErrorMessage(error)}`,
-              );
+              // The desktop preview host already surfaced its own "Failed to
+              // open file …" dialog before rethrowing (desktopPreviewHost's
+              // fail() shows-then-throws), so reporting here would stack a
+              // second toast on the same failure (#10848). Log only.
+              this.logger.warn('Failed to open the full output artifact', {
+                data: toLogData(error),
+              });
             }
           },
         },

@@ -1999,9 +1999,12 @@ describe('CLI conversation transcript', () => {
     );
 
     expect(hydrated?.entries[0]?.spillPath).toBe(spillPath);
-    expect(transcriptToLines(hydrated, 80)).toEqual(
-      expect.arrayContaining(['Full output:', expect.stringContaining(notice)]),
-    );
+    expect(hydrated?.entries[0]?.spillFailed).toBe(true);
+    const lines = transcriptToLines(hydrated, 80);
+    // The failure notice renders without a "Full output:" header — the header
+    // promises recovered output that a failed spill does not have.
+    expect(lines).toContainEqual(expect.stringContaining(notice));
+    expect(lines).not.toContain('Full output:');
   });
 
   it('uses the full print width without Ink-only role padding', () => {
