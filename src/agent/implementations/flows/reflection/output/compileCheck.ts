@@ -279,7 +279,7 @@ async function compileOne(
     invalidCharPattern: /[^a-zA-Z0-9._-]/g,
     replacement: '_',
   });
-  const pathHash = truncatedHexId(pathForSafeName, PATH_HASH_LENGTH, 'sha1');
+  const pathHash = truncatedHexId(pathForSafeName, PATH_HASH_LENGTH);
   const sanitizedStem = sanitizedName.slice(0, MAX_SANITIZED_STEM_LENGTH);
   const safeName = `${sanitizedStem}_${pathHash}`;
   const buildDir = path.join(
