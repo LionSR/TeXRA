@@ -32,32 +32,14 @@ function taskGroupEndStatus(
   return value;
 }
 
-/**
- * Recover the exact zero-based `rN` round labels written before typed stage
- * metadata was persisted. Human-facing `Round N` labels have not had one
- * stable indexing convention, so they remain unclassified rather than being
- * assigned a guessed index.
- *
- * Introduced pre-#7164; replacement (typed stage metadata) shipped
- * 2026-07-05. Retire after 2026-10-05, pending an exported-trace permanence
- * ruling (see #10857).
- */
+/** The optional `kind`/`index` stage metadata carried on a lifecycle row. */
 function taskGroupStageMetadata(
-  name: string,
   kind: TaskGroup['kind'],
   index: number | undefined,
 ): Pick<TaskGroup, 'kind' | 'index'> {
-  const legacyMatch =
-    kind === undefined || kind === 'round' ? /^r(\d+)$/.exec(name) : null;
-  const inferredRoundIndex = legacyMatch
-    ? Number.parseInt(legacyMatch[1], 10)
-    : undefined;
-  const normalizedKind =
-    kind ?? (inferredRoundIndex !== undefined ? 'round' : undefined);
-  const normalizedIndex = index ?? inferredRoundIndex;
   return {
-    ...(normalizedKind !== undefined ? { kind: normalizedKind } : {}),
-    ...(normalizedIndex !== undefined ? { index: normalizedIndex } : {}),
+    ...(kind !== undefined ? { kind } : {}),
+    ...(index !== undefined ? { index } : {}),
   };
 }
 
@@ -108,7 +90,7 @@ export function upsertTaskGroupFromStreamLog(
       startTime: entry.timestamp,
       status: startStatus,
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
-      ...taskGroupStageMetadata(name, payload.kind, payload.index),
+      ...taskGroupStageMetadata(payload.kind, payload.index),
       ...(payload.total !== undefined ? { total: payload.total } : {}),
     };
 
@@ -133,7 +115,7 @@ export function upsertTaskGroupFromStreamLog(
       startTime: entry.timestamp,
       status,
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
-      ...taskGroupStageMetadata(name, payload.kind, payload.index),
+      ...taskGroupStageMetadata(payload.kind, payload.index),
       ...(payload.total !== undefined ? { total: payload.total } : {}),
       ...(endTime !== undefined ? { endTime } : {}),
     });
