@@ -390,11 +390,8 @@ function polishInstruction(): void {
     agent: executionMessage.agent,
     model: model$.get(),
     inputFiles: files.inputFiles,
-    inputFilesActive: files.inputFilesActive,
     contextFiles: files.contextFiles,
-    contextFilesActive: files.contextFilesActive,
     mediaFiles: files.mediaFiles,
-    mediaFilesActive: files.mediaFilesActive,
   });
 }
 

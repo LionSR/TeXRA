@@ -65,11 +65,8 @@ describe('MainView execute message builder', () => {
         baseFile: 'old.tex',
         editedFile: 'new.tex',
         inputFiles: ['main.tex'],
-        inputFilesActive: true,
         contextFiles: ['refs.bib'],
-        contextFilesActive: true,
         mediaFiles: ['figure.png'],
-        mediaFilesActive: true,
       },
       toolConfig: {
         autoExtractFigure: true,
@@ -96,7 +93,7 @@ describe('MainView execute message builder', () => {
 
     expect(message.agent).toBe('correct');
     expect(message.agentCategory).toBe(AgentCategory.Workflow);
-    expect(message.files?.inputFilesActive).toBe(false);
+    expect(message.files?.inputFiles).toEqual([]);
   });
 
   it('preserves the selected workspace root in the execute session', () => {
