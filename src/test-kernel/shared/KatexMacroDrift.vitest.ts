@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { applyReplacements } from '@replacement/engine';
-import {
-  MAX_REGEX_REPLACEMENTS,
-  MAX_STYLE_REPLACEMENTS,
-} from '@replacement/maxRules';
+import { MAX_STYLE_REPLACEMENTS } from '@replacement/maxRules';
 import { katexMacros } from '@shared/markdown/katexMacros';
 
 const MAX_COMMAND = /\\[A-Za-z][A-Za-z0-9]*/g;
@@ -184,45 +181,6 @@ describe('katexMacros vs maxRules shortcuts', () => {
   it('maps built-in-colliding sources to safe destinations at runtime', () => {
     expect(applyReplacements('_{\\S}', MAX_STYLE_REPLACEMENTS)).toBe('_\\sS');
     expect(applyReplacements('^{\\S}', MAX_STYLE_REPLACEMENTS)).toBe('^\\sS');
-    expect(applyReplacements('_\\S', MAX_REGEX_REPLACEMENTS)).toBe('_\\sS');
-    expect(applyReplacements('^\\S', MAX_REGEX_REPLACEMENTS)).toBe('^\\sS');
-    // The boundary-aware migration must not turn S-prefixed shortcuts such
-    // as '\Strat'/'\\Sig' into '\sStrat'/'\\sSig'.
-    expect(
-      applyReplacements('_\\Strat', [
-        MAX_STYLE_REPLACEMENTS,
-        MAX_REGEX_REPLACEMENTS,
-      ]),
-    ).toBe('_\\Strat');
-    expect(
-      applyReplacements('^\\Sig', [
-        MAX_STYLE_REPLACEMENTS,
-        MAX_REGEX_REPLACEMENTS,
-      ]),
-    ).toBe('^\\Sig');
-    // Escaped script markers (`\_\S`, `\^\S`) are not legacy unbraced
-    // output; the migration's negative lookbehind must leave them intact.
-    expect(
-      applyReplacements('\\_\\S', [
-        MAX_STYLE_REPLACEMENTS,
-        MAX_REGEX_REPLACEMENTS,
-      ]),
-    ).toBe('\\_\\S');
-    expect(
-      applyReplacements('\\^\\S', [
-        MAX_STYLE_REPLACEMENTS,
-        MAX_REGEX_REPLACEMENTS,
-      ]),
-    ).toBe('\\^\\S');
-    // `\S` followed by a digit is the documented remaining ambiguity: the
-    // migration still rewrites it because legacy `\S0` output is
-    // indistinguishable from a genuine section sign in `x^\S2`.
-    expect(
-      applyReplacements('x^\\S2', [
-        MAX_STYLE_REPLACEMENTS,
-        MAX_REGEX_REPLACEMENTS,
-      ]),
-    ).toBe('x^\\sS2');
     expect(applyReplacements('\\mathbf{f}', MAX_STYLE_REPLACEMENTS)).toBe(
       '\\bbf',
     );

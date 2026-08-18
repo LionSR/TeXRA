@@ -335,7 +335,10 @@ export function changeAgent(sessionType: SessionType, value: string): void {
   sessionType$.set(sessionType);
   refreshModelSelectionForActiveSession();
   refreshInstructionPlaceholder();
-  postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
+  postMessage(MAIN_VIEW_COMMANDS.SET_BANNER, {
+    banner: 'agentConfig',
+    visible: false,
+  });
 }
 
 // ---------------------------------------------------------------------------

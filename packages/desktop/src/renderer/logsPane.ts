@@ -46,7 +46,6 @@ export interface LogsPaneOptions {
     callback: () => void,
     intervalMs: number,
   ) => number;
-  readonly cancelRefresh?: (handle: number) => void;
   readonly refreshIntervalMs?: number;
 }
 
@@ -169,8 +168,6 @@ export function createLogsPane(
     options.scheduleRefresh ??
     ((callback: () => void, intervalMs: number) =>
       window.setInterval(callback, intervalMs));
-  const cancelRefresh =
-    options.cancelRefresh ?? ((handle: number) => window.clearInterval(handle));
   const refreshIntervalMs =
     options.refreshIntervalMs ?? LOG_AUTO_REFRESH_INTERVAL_MS;
 
@@ -286,7 +283,7 @@ export function createLogsPane(
     if (active === nextActive) return;
     active = nextActive;
     if (!active) {
-      if (refreshHandle != null) cancelRefresh(refreshHandle);
+      if (refreshHandle != null) window.clearInterval(refreshHandle);
       refreshHandle = undefined;
       return;
     }

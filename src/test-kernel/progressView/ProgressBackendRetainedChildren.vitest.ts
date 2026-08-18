@@ -242,10 +242,7 @@ describe('retained finished children', () => {
     // frontend's other writer of `subagents`; it must overlay the stale row
     // with the authoritative status-machine outcome.
     backend.renderer.sendStreamMetadata(
-      backend.projections.streamRoster(
-        backend.presentation.activeStream,
-        backend.state.streamStatus.getAllStreamStates(),
-      ),
+      backend.presentation.activeStream,
       backend.presentation.activeStream,
     );
     backend.renderer.updateStreamMetadata(

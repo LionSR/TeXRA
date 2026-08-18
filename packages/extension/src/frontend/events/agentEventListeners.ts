@@ -123,9 +123,10 @@ async function handleShowAgentConfigBanner(
     if (!view) return false;
     return (
       (await view.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-        agentName: payload.agentName,
-        customDirSet: true,
+        command: MAIN_VIEW_COMMANDS.SET_BANNER,
+        banner: 'agentConfig',
+        visible: true,
+        data: { agentName: payload.agentName, customDirSet: true },
       })) !== false
     );
   } catch (err) {

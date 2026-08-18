@@ -61,7 +61,7 @@ import {
   findClaudeBinaryPath,
 } from './claudeAgentImport';
 import { type ChildStream } from './delegation/childStream';
-import { ClaudeAgentSessions } from './agentCliSessionStores';
+import { claudeAgentSessionsFor } from './agentCliSessionStores';
 import {
   dispatchAgentCliTool,
   launchAgentCliSession,
@@ -448,7 +448,7 @@ function startClaudeAgentLoop(params: {
     agentName: CLAUDE_AGENT_NAME,
     stageLabel: 'Claude Code session',
     initialPrompt,
-    store: ClaudeAgentSessions,
+    store: claudeAgentSessionsFor,
     releaseFallbackClaim: params.releaseFallbackClaim,
     runProviderTurn: async (prompt, _ports, abortController) => {
       const forkSession = isFirstTurn && params.forkSession;
@@ -532,7 +532,7 @@ export class ClaudeAgentTool extends defineTool({
     return dispatchAgentCliTool({
       agentName: CLAUDE_AGENT_NAME,
       approvalLabel: `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
-      store: ClaudeAgentSessions,
+      store: claudeAgentSessionsFor,
       // A fork always launches a distinct TeXRA child. Queueing onto the
       // source session would mutate the original instead of branching it.
       resumeId: isFork ? undefined : sessionId,
