@@ -357,14 +357,6 @@ interface StreamRecord {
   // staged deletion) — the lane itself, not this field, serializes the work.
   diskState: DiskState;
   seedChain: Promise<void> | undefined;
-  /**
-   * Single-flight guard for a lazily-triggered disk read: sibling mutations
-   * queued for the same unseeded stream before this read settles share it
-   * instead of each paying for their own `readSeed`. Cleared once the read
-   * settles (see `ensureSeedReadStarted`), so the next stream is free to
-   * retry after a failure instead of being wedged on a stale promise.
-   */
-  pendingSeedRead: Promise<void> | undefined;
   /** Incremented for each refresh attempt; seed-gated mutations do not change it. */
   seedRefreshGeneration: number;
   /** Authoritative disk provenance captured before the current refresh chain began. */
@@ -405,7 +397,6 @@ export class StreamSnapshotStore {
     summaryMetaHydrationFallback: undefined,
     diskState: 'unknown',
     seedChain: undefined,
-    pendingSeedRead: undefined,
     seedRefreshGeneration: 0,
     seedRefreshBaseline: undefined,
     metaOverlay: false,
@@ -715,48 +706,27 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Start (or join) the single disk read shared by every mutation queued for
-   * this stream before it settles: two mutations queued back-to-back capture
-   * the SAME `pendingSeedRead` promise synchronously, so only the first pays
-   * for `readSeed` — the rest just await it. Cleared on settle (guarded by
-   * identity, so a newer read that has already replaced this one is left
-   * alone) so a later, genuinely fresh attempt is free to retry.
-   */
-  private ensureSeedReadStarted(
-    stream: StreamTabId,
-    version: number,
-  ): Promise<void> {
-    const record = this.getOrCreateRecord(stream);
-    if (record.pendingSeedRead) return record.pendingSeedRead;
-    const seed = this.readSeed(stream, version).finally(() => {
-      const current = this.records.get(stream);
-      if (current?.pendingSeedRead === seed)
-        current.pendingSeedRead = undefined;
-    });
-    record.pendingSeedRead = seed;
-    return seed;
-  }
-
-  /**
-   * Queue a mutation onto the stream's seed lane: the lane's FIFO order (not
-   * manual chaining) is what guarantees this runs after every mutation queued
-   * ahead of it. `ensureSeedReadStarted` is captured synchronously, before
-   * enqueueing, so sibling mutations queued in the same tick share one read
-   * instead of each starting their own.
+   * Queue a mutation onto the stream's seed lane: the lane's single-flight
+   * FIFO order (concurrency 1, shared with `refreshSeed`) is what guarantees
+   * this runs after every unit of work queued ahead of it, seed reads
+   * included — the read itself must run INSIDE a queued task, not before
+   * enqueueing, or a `refreshSeed` racing on the same stream could start its
+   * own disk read concurrently with this one (the queue only serializes what
+   * it dispatches; anything started outside `add()` runs unguarded). Each
+   * task re-checks `hasDiskProvenance` before reading, so once the first
+   * queued task establishes it, every task queued behind it skips straight
+   * to `apply`.
    */
   private queueAfterSeed(
     stream: StreamTabId,
     version: number,
     apply: () => unknown,
   ): Promise<void> {
-    const seedRead = this.hasDiskProvenance(stream)
-      ? undefined
-      : this.ensureSeedReadStarted(stream, version);
     const next: Promise<void> = this.seedQueueFor(stream)
       .add(async () => {
-        if (seedRead) {
+        if (!this.hasDiskProvenance(stream)) {
           try {
-            await seedRead;
+            await this.readSeed(stream, version);
           } catch (err: unknown) {
             if (!this.hasDiskProvenance(stream)) throw err;
           }
@@ -1943,10 +1913,6 @@ export class StreamSnapshotStore {
     record.seedRefreshBaseline = refreshBaseline;
     const refreshGeneration = ++record.seedRefreshGeneration;
     record.diskState = 'unknown';
-    // A forced refresh supersedes any lazily-started read still in flight for
-    // the OLD (now-stale) diskState; a `queueAfterSeed` call arriving after
-    // this point must not join it.
-    record.pendingSeedRead = undefined;
     const queue = this.seedQueueFor(stream);
     const next: Promise<void> = queue
       .add(async () => {
