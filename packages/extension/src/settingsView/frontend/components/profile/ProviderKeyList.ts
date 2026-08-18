@@ -8,6 +8,8 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { ProviderKeyStatus, ProviderSetting } from '@shared/schemas';
 import { DEFAULT_GLOBAL_STREAMING } from '@shared/schemas';
+import { PROVIDER_STATE_ENTRIES } from '@shared/constants/providers';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import {
@@ -27,6 +29,7 @@ import '@awesome.me/webawesome/dist/components/switch/switch.js';
 // Local imports - profile view styles and events
 import { createEvent } from '@shared/utils/events';
 import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
+import { postStateSetting } from '../shared/stateSettingRows';
 import { providerKeyListStyles } from './ProviderKeyList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
@@ -52,6 +55,20 @@ export class ProviderKeyList extends LitElement {
   private toggleExpanded(provider: string): void {
     this.expandedProvider =
       this.expandedProvider === provider ? null : provider;
+  }
+
+  /**
+   * Catalog keys for a provider's streaming/endpoint writes. The lowercase
+   * fallback mirrors `providerConfig.entry()`: the API-key roster spells
+   * OpenRouter as `openRouter` while the state registry uses `openrouter`.
+   */
+  private providerStateKeys(provider: string) {
+    return (
+      PROVIDER_STATE_ENTRIES.find((entry) => entry.id === provider) ??
+      PROVIDER_STATE_ENTRIES.find(
+        (entry) => entry.id === provider.toLowerCase(),
+      )
+    );
   }
 
   private renderActions(entry: ProviderKeyStatus): TemplateResult {
@@ -104,10 +121,8 @@ export class ProviderKeyList extends LitElement {
           ?checked=${entry.streaming}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
-            postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING, {
-              provider: entry.provider,
-              enabled: checked,
-            });
+            const key = this.providerStateKeys(entry.provider)?.streamingKey;
+            if (key) postStateSetting(key, checked);
           }}
         >
           Streaming
@@ -126,10 +141,8 @@ export class ProviderKeyList extends LitElement {
               placeholder="Leave blank for default"
               @change=${(e: Event) => {
                 const value = (e.target as WaInput).value?.trim() ?? '';
-                postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT, {
-                  provider: entry.provider,
-                  endpoint: value,
-                });
+                const key = this.providerStateKeys(entry.provider)?.endpointKey;
+                if (key) postStateSetting(key, value);
               }}
             ></wa-input>
           </div>
@@ -238,9 +251,7 @@ export class ProviderKeyList extends LitElement {
           checked: this.globalStreamingDefault,
           onChange: (e: Event) => {
             const checked = (e.target as WaSwitch).checked;
-            postMessage(SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING, {
-              enabled: checked,
-            });
+            postStateSetting(GlobalStateKey.STREAMING_GLOBAL, checked);
           },
         })}
         <div class="settings-disclosure-list">

@@ -15,35 +15,24 @@ import {
 import { isNonEmptyString } from '@utils/core';
 
 /**
- * Entry-point schema for a restore-into-the-main-view payload. Unwraps the
- * legacy `{ agentConfig }` wrapper (the retired TaskState shape) once, so
- * nothing downstream branches on which form arrived.
- *
- * Unwrapping happens in `z.preprocess` rather than as a `z.union` legacy
- * member because `AgentConfigSchema` prefaults every field: a union would let
- * a wrapper whose `agentConfig` is malformed fall through to the plain member
- * and validate as an empty default workflow config, silently restoring a blank
- * form instead of reporting malformed input.
+ * Entry-point schema for a restore-into-the-main-view payload: a plain
+ * `AgentConfig`. The identity refine runs first because `AgentConfigSchema`
+ * prefaults every field — without it, malformed input would validate as an
+ * empty default workflow config and silently restore a blank form.
  */
-export const RestoreRunConfigInputSchema = z.preprocess(
-  (input) =>
-    typeof input === 'object' && input !== null && 'agentConfig' in input
-      ? input.agentConfig
-      : input,
-  z
-    .unknown()
-    .refine((input) => {
-      if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-        return false;
-      }
-      const identities = [
-        'agent' in input ? input.agent : undefined,
-        'model' in input ? input.model : undefined,
-      ].filter((value) => value !== undefined);
-      return identities.length > 0 && identities.every(isNonEmptyString);
-    }, 'A restored run configuration must identify a non-empty agent or model.')
-    .pipe(AgentConfigSchema),
-);
+export const RestoreRunConfigInputSchema = z
+  .unknown()
+  .refine((input) => {
+    if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+      return false;
+    }
+    const identities = [
+      'agent' in input ? input.agent : undefined,
+      'model' in input ? input.model : undefined,
+    ].filter((value) => value !== undefined);
+    return identities.length > 0 && identities.every(isNonEmptyString);
+  }, 'A restored run configuration must identify a non-empty agent or model.')
+  .pipe(AgentConfigSchema);
 
 /** Convert a run config into a full main view state snapshot. */
 export function buildMainViewState(

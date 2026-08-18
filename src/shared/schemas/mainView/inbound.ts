@@ -23,6 +23,7 @@ import {
   MultipleDocumentFileTypeSchema,
 } from '../fileTypes';
 import { GettingStartedActionSchema, SessionTypeSchema } from './state';
+import { SetBannerMessageSchema } from './outbound';
 import {
   MainViewExecuteFilesSchema,
   MainViewExecuteInboundMessageSchema,
@@ -182,24 +183,16 @@ const ApiKeyMessages = [
 ] as const;
 
 const BannerMessages = [
-  commandOnly(MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER),
-  commandOnly(MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER),
-  commandOnly(MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER),
-  commandOnly(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER),
-  commandOnly(MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER),
+  // Webview-initiated banner updates (e.g. dismissing the agent-config
+  // banner); the host echoes them back to the active view.
+  SetBannerMessageSchema,
   commandOnly(MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES),
-  commandOnly(MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER),
-  commandOnly(MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER),
   commandOnly(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER),
   commandOnly(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER),
   commandOnly(MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION),
     action: GettingStartedActionSchema,
-  }),
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER),
-    missingTools: z.array(z.string()).optional(),
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE),

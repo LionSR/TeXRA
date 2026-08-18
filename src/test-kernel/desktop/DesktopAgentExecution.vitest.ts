@@ -987,9 +987,10 @@ describe('DesktopProgressBridge', () => {
     });
 
     expect(messages).toContainEqual({
-      command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-      agentName: 'missing-writer',
-      customDirSet: true,
+      command: MAIN_VIEW_COMMANDS.SET_BANNER,
+      banner: 'agentConfig',
+      visible: true,
+      data: { agentName: 'missing-writer', customDirSet: true },
     });
     expect(messages).toHaveLength(1);
     expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');

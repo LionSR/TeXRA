@@ -152,13 +152,9 @@ export type TeamOptionData = z.infer<typeof TeamOptionDataSchema>;
 // Persisted State Schema
 // ============================================================
 
-const WorkflowToolConfigFieldsSchema = ToolConfigFieldsSchema.omit({
-  attachDiagnostics: true,
-});
-
 // Composes: UIFileFieldsSchema (file fields) + workflow tool options.
 export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
-  WorkflowToolConfigFieldsSchema,
+  ToolConfigFieldsSchema,
 ).extend({
   sessionType: SessionTypeSchema.prefault('toolUse'),
   launchTarget: LaunchTargetSchema.prefault('agent'),
@@ -229,7 +225,7 @@ const FileSelectConfigSchema = z.object({
 });
 export type FileSelectConfig = z.infer<typeof FileSelectConfigSchema>;
 
-export type CheckboxValues = z.infer<typeof WorkflowToolConfigFieldsSchema>;
+export type CheckboxValues = z.infer<typeof ToolConfigFieldsSchema>;
 
 const SingleFilesSchema = z.object({
   baseFile: z.string(),
@@ -254,7 +250,7 @@ const MultiFilesKeySchema = MultiFilesSchema.keyof();
 
 const FileStateContextSchema = z.object({
   sessionType: SessionTypeSchema,
-  checkboxValues: WorkflowToolConfigFieldsSchema,
+  checkboxValues: ToolConfigFieldsSchema,
   singleFiles: SingleFilesSchema,
   fileOptions: FileOptionsSchema,
   multiFiles: MultiFilesSchema,
