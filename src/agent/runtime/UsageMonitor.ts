@@ -1,7 +1,6 @@
 import type { AgentTrace } from '@agent/trace';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
-import { usesServerSideKeysRoute } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import type { ModelCell } from '@agent/runtime/ModelCell';
 import type {
   ExtendedTokenUsageStats,
@@ -10,10 +9,7 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import {
-  USAGE_LOG_FLUSH_OUTCOME,
-  UsageLogService,
-} from '@telemetry/UsageLogService';
+import { UsageLogService } from '@telemetry/UsageLogService';
 import type { UsageLogStats } from '@telemetry/UsageLogTypes';
 import { roundTo } from '@utils/core';
 import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
@@ -145,7 +141,7 @@ export class UsageMonitor {
       const roundReasoningTokens = latestUsage.reasoningTokens ?? 0;
       const roundCost = latestUsage.cost;
       const toolUseTokens = latestUsage.toolUsePromptTokens ?? 0;
-      const usageRoute = latestUsage.usageRoute ?? this.currentUsageRoute();
+      const usageRoute = latestUsage.usageRoute ?? 'api-key';
       const roundCacheMissTokens = resolveRoundCacheMissTokens(
         latestUsage.cacheMissInputTokens,
         roundInputTokens,
@@ -204,8 +200,7 @@ export class UsageMonitor {
         },
       );
 
-      // Log to backend for analytics/billing. Relay-backed rounds wait for the
-      // flush because the next relay request enforces the cap from DB state.
+      // Log to backend for analytics/billing.
       await this.logToBackend(
         stateGlobal.totalResponseTimeMs,
         {
@@ -242,23 +237,6 @@ export class UsageMonitor {
     return (totals.totalCacheReadInputTokens / totalCacheableTokens) * 100;
   }
 
-  private currentUsageRoute(): UsageRoute | undefined {
-    try {
-      // Shares ModelHandler's runtime combinator (#7101 triage) rather than
-      // re-deriving the same `!openRouter && relaySync` formula independently
-      // — `IModelHandler` does not expose `shouldUseServerSideKeys()`, so the
-      // config-shaped combinator is what this class can call.
-      return usesServerSideKeysRoute(this.modelInfo.config)
-        ? 'relay'
-        : 'api-key';
-    } catch (error) {
-      this.context.logger.debug('Usage route relay check failed', {
-        data: error,
-      });
-      return undefined;
-    }
-  }
-
   /**
    * Log per-round usage to backend for analytics/billing.
    * Errors are caught and logged, never thrown.
@@ -280,7 +258,6 @@ export class UsageMonitor {
     try {
       const { config } = this.modelInfo;
       const cachedInputTokens = usage.cachedInputTokens ?? 0;
-      const usedRelay = usage.usageRoute === 'relay';
 
       UsageLogService.log({
         model: config.fullName,
@@ -293,28 +270,9 @@ export class UsageMonitor {
         responseTimeMs: Math.round(totalResponseTimeMs),
         cachedInputTokens,
         reasoningTokens: usage.reasoningTokens ?? 0,
-        usedRelay,
         ...(usage.usageRoute != null && { usageRoute: usage.usageRoute }),
         streamId: this.context.streamId,
       });
-
-      // The relay enforces the monthly spend cap from the server-side usage
-      // total, which is only as fresh as the last flush (otherwise batched
-      // every ~30s / 10 entries). For relay rounds, flush now so the relay's
-      // pre-call check sees this round's cost before the next call — bounding
-      // free-tier overage to roughly one round instead of a whole session.
-      if (usedRelay) {
-        const flushOutcome = await UsageLogService.flush();
-        if (flushOutcome === USAGE_LOG_FLUSH_OUTCOME.PENDING) {
-          this.context.logger.debug(
-            'Relay usage logging is queued; spend-cap data will retry later.',
-          );
-        } else if (flushOutcome === USAGE_LOG_FLUSH_OUTCOME.REJECTED) {
-          this.context.logger.error(
-            'Relay usage logging was permanently rejected; spend-cap accounting is incomplete.',
-          );
-        }
-      }
     } catch (error) {
       this.context.logger.warn('Backend usage logging failed', {
         data: error,

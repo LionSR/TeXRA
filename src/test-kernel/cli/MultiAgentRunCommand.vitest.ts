@@ -361,25 +361,6 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.planTeamRun).toHaveBeenCalledTimes(2);
   });
 
-  it('does not load remote agents for relay-token-only model authentication', async () => {
-    mocks.teamPlanHasGaps.mockReturnValueOnce(true);
-    isAuthenticatedSpy.mockResolvedValueOnce(true);
-    canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(false);
-
-    const result = await loadCliMultiAgentRunPlan({
-      preset: 'mathematician',
-    });
-
-    expect(result.remoteCatalogRefreshAttempted).toBe(false);
-    expect(agentCatalogMock.loadAgents).toHaveBeenCalledOnce();
-    expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith({
-      includeRemote: false,
-    });
-    expect(agentCatalogMock.refresh).not.toHaveBeenCalled();
-    expect(isAuthenticatedSpy).not.toHaveBeenCalled();
-    expect(mocks.planTeamRun).toHaveBeenCalledTimes(1);
-  });
-
   it('marks preset-list resolution when authenticated gaps triggered a remote load', async () => {
     mocks.teamPlanHasGaps.mockReturnValueOnce(true);
     canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(true);

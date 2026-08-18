@@ -123,7 +123,6 @@ export class ProbeEnvironmentTool extends defineTool({
         researcherAccess: {
           authenticated: auth.authenticated,
           email: auth.authenticated ? auth.email : undefined,
-          tier: auth.authenticated ? auth.tier : undefined,
         },
         chatGptSubscription: chatGptStatus,
         githubToken,

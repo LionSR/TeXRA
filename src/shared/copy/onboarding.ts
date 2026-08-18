@@ -25,21 +25,14 @@ export const ONBOARDING_CHOICE_CHATGPT = {
 } as const;
 
 /**
- * The free academic program you sign in to. Distinct from included access
- * (how model calls are paid for once signed in) — see `modelAccess.ts`.
+ * The academic program you sign in to for the hosted research-agent catalog.
  */
 export const RESEARCHER_ACCESS = {
   label: 'Researcher Access',
 } as const;
 
-/** State 0 choice 2. */
-export const ONBOARDING_CHOICE_SIGN_IN = {
-  label: `Sign in with ${RESEARCHER_ACCESS.label}`,
-  description: 'Free for academics; no API key needed',
-} as const;
-
 /**
- * State 0 choice 3. Same name as the model-access setting's option, so the
+ * State 0 choice 2. Same name as the model-access setting's option, so the
  * first-run picker and the settings radio group cannot drift apart; the
  * description stays short here because the picker shows one line per choice.
  */

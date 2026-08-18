@@ -296,14 +296,14 @@ set -a; . .env; set +a
 texra doctor
 ```
 
-Prefer not to manage keys at all? Sign in to TeXRA for included hosted access:
+Prefer not to manage keys at all? Connect a provider subscription instead:
 
 ```bash
-texra login
+texra auth chatgpt login
 texra auth status
 ```
 
-See [TeXRA CLI](./texra-cli.md) for sign-in, workspace defaults, and switching between hosted and personal-key access.
+See [TeXRA CLI](./texra-cli.md) for provider keys, subscriptions, and workspace defaults.
 
 ::: info Getting API Keys
 

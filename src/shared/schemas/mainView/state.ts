@@ -54,20 +54,14 @@ const PickerOptionBaseSchema = z.object({
 });
 
 const ModelAvailabilityKindSchema = z.enum([
-  'included-access',
   'provider-key',
   'openrouter-key',
   'missing-key',
-  'not-included',
-  'included-login-required',
-  'relay-quota-exhausted',
   'retired',
-  // ChatGPT-subscription (Codex) access via the user's own OAuth session. Kept
-  // distinct from relay `included-access` because it is the user's own
-  // credential and runs regardless of relay-vs-personal API mode.
+  // ChatGPT-subscription (Codex) access via the user's own OAuth session.
   'subscription-access',
-  // Editor-hosted Copilot access is keyless but distinct from ChatGPT and the
-  // TeXRA relay. Permission state is reported by the VS Code host.
+  // Editor-hosted Copilot access is keyless but distinct from ChatGPT.
+  // Permission state is reported by the VS Code host.
   'copilot-access',
   'copilot-consent-required',
   'copilot-unavailable',

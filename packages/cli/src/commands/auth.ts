@@ -2,7 +2,6 @@ import { defineCommand } from 'citty';
 
 import { DEFAULT_OAUTH_PROVIDER, isOAuthProvider } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
-import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -14,27 +13,14 @@ import {
   unsupportedLoginProviderMessage,
   type CliLoginInit,
 } from '../runtime/loginOptions';
-import {
-  writeErrorStderr,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
-import {
-  fetchRelayUsageSummary,
-  parseUtcMonth,
-  type RelayUsageSummary,
-} from '../runtime/relayUsage';
+import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { CLI_OAUTH_PROVIDER_INPUTS } from '../runtime/oauthProviderDisplay';
 import {
   formatCliManualAuthUrlMessage,
   getCliAuthProfile,
-  getCliSessionAccessToken,
-  relayTokenStillActiveNotice,
-  resolveCliUsageTier,
   signInCliSupabase,
   signInCliSupabaseDeviceCode,
   signOutCliSupabase,
-  supabaseSignOutOutcomeMessage,
   type CliAuthProfile,
 } from '../runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '../runtime/supabaseAuthDeviceCode';
@@ -47,7 +33,6 @@ import { booleanArg, GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { cliProgressWriter, emitCliResult } from './_helpers/output';
 import { chatgptAuthCommand } from './chatgptAuth';
 import { grokAuthCommand } from './grokAuth';
-import { authTokenCommand } from './relayTokens';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 type LoginCommandArgs = {
@@ -258,17 +243,11 @@ export const logoutCommand = defineCliCommand({
     const signOutResult = await withCliAuthError(() => signOutCliSupabase());
     if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
 
-    // Sign-out only clears the stored session; a configured TEXRA_RELAY_TOKEN
-    // keeps authenticating relay calls, so report it instead of a clean exit.
-    const relayNotice = relayTokenStillActiveNotice();
-    const payload = {
-      authenticated: false,
-      relayTokenConfigured: relayNotice !== undefined,
-    };
+    const payload = { authenticated: false };
     emitCliResult(context, {
       json: payload,
       ndjson: { kind: 'auth', ...payload },
-      text: supabaseSignOutOutcomeMessage('Signed out.'),
+      text: 'Signed out.',
     });
     return CliExitCode.Success;
   },
@@ -282,7 +261,7 @@ export const logoutCommand = defineCliCommand({
  */
 function formatAuthStatusLine(profile: CliAuthProfile): string {
   if (profile.authenticated) {
-    return `Signed in as ${profile.accountLabel || 'unknown'} (${profile.tier ?? 'unknown'}).`;
+    return `Signed in as ${profile.accountLabel || 'unknown'}.`;
   }
   if (profile.sessionState === 'transient') {
     return 'The authentication service is temporarily unavailable. Your stored session is intact; try again later.';
@@ -315,74 +294,10 @@ const authStatusCommand = defineCliCommand({
   },
 });
 
-const usageCommand = defineCliCommand({
-  meta: { name: 'usage', description: 'Show your included access usage' },
-  args: {
-    ...GLOBAL_ARGS,
-    month: {
-      type: 'string',
-      description: 'UTC month to show, formatted as YYYY-MM',
-    },
-  },
-  async run(context, ctx) {
-    const month = optString(ctx.args.month);
-    // Pre-validate `--month` before any network I/O so a malformed value
-    // yields a Usage error (exit 2), not the catch-all ModelOrNetworkError
-    // (exit 3) that the broader try/catch below would assign.
-    if (month) {
-      try {
-        parseUtcMonth(month);
-      } catch (error) {
-        writeErrorStderr(error);
-        return CliExitCode.Usage;
-      }
-    }
-    const usageResult = await withCliAuthError(async () => {
-      await initCliPlatform({ ...context, quietLogs: true });
-      const profile = await getCliAuthProfile();
-      // Usage reads usage_logs via PostgREST, which needs a GoTrue session —
-      // a relay-scoped CI token cannot read it. Gate on the session itself so
-      // a developer with both an env token and an interactive sign-in still
-      // gets their usage.
-      const sessionToken = await getCliSessionAccessToken();
-      if (!sessionToken) {
-        writeTextStderr(
-          profile.credentialSource === 'relayToken'
-            ? 'Run `texra login` to see your usage, or open the account dashboard. TEXRA_RELAY_TOKEN on its own cannot read usage.'
-            : 'Not signed in. Run `texra login` first.',
-        );
-        return undefined;
-      }
-      const tier = (await resolveCliUsageTier(profile)) ?? 'free';
-      return await fetchRelayUsageSummary({ tier, month });
-    });
-    if (!usageResult.ok) return CliExitCode.ModelOrNetworkError;
-    const summary = usageResult.value;
-    if (!summary) return CliExitCode.ModelOrNetworkError;
-
-    const periodMonth = summary.periodStart.slice(0, 7);
-    emitCliResult(context, {
-      json: summary,
-      ndjson: { kind: 'relay-usage', ...summary },
-      text: [
-        `${INCLUDED_ACCESS.label} usage for ${periodMonth} (${summary.tier})`,
-        `Spend: $${summary.costUsd.toFixed(2)} / $${summary.limitUsd.toFixed(2)} (${summary.usagePercent.toFixed(1)}%)`,
-        `Remaining: $${summary.remainingUsd.toFixed(2)}`,
-        `Streams: ${summary.streamCount}`,
-        `Tokens: ${summary.inputTokens} input (${summary.cachedTokens} cached), ${summary.outputTokens} output, ${summary.reasoningTokens} reasoning`,
-        `Models: ${summary.modelsUsed}; providers: ${summary.providersUsed}`,
-      ].join('\n'),
-    });
-    return CliExitCode.Success;
-  },
-});
-
 const AUTH_SUBCOMMANDS = {
   login: loginCommand,
   logout: logoutCommand,
   status: authStatusCommand,
-  usage: usageCommand,
-  token: authTokenCommand,
   chatgpt: chatgptAuthCommand,
   grok: grokAuthCommand,
 } as const;
@@ -394,7 +309,7 @@ export const authCommand = defineCommand({
   meta: {
     name: 'auth',
     description:
-      'Sign in with ChatGPT, Grok, or Researcher Access; check status; and view usage',
+      'Sign in with ChatGPT, Grok, or your TeXRA account; check status',
   },
   args: {
     ...GLOBAL_ARGS,

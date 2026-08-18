@@ -106,15 +106,6 @@ function modelOptionsAccess(
     visibleModels: [],
     secrets: new FakeSecrets(),
     useOpenRouter: false,
-    serverSideKeyService: {
-      canUseServerSideKeys: async () => false,
-      getUseIncludedModelAccess: () => false,
-      isAuthenticated: async () => false,
-      wasQuotaAutoSwitched: () => false,
-      isRelayQuotaExceeded: () => false,
-      isProviderOnServer: () => false,
-      canUseModelSync: () => false,
-    },
     ...overrides,
   };
 }

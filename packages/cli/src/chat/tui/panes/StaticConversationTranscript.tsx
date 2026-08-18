@@ -9,7 +9,6 @@ import path from 'node:path';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
-import { shortCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { StreamPhase, StreamTabId } from '@shared/schemas';
@@ -179,9 +178,7 @@ function SessionHeaderBlock({
           <Text bold color={COLOR_HINT}>
             {'{ T } TeXRA'}
           </Text>{' '}
-          <Text dimColor>v{meta.version}</Text>{' '}
-          <Text dimColor>{shortCliModelAccessRoute(meta.apiMode)}</Text>{' '}
-          <Text>{identityLine}</Text>
+          <Text dimColor>v{meta.version}</Text> <Text>{identityLine}</Text>
         </Text>
       </Box>
     );
@@ -205,7 +202,6 @@ function SessionHeaderBlock({
             {'{ T } TeXRA'}
           </Text>
           <Text dimColor>v{meta.version}</Text>
-          <Text dimColor>{shortCliModelAccessRoute(meta.apiMode)}</Text>
         </Box>
         <Box>
           <Text wrap="truncate-end">{identityLine}</Text>
@@ -267,7 +263,6 @@ function staticTranscriptItemBaseMetrics(
       bytes:
         Buffer.byteLength(item.identityLine, 'utf8') +
         Buffer.byteLength(item.meta.version, 'utf8') +
-        Buffer.byteLength(item.meta.apiMode, 'utf8') +
         Buffer.byteLength(item.meta.agent, 'utf8') +
         Buffer.byteLength(item.meta.cwd, 'utf8') +
         64,
@@ -595,7 +590,7 @@ function executionLabelsEqual(
 /** Rendering-relevant item equality: entries compare by reference (they are
  *  immutable log rows), headers by the values `SessionHeaderBlock` draws —
  *  `identityLine` and `compact` directly, plus the `SessionMeta` fields the
- *  block renders (`version`, `apiMode`, and `cwd` in the full header only).
+ *  block renders (`version`, and `cwd` in the full header only).
  *  The `SessionMeta` fields are compared individually rather than by object
  *  reference because `patchSessionMeta`/`resetCliState` always spread into a
  *  fresh object, even for content-identical patches. A rebuilt state that
@@ -613,7 +608,6 @@ function staticTranscriptItemsEquivalent(
         item.compact === other.compact &&
         item.identityLine === other.identityLine &&
         item.meta.version === other.meta.version &&
-        item.meta.apiMode === other.meta.apiMode &&
         (item.compact || item.meta.cwd === other.meta.cwd)
       );
     }

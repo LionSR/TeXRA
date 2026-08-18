@@ -22,7 +22,6 @@ type CliGlobalArgsDef = {
   print: { type: 'boolean'; alias: 'p'; description: string };
   quiet: { type: 'boolean'; alias: 'q'; description: string };
   cwd: { type: 'string'; valueHint: string; description: string };
-  'api-mode': { type: 'string'; description: string };
   'output-format': {
     type: 'enum';
     options: CliOutputFormat[];
@@ -79,11 +78,6 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
     type: 'string',
     valueHint: 'directory',
     description: 'Working directory the agent runs against (defaults to $PWD)',
-  },
-  'api-mode': {
-    type: 'string',
-    description:
-      'How model calls are paid for: included (covered by your TeXRA plan) or personal (your own API keys)',
   },
   'output-format': {
     type: 'enum',
@@ -151,7 +145,6 @@ export const INTERACTIVE_GLOBAL_ARGS: Omit<
 > = {
   quiet: GLOBAL_ARGS.quiet,
   cwd: GLOBAL_ARGS.cwd,
-  'api-mode': GLOBAL_ARGS['api-mode'],
   'approval-policy': GLOBAL_ARGS['approval-policy'],
   color: GLOBAL_ARGS.color,
 };

@@ -5,7 +5,6 @@ import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import { CODEX_BACKEND_BASE_URL, resetCodexCoordinator } from '@auth/codex';
-import { setServerSideKeyService } from '@auth/serverKeys';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT } from '@model/providerCapabilities';
 import {
@@ -97,14 +96,6 @@ function expectOnSubscription(handler: ModelHandlerCodex): void {
 
 describe('ModelHandlerCodex subscription fallback', () => {
   beforeEach(() => {
-    // The fallback path resolves the OpenAI base via the relay service; stub it
-    // to "no relay" so getBaseUrl() yields the direct OpenAI base.
-    setServerSideKeyService({
-      getUseIncludedModelAccess: () => false,
-      canUseServerSideKeys: async () => false,
-      wasQuotaAutoSwitched: () => false,
-      shouldUseServerSideKeysSync: () => false,
-    } as never);
     invalidateApiKeyCache();
   });
 

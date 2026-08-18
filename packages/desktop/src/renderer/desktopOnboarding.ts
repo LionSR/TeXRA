@@ -24,7 +24,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_MODE_PRESETS, type AgentModePreset } from '@shared/schemas';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
+import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -300,8 +300,8 @@ export function createStartupTeamPanel({
           <div>
             <strong>Model access</strong>
             <span>
-              Sign in for ${INCLUDED_ACCESS.inline}, or add
-              ${OWN_API_KEYS.inline} in Settings.
+              Sign in with a subscription, or add ${OWN_API_KEYS.inline} in
+              Settings.
             </span>
           </div>
         </li>

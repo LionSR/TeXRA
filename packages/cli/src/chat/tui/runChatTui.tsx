@@ -13,7 +13,6 @@ import { detachSubagentsOnStop, type ToolUseResumeData } from '@agent/runtime';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
-import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   firstRunSetupAgentOverride,
   SETUP_AGENT_HANDOFF_NOTICE,
@@ -73,7 +72,7 @@ import {
 import {
   applyCliModelAccessSelection,
   applyCliProviderApiKey,
-} from './commands/handlers/apiModeCommands';
+} from './commands/handlers/modelAccessCommands';
 import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
 import {
   loginFromChat,
@@ -141,8 +140,7 @@ export interface RunChatInit {
 }
 
 const CHAT_STARTUP_MODEL_RECOVERY = {
-  includedModeAction: 'retry with `texra chat --api-mode included`',
-  personalModeAction: 'retry with `texra chat --api-mode personal`',
+  configureKeyAction: 'add a provider API key with `texra setup`',
 } satisfies CliNoAvailableModelsRecoveryOptions;
 
 export async function runChat(
@@ -188,7 +186,7 @@ export async function runChat(
   const runtimeSession = transcriptLifecycle.session;
   runtimeSession.setApprovalPolicy(context.approvalPolicy);
   // First-run gate (interactive only; headless already rejected above). A
-  // credential-less user signs in or saves a key here; the apiMode + model
+  // credential-less user signs in or saves a key here; the model
   // resolution below then see the freshly-set credentials in the same process.
   const { maybeRunCliOnboarding } =
     await import('@cli/onboarding/runOnboarding');
@@ -199,7 +197,6 @@ export async function runChat(
     // the no-models resolution error — the dead-end this feature exists to fix.
     return { exitCode: CliExitCode.Success };
   }
-  const apiMode = effectiveCliApiMode(context);
   // State 1 continuation (docs/prds/2026-06-11-agent-native-onboarding.md): on a true
   // first run the post-picker session starts with the setup agent. Threaded
   // through the same override slot resolveChatDefaults already honors, and
@@ -236,9 +233,7 @@ export async function runChat(
   try {
     modelSelection = await selectCliRunnableModel(defaults.model, {
       fallbackReason: defaults.modelSource,
-      apiMode,
       noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-        apiMode,
         CHAT_STARTUP_MODEL_RECOVERY,
       ),
     });
@@ -255,7 +250,6 @@ export async function runChat(
     runtimeSession.approvalPolicy;
   const currentSessionContext = (helperModel: string): CliContext => ({
     ...context,
-    apiMode: sessionMetaSignal.get().apiMode,
     helperModel,
     quietLogs: true,
   });
@@ -291,7 +285,6 @@ export async function runChat(
     model,
     modelSource: defaults.modelSource,
     cwd: context.cwd,
-    apiMode,
     approvalPolicy: runtimeSession.approvalPolicy,
     canDelegate: chatAgentSupportsDelegation(agent),
     transcriptMode: transcriptLifecycle.canResume ? 'persistent' : 'ephemeral',
@@ -493,8 +486,7 @@ export async function runChat(
       applyCliModelSelection(nextModel, slashCommandContext()),
     onModelAccessSelect: (route, output) =>
       applyCliModelAccessSelection(route, slashCommandContext(), output),
-    onApiKeySave: (provider, key) =>
-      applyCliProviderApiKey(provider, key, slashCommandContext()),
+    onApiKeySave: (provider, key) => applyCliProviderApiKey(provider, key),
     onLoginSelect: (value, output) => loginFromChat(value, context, output),
     onLogoutSelect: (value, output) => logoutFromChat(value, output),
     onMemorySelect: showCliMemoryPreview,

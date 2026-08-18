@@ -29,14 +29,17 @@ export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;
  *  rather than independent booleans. `isCredentialExhausted` below answers the
  *  combined "exhausted for any reason" question. */
 export const ExhaustionReasonSchema = z.enum([
-  /** Relay monthly spending limit reached; the stored personal key is fine. */
+  /** LEGACY: relay monthly spending limit. The relay was removed 2026-08
+   *  (docs/proposals/2026-08-18-relay-removal-and-recovery.md); the member
+   *  stays because persisted stream logs are reparsed on load and the legacy
+   *  migration below reconstructs it. Delete after 2026-11. */
   'relay-limit',
   /** The upstream provider account itself is out of credit/quota — the key
    *  the user has IS the broken one, so a new key is required. */
   'upstream-credit',
   /** A ChatGPT-subscription (Codex) request was rejected because the plan's
    *  usage quota is exhausted; accepting the switch disables the "prefer
-   *  ChatGPT subscription" preference rather than disabling relay.
+   *  ChatGPT subscription" preference.
    *  Remark: permanently flipping prefer-off is not always ideal — when the
    *  quota later resets, the user may forget to turn the preference back on. */
   'chatgpt-subscription',
@@ -133,14 +136,8 @@ const ProviderErrorObjectSchema = z.object({
    *  true (because they need user action — a key swap or new API key —
    *  before any retry makes sense). */
   userRetryable: z.boolean(),
-  /** True when the error is known to come from the relay. Omitted when the
-   *  retry-state path cannot determine the relay verdict. Independent of
-   *  `exhaustionReason` — a relay error can be a transient 5xx with no
-   *  exhaustion, and an exhaustion can be direct-to-provider (upstream credit
-   *  depletion) with no relay involved. */
-  isRelayError: z.boolean().optional(),
-  /** Reason the credential/quota is exhausted (relay monthly limit, upstream
-   *  provider credit depletion, or a subscription usage limit). Auto-
+  /** Reason the credential/quota is exhausted (upstream provider credit
+   *  depletion, or a subscription usage limit). Auto-
    *  retry is skipped and the retry panel offers a "Use your own API key"
    *  button for any of these. Use the `isCredentialExhausted` helper below
    *  for the combined check. */
@@ -193,17 +190,6 @@ export const ProviderErrorPartialSchema = z.preprocess(
   ProviderErrorObjectSchema.partial(),
 );
 export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
-
-/** Single source of truth for "the upstream provider account itself is out of
- *  credit/quota" — the key the user has IS the broken one, so the auto-resume
- *  handler must require a new key rather than reusing the depleted stored
- *  credential (unlike relay-limit exhaustion, where the stored personal key
- *  is fine). */
-export function isUpstreamCreditDepletedError(
-  errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
-): boolean {
-  return errorDetails?.exhaustionReason === 'upstream-credit';
-}
 
 /** Single source of truth for "auto-retry should be skipped because the
  *  credential/quota is exhausted". Derived from `exhaustionReason` rather than

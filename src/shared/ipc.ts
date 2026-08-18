@@ -203,8 +203,6 @@ export const PROFILE_VIEW_COMMANDS = {
   UPDATE_PROFILE: 'updateProfile',
   SIGN_IN: 'signIn',
   SIGN_OUT: 'signOut',
-  // API access mode toggle (Ultra tier)
-  SET_API_ACCESS_MODE: 'setApiAccessMode',
 } as const;
 
 export const MEMORY_VIEW_COMMANDS = {
@@ -246,7 +244,6 @@ export const SETTINGS_VIEW_CMD = {
   // Profile commands
   SIGN_IN: PROFILE_VIEW_COMMANDS.SIGN_IN,
   SIGN_OUT: PROFILE_VIEW_COMMANDS.SIGN_OUT,
-  SET_API_ACCESS_MODE: PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE,
   SET_PROVIDER_KEY: 'setProviderKey',
   REMOVE_PROVIDER_KEY: 'removeProviderKey',
   OPEN_PROVIDER_KEY_URL: 'openProviderKeyUrl',

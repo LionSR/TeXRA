@@ -14,19 +14,10 @@ import {
   type SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
-import {
-  RELAY_TOKEN_ENV_VAR,
-  fetchRelayTokenStatus,
-  getConfiguredRelayToken,
-} from '@auth/relayToken';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
-import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { readCliEnv } from './cliContext';
 import { openBrowser } from './browser';
 import { startLoopbackCallbackServer } from './supabaseAuthCallbackServer';
 import {
@@ -52,17 +43,14 @@ export interface LogBackend {
 export interface CliAuthProfile {
   authenticated: boolean;
   /**
-   * Health of the stored GoTrue session. Absent when a usable CI relay token
-   * supplies access and the session is never classified. `transient` means the
+   * Health of the stored GoTrue session. `transient` means the
    * authentication service could not be reached, so the stored session is
    * intact and signing in again would be premature.
    */
   sessionState?: StoredSessionState;
-  credentialSource?: 'session' | 'relayToken';
   accountLabel?: string;
-  tier?: string;
   expiresAt?: string;
-  /** Extra status context, e.g. a rejected or unverifiable CI relay token. */
+  /** Extra status context. */
   note?: string;
 }
 
@@ -152,9 +140,7 @@ export async function signInCliSupabase(
       await Promise.race([browserLaunch, sessionPromise.then(() => undefined)]);
     }
 
-    const session = await sessionPromise;
-    getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
-    return session;
+    return await sessionPromise;
   } finally {
     await callbackServer.close();
   }
@@ -204,102 +190,25 @@ export async function signInCliSupabaseDeviceCode(
     defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   });
   await authCoordinator.storeSession(session);
-  getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
   return session;
 }
 
 export async function signOutCliSupabase(): Promise<void> {
   const authCoordinator = initializeCliSupabaseAuth();
   await authCoordinator.clearSession();
-  // Included access is a user preference, not a record of who is signed in.
-  // Sign-out drops the credential and clears the caches derived from it; the
-  // access decision is re-resolved against the remaining credentials on the
-  // next request, so a configured TEXRA_RELAY_TOKEN keeps working and a
-  // preference the user set by hand survives the round trip.
-  getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
   await refreshRemoteAgentCatalogAfterSignOut(
     invalidateRemoteAgentsAfterSignOut,
     (message) => activeAuthLog?.warn('cli-auth', message),
   );
 }
 
-/**
- * Notice appended to sign-out output when TEXRA_RELAY_TOKEN is configured.
- * Sign-out only clears the stored GoTrue session — the CLI cannot unset the
- * parent shell's environment, so relay access stays active until the user
- * removes the variable themselves. Say so instead of reporting a clean exit.
- */
-export function relayTokenStillActiveNotice(
-  env: Record<string, string | undefined> = readCliEnv(),
-): string | undefined {
-  if (!getConfiguredRelayToken(env)) return undefined;
-  return `Note: ${RELAY_TOKEN_ENV_VAR} is still set in this environment, so ${INCLUDED_ACCESS.inline} stays active. Unset it (and revoke the token with \`texra auth token revoke\` if it leaked) to fully sign out.`;
-}
-
-/**
- * TeXRA sign-out outcome text: the caller's signed-out line plus the
- * relay-token caveat when TEXRA_RELAY_TOKEN keeps included access alive.
- * Every sign-out surface routes through here so none can report a bare clean
- * exit while relay access is still active.
- */
-export function supabaseSignOutOutcomeMessage(signedOutLine: string): string {
-  const relayNotice = relayTokenStillActiveNotice();
-  return relayNotice ? `${signedOutLine}\n${relayNotice}` : signedOutLine;
-}
-
-/**
- * Fresh access token for the stored CLI session, bypassing any configured
- * TEXRA_RELAY_TOKEN. Token management (texra setup-token) must authenticate
- * with a real user session — a CI token cannot mint or revoke tokens.
- */
+/** Fresh access token for the stored CLI session. */
 export async function getCliSessionAccessToken(): Promise<string | null> {
   return initializeCliSupabaseAuth().ensureFreshToken();
 }
 
-/**
- * Resolves the tier that should back relay usage queries: the stored
- * session's own tier for a CI relay token (the token's tier may describe a
- * different account than the session reading its usage, and usage reads run
- * on the session JWT), and the profile's own tier otherwise.
- */
-export async function resolveCliUsageTier(
-  profile: Pick<CliAuthProfile, 'credentialSource' | 'tier'>,
-): Promise<string | undefined> {
-  return profile.credentialSource === 'relayToken'
-    ? SupabaseClient.getSessionTier()
-    : profile.tier;
-}
-
 export async function getCliAuthProfile(): Promise<CliAuthProfile> {
   const authCoordinator = initializeCliSupabaseAuth();
-
-  // A configured CI relay token authenticates relay calls without a session;
-  // report it as the active credential so `texra auth status` / `texra
-  // doctor` explain where access is coming from. Verify it first: a token
-  // the server has rejected (expired, revoked) must not report a signed-in
-  // state the relay will 401. When the check itself fails (offline), stay
-  // optimistic but say the token could not be verified.
-  const relayToken = getConfiguredRelayToken(readCliEnv());
-  let rejectedTokenNote: string | undefined;
-  if (relayToken) {
-    const status = await fetchRelayTokenStatus(relayToken);
-    if (status.state === 'invalid') {
-      // A rejected token behaves as if unset: fall through to the stored
-      // session (which may still be valid), keeping a note that explains
-      // why relay calls won't use the configured token.
-      rejectedTokenNote = `${RELAY_TOKEN_ENV_VAR} is set but the server rejected it (expired or revoked). Create a new token with \`texra setup-token\`.`;
-    } else {
-      return {
-        authenticated: true,
-        credentialSource: 'relayToken',
-        accountLabel: `CI token (${RELAY_TOKEN_ENV_VAR})`,
-        tier: status.state === 'valid' ? status.tier : 'free',
-        ...(status.state === 'unknown' && {
-          note: `Could not check ${RELAY_TOKEN_ENV_VAR} right now (network error).`,
-        }),
-      };
-    }
-  }
 
   // Classify the stored session instead of asking "is there a token": a
   // GoTrue outage leaves the session stored and usable once the service
@@ -309,33 +218,14 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
     return {
       authenticated: false,
       sessionState,
-      ...(rejectedTokenNote && {
-        credentialSource: 'relayToken' as const,
-        note: rejectedTokenNote,
-      }),
     };
   }
 
   const session = await authCoordinator.loadSession();
-  let tier = 'free';
-  try {
-    tier = await SupabaseClient.getUserTier();
-  } catch (error) {
-    // Keep status usable even if profile metadata is temporarily unavailable,
-    // but surface the cause so a transient provider/network failure is not
-    // mistaken for a clean 'free' tier.
-    activeAuthLog?.warn(
-      'cli-auth',
-      `Could not resolve usage tier: ${toErrorMessage(error)}`,
-    );
-  }
   return {
     authenticated: true,
     sessionState,
-    credentialSource: 'session',
     accountLabel: session?.account.label,
-    tier,
     expiresAt: session ? new Date(session.expiresAt).toISOString() : undefined,
-    ...(rejectedTokenNote && { note: rejectedTokenNote }),
   };
 }

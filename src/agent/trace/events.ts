@@ -294,14 +294,13 @@ interface DomainEvent extends StageStamp {
 /**
  * Fields `formatProviderHttpError`'s `terminalError()` branch actually sets
  * for `abort` / `disk-full` (see `src/common/errors/sdkError/
- * providerErrorFormat.ts`): it deliberately opts out of provider/relay/
+ * providerErrorFormat.ts`): it deliberately opts out of provider/
  * credential classification, so `statusCode`/`provider`/`requestId`/
  * `exhaustionReason` are never populated for these kinds.
  */
 type ResultEventLocalError = Readonly<{
   message?: string;
   userRetryable?: RetryErrorInfo['userRetryable'];
-  isRelayError?: RetryErrorInfo['isRelayError'];
   streamDiagnostics?: RetryErrorInfo['streamDiagnostics'];
   partialText?: RetryErrorInfo['partialText'];
 }>;
@@ -321,11 +320,7 @@ type ResultEventProviderError = ResultEventLocalError &
     Partial<
       Omit<
         RetryErrorInfo,
-        | 'message'
-        | 'userRetryable'
-        | 'isRelayError'
-        | 'streamDiagnostics'
-        | 'partialText'
+        'message' | 'userRetryable' | 'streamDiagnostics' | 'partialText'
       >
     >
   >;

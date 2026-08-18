@@ -9,7 +9,6 @@
  * Wire identifiers (`texra`, `chatgpt`, `grok`) stay internal.
  */
 
-import { INCLUDED_ACCESS } from './modelAccess';
 import { RESEARCHER_ACCESS } from './onboarding';
 
 /** Shared device-code option description for any account picker. */
@@ -49,7 +48,7 @@ export const GROK_AUTH = {
  * name itself stays on {@link RESEARCHER_ACCESS} in `onboarding.ts`.
  */
 export const RESEARCHER_ACCESS_AUTH = {
-  loginDescription: `${INCLUDED_ACCESS.label} and remote agents`,
+  loginDescription: 'Remote agents and your TeXRA account',
   deviceCodeLabel: 'Researcher device code',
   logoutDescription: `Sign out of your ${RESEARCHER_ACCESS.label} account`,
   /** `/login` slash-command description. */
@@ -64,5 +63,5 @@ export const RESEARCHER_ACCESS_AUTH = {
   startingBrowser: (provider: string): string =>
     `Opening browser for ${RESEARCHER_ACCESS.label} ${provider} sign-in...`,
   signedIn: (accountLabel: string): string =>
-    `Signed in with ${RESEARCHER_ACCESS.label} as ${accountLabel}. Model calls now use ${INCLUDED_ACCESS.inline}.`,
+    `Signed in with ${RESEARCHER_ACCESS.label} as ${accountLabel}.`,
 } as const;

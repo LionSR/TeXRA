@@ -4,11 +4,7 @@ import { isObject } from '@utils/core';
  *  `ModelCredentialRoute` without importing `@agent` (common → agent is
  *  a forbidden architecture edge). */
 export type SdkCredentialRoute =
-  | 'api-key'
-  | 'chatgpt-subscription'
-  | 'xai-subscription'
-  | 'openrouter'
-  | 'relay';
+  'api-key' | 'chatgpt-subscription' | 'xai-subscription' | 'openrouter';
 
 /**
  * Side channel carrying the endpoint a thrown SDK error was sent to, for SDKs

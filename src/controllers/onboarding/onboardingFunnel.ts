@@ -20,7 +20,7 @@ import type { OnboardingFunnelState } from '@shared/schemas';
 export type { OnboardingFunnelState };
 
 export interface OnboardingFunnelInputs {
-  /** A usable credential exists (relay sign-in or any provider API key). */
+  /** A usable credential exists (a subscription or any provider API key). */
   hasCredential: boolean;
   /** The user saw the State 0 picker and chose "Skip for now". */
   declined: boolean;
