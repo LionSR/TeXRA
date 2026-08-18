@@ -656,7 +656,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
     expectDispatched(
       {
         command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-        approvalId: 'plan-1',
+        requestId: 'plan-1',
         action: 'approve_and_goal',
       },
       handlers,
@@ -673,7 +673,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
     expectDispatched(
       {
         command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-        proposalId: 'proposal-1',
+        requestId: 'proposal-1',
         action: 'approve',
         agent: 'review',
         model: 'deepseek',
@@ -696,7 +696,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
     });
     expect(actions.approval.handlePlanApprovalAction).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-      approvalId: 'plan-1',
+      requestId: 'plan-1',
       action: 'approve_and_goal',
     });
     expect(actions.approval.handleUserQuestionAction).toHaveBeenCalledWith({
@@ -707,7 +707,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
     });
     expect(actions.approval.handleAgentProposalAction).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-      proposalId: 'proposal-1',
+      requestId: 'proposal-1',
       action: 'approve',
       agent: 'review',
       model: 'deepseek',
@@ -726,11 +726,11 @@ describe('permission action schemas', () => {
   };
   const proposal = {
     command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-    proposalId: 'proposal-1',
+    requestId: 'proposal-1',
   };
   const plan = {
     command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-    approvalId: 'plan-1',
+    requestId: 'plan-1',
   };
 
   it.each([

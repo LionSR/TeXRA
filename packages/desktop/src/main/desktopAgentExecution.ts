@@ -296,8 +296,8 @@ export class DesktopProgressBridge {
           },
           proposal: createAgentProposalTransport({
             getRenderer: () => this.backend.renderer,
-            isPending: (proposalId) =>
-              this.backend.approvalHandlers.proposal.get(proposalId) !==
+            isPending: (requestId) =>
+              this.backend.approvalHandlers.proposal.get(requestId) !==
               undefined,
           }),
         },
@@ -745,24 +745,24 @@ export class DesktopProgressBridge {
         sendFollowUp: (stream, text) => this.sendFollowUp(stream, text),
       },
       agentProposal: {
-        getPendingProposal: (proposalId) =>
-          this.backend.approvalHandlers.proposal.get(proposalId),
+        getPendingProposal: (requestId) =>
+          this.backend.approvalHandlers.proposal.get(requestId),
         restoreRunConfig: async (config) => this.restoreRunConfig(config),
         openFile: (file) => this.options.host.openPath(file),
-        settleProposal: (proposalId, result) => {
+        settleProposal: (requestId, result) => {
           const resolved = this.hostInteractions.submitProposalDecision(
-            proposalId,
+            requestId,
             result,
           );
           if (!resolved) {
             this.logger.warn(
-              `No pending desktop host interaction found for proposal: ${proposalId}`,
+              `No pending desktop host interaction found for proposal: ${requestId}`,
             );
           }
         },
-        onMissingProposal: (proposalId) => {
+        onMissingProposal: (requestId) => {
           this.logger.warn(
-            `No pending desktop agent proposal found for setup: ${proposalId}`,
+            `No pending desktop agent proposal found for setup: ${requestId}`,
           );
         },
         onInvalidProposal: (issues) => {
@@ -772,7 +772,7 @@ export class DesktopProgressBridge {
         },
         onSetupComplete: (proposal) => {
           this.logger.info(
-            `Desktop agent proposal ${proposal.proposalId} set up in main view`,
+            `Desktop agent proposal ${proposal.requestId} set up in main view`,
             {
               data: { agent: proposal.agent },
             },
@@ -849,7 +849,7 @@ export class DesktopProgressBridge {
             ),
           handlePlanApprovalAction: (message) => {
             this.hostInteractions.submitPlanDecision(
-              message.approvalId,
+              message.requestId,
               message.action === 'reject'
                 ? { action: 'reject', feedback: message.feedback }
                 : { action: message.action },

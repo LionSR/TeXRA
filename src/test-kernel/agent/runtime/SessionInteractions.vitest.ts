@@ -84,15 +84,15 @@ function createHandlerSet(events: UiEvent[]): ApprovalRequestHandlerSet {
       'retry',
       'streamId',
     ),
-    proposal: handler<AgentProposalPermission, 'proposalId', ProposalResult>(
+    proposal: handler<AgentProposalPermission, 'requestId', ProposalResult>(
       'proposal',
-      'proposalId',
+      'requestId',
     ),
     planApproval: handler<
       PlanApprovalPermission,
-      'approvalId',
+      'requestId',
       PlanApprovalResult
-    >('planApproval', 'approvalId'),
+    >('planApproval', 'requestId'),
     externalInquiry: handler<ExternalInquiryPermission, 'requestId'>(
       'externalInquiry',
       'requestId',
@@ -180,7 +180,7 @@ function createControllablePlanAdapter(
     requestPlanApproval(request, requestOptions?: HostInteractionOptions) {
       requests.push(request);
       return new Promise((settle) =>
-        pending.set(request.approvalId, {
+        pending.set(request.requestId, {
           request,
           cancellationScope: requestOptions?.cancellationScope,
           settle,
@@ -235,11 +235,11 @@ const criticism = {
 
 function requestPlan(
   session: SessionHandle,
-  approvalId: string,
+  requestId: string,
   stream: StreamTabId = streamId,
 ): Promise<PlanApprovalResult> {
   return session.interactions.requestPlanApproval({
-    approvalId,
+    requestId,
     streamId: stream,
     plan,
     goalEnabled: false,
@@ -248,10 +248,10 @@ function requestPlan(
 
 function requestProposal(
   session: SessionHandle,
-  proposalId: string,
+  requestId: string,
 ): Promise<ProposalResult> {
   return session.interactions.requestAgentProposal({
-    proposalId,
+    requestId,
     streamId,
     ...proposal,
   });

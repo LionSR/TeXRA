@@ -344,14 +344,14 @@ export function handlePermissionAction(
         ? ({
             command: PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS,
             stream: data.streamId,
-            initiatingProposalId: data.proposalId,
+            initiatingProposalId: data.requestId,
           } satisfies ProgressViewInboundMessage)
         : undefined;
       let message: ProgressViewInboundMessage;
       if (decision.action === 'approve' || approveAllDelegatedWork) {
         message = {
           command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-          proposalId: data.proposalId,
+          requestId: data.requestId,
           action: 'approve',
           ...(decision.model ? { model: decision.model } : {}),
           ...(decision.agent ? { agent: decision.agent } : {}),
@@ -359,22 +359,22 @@ export function handlePermissionAction(
       } else if (decision.action === 'reject') {
         message = {
           command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-          proposalId: data.proposalId,
+          requestId: data.requestId,
           action: 'reject',
           ...(decision.feedback ? { feedback: decision.feedback } : {}),
         };
       } else {
         message = {
           command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-          proposalId: data.proposalId,
+          requestId: data.requestId,
           action: 'setup',
         };
       }
       postWithOptionalBypass(bypassMessage, message);
       // Optimistic removal — track resolved ID so late SHOW is a no-op
-      const removed = removePrompt(PERMISSION_KIND.PROPOSAL, data.proposalId);
+      const removed = removePrompt(PERMISSION_KIND.PROPOSAL, data.requestId);
       if (!removed) {
-        addResolvedProposalId(data.proposalId);
+        addResolvedProposalId(data.requestId);
       }
       break;
     }
@@ -382,13 +382,13 @@ export function handlePermissionAction(
       const { data, decision } = detail;
       postPermissionMessage({
         command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-        approvalId: data.approvalId,
+        requestId: data.requestId,
         action: decision.action,
         ...(decision.action === 'reject' && decision.feedback
           ? { feedback: decision.feedback }
           : {}),
       });
-      removePrompt(PERMISSION_KIND.PLAN_APPROVAL, data.approvalId);
+      removePrompt(PERMISSION_KIND.PLAN_APPROVAL, data.requestId);
       break;
     }
     case PERMISSION_KIND.EXTERNAL_INQUIRY: {

@@ -1283,7 +1283,7 @@ describe('App approval surface ownership', () => {
     void enqueueApproval({
       kind: 'planApproval',
       payload: {
-        approvalId: 'plan-dashboard-root',
+        requestId: 'plan-dashboard-root',
         streamId: ROOT,
         plan: { objective: 'Verify the dashboard root.' },
         goalEnabled: false,
@@ -1298,7 +1298,7 @@ describe('App approval surface ownership', () => {
         const pending = currentApproval.get()?.payload;
         return (
           pending?.kind === 'planApproval' &&
-          pending.payload.approvalId === 'plan-dashboard-root'
+          pending.payload.requestId === 'plan-dashboard-root'
         );
       });
       await waitFor(() => stdout.output.includes('Approve plan?'));

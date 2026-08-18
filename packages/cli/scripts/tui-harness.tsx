@@ -1034,7 +1034,7 @@ function makeRetryApprovalPayload(): RetryPermission {
 
 function makePlanApprovalPayload(): PlanApprovalPermission {
   return {
-    approvalId: 'harness-plan-approval',
+    requestId: 'harness-plan-approval',
     streamId: STREAM_ID,
     goalEnabled: PLAN_APPROVAL_GOAL,
     plan: {
@@ -1045,7 +1045,7 @@ function makePlanApprovalPayload(): PlanApprovalPermission {
 
 function makeAgentProposalPayload() {
   return {
-    proposalId: 'harness-agent-proposal',
+    requestId: 'harness-agent-proposal',
     streamId: STREAM_ID,
     agentCategory: AgentCategory.ToolUse,
     agent: 'review',

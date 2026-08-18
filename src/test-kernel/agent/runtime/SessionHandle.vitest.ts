@@ -267,7 +267,7 @@ describe('SessionHandle', () => {
 
     try {
       const planA = a.interactions.requestPlanApproval({
-        approvalId: 'approval:a',
+        requestId: 'approval:a',
         streamId,
         plan,
         goalEnabled: false,
@@ -278,7 +278,7 @@ describe('SessionHandle', () => {
         operation: 'Model invocation',
       });
       const planB = b.interactions.requestPlanApproval({
-        approvalId: 'approval:b',
+        requestId: 'approval:b',
         streamId,
         plan,
         goalEnabled: false,

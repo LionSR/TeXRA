@@ -347,9 +347,9 @@ export class LogList extends LitElement {
       event,
       '.proposal-restore-link',
     );
-    if (proposalLink?.dataset.proposalId) {
+    if (proposalLink?.dataset.proposalInputId) {
       event.preventDefault();
-      const proposal = getProposalInput(proposalLink.dataset.proposalId);
+      const proposal = getProposalInput(proposalLink.dataset.proposalInputId);
       if (proposal) {
         postMessage(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG, {
           proposal,

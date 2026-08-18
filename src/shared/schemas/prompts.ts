@@ -87,7 +87,7 @@ export const AgentProposalSchema = z.discriminatedUnion('agentCategory', [
 export type AgentProposal = z.infer<typeof AgentProposalSchema>;
 
 const ProposalPermissionBaseSchema = z.object({
-  proposalId: z.string(),
+  requestId: z.string(),
   streamId: StreamTabIdSchema,
 });
 
@@ -215,7 +215,7 @@ export type ToolEditApprovalAction =
   'approve' | 'reject' | 'openDiff' | 'showLatexdiff' | 'previewProposed';
 
 export const PlanApprovalPermissionSchema = z.strictObject({
-  approvalId: z.string(),
+  requestId: z.string(),
   streamId: StreamTabIdSchema,
   plan: PlanSchema,
   /**
