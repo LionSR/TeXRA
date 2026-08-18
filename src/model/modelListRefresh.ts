@@ -148,7 +148,10 @@ export async function refreshModelListStateIfNeeded(
   let reordered = false;
   let routePreferencesCleared: string[] = [];
   if (currentModels) {
-    const reconciliation = reconcileEnabledModels(currentModels, versionChanged);
+    const reconciliation = reconcileEnabledModels(
+      currentModels,
+      versionChanged,
+    );
     added = reconciliation.added;
     removed = reconciliation.removed;
     reordered =
