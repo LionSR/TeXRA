@@ -1,8 +1,7 @@
 // Local imports
 import { createLog } from '@logger/logUtils';
 import { platform, tryPlatform } from '@platform/platform';
-import type { ConfigTarget, Disposable } from '@platform/interfaces';
-import { ensureArray } from '@utils/core';
+import type { ConfigTarget } from '@platform/interfaces';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Third-party imports
@@ -105,25 +104,4 @@ export async function updateConfig<T>(
 
   const key = prefix && !path.startsWith('texra.') ? `texra.${path}` : path;
   await configProvider().update(key, value, target);
-}
-
-/**
- * Register a listener for configuration changes on the given keys.
- *
- * @param context Extension context used to dispose the listener
- * @param keys Configuration keys to watch
- * @param callback Callback executed when any watched key changes
- * @returns Disposable for the registered listener
- */
-export function watchConfig(
-  context: { subscriptions: Disposable[] },
-  keys: string | string[],
-  callback: () => void,
-): Disposable {
-  const keyArray = ensureArray(keys);
-  const provider = configProvider();
-  const disposable = provider.watch(keyArray, callback);
-
-  context.subscriptions.push(disposable);
-  return disposable;
 }

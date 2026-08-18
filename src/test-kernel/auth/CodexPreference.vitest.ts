@@ -39,7 +39,6 @@ describe('Codex subscription preference', () => {
     expect(isPreferCodexSubscription()).toBe(false);
     expect(config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY)).toMatchObject({
       globalValue: true,
-      workspaceFolderValue: false,
     });
   });
 });

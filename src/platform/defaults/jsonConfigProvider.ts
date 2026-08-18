@@ -1,15 +1,11 @@
 import { getCoreSettingDefault } from '@shared/schemas';
-import {
-  canonicalConfigKey,
-  createWatcherRegistry,
-} from '@shared/config/configKeys';
+import { canonicalConfigKey } from '@shared/config/configKeys';
 
 import type { JsonStore } from './jsonStore';
 import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
-  Disposable,
 } from '../interfaces';
 
 export interface JsonConfigProviderOptions {
@@ -23,7 +19,6 @@ export interface JsonConfigProviderOptions {
  * `update()` routes writes by {@link ConfigTarget}.
  */
 export class JsonConfigProvider implements ConfigProvider {
-  private readonly watchers = createWatcherRegistry();
   private workspaceStore: JsonStore;
   private readonly globalStore: JsonStore;
 
@@ -42,15 +37,10 @@ export class JsonConfigProvider implements ConfigProvider {
     return schemaDefault === undefined ? (defaultValue as T) : schemaDefault;
   }
 
-  /** Switch workspace scope while retaining global values and subscriptions. */
+  /** Switch workspace scope while retaining global values. */
   replaceWorkspaceStore(workspaceStore: JsonStore): JsonStore {
     const previousStore = this.workspaceStore;
-    const affectedKeys = new Set([
-      ...Object.keys(previousStore.snapshot()),
-      ...Object.keys(workspaceStore.snapshot()),
-    ]);
     this.workspaceStore = workspaceStore;
-    for (const key of affectedKeys) this.watchers.notify(key);
     return previousStore;
   }
 
@@ -63,14 +53,11 @@ export class JsonConfigProvider implements ConfigProvider {
     const storedKey = canonicalConfigKey(key);
     // JsonStore.set treats `undefined` as a delete.
     await store.set(storedKey, value);
-    this.watchers.notify(storedKey);
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
     const storedKey = canonicalConfigKey(key);
-    const defaultValue = getCoreSettingDefault(storedKey) as T | undefined;
     return {
-      ...(defaultValue !== undefined && { defaultValue }),
       globalValue: this.globalStore.get<T>(storedKey),
       workspaceValue: this.workspaceStore.get<T>(storedKey),
     };
@@ -81,12 +68,5 @@ export class JsonConfigProvider implements ConfigProvider {
     return (
       this.workspaceStore.has(storedKey) || this.globalStore.has(storedKey)
     );
-  }
-
-  watch(
-    key: string | readonly string[] | RegExp,
-    listener: () => void,
-  ): Disposable {
-    return this.watchers.add({ key, listener });
   }
 }

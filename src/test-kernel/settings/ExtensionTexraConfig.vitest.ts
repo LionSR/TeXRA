@@ -70,7 +70,6 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
 
     expect(config.get('texra.bib.zoteroPort')).toBe(23119);
     expect(config.inspect('texra.bib.zoteroPort')).toStrictEqual({
-      defaultValue: 23119,
       globalValue: undefined,
       workspaceValue: undefined,
     });
@@ -88,14 +87,10 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
     );
     const key = 'texra.latex.enabledReplacements';
     const first = config.get<string[]>(key);
-    const inspection = config.inspect<string[]>(key);
 
     first.push('mutated');
-    inspection?.defaultValue?.push('mutated-default');
 
     expect(config.get<string[]>(key)).not.toContain('mutated');
-    expect(config.get<string[]>(key)).not.toContain('mutated-default');
-    expect(inspection?.defaultValue).not.toBe(first);
   });
 
   it('rebinds reads and writes when the workspace folder changes', async () => {
@@ -121,8 +116,6 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
       createStorage(internalStorage, globalStorage),
       firstWorkspace,
     );
-    const listener = vi.fn();
-    config.watch('texra.bib.zoteroPort', listener);
 
     expect(config.get('texra.bib.zoteroPort')).toBe(24001);
     const transition = config.enqueueWorkspaceTransition(
@@ -134,7 +127,6 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
     );
     await transition.completion;
     expect(config.get('texra.bib.zoteroPort')).toBe(24002);
-    expect(listener).toHaveBeenCalledOnce();
 
     await config.update('texra.bib.zoteroPort', 25000);
     await expect(readFile(firstConfig, 'utf8')).resolves.toContain('24001');
