@@ -102,7 +102,7 @@ function agentProposal(
   overrides: Partial<AgentProposalPermission> = {},
 ): AgentProposalPermission {
   const base = {
-    proposalId: 'proposal-1',
+    requestId: 'proposal-1',
     streamId: 'root@deepseekT#abc',
     agent: 'review',
     model: 'deepseekT',
@@ -811,7 +811,7 @@ describe('buildAgentProposalApprovalContent', () => {
     expect(summary).toContain('Model: deepseekT');
     expect(summary).toContain('Instruction:');
     expect(summary).toContain('  Please verify the proof carefully.');
-    expect(summary).not.toContain('proposalId');
+    expect(summary).not.toContain('requestId');
     expect(summary).not.toContain('streamId');
     expect(summary).not.toContain('{');
     expect(details).toBeUndefined();

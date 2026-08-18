@@ -93,7 +93,7 @@ function submitPlanDecision(
   decision: PlanApprovalResult,
 ): boolean {
   return decisions.submitPlan(
-    (approval.payload as { approvalId: string }).approvalId,
+    (approval.payload as { requestId: string }).requestId,
     decision,
   );
 }

@@ -80,14 +80,14 @@ export function createRecordingApprovalHandlers(): RecordingApprovalHandlerSet {
   const retry = handler<RetryPermission, 'streamId', RetryResult>('streamId');
   const proposal = handler<
     AgentProposalPermission,
-    'proposalId',
+    'requestId',
     ProposalResult
-  >('proposalId');
+  >('requestId');
   const planApproval = handler<
     PlanApprovalPermission,
-    'approvalId',
+    'requestId',
     PlanApprovalResult
-  >('approvalId');
+  >('requestId');
   const externalInquiry = handler<ExternalInquiryPermission, 'requestId'>(
     'requestId',
   );
