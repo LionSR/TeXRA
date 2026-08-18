@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
 import { ProviderSettingDefSchema } from '@shared/constants/providers';
 import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { AgentMetadataBaseSchema } from './agent';
+
 import { commandOnly } from './messageFactories';
 import {
   SpendingStatusErrorSchema,
@@ -31,20 +31,6 @@ export const DEFAULT_GLOBAL_STREAMING = true;
 const ProfileUserSchema = z.object({
   email: z.string(),
 });
-
-/**
- * Remote agent data for the profile view.
- * Extends AgentMetadataBaseSchema (name, category, description) with
- * profile-specific fields. Description is required (non-optional) here.
- *
- * No longer carried on UPDATE_PROFILE; kept only because
- * `settingsViewMessages.ts` re-exports the type (follow-up removal).
- */
-const RemoteAgentSchema = AgentMetadataBaseSchema.extend({
-  description: z.string(), // override optional → required for display
-  supportsMultipleOutput: z.boolean(),
-});
-export type RemoteAgent = z.infer<typeof RemoteAgentSchema>;
 
 const ApiAccessModeSchema = z.enum(['included', 'personal']);
 export type ApiAccessMode = z.infer<typeof ApiAccessModeSchema>;
