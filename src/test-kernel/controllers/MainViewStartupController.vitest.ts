@@ -94,7 +94,11 @@ describe('MainViewStartupController', () => {
         command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
         optionsData: STARTUP_OPTIONS.teamOptions,
       },
-      { command: MAIN_VIEW_COMMANDS.SET_BANNER, banner: 'login', visible: true },
+      {
+        command: MAIN_VIEW_COMMANDS.SET_BANNER,
+        banner: 'login',
+        visible: true,
+      },
     ]);
   });
 
