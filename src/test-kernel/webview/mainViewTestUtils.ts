@@ -76,7 +76,6 @@ export function teamOption(
     source: 'built-in',
     description: '',
     unavailableMembers: [],
-    rootAgentName: null,
     ...overrides,
   };
 }

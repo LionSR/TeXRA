@@ -16,8 +16,6 @@ export {
   type AgentDirectoryServiceLogger,
 } from './AgentDirectoryService';
 
-export { toRemoteAgentProfileData } from './remoteAgentProfileData';
-
 export {
   AgentRosterController,
   InvalidAgentTeamError,
@@ -38,7 +36,6 @@ export {
   resolveAgent,
   resolveAgentForLaunch,
   getAgentsByCategory,
-  getAgentsBySource,
   getCustomAgentScanIssues,
   refresh,
   invalidateRemoteAgentsAfterSignOut,

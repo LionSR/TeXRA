@@ -1,11 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@agent/index', () => ({
-  getAgentsBySource: vi.fn(() => []),
-  loadAgents: vi.fn(async () => {}),
-  toRemoteAgentProfileData: vi.fn(),
-}));
-
 vi.mock('@utils/config/providerConfig', () => ({
   getGlobalStreaming: () => true,
 }));
@@ -14,7 +8,6 @@ const serverSideKeyService = {
   getUseIncludedModelAccess: vi.fn(() => false),
   canUseServerSideKeys: vi.fn(async () => false),
   refreshSpendingStatus: vi.fn(async () => {}),
-  getAccessExpirationDate: vi.fn(() => null),
   wasQuotaAutoSwitched: vi.fn(() => false),
   getSpendingStatus: vi.fn(() => null as unknown),
   getSpendingStatusError: vi.fn(() => null as unknown),

@@ -386,15 +386,6 @@ export class TierService {
     return this.userStatus?.isExpired ?? false;
   }
 
-  /**
-   * Get the access expiration date.
-   * Returns null if no expiration (lifetime access) or status not available.
-   */
-  getExpirationDate(): Date | null {
-    const expiresAt = this.userStatus?.accessExpiresAt;
-    return expiresAt ? new Date(expiresAt) : null;
-  }
-
   // ===========================================================================
   // Relay Spending Methods
   // ===========================================================================
