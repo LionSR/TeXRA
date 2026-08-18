@@ -228,7 +228,9 @@ export class LitSessionRenderer implements SessionRendererPort {
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
         stream: streamId,
-        rounds: nonEmptyRounds(this.state.snapshots.getMissingOutputs(streamId)),
+        rounds: nonEmptyRounds(
+          this.state.snapshots.getMissingOutputs(streamId),
+        ),
       });
     });
   }
@@ -238,7 +240,9 @@ export class LitSessionRenderer implements SessionRendererPort {
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
         stream: streamId,
-        rounds: nonEmptyRounds(this.state.snapshots.getCompileFailures(streamId)),
+        rounds: nonEmptyRounds(
+          this.state.snapshots.getCompileFailures(streamId),
+        ),
         reset: true,
       }),
     );
