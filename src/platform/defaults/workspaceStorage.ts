@@ -24,14 +24,6 @@ const STORAGE_LAYOUT = {
 
 export const MEMORY_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.memory;
 export const RUNS_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.runs;
-export const WORKSPACE_STORAGE_COLLECTIONS_MERGED_PER_CHILD = [
-  RUNS_STORAGE_DIR,
-  WORKSPACE_STORAGE_LAYOUT.executionLeases,
-  WORKSPACE_STORAGE_LAYOUT.legacyRuns,
-  WORKSPACE_STORAGE_LAYOUT.streamData,
-  WORKSPACE_STORAGE_LAYOUT.streamLogs,
-  MEMORY_STORAGE_DIR,
-] as const;
 
 type WorkspacePathSource = string | undefined | (() => string | undefined);
 
