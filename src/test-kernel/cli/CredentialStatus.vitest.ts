@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   isCodexSubscriptionActive: vi.fn(),
+  isXaiSubscriptionActive: vi.fn(),
   lookupApiKey: vi.fn(),
 }));
 
@@ -11,6 +12,7 @@ vi.mock('@model/providerCapabilities', async (importOriginal) => {
   return {
     ...actual,
     isCodexSubscriptionActive: mocks.isCodexSubscriptionActive,
+    isXaiSubscriptionActive: mocks.isXaiSubscriptionActive,
   };
 });
 
@@ -28,11 +30,22 @@ const { hasCliRunCredential } = await import('@cli/runtime/credentialStatus');
 describe('CLI credential status', () => {
   beforeEach(() => {
     mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
+    mocks.isXaiSubscriptionActive.mockReset().mockResolvedValue(false);
     mocks.lookupApiKey.mockReset();
   });
 
   it('counts an active ChatGPT subscription without checking provider keys', async () => {
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
+    mocks.lookupApiKey.mockRejectedValue(
+      new Error('provider keys must not be checked'),
+    );
+
+    await expect(hasCliRunCredential()).resolves.toBe(true);
+    expect(mocks.lookupApiKey).not.toHaveBeenCalled();
+  });
+
+  it('counts an active Grok subscription without checking provider keys', async () => {
+    mocks.isXaiSubscriptionActive.mockResolvedValue(true);
     mocks.lookupApiKey.mockRejectedValue(
       new Error('provider keys must not be checked'),
     );

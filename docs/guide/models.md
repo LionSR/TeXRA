@@ -173,8 +173,9 @@ Expand a provider's row (click the chevron) to toggle streaming or, for provider
 
 You can also place a `.env` file in your workspace with variables like `OPENAI_API_KEY`. TeXRA loads this automatically so you don't need to enter keys every time.
 
-Prefer not to manage keys at all? A provider subscription you already pay for — ChatGPT, Grok, Kimi Code, or
-the GLM Coding Plan — works instead of an API key. See
+Already paying for a ChatGPT or Grok subscription? Sign in and skip the API key for those models — no key to manage.
+Kimi Code and the GLM Coding Plan also run on a subscription you already pay for, authenticated with a
+plan-specific key instead of a full provider key. See
 [Quick Start → Add a key or connect a subscription](./quick-start.md#add-a-key-or-connect-a-subscription).
 
 ## Customizing the Model List

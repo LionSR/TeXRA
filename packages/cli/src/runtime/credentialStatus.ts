@@ -1,9 +1,15 @@
 // Credential checks used by the interactive first-run onboarding gate.
 
 import { warn as logWarning } from '@logger/logUtils';
-import { isCodexSubscriptionActive } from '@model/providerCapabilities';
+import {
+  isCodexSubscriptionActive,
+  isXaiSubscriptionActive,
+} from '@model/providerCapabilities';
 import { hasAnyUsableProviderApiKey } from '@model/setupCredentialAccess';
-import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
+import {
+  CHATGPT_SETUP_MODEL,
+  XAI_SETUP_MODEL,
+} from '@model/setupModelDefaults';
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -41,5 +47,9 @@ export async function hasCliRunCredential(): Promise<boolean> {
     () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
   );
   if (hasChatGptSubscription) return true;
+  const hasGrokSubscription = await probeCredential('Grok subscription', () =>
+    isXaiSubscriptionActive(XAI_SETUP_MODEL),
+  );
+  if (hasGrokSubscription) return true;
   return hasProviderApiKey();
 }
