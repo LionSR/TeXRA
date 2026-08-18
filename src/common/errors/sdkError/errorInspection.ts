@@ -35,6 +35,26 @@ export function pickNumberField(v: unknown, key: string): number | undefined {
     : undefined;
 }
 
+/** First non-blank string `key` field across the body candidates. */
+export function firstBodyStringField(
+  rawErrorBody: unknown,
+  key: string,
+): string | undefined {
+  return errorBodyCandidates(rawErrorBody)
+    .map((candidate) => pickStringField(candidate, key))
+    .find((value) => value !== undefined);
+}
+
+/** First finite-number `key` field across the body candidates. */
+export function firstBodyNumberField(
+  rawErrorBody: unknown,
+  key: string,
+): number | undefined {
+  return errorBodyCandidates(rawErrorBody)
+    .map((candidate) => pickNumberField(candidate, key))
+    .find((value) => value !== undefined);
+}
+
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 export function safeGetReasonPhrase(statusCode: number): string | undefined {
   try {

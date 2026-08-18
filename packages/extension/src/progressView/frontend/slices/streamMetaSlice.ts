@@ -39,19 +39,19 @@ function upsertSortedStreamInfo(
 // messageDispatcher.ts. This slice only owns a subset.
 export const streamMetaHandlers = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA]: (data) => {
-    const name = data.streamInfo.name;
+    const { streamInfo: rawInfo, streamState, activeStream } = data;
+    const name = rawInfo.name;
 
     const prev = appState.get();
     const existingInfo = prev.streamById.get(name);
-    const description =
-      data.streamInfo.description ?? existingInfo?.description;
+    const description = rawInfo.description ?? existingInfo?.description;
     const streamInfo =
-      description !== data.streamInfo.description
-        ? { ...data.streamInfo, description }
-        : data.streamInfo;
+      description !== rawInfo.description
+        ? { ...rawInfo, description }
+        : rawInfo;
     const mergedState = mergeBackendOwnedState(
       prev.streamStates.get(name),
-      data.streamState,
+      streamState,
     );
 
     appState.set(
@@ -73,8 +73,8 @@ export const streamMetaHandlers = {
         // a start before its already-recorded outcome arrives.
         if (mergedState) draft.streamStates.set(name, mergedState);
 
-        if (data.activeStream !== undefined) {
-          draft.activeStreamId = data.activeStream || null;
+        if (activeStream !== undefined) {
+          draft.activeStreamId = activeStream || null;
         }
       }),
     );
@@ -127,11 +127,12 @@ export const streamMetaHandlers = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION]: (data) => {
     const { stream, description } = data;
+    const prev = appState.get();
     // Registration metadata carries the same description, so an early patch
     // can be ignored until the authoritative stream entry arrives.
-    if (!appState.get().streamById.has(stream)) return;
+    if (!prev.streamById.has(stream)) return;
     appState.set(
-      create(appState.get(), (draft) => {
+      create(prev, (draft) => {
         const existing = draft.streamById.get(stream);
         // Replace via set() so the Map value identity changes and selectors
         // observing streamById propagate the update.

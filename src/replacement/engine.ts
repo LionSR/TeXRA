@@ -55,12 +55,6 @@ import {
 
 const log = createLog('ReplacementEngine');
 
-/**
- * Single policy owner for replacement rules. Call sites route through one of
- * these methods instead of composing lower-level rules themselves, so rule
- * selection, ordering, and failure handling stay in this module.
- */
-
 function applyNonRegexPolicy(text: string): string {
   const processed = applyReplacements(text, getAllReplacements()).trim();
   return shouldWrapCritiqueInAlign()
@@ -100,6 +94,11 @@ function applyAllPolicy(text: string): string {
   return wrapCritique ? wrapCritiqueInAlign(result) : result;
 }
 
+/**
+ * Single policy owner for replacement rules. Call sites route through one of
+ * these methods instead of composing lower-level rules themselves, so rule
+ * selection, ordering, and failure handling stay in this module.
+ */
 const replacementEngine = {
   /**
    * Apply every replacement rule in the recommended order. Non-regex
@@ -107,9 +106,7 @@ const replacementEngine = {
    * may introduce. Config values are read once and reused across all passes, and
    * whole-document cleanup runs once at the end instead of after each pass.
    */
-  applyAll(text: string): string {
-    return applyAllPolicy(text);
-  },
+  applyAll: applyAllPolicy,
 
   /**
    * Purpose-specific replacement policy entry point. Call sites request the

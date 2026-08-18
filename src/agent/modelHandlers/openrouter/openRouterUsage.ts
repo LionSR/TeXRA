@@ -17,6 +17,15 @@ import {
 import { normalizeUsage } from '../support/UsageNormalizer';
 import type { ChatUsage } from '@openrouter/sdk/models';
 
+function toStandardTokens(usage: ChatUsage) {
+  return {
+    inputTokens: usage.promptTokens ?? 0,
+    outputTokens: usage.completionTokens ?? 0,
+    cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+    reasoningTokens: usage.completionTokensDetails?.reasoningTokens ?? 0,
+  };
+}
+
 /**
  * Prefer OpenRouter's billed cost for credit-backed requests. BYOK cost is
  * split between OpenRouter credits and the upstream provider account, so keep
@@ -31,16 +40,7 @@ export function computeOpenRouterPrice(
     return responseUsage.cost;
   }
 
-  return computeStandardPrice(
-    {
-      inputTokens: responseUsage.promptTokens ?? 0,
-      outputTokens: responseUsage.completionTokens ?? 0,
-      cachedTokens: responseUsage.promptTokensDetails?.cachedTokens ?? 0,
-      reasoningTokens:
-        responseUsage.completionTokensDetails?.reasoningTokens ?? 0,
-    },
-    config,
-  );
+  return computeStandardPrice(toStandardTokens(responseUsage), config);
 }
 
 /** Normalizes OpenRouter usage data into a unified format. */
@@ -54,12 +54,7 @@ export function normalizeOpenRouterUsage(
     {
       provider,
       computePrice: (usage) => computeOpenRouterPrice(usage, config),
-      extract: (usage) => ({
-        inputTokens: usage.promptTokens ?? 0,
-        outputTokens: usage.completionTokens ?? 0,
-        cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
-        reasoningTokens: usage.completionTokensDetails?.reasoningTokens ?? 0,
-      }),
+      extract: (usage) => toStandardTokens(usage),
     },
     rawUsage,
     responseTimeMs,

@@ -23,7 +23,6 @@ import {
   deletePersistedStreamLog,
 } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
-import type { StagedStreamSnapshotDeletion } from './StagedDeletionCoordinator';
 
 const log = createLog('AdjacentStreamCleanup');
 
@@ -65,8 +64,10 @@ async function deletePersistedAdjacentStreamState(
   stream: StreamTabId,
   snapshots: StreamSnapshotStore,
 ): Promise<void> {
-  const snapshotDeletion: StagedStreamSnapshotDeletion =
-    await snapshots.stageDeleteStream(stream, clearChildSummaryParentEdges);
+  const snapshotDeletion = await snapshots.stageDeleteStream(
+    stream,
+    clearChildSummaryParentEdges,
+  );
   try {
     await deletePersistedStreamLog(stream);
   } catch (error) {

@@ -9,12 +9,12 @@
 // block that renders beyond its plain-text projection.
 
 // Local imports - shared schemas and utilities
-import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
-import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import {
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '@cli/runtime/terminalText';
+import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
+import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
 import {
   executionsSubagentSummary,
@@ -363,17 +363,15 @@ function buildStyledLines(
     output.length === 0 &&
     !patchGroups &&
     !toolUse.isError;
-  const compactOutput =
-    options.compactOutput !== undefined && !opts.showOutput
-      ? [
-          ...(options.compactOutput === 'loaded'
-            ? [row([{ text: 'Full output:' }])]
-            : []),
-          ...toolUse.outputText
-            .split('\n')
-            .map((line) => row([{ text: line }])),
-        ]
-      : [];
+  const compactOutput: ToolDisplayLine[] = [];
+  if (options.compactOutput !== undefined && !opts.showOutput) {
+    if (options.compactOutput === 'loaded') {
+      compactOutput.push(row([{ text: 'Full output:' }]));
+    }
+    for (const line of toolUse.outputText.split('\n')) {
+      compactOutput.push(row([{ text: line }]));
+    }
+  }
 
   return [
     row([

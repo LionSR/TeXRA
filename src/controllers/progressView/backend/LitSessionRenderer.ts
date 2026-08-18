@@ -21,6 +21,7 @@ import type {
   ProgressPermissionKind,
   ProgressViewOutboundMessage,
   ProgressViewPlacement,
+  RoundIndexed,
   StreamPhase,
   StreamStage,
   StreamSubstate,
@@ -100,9 +101,7 @@ export class LitSessionRenderer implements SessionRendererPort {
     },
   ): void {
     if (!this.isAvailable()) return;
-    this.updateStreamMetadata(streamId, options?.streamStates, {
-      activeStream: options?.activeStream,
-    });
+    this.updateStreamMetadata(streamId, options?.streamStates, options);
   }
 
   onStreamStatusChanged(
@@ -194,14 +193,13 @@ export class LitSessionRenderer implements SessionRendererPort {
   }
 
   onFilesChanged(streamId: StreamTabId): void {
-    this.sendIfActive(streamId, () => {
-      const rounds = this.snapshots.getOutputFiles(streamId);
+    this.sendIfActive(streamId, () =>
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
         stream: streamId,
-        rounds: Object.keys(rounds).length ? rounds : undefined,
-      });
-    });
+        rounds: nonEmptyRounds(this.snapshots.getOutputFiles(streamId)),
+      }),
+    );
   }
 
   onMissingOutputsChanged(
@@ -217,25 +215,23 @@ export class LitSessionRenderer implements SessionRendererPort {
         });
         return;
       }
-      const rounds = this.snapshots.getMissingOutputs(streamId);
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
         stream: streamId,
-        rounds: Object.keys(rounds).length ? rounds : undefined,
+        rounds: nonEmptyRounds(this.snapshots.getMissingOutputs(streamId)),
       });
     });
   }
 
   onCompileFailuresChanged(streamId: StreamTabId): void {
-    this.sendIfActive(streamId, () => {
-      const rounds = this.snapshots.getCompileFailures(streamId);
+    this.sendIfActive(streamId, () =>
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
         stream: streamId,
-        rounds: Object.keys(rounds).length ? rounds : undefined,
+        rounds: nonEmptyRounds(this.snapshots.getCompileFailures(streamId)),
         reset: true,
-      });
-    });
+      }),
+    );
   }
 
   onRunUsageChanged(
@@ -480,4 +476,11 @@ export class LitSessionRenderer implements SessionRendererPort {
     }
     this.pendingProgressUpdates.clear();
   }
+}
+
+/** Omit empty round records so the frontend keeps its "no data" placeholder. */
+function nonEmptyRounds<T>(
+  rounds: RoundIndexed<T>,
+): RoundIndexed<T> | undefined {
+  return Object.keys(rounds).length ? rounds : undefined;
 }

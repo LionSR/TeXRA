@@ -285,23 +285,23 @@ export async function askApproval(
   content: CliApprovalContent,
   hooks: CliApprovalPromptHooks = {},
 ): Promise<CliApprovalDecision> {
-  const getDetails = content.details;
   try {
     return await cliPromptQueue(context).add(async () => {
+      const prompt = content.details
+        ? 'Approve? [y/N, v view full, or n <feedback>] '
+        : 'Approve? [y/N, or n <feedback>] ';
       let answer: string;
       while (true) {
         hooks.beforePrompt?.();
         answer = await askCliApprovalQuestion(context, {
           kind: 'approval',
           summary: content.summary,
-          prompt: getDetails
-            ? 'Approve? [y/N, v view full, or n <feedback>] '
-            : 'Approve? [y/N, or n <feedback>] ',
+          prompt,
         });
-        if (getDetails == null || !isViewDetailsAnswer(answer)) {
+        if (content.details == null || !isViewDetailsAnswer(answer)) {
           break;
         }
-        writeTextStderr(safeTerminalText(getDetails()));
+        writeTextStderr(safeTerminalText(content.details()));
       }
 
       const parsed = parseApprovalAnswer(answer);

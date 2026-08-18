@@ -32,7 +32,7 @@ vi.mock('@transcript', () => ({
 }));
 
 // Imported after vi.mock so the mocked dependency is in place.
-import { ChatExportController } from '@controllers/settingsView/ChatExportController';
+import { ChatExportController } from '@controllers/progressView/ChatExportController';
 
 const config = {
   agent: 'correct',

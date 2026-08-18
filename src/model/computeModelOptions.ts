@@ -613,12 +613,10 @@ async function buildModelOptionData(
     isKimiSubscriptionEligible(rawConfig) &&
     !isKimiCodeExclusiveModel(rawConfig)
   ) {
-    if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
-      routeLabel = 'Via OpenRouter';
-    } else {
-      const source = resolveModelSource(config) ?? config.provider;
-      routeLabel = `Via ${providerDisplayName(source)}`;
-    }
+    const via = shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)
+      ? 'OpenRouter'
+      : providerDisplayName(resolveModelSource(config) ?? config.provider);
+    routeLabel = `Via ${via}`;
   }
   return withAvailabilityFields(
     {

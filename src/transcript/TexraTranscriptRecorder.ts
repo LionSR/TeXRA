@@ -281,9 +281,8 @@ export function attachTranscriptRecorder(
       queue = new PQueue({ concurrency: 1 });
       spillQueues.set(path, queue);
     }
-    const pending = Promise.resolve(
-      queue.add(() => spillWriter.write(path, text)),
-    )
+    const pending = queue
+      .add(() => spillWriter.write(path, text))
       .catch((error: unknown) => {
         pendingSpillFailure ??= error;
       })

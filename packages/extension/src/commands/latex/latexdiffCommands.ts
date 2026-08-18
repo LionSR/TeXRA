@@ -200,7 +200,6 @@ async function prepareLatexdiffResultsAndScheduleViewer(
 ): Promise<void> {
   let lastViewerLocation: FileLocation | undefined;
   let lastProcessedLocation: FileLocation | undefined;
-  let viewerPrepared = false;
   let completedSetup = false;
 
   try {
@@ -220,7 +219,6 @@ async function prepareLatexdiffResultsAndScheduleViewer(
           );
           if (opened.viewerReady) {
             lastViewerLocation = opened.diffLocation;
-            viewerPrepared = true;
           }
         }
       } else if (!result.success) {
@@ -231,12 +229,11 @@ async function prepareLatexdiffResultsAndScheduleViewer(
     }
     completedSetup = true;
   } finally {
-    if (viewerPrepared && lastViewerLocation) {
+    if (lastViewerLocation) {
       let viewerTargetReady = true;
       if (
         !completedSetup ||
-        !lastProcessedLocation ||
-        lastProcessedLocation.absolutePath !== lastViewerLocation.absolutePath
+        lastProcessedLocation?.absolutePath !== lastViewerLocation.absolutePath
       ) {
         viewerTargetReady =
           await restorePreparedViewerTarget(lastViewerLocation);

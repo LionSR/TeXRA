@@ -67,8 +67,8 @@ import {
 
 /**
  * Buttons enabled while a run is active (running / waiting / resuming): stop
- * plus the live-session controls (bypass toggles, compact, restore, storage)
- * and the run-context copy, whose text is worth handing off mid-run.
+ * plus the live-session controls (bypass toggles, compact, restore, storage,
+ * export) and the run-context copy, whose text is worth handing off mid-run.
  */
 const ACTIVE_STATE_BUTTONS = [
   ELEMENT_IDS.STOP_STREAM_BTN,
@@ -77,13 +77,14 @@ const ACTIVE_STATE_BUTTONS = [
   ELEMENT_IDS.COMPACT_RESPONSE_BTN,
   ELEMENT_IDS.RESTORE_STATE_BTN,
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ];
 
 /**
  * Buttons enabled in every terminal (finished) state — failed / completed /
- * cancelled: the run is over, so re-run, resume, archive, diff, restore, and
- * the run-context copy are all available.
+ * cancelled: the run is over, so re-run, resume, archive, diff, restore,
+ * export, and the run-context copy are all available.
  */
 const TERMINAL_STATE_BUTTONS = [
   ELEMENT_IDS.RUN_NEW_BTN,
@@ -93,6 +94,7 @@ const TERMINAL_STATE_BUTTONS = [
   ELEMENT_IDS.RESTORE_STATE_BTN,
   ELEMENT_IDS.DIFF_STREAM_BTN,
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ];
 
@@ -131,6 +133,7 @@ const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
 /** Buttons that depend on having an executionId */
 const EXECUTION_DEPENDENT_BUTTONS = new Set([
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.RESUME_BTN,
 ]);
 
@@ -368,11 +371,13 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
    * copying (not a workflow stream, or no outputs and no compile failures) —
    * which is what disables the button.
    */
-  private runContextText(): string {
-    const state = this.state;
-    if (!this.stream || !state || !isWorkflowState(state)) return '';
+  private runContextText(
+    stream: StreamTabInfo,
+    state: StreamState | null | undefined,
+  ): string {
+    if (!state || !isWorkflowState(state)) return '';
     return formatWorkflowRunContext({
-      stream: this.stream,
+      stream,
       files: state.files,
       compileFailures: state.compileFailures,
     });
@@ -419,7 +424,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
       : undefined;
     // Composed once per render: it both gates the copy button and is the
     // payload its click writes.
-    const runContext = this.runContextText();
+    const runContext = this.runContextText(this.stream, state);
 
     // Precompute per-button view metadata once. Only the tooltip is
     // active-state-aware; the accessible name stays constant because

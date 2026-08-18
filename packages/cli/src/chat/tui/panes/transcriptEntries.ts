@@ -309,8 +309,7 @@ export function incrementalStaticTranscriptEntries(
     sameEntries ||
     (source.length >= previous.scannedIndex &&
       (previous.scannedIndex === 0 ||
-        (previous.entriesRef !== undefined &&
-          source[previous.scannedIndex - 1] === previous.lastScannedEntry)));
+        source[previous.scannedIndex - 1] === previous.lastScannedEntry));
   if (!canContinue) {
     return {
       appended: [],
@@ -325,8 +324,8 @@ export function incrementalStaticTranscriptEntries(
   let laterRenderable = false;
   for (let index = suffix.length - 1; index >= 0; index -= 1) {
     hasLaterRenderable[index] = laterRenderable;
-    const entry = suffix[index];
-    if (entry !== undefined && isRenderableTranscriptEntry(entry)) {
+    const entry = suffix[index]!;
+    if (isRenderableTranscriptEntry(entry)) {
       laterRenderable = true;
     }
   }
@@ -334,8 +333,7 @@ export function incrementalStaticTranscriptEntries(
   const appended: ConversationEntry[] = [];
   let scannedIndex = start;
   for (let index = 0; index < suffix.length; index += 1) {
-    const entry = suffix[index];
-    if (entry === undefined) break;
+    const entry = suffix[index]!;
     if (!entry.finalized) break;
     if (!isRenderableTranscriptEntry(entry)) {
       scannedIndex = start + index + 1;
@@ -347,8 +345,8 @@ export function incrementalStaticTranscriptEntries(
       !isInquiryContinuationText(entry.text) &&
       !hasLaterRenderable[index];
     if (defersLiveUserPrompt) break;
-    appended.push(entry);
     scannedIndex = start + index + 1;
+    appended.push(entry);
   }
 
   return {

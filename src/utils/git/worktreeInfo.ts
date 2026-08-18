@@ -75,7 +75,7 @@ async function readBranch(cwd: string): Promise<string | undefined> {
     { cwd, timeout: GIT_TIMEOUT_MS, channel: 'worktreeInfo' },
   );
   if (!result.success) return undefined;
-  const name = result.stdout?.trim();
+  const name = result.stdout.trim();
   return name && name !== 'HEAD' ? name : undefined;
 }
 

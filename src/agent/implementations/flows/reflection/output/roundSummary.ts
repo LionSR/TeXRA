@@ -45,14 +45,7 @@ export function blankRoundSummary(options: {
   outputFile: FileLocation;
   endTurn: boolean;
 }): RoundSummary {
-  return {
-    storageKey: options.storageKey,
-    currRound: options.currRound,
-    fileInfos: [],
-    filesToOpen: [],
-    outputFile: options.outputFile,
-    endTurn: options.endTurn,
-  };
+  return { ...options, fileInfos: [], filesToOpen: [] };
 }
 
 export async function summarizeRound(

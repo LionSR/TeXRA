@@ -305,13 +305,11 @@ export class SessionFactApplier {
               fact.payload.streamId,
               { reset: true },
             );
+          // followUpSent refreshes from the follow-ups store exactly like
+          // updateQueuedFollowUps: the send itself is not a payload, but the
+          // queue may have changed.
           case 'updateQueuedFollowUps':
-            return this.renderer.onQueuedFollowUpsChanged(
-              fact.payload.streamId,
-            );
           case 'followUpSent':
-            // Refresh from the follow-ups store (same as updateQueuedFollowUps):
-            // the send itself is not a payload, but the queue may have changed.
             return this.renderer.onQueuedFollowUpsChanged(
               fact.payload.streamId,
             );
@@ -833,15 +831,7 @@ export class SessionFactApplier {
       this.state.getOrCreateStreamState(streamId, category);
     }
 
-    if (isNewStream) {
-      this.pushStreamMetadata(streamId, {
-        streamStates: this.buildStreamStatesForRefresh(
-          streamId,
-          status,
-          substate,
-        ),
-      });
-    } else if (isNewRunningTransition) {
+    if (isNewStream || isNewRunningTransition) {
       this.pushStreamMetadata(streamId, {
         streamStates: this.buildStreamStatesForRefresh(
           streamId,

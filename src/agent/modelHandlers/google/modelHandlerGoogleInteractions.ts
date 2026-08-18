@@ -20,8 +20,10 @@ import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/media
 import { parseToolInputAsObject } from '@agent/core/flows/toolCallParsing';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';
-import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
-import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
+import {
+  GOOGLE_FINISH,
+  type ProviderStopReason,
+} from '@agent/types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   CreateResponseResult,

@@ -83,9 +83,10 @@ export function computeAnthropicPrice(
   const inputPrice = config.inputPrice;
   const outputPrice = config.outputPrice;
 
-  // Cache-creation tokens bill at a fixed multiplier of the input price per
-  // million tokens, by TTL bucket.
-  const priceForCacheCreation = (tokens: number, multiplier: number): number =>
+  // Cache-creation and cache-read tokens bill at a multiplier of the input
+  // price per million tokens (the same unit formula, just with a different
+  // multiplier for each bucket).
+  const priceForTokens = (tokens: number, multiplier: number): number =>
     (tokens * inputPrice * multiplier) / 1e6;
 
   let basePrice = calculateTokenPrice(
@@ -105,25 +106,24 @@ export function computeAnthropicPrice(
         0,
       );
 
-      basePrice += priceForCacheCreation(
+      basePrice += priceForTokens(
         usageTotals.cacheCreation5mTokens,
         CACHE_CREATION_COST_MULTIPLIER_5M,
       );
-      basePrice += priceForCacheCreation(
+      basePrice += priceForTokens(
         usageTotals.cacheCreation1hTokens,
         CACHE_CREATION_COST_MULTIPLIER_1H,
       );
-      basePrice += priceForCacheCreation(
+      basePrice += priceForTokens(
         unclassifiedCacheCreationTokens,
         CACHE_CREATION_COST_MULTIPLIER_5M,
       );
     }
     if (usageTotals.cacheReadTokens > 0) {
-      basePrice +=
-        (usageTotals.cacheReadTokens *
-          inputPrice *
-          config.cacheDiscountFactor) /
-        1e6;
+      basePrice += priceForTokens(
+        usageTotals.cacheReadTokens,
+        config.cacheDiscountFactor,
+      );
     }
   }
 

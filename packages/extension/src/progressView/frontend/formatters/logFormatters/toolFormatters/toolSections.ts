@@ -28,8 +28,9 @@ import {
   TOOL_CODE_LANGUAGES,
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
-import type { CodexMcpToolOutput, ProposalFileGroup } from '@shared/schemas';
 import {
+  type CodexMcpToolOutput,
+  type ProposalFileGroup,
   CodexMcpToolOutputSchema,
   getProposalFileGroups,
   WorkflowScriptFilesSchema,
@@ -134,9 +135,10 @@ function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input, filePath, parsedOutput } = ctx;
   if (!isObject(input)) return [];
   const editInput = input as EditDiffLikeInput;
-  const candidates = Array.isArray(editInput.edits)
-    ? editInput.edits.map(editCandidateOf).filter(filterNotNullish)
-    : [editCandidateOf(editInput)].filter(filterNotNullish);
+  const editsSource = Array.isArray(editInput.edits)
+    ? editInput.edits
+    : [editInput];
+  const candidates = editsSource.map(editCandidateOf).filter(filterNotNullish);
   if (candidates.length === 0) return [];
 
   const sections: TemplateResult[] = [];

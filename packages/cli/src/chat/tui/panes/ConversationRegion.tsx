@@ -201,9 +201,7 @@ export function ConversationRegion({
     workflowDashboardItemCount > 0
       ? workflowDashboardItemCount
       : snapshot.sessionViews.length;
-  const approvalOnlyDashboard = workflowDashboardItemCount === 1;
-  const minimumSessionPanelRows =
-    workflowDashboardItemCount > 0 && !approvalOnlyDashboard ? 3 : 2;
+  const minimumSessionPanelRows = workflowDashboardItemCount > 1 ? 3 : 2;
   const {
     bottomPanelRows: bottomPanelBudget,
     conversationRows,

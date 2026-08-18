@@ -312,6 +312,14 @@ export function createChatSessionController(
   let activeAutoResumeCancellation:
     { cancellationRequested: boolean } | undefined;
 
+  const requestStop = (): void => {
+    blockRecoveryUntilInterruptedRunSettles();
+    if (activeAutoResumeCancellation) {
+      activeAutoResumeCancellation.cancellationRequested = true;
+    }
+    session.stopRequested = true;
+  };
+
   // -----------------------------------------------------------------------
   // Internal helpers
   // -----------------------------------------------------------------------
@@ -333,22 +341,21 @@ export function createChatSessionController(
     // (e.g. the model-not-recognized instruction) is marked -- skip the
     // generic transcript line so the TUI doesn't show the same failure twice.
     const resumeFailure = describeResumeFailure(error);
-    if (
-      !session.stopRequested &&
-      !hasErrorPresentedMarker(error) &&
-      !hasErrorPresentationPending(error)
-    ) {
+    const alreadyPresented =
+      hasErrorPresentedMarker(error) || hasErrorPresentationPending(error);
+    if (!session.stopRequested && !alreadyPresented) {
       appendLocalErrorTranscript(
         resumeFailure.kind === 'lease-active'
           ? resumeFailure.message
           : toErrorMessage(error),
       );
     }
-    session.runExitCode = CliExitCode.AgentError;
     if (session.stopRequested) {
       session.runExitCode = CliExitCode.Success;
     } else if (resumeFailure.kind === 'lease-active') {
       session.runExitCode = CliExitCode.Usage;
+    } else {
+      session.runExitCode = CliExitCode.AgentError;
     }
   };
 
@@ -866,11 +873,7 @@ export function createChatSessionController(
   // -----------------------------------------------------------------------
 
   const stop = (): void => {
-    blockRecoveryUntilInterruptedRunSettles();
-    if (activeAutoResumeCancellation) {
-      activeAutoResumeCancellation.cancellationRequested = true;
-    }
-    session.stopRequested = true;
+    requestStop();
     interruptActiveRun();
   };
 
@@ -880,11 +883,7 @@ export function createChatSessionController(
       cause: 'Run interrupted.',
     });
     if (streamId === session.streamId) {
-      blockRecoveryUntilInterruptedRunSettles();
-      if (activeAutoResumeCancellation) {
-        activeAutoResumeCancellation.cancellationRequested = true;
-      }
-      session.stopRequested = true;
+      requestStop();
       session.interruptedStreamId = streamId;
     }
     runtimeSession.executions.stopAgentStream(streamId, {

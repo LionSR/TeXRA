@@ -1,6 +1,6 @@
 /**
- * Session slice: execution, file-operation, housekeeping, and history
- * commands routed through the shared executionHandlers module.
+ * Session slice: execution and file-operation commands routed through the
+ * shared executionHandlers module.
  */
 
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';

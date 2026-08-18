@@ -9,11 +9,9 @@ import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
 import { AGENT_RUN_GLOBAL_ARGS } from './_helpers/globalArgs';
 
-// Resume is dual-mode, so it takes the full global flag set: a tool-use
-// session reopens the interactive chat (headless callers are rejected with
-// guidance once the stored category is known), while a workflow run resumes
-// headless and honors the run-time skill sources together with
-// `--print`/`--output-format`/`--no-input`, like `texra run`.
+// Resume is dual-mode, so it takes the full run flag set: a tool-use session
+// reopens the interactive chat, while a workflow run resumes headless like
+// `texra run`.
 export const resumeCommand = defineCommand({
   meta: {
     name: 'resume',

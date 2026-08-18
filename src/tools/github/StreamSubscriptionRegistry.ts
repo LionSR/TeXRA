@@ -151,14 +151,15 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
    * without needing to know which stream owns it.
    */
   unbindAll(key: string): number {
+    const canonicalKey = key as K;
     const removedBindings: BoundSubscription[] = [];
     const owners = new Set<SessionHandle>();
     for (const [streamId, bound] of [...this.perStream]) {
-      const binding = bound.get(key as K);
+      const binding = bound.get(canonicalKey);
       if (!binding) continue;
       removedBindings.push(binding);
       owners.add(binding.owner);
-      this.removeBoundKey(streamId, bound, key as K);
+      this.removeBoundKey(streamId, bound, canonicalKey);
     }
     if (removedBindings.length > 0) {
       for (const owner of owners) this.detachReleaseHookIfUnused(owner);
@@ -176,12 +177,9 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     const streamIdsByKey = new Map<K, StreamTabId[]>();
     for (const [streamId, bound] of this.perStream) {
       for (const key of bound.keys()) {
-        const existing = streamIdsByKey.get(key);
-        if (existing) {
-          existing.push(streamId);
-        } else {
-          streamIdsByKey.set(key, [streamId]);
-        }
+        const streamIds = streamIdsByKey.get(key);
+        if (streamIds) streamIds.push(streamId);
+        else streamIdsByKey.set(key, [streamId]);
       }
     }
     return keys.map((key) => ({

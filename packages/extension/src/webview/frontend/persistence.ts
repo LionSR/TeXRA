@@ -27,15 +27,13 @@ import { type ZodError } from 'zod';
 
 // Local imports - shared state and schemas
 import { hostBridge } from '@shared/hostBridge';
-import type {
-  ByCategory,
-  MainViewPersistedState,
-  StateRestoreMessage,
-} from '@shared/schemas';
 import {
   AGENT_CATEGORIES,
   byCategory,
   MainViewPersistedStateSchema,
+  type ByCategory,
+  type MainViewPersistedState,
+  type StateRestoreMessage,
 } from '@shared/schemas';
 import { Signal } from '@shared/signals';
 import {

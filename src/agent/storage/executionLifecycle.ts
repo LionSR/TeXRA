@@ -36,14 +36,12 @@ import {
 const log = createLog('ExecutionLifecycle');
 
 function pinExecutionWorkingDirectory(record: RunRecord): RunRecord {
-  const explicitWorkingDirectory = record.workingDirectory;
-  const workspacePath = WorkspaceFS.getPath();
-  let workingDirectory: string | undefined;
-  if (explicitWorkingDirectory?.trim()) {
-    workingDirectory = explicitWorkingDirectory;
-  } else if (workspacePath?.trim()) {
-    workingDirectory = workspacePath;
-  }
+  // First non-blank candidate wins, stored verbatim (untrimmed) — trimming
+  // here previously mangled resumed workflow paths (2e3197f92f).
+  const workingDirectory = [
+    record.workingDirectory,
+    WorkspaceFS.getPath(),
+  ].find((dir) => dir?.trim());
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 

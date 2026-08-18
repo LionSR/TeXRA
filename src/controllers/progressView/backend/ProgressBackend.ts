@@ -350,19 +350,21 @@ export class ProgressBackend {
     const failures = hydration.filter(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );
-    if (generation !== this.activationGeneration) {
-      if (transcriptLeaseResult.status === 'fulfilled')
+    const closeTranscriptLease = () => {
+      if (transcriptLeaseResult.status === 'fulfilled') {
         transcriptLeaseResult.value.close();
+      }
+    };
+    if (generation !== this.activationGeneration) {
+      closeTranscriptLease();
       return false;
     }
     if (!this.state.streamLogs.has(stream)) {
-      if (transcriptLeaseResult.status === 'fulfilled')
-        transcriptLeaseResult.value.close();
+      closeTranscriptLease();
       return false;
     }
     if (failures.length > 0) {
-      if (transcriptLeaseResult.status === 'fulfilled')
-        transcriptLeaseResult.value.close();
+      closeTranscriptLease();
       if (failures.length === 1) throw failures[0].reason;
       throw new AggregateError(
         failures.map((failure) => failure.reason),
@@ -432,16 +434,26 @@ export class ProgressBackend {
     return this.factApplier.setStreamStatus(...args);
   }
 
-  /** Inject a session fact (tests / rare host seeds). Prefer the hub in production. */
-  applySessionFact(
-    ...args: Parameters<SessionFactApplier['handleSessionFact']>
+  /**
+   * Admit one session fact through the applier, then apply presentation
+   * policy for an accepted attachment. A refused attachment (removed stream)
+   * must not activate or lease.
+   */
+  private admitSessionFact(
+    fact: Parameters<SessionFactApplier['handleSessionFact']>[0],
   ): boolean {
-    const admitted = this.factApplier.handleSessionFact(...args);
-    const [fact] = args;
+    const admitted = this.factApplier.handleSessionFact(fact);
     if (admitted && fact.type === 'setActiveStream') {
       this.handleStreamPresentationRequest(fact.payload);
     }
     return admitted;
+  }
+
+  /** Inject a session fact (tests / rare host seeds). Prefer the hub in production. */
+  applySessionFact(
+    ...args: Parameters<SessionFactApplier['handleSessionFact']>
+  ): boolean {
+    return this.admitSessionFact(args[0]);
   }
 
   /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */
@@ -527,6 +539,8 @@ export class ProgressBackend {
     }
     releaseDeletionClaim();
 
+    const retainedOutcome =
+      retained === 'active' || retained === 'failed' ? retained : undefined;
     if (commandRemoval) {
       // Retire a retained command-owned tombstone before rebuilding the tab
       // rail. selectableStreamNames() deliberately hides provisional
@@ -538,14 +552,14 @@ export class ProgressBackend {
         retained,
         commandRemoval.created,
       );
-    } else if (retained === 'active' || retained === 'failed') {
+    } else if (retainedOutcome) {
       // A fact-path removal owns its barrier in SessionFactApplier. Let it
       // retire and replay before this retained-state rebuild enumerates the
       // selectable rail, which deliberately hides provisional removals.
-      beforeRetainedRepair?.(retained);
+      beforeRetainedRepair?.(retainedOutcome);
     }
 
-    if (retained === 'active' || retained === 'failed') {
+    if (retainedOutcome) {
       // Best-effort presentation repair, each failure isolated so a broken
       // rebuild cannot suppress the retention notification and neither can
       // make the deletion outcome disappear. The session-fact applier must
@@ -562,8 +576,8 @@ export class ProgressBackend {
       }
       try {
         await this.lifecycle.notifyDeletionRetained(
-          retained === 'active' ? 1 : 0,
-          retained === 'failed' ? 1 : 0,
+          retainedOutcome === 'active' ? 1 : 0,
+          retainedOutcome === 'failed' ? 1 : 0,
         );
       } catch (error) {
         log.warn('Failed to notify after a retained stream deletion', {
@@ -622,22 +636,43 @@ export class ProgressBackend {
     return this.prepareStreamDeletionCore(stream);
   }
 
+  /**
+   * Whether an activation that started after `generationAtStart` expresses a
+   * selection intent a finishing deletion must respect: an explicit
+   * deselection, or a switch to some stream other than the deleted one that
+   * still has a transcript. Anything else (a switch to the deleted stream
+   * itself, or to an identity that no longer exists) lets the deletion path
+   * choose the surviving selection.
+   */
+  private newerIntentControlsSelection(
+    generationAtStart: number,
+    deletedStream?: StreamTabId,
+  ): boolean {
+    if (generationAtStart === this.activationGeneration) return false;
+    const target = this.latestActivationTarget;
+    return (
+      target === '' ||
+      (target !== deletedStream && this.state.streamLogs.has(target))
+    );
+  }
+
   private async deleteStreamNow(
     stream: StreamTabId,
     wasActive: boolean,
     activationGenerationAtStart: number,
     expectedIncarnation?: number,
-  ): Promise<'deleted' | 'active' | 'failed' | 'superseded' | undefined> {
+  ): Promise<DeleteStreamResult | undefined> {
     // `undefined` means the deletion never ran (reserved id / cannot-use data
     // dir), not "deleted": the command path relies on a committed deletion
     // being reported as `deleted` so it keeps the tombstone it just installed.
     if (!canUseStreamDataDir(stream)) return undefined;
 
     const hadDeletableData = this.hasDeletableStreamData(stream);
-    const deletion =
-      expectedIncarnation === undefined
-        ? await this.state.clearStream(stream)
-        : await this.state.clearStream(stream, { expectedIncarnation });
+    // An undefined expectedIncarnation falls back to the current incarnation
+    // inside `clearStream`, matching the no-options call this replaces.
+    const deletion = await this.state.clearStream(stream, {
+      expectedIncarnation,
+    });
     if (deletion !== 'deleted') {
       return deletion;
     }
@@ -660,11 +695,10 @@ export class ProgressBackend {
       activeAfterClear !== '' && remainingStreams.includes(activeAfterClear);
     const newerActivationPending =
       activationGenerationAtStart !== this.activationGeneration;
-    const newerIntentControlsSelection =
-      newerActivationPending &&
-      (this.latestActivationTarget === '' ||
-        (this.latestActivationTarget !== stream &&
-          this.state.streamLogs.has(this.latestActivationTarget)));
+    const newerIntentControlsSelection = this.newerIntentControlsSelection(
+      activationGenerationAtStart,
+      stream,
+    );
     // A concurrent switch to a surviving stream still needs reassertion after
     // DELETE_STREAM. A concurrent explicit deselection is presentation intent
     // and must remain empty rather than being replaced by a fallback.
@@ -705,9 +739,7 @@ export class ProgressBackend {
     );
     if (!outcome) return;
     const newerIntentControlsSelection =
-      activationGeneration !== this.activationGeneration &&
-      (this.latestActivationTarget === '' ||
-        this.state.streamLogs.has(this.latestActivationTarget));
+      this.newerIntentControlsSelection(activationGeneration);
     try {
       await this.lifecycle.rebuildRenderedStreams({
         syncActiveStream: !outcome.allDeleted && !newerIntentControlsSelection,
@@ -891,13 +923,7 @@ export class ProgressBackend {
       this.session.events.subscribe(
         (sessionEvent) => {
           if (sessionEvent.scope !== 'session') return;
-          const admitted = this.factApplier.handleSessionFact(
-            sessionEvent.event,
-          );
-          // A refused attachment (removed stream) must not activate or lease.
-          if (admitted && sessionEvent.event.type === 'setActiveStream') {
-            this.handleStreamPresentationRequest(sessionEvent.event.payload);
-          }
+          this.admitSessionFact(sessionEvent.event);
         },
         { scope: 'session' },
       ),

@@ -72,7 +72,7 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     // Generated from the editing keymap so this list can't drift from the
     // bindings that actually exist (see textInputBindings.ts).
     `- ${textInputEditingHelp()}`,
-    '- `Esc` stops the focused agent · `Ctrl-C` exits idle chats; stops active responses',
+    '- `Esc` returns to the parent session, or stops the focused agent when there is no parent · `Ctrl-C` exits idle chats; stops active responses',
     "- `Ctrl-T` opens the focused stream's full output in a scrollable reader (PgUp/PgDn pages)",
     `- \`Tab\` ${SESSION_LIST.openHelp}`,
     `- \`${focusChord}\` focuses a stream directly`,

@@ -15,8 +15,13 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import type { BashPermission, StreamTabId, ToolResult } from '@shared/schemas';
-import { BASH_APPROVAL_CONFIG_KEY, StreamTabIdSchema } from '@shared/schemas';
+import {
+  BASH_APPROVAL_CONFIG_KEY,
+  StreamTabIdSchema,
+  type BashPermission,
+  type StreamTabId,
+  type ToolResult,
+} from '@shared/schemas';
 import {
   decideTexraApproval,
   isTexraApprovalDenied,
@@ -132,19 +137,23 @@ export function buildBashApprovalRejectedResult(
 ): ToolResult {
   const preview = truncateWithEllipsis(command, 60);
   const classification = classifyRejection(rejection);
-  const feedback =
-    classification.kind === 'feedback'
-      ? classification.feedback?.trim()
-      : undefined;
-  let message = `User rejected command: ${preview}`;
-  let guidance: string | undefined = DEFAULT_BASH_REJECTION_GUIDANCE;
-  if (classification.kind === 'policy') {
-    message = `Command denied: ${preview}`;
-    guidance = classification.reason.trim();
-  }
-  if (classification.kind === 'cancelled') {
-    message = `Command approval cancelled: ${preview}`;
-    guidance = classification.cause?.trim();
+  let message: string;
+  let guidance: string | undefined;
+  let feedback: string | undefined;
+  switch (classification.kind) {
+    case 'policy':
+      message = `Command denied: ${preview}`;
+      guidance = classification.reason.trim();
+      break;
+    case 'cancelled':
+      message = `Command approval cancelled: ${preview}`;
+      guidance = classification.cause?.trim();
+      break;
+    case 'feedback':
+      message = `User rejected command: ${preview}`;
+      guidance = DEFAULT_BASH_REJECTION_GUIDANCE;
+      feedback = classification.feedback?.trim();
+      break;
   }
   const error = feedback || !guidance ? message : `${message}\n\n${guidance}`;
   return errorResult(error, {

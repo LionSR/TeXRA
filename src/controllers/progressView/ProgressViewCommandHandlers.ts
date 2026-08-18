@@ -29,6 +29,11 @@ import {
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
+import {
+  exportStreamTranscript,
+  NO_TRANSCRIPT_TO_EXPORT_MESSAGE,
+  type TranscriptExportPorts,
+} from './exportTranscript';
 import type { ProgressWorkflowActionsController } from './ProgressWorkflowActionsController';
 import type { ProgressApiKeyRetryController } from './ProgressApiKeyRetryController';
 import type {
@@ -67,11 +72,11 @@ export async function resolveNativeAgentRun(
     );
     return null;
   }
-  const { config, ...rest } = metadata;
+  const { config } = metadata;
   if (!config) return null;
   // The config guard above guarantees the resolved metadata carries a config,
   // so the return type narrows `config` to defined for callers.
-  return { ...rest, config };
+  return { ...metadata, config };
 }
 
 type ProgressViewMessage<C extends ProgressViewInboundMessage['command']> =
@@ -410,6 +415,11 @@ export interface ProgressViewSecondTierActions {
     ) => boolean;
     readonly cancel: (stream: StreamTabId, requestId: string) => void;
   };
+  /**
+   * Host ports for writing and opening a transcript export. Format picking
+   * and file opening stay on the host; the shared helper owns the write.
+   */
+  readonly transcriptExport: TranscriptExportPorts;
 }
 
 /**
@@ -480,6 +490,17 @@ export function createProgressViewSecondTierHandlers(
           'Switched to your own API key. There is no pending retry to resume, so run the agent again when you are ready.',
         );
       }
+    },
+
+    // ── Transcript export (replaces the retired History-tab export) ──
+    [CMD.EXPORT_TRANSCRIPT]: async (data) => {
+      await deps.preload?.(data.stream);
+      const executionId = deps.getRunMetadata(data.stream).executionId;
+      if (!executionId) {
+        await deps.host.showInfo(NO_TRANSCRIPT_TO_EXPORT_MESSAGE);
+        return;
+      }
+      await exportStreamTranscript(executionId, deps.transcriptExport);
     },
 
     // ── State restore ──

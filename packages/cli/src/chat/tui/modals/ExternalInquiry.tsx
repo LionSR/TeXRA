@@ -45,16 +45,13 @@ type ExternalInquiryDisplayLine = ScrollableDisplayLine<'text'>;
 
 type CopyStatus = 'idle' | 'copying' | 'copied' | 'failed';
 
-function copyStatusLabel(status: Exclude<CopyStatus, 'idle'>): string {
-  switch (status) {
-    case 'copying':
-      return ' copying...';
-    case 'copied':
-      return ' copied to clipboard';
-    case 'failed':
-      return ' copy failed';
-  }
-}
+const COPY_STATUS_LABELS: Readonly<
+  Record<Exclude<CopyStatus, 'idle'>, string>
+> = {
+  copying: ' copying...',
+  copied: ' copied to clipboard',
+  failed: ' copy failed',
+};
 
 const DEFAULT_EXTERNAL_INQUIRY_QUESTION_ROWS = 16;
 const EXTERNAL_INQUIRY_FIXED_ROWS = 6;
@@ -300,11 +297,11 @@ export function ExternalInquiry(
       title={
         <>
           Agent asks:
-          {copyStatus !== 'idle' ? (
+          {copyStatus !== 'idle' && (
             <Text color={copyStatusColor} dimColor={copyStatus === 'copying'}>
-              {copyStatusLabel(copyStatus)}
+              {COPY_STATUS_LABELS[copyStatus]}
             </Text>
-          ) : null}
+          )}
         </>
       }
       footer={<KeyHints hints={keyHints} confirmCancel={false} />}

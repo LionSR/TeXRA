@@ -181,10 +181,6 @@ function bindAbortSignals(
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
 ): ChildRunStrategy<AgentRuntimeFlowResult> & {
-  /** Underlying application error captured for the most recent turn. */
-  readonly getTurnError: () => unknown;
-  /** Terminal-shaped result captured from the most recent turn's return. */
-  readonly getTurnResult: () => AgentFlowResult | undefined;
   /** Shared typed result construction used by detached and in-band drivers. */
   readonly buildResult: (
     turn: AgentRuntimeFlowResult,
@@ -397,8 +393,6 @@ export function createNativeSubagentStrategy(
 
     isTerminal: (turn) => !isWaitingFlowResult(turn),
     isTurnError: () => lastErr !== undefined,
-    getTurnError: () => lastErr,
-    getTurnResult: () => lastResult,
 
     resolveDeliveryTarget,
 

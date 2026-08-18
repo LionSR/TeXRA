@@ -1,7 +1,7 @@
 import { formatResetDuration } from './chatgptSubscriptionDetection';
 import {
-  errorBodyCandidates,
-  pickNumberField,
+  firstBodyNumberField,
+  firstBodyStringField,
   pickStringField,
 } from './errorInspection';
 import { detectSdkCredentialRoute } from './sdkRequestEndpoint';
@@ -37,19 +37,13 @@ export function parseXaiSubscriptionLimit(
   if (detectSdkCredentialRoute(err) !== 'xai-subscription') return null;
 
   const message =
-    errorBodyCandidates(rawErrorBody)
-      .map((candidate) => pickStringField(candidate, 'message'))
-      .find((candidate) => candidate !== undefined) ??
-    (typeof (err as { message?: unknown }).message === 'string'
-      ? (err as { message: string }).message
-      : undefined);
+    firstBodyStringField(rawErrorBody, 'message') ??
+    pickStringField(err, 'message');
   if (!message || !USAGE_LIMIT_PATTERN.test(message)) return null;
 
-  const resetsInSeconds = errorBodyCandidates(rawErrorBody)
-    .map((candidate) => pickNumberField(candidate, 'resets_in_seconds'))
-    .find((value): value is number => value !== undefined);
-
-  return { resetsInSeconds };
+  return {
+    resetsInSeconds: firstBodyNumberField(rawErrorBody, 'resets_in_seconds'),
+  };
 }
 
 /** Human-readable message for a Grok-subscription usage-limit error. */

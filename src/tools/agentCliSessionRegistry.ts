@@ -121,8 +121,7 @@ export class AgentCliSessionRegistry {
     sessionId: string,
   ): Promise<AgentCliSessionEntry | undefined> {
     const state = this.sessions.get(sessionId);
-    if (state?.kind === 'active') return state.entry;
-    return state?.ready;
+    return state?.kind === 'active' ? state.entry : state?.ready;
   }
 
   release(sessionId: string): void {

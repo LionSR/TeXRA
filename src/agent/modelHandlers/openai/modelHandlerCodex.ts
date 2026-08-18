@@ -130,11 +130,12 @@ export function rewriteCodexRequestBody(
   }
 
   const instructions: string[] = [];
-  if (
-    typeof rewritten.instructions === 'string' &&
-    rewritten.instructions.trim()
-  ) {
-    instructions.push(rewritten.instructions.trim());
+  const existingInstructions =
+    typeof rewritten.instructions === 'string'
+      ? rewritten.instructions.trim()
+      : '';
+  if (existingInstructions) {
+    instructions.push(existingInstructions);
   }
   if (Array.isArray(rewritten.input)) {
     const kept: unknown[] = [];
@@ -197,10 +198,10 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   private capabilitiesForRoute(
     route: ModelCredentialRoute | NormalizedUsage['usageRoute'],
   ): ProviderCapabilityProfile | null {
+    if (route === 'chatgpt-subscription')
+      return this.subscriptionCapabilities();
     if (route === undefined) return this.configuredSubscriptionCapabilities();
-    return route === 'chatgpt-subscription'
-      ? this.subscriptionCapabilities()
-      : null;
+    return null;
   }
 
   protected override getActiveProviderCapabilities(): ProviderCapabilityProfile | null {
@@ -264,14 +265,16 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   /** The Codex backend while the subscription is active, else the default
    *  OpenAI base from the parent. */
   public override getBaseUrl(): string | null {
-    if (this.activeCredentialRoute !== undefined) {
-      return this.activeCredentialRoute === 'chatgpt-subscription'
-        ? CODEX_BACKEND_BASE_URL
-        : super.getBaseUrl();
+    if (this.activeCredentialRoute === 'chatgpt-subscription') {
+      return CODEX_BACKEND_BASE_URL;
     }
-    return this.hasConfiguredSubscriptionProfile()
-      ? CODEX_BACKEND_BASE_URL
-      : super.getBaseUrl();
+    if (
+      this.activeCredentialRoute === undefined &&
+      this.hasConfiguredSubscriptionProfile()
+    ) {
+      return CODEX_BACKEND_BASE_URL;
+    }
+    return super.getBaseUrl();
   }
 
   override async getClient(

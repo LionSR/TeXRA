@@ -76,8 +76,6 @@ export async function persistTerminalExecution(
     logger: callerLogger,
     failedMessage,
   } = params;
-  const agentData =
-    agentName !== undefined ? { agentIdentifier: agentName } : {};
   const finalization = await finalizeExecutionWithLease({
     executionId,
     outcome,
@@ -86,7 +84,7 @@ export async function persistTerminalExecution(
   if (finalization.status === 'failed') {
     callerLogger.warn(failedMessage, {
       data: {
-        ...agentData,
+        ...(agentName ? { agentIdentifier: agentName } : {}),
         executionId,
         stage: finalization.stage,
         outcomePersisted: finalization.outcomePersisted,

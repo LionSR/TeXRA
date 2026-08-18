@@ -328,7 +328,6 @@ export class ToolUseDispatchNode<C> extends Node<
         error: message.trim() || 'Tool execution failed.',
         ...(diagnostics ? { diagnostics } : {}),
       };
-      return { result, extracted: extractToolAttachments(result) };
     }
 
     try {
@@ -590,30 +589,33 @@ export class ToolUseDispatchNode<C> extends Node<
     // OpenAI) keep their receiver bound.
     const modelHandler = this.services.modelCell.handler;
     const client = await this.services.modelCell.getClient();
+    const toolResults = allResults.map((execResult) => ({
+      call: execResult.call,
+      result: execResult.extracted.sanitizedResult,
+      attachments: execResult.extracted.attachments,
+    }));
     if (
-      allResults.length > 1 &&
+      toolResults.length > 1 &&
       modelHandler.requiresBatchedParallelToolResults &&
       modelHandler.createBatchedToolUseFollowUpMessages
     ) {
       const followUpMsgs =
         await modelHandler.createBatchedToolUseFollowUpMessages(
-          allResults.map((execResult) => ({
-            call: execResult.call,
-            result: execResult.extracted.sanitizedResult,
-            attachments: execResult.extracted.attachments,
-          })),
+          toolResults,
           workspace,
           assistantText || undefined,
           client,
         );
       shared.messages.push(...followUpMsgs);
     } else {
-      for (const [index, execResult] of allResults.entries()) {
-        const { sanitizedResult, attachments } = execResult.extracted;
+      for (const [
+        index,
+        { call, result, attachments },
+      ] of toolResults.entries()) {
         const followUpMsgs = await modelHandler.createToolUseFollowUpMessages(
           client,
-          execResult.call,
-          sanitizedResult,
+          call,
+          result,
           attachments,
           workspace,
           index === 0 ? assistantText || undefined : undefined,

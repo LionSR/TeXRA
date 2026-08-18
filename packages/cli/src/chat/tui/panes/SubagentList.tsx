@@ -65,6 +65,7 @@ import {
   type WorkflowPhaseGroup,
   type WorkflowTaskEntry,
 } from '../state/workflowDashboardModel';
+
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
@@ -417,7 +418,20 @@ function WorkflowDashboard({
   ) {
     return null;
   }
-  const heading = `${model.root.agent ?? 'Workflow'} · ${done}/${total} done`;
+  const headingPhase = activeGroup?.heading
+    ? formatWorkflowPhaseHeading({
+        phaseLabel: activeGroup.label,
+        ...(activeGroup.heading.phaseIndex !== undefined
+          ? { phaseIndex: activeGroup.heading.phaseIndex }
+          : {}),
+        ...(activeGroup.heading.phaseTotal !== undefined
+          ? { phaseTotal: activeGroup.heading.phaseTotal }
+          : {}),
+      })
+    : undefined;
+  const heading = headingPhase
+    ? `${model.root.agent ?? 'Workflow'} · ${headingPhase} · ${done}/${total} done`
+    : `${model.root.agent ?? 'Workflow'} · ${done}/${total} done`;
   const { failed } = workflowCallFailureTally(calls);
   const renderTask = (
     item: SelectItem<ChildListValue>,

@@ -80,11 +80,6 @@ export type ValidationErrorDiagnostics = z.infer<
 >;
 
 /**
- * Format Zod issues into structured diagnostics for model consumption.
- * `expected`/`received` only exist on certain ZodIssue subtypes (e.g.
- * invalid_type), so we cast to access them.
- */
-/**
  * Render Zod issues as a single `; `-joined, human-readable string
  * (`path.to.field: message; <root>: message`). Shared by the salvage parsers
  * that must loudly surface malformed persisted entries (roundIndexed,
@@ -100,6 +95,11 @@ export function formatZodIssuesMessage(
     .join('; ');
 }
 
+/**
+ * Format Zod issues into structured diagnostics for model consumption.
+ * `expected`/`received` only exist on certain ZodIssue subtypes (e.g.
+ * invalid_type), so we cast to access them.
+ */
 export function formatZodIssuesForDiagnostics(
   issues: ZodIssue[],
 ): FormattedZodIssue[] {

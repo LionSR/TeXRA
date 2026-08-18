@@ -71,8 +71,8 @@ export interface SettingsToggleRowOptions {
 /** Stable per-row id derived from the label, so the `for`/`id` pair does not
  *  churn across re-renders the way a counter would. Labels are unique within a
  *  settings page. */
-function toggleRowId(label: string): string {
-  return `settings-toggle-${label
+function settingsRowId(kind: 'toggle' | 'number', label: string): string {
+  return `settings-${kind}-${label
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, '-')
     .replaceAll(/^-|-$/g, '')}`;
@@ -98,7 +98,7 @@ function toggleRowId(label: string): string {
 export function renderSettingsToggleRow(
   options: SettingsToggleRowOptions,
 ): TemplateResult {
-  const id = toggleRowId(options.label);
+  const id = settingsRowId('toggle', options.label);
   return html`
     <div class="settings-row">
       <div class="settings-row-text">
@@ -115,13 +115,6 @@ export function renderSettingsToggleRow(
       </div>
     </div>
   `;
-}
-
-function numberRowId(label: string): string {
-  return `settings-number-${label
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-|-$/g, '')}`;
 }
 
 export interface SettingsNumberRowOptions {
@@ -154,7 +147,7 @@ export interface SettingsNumberRowOptions {
 export function renderSettingsNumberRow(
   options: SettingsNumberRowOptions,
 ): TemplateResult {
-  const id = numberRowId(options.label);
+  const id = settingsRowId('number', options.label);
 
   const commit = (input: WaInput, raw: string): void => {
     const parsed = Number(raw);

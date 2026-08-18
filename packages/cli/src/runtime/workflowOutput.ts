@@ -18,7 +18,11 @@ import { getRunDir } from '@utils/files/runStorageFs';
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
 // path.relative on the workflow's own generated outputs, never user input.
 import { toPosixPath } from '@utils/core/pathCore';
-import { formatResultCount, pluralize } from '@utils/text/stringUtils';
+import {
+  formatResultCount,
+  isNonEmptyString,
+  pluralize,
+} from '@utils/text/stringUtils';
 
 import { CliUsageError, type CliContext } from './cliContext';
 import { type CliRunResult, type ExecuteAgentResult } from './terminalStatus';
@@ -245,23 +249,16 @@ export async function resolveWorkflowOutput(
   options: WorkflowOutputResolutionOptions,
 ): Promise<CliWorkflowRunResult> {
   const runDirectory = options.runDirectory ?? getRunDir(result.executionId);
+  const baseResult = { ...result, workingDirectory: context.cwd, runDirectory };
   // Interrupted rounds remain inspectable in run storage, but are not final
   // artifacts and must not replace the user's requested destination.
   if (result.outcome === RUN_OUTCOME.CANCELLED && (outputFile || outputDir)) {
-    return {
-      ...result,
-      workingDirectory: context.cwd,
-      runDirectory,
-    };
+    return baseResult;
   }
   // Commit before validation as well as copying: once output finalization owns
   // the verdict, its missing-output and filesystem failures must stay visible.
   if ((outputFile || outputDir) && options.tryCommitPublication?.() === false) {
-    return {
-      ...result,
-      workingDirectory: context.cwd,
-      runDirectory,
-    };
+    return baseResult;
   }
   const terminalStatus = runOutcomeToExecutionStatus(result.outcome);
   if (result.outputs.length === 0 && (outputFile || outputDir)) {
@@ -371,17 +368,8 @@ export function resumeWorkflowOutputFile(
 ): string | undefined {
   if (config.agentCategory !== AgentCategory.Workflow) return undefined;
 
-  const resolveOutputFile = (outputFile: string | undefined | null) => {
-    if (outputFile == null || outputFile.length === 0) return undefined;
-    if (path.isAbsolute(outputFile)) return outputFile;
-    const workingDirectory = config.workingDirectory;
-    return workingDirectory
-      ? path.join(workingDirectory, outputFile)
-      : outputFile;
-  };
-
   const cliOutputFile = config.cliOutputFile;
-  if (cliOutputFile != null && cliOutputFile.length > 0) {
+  if (isNonEmptyString(cliOutputFile)) {
     if (!path.isAbsolute(cliOutputFile)) {
       throw new CliUsageError(
         `Stored workflow output file is not absolute: ${cliOutputFile}`,
@@ -391,9 +379,15 @@ export function resumeWorkflowOutputFile(
   }
 
   const outputFiles = config.outputFiles ?? [];
-  return outputFiles.length === 1
-    ? resolveOutputFile(outputFiles[0])
-    : undefined;
+  if (outputFiles.length !== 1) return undefined;
+
+  const outputFile = outputFiles[0];
+  if (!isNonEmptyString(outputFile)) return undefined;
+  if (path.isAbsolute(outputFile)) return outputFile;
+  const workingDirectory = config.workingDirectory;
+  return workingDirectory
+    ? path.join(workingDirectory, outputFile)
+    : outputFile;
 }
 
 export function resumeWorkflowOutputDirectory(
@@ -402,7 +396,7 @@ export function resumeWorkflowOutputDirectory(
   if (config.agentCategory !== AgentCategory.Workflow) return undefined;
 
   const outputDirectory = config.cliOutputDirectory;
-  if (outputDirectory == null || outputDirectory.length === 0) return undefined;
+  if (!isNonEmptyString(outputDirectory)) return undefined;
   if (!path.isAbsolute(outputDirectory)) {
     throw new CliUsageError(
       `Stored workflow output directory is not absolute: ${outputDirectory}`,

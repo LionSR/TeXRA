@@ -97,7 +97,6 @@ export function createDirectLspLeanAdapter(
   options: DirectLspLeanAdapterOptions = {},
 ): LeanLanguageServices & { dispose(): Promise<void> } {
   const lakeCommand = options.lakeCommand ?? 'lake';
-  const resolveRoot = defaultResolveWorkspaceRoot;
   const maxSessions =
     options.maxSessions == null ? undefined : Math.max(1, options.maxSessions);
   const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_LEAN_IDLE_TIMEOUT_MS;
@@ -116,14 +115,14 @@ export function createDirectLspLeanAdapter(
     // context does not reliably survive the start queue's scheduling hop.
     const runId = currentRunId();
     const absolute = path.resolve(filePath);
-    const root = await resolveRoot(absolute);
+    const root = await defaultResolveWorkspaceRoot(absolute);
     throwIfStopped(generation);
     if (!root) {
       throw new Error(
         `No Lean project found for ${absolute}. Lake projects need a lakefile.lean or lakefile.toml in an ancestor directory.`,
       );
     }
-    return getOrStartSession(root, generation, runId);
+    return enqueueStart(() => getOrStartSessionLocked(root, generation, runId));
   }
 
   function throwIfStopped(generation: number): void {
@@ -274,12 +273,8 @@ export function createDirectLspLeanAdapter(
       clearTimeout(tracked.idleTimer);
       tracked.idleTimer = undefined;
     }
-    if (
-      reason === 'idle' ||
-      reason === 'capacity' ||
-      reason === 'exhausted' ||
-      reason === 'run-end'
-    ) {
+    // 'restart' and 'shutdown' stops are caller-initiated and already logged.
+    if (reason !== 'restart' && reason !== 'shutdown') {
       info(LOG_CHANNEL, `Stopping Lean server at ${root} (${reason})`);
     }
     try {
@@ -415,14 +410,6 @@ export function createDirectLspLeanAdapter(
     ) as Promise<T>;
   }
 
-  function getOrStartSession(
-    root: string,
-    generation = startGeneration,
-    runId?: ExecutionId,
-  ): Promise<LeanSession> {
-    return enqueueStart(() => getOrStartSessionLocked(root, generation, runId));
-  }
-
   async function getOrStartSessionLocked(
     root: string,
     generation: number,
@@ -481,21 +468,17 @@ export function createDirectLspLeanAdapter(
       inFlight: 0,
       ownerRunIds: new Set(runId === undefined ? [] : [runId]),
     });
-    if (startGeneration !== generation) {
-      await disposeSession(root, 'shutdown');
-      throw new Error(ADAPTER_STOPPED_MESSAGE);
-    }
     try {
       await session.ensureReady();
+      // Re-check after the await: a concurrent disposeAll must not leave a
+      // freshly readied session behind. Any failure here (including this
+      // stop) tears the just-tracked session down again.
+      throwIfStopped(generation);
+      return session;
     } catch (error) {
       await disposeSession(root, 'shutdown');
       throw error;
     }
-    if (startGeneration !== generation) {
-      await disposeSession(root, 'shutdown');
-      throw new Error(ADAPTER_STOPPED_MESSAGE);
-    }
-    return session;
   }
 
   async function startAndLease(
@@ -628,12 +611,7 @@ export function createDirectLspLeanAdapter(
           }
           try {
             await runForAllSessions(
-              new Map(
-                acquired.map((tracked) => [
-                  tracked.session.workspaceRoot,
-                  tracked.session,
-                ]),
-              ),
+              acquired.map((tracked) => tracked.session),
               lakeCommand,
               LAKE_PROJECT_ARGS[command],
             );
@@ -764,17 +742,17 @@ function isFileTableExhausted(error: unknown): boolean {
 }
 
 async function runForAllSessions(
-  sessions: Map<string, LeanSession>,
+  activeSessions: LeanSession[],
   lakeCommand: string,
   args: readonly string[],
 ): Promise<void> {
-  if (sessions.size === 0) {
+  if (activeSessions.length === 0) {
     throw new Error(
       `No Lean project session active. Run a Lean tool against a file in your project first, then retry "${args.join(' ')}".`,
     );
   }
   const results = await Promise.all(
-    [...sessions.values()].map((session) =>
+    activeSessions.map((session) =>
       runLakeCommand({
         workspaceRoot: session.workspaceRoot,
         lakeCommand,

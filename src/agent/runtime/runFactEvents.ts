@@ -54,13 +54,14 @@ export function reportMissingOutputs(
     xmlFile: string | null;
   },
 ): void {
+  const { streamId, round, missing, xmlFile } = info;
   trace.domain({
     key: 'missingOutputs',
-    text: `${formatResultCount(info.missing.length, 'output file')} missing`,
-    data: { missing: info.missing, xmlFile: info.xmlFile },
+    text: `${formatResultCount(missing.length, 'output file')} missing`,
+    data: { missing, xmlFile },
   });
   emitRunFact(trace, 'updateMissingOutputs', {
-    streamId: info.streamId,
-    filesByRound: { [info.round]: info.missing },
+    streamId,
+    filesByRound: { [round]: missing },
   });
 }

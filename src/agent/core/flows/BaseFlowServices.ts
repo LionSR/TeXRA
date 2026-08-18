@@ -37,11 +37,10 @@ export function createToolPolicy(policy: ToolPolicy = {}): ToolPolicy {
   // `Object.freeze` is shallow, so the nested tool-name array gets its own
   // frozen copy rather than aliasing the caller's (still mutable) array.
   return Object.freeze({
-    approvalPromptsUnavailable: policy.approvalPromptsUnavailable,
+    ...policy,
     runtimeUnavailableTools: policy.runtimeUnavailableTools
       ? Object.freeze([...policy.runtimeUnavailableTools])
       : undefined,
-    stopAfterCycle: policy.stopAfterCycle,
   });
 }
 

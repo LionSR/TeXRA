@@ -22,10 +22,9 @@ export interface ResponseTextProcessing {
 export function createTexraResponseTextProcessing(
   connectResponseText: ResponseTextConnector,
 ): ResponseTextProcessing {
-  return Object.freeze({
-    normalizeResponseText: (text: string): string => text.trim(),
-    postProcessResponse: (text: string): string =>
-      replacementEngine.applyAll(text),
+  return Object.freeze<ResponseTextProcessing>({
+    normalizeResponseText: (text) => text.trim(),
+    postProcessResponse: (text) => replacementEngine.applyAll(text),
     connectResponseText,
   });
 }

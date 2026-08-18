@@ -221,7 +221,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Ctrl-C stop');
     expect(display.bindings).not.toContain('Alt-s');
     // Stream-navigation hints stay hidden in a single-stream chat.
-    expect(display.bindings).not.toContain('Esc back');
+    expect(display.bindings).not.toContain('Esc parent');
     expect(display.bindings).not.toContain('Tab sessions');
     expect(display.bindings).not.toContain('Alt-1..9 focus');
     expect(leftTexts(display)).not.toContain('deepseekT');
@@ -253,6 +253,18 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Alt-s subagents');
   });
 
+  it('names the focused nested session and its workflow phase', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        isChildStream: true,
+        location: 'Survey (1/1) › Agent runtime',
+        width: 80,
+      }),
+    );
+
+    expect(leftTexts(display)).toContain('Survey (1/1) › Agent runtime');
+  });
+
   it('declares the running session count as a status segment', () => {
     const display = buildStatusBarDisplay(
       statusInput({
@@ -266,22 +278,22 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Tab sessions');
   });
 
-  it('prioritizes Esc back at the narrowest width where it fits', () => {
+  it('prioritizes Esc parent at the narrowest width where it fits', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        width: 10,
+        width: 12,
         shortcuts: { parentNavigationAvailable: true },
       }),
     );
 
-    expect(display.bindings).toBe('Esc back');
+    expect(display.bindings).toBe('Esc parent');
   });
 
-  it('retains Ctrl-C beside Esc back whenever the pair fits', () => {
+  it('retains Ctrl-C beside Esc parent whenever the pair fits', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         ctrlCAction: 'stop root',
-        width: 29,
+        width: 31,
         shortcuts: {
           childNavigationAvailable: true,
           parentNavigationAvailable: true,
@@ -289,14 +301,14 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toBe('Esc back · Ctrl-C stop root');
+    expect(display.bindings).toBe('Esc parent · Ctrl-C stop root');
   });
 
   it('retains full output before dropping to the parent Ctrl-C pair', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         ctrlCAction: 'stop root',
-        width: 50,
+        width: 52,
         shortcuts: {
           childNavigationAvailable: true,
           parentNavigationAvailable: true,
@@ -306,7 +318,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Esc back · Ctrl-T transcript · Ctrl-C stop root',
+      'Esc parent · Ctrl-T transcript · Ctrl-C stop root',
     );
   });
 
@@ -324,7 +336,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Esc back · Tab sessions · Ctrl-T transcript · /agent agents · Ctrl-C exit',
+      'Esc parent · Tab sessions · Ctrl-T transcript · /agent agents · Ctrl-C exit',
     );
   });
 
@@ -341,17 +353,19 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toBe('Esc back · Ctrl-T transcript · Ctrl-C exit');
+    expect(display.bindings).toBe(
+      'Esc parent · Ctrl-T transcript · Ctrl-C exit',
+    );
   });
 
-  it('omits Esc back at the same bounded width without a parent', () => {
+  it('omits Esc parent at the same bounded width without a parent', () => {
     const display = buildStatusBarDisplay(statusInput({ width: 10 }));
 
     expect(display.bindings).toBe('Ctrl-C exit');
-    expect(display.bindings).not.toContain('Esc back');
+    expect(display.bindings).not.toContain('Esc parent');
   });
 
-  it('falls back to Ctrl-C when a tiny terminal cannot fit Esc back', () => {
+  it('falls back to Ctrl-C when a tiny terminal cannot fit Esc parent', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         width: 9,
@@ -360,7 +374,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe('Ctrl-C exit');
-    expect(display.bindings).not.toContain('Esc back');
+    expect(display.bindings).not.toContain('Esc parent');
   });
 
   it('advertises list-owned keys while the child list has focus', () => {
@@ -386,7 +400,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('k kill');
     expect(display.bindings).toContain('Tab input');
     expect(display.bindings).toContain('Esc input');
-    expect(display.bindings).not.toContain('Esc back');
+    expect(display.bindings).not.toContain('Esc parent');
     expect(display.bindings).not.toContain('Tab sessions');
   });
 
@@ -445,7 +459,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toContain('Esc close');
-    expect(display.bindings).not.toContain('Esc back');
+    expect(display.bindings).not.toContain('Esc parent');
     expect(display.bindings).not.toContain('↑/↓ select');
   });
 
@@ -577,7 +591,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Esc back · Tab sessions · Ctrl-T transcript · Ctrl-C stop root',
+      'Esc parent · Tab sessions · Ctrl-T transcript · Ctrl-C stop root',
     );
   });
 
@@ -1679,7 +1693,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('Esc back');
+    expect(display.bindings).toContain('Esc parent');
     expect(display.bindings).toContain('Esc 1..9 focus');
     expect(display.bindings).not.toContain('Esc p tasks');
     expect(display.bindings).not.toContain('Esc s subagents');

@@ -268,15 +268,11 @@ export function createLogsPane(
           aria-label="Recent desktop log entries"
         >
           <div role="status">${logStatusContent()}</div>
-          ${
-            state.entries.length > 0
-              ? repeat(
-                  state.entries.toReversed(),
-                  (entry) => entry.id,
-                  entryTemplate,
-                )
-              : nothing
-          }
+          ${repeat(
+            state.entries.toReversed(),
+            (entry) => entry.id,
+            entryTemplate,
+          )}
         </div>
       </section>
     `;

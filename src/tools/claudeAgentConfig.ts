@@ -36,8 +36,7 @@ import { safeHomedir } from '@utils/system/platformPaths';
 import { createEnumStateGetter } from './support/enumConfig';
 import { CLAUDE_AGENT_NAME } from './claudeAgentShared';
 
-const LOG_CHANNEL = 'claudeAgent';
-const log = createLog(LOG_CHANNEL);
+const log = createLog('claudeAgent');
 
 // ============================================================================
 // Model — defaults to Sonnet 5; users can override per-call or via workspace state

@@ -49,6 +49,7 @@ import {
   type WorkflowFileOperation,
   type WorkflowFileOperationRequest,
 } from '@controllers/progressView/ProgressWorkflowActionsController';
+import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import {
   createProgressViewSecondTierHandlers,
@@ -118,6 +119,12 @@ import {
 import type { DesktopProgressInboundHandlerRegistry } from './desktopProgressIpc.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
+function operationLabel(operation: WorkflowFileOperation) {
+  return operation === 'pack'
+    ? { verb: 'pack', gerund: 'packing' }
+    : { verb: 'clean', gerund: 'cleaning' };
+}
+
 /**
  * Outcome of revealing a stream, mirroring the extension's progress navigation
  * so a settings-panel jump to a deleted run reports the same thing on both
@@ -144,6 +151,8 @@ export interface DesktopAgentExecutionOptions {
   host: DesktopAgentExecutionHost;
   session: SessionHandle;
   sessionStores: SessionStores;
+  /** Packaged app resources root (`…/resources`), for export templates. */
+  resourcesPath: string;
   /** Aborts construction and detaches presentation when its window closes. */
   presentationSignal?: AbortSignal;
 }
@@ -153,6 +162,8 @@ export interface DesktopProgressBridgeOptions {
   sessionStores: SessionStores;
   logger?: AgentTrace;
   host: DesktopAgentExecutionHost;
+  /** Packaged app resources root (`…/resources`), for export templates. */
+  resourcesPath: string;
 }
 
 export class DesktopProgressBridge {
@@ -190,6 +201,7 @@ export class DesktopProgressBridge {
   private readonly initialization: Promise<void>;
   private disposed = false;
   private presentationReady = false;
+  private chatExportControllerLoad: Promise<ChatExportController> | undefined;
 
   progressViewInboundHandlers!: DesktopProgressInboundHandlerRegistry;
 
@@ -210,24 +222,11 @@ export class DesktopProgressBridge {
       // The desktop task shell keeps the conversation canvas permanently on
       // screen, so there is no separate progress surface to reveal.
       requestEnsureProgressView: () => undefined,
-      requestShowError: ({ message }) => {
-        // Report what the error dialog actually did: the concrete
-        // showErrorMessage awaits dialog.showMessageBox, which rejects when
-        // the window is torn down beneath it. Voiding the promise would
-        // leave that rejection unhandled, and reporting nothing would read
-        // as not-delivered even when the dialog did render (#10400).
-        return Promise.resolve(
+      requestShowError: ({ message }) =>
+        this.settleHostDialog(
           this.options.host.showErrorMessage(message),
-        ).then(
-          () => true,
-          (error: unknown) => {
-            this.logger.warn('Failed to present the error dialog', {
-              data: toLogData(error),
-            });
-            return false;
-          },
-        );
-      },
+          'Failed to present the error dialog',
+        ),
       requestShowInstruction: (instruction) => {
         // An instruction is actionable guidance, not a failure, so it uses
         // the info dialog. The desktop dialog carries no buttons, so the
@@ -238,47 +237,24 @@ export class DesktopProgressBridge {
               .map((action) => INSTRUCTION_ACTION_HINT[action] ?? action)
               .join(', ')})`
           : '';
-        // Observe the dialog promise before reporting delivery (#10399): the
-        // concrete showInfoMessage awaits dialog.showMessageBox, which
-        // rejects when its window is being torn down. Reporting `true`
-        // unconditionally would mark a launch error as presented while the
-        // rejection went unhandled and nothing rendered. The desktop dialog
-        // is window-modal, so settling on dismissal does not park the
-        // launching stream the way a non-modal notification would.
-        return Promise.resolve(
+        return this.settleHostDialog(
           this.options.host.showInfoMessage(`${instruction.message}${hint}`),
-        ).then(
-          () => true,
-          (error: unknown) => {
-            this.logger.warn('Failed to present the instruction dialog', {
-              data: toLogData(error),
-            });
-            return false;
-          },
+          'Failed to present the instruction dialog',
         );
       },
-      showAgentConfigBanner: ({ agentName }) => {
-        return (
-          this.postToRenderer({
-            command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-            agentName,
-            customDirSet: true,
-          }) !== false
-        );
-      },
-      requestOpenFile: (data: RequestOpenFilePayload) => {
+      showAgentConfigBanner: ({ agentName }) =>
+        this.postToRenderer({
+          command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+          agentName,
+          customDirSet: true,
+        }) !== false,
+      requestOpenFile: (data: RequestOpenFilePayload) =>
         // Desktop has no editor integration to preview through, so the
         // resolved path goes to the preview-with-fallback host directly.
-        return this.options.host.openPath(data.location.absolutePath).then(
-          () => true,
-          (error: unknown) => {
-            this.logger.warn('Failed to open requested file on desktop', {
-              data: toLogData(error),
-            });
-            return false;
-          },
-        );
-      },
+        this.settleHostDialog(
+          this.options.host.openPath(data.location.absolutePath),
+          'Failed to open requested file on desktop',
+        ),
     };
     const presentationHost: Pick<SessionHostInteractions, 'emit'> = {
       emit: (event, payload) => this.handlePresentationEvent(event, payload),
@@ -528,9 +504,8 @@ export class DesktopProgressBridge {
       },
       getUseIncludedModelAccess: () =>
         getServerSideKeyService().getUseIncludedModelAccess(),
-      setUseIncludedModelAccess: async (enabled) => {
-        await getServerSideKeyService().setUseIncludedModelAccess(enabled);
-      },
+      setUseIncludedModelAccess: (enabled) =>
+        getServerSideKeyService().setUseIncludedModelAccess(enabled),
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
         this.hostInteractions.isRetryPending(stream, requestId),
@@ -651,17 +626,18 @@ export class DesktopProgressBridge {
     operation: WorkflowFileOperation,
     request: WorkflowFileOperationRequest,
   ): Promise<void> {
+    const { verb, gerund } = operationLabel(operation);
     const { agent, model, inputFile, executionId } = request;
     if (!agent || !model || !inputFile) {
       await this.options.host.showErrorMessage(
-        `Select an input file before ${operation === 'pack' ? 'packing' : 'cleaning'}.`,
+        `Select an input file before ${gerund}.`,
       );
       return;
     }
 
     if (!executionId) {
       await this.options.host.showErrorMessage(
-        `Missing execution identity for ${operation}.`,
+        `Missing execution identity for ${verb}.`,
       );
       return;
     }
@@ -695,6 +671,7 @@ export class DesktopProgressBridge {
     result: FileOpResult,
     inputFile: string,
   ): Promise<void> {
+    const { verb, gerund } = operationLabel(operation);
     switch (result.status) {
       case 'success': {
         const folder = result.outputFolder;
@@ -708,17 +685,17 @@ export class DesktopProgressBridge {
       }
       case 'noFiles':
         await this.options.host.showInfoMessage(
-          `No files found to ${operation} for ${inputFile}`,
+          `No files found to ${verb} for ${inputFile}`,
         );
         return;
       case 'missingParams':
         await this.options.host.showErrorMessage(
-          `Select an input file before ${operation === 'pack' ? 'packing' : 'cleaning'}.`,
+          `Select an input file before ${gerund}.`,
         );
         return;
       case 'error':
         await this.options.host.showErrorMessage(
-          `Error during ${operation}: ${result.error}`,
+          `Error during ${verb}: ${result.error}`,
         );
         return;
     }
@@ -731,9 +708,8 @@ export class DesktopProgressBridge {
           getRunMetadata: (stream) => this.getRunMetadata(stream),
           preload: (stream) => this.state.snapshots.preload([stream]),
         },
-        runExecutionRequest: async (request) => {
-          await this.runValidatedExecutionRequest(request);
-        },
+        runExecutionRequest: (request) =>
+          this.runValidatedExecutionRequest(request),
       },
       workflowFileActions: {
         state: {
@@ -761,11 +737,10 @@ export class DesktopProgressBridge {
           showError: async (message) => {
             await this.options.host.showErrorMessage(message);
           },
-          logError: (message, error) => {
+          logError: (message, error) =>
             this.logger.error(message, {
               data: toLogData(error),
-            });
-          },
+            }),
         },
         sendFollowUp: (stream, text) => this.sendFollowUp(stream, text),
       },
@@ -815,12 +790,11 @@ export class DesktopProgressBridge {
         followUp: {
           sendFollowUp: ({ stream, text, mediaFiles }) =>
             this.sendFollowUp(stream, text, mediaFiles),
-          reportImageSaveError: (image, error) => {
+          reportImageSaveError: (image, error) =>
             this.logger.warn(
               `Failed to save pasted follow-up image ${image.fileName}`,
               { data: toLogData(error) },
-            );
-          },
+            ),
         },
         bypass: {
           session: this.session,
@@ -909,9 +883,7 @@ export class DesktopProgressBridge {
       followUp: this.followUpController,
       followUpPolish: this.followUpPolishController,
       host: {
-        showInfo: async (message) => {
-          await this.options.host.showInfoMessage(message);
-        },
+        showInfo: (message) => this.options.host.showInfoMessage(message),
       },
       session: this.session,
       getRunConfig: (stream) =>
@@ -955,6 +927,17 @@ export class DesktopProgressBridge {
             action: 'cancel',
           });
         },
+      },
+      transcriptExport: {
+        pickFormat: () => this.options.host.pickTranscriptExportFormat(),
+        openPath: (filePath) => this.options.host.openPath(filePath),
+        showInfo: (message) => this.options.host.showInfoMessage(message),
+        showWarning: (message) => this.options.host.showWarningMessage(message),
+        showError: (message) => this.options.host.showErrorMessage(message),
+        reportDetail: (message) => this.logger.error(message),
+        getController: () => this.getChatExportController(),
+        getTraceViewerTemplate: () =>
+          path.join(this.options.resourcesPath, 'traceViewer', 'index.html'),
       },
     };
 
@@ -1062,6 +1045,25 @@ export class DesktopProgressBridge {
    */
   private showSettings(tab?: SettingsTabPanelName): void {
     postDesktopSettingsView((message) => this.postToRenderer(message), tab);
+  }
+
+  /**
+   * Settle a host dialog promise and report whether it was actually presented.
+   * The desktop dialog await rejects when its window is torn down beneath it;
+   * voiding the promise would leave that rejection unhandled, and reporting
+   * nothing would read as not-delivered even when the dialog did render.
+   */
+  private async settleHostDialog(
+    dialog: Promise<unknown> | void,
+    logMessage: string,
+  ): Promise<boolean> {
+    try {
+      await dialog;
+      return true;
+    } catch (error) {
+      this.logger.warn(logMessage, { data: toLogData(error) });
+      return false;
+    }
   }
 
   private handlePresentationEvent<K extends RuntimePresentationEvent>(
@@ -1201,7 +1203,7 @@ export class DesktopProgressBridge {
     };
   }
 
-  private sendFollowUp(
+  private async sendFollowUp(
     streamId: StreamTabId,
     text: string,
     mediaFiles?: readonly string[],
@@ -1248,7 +1250,6 @@ export class DesktopProgressBridge {
           data: toLogData(error),
         });
       });
-    return Promise.resolve();
   }
 
   /**
@@ -1339,9 +1340,28 @@ export class DesktopProgressBridge {
       ...(await listDesktopWorkspaceFiles('input', workspacePath)),
       ...(await listDesktopWorkspaceFiles('context', workspacePath)),
     ];
-    return files.map((file) =>
-      path.isAbsolute(file) ? file : path.join(workspacePath, file),
-    );
+    return files.map((file) => path.resolve(workspacePath, file));
+  }
+
+  private getChatExportController(): Promise<ChatExportController> {
+    this.chatExportControllerLoad ??=
+      import('@controllers/progressView/ChatExportController')
+        .then(async ({ ChatExportController: Controller }) => {
+          const latexPreamble = await readFile(
+            path.join(
+              this.options.resourcesPath,
+              'templates',
+              'chatExport.tex',
+            ),
+            'utf8',
+          );
+          return new Controller({ latexPreamble });
+        })
+        .catch((error: unknown) => {
+          this.chatExportControllerLoad = undefined;
+          throw error;
+        });
+    return this.chatExportControllerLoad;
   }
 
   /**
@@ -1366,6 +1386,7 @@ export async function createDesktopAgentExecution(
     session: options.session,
     sessionStores: options.sessionStores,
     host: options.host,
+    resourcesPath: options.resourcesPath,
   });
   const disposeAbortedPresentation = (): void => progress.dispose();
   options.presentationSignal?.addEventListener(

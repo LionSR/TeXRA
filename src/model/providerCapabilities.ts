@@ -172,7 +172,7 @@ async function isSignedInSubscriptionActive(
   if (!config) return false;
   const capabilities = resolveCapabilities(config, getUseOpenRouter());
   if (!capabilities) return false;
-  return await isSignedIn();
+  return isSignedIn();
 }
 
 /** Whether the model currently routes through a signed-in ChatGPT subscription. */

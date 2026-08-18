@@ -521,10 +521,10 @@ export class BashTool extends defineTool({
         data: err,
       });
     };
-    const logDurabilityFailure = (action: string, err: unknown): void => {
-      markOwnedExecutionLeaseUndurable(executionId);
-      logBackgroundFailure(action, err);
-    };
+    const logPersistFailure = (
+      kind: 'report' | 'result manifest',
+      err: unknown,
+    ): void => logBackgroundFailure(`persist ${kind}`, err);
 
     let childFinalized = false;
     const finalizeChild = async (
@@ -547,9 +547,7 @@ export class BashTool extends defineTool({
           targetStreamId: parentStreamId,
           followUp: { text, origin: 'subagent_result' },
           session: runSession,
-          ...(parentDeliveryGenerationId !== undefined
-            ? { expectedGenerationId: parentDeliveryGenerationId }
-            : {}),
+          expectedGenerationId: parentDeliveryGenerationId,
         });
         if (delivery.kind !== 'delivered') {
           logger.warn(
@@ -598,7 +596,7 @@ export class BashTool extends defineTool({
               timedOut: result.timedOut,
               command,
             },
-            (kind, err) => logBackgroundFailure(`persist ${kind}`, err),
+            logPersistFailure,
           );
 
           await deliverAndFinalize(msg, {
@@ -616,7 +614,7 @@ export class BashTool extends defineTool({
           executionId,
           msg,
           undefined,
-          (kind, err) => logBackgroundFailure(`persist ${kind}`, err),
+          logPersistFailure,
         );
 
         await deliverAndFinalize(msg, {
@@ -625,7 +623,8 @@ export class BashTool extends defineTool({
           autoClose: true,
         });
       } catch (err: unknown) {
-        logDurabilityFailure('complete', err);
+        markOwnedExecutionLeaseUndurable(executionId);
+        logBackgroundFailure('complete', err);
         // Nothing else finalizes a background child, so an unexpected throw
         // before the normal finalize would leave the stream RUNNING forever
         // and its interrupt handler attached to a dead process.

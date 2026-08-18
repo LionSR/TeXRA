@@ -4,8 +4,11 @@
 
 // Local imports - shared IPC and schemas
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentOptionData, MainViewHandlerRegistry } from '@shared/schemas';
-import { agentName } from '@shared/schemas';
+import {
+  agentName,
+  type AgentOptionData,
+  type MainViewHandlerRegistry,
+} from '@shared/schemas';
 import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 // Constants-only module: safe for the webview bundle (no platform imports).
 

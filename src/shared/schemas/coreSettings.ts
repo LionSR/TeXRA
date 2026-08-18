@@ -64,13 +64,13 @@ export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = {
  * settings-view Multi-Agent tab so the schema, runtime, and UI cannot disagree
  * about the range.
  */
-export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
+export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = {
   defaultValue: 16,
   min: 1,
   max: 100,
   description:
     'Maximum number of live native child model conversations one session may run at once. Detached subagents beyond this wait for a slot to free.',
-} as const);
+} as const;
 
 export const DEFAULT_CORE_SETTINGS = {
   agentOutputs: {

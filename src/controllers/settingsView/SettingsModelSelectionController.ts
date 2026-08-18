@@ -18,14 +18,14 @@ import { isGpt5ModelName } from '@model/modelNames';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  CopilotRouteInfo,
-  ModelOptionData,
-  ModelSelectionItem,
-  ReasoningLevel,
-  UpdateModelSelectionMessage,
+import {
+  type CopilotRouteInfo,
+  type ModelOptionData,
+  type ModelSelectionItem,
+  type ReasoningLevel,
+  type UpdateModelSelectionMessage,
+  ReasoningLevelSchema,
 } from '@shared/schemas';
-import { ReasoningLevelSchema } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   DEFAULT_HELPER_MODEL,
@@ -212,15 +212,14 @@ export class SettingsModelSelectionController {
     // uses. Passing an explicit list keeps the picker's view authoritative and
     // avoids re-deriving availability at render time. Copilot routes are not
     // candidates: they are transports for the canonical base models (#9635).
-    const configEntries = staticModelConfigEntries();
-    const configs = new Map<string, ModelConfig>(configEntries);
-    const candidates = configEntries
+    const configs = new Map<string, ModelConfig>(staticModelConfigEntries());
+    const candidates = [...configs.values()]
       .filter(
-        ([, config]) =>
+        (config) =>
           config.provider !== ModelProvider.COPILOT &&
           this.modelSources.has(resolveModelSource(config) ?? config.provider),
       )
-      .map(([name]) => name);
+      .map((config) => config.name);
     const resolveModelOptions =
       this.deps.resolveModelOptions ?? computeModelOptionsData;
     const optionsData = await resolveModelOptions(candidates);

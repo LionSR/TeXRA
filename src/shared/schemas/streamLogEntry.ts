@@ -183,8 +183,14 @@ const StreamLogEntryEnvelopeSchema = z.union([
   GroupStreamLogEntrySchema.extend({ data: z.unknown().optional() }),
 ]);
 
-/** Recover a well-formed stream-log envelope with a malformed nested payload. */
-const ResilientStreamLogEntrySchema = z
+/**
+ * Recover a well-formed stream-log envelope with a malformed nested payload.
+ * Exported traces are a permanent compatibility boundary: parse each row
+ * independently, recover stale group display fields field-by-field, and
+ * degrade any other malformed typed payload to a generic row so one old
+ * nested payload cannot make the whole trace unusable.
+ */
+export const TraceStreamLogEntrySchema = z
   .unknown()
   .transform((raw, context): StreamLogEntry => {
     const canonical = StreamLogEntrySchema.safeParse(raw);
@@ -216,14 +222,6 @@ const ResilientStreamLogEntrySchema = z
   });
 
 /**
- * Exported traces are a permanent compatibility boundary. Parse each row
- * independently: recover stale group display fields field-by-field, and
- * degrade any other malformed typed payload to a generic row so one old
- * nested payload cannot make the whole trace unusable.
- */
-export const TraceStreamLogEntrySchema = ResilientStreamLogEntrySchema;
-
-/**
  * Live deltas are a batch transport boundary. Recover each well-formed row
  * independently so one stale nested payload cannot discard later entries in
  * the same frame. Rows without even a stream-log envelope are omitted: there
@@ -233,7 +231,7 @@ export const StreamLogEntryBatchSchema = z
   .array(z.unknown())
   .transform((entries) =>
     entries.flatMap((entry) => {
-      const parsed = ResilientStreamLogEntrySchema.safeParse(entry);
+      const parsed = TraceStreamLogEntrySchema.safeParse(entry);
       return parsed.success ? [parsed.data] : [];
     }),
   );

@@ -49,23 +49,19 @@ async function workflowRecoveryInputsAreDurable(
   config: Parameters<typeof executeCliWorkflowConfig>[0],
   fallbackCwd: string,
 ): Promise<boolean> {
-  const workingDirectory = config.workingDirectory || fallbackCwd;
+  const cwd = config.workingDirectory || fallbackCwd;
   const paths = [...(config.inputFiles ?? []), ...(config.contextFiles ?? [])];
-  return (
-    await Promise.all(
-      paths.map(async (inputPath) => {
-        const absolutePath = path.isAbsolute(inputPath)
-          ? inputPath
-          : path.resolve(workingDirectory, inputPath);
-        try {
-          await fs.access(absolutePath);
-          return true;
-        } catch {
-          return false;
-        }
-      }),
-    )
-  ).every(Boolean);
+  const checks = await Promise.all(
+    paths.map(async (inputPath) => {
+      try {
+        await fs.access(path.resolve(cwd, inputPath));
+        return true;
+      } catch {
+        return false;
+      }
+    }),
+  );
+  return checks.every(Boolean);
 }
 
 /**
@@ -204,14 +200,14 @@ export async function runResumeExecution(
       failed = true;
       const description = describeResumeFailure(error);
       if (description.kind === 'lease-active') {
-        failureExitCode = CliExitCode.Usage;
         writeTextStderr(description.message);
       } else if (error instanceof CliUsageError) {
-        failureExitCode = CliExitCode.Usage;
         writeTextStderr(error.message);
       } else {
         writeTextStderr(loadFailureMessage(id, error));
+        return;
       }
+      failureExitCode = CliExitCode.Usage;
     },
   });
   if (failed) return failureExitCode;

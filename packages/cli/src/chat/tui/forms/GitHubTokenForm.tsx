@@ -19,43 +19,46 @@ export interface GitHubTokenStatusView {
 
 type GitHubTokenAction = 'set' | 'remove' | 'open-url';
 
+const STATUS_LABELS: Readonly<Record<GitHubTokenStatus, string>> = {
+  none: 'Not set',
+  secret: 'Token set',
+  env: 'From GH_TOKEN / GITHUB_TOKEN',
+};
+
 export function formatGitHubTokenSummary(view: GitHubTokenStatusView): string {
   if (!view.status) {
     if (view.loading && !view.error) return 'Checking token';
     return 'Status unavailable';
   }
-  let label = 'Not set';
-  if (view.status === 'secret') label = 'Token set';
-  else if (view.status === 'env') label = 'From GH_TOKEN / GITHUB_TOKEN';
+  const label = STATUS_LABELS[view.status];
   if (view.error) return `${label} · status unavailable`;
   return view.loading ? `${label} · refreshing` : label;
 }
 
-function buildGitHubTokenActionItems(status: GitHubTokenStatus) {
-  const items: Array<{
-    value: GitHubTokenAction;
-    label: string;
-    description?: string;
-  }> = [
+function buildGitHubTokenActionItems(
+  status: GitHubTokenStatus,
+): Array<{ value: GitHubTokenAction; label: string; description?: string }> {
+  return [
     {
       value: 'set',
       label: status === 'secret' ? 'Replace token' : 'Set token',
       description: 'stored in TeXRA secrets',
     },
+    ...(status === 'secret'
+      ? [
+          {
+            value: 'remove' as const,
+            label: 'Remove token',
+            description: 'forget the stored token',
+          },
+        ]
+      : []),
+    {
+      value: 'open-url',
+      label: 'Create on GitHub…',
+      description: 'repo scope pre-selected',
+    },
   ];
-  if (status === 'secret') {
-    items.push({
-      value: 'remove',
-      label: 'Remove token',
-      description: 'forget the stored token',
-    });
-  }
-  items.push({
-    value: 'open-url',
-    label: 'Create on GitHub…',
-    description: 'repo scope pre-selected',
-  });
-  return items;
 }
 
 function statusHint(status: GitHubTokenStatus | undefined): string {
@@ -106,6 +109,11 @@ export function GitHubTokenForm(
   }
 
   const status = props.statusView?.status ?? 'none';
+  const loading = props.statusView?.loading ?? false;
+  const statusError = props.statusView?.error ?? false;
+  const errorNode = error ? (
+    <Text color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text>
+  ) : undefined;
   return (
     <ListForm
       title="GitHub token"
@@ -113,26 +121,14 @@ export function GitHubTokenForm(
       items={buildGitHubTokenActionItems(status)}
       description={
         <Text dimColor>
-          {formatGitHubTokenSummary({
-            status: props.statusView?.status,
-            loading: props.statusView?.loading ?? false,
-            error: props.statusView?.error ?? false,
-          })}
+          {formatGitHubTokenSummary({ status, loading, error: statusError })}
           {'. '}
-          {statusHint(props.statusView?.status)}
+          {statusHint(status)}
         </Text>
       }
-      detail={
-        error ? (
-          <Text color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text>
-        ) : undefined
-      }
-      detailRows={error ? 1 : 0}
-      compactDetail={
-        error ? (
-          <Text color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text>
-        ) : undefined
-      }
+      detail={errorNode}
+      detailRows={errorNode ? 1 : 0}
+      compactDetail={errorNode}
       action="select"
       escapeAction="back"
       onSelect={(action) => {

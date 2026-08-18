@@ -14,8 +14,9 @@ import {
   TEXRA_APPROVAL_POLICY_OPTIONS,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { ToolCategory, ToolDashboardItem } from '@shared/schemas';
 import {
+  type ToolCategory,
+  type ToolDashboardItem,
   AGENT_SKILLS_CONFIG_KEY,
   BASH_APPROVAL_CONFIG_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,

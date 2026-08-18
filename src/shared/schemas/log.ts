@@ -76,8 +76,6 @@ export const STREAM_LOG_ENTRY_TYPES = {
   GROUP_END: 'group-end',
 } as const;
 
-const StreamLogEntryTypeSchema = z.enum(STREAM_LOG_ENTRY_TYPES);
-
 const LoadedMediaMetadataSchema = z.discriminatedUnion('kind', [
   z.object({
     /**

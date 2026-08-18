@@ -30,14 +30,14 @@ import {
 } from '@common/errors/sdkError/errorPatterns';
 import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
-import type {
-  FileLocation,
-  MediaAttachmentKind,
-  ToolDefinition,
-  ToolFileAttachment,
-  ToolResult,
+import {
+  type FileLocation,
+  type MediaAttachmentKind,
+  type ToolDefinition,
+  type ToolFileAttachment,
+  type ToolResult,
+  DEFAULT_CORE_SETTINGS,
 } from '@shared/schemas';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
@@ -451,7 +451,7 @@ export class ModelHandlerOpenAI<
         decorateError: (err, tail) => {
           // Tag at the boundary so abort identity survives wrapping and
           // minification (mirrors the Anthropic stream catch).
-          tagOpenAISdkError(err, this.config.provider);
+          this.sdkErrorTagger(err, this.config.provider);
           if (requestId && err instanceof Error) {
             (err as ErrorWithRequestId).request_id = requestId;
           }

@@ -221,6 +221,8 @@ function stateSetting<const H extends readonly SettingHost[]>(
 const GIT_AUTHOR_CONSUMER = 'packages/cli/src/runtime/gitAuthor.ts';
 const CODEX_CONFIG_CONSUMER = 'src/tools/codexConfig.ts';
 const CLAUDE_AGENT_CONFIG_CONSUMER = 'src/tools/claudeAgentConfig.ts';
+const WORKFLOW_COMPILE_CONSUMER =
+  'src/agent/implementations/flows/reflection/output/compileCheck.ts';
 const GIT_AUTHOR_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "create a git commit"',
@@ -566,8 +568,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'workflow',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer:
-      'src/agent/implementations/flows/reflection/output/compileCheck.ts',
+    cliConsumer: WORKFLOW_COMPILE_CONSUMER,
     cliRuntimeReachability: WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'latex',
   }),
@@ -583,8 +584,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'workflow',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop', 'cli'],
-    cliConsumer:
-      'src/agent/implementations/flows/reflection/output/compileCheck.ts',
+    cliConsumer: WORKFLOW_COMPILE_CONSUMER,
     cliRuntimeReachability: WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'latex',
   }),
@@ -788,7 +788,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliRuntimeReachability: TOOL_PATH_PROTECTION_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'approval',
   }),
-] as const;
+];
 
 /** Every canonical `texra.*` key in the catalog. */
 export const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
