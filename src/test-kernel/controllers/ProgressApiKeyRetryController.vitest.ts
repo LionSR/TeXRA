@@ -7,6 +7,8 @@ import {
 } from '@controllers/progressView/ProgressApiKeyRetryController';
 import type { ApiProvider } from '@model/apiProviders';
 import { prefersCopilotRoute } from '@model/copilotRouting';
+import type { QuotaFallbackRuntime } from '@model/quotaFallbackRoutes';
+import type { QuotaFallbackRoute } from '@shared/quotaFallbackRoutes';
 import { installPlatform } from '@test/support/setupPlatform';
 
 const PROVIDERS = [
@@ -28,6 +30,26 @@ const RETRIED_WITH_OWN_KEY_RESULT = {
   disabledIncludedModelAccess: true,
   disabledQuotaRoutes: [],
 };
+
+function testRuntime(
+  descriptor: Pick<
+    QuotaFallbackRoute,
+    'id' | 'exhaustionReason' | 'disableIncludedAccess' | 'fallbackApiProvider'
+  >,
+  getEnabled: () => boolean,
+  setEnabled: (enabled: boolean) => Promise<void>,
+): QuotaFallbackRuntime {
+  return {
+    descriptor: {
+      retryFallbackName: descriptor.id,
+      retrySourceName: descriptor.id,
+      ...descriptor,
+    },
+    getEnabled,
+    setEnabled,
+    restoreEnabled: setEnabled,
+  };
+}
 
 interface HarnessOptions {
   keys?: Partial<Record<ApiProvider, string | undefined>>;
@@ -96,45 +118,57 @@ function createHarness(options: HarnessOptions = {}): {
       setUseIncludedModelAccess: async (enabled) => {
         includedAccessValues.push(enabled);
       },
-      quotaFallbackToggles: [
-        {
-          exhaustionReason: 'chatgpt-subscription',
-          disableIncludedAccess: true,
-          fallbackApiProvider: 'openai',
-          getEnabled: () => preferChatGptSubscription,
-          setEnabled: async (enabled) => {
+      quotaFallbackRuntimes: [
+        testRuntime(
+          {
+            id: 'chatgpt',
+            exhaustionReason: 'chatgpt-subscription',
+            disableIncludedAccess: true,
+            fallbackApiProvider: 'openai',
+          },
+          () => preferChatGptSubscription,
+          async (enabled) => {
             preferChatGptSubscription = enabled;
             chatGptSubscriptionValues.push(enabled);
           },
-        },
-        {
-          exhaustionReason: 'xai-subscription',
-          disableIncludedAccess: true,
-          fallbackApiProvider: 'xai',
-          getEnabled: () => preferGrokSubscription,
-          setEnabled: async (enabled) => {
+        ),
+        testRuntime(
+          {
+            id: 'grok',
+            exhaustionReason: 'xai-subscription',
+            disableIncludedAccess: true,
+            fallbackApiProvider: 'xai',
+          },
+          () => preferGrokSubscription,
+          async (enabled) => {
             preferGrokSubscription = enabled;
             grokSubscriptionValues.push(enabled);
           },
-        },
-        {
-          exhaustionReason: 'glm-coding-plan',
-          disableIncludedAccess: false,
-          getEnabled: () => glmCodingPlan,
-          setEnabled: async (enabled) => {
+        ),
+        testRuntime(
+          {
+            id: 'glmCodingPlan',
+            exhaustionReason: 'glm-coding-plan',
+            disableIncludedAccess: false,
+          },
+          () => glmCodingPlan,
+          async (enabled) => {
             glmCodingPlan = enabled;
             glmCodingPlanValues.push(enabled);
           },
-        },
-        {
-          exhaustionReason: 'kimi-code-subscription',
-          disableIncludedAccess: false,
-          getEnabled: () => kimiCode,
-          setEnabled: async (enabled) => {
+        ),
+        testRuntime(
+          {
+            id: 'kimiCode',
+            exhaustionReason: 'kimi-code-subscription',
+            disableIncludedAccess: false,
+          },
+          () => kimiCode,
+          async (enabled) => {
             kimiCode = enabled;
             kimiCodeValues.push(enabled);
           },
-        },
+        ),
       ],
       invalidateModelOptionsCache: () => {
         invalidations += 1;

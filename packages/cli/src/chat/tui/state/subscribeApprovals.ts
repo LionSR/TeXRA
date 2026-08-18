@@ -65,7 +65,10 @@ import {
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { platform } from '@platform/platform';
-import { quotaFallbackRouteById } from '@shared/quotaFallbackRoutes';
+import {
+  isCodingPlanQuotaRoute,
+  type QuotaFallbackRouteId,
+} from '@shared/quotaFallbackRoutes';
 import {
   isUpstreamCreditDepletedError,
   type AgentProposalPermission,
@@ -146,8 +149,7 @@ function maybeAutoSwitchRetry(
     const decision = cliRetryApiSwitchDecision(payload);
     if (
       decision.disableQuotaRoute === undefined ||
-      quotaFallbackRouteById(decision.disableQuotaRoute)?.codingPlanId ===
-        undefined
+      !isCodingPlanQuotaRoute(decision.disableQuotaRoute)
     ) {
       return undefined;
     }
@@ -468,8 +470,7 @@ async function requestRetryInteraction(
       if (
         retryDecision.source === 'automatic' &&
         decision.disableQuotaRoute !== undefined &&
-        quotaFallbackRouteById(decision.disableQuotaRoute)?.codingPlanId !==
-          undefined
+        isCodingPlanQuotaRoute(decision.disableQuotaRoute)
       ) {
         notify('credentialSwitched');
       }
@@ -678,6 +679,34 @@ function throwWithRollbackFailures(
   throw error;
 }
 
+interface OauthCliPreference {
+  readonly label: string;
+  readonly isPrefer: () => boolean;
+  readonly setPrefer: (
+    enabled: boolean,
+  ) => Promise<{ readonly effective: boolean }>;
+}
+
+function oauthCliPreference(
+  id: QuotaFallbackRouteId | undefined,
+): OauthCliPreference | undefined {
+  if (id === 'chatgpt') {
+    return {
+      label: 'ChatGPT',
+      isPrefer: isPreferCodexSubscription,
+      setPrefer: setCliCodexSubscription,
+    };
+  }
+  if (id === 'grok') {
+    return {
+      label: 'Grok',
+      isPrefer: isPreferXaiSubscription,
+      setPrefer: setCliXaiSubscription,
+    };
+  }
+  return undefined;
+}
+
 /** Commit the access-mode and subscription writes for a retry switch.
  *
  *  Runs while the commit queue already holds its slot. On failure it rolls
@@ -692,15 +721,8 @@ async function applyRetryCredentialCommit(
   signal.throwIfAborted();
   const previousApiMode = getCliApiMode();
   const previousOpenRouter = cliOpenRouterEnabled();
-  const oauthRoute = decision.disableQuotaRoute;
-  const disableChatGpt = oauthRoute === 'chatgpt';
-  const disableGrok = oauthRoute === 'grok';
-  const previousChatGptPreference = disableChatGpt
-    ? isPreferCodexSubscription()
-    : false;
-  const previousGrokPreference = disableGrok
-    ? isPreferXaiSubscription()
-    : false;
+  const oauth = oauthCliPreference(decision.disableQuotaRoute);
+  const previousOauthPreference = oauth?.isPrefer() ?? false;
   let apiModeWriteStarted = false;
   let subscriptionWriteStarted = false;
   try {
@@ -710,28 +732,12 @@ async function applyRetryCredentialCommit(
       await runRetryTask(() => setCliApiMode(apiMode), signal);
       signal.throwIfAborted();
     }
-    if (disableChatGpt) {
+    if (oauth) {
       subscriptionWriteStarted = true;
-      const update = await runRetryTask(
-        () => setCliCodexSubscription(false),
-        signal,
-      );
+      const update = await runRetryTask(() => oauth.setPrefer(false), signal);
       if (update.effective) {
         throw new Error(
-          'ChatGPT subscription remains enabled by a more specific setting.',
-        );
-      }
-      signal.throwIfAborted();
-    }
-    if (disableGrok) {
-      subscriptionWriteStarted = true;
-      const update = await runRetryTask(
-        () => setCliXaiSubscription(false),
-        signal,
-      );
-      if (update.effective) {
-        throw new Error(
-          'Grok subscription remains enabled by a more specific setting.',
+          `${oauth.label} subscription remains enabled by a more specific setting.`,
         );
       }
       signal.throwIfAborted();
@@ -749,44 +755,26 @@ async function applyRetryCredentialCommit(
     // off.
     let openRouterToPreserve = previousOpenRouter;
     const rollbackFailures = await rollbackChangedSettings([
-      {
-        writeStarted: subscriptionWriteStarted && disableChatGpt,
-        needsRollback: () => !isPreferCodexSubscription(),
-        restore: async () => {
-          const update = await setCliCodexSubscription(
-            previousChatGptPreference,
-          );
-          if (update.effective !== previousChatGptPreference) {
-            throw new Error(
-              `ChatGPT subscription preference remained ${String(update.effective)}.`,
-            );
-          }
-        },
-        restoredInMemory: () =>
-          isPreferCodexSubscription() === previousChatGptPreference,
-        memoryRestoredContext:
-          'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed',
-        restoreFailedContext:
-          'Could not restore the ChatGPT subscription preference',
-      },
-      {
-        writeStarted: subscriptionWriteStarted && disableGrok,
-        needsRollback: () => !isPreferXaiSubscription(),
-        restore: async () => {
-          const update = await setCliXaiSubscription(previousGrokPreference);
-          if (update.effective !== previousGrokPreference) {
-            throw new Error(
-              `Grok subscription preference remained ${String(update.effective)}.`,
-            );
-          }
-        },
-        restoredInMemory: () =>
-          isPreferXaiSubscription() === previousGrokPreference,
-        memoryRestoredContext:
-          'The previous Grok subscription preference appears restored in memory, but persistence could not be confirmed',
-        restoreFailedContext:
-          'Could not restore the Grok subscription preference',
-      },
+      ...(oauth === undefined
+        ? []
+        : [
+            {
+              writeStarted: subscriptionWriteStarted,
+              needsRollback: () => !oauth.isPrefer(),
+              restore: async () => {
+                const update = await oauth.setPrefer(previousOauthPreference);
+                if (update.effective !== previousOauthPreference) {
+                  throw new Error(
+                    `${oauth.label} subscription preference remained ${String(update.effective)}.`,
+                  );
+                }
+              },
+              restoredInMemory: () =>
+                oauth.isPrefer() === previousOauthPreference,
+              memoryRestoredContext: `The previous ${oauth.label} subscription preference appears restored in memory, but persistence could not be confirmed`,
+              restoreFailedContext: `Could not restore the ${oauth.label} subscription preference`,
+            },
+          ]),
       ...(codingPlanRollback ? [codingPlanRollback] : []),
       {
         writeStarted: apiModeWriteStarted,
@@ -872,9 +860,11 @@ async function switchRetryToPersonalCredentials(
   // disable, preparation, and rollback all stay inside one commit-queue slot
   // so a second coding-plan retry cannot interleave: its disable must wait
   // until this retry's rollback (if any) has finished.
-  const codingPlanId = decision.disableQuotaRoute
-    ? quotaFallbackRouteById(decision.disableQuotaRoute)?.codingPlanId
-    : undefined;
+  const codingPlanId =
+    decision.disableQuotaRoute !== undefined &&
+    isCodingPlanQuotaRoute(decision.disableQuotaRoute)
+      ? decision.disableQuotaRoute
+      : undefined;
   const codingPlanRuntime = codingPlanId
     ? codingPlanSubscriptionRuntimes.find(
         (runtime) => runtime.descriptor.id === codingPlanId,
@@ -898,19 +888,6 @@ async function switchRetryToPersonalCredentials(
               signal,
             );
             signal.throwIfAborted();
-          } catch (error) {
-            throwWithRollbackFailures(
-              error,
-              await rollbackChangedSettings([
-                codingPlanRollbackConfig(
-                  runtime,
-                  previousCodingPlanEnabled,
-                  codingPlanWriteStarted,
-                ),
-              ]),
-            );
-          }
-          try {
             await prepareRetryClient(prepareRetry, 'personal', signal);
           } catch (error) {
             throwWithRollbackFailures(

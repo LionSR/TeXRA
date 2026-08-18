@@ -36,8 +36,6 @@ export interface QuotaFallbackRoute {
   readonly disableIncludedAccess: boolean;
   readonly retryFallbackName: string;
   readonly retrySourceName: string;
-  /** Set when this route is one of {@link CODING_PLAN_SUBSCRIPTIONS}. */
-  readonly codingPlanId?: CodingPlanSubscriptionId;
 }
 
 const OAUTH_QUOTA_FALLBACK_ROUTES = Object.freeze([
@@ -70,7 +68,6 @@ export const QUOTA_FALLBACK_ROUTES: readonly QuotaFallbackRoute[] =
         disableIncludedAccess: false,
         retryFallbackName: plan.retryFallbackName,
         retrySourceName: plan.retrySourceName,
-        codingPlanId: plan.id,
       }),
     ),
   ]);
@@ -95,4 +92,11 @@ export function quotaFallbackRouteById(
   id: QuotaFallbackRouteId,
 ): QuotaFallbackRoute | undefined {
   return ROUTE_BY_ID.get(id);
+}
+
+/** True when `id` is one of {@link CODING_PLAN_SUBSCRIPTIONS}. */
+export function isCodingPlanQuotaRoute(
+  id: QuotaFallbackRouteId,
+): id is CodingPlanSubscriptionId {
+  return CODING_PLAN_SUBSCRIPTIONS.some((plan) => plan.id === id);
 }

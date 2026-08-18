@@ -5,7 +5,10 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import type { ApiProvider } from '@model/apiProviders';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveDirectModelApiKeyProvider } from '@model/openRouterRouting';
-import { quotaFallbackRuntimes } from '@model/quotaFallbackRoutes';
+import {
+  quotaFallbackRuntimes,
+  type QuotaFallbackRuntime,
+} from '@model/quotaFallbackRoutes';
 import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
 import {
   isKimiCodeExclusiveModel,
@@ -27,21 +30,6 @@ export interface ProgressApiKeyRetryRequest {
   kimiCodeRoutedOnFailure?: boolean;
   chatGptSubscriptionEligible?: boolean;
   viaRelay?: boolean;
-}
-
-/**
- * One quota-fallback route (ChatGPT, Grok, GLM Coding Plan, Kimi Code) the
- * retry controller can turn off when its quota is exhausted. Accepting the
- * switch disables the route's preference so the same model retries on the
- * fallback credential.
- */
-export interface QuotaFallbackToggle {
-  readonly exhaustionReason: ExhaustionReason;
-  readonly disableIncludedAccess: boolean;
-  readonly fallbackApiProvider?: ApiProvider;
-  readonly getEnabled: () => boolean;
-  readonly setEnabled: (enabled: boolean) => Promise<void>;
-  readonly restoreEnabled?: (enabled: boolean) => Promise<void>;
 }
 
 interface ProgressApiKeyPreparationResult {
@@ -78,7 +66,7 @@ export interface ProgressApiKeyRetryControllerDeps {
   setUseIncludedModelAccess(enabled: boolean): Promise<void>;
   /** Quota-fallback routes (ChatGPT, Grok, GLM, Kimi). Defaults to the
    *  shared runtime catalog. Tests inject a local table. */
-  quotaFallbackToggles?: readonly QuotaFallbackToggle[];
+  quotaFallbackRuntimes?: readonly QuotaFallbackRuntime[];
   invalidateModelOptionsCache(): void;
   isRetryPending(stream: StreamTabId, requestId: string): boolean;
   triggerRetry(
@@ -130,18 +118,8 @@ export class ProgressApiKeyRetryController {
     );
   }
 
-  private get quotaFallbackToggles(): readonly QuotaFallbackToggle[] {
-    return (
-      this.deps.quotaFallbackToggles ??
-      quotaFallbackRuntimes.map((runtime) => ({
-        exhaustionReason: runtime.descriptor.exhaustionReason,
-        disableIncludedAccess: runtime.descriptor.disableIncludedAccess,
-        fallbackApiProvider: runtime.descriptor.fallbackApiProvider,
-        getEnabled: runtime.getEnabled,
-        setEnabled: runtime.setEnabled,
-        restoreEnabled: runtime.restoreEnabled,
-      }))
-    );
+  private get fallbackRuntimes(): readonly QuotaFallbackRuntime[] {
+    return this.deps.quotaFallbackRuntimes ?? quotaFallbackRuntimes;
   }
 
   async useOwnApiKey(
@@ -232,10 +210,11 @@ export class ProgressApiKeyRetryController {
   private resolveProvider(
     request: Pick<ProgressApiKeyRetryRequest, 'provider' | 'exhaustionReason'>,
   ): ApiProvider | undefined {
-    const route = this.quotaFallbackToggles.find(
-      (candidate) => candidate.exhaustionReason === request.exhaustionReason,
+    const route = this.fallbackRuntimes.find(
+      (candidate) =>
+        candidate.descriptor.exhaustionReason === request.exhaustionReason,
     );
-    return route?.fallbackApiProvider ?? request.provider;
+    return route?.descriptor.fallbackApiProvider ?? request.provider;
   }
 
   private shouldDisableIncludedModelAccess(
@@ -243,21 +222,25 @@ export class ProgressApiKeyRetryController {
   ): boolean {
     if (request.viaRelay === true) return true;
     if (request.exhaustionReason === 'copilot-subscription') return true;
-    return this.matchingQuotaToggles(request).some(
-      (toggle) => toggle.disableIncludedAccess,
+    return this.fallbackRuntimes.some(
+      (runtime) =>
+        this.shouldDisableRuntime(runtime, request) &&
+        runtime.descriptor.disableIncludedAccess,
     );
   }
 
-  /** Whether this toggle should turn off for `request`. Catalog match plus
+  /** Whether this route should turn off for `request`. Catalog match plus
    *  the two request-specific extras that are not their own exhaustion
    *  reason: Copilot→ChatGPT, and a dual-backend Kimi credit reroute. */
-  private shouldDisableToggle(
-    toggle: QuotaFallbackToggle,
+  private shouldDisableRuntime(
+    runtime: QuotaFallbackRuntime,
     request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
   ): boolean {
-    if (request.exhaustionReason === toggle.exhaustionReason) return true;
+    if (request.exhaustionReason === runtime.descriptor.exhaustionReason) {
+      return true;
+    }
     if (
-      toggle.exhaustionReason === 'chatgpt-subscription' &&
+      runtime.descriptor.exhaustionReason === 'chatgpt-subscription' &&
       request.exhaustionReason === 'copilot-subscription' &&
       request.chatGptSubscriptionEligible === true
     ) {
@@ -279,18 +262,10 @@ export class ProgressApiKeyRetryController {
     // so unrelated `kimi3` failures through OpenRouter, Moonshot, or the
     // relay leave the preference untouched.
     return (
-      toggle.exhaustionReason === 'kimi-code-subscription' &&
+      runtime.descriptor.exhaustionReason === 'kimi-code-subscription' &&
       request.exhaustionReason === 'upstream-credit' &&
       request.kimiCodeRoutedOnFailure === true &&
       this.isDualBackendKimiCodeModel(request.model)
-    );
-  }
-
-  private matchingQuotaToggles(
-    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
-  ): readonly QuotaFallbackToggle[] {
-    return this.quotaFallbackToggles.filter((toggle) =>
-      this.shouldDisableToggle(toggle, request),
     );
   }
 
@@ -319,10 +294,13 @@ export class ProgressApiKeyRetryController {
       // One chain: turn off every matching quota-fallback preference so the
       // retry rebuilds onto the fallback credential. Remark: prefer-off
       // sticks after the quota resets — users may forget to re-enable it.
-      for (const toggle of this.quotaFallbackToggles) {
-        if (toggle.getEnabled() && this.shouldDisableToggle(toggle, request)) {
-          disabledQuotaRoutes.push(toggle.exhaustionReason);
-          await toggle.setEnabled(false);
+      for (const runtime of this.fallbackRuntimes) {
+        if (
+          runtime.getEnabled() &&
+          this.shouldDisableRuntime(runtime, request)
+        ) {
+          disabledQuotaRoutes.push(runtime.descriptor.exhaustionReason);
+          await runtime.setEnabled(false);
           this.deps.invalidateModelOptionsCache();
         }
       }
@@ -376,9 +354,9 @@ export class ProgressApiKeyRetryController {
     return {
       useIncludedModelAccess: this.deps.getUseIncludedModelAccess(),
       quotaRoutes: new Map(
-        this.quotaFallbackToggles.map((toggle) => [
-          toggle.exhaustionReason,
-          toggle.getEnabled(),
+        this.fallbackRuntimes.map((runtime) => [
+          runtime.descriptor.exhaustionReason,
+          runtime.getEnabled(),
         ]),
       ),
     };
@@ -394,14 +372,12 @@ export class ProgressApiKeyRetryController {
     // rest have run (compensation per the error-handling checklist's L2).
     const restores: Array<() => Promise<void>> = [];
     for (const reason of [...prepared.disabledQuotaRoutes].reverse()) {
-      const toggle = this.quotaFallbackToggles.find(
-        (candidate) => candidate.exhaustionReason === reason,
+      const runtime = this.fallbackRuntimes.find(
+        (candidate) => candidate.descriptor.exhaustionReason === reason,
       );
-      if (toggle)
+      if (runtime)
         restores.push(() =>
-          (toggle.restoreEnabled ?? toggle.setEnabled)(
-            before.quotaRoutes.get(reason) ?? false,
-          ),
+          runtime.restoreEnabled(before.quotaRoutes.get(reason) ?? false),
         );
     }
     if (prepared.disabledIncludedModelAccess) {
