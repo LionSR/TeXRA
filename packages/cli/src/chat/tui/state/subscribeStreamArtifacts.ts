@@ -57,7 +57,7 @@ registerCliStateResetHook(() => {
 });
 
 /** Invalidate the projection memo and repaint artifact readers. */
-export function bumpStreamArtifactRevision(): void {
+function bumpStreamArtifactRevision(): void {
   artifactProjectionMemo.clear();
   streamArtifactRevision.set(streamArtifactRevision.get() + 1);
 }
