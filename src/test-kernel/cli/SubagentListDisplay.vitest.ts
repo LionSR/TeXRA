@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import '@test/support/defaultSessionTestSetup';
 
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   CHILD_STATUS_MARKER,
   childRowMetadataText,
@@ -33,6 +36,10 @@ import {
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
 import {
+  bindChildStreamState,
+  unbindChildStreamState,
+} from '@cli/chat/tui/state/childExecutions';
+import {
   streamTreeViews,
   type StreamView,
 } from '@cli/chat/tui/state/streamViews';
@@ -42,9 +49,11 @@ import {
   visibleSelectRange,
   type SelectItem,
 } from '@cli/tui/ui/Select';
+import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
   STREAM_PHASE,
+  type StreamStage,
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
@@ -69,10 +78,48 @@ function workflowAgentSlice(
 ): StreamSlice {
   return {
     ...emptySlice(id as StreamTabId),
-    category: AgentCategory.Workflow,
     status: STREAM_PHASE.COMPLETED,
     ...overrides,
   };
+}
+
+// Identity, model, stage, and tool-call counts live on the shared session
+// substrate, not the CLI slice; tests seed them through the bound
+// `SessionState`'s public API exactly as the fact applier does.
+let sessionState: SessionState;
+
+beforeEach(() => {
+  sessionState = new SessionState(defaultSession());
+  bindChildStreamState(sessionState);
+});
+afterEach(() => {
+  unbindChildStreamState(sessionState);
+});
+
+function seedStream(
+  id: StreamTabId,
+  seed: {
+    readonly metadata?: Parameters<SessionState['updateStreamMetadata']>[1];
+    readonly stage?: StreamStage;
+    readonly toolCallCount?: number;
+  },
+): void {
+  sessionState.streamLogs.ensureStream(id);
+  if (seed.metadata) sessionState.updateStreamMetadata(id, seed.metadata);
+  if (seed.stage === undefined && seed.toolCallCount === undefined) return;
+  sessionState.getOrCreateStreamState(id, AgentCategory.Workflow);
+  sessionState.updateStreamState(id, (prev) => ({
+    ...prev,
+    ...(seed.stage !== undefined ? { stage: seed.stage } : {}),
+    ...(seed.toolCallCount !== undefined
+      ? {
+          conversationProgress: {
+            ...prev.conversationProgress,
+            toolCallCount: seed.toolCallCount,
+          },
+        }
+      : {}),
+  }));
 }
 
 function phaseEntry(
@@ -188,15 +235,19 @@ describe('CLI child list display model', () => {
 
   it('omits static input and context counts from the live workflow band', () => {
     const workflow = workflowAgentSlice('devise', {});
-    const toolUse = workflowAgentSlice('review', {
-      category: AgentCategory.ToolUse,
-    });
+    const toolUse = workflowAgentSlice('review', {});
     const workflowWithoutInputs = workflowAgentSlice('empty', {});
 
-    expect(workflowRunStatusSummary(workflow)).toBeUndefined();
-    expect(workflowRunStatusSummary(toolUse)).toBeUndefined();
-    expect(workflowRunStatusSummary(workflowWithoutInputs)).toBeUndefined();
-    expect(workflowRunStatusSummary(undefined)).toBeUndefined();
+    expect(
+      workflowRunStatusSummary(workflow, AgentCategory.Workflow),
+    ).toBeUndefined();
+    expect(
+      workflowRunStatusSummary(toolUse, AgentCategory.ToolUse),
+    ).toBeUndefined();
+    expect(
+      workflowRunStatusSummary(workflowWithoutInputs, AgentCategory.Workflow),
+    ).toBeUndefined();
+    expect(workflowRunStatusSummary(undefined, undefined)).toBeUndefined();
   });
 
   it('leads the workflow status band with the current phase and its task fold', () => {
@@ -233,10 +284,14 @@ describe('CLI child list display model', () => {
     // Only the current phase's tasks are folded, and the phase segment leads so
     // it survives truncation on a narrow terminal.
     expect(
-      workflowRunStatusSummary(slice)?.map((segment) => segment.text),
+      workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
+        (segment) => segment.text,
+      ),
     ).toEqual(['Map (1/3)', '1/2 done']);
     expect(
-      workflowRunStatusSummary(slice)?.map((segment) => segment.tone),
+      workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
+        (segment) => segment.tone,
+      ),
     ).toEqual(['muted', 'muted']);
   });
 
@@ -270,10 +325,14 @@ describe('CLI child list display model', () => {
     // warning-toned failure tally is what distinguishes a degraded run from a
     // clean one at the status level.
     expect(
-      workflowRunStatusSummary(slice)?.map((segment) => segment.text),
+      workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
+        (segment) => segment.text,
+      ),
     ).toEqual(['Map (1/1)', '2/2 done', '1 failed']);
     expect(
-      workflowRunStatusSummary(slice)?.map((segment) => segment.tone),
+      workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
+        (segment) => segment.tone,
+      ),
     ).toEqual(['muted', 'muted', 'warning']);
   });
 
@@ -309,7 +368,9 @@ describe('CLI child list display model', () => {
     });
 
     expect(
-      workflowRunStatusSummary(slice)?.map((segment) => segment.text),
+      workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
+        (segment) => segment.text,
+      ),
     ).toEqual(['Verify (2/2)', '0/1 done']);
   });
 
@@ -338,7 +399,9 @@ describe('CLI child list display model', () => {
       ],
     });
 
-    expect(workflowRunStatusSummary(slice)).toBeUndefined();
+    expect(
+      workflowRunStatusSummary(slice, AgentCategory.Workflow),
+    ).toBeUndefined();
   });
 
   it('clears the prior status when a new attempt has not emitted work', () => {
@@ -356,7 +419,9 @@ describe('CLI child list display model', () => {
       ],
     });
 
-    expect(workflowRunStatusSummary(slice)).toBeUndefined();
+    expect(
+      workflowRunStatusSummary(slice, AgentCategory.Workflow),
+    ).toBeUndefined();
   });
 
   it('does not infer status after a malformed declared attempt boundary', () => {
@@ -375,7 +440,9 @@ describe('CLI child list display model', () => {
       ],
     });
 
-    expect(workflowRunStatusSummary(slice)).toBeUndefined();
+    expect(
+      workflowRunStatusSummary(slice, AgentCategory.Workflow),
+    ).toBeUndefined();
   });
 
   it('tallys failures across the whole run, not just the current phase', () => {
@@ -408,7 +475,9 @@ describe('CLI child list display model', () => {
     });
 
     expect(
-      workflowRunStatusSummary(slice)?.map((segment) => segment.text),
+      workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
+        (segment) => segment.text,
+      ),
     ).toEqual(['Write (2/2)', '0/2 done', '1 failed']);
   });
 
@@ -429,7 +498,9 @@ describe('CLI child list display model', () => {
       ],
     });
 
-    expect(workflowRunStatusSummary(slice)).toBeUndefined();
+    expect(
+      workflowRunStatusSummary(slice, AgentCategory.Workflow),
+    ).toBeUndefined();
   });
 
   it('leaves a phase-less task out of the active phase fold', () => {
@@ -462,7 +533,9 @@ describe('CLI child list display model', () => {
     });
 
     expect(
-      workflowRunStatusSummary(slice)?.map((segment) => segment.text),
+      workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
+        (segment) => segment.text,
+      ),
     ).toEqual(['Map (1/2)', '0/1 done']);
   });
 
@@ -833,21 +906,12 @@ describe('CLI child list display model', () => {
     const agent = 'agent-1' as StreamTabId;
     const streams = new Map<StreamTabId, StreamSlice>([
       [run, workflowAgentSlice('run', { status: STREAM_PHASE.RUNNING })],
-      [
-        bash,
-        workflowAgentSlice('bash-1', {
-          model: 'gemini35f',
-          identity: { kind: 'process', tool: 'bash' },
-          status: STREAM_PHASE.RUNNING,
-        }),
-      ],
+      [bash, workflowAgentSlice('bash-1', { status: STREAM_PHASE.RUNNING })],
       [
         agent,
         workflowAgentSlice('agent-1', {
-          model: 'gpt56',
           status: STREAM_PHASE.RUNNING,
-          conversation: { toolCallCount: 5 },
-          cumulativeUsage: {
+          usage: {
             inputTokens: 1000,
             outputTokens: 39_900,
             cost: 0,
@@ -855,6 +919,19 @@ describe('CLI child list display model', () => {
         }),
       ],
     ]);
+    seedStream(bash, {
+      metadata: {
+        identity: { kind: 'process', tool: 'bash' },
+        config: { model: 'gemini35f' },
+      },
+    });
+    seedStream(agent, {
+      metadata: {
+        identity: { kind: 'agent', agent: 'bash' },
+        config: { model: 'gpt56' },
+      },
+      toolCallCount: 5,
+    });
     const parentStream = new Map<StreamTabId, StreamTabId>([
       [bash, run],
       [agent, run],
@@ -992,6 +1069,12 @@ describe('CLI child list display model', () => {
     async (columns) => {
       const run = 'run' as StreamTabId;
       const reflection = 'reflect' as StreamTabId;
+      seedStream(run, {
+        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
+      });
+      seedStream(reflection, {
+        stage: { kind: 'round', index: 1, total: 3 },
+      });
       const output = await renderSubagentList(
         {
           maxRows: 4,
@@ -1002,7 +1085,6 @@ describe('CLI child list display model', () => {
               active: false,
               slice: workflowAgentSlice('run', {
                 status: STREAM_PHASE.RUNNING,
-                stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
               }),
             },
             {
@@ -1011,7 +1093,6 @@ describe('CLI child list display model', () => {
               active: false,
               slice: workflowAgentSlice('reflect', {
                 status: STREAM_PHASE.RUNNING,
-                stage: { kind: 'round', index: 1, total: 3 },
               }),
             },
           ],
@@ -1036,12 +1117,10 @@ describe('CLI child list display model', () => {
     const run = 'run' as StreamTabId;
     const exactChild = 'exact-child' as StreamTabId;
     const wrongChild = 'wrong-child' as StreamTabId;
+    seedStream(run, {
+      metadata: { identity: { kind: 'agent', agent: 'research-workflow' } },
+    });
     const rootSlice = workflowAgentSlice(run, {
-      agent: 'research-workflow',
-      identity: {
-        kind: 'multiAgentWorkflow' as const,
-        workflowName: 'research-workflow',
-      },
       status: STREAM_PHASE.RUNNING,
       entries: [
         phaseEntry('phase-map', 'Map', { phaseIndex: 0, phaseTotal: 2 }),
@@ -1087,14 +1166,19 @@ describe('CLI child list display model', () => {
         ),
       ],
     });
+    seedStream(exactChild, {
+      metadata: { config: { model: 'exact-live-model' } },
+    });
+    seedStream(wrongChild, {
+      metadata: { config: { model: 'wrong-child-model' } },
+    });
     const streams = new Map<StreamTabId, StreamSlice>([
       [run, rootSlice],
       [
         exactChild,
         workflowAgentSlice(exactChild, {
-          model: 'exact-live-model',
           runStartedAt: Date.now() - 5_000,
-          cumulativeUsage: {
+          usage: {
             inputTokens: 100,
             outputTokens: 512,
             cost: 0.004,
@@ -1104,8 +1188,7 @@ describe('CLI child list display model', () => {
       [
         wrongChild,
         workflowAgentSlice(wrongChild, {
-          model: 'wrong-child-model',
-          cumulativeUsage: {
+          usage: {
             inputTokens: 100,
             outputTokens: 999,
             cost: 9,
@@ -1176,12 +1259,10 @@ describe('CLI child list display model', () => {
     const shared = 'shared-child' as StreamTabId;
     const fallback = 'fallback-child' as StreamTabId;
     const missing = 'missing-child' as StreamTabId;
+    seedStream(run, {
+      metadata: { identity: { kind: 'agent', agent: 'grouped-workflow' } },
+    });
     const rootSlice = workflowAgentSlice(run, {
-      agent: 'grouped-workflow',
-      identity: {
-        kind: 'multiAgentWorkflow' as const,
-        workflowName: 'grouped-workflow',
-      },
       status: STREAM_PHASE.RUNNING,
       entries: [
         phaseEntry('phase-map-a', 'Map', { phaseIndex: 0, phaseTotal: 2 }),
@@ -1255,13 +1336,18 @@ describe('CLI child list display model', () => {
         ),
       ],
     });
+    seedStream(shared, {
+      metadata: { config: { model: 'ambiguous-model' } },
+    });
+    seedStream(fallback, {
+      metadata: { config: { model: 'fallback-model' } },
+    });
     const streams = new Map<StreamTabId, StreamSlice>([
       [run, rootSlice],
       [
         shared,
         workflowAgentSlice(shared, {
-          model: 'ambiguous-model',
-          cumulativeUsage: {
+          usage: {
             inputTokens: 100,
             outputTokens: 999,
             cost: 9,
@@ -1271,9 +1357,8 @@ describe('CLI child list display model', () => {
       [
         fallback,
         workflowAgentSlice(fallback, {
-          model: 'fallback-model',
           runStartedAt: Date.now() - 5_000,
-          cumulativeUsage: {
+          usage: {
             inputTokens: 100,
             outputTokens: 321,
             cost: 0.007,
@@ -1357,11 +1442,6 @@ describe('CLI child list display model', () => {
     const run = 'approval-run' as StreamTabId;
     const child = 'approval-child' as StreamTabId;
     const rootSlice = workflowAgentSlice(run, {
-      agent: 'workflow',
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'workflow',
-      },
       status: STREAM_PHASE.RUNNING,
       entries: [
         workflowTaskEntry('task', 'Running: Long task', {
@@ -1397,7 +1477,6 @@ describe('CLI child list display model', () => {
   it('keeps a scoped-root approval visible when its label truncates', async () => {
     const run = 'approval-run-with-a-deliberately-long-id' as StreamTabId;
     const rootSlice = workflowAgentSlice(run, {
-      agent: 'A scoped conversation with a deliberately long label',
       status: STREAM_PHASE.RUNNING,
     });
     const output = await renderSubagentList(
@@ -1466,7 +1545,6 @@ describe('CLI child list display model', () => {
     const run = 'approval-run' as StreamTabId;
     const child = 'approval-child' as StreamTabId;
     const rootSlice = workflowAgentSlice(run, {
-      agent: 'A workflow with a deliberately long name',
       status: STREAM_PHASE.RUNNING,
       entries: [
         workflowTaskEntry('task', 'Running: Check', {
@@ -1514,12 +1592,10 @@ describe('CLI child list display model', () => {
 
   it('shows a session approval before workflow dashboard rows exist', async () => {
     const run = 'approval-run' as StreamTabId;
+    seedStream(run, {
+      metadata: { identity: { kind: 'agent', agent: 'Starting workflow' } },
+    });
     const rootSlice = workflowAgentSlice(run, {
-      agent: 'Starting workflow',
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'starting-workflow',
-      },
       status: STREAM_PHASE.RUNNING,
       entries: [],
     });
@@ -1551,6 +1627,7 @@ describe('CLI child list display model', () => {
     async ({ columns, metadataColumn }) => {
       const run = 'run' as StreamTabId;
       const child = 'child' as StreamTabId;
+      seedStream(child, { toolCallCount: 5 });
       const output = await renderSubagentList(
         {
           listRootStreamId: run,
@@ -1571,8 +1648,7 @@ describe('CLI child list display model', () => {
               parentId: run,
               slice: workflowAgentSlice('child', {
                 status: STREAM_PHASE.RUNNING,
-                conversation: { toolCallCount: 5 },
-                cumulativeUsage: {
+                usage: {
                   inputTokens: 1000,
                   outputTokens: 39_900,
                   cost: 0,

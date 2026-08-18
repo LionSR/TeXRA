@@ -107,6 +107,7 @@ import {
 import {
   activeSubagentsFor,
   childRosters,
+  streamMetadataFor,
   parentStream,
   visibleSubagentRows,
 } from '../src/chat/tui/state/childExecutions';
@@ -1386,6 +1387,28 @@ function seedRunningWorkflow(): void {
   transitionStreamRunning(childStreamId);
 
   const runTrace = createRunTrace(childStreamId, defaultSession().transcripts);
+  // `runTrace.trace` only feeds the transcript recorder (see
+  // `createRunTrace`); a real launch also bridges it onto the session event
+  // hub via `session.attachRunTrace`, which is what lands a `run.start` in
+  // the durable summary mirror (`SessionHandle`'s `attachSessionEvents`) so
+  // `getStreamMetadata(...)` overlays `identity` regardless of the RUNNING
+  // transition's ephemeral metadata reset. Emit straight onto the hub here,
+  // the same way the output-file/compile-failure facts below do —
+  // `SubagentList`'s `workflowDashboardRoot` gate reads that overlay to pick
+  // the two-column task dashboard.
+  defaultSession().events.emit({
+    scope: 'run',
+    streamId: childStreamId,
+    event: {
+      type: 'run.start',
+      streamId: childStreamId,
+      executionId,
+      identity: {
+        kind: 'multiAgentWorkflow',
+        workflowName: 'live-workflow-validation',
+      },
+    },
+  });
   const runStage = runTrace.trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {
@@ -1453,13 +1476,6 @@ function seedRunningWorkflow(): void {
     transitionStreamRunning(child.childStreamId);
   }
   emitChildRoster(childStreamId, workflowChildren);
-  patchStream(childStreamId, (slice) => ({
-    ...slice,
-    identity: {
-      kind: 'multiAgentWorkflow',
-      workflowName: 'live-workflow-validation',
-    },
-  }));
 
   HARNESS_DISPOSERS.push(() => {
     phaseStage.end('cancelled');
@@ -1772,6 +1788,19 @@ HARNESS_DISPOSERS.push(
 // streams the session's log store knows.
 emitSetActiveStream(STREAM_ID);
 
+function emitStreamDescription(
+  streamId: StreamTabId,
+  description: string,
+): void {
+  defaultSession().events.emit({
+    scope: 'session',
+    event: {
+      type: 'updateStreamDescription',
+      payload: { streamId, description },
+    },
+  });
+}
+
 if (SHOW_CHILDREN) {
   const startedAt = Date.now() - 74_000;
   const nestedStartedAt = startedAt + 24_000;
@@ -1841,19 +1870,16 @@ if (SHOW_CHILDREN) {
     emitSetActiveStream(streamId, AgentCategory.ToolUse);
     emitParentStreamEdge(streamId, STREAM_ID);
     if (addNestedChildren) emitChildRoster(streamId, [nestedStrategyChild]);
+    emitStreamDescription(streamId, `${child.agentName} sub-workflow`);
     patchStream(streamId, (slice) => ({
       ...slice,
-      category: AgentCategory.ToolUse,
-      identity: child.identity,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-      description: `${child.agentName} sub-workflow`,
       entries: makeChildEntries(child.agentName, child.executionId),
       // One child carries usage so scenarios pin the row metadata column's
       // generated-token figure (`↓40k`).
-      cumulativeUsage:
+      usage:
         child.agentName === 'reviewer'
           ? { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 }
-          : slice.cumulativeUsage,
+          : slice.usage,
     }));
     setStreamStatusInCliState({
       streamId: streamId,
@@ -1871,11 +1897,12 @@ if (SHOW_CHILDREN) {
       'harness-nested-local-checker-stream',
       'harness-child-strategy-stream',
     );
+    emitStreamDescription(
+      'harness-nested-local-checker-stream',
+      'localChecker nested proof check',
+    );
     patchStream('harness-nested-local-checker-stream', (slice) => ({
       ...slice,
-      category: AgentCategory.ToolUse,
-      identity: nestedStrategyChild.identity,
-      description: 'localChecker nested proof check',
       entries: makeChildEntries('localChecker', 'nested proof check'),
     }));
     setStreamStatusInCliState({
@@ -1887,8 +1914,7 @@ if (SHOW_CHILDREN) {
 }
 
 if (SHOW_TODOS) {
-  patchStream(STREAM_ID, (slice) => ({
-    ...slice,
+  const workPlan = {
     todos: [
       {
         content: 'Split theorem into algebraic and analytic checks',
@@ -1917,8 +1943,7 @@ if (SHOW_TODOS) {
         'Have a subagent inspect the Lean-style finite case.',
       ].join('\n'),
     },
-  }));
-  const workPlan = streams.get().get(STREAM_ID)!;
+  };
   defaultSession().events.emit({
     scope: 'run',
     streamId: STREAM_ID,
@@ -2269,9 +2294,13 @@ function markHarnessExecutionStopped(executionId: string): void {
 
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
+  const focusedActiveStreamId = activeStreamIdSignal.get();
   const focusedChildRoute = focusedChildFollowUpRoute({
-    activeStreamId: activeStreamIdSignal.get(),
+    activeStreamId: focusedActiveStreamId,
     parentStream: parentStream.get(),
+    metadata: focusedActiveStreamId
+      ? streamMetadataFor(focusedActiveStreamId)
+      : undefined,
     streams: streams.get(),
   });
   if (focusedChildRoute.kind === 'reject') {
