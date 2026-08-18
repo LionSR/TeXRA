@@ -42,11 +42,9 @@ const REAL_KNIP_STDOUT = JSON.stringify({
       types: [],
     },
     {
-      file: 'src/auth/serverKeys/ServerSideKeyService.ts',
+      file: 'src/auth/example/ExampleService.ts',
       duplicates: [],
-      exports: [
-        { name: 'USE_INCLUDED_ACCESS_KEY', line: 47, col: 14, pos: 1491 },
-      ],
+      exports: [{ name: 'EXAMPLE_STATE_KEY', line: 47, col: 14, pos: 1491 }],
       files: [],
       types: [],
     },

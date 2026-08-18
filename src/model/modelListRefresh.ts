@@ -46,8 +46,8 @@ function reconcileEnabledModels(
 ): EnabledModelReconciliation {
   const strippedSet = new Set<string>();
 
-  // Retired models are hard unavailable even for users with included relay
-  // access. This sweep runs on every reconciliation, unconditionally --
+  // Retired models are hard unavailable for everyone.
+  // This sweep runs on every reconciliation, unconditionally --
   // deliberately *not* gated behind a version threshold.
   // `reconcileEnabledModels` runs on every startup so a catalogue
   // retirement is applied even when preferred-model membership is unchanged.

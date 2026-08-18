@@ -70,9 +70,6 @@ const mocks = vi.hoisted(() => ({
   initializeCliSupabaseAuth: vi.fn(),
   initializeNodeRuntimeSkills: vi.fn(),
   initNodeAgentRuntime: vi.fn(),
-  serverSideKeyService: {
-    setUseIncludedModelAccess: vi.fn(),
-  },
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
   invalidateModelOptionsCache: vi.fn(),
@@ -84,10 +81,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/index/platformAgentDirectories', () => ({
   createPlatformAgentDirectories: mocks.createPlatformAgentDirectories,
-}));
-
-vi.mock('@auth/serverKeys', () => ({
-  getServerSideKeyService: () => mocks.serverSideKeyService,
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', () => ({
@@ -184,7 +177,8 @@ vi.mock('@tools/lean/direct/directLspAdapter', () => ({
   registerDirectLeanLanguageServices: vi.fn(),
 }));
 
-const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
+// Installed so startup never reaches a real auth check; no test reads it.
+vi.spyOn(SupabaseClient, 'isAuthenticated');
 const canAccessRemoteAgentCatalogSpy = vi.spyOn(
   SupabaseClient,
   'canAccessRemoteAgentCatalog',
@@ -247,9 +241,6 @@ describe('CLI platform init', () => {
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
     mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
     canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
-    mocks.serverSideKeyService.setUseIncludedModelAccess.mockResolvedValue(
-      undefined,
-    );
   });
 
   it('uses the configured storage root for CLI secrets', async () => {
@@ -478,59 +469,6 @@ describe('CLI platform init', () => {
       currentVersion: '1.2.3',
       versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
     });
-  });
-
-  it('keeps included access off when OpenRouter routing is enabled', async () => {
-    mocks.cliGlobalState.get.mockImplementation((key, defaultValue) =>
-      key === GlobalStateKey.USE_OPENROUTER ? true : defaultValue,
-    );
-    mocks.tryPlatform.mockReturnValue({ globalState: mocks.cliGlobalState });
-
-    await initCliPlatform(cliContext());
-
-    expect(isAuthenticatedSpy).not.toHaveBeenCalled();
-    expect(
-      mocks.serverSideKeyService.setUseIncludedModelAccess,
-    ).toHaveBeenCalledWith(false);
-  });
-
-  it('clears OpenRouter when startup explicitly selects included access', async () => {
-    mocks.cliGlobalState.get.mockImplementation((key, defaultValue) =>
-      key === GlobalStateKey.USE_OPENROUTER ? true : defaultValue,
-    );
-    mocks.tryPlatform.mockReturnValue({ globalState: mocks.cliGlobalState });
-
-    await initCliPlatform(cliContext({ apiMode: 'included' }));
-
-    expect(mocks.cliGlobalState.update).toHaveBeenCalledWith(
-      GlobalStateKey.USE_OPENROUTER,
-      false,
-    );
-    expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
-    expect(
-      mocks.serverSideKeyService.setUseIncludedModelAccess,
-    ).toHaveBeenCalledWith(true);
-  });
-
-  it('keeps an explicitly requested included mode selected while signed out', async () => {
-    await initCliPlatform(cliContext({ apiMode: 'included' }));
-
-    // The model layer, not startup, decides that these models need a sign-in.
-    expect(
-      mocks.serverSideKeyService.setUseIncludedModelAccess,
-    ).toHaveBeenCalledWith(true);
-  });
-
-  it('leaves the stored included-access preference alone when no mode is requested', async () => {
-    // The preference lives in shared `~/.texra` state, so deriving it from the
-    // current session would let a signed-out CLI launch silently switch other
-    // hosts to personal keys.
-    await initCliPlatform(cliContext());
-
-    expect(
-      mocks.serverSideKeyService.setUseIncludedModelAccess,
-    ).not.toHaveBeenCalled();
-    expect(isAuthenticatedSpy).not.toHaveBeenCalled();
   });
 
   it('registers CLI runtime skill sources through the shared Node host helper', async () => {

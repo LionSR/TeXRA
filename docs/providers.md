@@ -1,6 +1,6 @@
 # Supported AI Providers
 
-_Last Updated: May 27, 2026_
+_Last Updated: August 18, 2026_
 
 The following table lists the AI model providers supported by TeXRA, along with their operating headquarters and links to their respective terms and privacy policies. When you select a provider, your content is transmitted to that provider's API endpoints and is subject to their terms.
 
@@ -21,7 +21,7 @@ The following table lists the AI model providers supported by TeXRA, along with 
 ## Access Modes
 
 - **Personal API Keys**: When you use your own API keys, requests go directly from your local TeXRA client (VS Code extension, CLI, or desktop app) to the provider. No data passes through TeXRA servers.
-- **Researcher Access Program**: When you use the Researcher Access Program, requests are routed through a TeXRA-operated relay (`remote.texra.ai`) before being forwarded to the provider. Your content temporarily transits our infrastructure but is not permanently stored.
+- **Provider Subscriptions**: When you sign in to a provider subscription (ChatGPT, Grok, Kimi Code, or a GLM Coding Plan), requests still go directly from your local TeXRA client to that provider's endpoints, authenticated with the subscription instead of an API key. No data passes through TeXRA servers.
 
 ## Your Responsibility
 

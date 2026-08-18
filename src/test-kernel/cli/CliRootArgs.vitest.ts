@@ -7,7 +7,6 @@ import { hasMagic } from 'glob';
 import stripAnsi from 'strip-ansi';
 
 import { rootCommand, runCli } from '@cli/commands/root';
-import { doctorPlatformInitContext } from '@cli/commands/doctor';
 import {
   normalizeRootShortcuts,
   reorderGlobalFlags,
@@ -186,12 +185,6 @@ describe('CLI root argument routing', () => {
       '--output-format',
       'json',
     ]);
-  });
-
-  it('keeps leading api-mode flags attached to explicit subcommands', () => {
-    expect(
-      reorderGlobalFlags(['--api-mode', 'personal', 'run', 'polish']),
-    ).toEqual(['run', 'polish', '--api-mode', 'personal']);
   });
 
   it('keeps leading source flags attached to agent subcommands', () => {
@@ -996,22 +989,13 @@ describe('CLI root argument routing', () => {
     );
   });
 
-  it('recognizes raw relay fetch stack logs from lower-level clients', () => {
+  it('recognizes raw fetch stack logs from lower-level clients', () => {
     const error = new TypeError('fetch failed', {
       cause: new Error('getaddrinfo ENOTFOUND remote.texra.ai'),
     });
 
     expect(isCliFetchStackLog([error])).toBe(true);
     expect(isCliFetchStackLog([new Error('unrelated')])).toBe(false);
-  });
-
-  it('does not force doctor into personal-key model availability', () => {
-    const init = doctorPlatformInitContext(
-      createRunCommandCliContext({ apiMode: 'included' }),
-    ) as { skipIncludedModelAccess?: boolean; quietLogs?: boolean };
-
-    expect(init.quietLogs).toBe(true);
-    expect(init.skipIncludedModelAccess).toBeUndefined();
   });
 });
 

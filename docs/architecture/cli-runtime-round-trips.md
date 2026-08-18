@@ -62,9 +62,6 @@ Current ownership:
 - Agent registry load scope:
   `agentRegistry.loadAgents()` call sites.
   Local-only for list/display, remote reload only when authenticated and gaps exist.
-- API mode:
-  `runtime/apiAccessMode.ts`.
-  One persisted key-mode flag, with command/env override through `CliContext`.
 - Model availability:
   `runtime/modelAccess.ts`.
   The launcher, `/model`, and chat startup share this module, but can each load the model list.
@@ -170,7 +167,7 @@ sequenceDiagram
   Run->>P: replan current preset
 ```
 
-The local CLI shows built-in teams as unavailable without relay-served
+The local CLI shows built-in teams as unavailable without account-served
 orchestrators. Local specialists such as `lean`, `research`, and `numerics`
 remain visible as available members, but they are not promoted to team roots.
 That keeps list, launcher, and run output aligned: a built-in team either has a
@@ -235,7 +232,7 @@ team planning. Startup should need only names, descriptions, and availability.
 
 1. Normalize stream status ownership first. It is small and directly helps
    subagent display/debuggability.
-2. Extract model selection ownership next. It addresses startup model selection,
-   `/model`, API-mode switching, and future relay/personal divergence.
+2. Extract model selection ownership next. It addresses startup model selection
+   and `/model`.
 3. Consolidate team planning after that. It is higher blast radius because it
    touches local/remote agent loading and multi-agent launch semantics.

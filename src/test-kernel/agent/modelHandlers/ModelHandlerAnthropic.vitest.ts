@@ -10,7 +10,7 @@ import {
   BadRequestError as AnthropicBadRequestError,
 } from '@anthropic-ai/sdk';
 import { PDFDocument } from '@cantoo/pdf-lib';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type ModelCapabilities,
   MODEL_CONFIGS,
@@ -35,7 +35,6 @@ import {
   resolveAnthropicCompactionOutcome,
   SHORT_CACHE_CONTROL,
 } from '@agent/modelHandlers/anthropic/anthropicContextManagement';
-import * as serverKeysModule from '@auth/serverKeys';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { AgentCategory } from '@shared/schemas';
 import type { ToolFileAttachment } from '@shared/schemas';
@@ -2693,25 +2692,6 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       request_id: undefined,
     };
   }
-
-  /**
-   * The stream-failure debug log resolves relay routing via the server-side
-   * key service; stub it so this isolated suite doesn't need the singleton
-   * that extension activation normally initializes.
-   */
-  function stubDirectServerKeyService(): void {
-    vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
-      shouldUseServerSideKeysSync: () => false,
-      getUseIncludedModelAccess: () => false,
-      canUseServerSideKeys: async () => false,
-      getRelayBaseUrl: (provider: string) =>
-        `https://relay.example.com/functions/v1/relay/${provider}/v1`,
-    } as unknown as ReturnType<
-      typeof serverKeysModule.getServerSideKeyService
-    >);
-  }
-
-  beforeEach(stubDirectServerKeyService);
 
   /**
    * A logged handler forced onto the streaming path so tests exercise the

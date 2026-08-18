@@ -69,8 +69,4 @@ export const retryRequestPanelStyles: CSSResult = css`
     max-height: 12em;
     overflow-y: auto;
   }
-
-  .retry-request--relay .retry-request__operation {
-    color: var(--color-warning);
-  }
 `;

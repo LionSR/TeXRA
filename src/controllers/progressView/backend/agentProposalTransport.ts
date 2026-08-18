@@ -36,10 +36,10 @@ export function createAgentProposalTransport(options: {
 } {
   const { getRenderer, isPending } = options;
 
-  // Model options have a visible-model fallback that does not require
-  // ServerSideKeyService, so the dropdown still appears if availability
-  // loading fails. Agent options have no static equivalent, so the agent
-  // dropdown is omitted when the registry fetch fails.
+  // Model options have a visible-model fallback, so the dropdown still
+  // appears if availability loading fails. Agent options have no static
+  // equivalent, so the agent dropdown is omitted when the registry fetch
+  // fails.
   const sendResolvedOptions = async (
     proposal: AgentProposalPermission,
   ): Promise<void> => {

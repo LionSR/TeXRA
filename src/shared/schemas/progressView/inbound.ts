@@ -70,11 +70,6 @@ const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
   provider: z.string().optional(),
   model: z.string().optional(),
   exhaustionReason: ExhaustionReasonSchema.optional(),
-  /** True when the failing request went through the TeXRA relay. When
-   *  false, relay wasn't in the path (direct-key call) and the handler
-   *  must not globally disable relay access — other providers may still
-   *  be served successfully by relay. */
-  viaRelay: z.boolean().optional(),
   /** True when the failed handler was dispatched onto the Kimi Code coding
    * endpoint, captured before the retry panel opened. */
   kimiCodeRoutedOnFailure: z.boolean().optional(),

@@ -1,9 +1,5 @@
 import { LRUCache } from 'lru-cache';
 
-import {
-  includedModelAccess,
-  type IncludedModelAccess,
-} from '@model/includedModelAccess';
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
@@ -12,7 +8,6 @@ import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { providerDisplayName } from '@shared/constants/providers';
 import {
   isKimiCodeExclusiveModel,
@@ -41,7 +36,6 @@ import {
   DEFAULT_MODELS,
 } from './modelOptionsBasic';
 import {
-  allowsModelRelay,
   isOpenRouterRoutingUnsupported,
   resolveDirectModelApiKeyProvider,
   resolveModelSource,
@@ -59,30 +53,10 @@ import type { ModelConfig } from 'llm-zoo';
 
 type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
 
-/**
- * The slice of {@link IncludedModelAccess} model availability reads: whether
- * included access is on, whether the account can use it, and which
- * providers/models it covers. Derived rather than redeclared so a caller can
- * always pass the installed provider, while a test — and the picker's own
- * narrower contract — stays free of the credential and routing members that
- * only request construction needs.
- */
-export type ModelOptionsServerAccess = Pick<
-  IncludedModelAccess,
-  | 'canUseServerSideKeys'
-  | 'getUseIncludedModelAccess'
-  | 'isAuthenticated'
-  | 'wasQuotaAutoSwitched'
-  | 'isRelayQuotaExceeded'
-  | 'isProviderOnServer'
-  | 'canUseModelSync'
->;
-
 export interface ModelOptionsAccess {
   readonly visibleModels: readonly string[];
   readonly secrets: PlatformSecrets;
   readonly useOpenRouter: boolean;
-  readonly serverSideKeyService: ModelOptionsServerAccess;
 }
 
 /**
@@ -122,25 +96,10 @@ const AVAILABILITY_STATUS_FIELDS = {
     requiresKey: false,
   },
   'provider-key': { label: 'API key set', available: true, requiresKey: false },
-  'included-access': {
-    label: INCLUDED_ACCESS.label,
-    available: true,
-    requiresKey: false,
-  },
   'missing-key': {
     label: 'Missing API key',
     available: false,
     requiresKey: true,
-  },
-  'not-included': {
-    label: 'Not included',
-    available: false,
-    requiresKey: false,
-  },
-  'included-login-required': {
-    label: 'Sign in required',
-    available: false,
-    requiresKey: false,
   },
   'subscription-access': {
     label: 'ChatGPT subscription',
@@ -164,11 +123,6 @@ const AVAILABILITY_STATUS_FIELDS = {
   },
   'provider-unavailable': {
     label: 'Unavailable through selected provider',
-    available: false,
-    requiresKey: false,
-  },
-  'relay-quota-exhausted': {
-    label: 'Usage limit reached',
     available: false,
     requiresKey: false,
   },
@@ -234,17 +188,8 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
     }
     const modelSource = resolveModelSource(config) ?? config.provider;
     const providerName = providerDisplayName(modelSource);
-    const nextStep = allowsModelRelay(config)
-      ? `Provide it, or enable ${INCLUDED_ACCESS.inline}.`
-      : 'Provide it to continue.';
-    return `Model "${model}" requires your ${providerName} API key. ${nextStep}`;
+    return `Model "${model}" requires your ${providerName} API key. Provide it to continue.`;
   },
-  'not-included': ({ model }) =>
-    `Model "${model}" is not available with your current subscription tier. Upgrade your plan or switch to a different model.`,
-  'included-login-required': ({ model }) =>
-    `Model "${model}" is served by ${INCLUDED_ACCESS.inline}, which needs an account. Sign in, or provide a provider API key and switch to ${OWN_API_KEYS.inline}.`,
-  'relay-quota-exhausted': ({ model }) =>
-    `Model "${model}" is unavailable. ${INCLUDED_ACCESS.usedUp.statement} ${INCLUDED_ACCESS.usedUp.nextStep}`,
   'copilot-consent-required': ({ model }) =>
     `Model "${model}" needs your approval before TeXRA can use it through Copilot in VS Code.`,
   'copilot-unavailable': ({ model }) =>
@@ -300,16 +245,7 @@ async function getPersonalAccessKindForModel(
 interface ModelAvailabilityContext {
   hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
   hasOpenRouter: boolean;
-  hasServerAccess: boolean;
-  relayQuotaExhausted: boolean;
   useOpenRouter: boolean;
-  useIncludedAccess: boolean;
-  /**
-   * Whether included access is selected while no account session exists, so
-   * the honest reason a relay-served model cannot run is "sign in" rather
-   * than "missing API key".
-   */
-  includedAccessSignedOut: boolean;
   /** Whether the user is signed in with ChatGPT (only resolved when the
    * "prefer subscription" switch is on). */
   codexSignedIn: boolean;
@@ -319,7 +255,6 @@ interface ModelAvailabilityContext {
   preferKimiCode: boolean;
   /** Whether a Kimi Code console API key is stored. */
   kimiCodeKeySet: boolean;
-  serverSideKeyService: ModelOptionsServerAccess;
 }
 
 /**
@@ -336,28 +271,13 @@ function effectiveKimiCodeConfig(
   ctx: ModelAvailabilityContext,
 ): ModelConfig {
   if (!isKimiSubscriptionEligible(config)) return config;
-  // The relay only owns the model when included access can actually serve it
-  // — the same route decision and post-route config synthesis ModelFactory
+  // The same route decision and post-route config synthesis ModelFactory
   // applies, driven by the pre-resolved context facts.
   return kimiCodeEffectiveConfig(config, {
     useOpenRouter: ctx.useOpenRouter,
     keySet: ctx.kimiCodeKeySet,
     preferKimiCode: ctx.preferKimiCode,
-    includedAccess: ctx.useIncludedAccess && ctx.hasServerAccess,
   });
-}
-
-function canUseIncludedAccessForModel(
-  model: string,
-  config: ModelConfig,
-  ctx: ModelAvailabilityContext,
-): boolean {
-  return (
-    allowsModelRelay(config) &&
-    ctx.hasServerAccess &&
-    ctx.serverSideKeyService.isProviderOnServer(config.provider) &&
-    ctx.serverSideKeyService.canUseModelSync(model)
-  );
 }
 
 /** Determine how a model can be used in the current access mode. */
@@ -397,7 +317,7 @@ async function resolveModelAvailability(
   }
 
   // ChatGPT subscription (Codex) is a preference, not a hard requirement. When
-  // the host is not signed in, continue through the normal API-key/relay paths
+  // the host is not signed in, continue through the normal API-key paths
   // so the switch cannot disable models that are otherwise runnable.
   if (ctx.codexSignedIn) {
     const subscriptionCapabilities = resolveCodexSubscriptionCapabilities(
@@ -429,8 +349,7 @@ async function resolveModelAvailability(
     }
   }
 
-  // OpenRouter routing is intentionally outside included access; a configured
-  // OpenRouter key is the only ready state for these calls.
+  // A configured OpenRouter key is the only ready state for these calls.
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
     if (ctx.hasOpenRouter) return availabilityStatus('openrouter-key');
     return {
@@ -439,31 +358,9 @@ async function resolveModelAvailability(
     };
   }
 
-  if (allowsModelRelay(config) && ctx.relayQuotaExhausted) {
-    return availabilityStatus('relay-quota-exhausted');
-  }
-
-  if (canUseIncludedAccessForModel(model, config, ctx)) {
-    return availabilityStatus('included-access');
-  }
-
-  // Fall back to personal API keys when the user opted out of included access
-  // OR they aren't authenticated for it (avoids showing every model as
-  // disabled for unauthenticated users with the default setting).
-  if (
-    allowsModelRelay(config) &&
-    ctx.useIncludedAccess &&
-    ctx.hasServerAccess
-  ) {
-    return availabilityStatus('not-included');
-  }
-
   const personalAccess = await getPersonalAccessKindForModel(config, ctx);
   if (personalAccess) return availabilityStatus(personalAccess);
 
-  if (ctx.includedAccessSignedOut && allowsModelRelay(config)) {
-    return availabilityStatus('included-login-required');
-  }
   return availabilityStatus('missing-key');
 }
 
@@ -471,47 +368,26 @@ async function buildAvailabilityContext(
   access: ModelOptionsAccess,
   useApiKeyCache: boolean,
 ): Promise<ModelAvailabilityContext> {
-  const { serverSideKeyService } = access;
   const hasApiKey = (provider: ApiProvider) =>
     useApiKeyCache
       ? hasUsableApiKey(access.secrets, provider)
       : apiKeyExistsUncached(access.secrets, provider);
-  const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
-  const [
-    hasOpenRouter,
-    hasServerAccess,
-    codexSignedIn,
-    xaiSignedIn,
-    kimiCodeKeySet,
-    includedAccessSignedOut,
-  ] = await Promise.all([
-    hasApiKey('openRouter'),
-    serverSideKeyService.canUseServerSideKeys(),
-    // Only worth a secrets read when the "prefer subscription" switch is on.
-    isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
-    isPreferXaiSubscription() ? isXaiSignedIn() : Promise.resolve(false),
-    hasApiKey('kimiCode'),
-    // Signed-out is only a distinct availability reason on the included-access
-    // route, so personal mode never pays for this read.
-    useIncludedAccess
-      ? serverSideKeyService.isAuthenticated().then((authed) => !authed)
-      : Promise.resolve(false),
-  ]);
+  const [hasOpenRouter, codexSignedIn, xaiSignedIn, kimiCodeKeySet] =
+    await Promise.all([
+      hasApiKey('openRouter'),
+      // Only worth a secrets read when the "prefer subscription" switch is on.
+      isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
+      isPreferXaiSubscription() ? isXaiSignedIn() : Promise.resolve(false),
+      hasApiKey('kimiCode'),
+    ]);
   return {
     hasUsableApiKey: hasApiKey,
     hasOpenRouter,
-    hasServerAccess,
-    includedAccessSignedOut,
-    relayQuotaExhausted:
-      serverSideKeyService.wasQuotaAutoSwitched() ||
-      (useIncludedAccess && serverSideKeyService.isRelayQuotaExceeded()),
     useOpenRouter: access.useOpenRouter,
-    useIncludedAccess,
     codexSignedIn,
     xaiSignedIn,
     preferKimiCode: getPreferKimiCode(),
     kimiCodeKeySet,
-    serverSideKeyService,
   };
 }
 
@@ -529,7 +405,6 @@ function buildDefaultModelOptionsAccess(): ModelOptionsAccess {
     visibleModels: getVisibleModels(host.globalState),
     secrets: host.secrets,
     useOpenRouter: getUseOpenRouter(),
-    serverSideKeyService: includedModelAccess(),
   };
 }
 

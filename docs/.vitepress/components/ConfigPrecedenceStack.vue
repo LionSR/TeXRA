@@ -29,12 +29,7 @@ const layers = [
     title: 'Environment variables',
     sub: 'shell exports',
     chip: 'TEXRA_MODEL',
-    siblings: [
-      'TEXRA_AGENT',
-      'TEXRA_OUTPUT_FORMAT',
-      'TEXRA_APPROVAL_POLICY',
-      'TEXRA_API_MODE',
-    ],
+    siblings: ['TEXRA_AGENT', 'TEXRA_OUTPUT_FORMAT', 'TEXRA_APPROVAL_POLICY'],
   },
   {
     icon: 'file-code',

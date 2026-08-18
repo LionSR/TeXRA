@@ -54,7 +54,6 @@ function mockSignedInCatalogAccess(canAccessCatalog: boolean): void {
     canAccessCatalog,
   );
   vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
-  vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('free');
 }
 
 async function clearOnboardingState(): Promise<void> {
@@ -73,7 +72,7 @@ async function clearOnboardingState(): Promise<void> {
 beforeAll(async () => {
   // Real bundled agent YAMLs on disk and no remote agents (signed out), so
   // the tests exercise the actual name → key resolution including the
-  // unresolved relay-served orchestrator.
+  // unresolved account-served orchestrator.
   const { initPlatform } = await import('@platform/platform');
   initPlatform(
     createFakePlatform(
@@ -124,7 +123,7 @@ describe('apply_team', () => {
     expect(getDefaultTeamId(platform().globalState)).toBe('physicist');
   });
 
-  it('reports the relay-served orchestrator as available after sign-in', async () => {
+  it('reports the account-served orchestrator as available after sign-in', async () => {
     const result = await applyTeam({
       teamId: 'starter',
       unavailableAction: 'continue',

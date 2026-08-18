@@ -3,7 +3,6 @@
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 import { when } from 'lit/directives/when.js';
 
 // Side-effect imports - register WA components
@@ -22,7 +21,6 @@ import {
   isCredentialExhausted,
   type ProviderErrorPartial,
 } from '@shared/schemas';
-import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { isKimiCodeSubscriptionRetryBlocked } from '@shared/model/kimiCodeRetryGate';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
@@ -66,14 +64,12 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
 
   override render(): TemplateResult {
     const data = this.permission.data;
-    const isRelay = data.errorDetails?.isRelayError === true;
     const canUseOwnApiKey = this.canUseOwnApiKey();
     const copilotQuotaExhausted =
       data.errorDetails?.exhaustionReason === 'copilot-subscription';
     const userRetryable = data.errorDetails?.userRetryable !== false;
     const metaParts: MetaPart[] = [
       ...(data.model ? [`Model: ${data.model}`] : []),
-      ...(isRelay ? [`Source: ${INCLUDED_ACCESS.label}`] : []),
       `Can retry: ${userRetryable ? 'Yes' : 'No'}`,
     ];
 
@@ -81,12 +77,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     const disabled = this.archived;
 
     return html`
-      <div
-        class=${classMap({
-          'retry-request': true,
-          'retry-request--relay': isRelay,
-        })}
-      >
+      <div class="retry-request">
         <div class="retry-request__details">
           <div class="retry-request__operation">
             ${data.operation ? `Failed: ${data.operation}` : 'Request failed'}

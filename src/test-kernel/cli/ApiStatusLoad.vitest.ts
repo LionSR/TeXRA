@@ -1,12 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  fetchRelayUsageSummary: vi.fn(),
-  getCliApiMode: vi.fn(),
   getCliAuthProfile: vi.fn(),
-  getCliSessionAccessToken: vi.fn(),
   readCliModelAccessStatus: vi.fn(),
-  resolveCliUsageTier: vi.fn(),
   lookupApiKeyOrigin: vi.fn(),
   getSubscriptionUsage: vi.fn(),
   secrets: {},
@@ -21,23 +17,8 @@ vi.mock(
   }),
 );
 
-vi.mock('@cli/runtime/apiAccessMode', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@cli/runtime/apiAccessMode')>();
-  return {
-    ...actual,
-    getCliApiMode: mocks.getCliApiMode,
-  };
-});
-
 vi.mock('@cli/runtime/supabaseAuth', () => ({
   getCliAuthProfile: mocks.getCliAuthProfile,
-  getCliSessionAccessToken: mocks.getCliSessionAccessToken,
-  resolveCliUsageTier: mocks.resolveCliUsageTier,
-}));
-
-vi.mock('@cli/runtime/relayUsage', () => ({
-  fetchRelayUsageSummary: mocks.fetchRelayUsageSummary,
 }));
 
 vi.mock('@cli/runtime/modelAccessSelection', () => ({
@@ -94,24 +75,8 @@ function codingPlans(
   };
 }
 
-/** Model-access status with the included fallback and every route off. */
-function useIncludedAccessStatus(): void {
-  mocks.readCliModelAccessStatus.mockResolvedValue({
-    apiFallback: 'included',
-    preferences: {
-      chatGpt: 'off',
-      grok: 'off',
-    },
-    codingPlans: codingPlans(),
-    chatGptSignedIn: false,
-    grokSignedIn: false,
-  });
-}
-
-function accountStatusLines(
-  apiMode: 'personal' | 'included',
-): Promise<string[]> {
-  return loadCliDetailedAccountStatusLines({ apiMode });
+function accountStatusLines(): Promise<string[]> {
+  return loadCliDetailedAccountStatusLines();
 }
 
 function renderPreferenceRoute(
@@ -120,7 +85,6 @@ function renderPreferenceRoute(
   enabled: boolean,
 ): Promise<string[]> {
   mocks.readCliModelAccessStatus.mockResolvedValue({
-    apiFallback: 'personal',
     preferences: {
       chatGpt: route === 'chatGpt' ? preference : 'off',
       grok: 'off',
@@ -136,22 +100,15 @@ function renderPreferenceRoute(
     chatGptAccountLabel:
       route === 'chatGpt' && enabled ? 'chatgpt@example.com' : undefined,
   });
-  return accountStatusLines('personal');
+  return accountStatusLines();
 }
 
 describe('loadCliApiStatus', () => {
   beforeEach(() => {
-    mocks.fetchRelayUsageSummary.mockReset();
-    mocks.getCliApiMode.mockReset().mockReturnValue('personal');
     mocks.getCliAuthProfile.mockReset().mockResolvedValue({
       authenticated: false,
     });
-    mocks.getCliSessionAccessToken
-      .mockReset()
-      .mockResolvedValue('session-token');
-    mocks.resolveCliUsageTier.mockReset().mockResolvedValue('free');
     mocks.readCliModelAccessStatus.mockReset().mockResolvedValue({
-      apiFallback: 'personal',
       preferences: {
         chatGpt: 'off',
         grok: 'off',
@@ -184,12 +141,12 @@ describe('loadCliApiStatus', () => {
       name: 'with a profile note',
       profile: {
         authenticated: false,
-        note: 'The configured relay token was rejected.',
+        note: 'Account metadata may be stale.',
       },
       lines: [
         'api: your own API keys',
         'auth: signed out',
-        'The configured relay token was rejected.',
+        'Account metadata may be stale.',
       ],
     },
   ])(
@@ -201,55 +158,20 @@ describe('loadCliApiStatus', () => {
     },
   );
 
-  it('uses an invocation API mode override for launcher status text', async () => {
-    await expect(
-      loadCliApiStatus({
-        apiMode: 'included',
-        includeActionHint: true,
-      }),
-    ).resolves.toEqual([
-      'api: included access',
-      'auth: signed out',
-      'actions: choose Model access below; `texra login` signs in with Researcher Access',
-    ]);
-    expect(mocks.getCliApiMode).not.toHaveBeenCalled();
-  });
-
-  it('keeps launcher usage compact', async () => {
+  it('groups personal keys with their route', async () => {
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
       accountLabel: 'researcher@example.com',
-      tier: 'Ultra',
-      credentialSource: 'session',
-    });
-    mocks.resolveCliUsageTier.mockResolvedValue('Ultra');
-    mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 100.3 });
-
-    await expect(loadCliApiStatus({ apiMode: 'included' })).resolves.toEqual([
-      'api: included access',
-      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 100.3% used, 0% remaining',
-    ]);
-  });
-
-  it('groups personal keys with their route and omits unused included quota', async () => {
-    mocks.getCliAuthProfile.mockResolvedValue({
-      authenticated: true,
-      accountLabel: 'researcher@example.com',
-      tier: 'Researcher',
-      credentialSource: 'session',
       note: 'Account metadata may be stale.',
     });
     setPersonalKeys('deepseek');
-    mocks.resolveCliUsageTier.mockResolvedValue('Researcher');
-    mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 25 });
 
     await expect(loadCliApiStatus()).resolves.toEqual([
       'api: your own API keys',
       'your own API keys: DeepSeek',
-      'auth: signed in as researcher@example.com · tier: Researcher',
+      'auth: signed in as researcher@example.com',
       'Account metadata may be stale.',
     ]);
-    expect(mocks.fetchRelayUsageSummary).not.toHaveBeenCalled();
   });
 
   it('does not couple compact launcher status to model-access reads', async () => {
@@ -268,7 +190,6 @@ describe('loadCliApiStatus', () => {
 
   it('renders preferred Kimi and ChatGPT routes with their owned credentials', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
-      apiFallback: 'included',
       preferences: {
         chatGpt: 'on',
         grok: 'off',
@@ -281,14 +202,10 @@ describe('loadCliApiStatus', () => {
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
       accountLabel: 'texra@example.com',
-      tier: 'Ultra',
-      credentialSource: 'session',
     });
     setPersonalKeys('deepseek', 'glm', 'kimiCode');
-    mocks.resolveCliUsageTier.mockResolvedValue('Ultra');
-    mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 24.5 });
 
-    const lines = await accountStatusLines('included');
+    const lines = await accountStatusLines();
     const joined = lines.join('\n');
 
     expect(lineFor(lines, 'ChatGPT')).toBe(
@@ -297,15 +214,12 @@ describe('loadCliApiStatus', () => {
     expect(lineFor(lines, 'Kimi Code')).toBe(
       'Kimi Code: preferred · key configured',
     );
-    expect(lineFor(lines, 'Otherwise')).toBe(
-      'Otherwise: Included access · signed in as texra@example.com · Ultra · included usage this month: 24.5% used, 75.5% remaining',
-    );
+    expect(lineFor(lines, 'Otherwise')).toBe('Otherwise: Your own API keys');
     expect(lineFor(lines, 'Other API keys')).toBe(
       'Other API keys: DeepSeek, GLM',
     );
     expect(joined.match(/Kimi Code/g)).toHaveLength(1);
     expect(joined.match(/chatgpt@example\.com/g)).toHaveLength(1);
-    expect(joined.match(/texra@example\.com/g)).toHaveLength(1);
     expect(mocks.readCliModelAccessStatus).toHaveBeenCalledOnce();
     expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
     expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(3);
@@ -313,7 +227,6 @@ describe('loadCliApiStatus', () => {
 
   it('appends normalized usage to configured routes and force-refreshes on open', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
-      apiFallback: 'personal',
       preferences: {
         chatGpt: 'off',
         grok: 'off',
@@ -358,7 +271,6 @@ describe('loadCliApiStatus', () => {
     });
 
     const lines = await loadCliDetailedAccountStatusLines({
-      apiMode: 'personal',
       now: 1_800_000_000_000,
     });
 
@@ -505,7 +417,6 @@ describe('loadCliApiStatus', () => {
 
   it('keeps a shared GLM key in the personal-key inventory', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
-      apiFallback: 'personal',
       preferences: {
         chatGpt: 'off',
         grok: 'off',
@@ -516,7 +427,7 @@ describe('loadCliApiStatus', () => {
     });
     setPersonalKeys('glm');
 
-    const lines = await accountStatusLines('personal');
+    const lines = await accountStatusLines();
 
     expect(lineFor(lines, 'Other API keys')).toBe('Other API keys: GLM');
   });
@@ -524,7 +435,7 @@ describe('loadCliApiStatus', () => {
   it('keeps signed-out personal-only status truthful', async () => {
     setPersonalKeys('deepseek');
 
-    const lines = await accountStatusLines('personal');
+    const lines = await accountStatusLines();
 
     expect(lines).toEqual([
       'Otherwise: Your own API keys',
@@ -533,76 +444,8 @@ describe('loadCliApiStatus', () => {
     expect(lines.join('\n')).not.toContain('TeXRA');
   });
 
-  it('keeps signed-out included-only status truthful and omits empty keys', async () => {
-    useIncludedAccessStatus();
-
-    const lines = await accountStatusLines('included');
-
-    expect(lines).toEqual(['Otherwise: Included access · signed out']);
-    expect(mocks.fetchRelayUsageSummary).not.toHaveBeenCalled();
-  });
-
-  it('keeps included-only account, tier, and usage on the fallback route', async () => {
-    useIncludedAccessStatus();
-    mocks.getCliAuthProfile.mockResolvedValue({
-      authenticated: true,
-      accountLabel: 'included@example.com',
-      tier: 'Researcher',
-      credentialSource: 'session',
-    });
-    mocks.resolveCliUsageTier.mockResolvedValue('Researcher');
-    mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 10 });
-
-    const lines = await accountStatusLines('included');
-
-    expect(lines).toEqual([
-      'Otherwise: Included access · signed in as included@example.com · Researcher · included usage this month: 10.0% used, 90.0% remaining',
-    ]);
-  });
-
-  it('owns the CI-token limitation on the included fallback', async () => {
-    useIncludedAccessStatus();
-    mocks.getCliAuthProfile.mockResolvedValue({
-      authenticated: true,
-      accountLabel: 'CI token (TEXRA_RELAY_TOKEN)',
-      tier: 'Researcher',
-      credentialSource: 'relayToken',
-    });
-    mocks.getCliSessionAccessToken.mockResolvedValue(null);
-
-    const lines = await accountStatusLines('included');
-    const fallback = lineFor(lines, 'Otherwise');
-
-    expect(fallback).toContain('CI token (TEXRA_RELAY_TOKEN)');
-    expect(fallback).toContain('Researcher');
-    expect(fallback).toContain('TEXRA_RELAY_TOKEN on its own cannot read it');
-    expect(lines.filter((line) => line.includes('CI token'))).toHaveLength(1);
-    expect(mocks.fetchRelayUsageSummary).not.toHaveBeenCalled();
-  });
-
-  it('owns usage-fetch failures on the included fallback', async () => {
-    useIncludedAccessStatus();
-    mocks.getCliAuthProfile.mockResolvedValue({
-      authenticated: true,
-      accountLabel: 'texra@example.com',
-      tier: 'Ultra',
-      credentialSource: 'session',
-    });
-    mocks.resolveCliUsageTier.mockResolvedValue('Ultra');
-    mocks.fetchRelayUsageSummary.mockRejectedValue(new Error('quota offline'));
-
-    const lines = await accountStatusLines('included');
-
-    expect(lineFor(lines, 'Otherwise')).toContain(
-      'Ultra · included usage: quota offline',
-    );
-    expect(lines.filter((line) => line.includes('quota offline'))).toHaveLength(
-      1,
-    );
-  });
-
   it('omits unavailable key categories instead of printing none', async () => {
-    const lines = await accountStatusLines('personal');
+    const lines = await accountStatusLines();
 
     expect(lines).toEqual(['Otherwise: Your own API keys']);
   });
@@ -614,14 +457,13 @@ describe('loadCliApiStatus', () => {
       note: profileNote,
     });
 
-    const lines = await accountStatusLines('personal');
+    const lines = await accountStatusLines();
 
     expect(lines.filter((line) => line === profileNote)).toHaveLength(1);
   });
 
   it('reports the legacy model-access overview without reading key storage', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
-      apiFallback: 'personal',
       preferences: {
         chatGpt: 'on',
         grok: 'off',
@@ -637,11 +479,8 @@ describe('loadCliApiStatus', () => {
     });
     mocks.lookupApiKeyOrigin.mockRejectedValue(new Error('keychain offline'));
 
-    await expect(
-      loadCliModelAccessOverview({ apiMode: 'personal' }),
-    ).resolves.toEqual({
+    await expect(loadCliModelAccessOverview()).resolves.toEqual({
       access: {
-        apiFallback: 'personal',
         preferences: {
           chatGpt: 'on',
           grok: 'off',

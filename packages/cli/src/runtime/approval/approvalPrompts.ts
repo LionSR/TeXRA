@@ -1,15 +1,12 @@
 import PQueue from 'p-queue';
 
 import { defaultSession } from '@agent/runtime';
-import { isRelayMonthlyLimitMessage } from '@common/errors/sdkError/relayDetection';
 import { warn as logWarning } from '@logger/logUtils';
-import {
-  isCredentialExhausted,
-  type AgentProposalPermission,
-  type ExhaustionReason,
-  type PlanApprovalPermission,
-  type RetryPermission,
-  type ApprovalDecision,
+import type {
+  AgentProposalPermission,
+  PlanApprovalPermission,
+  RetryPermission,
+  ApprovalDecision,
 } from '@shared/schemas';
 import {
   quotaFallbackRouteById,
@@ -49,9 +46,6 @@ export type CliDecisionApprovalRequest =
       readonly payload: AgentProposalPermission;
     }
   | { readonly type: 'showRetryRequest'; readonly payload: RetryPermission };
-
-const CLI_PERSONAL_API_RETRY_HINT =
-  'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to your own API keys.';
 
 export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
@@ -105,11 +99,9 @@ export function warnApprovalDenied(context: CliContext, gate?: string): void {
  * `RetryPermission` maps to exactly one action; consumers (the retry modal's
  * switch decision, the retry request message, and the auto-switch) switch on
  * this instead of re-deriving precedence from overlapping predicates.
- * Precedence: a catalogued quota-fallback route (ChatGPT, Grok, coding
- * plan) wins over relay exhaustion.
  */
 export type CliRetryAction =
-  `disable-quota-route:${QuotaFallbackRouteId}` | 'switch-to-personal' | 'none';
+  `disable-quota-route:${QuotaFallbackRouteId}` | 'none';
 
 const DISABLE_QUOTA_ROUTE_PREFIX = 'disable-quota-route:';
 
@@ -140,14 +132,6 @@ export function classifyCliRetryAction(
     }
     return `${DISABLE_QUOTA_ROUTE_PREFIX}${route.id}`;
   }
-  if (
-    details != null &&
-    isCredentialExhausted(details) &&
-    (details.isRelayError === true ||
-      isRelayMonthlyLimitMessage(payload.errorMessage))
-  ) {
-    return 'switch-to-personal';
-  }
   return 'none';
 }
 
@@ -157,11 +141,9 @@ export function cliRetryActionHint(action: CliRetryAction): string | undefined {
   if (routeId !== undefined) {
     const route = quotaFallbackRouteById(routeId);
     if (!route) return undefined;
-    return `Use \`/api personal\` in the chat TUI, or press \`k\` on the retry prompt, to switch from your ${route.retrySourceName} to ${route.retryFallbackName}.`;
+    return `Press \`k\` on the retry prompt to switch from your ${route.retrySourceName} to ${route.retryFallbackName}.`;
   }
-  return action === 'switch-to-personal'
-    ? CLI_PERSONAL_API_RETRY_HINT
-    : undefined;
+  return undefined;
 }
 
 /** Whether a retry could be re-run against a personal API key. */
@@ -178,14 +160,13 @@ export function isCliApiSwitchableRetry(payload: RetryPermission): boolean {
  */
 interface CliRetryApiSwitchDecision {
   readonly accepted: true;
-  readonly apiMode: 'personal';
   readonly disableQuotaRoute?: QuotaFallbackRouteId;
 }
 
 /**
- * Map a failed retry to the quota-fallback route it disables. Every switch
- * flips API mode to personal keys; a catalogued route additionally turns
- * off the preference that routed onto the exhausted credential. Drives off
+ * Map a failed retry to the quota-fallback route it disables: a catalogued
+ * route turns off the preference that routed onto the exhausted credential
+ * so the retry rebuilds onto the stored fallback key. Drives off
  * {@link classifyCliRetryAction} so the modal cannot drift from the classifier.
  */
 export function cliRetryApiSwitchDecision(
@@ -197,23 +178,9 @@ export function cliRetryApiSwitchDecision(
     return {
       accepted: true,
       disableQuotaRoute: routeId,
-      apiMode: 'personal',
     };
   }
-  // A relay or ineligible retry has no subscription/plan toggle to turn off;
-  // the switch only re-routes the retry onto personal keys.
-  return { accepted: true, apiMode: 'personal' };
-}
-
-export function appendCliApiSwitchHint(
-  text: string,
-  exhaustionReason?: ExhaustionReason,
-): string {
-  if (exhaustionReason !== 'relay-limit' && !isRelayMonthlyLimitMessage(text)) {
-    return text;
-  }
-  if (text.includes('/api personal')) return text;
-  return [text, CLI_PERSONAL_API_RETRY_HINT].join('\n');
+  return { accepted: true };
 }
 
 async function askCliApprovalQuestion(

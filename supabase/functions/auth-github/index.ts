@@ -57,7 +57,7 @@ type MetadataRecord = Record<string, unknown>;
 // =============================================================================
 
 // The edge runtime hands over paths including the function slug
-// (/auth-github/exchange), same as the relay function.
+// (/auth-github/exchange).
 const app = new Hono<{ Variables: SupabaseClientVariables }>().basePath(
   '/auth-github',
 );

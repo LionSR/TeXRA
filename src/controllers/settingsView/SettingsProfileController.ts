@@ -3,14 +3,11 @@ import { API_PROVIDERS } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import {
-  type ApiAccessMode,
   DEFAULT_CORE_SETTINGS,
   type NumberSetting,
   type ProviderKeyStatus,
   type ProviderSetting,
-  type SpendingStatus,
   type UpdateProfileMessage,
-  isSpendingQuotaExceeded,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
 } from '@shared/schemas';
@@ -68,18 +65,9 @@ type ProviderSettingUpdateResult =
   | { kind: 'updated'; affectsModelAvailability: boolean }
   | { kind: 'rejected'; key: string };
 
-type ApiAccessModeUpdate =
-  | {
-      readonly kind: 'updated';
-      readonly mode: ApiAccessMode;
-      readonly openRouterDisabled: boolean;
-    }
-  | { readonly kind: 'rejected'; readonly reason: 'quota_exhausted' };
-
 /**
  * Host-supplied storage/secrets wiring: `globalState`,
- * `loadProviderKeyStatuses`, `getConfig`/`updateConfig`,
- * `setUseIncludedModelAccess`, and `refreshSpendingStatus` all depend on
+ * `loadProviderKeyStatuses`, and `getConfig`/`updateConfig` all depend on
  * host-specific storage and secrets, so each host must supply them. Everything
  * else the controller needs — the provider catalog and the region-aware
  * lookups built on it — is host-agnostic and read straight from its modules.
@@ -91,8 +79,6 @@ interface SettingsProfileControllerDeps {
   >;
   getConfig<T>(key: string, defaultValue: T): T;
   updateConfig(key: string, value: SettingsProfileConfigValue): Promise<void>;
-  setUseIncludedModelAccess(enabled: boolean): Promise<void>;
-  refreshSpendingStatus(): Promise<SpendingStatus | null>;
 }
 
 export class SettingsProfileController {
@@ -146,39 +132,6 @@ export class SettingsProfileController {
   getProviderKeyUrl(provider: string): string | undefined {
     const defaultUrl = PROVIDER_URLS[provider];
     return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
-  }
-
-  async setApiAccessMode(mode: ApiAccessMode): Promise<ApiAccessModeUpdate> {
-    const includedAccess = mode === 'included';
-    let spendingStatus: SpendingStatus | null = null;
-    if (includedAccess) {
-      try {
-        spendingStatus = await this.deps.refreshSpendingStatus();
-      } catch (error) {
-        // The relay remains authoritative, so an unknown local result must not
-        // block the mutation. Preserve the refresh failure in the trace only.
-        logger.warn('Included Access quota refresh failed; proceeding', {
-          data: { error },
-        });
-      }
-    }
-    if (spendingStatus !== null && isSpendingQuotaExceeded(spendingStatus)) {
-      return { kind: 'rejected', reason: 'quota_exhausted' };
-    }
-    await this.deps.setUseIncludedModelAccess(includedAccess);
-
-    let openRouterDisabled = false;
-    if (
-      includedAccess &&
-      this.deps.globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER, false)
-    ) {
-      // Included Access routes through the TeXRA relay; OpenRouter bypasses it.
-      await this.deps.globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-      openRouterDisabled = true;
-    }
-
-    invalidateModelOptionsCache();
-    return { kind: 'updated', mode, openRouterDisabled };
   }
 
   async setProviderSetting(input: {

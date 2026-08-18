@@ -240,7 +240,6 @@ const actionCases: PermissionCase[] = [
         model: 'claude-sonnet',
         exhaustionReason: undefined,
         provider: undefined,
-        viaRelay: undefined,
       }),
     ],
     remains: true,

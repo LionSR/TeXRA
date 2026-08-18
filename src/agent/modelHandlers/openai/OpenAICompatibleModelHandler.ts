@@ -65,7 +65,6 @@ export abstract class OpenAICompatibleModelHandler<
       this.config,
       client.baseURL,
       credential.route,
-      this.shouldUseServerSideKeys(),
     );
     const registered = this.rememberClientCredentialRoute(
       client,

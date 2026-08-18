@@ -10,35 +10,22 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import * as serverKeysModule from '@auth/serverKeys';
-import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
 const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-const RELAY_BASE_URL = 'https://relay.example.test/openai';
 const TEST_API_KEY = 'test-secret-key';
-
-function diagnosticRoute(
-  config: ModelConfig,
-  useRelay: boolean,
-): ResolvedClientCredential['route'] {
-  if (useRelay) return 'relay';
-  if (config.openRouterOnly) return 'openrouter';
-  return 'api-key';
-}
 
 function diagnosticCredential(
   config: ModelConfig,
   baseUrl: string | null,
-  useRelay: boolean,
 ): ResolvedClientCredential {
   return {
     apiKey: TEST_API_KEY,
     baseUrl,
-    route: diagnosticRoute(config, useRelay),
+    route: config.openRouterOnly ? 'openrouter' : 'api-key',
   };
 }
 
@@ -53,66 +40,38 @@ const KIMI_DIAGNOSTICS_CONFIG = Object.freeze({
 });
 
 class TestModelHandlerOpenAI extends ModelHandlerOpenAI {
-  constructor(
-    config: ModelConfig,
-    private readonly useRelay: boolean,
-  ) {
-    super(config);
-  }
-
-  protected override shouldUseServerSideKeys(): boolean {
-    return this.useRelay;
-  }
-
   protected override async resolveClientCredential(
     _selection: ModelCredentialSelection = 'configured',
   ): Promise<ResolvedClientCredential> {
-    return diagnosticCredential(this.config, this.getBaseUrl(), this.useRelay);
+    return diagnosticCredential(this.config, this.getBaseUrl());
   }
 }
 
 class TestModelHandlerOpenAIResponse extends ModelHandlerOpenAIResponse {
-  constructor(
-    config: ModelConfig,
-    private readonly useRelay: boolean,
-  ) {
-    super(config);
-  }
-
-  protected override shouldUseServerSideKeys(): boolean {
-    return this.useRelay;
-  }
-
   protected override async resolveClientCredential(
     _selection: ModelCredentialSelection = 'configured',
   ): Promise<ResolvedClientCredential> {
-    return diagnosticCredential(this.config, this.getBaseUrl(), this.useRelay);
+    return diagnosticCredential(this.config, this.getBaseUrl());
   }
 }
 
 type OpenAICompatibleHandler =
   TestModelHandlerOpenAI | TestModelHandlerOpenAIResponse;
 
-function createHandlers(
-  config: ModelConfig,
-  useRelay: boolean,
-): OpenAICompatibleHandler[] {
+function createHandlers(config: ModelConfig): OpenAICompatibleHandler[] {
   return [
-    new TestModelHandlerOpenAI(config, useRelay),
-    new TestModelHandlerOpenAIResponse(config, useRelay),
+    new TestModelHandlerOpenAI(config),
+    new TestModelHandlerOpenAIResponse(config),
   ];
 }
 
-async function clientDiagnostics(
-  config: ModelConfig,
-  { useRelay = false }: { useRelay?: boolean } = {},
-): Promise<string[]> {
+async function clientDiagnostics(config: ModelConfig): Promise<string[]> {
   const messages: string[] = [];
   const logger = {
     debug: vi.fn((message: string) => messages.push(message)),
   } as unknown as AgentTrace;
 
-  for (const handler of createHandlers(config, useRelay)) {
+  for (const handler of createHandlers(config)) {
     handler.setLogger(logger);
     await handler.getClient();
   }
@@ -153,7 +112,7 @@ describe('OpenAI-compatible client diagnostics', () => {
     const config = buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG);
     const transports: unknown[] = [];
 
-    for (const handler of createHandlers(config, false)) {
+    for (const handler of createHandlers(config)) {
       const client = await handler.getClient();
       expect(client.maxRetries).toBe(0);
       transports.push((client as unknown as { fetch: unknown }).fetch);
@@ -223,31 +182,6 @@ describe('OpenAI-compatible client diagnostics', () => {
       owner: 'OpenRouter API key',
       model: 'moonshotai/kimi-k2.5',
       baseUrl: OPENROUTER_BASE_URL,
-    });
-  });
-
-  it('reports the relay access token and relay endpoint', async () => {
-    vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
-      getRelayBaseUrl: () => RELAY_BASE_URL,
-    } as unknown as ReturnType<
-      typeof serverKeysModule.getServerSideKeyService
-    >);
-    installTexraModelAccess();
-    const messages = await clientDiagnostics(
-      buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG, {
-        name: 'gpt-test',
-        fullName: 'gpt-test',
-        shortName: 'gpt-test',
-        provider: ModelProvider.OPENAI,
-        baseUrl: undefined,
-      }),
-      { useRelay: true },
-    );
-
-    expectBothHandlers(messages, {
-      owner: 'TeXRA relay access token',
-      model: 'gpt-test',
-      baseUrl: RELAY_BASE_URL,
     });
   });
 

@@ -1,5 +1,4 @@
 // Local imports
-import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   API_PROVIDERS,
   apiKeySecretName,
@@ -45,10 +44,7 @@ export class SecretManager {
     const keyChecks = await Promise.all(
       this.API_PROVIDERS.map((provider) => this.hasUsableApiKey(provider)),
     );
-    return (
-      keyChecks.some(Boolean) ||
-      getServerSideKeyService().canUseServerSideKeys()
-    );
+    return keyChecks.some(Boolean);
   }
 
   /** Usable-key check, delegated to `@model/apiProviders`'s `hasUsableApiKey`. */

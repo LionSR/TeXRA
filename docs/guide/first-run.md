@@ -19,23 +19,21 @@ on, and runs this same polish demo, ending at the diff. This page is the
 manual mirror of that conversation.
 :::
 
-## Step 0: sign in, use ChatGPT, or add a key
+## Step 0: add a key or connect a subscription
 
 A credential is the one step no agent can do for you. Three ways in:
 
-- **Sign in — free for academics** — Researcher Access: no API key
-  needed (recommended). In VS Code, run **TeXRA: Sign In** from the
-  command palette; in the terminal, run `texra login`.
+- **Use your own provider API key** — Anthropic, OpenAI, Google, and
+  more. See
+  [Quick start → Add a key or connect a subscription](./quick-start.md#add-a-key-or-connect-a-subscription).
 - **Use ChatGPT subscription** — Codex models through your ChatGPT plan.
   In VS Code, open **Settings → Subscriptions** and use the ChatGPT
   sign-in section; in the terminal, run `texra auth chatgpt login`.
+  Grok, Kimi Code, and the GLM Coding Plan connect from the same place.
 - **Use GitHub Copilot in VS Code** — compatible models through your Copilot
   subscription. Open **Settings → Subscriptions → Copilot in VS Code** and grant
   access in the native VS Code prompt. No provider API key is needed. This
   source is unavailable in the terminal and desktop applications.
-- **Use your own provider API key** — Anthropic, OpenAI, Google, and
-  more. See
-  [Quick start → Sign in, use ChatGPT, or add a key](./quick-start.md#sign-in-use-chatgpt-or-add-a-key).
 
 ## What you'll do
 
