@@ -72,18 +72,18 @@ or Supabase import.
 Interface members (each a question the model layer asks; see the SHA for full
 doc comments):
 
-| Member | Answer it gave |
-| --- | --- |
-| `getUseIncludedModelAccess()` | user toggle on at all? |
-| `isAuthenticated()` | account session exists (distinguishes "not signed in" from "tier doesn't cover model") |
-| `canUseServerSideKeys()` | async access decision; primes caches |
-| `canUseModelSync(model)` | primed tier cache covers this model? |
-| `isProviderOnServer(provider)` | provider served by relay at all? |
-| `shouldUseServerSideKeysSync(provider, model?)` | combined sync gate on the dispatch hot path |
-| `wasQuotaAutoSwitched()` / `isRelayQuotaExceeded()` | quota-flip status for UI/error copy |
-| `getRelayBaseUrl(provider)` | per-provider relay base URL |
-| `getAccessToken(forceRefresh?)` / `isAccessTokenExpiringSoon()` | bearer credential + proactive-refresh probe |
-| `capReasoningEffort(model, effort)` | tier cap on GPT-5 reasoning effort |
+| Member                                                          | Answer it gave                                                                         |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `getUseIncludedModelAccess()`                                   | user toggle on at all?                                                                 |
+| `isAuthenticated()`                                             | account session exists (distinguishes "not signed in" from "tier doesn't cover model") |
+| `canUseServerSideKeys()`                                        | async access decision; primes caches                                                   |
+| `canUseModelSync(model)`                                        | primed tier cache covers this model?                                                   |
+| `isProviderOnServer(provider)`                                  | provider served by relay at all?                                                       |
+| `shouldUseServerSideKeysSync(provider, model?)`                 | combined sync gate on the dispatch hot path                                            |
+| `wasQuotaAutoSwitched()` / `isRelayQuotaExceeded()`             | quota-flip status for UI/error copy                                                    |
+| `getRelayBaseUrl(provider)`                                     | per-provider relay base URL                                                            |
+| `getAccessToken(forceRefresh?)` / `isAccessTokenExpiringSoon()` | bearer credential + proactive-refresh probe                                            |
+| `capReasoningEffort(model, effort)`                             | tier cap on GPT-5 reasoning effort                                                     |
 
 Installed once per process from each host composition root, next to
 `initPlatform()`:
@@ -208,28 +208,36 @@ from Supabase sessions:
 `installTexraModelAccess.capIncludedReasoningEffort`: GPT-5-family models
 requesting `xhigh`/`max` were capped by tier — Max → `high`, free → `medium`,
 Ultra/unknown uncapped. Applied **only on the included-access route**; a direct
-API key was never capped. The server enforced the same caps (§6.5) so direct
-relay callers couldn't bypass the client.
+API key was never capped. The server independently enforced the `xhigh` half
+of this cap (`capOpenAIReasoningEffortForTier`, attic
+`functions/relay/reasoning.ts`) so a direct relay caller sending `xhigh`
+couldn't bypass the client; a direct caller sending `max` was not capped
+server-side.
 
 ## 5. Wire contracts and schemas (client side)
 
+**As of this PR, the client-side files named below are unchanged** — the
+sections that call them "removed"/"deleted" describe the state after the
+stacked follow-up PR, not this one.
+
 - `UsageRoute` gained `'relay'` (`src/shared/schemas/usage.ts`) — **the enum
   member survives removal** as a tolerated legacy value so persisted NDJSON
-  transcripts keep rendering; producers are gone. Same for the
-  `usageRouteBadge` `'relay'` branch ("Included access" / "Included") in
+  transcripts keep rendering; producers go away in the follow-up PR. Same for
+  the `usageRouteBadge` `'relay'` branch ("Included access" / "Included") in
   `src/shared/copy/modelAccess.ts`. Planned deletion after 2026-11.
 - `ExhaustionReason 'relay-limit'` + `isRelayError` flag
-  (`src/shared/schemas/errors.ts`) — removed; they traveled only in ephemeral
-  retry-state messages.
+  (`src/shared/schemas/errors.ts`) — to be removed; they traveled only in
+  ephemeral retry-state messages.
 - `SpendingStatus` / `SpendingStatusError` (`src/shared/schemas/spendingStatus.ts`,
-  deleted — schema preserved in §6.2 below): `{currentSpend, limit, remaining,
-  percentUsed}` in USD, UTC calendar month; error shape `{spendCheckFailed,
-  failureReason?, limit?}`. Quota meter warned at 80 % (`spendingQuotaState`:
-  ok / warning / exhausted), shared by Settings and the CLI status bar.
+  to be deleted): `{currentSpend, limit, remaining, percentUsed}` in USD, UTC
+  calendar month; error shape `{spendCheckFailed, failureReason?, limit?}`.
+  Quota meter warned at 80 % (`spendingQuotaState`: ok / warning / exhausted),
+  shared by Settings and the CLI status bar. Production site: the
+  `/relay/tier-config` response (§6.1).
 - `QuotaFallbackRoute.disableIncludedAccess` (`src/shared/quotaFallbackRoutes.ts`)
-  — removed; when a quota fallback switched routes it also had to turn off
-  included access so the retry could not still prefer the relay JWT.
-- Relay error detection (`src/common/errors/sdkError/relayDetection.ts`,
+  — to be removed; when a quota fallback switched routes it also had to turn
+  off included access so the retry could not still prefer the relay JWT.
+- Relay error detection (`src/common/errors/sdkError/relayDetection.ts`, to be
   deleted): `isRelayError(rawErrorBody)` = any error-body candidate contains a
   `_relay` key (the relay stamped `_relay: <version>` into every error
   envelope, §6.4). Also housed provider error-type→status inference which was
@@ -251,10 +259,12 @@ header/envelope `RELAY_VERSION` (last `1.10.0`).
   key env var is set, computed once per isolate (secrets changes restart the
   function).
 - `GET /relay/tier-config` (public + optional auth): static `TIER_CONFIG`
-  (providers, per-tier model lists) + `spendingLimits`; when the request
-  carries a resolvable credential, adds `userStatus {tier, accessExpiresAt,
-  isExpired, daysRemaining, isBanned}` and `spendingStatus` (or
-  `spendingStatusError` when the spend RPC failed).
+  (per-tier model lists) + `spendingLimits`, with its `providers` field
+  overridden to the same enabled-providers list as `/relay/providers` (not the
+  static `TIER_CONFIG.providers`); when the request carries a resolvable
+  credential, adds `userStatus {tier, accessExpiresAt, isExpired,
+daysRemaining, isBanned}` and `spendingStatus` (or `spendingStatusError`
+  when the spend RPC failed).
 - `ALL /relay/:provider/*`: the proxy. Full enforcement order in §6.3.
 
 ### 6.2 Authentication
@@ -404,14 +414,14 @@ retained until old clients age out.
 Deno edge functions cannot import client TypeScript, so these were duplicated
 and pinned by `RelaySharedConfigParity.vitest.ts` (attic copy):
 
-| Contract | Client side | Server side |
-| --- | --- | --- |
-| Tier names `free`/`Max`/`Ultra` | `src/auth/config.ts` `UserTierSchema` | `models.ts` tier constants + DB `profiles.tier` |
-| Spending limits 10/50/300 | `getRelaySpendingLimit` | `TIER_SPENDING_LIMITS` |
-| CI token prefix `texra_relay_` | `src/auth/relayToken.ts` | `_shared/relayCiToken.ts` |
-| Relay URL shape `/functions/v1/relay/<provider><suffix>` | `ServerSideKeyService.getRelayBaseUrl` | Hono routes + `paths.ts` |
-| GPT-5 effort caps free→medium, Max→high | `capIncludedReasoningEffort` | `reasoning.ts` + `OPENAI_GPT5_REASONING_EFFORT_CAPS` |
-| Error marker `_relay` | `isRelayError` | `jsonError` envelope |
+| Contract                                                 | Client side                            | Server side                                          |
+| -------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------- |
+| Tier names `free`/`Max`/`Ultra`                          | `src/auth/config.ts` `UserTierSchema`  | `models.ts` tier constants + DB `profiles.tier`      |
+| Spending limits 10/50/300                                | `getRelaySpendingLimit`                | `TIER_SPENDING_LIMITS`                               |
+| CI token prefix `texra_relay_`                           | `src/auth/relayToken.ts`               | `_shared/relayCiToken.ts`                            |
+| Relay URL shape `/functions/v1/relay/<provider><suffix>` | `ServerSideKeyService.getRelayBaseUrl` | Hono routes + `paths.ts`                             |
+| GPT-5 effort caps free→medium, Max→high                  | `capIncludedReasoningEffort`           | `reasoning.ts` + `OPENAI_GPT5_REASONING_EFFORT_CAPS` |
+| Error marker `_relay`                                    | `isRelayError`                         | `jsonError` envelope                                 |
 
 ## 11. Sunset record (fill in as executed)
 
