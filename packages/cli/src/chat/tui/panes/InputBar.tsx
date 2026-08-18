@@ -59,8 +59,6 @@ export interface InputBarProps {
   readonly disabledMessage?: string;
   /** Preserve component state while giving foreground panels the input rows. */
   readonly collapseWhenDisabled?: boolean;
-  /** Prompt prefix (e.g. `>`). */
-  readonly prompt?: string;
   /** Persistent input history (optional — undefined disables Ctrl-R). */
   readonly history?: InputHistory;
   /** Whether the input currently owns terminal keys. */
@@ -102,7 +100,7 @@ const INPUT_BAR_MAX_CONTENT_ROWS = 5;
 const INPUT_BAR_DECORATION_COLUMNS = 6;
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
-  const { disabled, history, onSubmit, prompt } = props;
+  const { disabled, history, onSubmit } = props;
   const keyboardActive = props.keyboardActive ?? true;
   const [value, setValueState] = useState('');
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
@@ -423,7 +421,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         aria-role="textbox"
       >
         <Text aria-hidden color={COLOR_HINT}>
-          {prompt ?? POINTER}{' '}
+          {POINTER}{' '}
         </Text>
         {disabled && props.disabledMessage ? (
           <Text dimColor>{props.disabledMessage}</Text>

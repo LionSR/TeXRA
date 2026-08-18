@@ -32,7 +32,7 @@ describe('CLI diff display', () => {
   it('keeps the overflow marker inside the total display budget', () => {
     const hunks = alternatingHunks(SIX_LINE_HUNK_SOURCE);
 
-    const lines = scrollBoundedDiffDisplayLines(hunks, 30, 4, 0);
+    const lines = scrollBoundedDiffDisplayLines(hunks, 4, 0);
 
     expect(lines).toHaveLength(4);
     expect(lines.at(-1)).toMatchObject({
@@ -44,7 +44,7 @@ describe('CLI diff display', () => {
   it('renders scroll markers around the visible diff window', () => {
     const hunks = alternatingHunks(SIX_LINE_HUNK_SOURCE);
 
-    const lines = scrollBoundedDiffDisplayLines(hunks, 0, 4, 2);
+    const lines = scrollBoundedDiffDisplayLines(hunks, 4, 2);
 
     expect(lines).toHaveLength(4);
     expect(lines[0]).toMatchObject({
@@ -71,7 +71,7 @@ describe('CLI diff display', () => {
   it('shows a changed line in a one-row diff window', () => {
     const hunks = alternatingHunks(FOUR_LINE_HUNK_SOURCE);
 
-    const lines = scrollBoundedDiffDisplayLines(hunks, 0, 1, 0);
+    const lines = scrollBoundedDiffDisplayLines(hunks, 1, 0);
 
     expect(lines).toHaveLength(1);
     expect(['added', 'removed']).toContain(lines[0]?.kind);
@@ -80,7 +80,7 @@ describe('CLI diff display', () => {
   it('prioritizes changed rows in a cramped diff window', () => {
     const hunks = alternatingHunks(FOUR_LINE_HUNK_SOURCE);
 
-    const lines = scrollBoundedDiffDisplayLines(hunks, 0, 3, 0);
+    const lines = scrollBoundedDiffDisplayLines(hunks, 3, 0);
 
     expect(lines).toHaveLength(3);
     expect(lines[0]?.kind).toBe('removed');
@@ -107,7 +107,6 @@ describe('CLI diff display', () => {
 
     const topLines = scrollBoundedDiffDisplayLines(
       hunks,
-      0,
       maxDisplayLines,
       0,
       width,
@@ -122,7 +121,6 @@ describe('CLI diff display', () => {
     );
     const initialLines = scrollBoundedDiffDisplayLines(
       hunks,
-      0,
       maxDisplayLines,
       initialOffset,
       width,
@@ -148,7 +146,6 @@ describe('CLI diff display', () => {
     const initialOffset = initialDiffScrollOffset(hunks, 80, maxDisplayLines);
     const initialLines = scrollBoundedDiffDisplayLines(
       hunks,
-      0,
       maxDisplayLines,
       initialOffset,
       80,
@@ -185,7 +182,6 @@ describe('CLI diff display', () => {
 
     const initialLines = scrollBoundedDiffDisplayLines(
       hunks,
-      0,
       maxDisplayLines,
       initialDiffScrollOffset(hunks, 32, maxDisplayLines),
       32,
@@ -230,7 +226,6 @@ describe('CLI diff display', () => {
     const maxDisplayLines = 6;
     const initialLines = scrollBoundedDiffDisplayLines(
       hunks,
-      0,
       maxDisplayLines,
       initialDiffScrollOffset(hunks, 80, maxDisplayLines),
       80,
@@ -255,7 +250,7 @@ describe('CLI diff display', () => {
     expect(rendered).toContain('after $2n-1$.');
     expect(rendered).not.toContain('…');
     expect(lines.length).toBeGreaterThan(
-      scrollBoundedDiffDisplayLines(hunks, 0, 0, 0).length,
+      scrollBoundedDiffDisplayLines(hunks, 0, 0).length,
     );
   });
 
@@ -266,7 +261,7 @@ describe('CLI diff display', () => {
       'This is a deliberately long replacement sentence that needs multiple visual rows.',
     );
 
-    const lines = scrollBoundedDiffDisplayLines(hunks, 0, 4, 0, 24);
+    const lines = scrollBoundedDiffDisplayLines(hunks, 4, 0, 24);
 
     expect(lines).toHaveLength(4);
     expect(lines.at(-1)).toMatchObject({
@@ -279,7 +274,7 @@ describe('CLI diff display', () => {
   it('keeps wrapped overflow markers to one visual row at narrow widths', () => {
     const hunks = buildHunks('draft.tex', 'old sentence', 'x'.repeat(220));
 
-    const lines = scrollBoundedDiffDisplayLines(hunks, 0, 4, 0, 20);
+    const lines = scrollBoundedDiffDisplayLines(hunks, 4, 0, 20);
     const marker = lines.at(-1);
 
     expect(lines).toHaveLength(4);

@@ -12,7 +12,6 @@ import {
   dispatchMainViewInbound,
   MainViewInboundHandlerRegistry,
 } from '@shared/schemas';
-import { getConfig } from '@utils/config/configUtils';
 
 import { DiffManager } from './managers/DiffManager';
 import { FileManager } from './managers/FileManager';
@@ -64,7 +63,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     this.diffManager = new DiffManager();
     this.instructionManager = new InstructionManager();
     this.startupController = new MainViewStartupController({
-      getConfig,
       loadOptions,
       getAuthStatus,
       globalState: context.globalState,

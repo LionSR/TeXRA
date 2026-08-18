@@ -44,10 +44,6 @@ export interface BaseTextInputProps {
    *  the full editable value passed to onChange/onSubmit. */
   readonly maxDisplayRows?: number;
   readonly displayWidth?: number;
-  /** Pin the caret externally. When omitted, the component tracks the caret
-   *  internally so arrow keys / Home/End / Ctrl-A,E,U,K,W work out of the box. */
-  readonly cursor?: number;
-  readonly onCursorChange?: (cursor: number) => void;
   readonly onSubmit: (value: string) => void;
   readonly onInputChunkSubmit?: (value: string) => void;
   readonly onChange: (value: string) => void;
@@ -387,12 +383,10 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     onChange,
     onInputChunkSubmit,
     onSubmit,
-    onCursorChange,
   } = props;
 
-  const isControlled = props.cursor !== undefined;
   const [internalCursor, setInternalCursor] = useState<number>(value.length);
-  const cursor = clampCursor(props.cursor ?? internalCursor, value.length);
+  const cursor = clampCursor(internalCursor, value.length);
 
   // Mirror the latest value/cursor for async handlers (image paste): a
   // clipboard probe that resolves after the user keeps typing must insert at
@@ -413,20 +407,15 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   useEffect(() => {
     if (lastEmittedValueRef.current === value) return;
     lastEmittedValueRef.current = value;
-    if (!isControlled) setInternalCursor(value.length);
-    onCursorChange?.(value.length);
-  }, [value, isControlled, onCursorChange]);
+    setInternalCursor(value.length);
+  }, [value]);
 
-  const moveCursor = useCallback(
-    (next: number) => {
-      const latest = latestStateRef.current;
-      const c = clampCursor(next, latest.value.length);
-      latestStateRef.current = { value: latest.value, cursor: c };
-      if (!isControlled) setInternalCursor(c);
-      onCursorChange?.(c);
-    },
-    [isControlled, onCursorChange],
-  );
+  const moveCursor = useCallback((next: number) => {
+    const latest = latestStateRef.current;
+    const c = clampCursor(next, latest.value.length);
+    latestStateRef.current = { value: latest.value, cursor: c };
+    setInternalCursor(c);
+  }, []);
 
   const moveCursorTo = useCallback(
     (target: (value: string, cursor: number) => number) => {
@@ -442,10 +431,9 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       latestStateRef.current = { value: edit.value, cursor: c };
       lastEmittedValueRef.current = edit.value;
       onChange(edit.value);
-      if (!isControlled) setInternalCursor(c);
-      onCursorChange?.(c);
+      setInternalCursor(c);
     },
-    [isControlled, onChange, onCursorChange],
+    [onChange],
   );
 
   const syncLatestExternalValue = useCallback((): TextEdit => {
@@ -457,10 +445,9 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     const cursor = clampCursor(latest.cursor, externalValue.length);
     const next = { value: externalValue, cursor };
     latestStateRef.current = next;
-    if (!isControlled) setInternalCursor(cursor);
-    onCursorChange?.(cursor);
+    setInternalCursor(cursor);
     return next;
-  }, [isControlled, onCursorChange, props.readLatestValue]);
+  }, [props.readLatestValue]);
 
   const prepareInputChunkState = useCallback(
     (input: string): TextEdit => {
