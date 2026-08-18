@@ -318,21 +318,17 @@ describe('desktop composition root and launch environment', () => {
       '@desktop/main/platform/pathFix',
     );
     const env = { PATH: '/custom/bin:/usr/bin' };
-    const fixPath = vi.fn();
 
     const first = repairLaunchPath({
       env,
-      fixPath,
       platform: 'darwin',
     });
     const second = repairLaunchPath({
       env,
-      fixPath,
       platform: 'darwin',
     });
 
     expect(first).toBe(second);
-    expect(fixPath).toHaveBeenCalledTimes(2);
     expect(second.split(':')).toEqual([
       '/Library/TeX/texbin',
       '/opt/homebrew/bin',
@@ -348,7 +344,6 @@ describe('desktop composition root and launch environment', () => {
     expect(
       repairLaunchPath({
         env: linuxEnv,
-        fixPath,
         platform: 'linux',
       }),
     ).toBe('/custom/bin');
