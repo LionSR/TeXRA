@@ -115,7 +115,6 @@ class DesktopToolEditPreview implements ToolEditPreview {
       { filePath: this.staged.originalPath },
       { filePath: this.staged.proposedPath },
       `Tool edit: ${this.context.relativePath}`,
-      { preserveFocus: true },
     );
   }
 

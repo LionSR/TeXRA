@@ -1,14 +1,10 @@
 import { getCoreSettingDefault } from '@shared/schemas';
-import {
-  canonicalConfigKey,
-  createWatcherRegistry,
-} from '@shared/config/configKeys';
+import { canonicalConfigKey } from '@shared/config/configKeys';
 
 import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
-  Disposable,
 } from '../interfaces';
 
 /**
@@ -21,7 +17,6 @@ import type {
 export class MemoryConfigProvider implements ConfigProvider {
   private readonly global = new Map<string, unknown>();
   private readonly workspace = new Map<string, unknown>();
-  private readonly watchers = createWatcherRegistry();
 
   get<T>(key: string, defaultValue?: T): T {
     const storedKey = canonicalConfigKey(key);
@@ -45,14 +40,11 @@ export class MemoryConfigProvider implements ConfigProvider {
     } else {
       values.set(storedKey, value);
     }
-    this.watchers.notify(storedKey);
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> {
     const storedKey = canonicalConfigKey(key);
-    const defaultValue = getCoreSettingDefault(storedKey) as T | undefined;
     return {
-      ...(defaultValue !== undefined && { defaultValue }),
       globalValue: this.global.get(storedKey) as T | undefined,
       workspaceValue: this.workspace.get(storedKey) as T | undefined,
     };
@@ -61,12 +53,5 @@ export class MemoryConfigProvider implements ConfigProvider {
   isExplicitlySet(key: string): boolean {
     const storedKey = canonicalConfigKey(key);
     return this.workspace.has(storedKey) || this.global.has(storedKey);
-  }
-
-  watch(
-    key: string | readonly string[] | RegExp,
-    listener: () => void,
-  ): Disposable {
-    return this.watchers.add({ key, listener });
   }
 }

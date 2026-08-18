@@ -147,7 +147,6 @@ class VscodeToolEditPreview implements ToolEditPreview {
       this.diffSession.original,
       this.diffSession.proposed,
       this.diffSession.title,
-      { preserveFocus: true },
     );
   }
 

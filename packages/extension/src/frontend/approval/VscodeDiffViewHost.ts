@@ -3,7 +3,6 @@ import { promises as fs } from 'node:fs';
 import * as vscode from 'vscode';
 
 import {
-  type DiffOptions,
   type DiffSession,
   type DiffSource,
   type DiffViewHost,
@@ -29,7 +28,6 @@ export class VscodeDiffViewHost implements DiffViewHost {
     original: DiffSource,
     proposed: DiffSource,
     title: string,
-    options: DiffOptions = {},
   ): Promise<DiffSession> {
     const session = { original, proposed, title };
     await vscode.commands.executeCommand(
@@ -37,9 +35,7 @@ export class VscodeDiffViewHost implements DiffViewHost {
       this.toUri(original),
       this.toUri(proposed),
       title,
-      {
-        preserveFocus: options.preserveFocus ?? true,
-      } satisfies vscode.TextDocumentShowOptions,
+      { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
     );
     return session;
   }
