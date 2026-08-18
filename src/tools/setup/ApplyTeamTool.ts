@@ -8,7 +8,7 @@
  *
  * The roster write goes through the same shared application path
  * (`applyTeamRosterWithPreflight`) as the Settings "apply team" action, so the
- * two can't drift. Relay-served leads (orchestrators) that aren't in the
+ * two can't drift. Account-served leads (orchestrators) that aren't in the
  * registry yet (signed out) are reported as "after sign-in" rather than
  * silently dropped.
  */
@@ -160,7 +160,7 @@ ${describeTeams()}`,
     // `keys` holds only the agent keys that resolved in the registry; names
     // that didn't resolve right now stay in the roster as name slots (from
     // `unresolvedNames`), where visibility matches by name and they activate
-    // the moment they appear. Relay-served leads are absent until sign-in —
+    // the moment they appear. Account-served leads are absent until sign-in —
     // say so instead of letting it read as a silent failure; check registry
     // resolution, never auth.
     const activeWorkflow = keys.workflow;

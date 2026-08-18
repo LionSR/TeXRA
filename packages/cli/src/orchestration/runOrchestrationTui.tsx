@@ -8,7 +8,6 @@ import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import type { ApiAccessMode } from '@shared/schemas';
 import {
   isCliOrchestrationModelPickAction,
   orchestrationModelAccessView,
@@ -18,7 +17,6 @@ import {
 } from '../runtime/orchestration';
 import {
   buildCliModelAccessItems,
-  cliApiFallbackSelection,
   CLI_MODEL_ACCESS_DESCRIPTION,
   type CliModelAccessStatus,
 } from '../runtime/modelAccessRoute';
@@ -38,7 +36,6 @@ export interface OrchestrationAppProps {
    *  registry state, so the launcher still starts chats with runtime defaults;
    *  a known list with no runnable model disables chat/team starts. */
   readonly models: readonly CliModelAccess[];
-  readonly apiMode: ApiAccessMode;
   readonly modelAccess?: CliModelAccessStatus;
   /** CLI version, shown in the launcher header (matches the chat session
    *  header) so a directly-launched `texra` reports which build is running. */
@@ -257,7 +254,7 @@ export function OrchestrationApp(
   const app = useApp();
   const { columns, rows } = useWindowSize();
   const accessView = (source: readonly CliOrchestrationItem[]) =>
-    orchestrationModelAccessView(source, props.models, props.apiMode, {
+    orchestrationModelAccessView(source, props.models, {
       allowDefaultModelLaunch: props.allowDefaultModelLaunch,
     });
   const { items, modelItems } = accessView(props.items);
@@ -413,7 +410,6 @@ export function OrchestrationApp(
         <Select
           key="orchestration-model-access-picker"
           items={modelAccessItems}
-          activeValue={cliApiFallbackSelection(props.apiMode)}
           onSelect={(access) => finish({ kind: 'set-model-access', access })}
           {...selectProps}
         />

@@ -1,6 +1,5 @@
 <script setup>
 import CliChatHero from '../.vitepress/components/CliChatHero.vue';
-import CliAuthModesHero from '../.vitepress/components/CliAuthModesHero.vue';
 import CliToolsListHero from '../.vitepress/components/CliToolsListHero.vue';
 import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 import CliMultiAgentHero from '../.vitepress/components/CliMultiAgentHero.vue';
@@ -91,14 +90,41 @@ progress.
 
 ## Authentication
 
-You can run the CLI either with a TeXRA sign-in (included hosted access) or
-with your own provider API keys — whichever you prefer.
+Model calls run on your own provider API keys, or on a provider subscription
+you already pay for. Signing in to TeXRA is a separate, optional step that
+unlocks the hosted research-agent catalog.
 
-<CliAuthModesHero />
+**Bring your own provider keys.** Set the right environment variable for the
+provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+`GOOGLE_API_KEY`, …), then run the CLI normally:
 
-<p class="hero-caption">Two credential paths: included hosted access after <code>texra login</code>, or your own provider keys via env vars. <code>--api-mode personal</code> flips a single run to your key even while signed in.</p>
+```bash
+export ANTHROPIC_API_KEY=sk-…
+texra run polish --input paper.tex
+```
 
-**Sign in with GitHub or Google** to use included access without managing keys:
+The CLI doesn't read `.env` files automatically. If you already keep keys
+there, load them into the shell first (in bash/zsh: `set -a; . .env; set +a`).
+
+**Use a provider subscription.** ChatGPT, Grok (xAI), Kimi Code, and the GLM
+Coding Plan can serve model calls in place of an API key:
+
+```bash
+texra auth chatgpt login    # Codex models through your ChatGPT plan
+texra auth grok login       # Grok models through an xAI subscription
+```
+
+Inside a chat, `/api` manages the same preferences: `/api chatgpt`, `/api grok`,
+`/api kimi-code`, and `/api glm-code` set which subscription serves its
+provider's models, and `/api status` prints how each model will be paid for.
+
+**CI pipelines.** Headless pipelines can't sign in interactively — store the
+provider API key as a CI secret and export it in the pipeline environment.
+With a provider key set, `texra run …` needs no other credentials.
+
+**Sign in to TeXRA (Researcher Access)** to use the hosted research-agent
+catalog — remote agents then resolve by name like any local agent. Sign-in does
+not supply model access; runs still use the credentials above.
 
 ```bash
 texra login                 # pick GitHub or Google, then sign in via browser
@@ -125,45 +151,11 @@ they detect a remote session.
 ```bash
 texra auth                  # same as `texra auth status`
 texra auth status           # who am I signed in as?
-texra auth usage            # how much of my included quota have I used?
 texra logout
 ```
 
 `texra auth` on its own reports your account status and accepts the same flags
 as `texra auth status`, such as `--output-format json`.
-
-**CI pipelines.** Headless pipelines can't sign in interactively. Mint a
-long-lived relay token once, store it as a CI secret, and set
-`TEXRA_RELAY_TOKEN` in the pipeline environment:
-
-```bash
-texra setup-token --name "release pipeline" --expires 90
-texra setup-token --print-env >> "$GITHUB_ENV"   # GitHub Actions: env line only
-texra auth token list                            # audit your tokens
-texra auth token revoke <id>                     # rotate / kill a leaked token
-```
-
-CI tokens are scoped to relay model calls only — they cannot manage your
-account or mint more tokens. They default to a 30-day expiry (cap 365), are
-stored server-side only as hashes (the plaintext is shown exactly once at mint
-time), and their usage counts toward the same monthly relay quota as your
-interactive use. With `TEXRA_RELAY_TOKEN` set, `texra run …` needs no other
-credentials.
-
-**Bring your own provider keys.** Set the right environment variable for the
-provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
-`GOOGLE_API_KEY`, …), then run the CLI normally:
-
-```bash
-export ANTHROPIC_API_KEY=sk-…
-texra run polish --input paper.tex
-```
-
-If you're signed in **and** want this particular run to use your own key
-instead of hosted access, add `--api-mode personal`.
-
-The CLI doesn't read `.env` files automatically. If you already keep keys
-there, load them into the shell first (in bash/zsh: `set -a; . .env; set +a`).
 
 Run `texra doctor` any time to see which dependencies are detected, who you're
 signed in as, and which models the CLI can reach with the current credentials.
@@ -187,8 +179,8 @@ texra agents run review --input main.tex --instruction "Check the proof." --prin
 ```
 
 Slash commands inside the session: `/tools` lists and toggles integrations,
-`/api` switches between ChatGPT or Kimi Code subscriptions, hosted access,
-and personal-key access, `/model` switches to
+`/api` sets which provider subscriptions serve their models and reports how
+each model will be paid for, `/model` switches to
 another model from the same provider mid-session (the change applies
 immediately and persists on resume), `/skills` lists available skills and
 applies one to your next request, and `/resume` restores a stored execution.
@@ -397,16 +389,9 @@ may set command-specific `agent` and `model` defaults. The built-in CLI model
 default is `deepseekproT`.
 
 The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
-`TEXRA_OUTPUT_FORMAT`, `TEXRA_APPROVAL_POLICY`, and `TEXRA_API_MODE`. Run
+`TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. Run
 `texra doctor` to see which workspace config file was loaded and whether any
 keys were ignored.
-
-Use `--api-mode personal` or `TEXRA_API_MODE=personal` to force a `run` or
-`chat` invocation to use provider API keys even when the CLI is signed in for
-included hosted access. `--api-mode included` keeps the default hosted behavior
-when the account is signed in. The accepted aliases match the TUI `/api`
-command: `personal` (or its shorthand `byok`) selects your own provider keys,
-while `included` (or `relay`) selects hosted access.
 
 Two switches are environment-only:
 

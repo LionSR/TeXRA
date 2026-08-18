@@ -12,7 +12,6 @@ import {
   REASONING_LEVEL_OPTIONS,
   type ModelSelectionItem,
   type ProviderKeyStatus,
-  type ReasoningLevel,
 } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
@@ -38,7 +37,6 @@ import {
 
 // Local imports - profile view styles and events
 import { readSelectValue } from '@shared/utils/selectTemplates';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -126,41 +124,21 @@ export class ModelSelectionList extends LitElement {
     });
   }
 
-  private getIncludedAccessReasoningCap(
-    model: ModelSelectionItem,
-  ): ReasoningLevel | null {
-    // The cap only applies when the model is actually reachable through
-    // included access; availability is resolved upstream and carried on the
-    // item, so no relay/auth re-derivation is needed here.
-    if (
-      model.availability !== 'included-access' ||
-      model.reasoningLevel ||
-      !model.includedAccessReasoningCap
-    ) {
-      return null;
-    }
-    return model.includedAccessReasoningCap;
-  }
-
   private renderReasoningDropdown(
     model: ModelSelectionItem,
   ): TemplateResult | typeof nothing {
     if (!model.supportsReasoningLevel) return nothing;
 
     const currentValue = model.reasoningLevel ?? '';
-    const includedAccessCap = this.getIncludedAccessReasoningCap(model);
     const defaultLabel = model.defaultReasoningLevel
       ? `Default (${REASONING_LEVEL_LABELS[model.defaultReasoningLevel]})`
       : 'Default';
-    const title = includedAccessCap
-      ? `Reasoning level. ${INCLUDED_ACCESS.label} caps this model's default Extra high reasoning to ${REASONING_LEVEL_LABELS[includedAccessCap]}. Switch to ${OWN_API_KEYS.inline} for the full range.`
-      : 'Reasoning level';
 
     return html`
       <wa-select
         class="reasoning-level-select"
         .value=${currentValue}
-        title=${title}
+        title="Reasoning level"
         ?disabled=${model.disabled}
         @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
       >
@@ -171,17 +149,6 @@ export class ModelSelectionList extends LitElement {
           `,
         )}
       </wa-select>
-      ${
-        includedAccessCap
-          ? waIcon('triangle-exclamation', {
-              className: 'model-row-icon model-row-icon--warning',
-              // `label` as well as `title`: a titled but aria-hidden icon
-              // never reaches assistive technology.
-              label: title,
-              title,
-            })
-          : nothing
-      }
     `;
   }
 

@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { ModelProvider } from 'llm-zoo';
 
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 
 /** OpenAI-compatible base URL for the Kimi Code (Moonshot coding-subscription)
  *  coding endpoint. Lives here (shared) so both the model routing layer and the
@@ -18,8 +17,6 @@ export const KIMI_CODE_BASE_URL = 'https://api.kimi.com/coding/v1';
 interface ProviderDef {
   readonly id: ModelProvider;
   readonly displayName: string;
-  /** Whether this provider supports server-side (relay) API keys. */
-  readonly hasServerKey: boolean;
   /** URL for obtaining API keys. undefined = no standalone key page. */
   readonly keyUrl?: string;
   /** Global-state key for this provider's streaming toggle. */
@@ -61,13 +58,11 @@ export type ProviderEndpointStateEntry = ProviderStateEntry & {
  * provider set. Providers without a ModelProvider enum value (e.g. OpenRouter,
  * Kimi Code) live in EXTRA_API_KEY_PROVIDER_IDS instead.
  *
- * hasServerKey: true → automatically included in SERVER_SIDE_PROVIDERS.
  */
 const PROVIDER_REGISTRY = [
   {
     id: ModelProvider.OPENAI,
     displayName: 'OpenAI',
-    hasServerKey: true,
     keyUrl: 'https://platform.openai.com/api-keys',
     streamingKey: GlobalStateKey.STREAMING_OPENAI,
     endpointKey: GlobalStateKey.ENDPOINT_OPENAI,
@@ -75,7 +70,6 @@ const PROVIDER_REGISTRY = [
   {
     id: ModelProvider.ANTHROPIC,
     displayName: 'Anthropic',
-    hasServerKey: true,
     keyUrl: 'https://console.anthropic.com/',
     streamingKey: GlobalStateKey.STREAMING_ANTHROPIC,
     endpointKey: GlobalStateKey.ENDPOINT_ANTHROPIC,
@@ -83,7 +77,6 @@ const PROVIDER_REGISTRY = [
   {
     id: ModelProvider.GOOGLE,
     displayName: 'Google',
-    hasServerKey: true,
     keyUrl: 'https://aistudio.google.com/app/apikey',
     streamingKey: GlobalStateKey.STREAMING_GOOGLE,
     endpointKey: GlobalStateKey.ENDPOINT_GOOGLE,
@@ -91,7 +84,6 @@ const PROVIDER_REGISTRY = [
   {
     id: ModelProvider.XAI,
     displayName: 'xAI',
-    hasServerKey: true,
     keyUrl: 'https://console.x.ai/',
     streamingKey: GlobalStateKey.STREAMING_XAI,
     endpointKey: GlobalStateKey.ENDPOINT_XAI,
@@ -99,7 +91,6 @@ const PROVIDER_REGISTRY = [
   {
     id: ModelProvider.DEEPSEEK,
     displayName: 'DeepSeek',
-    hasServerKey: true,
     keyUrl: 'https://platform.deepseek.com/api_keys',
     streamingKey: GlobalStateKey.STREAMING_DEEPSEEK,
     endpointKey: GlobalStateKey.ENDPOINT_DEEPSEEK,
@@ -107,7 +98,6 @@ const PROVIDER_REGISTRY = [
   {
     id: ModelProvider.MOONSHOT,
     displayName: 'Moonshot',
-    hasServerKey: true,
     keyUrl: 'https://platform.moonshot.cn/console',
     streamingKey: GlobalStateKey.STREAMING_MOONSHOT,
     endpointKey: GlobalStateKey.ENDPOINT_MOONSHOT,
@@ -123,7 +113,6 @@ const PROVIDER_REGISTRY = [
   {
     id: ModelProvider.DASHSCOPE,
     displayName: 'Qwen',
-    hasServerKey: true,
     keyUrl: 'https://dashscope.aliyun.com/api-console/',
     streamingKey: GlobalStateKey.STREAMING_DASHSCOPE,
     endpointKey: GlobalStateKey.ENDPOINT_DASHSCOPE,
@@ -137,7 +126,6 @@ const PROVIDER_REGISTRY = [
   {
     id: ModelProvider.MINIMAX,
     displayName: 'MiniMax',
-    hasServerKey: true,
     keyUrl: 'https://platform.minimax.io/',
     streamingKey: GlobalStateKey.STREAMING_MINIMAX,
     endpointKey: GlobalStateKey.ENDPOINT_MINIMAX,
@@ -150,7 +138,6 @@ const PROVIDER_REGISTRY = [
   {
     id: ModelProvider.GLM,
     displayName: 'GLM',
-    hasServerKey: true,
     keyUrl: 'https://open.bigmodel.cn/',
     streamingKey: GlobalStateKey.STREAMING_GLM,
     endpointKey: GlobalStateKey.ENDPOINT_GLM,
@@ -165,10 +152,6 @@ const PROVIDER_REGISTRY = [
   {
     id: ModelProvider.META,
     displayName: 'Meta',
-    // The supabase relay does not forward to Meta yet (see
-    // supabase/functions/relay/models.ts ALL_PROVIDERS) — flip this together
-    // with the relay-side provider registration when Included Access lands.
-    hasServerKey: false,
     keyUrl: 'https://dev.meta.ai/',
     streamingKey: GlobalStateKey.STREAMING_META,
     endpointKey: GlobalStateKey.ENDPOINT_META,
@@ -201,17 +184,6 @@ export const MODEL_SOURCE_ORDER = [
   'kimiCode',
   ModelProvider.COPILOT,
 ] as const;
-
-/**
- * All providers that support server-side API keys.
- * Derived from PROVIDER_REGISTRY — no manual sync needed.
- */
-type ServerKeyEntry = Extract<
-  (typeof PROVIDER_REGISTRY)[number],
-  { hasServerKey: true }
->;
-export const SERVER_SIDE_PROVIDER_IDS: readonly ServerKeyEntry['id'][] =
-  PROVIDER_REGISTRY.filter((p) => p.hasServerKey).map((p) => p.id);
 
 /** Consolidated provider display names used across settings UI and model selection. */
 export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
@@ -308,7 +280,8 @@ export type ProviderSettingDef = z.infer<typeof ProviderSettingDefSchema>;
 export const USE_OPENROUTER_PROVIDER_SETTING = {
   key: GlobalStateKey.USE_OPENROUTER,
   label: 'Use OpenRouter for all models',
-  description: `Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key. OpenRouter does not use ${INCLUDED_ACCESS.inline}: your OpenRouter key is always used directly.`,
+  description:
+    'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
   globalStateKey: GlobalStateKey.USE_OPENROUTER,
 } satisfies ProviderSettingDef;
 
@@ -480,9 +453,8 @@ export const API_KEY_PROVIDER_IDS = Object.freeze([
  * avoids the substring-match foot-guns that plagued earlier regex-based versions
  * (matching `gemini*`, `minimax*`, etc. unintentionally).
  *
- * Note: this threshold is intentionally separate from the relay's free-tier
- * cutoff. The free tier may include capable mid-range models (e.g. Sonnet at
- * $3/M) that are not "fast" in the latency sense.
+ * Note: capable mid-range models (e.g. Sonnet at $3/M) are deliberately not
+ * "fast" in this latency sense despite moderate pricing.
  */
 
 /** Input-price ceiling (USD per million tokens) for the fast-model hint. */

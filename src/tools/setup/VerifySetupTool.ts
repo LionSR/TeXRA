@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolError, type ToolResult } from '@shared/schemas';
-import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 
 // Local file imports
 import { executed } from '@tools/core/result';
@@ -70,7 +69,7 @@ export class VerifySetupTool extends defineTool({
       );
     }
 
-    // Authentication verifies a configured relay token and primes the shared
+    // Authentication reports the stored session state and primes the shared
     // status cache. Credential readiness must read that settled state.
     const [core, hasUsableCredential] = await Promise.all([
       collectCoreSetupStatus(platform),
@@ -90,15 +89,15 @@ export class VerifySetupTool extends defineTool({
         ? 'LaTeX Workshop extension: not applicable outside VS Code.'
         : `LaTeX Workshop extension: ${latexWorkshopInstalled ? 'installed' : 'NOT installed'}.`,
     );
-    // A usable model credential can be a direct provider key, ChatGPT
-    // subscription, or a signed-in account with included access on. A bare
-    // auth.authenticated without usable server-side keys is NOT a working
-    // credential, so we don't let it count toward "ready".
+    // A usable model credential can be a direct provider key or a provider
+    // subscription. A bare auth.authenticated is NOT a working credential,
+    // so we don't let it count toward "ready".
     let credSummary: string;
     if (hasUsableCredential) {
       credSummary = 'usable model credential available';
     } else if (auth.authenticated) {
-      credSummary = `signed in but ${INCLUDED_ACCESS.inline} is off. Turn it back on or add an API key`;
+      credSummary =
+        'signed in but no provider API key is configured. Add one to run models';
     } else {
       credSummary = 'NONE: need an API key or sign-in';
     }

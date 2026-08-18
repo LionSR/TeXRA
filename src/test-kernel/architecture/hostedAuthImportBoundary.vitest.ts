@@ -162,18 +162,18 @@ describe('hosted auth import boundary', () => {
         resolve(REPO_ROOT, 'src/agent/runtime/fixture.ts'),
         `
           import { SupabaseClient } from '@auth/SupabaseClient';
-          const relayToken = require('@auth/relayToken');
+          const sessionToken = require('@auth/sessionToken');
           const futureProvider = import('@auth/future-provider/oauth');
-          const traversedRelay = import('@auth/codex/../relayToken');
+          const traversedSession = import('@auth/codex/../sessionToken');
           import { login } from '@auth/codex/oauth';
           export { login as xaiLogin } from '@auth/xai/callback';
         `,
       ),
     ).toEqual([
       '@auth/SupabaseClient',
-      '@auth/relayToken',
+      '@auth/sessionToken',
       '@auth/future-provider/oauth',
-      '@auth/codex/../relayToken',
+      '@auth/codex/../sessionToken',
     ]);
   });
 
@@ -183,11 +183,11 @@ describe('hosted auth import boundary', () => {
         resolve(REPO_ROOT, 'src/agent/runtime/fixture.ts'),
         `
           import { SupabaseClient } from '../../auth/SupabaseClient';
-          const relayToken = import('../../auth/relayToken', { with: { type: 'json' } });
+          const sessionToken = import('../../auth/sessionToken', { with: { type: 'json' } });
           const codex = import('../../auth/codex/oauth');
         `,
       ),
-    ).toEqual(['../../auth/SupabaseClient', '../../auth/relayToken']);
+    ).toEqual(['../../auth/SupabaseClient', '../../auth/sessionToken']);
   });
 
   it('rejects asserted module arguments and dynamic imports with options', () => {
@@ -195,12 +195,12 @@ describe('hosted auth import boundary', () => {
       findForbiddenAuthImports(
         resolve(REPO_ROOT, 'src/agent/runtime/fixture.ts'),
         `
-          const relayToken = require((('@auth/relayToken' as string)));
+          const sessionToken = require((('@auth/sessionToken' as string)));
           const futureProvider = import((('@auth/future-provider' satisfies string)), {
             with: { type: 'json' },
           });
         `,
       ),
-    ).toEqual(['@auth/relayToken', '@auth/future-provider']);
+    ).toEqual(['@auth/sessionToken', '@auth/future-provider']);
   });
 });

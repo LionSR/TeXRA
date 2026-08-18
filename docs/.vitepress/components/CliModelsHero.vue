@@ -1,29 +1,29 @@
 <script setup>
 // Terminal card for `texra models list` / `models show` — guide/models.md
 // "Customizing the Model List". The real list prints one
-// `<value>\t<label>\t<status>` row per model for the current api mode
+// `<value>\t<label>\t<status>` row per model the current credentials can run
 // (packages/cli/src/runtime/modelAccess.ts); `models show <id>` prints
 // `id:` / `label:` / `provider:` / `status:` detail lines
 // (formatCliModelDetails). Short ids are exactly what `--model` takes; labels
 // are the literal llm-zoo MODEL_CONFIGS labels the command prints; the status
-// column is the lowercased availability label for the current api mode —
-// 'included access' when signed in to the relay, 'api key set' /
-// 'openrouter key' in personal mode ('login required' / 'not included'
-// appear under --all). Snapshot shows a signed-in relay session.
+// column is the lowercased availability label from
+// src/model/computeModelOptions.ts — 'api key set' / 'openrouter key' /
+// 'chatgpt subscription' ('missing api key' appears under --all). Snapshot
+// shows a session running on provider API keys.
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.
 const rows = [
-  { id: 'fable5', label: 'Claude Fable 5', status: 'included access' },
-  { id: 'opus5T', label: 'Opus 5 (Thinking)', status: 'included access' },
+  { id: 'fable5', label: 'Claude Fable 5', status: 'api key set' },
+  { id: 'opus5T', label: 'Opus 5 (Thinking)', status: 'api key set' },
   {
     id: 'sonnet5T',
     label: 'Sonnet 5 (Thinking)',
-    status: 'included access',
+    status: 'api key set',
   },
   {
     id: 'deepseekT',
     label: 'DeepSeek V4 Flash (Thinking)',
-    status: 'included access',
+    status: 'api key set',
   },
 ];
 </script>
@@ -34,7 +34,7 @@ const rows = [
     aria-label="texra models list and show output"
   >
     <div class="cmo-scroll">
-      <!-- Beat 1: the roster for the current api mode -->
+      <!-- Beat 1: the roster the current credentials can run -->
       <div class="mk-term-prompt cmo-prompt">
         <span class="mk-term-sigil">$</span>
         <span class="mk-term-cmd">texra models list</span>
@@ -54,7 +54,7 @@ const rows = [
         <div><span class="cmo-k">id:</span> fable5</div>
         <div><span class="cmo-k">label:</span> Claude Fable 5</div>
         <div><span class="cmo-k">provider:</span> anthropic</div>
-        <div><span class="cmo-k">status:</span> included access</div>
+        <div><span class="cmo-k">status:</span> api key set</div>
       </div>
     </div>
   </TermWindow>

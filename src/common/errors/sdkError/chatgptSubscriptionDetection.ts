@@ -21,8 +21,8 @@ import {
  * key reports rate limits as `rate_limit_exceeded` / `insufficient_quota`
  * instead — so matching `type === 'usage_limit_reached'` reliably identifies a
  * subscription request whose quota ran out, the signal that lets the retry UI
- * offer "switch to your own API key" (parallel to the relay monthly-limit
- * affordance). Pure body inspection, mirroring {@link relayDetection}.
+ * offer "switch to your own API key". Pure body inspection over the raw
+ * error body candidates.
  */
 export interface ChatGptSubscriptionLimit {
   readonly planType?: string;

@@ -47,25 +47,8 @@ describe('saved key summary', () => {
     expect(message).toContain('ANTHROPIC_API_KEY');
   });
 
-  it('surfaces the access-route warning when ChatGPT remains active', () => {
-    const warning =
-      'Model access remains on ChatGPT subscription because a more specific setting overrides workspace config.';
-
-    expect(
-      formatSavedKeySummary('anthropic', {
-        apiMode: 'personal',
-        message: warning,
-      }),
-    ).toBe(SAVED_KEY_PREFIX + warning);
-  });
-
-  it('confirms the normal personal-key access route', () => {
-    expect(
-      formatSavedKeySummary('anthropic', {
-        apiMode: 'personal',
-        message: 'Model access: Your own API keys.',
-      }),
-    ).toBe(SAVED_KEY_PREFIX + 'Model access: Your own API keys.');
+  it('confirms where the saved key was stored', () => {
+    expect(formatSavedKeySummary('anthropic')).toBe(SAVED_KEY_PREFIX.trimEnd());
   });
 });
 

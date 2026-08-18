@@ -1,43 +1,18 @@
 /**
  * Canonical user-facing vocabulary for how model calls are paid for.
  *
- * Two concepts use canonical forms for each context. Model calls covered by
- * your TeXRA plan are "included access", and model calls billed to your own
- * provider accounts are "your own API keys". Settings pickers, quota notices,
- * compact status labels, and model availability messages import these strings
- * instead of paraphrasing the transport ("relay") or the internal enum values
- * ('included' / 'personal'), which stay wire identifiers and never reach the
- * screen.
+ * Model calls billed to your own provider accounts are "your own API keys".
+ * Settings pickers, compact status labels, and model availability messages
+ * import these strings instead of paraphrasing the internal enum values,
+ * which stay wire identifiers and never reach the screen.
  *
- * "Researcher Access" is the free program you sign in to, not a name for
- * included access; that copy lives in `onboarding.ts`.
+ * "Researcher Access" is the program you sign in to; that copy lives in
+ * `onboarding.ts`.
  */
 
 import type { UsageRoute } from '@shared/schemas';
 import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import { assertNever } from '@utils/core';
-
-/** Model calls paid for by your TeXRA plan. */
-export const INCLUDED_ACCESS = {
-  /** Standalone display name, e.g. a section heading or detailed status. */
-  label: 'Included access',
-  /** Width-constrained badge or status label. */
-  compactLabel: 'Included',
-  /** Same name inside a sentence. */
-  inline: 'included access',
-  /** Model-access picker option. */
-  option: {
-    label: 'Use included access',
-    description:
-      'Model calls are covered by your TeXRA plan, with no setup needed. OpenRouter is the exception: those models always use your OpenRouter key.',
-  },
-  /** Shown once the month's included access is spent. */
-  usedUp: {
-    statement: "You've used all of this month's included access.",
-    nextStep:
-      'Switch to your own API keys to keep going, or wait until next month.',
-  },
-} as const;
 
 /** Model calls paid for by your own provider accounts. */
 export const OWN_API_KEYS = {
@@ -83,10 +58,13 @@ export function usageRouteBadge(
       return { label: 'ChatGPT', compactLabel: 'ChatGPT', subscription: true };
     case 'xai-subscription':
       return { label: 'Grok', compactLabel: 'Grok', subscription: true };
+    // LEGACY: usage recorded on the retired relay route (producers removed
+    // 2026-08, docs/proposals/2026-08-18-relay-removal-and-recovery.md);
+    // kept so historical transcripts render honestly. Delete after 2026-11.
     case 'relay':
       return {
-        label: INCLUDED_ACCESS.inline,
-        compactLabel: INCLUDED_ACCESS.compactLabel,
+        label: 'included access',
+        compactLabel: 'Included',
         subscription: false,
       };
     case 'api-key':

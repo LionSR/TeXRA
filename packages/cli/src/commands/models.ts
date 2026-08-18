@@ -2,7 +2,6 @@ import { defineCommand } from 'citty';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import { knownCliModelIds } from '../runtime/cliConfig';
 import {
   getCliEnabledModels,
@@ -35,22 +34,15 @@ import type { CliContext } from '../runtime/cliContext';
 async function loadModelAccessList(
   context: CliContext,
   options: CliModelListOptions = {},
-): Promise<
-  | { models: CliModelAccess[]; apiMode: CliContext['apiMode'] }
-  | {
-      error: string;
-    }
-> {
+): Promise<{ models: CliModelAccess[] } | { error: string }> {
   try {
     return await suppressCliFetchStackLogs(async () => {
       await initCliPlatform({ ...context, quietLogs: true });
-      const apiMode = effectiveCliApiMode(context);
       const models = await getCliModelAccessList({
-        apiMode,
         models:
           options.includeUnavailable === true ? knownCliModelIds() : undefined,
       });
-      return { models, apiMode };
+      return { models };
     });
   } catch (error) {
     return { error: formatCliModelListError(error) };
@@ -69,7 +61,7 @@ async function listModels(
 
   const listedModels = listableModelAccessEntries(result.models, options);
   if (context.outputFormat === 'text' && listedModels.length === 0) {
-    writeTextStderr(formatNoListableModelsMessage(result.apiMode, options));
+    writeTextStderr(formatNoListableModelsMessage(options));
   }
   const records = listedModels.map(({ model }) => cliModelRecord(model));
   emitCliResult(
@@ -97,7 +89,6 @@ async function showModel(context: CliContext, id: string): Promise<number> {
   try {
     entry = await suppressCliFetchStackLogs(() =>
       loadCliModelAccessEntry(id, {
-        apiMode: result.apiMode,
         accessList: result.models,
       }),
     );
@@ -115,7 +106,7 @@ async function showModel(context: CliContext, id: string): Promise<number> {
   emitCliResult(context, {
     json: record,
     ndjson: { kind: 'model', model: record },
-    text: formatCliModelDetails(entry, result.apiMode),
+    text: formatCliModelDetails(entry),
   });
   return CliExitCode.Success;
 }

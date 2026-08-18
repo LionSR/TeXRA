@@ -2153,23 +2153,6 @@ describe('CLI transcript state', () => {
     expect([...lines[1]!.slice('⎿ '.length)]).toHaveLength(240);
   });
 
-  it('adds the personal-API hint once from structured relay-limit data', () => {
-    const logger = runTrace(root);
-    logModelError(logger, 'Model request failed', {
-      message: `${'x'.repeat(300)} Monthly spending limit reached.`,
-      exhaustionReason: 'relay-limit',
-      userRetryable: false,
-    });
-
-    syncStreamLog(root);
-    syncStreamLog(root);
-
-    const text = streamEntries(root)[0]?.text ?? '';
-    expect(text).toContain('\n⎿ ');
-    expect(text).not.toContain('Monthly spending limit reached.');
-    expect(text.match(/\/api personal/g)).toHaveLength(1);
-  });
-
   it('keeps actual tool failures on the tool-row renderer', () => {
     const logger = runTrace(root);
     logger.error('Actual tool failed', {

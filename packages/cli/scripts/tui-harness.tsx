@@ -66,7 +66,6 @@ import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
-import type { ApiAccessMode } from '@shared/schemas/settingsViewMessages';
 import { GoalStore } from '@tools/goal';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { createRunTrace, StreamLogStore } from '@transcript';
@@ -133,7 +132,6 @@ import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
-import { parseCliApiMode } from '../src/runtime/apiAccessMode';
 import {
   formatCliModelAccessRouteInline,
   resolveCliModelAccessRoute,
@@ -228,10 +226,6 @@ const SHOW_ORCHESTRATION_HISTORY =
   process.env.HARNESS_ORCHESTRATION_HISTORY === '1';
 const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
   process.env.HARNESS_NO_RUNNABLE_MODELS === '1';
-const HARNESS_API_MODE_FROM_ENV = parseCliApiMode(
-  process.env.HARNESS_API_MODE ?? '',
-);
-const HARNESS_API_MODE: ApiAccessMode = HARNESS_API_MODE_FROM_ENV ?? 'personal';
 const HARNESS_AUTHENTICATED = process.env.HARNESS_AUTHENTICATED?.trim();
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
@@ -336,7 +330,6 @@ const HARNESS_CWD =
 const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
 const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
 const HARNESS_CLI_CONTEXT: CliContext = {
-  apiMode: HARNESS_API_MODE,
   approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
   cliConfig: {},
   commandName: 'texra',
@@ -417,7 +410,6 @@ if (SHOW_PROJECT_SKILL) {
 }
 
 await initLocalCliPlatform({
-  apiMode: HARNESS_API_MODE,
   cwd: HARNESS_CWD,
   installSignalHandlers: false,
   resourcesPath: HARNESS_RESOURCES_PATH,
@@ -522,7 +514,6 @@ const HARNESS_PRESET_PLANS = planTeamRuns(teamPresets(undefined), {
 const HARNESS_MODEL_ACCESS =
   SHOW_BOTH_SUBSCRIPTION_PREFERENCES || SHOW_KIMI_CODE_SUBSCRIPTION
     ? {
-        apiFallback: HARNESS_API_MODE,
         preferences: {
           chatGpt: SHOW_BOTH_SUBSCRIPTION_PREFERENCES
             ? ('on' as const)
@@ -573,9 +564,9 @@ const HARNESS_ORCHESTRATION_MODEL_FIXTURES: readonly HarnessModelFixture[] = [
   {
     value: 'sonnet46T',
     label: 'Sonnet 4.6 (Thinking)',
-    availability: 'included-access',
+    availability: 'provider-key',
   },
-  { value: 'gpt54', label: 'GPT-5.4', availability: 'included-access' },
+  { value: 'gpt54', label: 'GPT-5.4', availability: 'provider-key' },
   {
     value: 'deepseekT',
     label: 'DeepSeek V4 Flash',
@@ -595,19 +586,14 @@ const HARNESS_ORCHESTRATION_MODEL_FIXTURES: readonly HarnessModelFixture[] = [
 
 function isHarnessModelAvailable(
   availability: HarnessModelFixture['availability'],
-  apiMode: ApiAccessMode,
 ): boolean {
-  return apiMode === 'included'
-    ? availability === 'included-access'
-    : availability === 'provider-key' || availability === 'openrouter-key';
+  return availability === 'provider-key' || availability === 'openrouter-key';
 }
 
 function harnessModelStatus(
   availability: HarnessModelFixture['availability'],
 ): string {
   switch (availability) {
-    case 'included-access':
-      return 'included access';
     case 'provider-key':
       return 'api key set';
     case 'openrouter-key':
@@ -617,22 +603,17 @@ function harnessModelStatus(
   }
 }
 
-function harnessModel(
-  fixture: HarnessModelFixture,
-  apiMode: ApiAccessMode,
-): CliModelAccess {
+function harnessModel(fixture: HarnessModelFixture): CliModelAccess {
   return {
     model: fixture,
-    available: isHarnessModelAvailable(fixture.availability, apiMode),
+    available: isHarnessModelAvailable(fixture.availability),
     status: harnessModelStatus(fixture.availability),
   };
 }
 
-function harnessOrchestrationModels(
-  apiMode: ApiAccessMode,
-): readonly CliModelAccess[] {
+function harnessOrchestrationModels(): readonly CliModelAccess[] {
   const models = HARNESS_ORCHESTRATION_MODEL_FIXTURES.map((fixture) =>
-    harnessModel(fixture, apiMode),
+    harnessModel(fixture),
   );
   return SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS
     ? models.map((model) => ({
@@ -650,9 +631,9 @@ function harnessOrchestrationStatusLines(): readonly string[] {
     accountLabel: authenticated ? 'harness@example.edu' : undefined,
   };
   return [
-    `api: ${formatCliModelAccessRouteInline(HARNESS_API_MODE)}`,
+    `api: ${formatCliModelAccessRouteInline('personal')}`,
     formatCliAuthStatusLine(profile),
-    formatCliApiStatusActionHint(HARNESS_API_MODE, profile),
+    formatCliApiStatusActionHint(profile),
   ];
 }
 
@@ -663,12 +644,7 @@ if (SHOW_ORCHESTRATION) {
       resumeItems={HARNESS_ORCHESTRATION_RESUME_ITEMS}
       agentItems={HARNESS_ORCHESTRATION_AGENT_ITEMS}
       teamItems={HARNESS_ORCHESTRATION_TEAM_ITEMS}
-      models={
-        HARNESS_API_MODE_FROM_ENV
-          ? harnessOrchestrationModels(HARNESS_API_MODE)
-          : []
-      }
-      apiMode={HARNESS_API_MODE}
+      models={process.env.HARNESS_API_MODE ? harnessOrchestrationModels() : []}
       modelAccess={HARNESS_MODEL_ACCESS}
       version="0.0.0-harness"
       statusLines={
@@ -1011,7 +987,6 @@ function makeRetryApprovalPayload(): RetryPermission {
       errorMessage: 'ChatGPT subscription usage limit reached. Resets in 2h.',
       errorDetails: {
         exhaustionReason: 'chatgpt-subscription',
-        isRelayError: false,
         provider: 'openai',
         statusCode: 429,
       },
@@ -1024,11 +999,9 @@ function makeRetryApprovalPayload(): RetryPermission {
     model: 'harness-model',
     errorMessage: 'HTTP 429 Too Many Requests',
     errorDetails: {
-      // Keep this fixture interactive: relay-limit retries auto-switch when
-      // a usable personal key exists, while upstream-credit requires an
+      // Keep this fixture interactive: upstream-credit requires an
       // explicit user decision before changing credentials.
       exhaustionReason: 'upstream-credit',
-      isRelayError: true,
       provider: 'openai',
       statusCode: 429,
     },
@@ -1174,9 +1147,7 @@ function appendHarnessRetryResult(
   credentialSelection: 'configured' | 'personal' | undefined,
 ): void {
   if (result.action === 'retry' && credentialSelection === 'personal') {
-    appendHarnessAssistantTranscript(
-      `RETRY-API-MODE ${sessionMeta.get().apiMode}`,
-    );
+    appendHarnessAssistantTranscript('RETRY-PERSONAL-CREDENTIALS');
     return;
   }
   appendHarnessAssistantTranscript(
@@ -1232,7 +1203,6 @@ sessionMeta.set({
   model: 'harness-model',
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
-  apiMode: HARNESS_API_MODE,
   approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
   canDelegate: CAN_DELEGATE,
   transcriptMode: 'persistent',
@@ -2286,7 +2256,6 @@ function appendHarnessStatus(): void {
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        apiMode: meta.apiMode,
         subscriptionActive: false,
         usageRoute: slice?.usage?.usageRoute,
       }),
@@ -2386,25 +2355,15 @@ registerBuiltinSlashCommands({
     );
   },
   onModelAccessSelect: (selection) => {
-    if (selection.kind === 'subscription-preference') {
-      if (selection.provider === 'kimi-code' && selection.state === 'on') {
-        return updateCliModelAccess(
-          { ...HARNESS_CLI_CONTEXT, apiMode: sessionMeta.get().apiMode },
-          selection,
-          { writeProgress: appendHarnessAssistantTranscript },
-        ).then((access) => {
-          sessionMeta.set({ ...sessionMeta.get(), apiMode: access.apiMode });
-          appendHarnessAssistantTranscript(access.message);
-        });
-      }
-      appendHarnessAssistantTranscript(
-        `${selection.provider} preference set to ${selection.state}.`,
-      );
-      return;
+    if (selection.provider === 'kimi-code' && selection.state === 'on') {
+      return updateCliModelAccess(HARNESS_CLI_CONTEXT, selection, {
+        writeProgress: appendHarnessAssistantTranscript,
+      }).then((access) => {
+        appendHarnessAssistantTranscript(access.message);
+      });
     }
-    sessionMeta.set({ ...sessionMeta.get(), apiMode: selection.apiMode });
     appendHarnessAssistantTranscript(
-      `API fallback set to ${selection.apiMode}.`,
+      `${selection.provider} preference set to ${selection.state}.`,
     );
   },
   onMemorySelect: (storagePath) => {

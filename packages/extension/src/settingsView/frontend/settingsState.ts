@@ -41,7 +41,6 @@ import {
   DEFAULT_GIT_WORKTREE_SUPPORT,
   DEFAULT_GLOBAL_STREAMING,
   DEFAULT_LATEX_SETTINGS_STATUS,
-  DEFAULT_QUOTA_AUTO_SWITCHED,
   DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
   SETTINGS_TAB_PANEL_BY_NAME,
   type AgentCategory,
@@ -65,8 +64,6 @@ import {
   type NumberSetting,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
-  type SpendingStatus,
-  type SpendingStatusError,
   type SubscriptionUsageSnapshots,
   type ToolDashboardItem,
 } from '@shared/schemas';
@@ -121,19 +118,8 @@ export const memoryToggleDisabled = trackedSignal(() => true);
 // ---------------------------------------------------------------------------
 export const authenticated = trackedSignal(() => false);
 export const userEmail = trackedSignal(() => '');
-export const tier = trackedSignal(() => 'free');
-export const apiAccessMode = trackedSignal<'included' | 'personal'>(
-  () => 'personal',
-);
 export const sessionProblem = trackedSignal<'expired' | 'unavailable' | null>(
   () => null,
-);
-export const spendingStatus = trackedSignal<SpendingStatus | null>(() => null);
-export const spendingStatusError = trackedSignal<SpendingStatusError | null>(
-  () => null,
-);
-export const quotaAutoSwitched = trackedSignal(
-  () => DEFAULT_QUOTA_AUTO_SWITCHED,
 );
 export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() => []);
 export const globalStreamingDefault = trackedSignal(

@@ -19,7 +19,6 @@ import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { QuotaFallbackRouteId } from '@shared/quotaFallbackRoutes';
 import type {
   AgentProposalPermission,
-  ApiAccessMode,
   ApprovalDecision as SharedApprovalDecision,
   BashPermission,
   ExternalInquiryPermission,
@@ -67,7 +66,6 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   /** Session bypass to activate before accepting this approval. */
   readonly bypass?: ApprovalBypassKind;
   /** Credential mode to apply before accepting this approval. */
-  readonly apiMode?: ApiAccessMode;
   /** Turn off the matching quota-fallback preference before accepting. */
   readonly disableQuotaRoute?: QuotaFallbackRouteId;
   /** Plan-only approval action when plain approve/reject is not specific enough. */

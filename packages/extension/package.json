@@ -500,7 +500,7 @@
           {
             "id": "texra.gettingStarted.signIn",
             "title": "Choose how TeXRA should sign in",
-            "description": "A credential is the one step no agent can do for you. Three ways in:\n\n**Use ChatGPT subscription** — ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Sign in with Researcher Access** — Free for academics; no API key needed. Signing in also unlocks remote agents, including the orchestrator.\n\n[Sign In](command:texra.auth.signIn)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions do not include API access.\n\n[Set API key](command:texra.setApiKey)",
+            "description": "A credential is the one step no agent can do for you. Two ways in:\n\n**Use ChatGPT subscription** — ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nSigning in to TeXRA (Researcher Access) separately unlocks the hosted research-agent catalog, including the orchestrator.\n\n[Sign In](command:texra.auth.signIn)",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
               "altText": "Screenshot of the API key configuration view"
@@ -525,7 +525,7 @@
           {
             "id": "texra.gettingStarted.agentModel",
             "title": "Meet the orchestrator",
-            "description": "After setup, the **orchestrator** is the habit. You don't pick from 23 agents -- it reads your paper, figures out what needs work, and hands each task to the right agent. You just approve the proposals as they come in.\n\nPick **orchestrator** from the agent dropdown and choose a model -- bigger models give better results, smaller ones are faster and cheaper. On your own API key, start with **assistant** instead; the orchestrator is served through Researcher Access.\n\nTeams give the orchestrator the right tools for your field. The setup assistant applies one for you, or pick one yourself:\n\n[Pick a team](command:texra.showMultiAgent)",
+            "description": "After setup, the **orchestrator** is the habit. You don't pick from 23 agents -- it reads your paper, figures out what needs work, and hands each task to the right agent. You just approve the proposals as they come in.\n\nPick **orchestrator** from the agent dropdown and choose a model -- bigger models give better results, smaller ones are faster and cheaper. The orchestrator itself comes from the hosted research-agent catalog, so sign in to TeXRA to use it; without sign-in, start with **assistant** instead.\n\nTeams give the orchestrator the right tools for your field. The setup assistant applies one for you, or pick one yourself:\n\n[Pick a team](command:texra.showMultiAgent)",
             "media": {
               "image": "resources/walkthroughs/media/agent-model-selection.png",
               "altText": "Screenshot of the agent and model selection UI"

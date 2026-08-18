@@ -4,8 +4,8 @@ import { agentName } from '../schemas/agent';
 export const SETUP_AGENT_NAME = 'setup';
 
 /**
- * Relay-served orchestrator roots that delegate to a team. They need sign-in,
- * so UIs surface them first.
+ * Remote-catalog orchestrator roots that delegate to a team. They need
+ * sign-in, so UIs surface them first.
  */
 const REMOTE_ORCHESTRATOR_AGENT_NAMES = [
   'orchestrator',
@@ -14,12 +14,12 @@ const REMOTE_ORCHESTRATOR_AGENT_NAMES = [
 
 /**
  * Bundled (local) orchestrator roots that delegate to a team. Unlike the
- * relay-served roots above, these ship in the extension/CLI and are available
- * offline without sign-in.
+ * remote-catalog roots above, these ship in the extension/CLI and are
+ * available offline without sign-in.
  */
 const BUNDLED_ORCHESTRATOR_AGENT_NAMES = ['engineer'] as const;
 
-/** Built-in delegating team roots, relay-served plus bundled. */
+/** Built-in delegating team roots, remote-catalog plus bundled. */
 export const BUILTIN_TEAM_ROOT_AGENT_NAMES = [
   ...REMOTE_ORCHESTRATOR_AGENT_NAMES,
   ...BUNDLED_ORCHESTRATOR_AGENT_NAMES,

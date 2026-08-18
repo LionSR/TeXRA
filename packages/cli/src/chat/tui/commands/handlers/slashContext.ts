@@ -5,7 +5,6 @@ import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type ExecutionId } from '@shared/schemas';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 
 /** Shared context every slash-command handler receives from the chat TUI. */
 export interface SlashCommandContext {
@@ -43,10 +42,7 @@ export const transcriptSlashCommandOutput: SlashCommandOutput = {
 };
 
 export const CHAT_API_MODE_MODEL_RECOVERY = {
-  includedModeAction: `switch to ${INCLUDED_ACCESS.inline} with \`/api included\``,
-  loginAction: 'run `/login`',
-  personalModeAction: `switch to ${OWN_API_KEYS.inline} with \`/api personal\``,
-  configureKeyAction: 'add a provider API key',
+  configureKeyAction: 'add a provider API key with `/key`',
 } satisfies CliNoAvailableModelsRecoveryOptions;
 
 /** Start an abortable slash-command action and expose `abort` on its promise. */
