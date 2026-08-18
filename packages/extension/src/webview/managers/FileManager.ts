@@ -300,9 +300,9 @@ export class FileManager extends BaseWebviewManager {
   /** Post show/hide getting started banner. */
   private postGettingStartedBanner(show: boolean): void {
     this.postMessage({
-      command: show
-        ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-        : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
+      command: MAIN_VIEW_COMMANDS.SET_BANNER,
+      banner: 'gettingStarted',
+      visible: show,
     });
   }
 

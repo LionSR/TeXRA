@@ -40,13 +40,10 @@ export interface MainViewStartupControllerDeps {
 
 type MainViewStartupMessage = Extract<
   MainViewMessage,
-  | { command: typeof MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER }
-  | { command: typeof MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER }
+  | { command: typeof MAIN_VIEW_COMMANDS.SET_BANNER }
   | { command: typeof MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS }
   | { command: typeof MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS }
   | { command: typeof MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS }
-  | { command: typeof MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER }
-  | { command: typeof MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER }
 >;
 
 export class MainViewStartupController {
@@ -65,9 +62,9 @@ export class MainViewStartupController {
       GlobalStateKey.ORCHESTRATOR_BANNER_DISMISSED,
     );
     return {
-      command: dismissed
-        ? MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER
-        : MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER,
+      command: MAIN_VIEW_COMMANDS.SET_BANNER,
+      banner: 'orchestrator',
+      visible: !dismissed,
     };
   }
 
@@ -93,9 +90,9 @@ export class MainViewStartupController {
         optionsData: teamOptions,
       },
       {
-        command: showLoginBanner
-          ? MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER
-          : MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+        command: MAIN_VIEW_COMMANDS.SET_BANNER,
+        banner: 'login',
+        visible: showLoginBanner,
       },
     ];
   }

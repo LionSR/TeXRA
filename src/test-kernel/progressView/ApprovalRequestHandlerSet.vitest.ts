@@ -38,7 +38,6 @@ function recordingHandlers(
       unused,
       unused,
       unused,
-      unused,
       (message) => messages.push(message),
       () => true,
       () => '',
