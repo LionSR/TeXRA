@@ -379,17 +379,6 @@ export class StreamLogStore {
   private readonly summaries = new Map<StreamTabId, StreamLogSummary>();
 
   /**
-   * Antechamber for snapshot metadata recorded before its stream is
-   * registered (run facts project ahead of `ensureStream`). Never listed —
-   * `has()`/`keys()` stay `summaries`-based — and adopted into the summary
-   * at registration; dropped with the stream otherwise.
-   */
-  private readonly pendingSummaryMeta = new Map<
-    StreamTabId,
-    StreamSummaryMeta
-  >();
-
-  /**
    * Max-wait throttle for the persistence path: the first dirty mutation in a
    * window starts the timer and later mutations join it without resetting it
    * (`scheduleSave`'s `pending` guard), so sustained sub-window appends still
@@ -598,15 +587,10 @@ export class StreamLogStore {
   /**
    * The snapshot-owned display metadata mirrored into this stream's summary,
    * or `undefined` for a stream whose summary predates the mirror (legacy
-   * rows backfill lazily on their next sidecar hydration). Metadata recorded
-   * ahead of stream registration is served from the antechamber, so a run
-   * fact that projects before `ensureStream` is never invisible.
+   * rows backfill lazily on their next sidecar hydration).
    */
   getSummaryMeta(streamId: StreamTabId): StreamSummaryMeta | undefined {
-    return (
-      this.summaries.get(streamId)?.meta ??
-      this.pendingSummaryMeta.get(streamId)
-    );
+    return this.summaries.get(streamId)?.meta;
   }
 
   /**
@@ -614,25 +598,19 @@ export class StreamLogStore {
    * always-resident summary (memory now, summary cache asynchronously).
    * Whole-object replacement — the publisher owns field lifecycles — and a
    * deep-equal no-op gate, so the startup hydration sweep republishing
-   * unchanged metadata for every stream costs no writes. A stream this store
-   * does not know yet holds its metadata in `pendingSummaryMeta`: `summaries`
-   * is the tab registry and registering here would mint a phantom stream, but
-   * run facts legitimately project ahead of registration, so the metadata
-   * waits in the antechamber and lands when `ensureStream` (or the first
-   * append) registers the stream.
+   * unchanged metadata for every stream costs no writes. Run facts may
+   * legitimately project before the stream's first append, so an unknown
+   * stream is registered here: `ensureStream` no-ops for known streams, and
+   * run facts only project for streams whose run genuinely started, so
+   * registering at projection cannot mint a phantom tab.
    */
   recordSummaryMeta(streamId: StreamTabId, meta: StreamSummaryMeta): void {
+    // Writability is asserted before `ensureStream`, so a read-only open can
+    // never reach the registration below.
     this.assertWritableStore('record stream summary metadata');
+    this.ensureStream(streamId);
     const summary = this.summaries.get(streamId);
-    if (!summary) {
-      if (isDeepStrictEqual(this.pendingSummaryMeta.get(streamId), meta))
-        return;
-      this.pendingSummaryMeta.set(streamId, meta);
-      this.stateRevision += 1;
-      return;
-    }
-    this.pendingSummaryMeta.delete(streamId);
-    if (isDeepStrictEqual(summary.meta, meta)) return;
+    if (summary === undefined || isDeepStrictEqual(summary.meta, meta)) return;
     summary.meta = meta;
     this.stateRevision += 1;
     // Share the transcript queue so flush/reload drains this write before a
@@ -645,13 +623,6 @@ export class StreamLogStore {
       const current = this.summaries.get(streamId);
       if (current) await this.maintainSummaryCache(streamId, { ...current });
     });
-  }
-
-  /** Land metadata recorded before this stream existed in the registry. */
-  private adoptPendingSummaryMeta(streamId: StreamTabId): void {
-    const pending = this.pendingSummaryMeta.get(streamId);
-    if (pending === undefined) return;
-    this.recordSummaryMeta(streamId, pending);
   }
 
   ensureStream(streamId: StreamTabId): void {
@@ -667,7 +638,6 @@ export class StreamLogStore {
       return;
     this.ensureStreamState(streamId).log = new StreamLog();
     this.summaries.set(streamId, {});
-    this.adoptPendingSummaryMeta(streamId);
     this.stateRevision += 1;
     if (this.mode.kind === 'persistent') {
       this.markDirty(streamId);
@@ -970,7 +940,6 @@ export class StreamLogStore {
       state.log = logInstance;
       if (!this.summaries.has(streamId)) {
         this.summaries.set(streamId, {});
-        this.adoptPendingSummaryMeta(streamId);
       }
     }
     const appended = settled
@@ -1415,18 +1384,6 @@ export class StreamLogStore {
     for (const [streamId, summary] of summaries) {
       this.summaries.set(streamId, summary);
     }
-    // Metadata recorded while a stream was unregistered lands now if the
-    // replacement set knows the stream (no-op on read-only opens: the
-    // antechamber only fills through recordSummaryMeta, which is writable-only).
-    // Entries absent from the replacement belong to the previous storage root
-    // and are discarded.
-    for (const streamId of [...this.pendingSummaryMeta.keys()]) {
-      if (this.summaries.has(streamId)) {
-        this.adoptPendingSummaryMeta(streamId);
-      } else {
-        this.pendingSummaryMeta.delete(streamId);
-      }
-    }
     this.writeTombstones.clear();
     this.clearing = false;
     this.stateRevision += 1;
@@ -1580,7 +1537,6 @@ export class StreamLogStore {
     this.dirtyIds.delete(streamId);
     this.releaseRequests.delete(streamId);
     this.summaries.delete(streamId);
-    this.pendingSummaryMeta.delete(streamId);
   }
 
   private forgetAllStreamState(): void {
@@ -1591,7 +1547,6 @@ export class StreamLogStore {
     this.dirtyIds.clear();
     this.releaseRequests.clear();
     this.summaries.clear();
-    this.pendingSummaryMeta.clear();
   }
 
   private assertWritableStore(operation: string): void {
