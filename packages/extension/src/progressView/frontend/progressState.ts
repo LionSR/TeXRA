@@ -12,7 +12,7 @@
  */
 
 import { create } from 'mutative';
-import { Signal, signal, select } from '@shared/signals';
+import { Signal, select, createTrackedSignalRegistry } from '@shared/signals';
 import {
   createStreamState,
   isToolUseState,
@@ -65,21 +65,28 @@ const EMPTY_CHILD_MAP: Map<StreamTabId, StreamTabInfo[]> = new Map();
 // State signals (writable)
 // ---------------------------------------------------------------------------
 
+// Reset registry — populated by `trackedSignal` as each signal below is
+// declared, so `resetProgressState()` can replay that single list instead of
+// a hand-ordered, independently-maintained `.set()` sequence. See
+// mainViewState.ts / settingsState.ts for the same pattern.
+const { trackedSignal, resetAll: resetTrackedSignals } =
+  createTrackedSignalRegistry();
+
 /**
  * Single source of truth: monolithic progress state wrapped in a signal.
  * Mutative's structural sharing ensures unchanged branches keep their
  * reference, so selector computeds auto-skip via Object.is().
  */
-export const appState = signal(createInitialState());
+export const appState = trackedSignal(() => createInitialState());
 
 /** Where the Progress view currently lives (sidebar / editor). */
-export const placement = signal<ProgressViewPlacement>('sidebar');
+export const placement = trackedSignal<ProgressViewPlacement>(() => 'sidebar');
 
 /** Webview width threshold flag — drives compact-tab layout. */
-export const narrowLayout = signal(false);
+export const narrowLayout = trackedSignal(() => false);
 
 /** Pending approval requests; drives permission UI and tab pulse indicator. */
-export const permissions$ = signal<PermissionState[]>([]);
+export const permissions$ = trackedSignal<PermissionState[]>(() => []);
 
 /**
  * Progress-view commands the active host's inbound registry declares
@@ -90,9 +97,8 @@ export const permissions$ = signal<PermissionState[]>([]);
  * `isKnownUnsupported` so a control never flashes visible then hidden once
  * the real capability set lands.
  */
-export const unsupportedProgressCommands$ = signal<ReadonlySet<string> | null>(
-  null,
-);
+export const unsupportedProgressCommands$ =
+  trackedSignal<ReadonlySet<string> | null>(() => null);
 
 // ---------------------------------------------------------------------------
 // Selector computeds: extract fields, auto-memoized by Object.is.
@@ -257,22 +263,20 @@ export function diffStatusAnnouncement(
  * the reset is a per-mount slate, not multi-instance coordination.
  *
  * Order matters: `_prevApprovalIds` must be cleared BEFORE
- * `permissions$.set([])` because that setter triggers `pendingApprovalIds$`
- * recomputation, which reads `_prevApprovalIds` for the stable-Set memo —
- * if we clear the cache after, the next read sees a stale prior Set and
- * returns it instead of the empty post-reset value. `_prevPhaseStages` is
- * the same memo over `appState`, so it is cleared before that setter too.
- * The announcement diff memos need no reset: they live on the ProgressApp
- * instance driving `diffStatusAnnouncement`, so a remount starts fresh.
+ * `resetTrackedSignals()` replays `permissions$`'s reset because that setter
+ * triggers `pendingApprovalIds$` recomputation, which reads `_prevApprovalIds`
+ * for the stable-Set memo — if we clear the cache after, the next read sees a
+ * stale prior Set and returns it instead of the empty post-reset value.
+ * `_prevPhaseStages` is the same memo over `appState`, so it is cleared
+ * before that replay too. The announcement diff memos need no reset: they
+ * live on the ProgressApp instance driving `diffStatusAnnouncement`, so a
+ * remount starts fresh.
  */
 export function resetProgressState(): void {
   _prevApprovalIds = new Set();
   _prevPhaseStages = EMPTY_PHASE_STAGE_MAP;
   clearFollowUpInputTransientStateStore();
-  appState.set(createInitialState());
-  placement.set('sidebar');
-  narrowLayout.set(false);
-  permissions$.set([]);
+  resetTrackedSignals();
 }
 
 // ---------------------------------------------------------------------------
