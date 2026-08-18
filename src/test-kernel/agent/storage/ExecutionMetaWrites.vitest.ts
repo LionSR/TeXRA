@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { finalizeExecution, getExecutionStore } from '@agent/storage';
 import { writeSessionDescription } from '@agent/storage/executionLifecycle';
@@ -56,6 +56,39 @@ describe('execution metadata updates', () => {
       outcome: RUN_OUTCOME.COMPLETED,
     });
     expect(meta?.workflow).toBeUndefined();
+  });
+
+  it('resolves to a failed result instead of rejecting when the terminal write fails', async () => {
+    const id = 'bbb004' as ExecutionId;
+    const store = getExecutionStore(id);
+    await store.writeMeta({
+      timestamp: new Date(0).toISOString(),
+    });
+
+    // Catchless callers (terminalPersistence, runAgent, CLI finalization)
+    // rely on finalizeExecution never rejecting: every store failure must
+    // surface as a 'failed' result (#10614). CANCELLED + 'preserve' skips
+    // the fail-closed flow-record delete, isolating the terminal-write arm.
+    const writeError = new Error('terminal write rejected');
+    const writeSpy = vi
+      .spyOn(store, 'writeMeta')
+      .mockRejectedValueOnce(writeError);
+    try {
+      await expect(
+        finalizeExecution({
+          executionId: id,
+          outcome: RUN_OUTCOME.CANCELLED,
+          flowRecord: 'preserve',
+        }),
+      ).resolves.toEqual({
+        status: 'failed',
+        error: writeError,
+        stage: 'terminal-status',
+        outcomePersisted: false,
+      });
+    } finally {
+      writeSpy.mockRestore();
+    }
   });
 
   it('accepts a later update after one fails on absent metadata', async () => {
