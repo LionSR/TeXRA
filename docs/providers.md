@@ -21,7 +21,7 @@ The following table lists the AI model providers supported by TeXRA, along with 
 ## Access Modes
 
 - **Personal API Keys**: When you use your own API keys, requests go directly from your local TeXRA client (VS Code extension, CLI, or desktop app) to the provider. No data passes through TeXRA servers.
-- **Provider Subscriptions**: When you sign in to a provider subscription (ChatGPT, Grok, Kimi Code, or a GLM Coding Plan), requests still go directly from your local TeXRA client to that provider's endpoints, authenticated with the subscription instead of an API key. No data passes through TeXRA servers.
+- **Provider Subscriptions**: When you connect a provider subscription (ChatGPT or Grok via OAuth sign-in, or a Kimi Code / GLM Coding Plan via its plan-specific key), requests still go directly from your local TeXRA client to that provider's endpoints. No data passes through TeXRA servers.
 
 ## Your Responsibility
 
