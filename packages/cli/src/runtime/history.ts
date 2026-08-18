@@ -236,7 +236,9 @@ export type CliHistoryExportInputResult =
  * {@link ChatExportInput} the markdown export formatter consumes (the HTML
  * export path uses `assembleTrace` instead — see `commands/history.ts`).
  * Thin CLI-specific wrapper around the shared {@link loadChatExportInput}
- * loader.
+ * loader, which also backs the extension's
+ * `ChatExportController.buildExportInput` — so the CLI and extension render
+ * the same conversation identically.
  *
  * Distinguishes "this execution id has no stored data at all" (`not_found`
  * — the same case `history show` reports as not found) from "this execution
