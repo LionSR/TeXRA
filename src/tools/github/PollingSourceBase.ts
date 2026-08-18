@@ -22,7 +22,7 @@ import {
   type Disposable,
   type LifecycleHost,
 } from '@platform/interfaces';
-import { tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import {
   createBoundedIdSet,
@@ -407,10 +407,10 @@ export abstract class PollingSourceBase<
 
   /**
    * Register `disposeAll` with the platform shutdown registry exactly once per
-   * lifecycle instance. Uses `tryPlatform()` so the base stays usable in
-   * browser/test contexts where no platform is installed, and defers to the
-   * first subscription so the shared singletons (constructed at module load,
-   * before `initPlatform()`) still register once the platform exists.
+   * lifecycle instance. Runs on the first subscription, which only happens
+   * after `initPlatform()` in every host — the shared singletons constructed
+   * at module load do nothing until then, so `platform()` throwing here means
+   * a genuine initialization-order defect, not an expected state.
    *
    * Re-checked on every subscribe, so a lifecycle replacement (extension
    * reactivation or test-harness reinstall) is picked up on the next
@@ -419,8 +419,8 @@ export abstract class PollingSourceBase<
    * installs a new lifecycle while the previous one is still live.
    */
   private registerShutdownIfNeeded(): void {
-    const lifecycle = tryPlatform()?.lifecycle;
-    if (!lifecycle || this.shutdownLifecycle === lifecycle) return;
+    const lifecycle = platform().lifecycle;
+    if (this.shutdownLifecycle === lifecycle) return;
     this.clearShutdownRegistration();
     this.shutdownRegistration = lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
       this.disposeAll(),
