@@ -9,23 +9,14 @@ import type {
 } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
-import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
-import type {
-  AgentProposalPermission,
-  BashPermission,
-  ExternalInquiryPermission,
-  PlanApprovalPermission,
-  RetryPermission,
-  StreamTabId,
-  ToolEditPermission,
-  UserQuestionPermission,
-} from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import type { ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.ts';
+import { createRecordingApprovalHandlers } from '../progressView/approvalHandlerSetHarness';
 
 interface DesktopHostInteractions {
   approvePendingDelegatedWork(
@@ -84,96 +75,6 @@ interface DesktopHostInteractionsModule {
   }): DesktopHostInteractions;
 }
 
-type ShowSpy<T> = ReturnType<typeof vi.fn<(item: T) => void>>;
-type DismissSpy = ReturnType<typeof vi.fn<(id: string) => void>>;
-
-interface RecordingTransport<T> {
-  readonly show: ShowSpy<T>;
-  readonly dismiss: DismissSpy;
-}
-
-interface RecordingApprovalHandlerSet extends ApprovalRequestHandlerSet {
-  readonly transport: {
-    toolEdit: RecordingTransport<ToolEditPermission>;
-    bash: RecordingTransport<BashPermission>;
-    retry: RecordingTransport<RetryPermission>;
-    proposal: RecordingTransport<AgentProposalPermission>;
-    planApproval: RecordingTransport<PlanApprovalPermission>;
-    externalInquiry: RecordingTransport<ExternalInquiryPermission>;
-    userQuestion: RecordingTransport<UserQuestionPermission>;
-  };
-}
-
-function handler<
-  T extends { streamId: string },
-  K extends keyof T,
-  Result = never,
->(
-  idField: K,
-): {
-  handler: ApprovalRequestHandler<T, K, Result>;
-  transport: RecordingTransport<T>;
-} {
-  const transport = {
-    show: vi.fn<(item: T) => void>(),
-    dismiss: vi.fn<(id: string) => void>(),
-  };
-  return {
-    handler: new ApprovalRequestHandler<T, K, Result>(
-      idField,
-      transport.show,
-      transport.dismiss,
-      () => true,
-    ),
-    transport,
-  };
-}
-
-function createHandlers(): RecordingApprovalHandlerSet {
-  const toolEdit = handler<ToolEditPermission, 'requestId'>('requestId');
-  const bash = handler<BashPermission, 'requestId', BashSettlement>(
-    'requestId',
-  );
-  const retry = handler<RetryPermission, 'streamId', RetryResult>('streamId');
-  const proposal = handler<
-    AgentProposalPermission,
-    'proposalId',
-    ProposalResult
-  >('proposalId');
-  const planApproval = handler<
-    PlanApprovalPermission,
-    'approvalId',
-    PlanApprovalResult
-  >('approvalId');
-  const externalInquiry = handler<ExternalInquiryPermission, 'requestId'>(
-    'requestId',
-  );
-  const userQuestion = handler<
-    UserQuestionPermission,
-    'requestId',
-    UserQuestionSettlement
-  >('requestId');
-
-  return {
-    toolEdit: toolEdit.handler,
-    bash: bash.handler,
-    retry: retry.handler,
-    proposal: proposal.handler,
-    planApproval: planApproval.handler,
-    externalInquiry: externalInquiry.handler,
-    userQuestion: userQuestion.handler,
-    transport: {
-      toolEdit: toolEdit.transport,
-      bash: bash.transport,
-      retry: retry.transport,
-      proposal: proposal.transport,
-      planApproval: planApproval.transport,
-      externalInquiry: externalInquiry.transport,
-      userQuestion: userQuestion.transport,
-    },
-  };
-}
-
 /** Reads the `requestId` passed to a handler's `.show()`, optionally for one stream. */
 function shownRequestId(
   show: ReturnType<typeof vi.fn>,
@@ -206,7 +107,9 @@ function expectStreamRegistered(
   });
 }
 
-async function createInteractions(handlers = createHandlers()) {
+async function createInteractions(
+  handlers = createRecordingApprovalHandlers(),
+) {
   const { createDesktopHostInteractions } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopHostInteractions.ts'))
   )) as DesktopHostInteractionsModule;
@@ -331,7 +234,7 @@ describe('createDesktopHostInteractions', () => {
   });
 
   it('rejects a plan decision for a pending bash request', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const { interactions, presentationSink, sessionEvents } =
       await createInteractions(handlers);
 
@@ -361,7 +264,7 @@ describe('createDesktopHostInteractions', () => {
   });
 
   it('forwards a bash cancellation cause without user provenance', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const { interactions, toolEditApprovals } =
       await createInteractions(handlers);
 
@@ -387,7 +290,7 @@ describe('createDesktopHostInteractions', () => {
   });
 
   it('can cancel synchronously while presenting a request', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const { interactions } = await createInteractions(handlers);
     handlers.transport.bash.show.mockImplementation(() => {
       interactions.cancel({
@@ -425,7 +328,7 @@ describe('createDesktopHostInteractions', () => {
   });
 
   it('reveals the owning stream before showing an external inquiry', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const { interactions, presentationSink, sessionEvents } =
       await createInteractions(handlers);
 
@@ -446,7 +349,7 @@ describe('createDesktopHostInteractions', () => {
   });
 
   it('preserves typed proposal approval overrides', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const { interactions } = await createInteractions(handlers);
 
     const resultPromise = interactions.requestAgentProposal({
@@ -475,7 +378,7 @@ describe('createDesktopHostInteractions', () => {
   });
 
   it('cancels all pending requests on dispose with a stable cause', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const { interactions } = await createInteractions(handlers);
 
     const bashPromise = interactions.requestBashApproval({
