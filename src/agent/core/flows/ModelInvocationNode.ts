@@ -435,15 +435,17 @@ export class ModelInvocationNode<
     }
   }
 
-  /** Auth/permission errors (401, 403), credential-exhausted errors (relay
-   *  monthly limit, upstream credit/quota depletion), and context-window
-   *  overflows skip auto-retries — they need human attention (switching
-   *  keys, topping up, shrinking the request) rather than an identical retry
-   *  that can only fail the same way again. A provider handler that knows
-   *  how to recover from an overflow (e.g. OpenAI Responses' compaction
-   *  retry) does so and never lets the error reach this gate; only overflow
-   *  errors nobody already recovered from are stopped here. `userRetryable`
-   *  only gates the manual retry UI; auto-retry is a stricter subset. */
+  /**
+   * Auth/permission errors (401, 403), credential-exhausted errors (relay
+   * monthly limit, upstream credit/quota depletion), and context-window
+   * overflows skip auto-retries — they need human attention (switching keys,
+   * topping up, shrinking the request) rather than an identical retry that can
+   * only fail the same way again. A provider handler that knows how to recover
+   * from an overflow (e.g. OpenAI Responses' compaction retry) does so and
+   * never lets the error reach this gate; only overflow errors nobody already
+   * recovered from are stopped here. `userRetryable` only gates the manual
+   * retry UI; auto-retry is a stricter subset.
+   */
   shouldAutoRetry(error: Error): boolean {
     return isProviderErrorAutoRetryable(error);
   }
