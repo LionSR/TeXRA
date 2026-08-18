@@ -357,19 +357,18 @@ const PROVIDER_ROUTING_SETTINGS = (
     [GlobalStateKey.GLM_USE_CHINA, GLM_USE_CHINA_PROVIDER_SETTING, true],
     [GlobalStateKey.GLM_CODING_PLAN, GLM_CODING_PLAN_PROVIDER_SETTING, false],
   ] as const
-).map(
-  ([key, setting, defaultValue]) =>
-    stateSetting({
-      key,
-      schema: z.boolean().prefault(defaultValue),
-      title: setting.label,
-      description: setting.description,
-      category: 'model',
-      store: 'globalState',
-      hosts: ['cli'],
-      cliConsumer: PROXY_CONFIG_CONSUMER,
-      cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
-    }),
+).map(([key, setting, defaultValue]) =>
+  stateSetting({
+    key,
+    schema: z.boolean().prefault(defaultValue),
+    title: setting.label,
+    description: setting.description,
+    category: 'model',
+    store: 'globalState',
+    hosts: ['cli'],
+    cliConsumer: PROXY_CONFIG_CONSUMER,
+    cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
+  }),
 );
 
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [
