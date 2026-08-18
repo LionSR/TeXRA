@@ -79,7 +79,11 @@ export type ProviderMessageBlockCategory =
 export function classifyProviderMessageBlockType(
   type: unknown,
 ): ProviderMessageBlockCategory | undefined {
-  return typeof type === 'string'
+  // `Object.hasOwn` guard, not a bare index: the map inherits from
+  // `Object.prototype`, so a provider block typed `'toString'` or
+  // `'constructor'` would otherwise return a function into consumer switches
+  // that `assertNever` on anything unrecognized.
+  return typeof type === 'string' && Object.hasOwn(CATEGORY_BY_BLOCK_TYPE, type)
     ? CATEGORY_BY_BLOCK_TYPE[type as keyof typeof CATEGORY_BY_BLOCK_TYPE]
     : undefined;
 }

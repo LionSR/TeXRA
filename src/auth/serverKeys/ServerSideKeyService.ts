@@ -146,9 +146,11 @@ export class ServerSideKeyService {
     // nor surfaced in any settings UI, so included (relay) access starts off
     // rather than silently routing that process's model traffic through
     // TeXRA's servers. Only a host that owns state can opt in.
+    // `?? true` normalizes a hand-edited persisted `null`, which `get` casts
+    // through rather than coercing; without it, access silently flips off.
     this.useIncludedModelAccess =
       this.globalState !== null &&
-      this.globalState.get<boolean>(USE_INCLUDED_ACCESS_KEY, true);
+      (this.globalState.get<boolean>(USE_INCLUDED_ACCESS_KEY, true) ?? true);
   }
 
   private hasFullAccess(): boolean {

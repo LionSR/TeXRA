@@ -55,7 +55,14 @@ function runtimeFor(
     if (coding === undefined) {
       throw new Error(`Unknown coding-plan subscription: ${descriptor.id}`);
     }
-    return coding;
+    // The three methods, not `coding` itself: spreading the whole runtime
+    // overwrites the `QuotaFallbackRoute` descriptor with the larger
+    // `CodingPlanSubscription` one.
+    return {
+      getEnabled: coding.getEnabled,
+      setEnabled: coding.setEnabled,
+      restoreEnabled: coding.restoreEnabled,
+    };
   }
   return OAUTH_RUNTIME_BY_ID[descriptor.id];
 }
