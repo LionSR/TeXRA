@@ -49,26 +49,6 @@ export function inferAndLogPersistedModelHandlerCompatibilityKey(
   return compatibilityKey;
 }
 
-function stringValue(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  return value.trim() || undefined;
-}
-
-function currentModelFromRawSharedState(
-  shared: Record<string, unknown>,
-): string | undefined {
-  const modelId = stringValue(shared.modelId);
-  if (modelId) return modelId;
-  // Records written before `modelId` carry the model only in `MODEL`, and this
-  // reader runs on raw bytes that never passed the migration boundary.
-  const userChannels = asRecord(asRecord(shared.stateSlices)?.userChannels);
-  if (!userChannels) return undefined;
-  return (
-    stringValue(asRecord(userChannels.transient)?.MODEL) ??
-    stringValue(asRecord(userChannels.input)?.MODEL)
-  );
-}
-
 export function inferPersistedFlowModelHandlerCompatibilityKey(
   model: string,
   shared: unknown,
@@ -83,7 +63,5 @@ export function inferPersistedFlowModelHandlerCompatibilityKey(
 
   // Inference reads model identity only; the persisted messages never fed the
   // decision, so they are not parsed here.
-  return inferPersistedModelHandlerCompatibilityKey(
-    currentModelFromRawSharedState(record) ?? model,
-  );
+  return inferPersistedModelHandlerCompatibilityKey(model);
 }
