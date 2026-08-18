@@ -141,9 +141,7 @@ export class ProviderKeyList extends LitElement {
               placeholder="Leave blank for default"
               @change=${(e: Event) => {
                 const value = (e.target as WaInput).value?.trim() ?? '';
-                const key = this.providerStateKeys(
-                  entry.provider,
-                )?.endpointKey;
+                const key = this.providerStateKeys(entry.provider)?.endpointKey;
                 if (key) postStateSetting(key, value);
               }}
             ></wa-input>
