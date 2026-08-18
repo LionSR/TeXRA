@@ -14,7 +14,7 @@ import {
   uniqueWorkflowChildStreamId,
   workflowDashboardModel,
 } from '@cli/chat/tui/state/workflowDashboardModel';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import { type StreamTabId } from '@shared/schemas';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import {
   pollForCondition,
@@ -39,9 +39,6 @@ function workflowRoot(
 ): StreamSlice {
   return {
     ...emptySlice(ROOT),
-    agent: 'workflow',
-    identity: { kind: 'multiAgentWorkflow' as const, workflowName: 'workflow' },
-    category: AgentCategory.Workflow,
     entries: [
       ...phases.map((phaseLabel, phaseIndex) => ({
         id: `phase-${phaseLabel}`,
@@ -391,7 +388,7 @@ describe('workflow dashboard model', () => {
     );
     try {
       await waitFor(() => stdout.output.includes('Explore · 0/0'));
-      expect(stdout.output).toContain('workflow · Explore · 0/0 done');
+      expect(stdout.output).toContain('Workflow · Explore · 0/0 done');
     } finally {
       instance.unmount();
     }

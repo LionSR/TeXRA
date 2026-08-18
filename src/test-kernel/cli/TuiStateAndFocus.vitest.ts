@@ -39,12 +39,19 @@ import {
 import { focusedChildFollowUpRoute } from '@cli/chat/tui/state/focusedChildFollowUp';
 import {
   activeSubagentsFor,
+  bindChildStreamState,
   childRosters,
   focusOrderDescendants,
+  invalidateChildStreams,
   isChildStreamRemoved,
   parentStream,
+  queuedFollowUpsFor,
   retainedChildStreamsFor,
+  sessionStateRevision,
+  streamMetadataFor,
+  streamStateFor,
   subagentExecutionLabels,
+  unbindChildStreamState,
   visibleSubagentRows,
 } from '@cli/chat/tui/state/childExecutions';
 import {
@@ -56,6 +63,7 @@ import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsA
 import {
   markArtifactStreamHydrated,
   readStreamArtifacts,
+  streamArtifactRevision,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import {
   estimateTranscriptEntryRows,
@@ -84,6 +92,8 @@ import {
   moveLocalTranscriptToStream,
   resolveLocalTranscriptStreamId,
 } from '@cli/chat/tui/state/transcript';
+import { projectStreamArtifacts } from '@controllers/session/StreamArtifactProjection';
+import { SessionState } from '@controllers/session/SessionState';
 import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 import {
   AgentCategory,
@@ -96,10 +106,12 @@ import {
   type ExecutionId,
   type ExtendedTokenUsageStats,
   type Plan,
+  type RunIdentity,
   type StorageKey,
   type StreamPhase,
   type StreamTabId,
   type TodoItem,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
@@ -291,6 +303,26 @@ function emitRunConfig(
   });
 }
 
+function emitRunStart(
+  hub: SessionEventHub,
+  streamId: StreamTabId,
+  executionId: ExecutionId,
+  identity: RunIdentity,
+  userFollowUpSupport?: UserFollowUpSupport,
+): void {
+  hub.emit({
+    scope: 'run',
+    streamId,
+    event: {
+      type: 'run.start',
+      streamId,
+      executionId,
+      identity,
+      ...(userFollowUpSupport === undefined ? {} : { userFollowUpSupport }),
+    },
+  });
+}
+
 function emitUsage(
   hub: SessionEventHub,
   streamId: StreamTabId,
@@ -356,22 +388,41 @@ function localSyntheticEntry(
   } as const;
 }
 
-/** Mark a stream as a native tool-use agent that can accept child follow-ups. */
-function markToolUseAgent(streamId: StreamTabId): void {
-  patchStream(streamId, (slice) => ({
-    ...slice,
-    identity: { kind: 'agent', agent: 'critic' },
-    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-    category: AgentCategory.ToolUse,
-  }));
+/** Mark a stream as a native tool-use agent that can accept child follow-ups:
+ *  identity and follow-up support land with `run.start`, category and model
+ *  with `run.config`, read back through the shared metadata mirror. */
+function markToolUseAgent(hub: SessionEventHub, streamId: StreamTabId): void {
+  const executionId = 'follow-up-exec' as ExecutionId;
+  emitRunStart(
+    hub,
+    streamId,
+    executionId,
+    { kind: 'agent', agent: 'critic' },
+    USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+  );
+  emitRunConfig(hub, streamId, executionId);
 }
 
-/** Mark a stream slice as workflow-category. */
+// Shared-metadata seeding for tests that drive `syncStreamLog` without a
+// session adapter attached: bind a `SessionState` over the default session
+// and write through its public API.
+let metadataState: SessionState | undefined;
+
+function seedStreamMetadata(
+  streamId: StreamTabId,
+  patch: Parameters<SessionState['updateStreamMetadata']>[1],
+): void {
+  if (!metadataState) {
+    metadataState = new SessionState(defaultSession());
+    bindChildStreamState(metadataState);
+  }
+  metadataState.updateStreamMetadata(streamId, patch);
+  invalidateChildStreams();
+}
+
+/** Mark a stream as workflow-category in the shared stream metadata. */
 function markWorkflow(streamId: StreamTabId): void {
-  patchStream(streamId, (slice) => ({
-    ...slice,
-    category: AgentCategory.Workflow,
-  }));
+  seedStreamMetadata(streamId, { agentCategory: AgentCategory.Workflow });
 }
 
 /** Unfinalized tool-row entry with empty render text fields. */
@@ -426,6 +477,10 @@ function withRunFacts(
 
 afterEach(() => {
   clearAllStreamStatusesForTest(defaultSession().status);
+  if (metadataState) {
+    unbindChildStreamState(metadataState);
+    metadataState = undefined;
+  }
   // A reset retires every stream id it clears, so an id reused by the next
   // test would stay refused by the status/focus owners. The second reset has
   // an empty map to retire and leaves no retired identity behind.
@@ -467,13 +522,11 @@ describe('cliState stream, focus, and child-edge fields', () => {
     });
   });
 
-  it('initialises every new slice with empty subagent/todo/plan/bypass defaults', () => {
+  it('initialises every new slice with empty subagent and bypass defaults', () => {
     setStatus(root, STREAM_PHASE.RUNNING);
     const slice = streams.get().get(root);
     expect(slice).toBeDefined();
     expect(activeRows(root)).toEqual([]);
-    expect(slice?.todos).toEqual([]);
-    expect(slice?.plan).toBeNull();
     expect(slice?.bypass).toEqual({
       bash: false,
       toolEdit: false,
@@ -623,8 +676,12 @@ describe('cliState stream, focus, and child-edge fields', () => {
     });
   });
 
-  it('projects phase stages onto the run slice and leaves rounds alone', () => {
-    withRunFacts((hub) => {
+  it('projects phase stages onto the shared stream state and leaves rounds alone', () => {
+    withRunFacts((hub, session) => {
+      // `run.config` resolves the category and RUNNING mints the execution
+      // state — the production order in which stage facts arrive.
+      emitRunConfig(hub, child1, 'exec-stage-child' as ExecutionId);
+      transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, child1, {
         id: 'phase-2',
         label: 'Reduce',
@@ -633,13 +690,15 @@ describe('cliState stream, focus, and child-edge fields', () => {
         total: 3,
       });
 
-      expect(streams.get().get(child1)?.stage).toEqual({
+      expect(streamStateFor(child1)?.stage).toEqual({
         kind: 'phase',
         label: 'Reduce',
         index: 1,
         total: 3,
       });
 
+      emitRunConfig(hub, root, 'exec-stage-root' as ExecutionId);
+      transitionStatus(session, root, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, root, {
         id: 'round-2',
         label: 'round 2',
@@ -648,7 +707,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
         total: 4,
       });
 
-      expect(streams.get().get(root)?.stage).toEqual({
+      expect(streamStateFor(root)?.stage).toEqual({
         kind: 'round',
         index: 1,
         total: 4,
@@ -657,14 +716,16 @@ describe('cliState stream, focus, and child-edge fields', () => {
   });
 
   it('keeps a dynamically opened phase positionless', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
+      emitRunConfig(hub, child1, 'exec-stage-child' as ExecutionId);
+      transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, child1, {
         id: 'phase-x',
         label: 'Cleanup',
         kind: 'phase',
       });
 
-      expect(streams.get().get(child1)?.stage).toEqual({
+      expect(streamStateFor(child1)?.stage).toEqual({
         kind: 'phase',
         label: 'Cleanup',
       });
@@ -1475,7 +1536,7 @@ describe('CLI TUI row allocation', () => {
     withRunFacts((hub, session) => {
       setStatus(root, STREAM_PHASE.WAITING);
       setStatus(child1, STREAM_PHASE.WAITING);
-      markToolUseAgent(child1);
+      markToolUseAgent(hub, child1);
       trackStreams(session, child1);
       emitParentEdge(hub, child1, root);
 
@@ -1498,7 +1559,7 @@ describe('CLI TUI row allocation', () => {
         childRosterRow('critic', child1, STREAM_PHASE.COMPLETED),
       ]);
       setStatus(child1, STREAM_PHASE.RUNNING);
-      markToolUseAgent(child1);
+      markToolUseAgent(hub, child1);
       emitParentEdge(hub, child1, root);
 
       activeStreamId.set(child1);
@@ -1520,7 +1581,7 @@ describe('CLI TUI row allocation', () => {
         childRosterRow('critic', child1, STREAM_PHASE.RUNNING),
       ]);
       setStatus(child1, STREAM_PHASE.CANCELLED);
-      markToolUseAgent(child1);
+      markToolUseAgent(hub, child1);
       emitParentEdge(hub, child1, root);
 
       activeStreamId.set(child1);
@@ -1618,17 +1679,17 @@ describe('CLI TUI row allocation', () => {
     })),
   ])('gates the focused child composer for $name', (fixture) => {
     setStatus(child1, fixture.status);
-    patchStream(child1, (slice) => ({
-      ...slice,
-      identity: fixture.identity,
-      userFollowUpSupport: fixture.userFollowUpSupport,
-      category: fixture.category,
-    }));
 
     expect(
       focusedChildFollowUpRoute({
         activeStreamId: child1,
         parentStream: new Map([[child1, root]]),
+        metadata: {
+          identity: fixture.identity,
+          userFollowUpSupport: fixture.userFollowUpSupport,
+          agentCategory: fixture.category,
+          creationTimestamp: 0,
+        },
         streams: streams.get(),
       }),
     ).toEqual({ kind: fixture.expected, streamId: child1 });
@@ -1637,47 +1698,42 @@ describe('CLI TUI row allocation', () => {
   it.each([
     {
       name: 'identity',
-      identity: undefined,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-      category: AgentCategory.ToolUse,
+      metadata: {
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+        agentCategory: AgentCategory.ToolUse,
+      },
     },
     {
       name: 'runtime support',
-      identity: { kind: 'agent' as const, agent: 'critic' },
-      userFollowUpSupport: undefined,
-      category: AgentCategory.ToolUse,
+      metadata: {
+        identity: { kind: 'agent' as const, agent: 'critic' },
+        agentCategory: AgentCategory.ToolUse,
+      },
     },
     {
       name: 'category',
-      identity: { kind: 'agent' as const, agent: 'critic' },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-      category: undefined,
+      metadata: {
+        identity: { kind: 'agent' as const, agent: 'critic' },
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      },
     },
-  ])('fails closed when child $name metadata is missing', (fixture) => {
-    withRunFacts((hub, session) => {
-      setStatus(child1, STREAM_PHASE.RUNNING);
-      patchStream(child1, (slice) => ({
-        ...slice,
-        identity: fixture.identity,
-        userFollowUpSupport: fixture.userFollowUpSupport,
-        category: fixture.category,
-      }));
-      trackStreams(session, child1);
-      emitParentEdge(hub, child1, root);
+  ])('fails closed when child $name metadata is missing', ({ metadata }) => {
+    setStatus(child1, STREAM_PHASE.RUNNING);
 
-      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({ kind: 'none' });
-      activeStreamId.set(child1);
-      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
-        kind: 'reject',
-        streamId: child1,
-      });
-    });
+    expect(
+      focusedChildFollowUpRoute({
+        activeStreamId: child1,
+        parentStream: new Map([[child1, root]]),
+        metadata: { creationTimestamp: 0, ...metadata },
+        streams: streams.get(),
+      }),
+    ).toEqual({ kind: 'reject', streamId: child1 });
   });
 
   it('fails closed when focused child status is missing while leaving root routing unchanged', () => {
     withRunFacts((hub, session) => {
       mintSlice(child1);
-      markToolUseAgent(child1);
+      markToolUseAgent(hub, child1);
       trackStreams(session, child1);
       emitParentEdge(hub, child1, root);
 
@@ -1702,7 +1758,7 @@ describe('CLI TUI row allocation', () => {
       // later phase transitions keep merging into it.
       emitChildRoster(hub, root, []);
       setStatus(child1, STREAM_PHASE.CANCELLED);
-      markToolUseAgent(child1);
+      markToolUseAgent(hub, child1);
 
       transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'restart-repair');
       // The RUNNING transition resets the child's per-run metadata; the edge
@@ -1728,7 +1784,7 @@ describe('CLI TUI row allocation', () => {
       ]);
       emitChildRoster(hub, root, []);
       setStatus(child1, STREAM_PHASE.RUNNING);
-      markToolUseAgent(child1);
+      markToolUseAgent(hub, child1);
       emitParentEdge(hub, child1, root);
 
       transitionStatus(
@@ -1916,58 +1972,6 @@ describe('CLI transcript state', () => {
   // it in place here so store-backed tests need no reset of their own.
   beforeEach(async () => {
     await defaultSession().transcripts.clear();
-  });
-
-  it('restores the latest active skills per stream and clears malformed snapshots', () => {
-    patchStream(root, (slice) => ({
-      ...slice,
-      category: AgentCategory.ToolUse,
-    }));
-    patchStream(child1, (slice) => ({
-      ...slice,
-      category: AgentCategory.ToolUse,
-    }));
-    const logger = runTrace(root);
-    logger.emit({
-      type: 'skills.snapshot',
-      skills: [
-        {
-          name: 'proof-audit',
-          description: 'Check proof steps.',
-          source: 'project',
-        },
-      ],
-    });
-
-    syncStreamLog(root);
-    syncStreamLog(child1);
-    expect(streams.get().get(root)?.activeSkills).toMatchObject([
-      { name: 'proof-audit', source: 'project' },
-    ]);
-    expect(streams.get().get(child1)?.activeSkills).toEqual([]);
-
-    resetCliState();
-    patchStream(root, (slice) => ({
-      ...slice,
-      category: AgentCategory.ToolUse,
-    }));
-    syncStreamLog(root);
-    expect(streams.get().get(root)?.activeSkills).toMatchObject([
-      { name: 'proof-audit' },
-    ]);
-
-    defaultSession()
-      .transcripts.get(root)
-      ?.appendSettled({
-        id: 'malformed-skills',
-        type: 'log',
-        level: 'info',
-        timestamp: 2,
-        messageType: MESSAGE_TYPES.ACTIVE_SKILLS,
-        data: { skills: [{ path: '/secret' }] },
-      });
-    syncStreamLog(root);
-    expect(streams.get().get(root)?.activeSkills).toEqual([]);
   });
 
   it('renders orchestrator follow-ups without protocol tags', () => {
@@ -2531,9 +2535,9 @@ describe('CLI transcript state', () => {
 
   it('bounds dormant workflow dashboard rows while preserving source order', () => {
     activeStreamId.set(root);
+    markWorkflow(child1);
     patchStream(child1, (slice) => ({
       ...slice,
-      category: AgentCategory.Workflow,
       entries: [
         localSyntheticEntry(
           'synthetic-compact-workflow-error',
@@ -2634,10 +2638,12 @@ describe('CLI transcript state', () => {
 
       syncStreamLog(child1);
 
-      expect(streams.get().get(child1)).toMatchObject({
-        description: 'Audit the compactness lemma.',
-        latestLine: 'The second lemma is valid.',
-      });
+      expect(streamMetadataFor(child1)?.description).toBe(
+        'Audit the compactness lemma.',
+      );
+      expect(streams.get().get(child1)?.latestLine).toBe(
+        'The second lemma is valid.',
+      );
     });
   });
 
@@ -3283,19 +3289,15 @@ describe('sessionSignalsAdapter run facts', () => {
       trackStreams(session, child1);
       emitParentEdge(hub, child1, root);
       emitRunConfig(hub, child1, executionId);
-      hub.emit({
-        scope: 'run',
-        streamId: child1,
-        event: {
-          type: 'run.start',
-          streamId: child1,
-          executionId,
-          identity: { kind: 'agent', agent: 'search' },
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        },
-      });
+      emitRunStart(
+        hub,
+        child1,
+        executionId,
+        { kind: 'agent', agent: 'search' },
+        USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      );
 
-      expect(streams.get().get(child1)?.userFollowUpSupport).toBe(
+      expect(streamMetadataFor(child1)?.userFollowUpSupport).toBe(
         USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       );
       focusStream(child1);
@@ -3304,18 +3306,12 @@ describe('sessionSignalsAdapter run facts', () => {
         streamId: child1,
       });
 
-      hub.emit({
-        scope: 'run',
-        streamId: child1,
-        event: {
-          type: 'run.start',
-          streamId: child1,
-          executionId,
-          identity: { kind: 'agent', agent: 'search' },
-        },
+      emitRunStart(hub, child1, executionId, {
+        kind: 'agent',
+        agent: 'search',
       });
 
-      expect(streams.get().get(child1)?.userFollowUpSupport).toBeUndefined();
+      expect(streamMetadataFor(child1)?.userFollowUpSupport).toBeUndefined();
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'reject',
         streamId: child1,
@@ -3324,7 +3320,7 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('keeps a session-scoped fact subscription live after state reset', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const nextRoot = 'root-after-clear' as StreamTabId;
       const todos: TodoItem[] = [
         {
@@ -3345,7 +3341,12 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(nextRoot)?.todos).toEqual(todos);
+      // The reset zeroed the artifact revision; the still-attached adapter
+      // re-bumped it, and the fact landed in the canonical snapshot store.
+      expect(streamArtifactRevision.get()).toBeGreaterThan(0);
+      expect(projectStreamArtifacts(session.snapshots, nextRoot).todos).toEqual(
+        todos,
+      );
     });
   });
 
@@ -3396,7 +3397,7 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('applies typed updateTodos run facts without host emission', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const todos: TodoItem[] = [
         {
           content: 'State the compactness lemma',
@@ -3415,12 +3416,14 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)?.todos).toEqual(todos);
+      expect(projectStreamArtifacts(session.snapshots, root).todos).toEqual(
+        todos,
+      );
     });
   });
 
   it('applies typed updatePlan run facts without host emission', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const plan: Plan = {
         objective:
           'Prove the local estimate and record the stopping criterion.',
@@ -3436,11 +3439,13 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)?.plan).toEqual(plan);
+      expect(projectStreamArtifacts(session.snapshots, root).plan).toEqual(
+        plan,
+      );
     });
   });
 
-  it('invalidates a hydrated artifact memo when the slice already matches', () => {
+  it('invalidates a hydrated artifact memo on a live work-plan fact', () => {
     const streamId = 'hydrated-artifact-memo' as StreamTabId;
     const previousTodos: TodoItem[] = [
       {
@@ -3475,10 +3480,8 @@ describe('sessionSignalsAdapter run facts', () => {
       markArtifactStreamHydrated(streamId);
       expect(readStreamArtifacts(streamId)?.todos).toEqual(previousTodos);
 
-      // Reproduce a pre-hydration mirror already holding the incoming value.
-      // The event still changes the canonical snapshot store and must clear
-      // the memo even though the slice patch itself is a no-op.
-      patchStream(streamId, (slice) => ({ ...slice, todos: nextTodos }));
+      // The event changes the canonical snapshot store and must clear the
+      // per-revision projection memo hydration populated.
       session.events.emit({
         scope: 'run',
         streamId,
@@ -3497,7 +3500,7 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('keeps a captured work-plan reader synchronized after focus moves', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const nextPlan: Plan = { objective: 'Updated reader objective.' };
       const nextTodos: TodoItem[] = [
         {
@@ -3530,10 +3533,9 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)).toMatchObject({
-        plan: nextPlan,
-        todos: nextTodos,
-      });
+      const projection = projectStreamArtifacts(session.snapshots, root);
+      expect(projection.plan).toEqual(nextPlan);
+      expect(projection.todos).toEqual(nextTodos);
       expect(foregroundReader.get()).toEqual({
         kind: 'workPlan',
         streamId: root,
@@ -3557,7 +3559,9 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('applies direct stage.start(kind: round) events without host emission', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
+      emitRunConfig(hub, root, 'exec-stage-root' as ExecutionId);
+      transitionStatus(session, root, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, root, {
         id: 'round-2',
         label: 'Round 2',
@@ -3566,7 +3570,7 @@ describe('sessionSignalsAdapter run facts', () => {
         total: 3,
       });
 
-      expect(streams.get().get(root)?.stage).toEqual({
+      expect(streamStateFor(root)?.stage).toEqual({
         kind: 'round',
         index: 1,
         total: 3,
@@ -3575,7 +3579,9 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('applies direct non-round stage.start events to the phase slot, not the round slot', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
+      emitRunConfig(hub, root, 'exec-stage-root' as ExecutionId);
+      transitionStatus(session, root, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, root, {
         id: 'phase-1',
         label: 'Compile phase',
@@ -3583,7 +3589,7 @@ describe('sessionSignalsAdapter run facts', () => {
         index: 0,
       });
 
-      expect(streams.get().get(root)?.stage).toEqual({
+      expect(streamStateFor(root)?.stage).toEqual({
         kind: 'phase',
         label: 'Compile phase',
         index: 0,
@@ -3614,7 +3620,7 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('applies direct usage events without host emission', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const storageKey = 'root-direct-run' as StorageKey;
       const usage = {
         inputTokens: 100,
@@ -3631,7 +3637,9 @@ describe('sessionSignalsAdapter run facts', () => {
       expect(streams.get().get(root)?.usage).toEqual(usage);
       // Cumulative usage is the snapshot store's per-run accumulator summed;
       // reasoningTokens is part of the one accumulated vocabulary.
-      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
+      expect(
+        projectStreamArtifacts(session.snapshots, root).cumulativeUsage,
+      ).toEqual({
         inputTokens: 100,
         outputTokens: 20,
         cost: 1,
@@ -3669,10 +3677,12 @@ describe('sessionSignalsAdapter run facts', () => {
       });
 
       expect(activeStreamId.get()).toBe(root);
-      expect(streams.get().get(child1)).toMatchObject({
-        category: AgentCategory.ToolUse,
-        description: 'Checking the local compactness claim.',
-      });
+      expect(streams.get().has(child1)).toBe(true);
+      const metadata = streamMetadataFor(child1);
+      expect(metadata?.agentCategory).toBe(AgentCategory.ToolUse);
+      expect(metadata?.description).toBe(
+        'Checking the local compactness claim.',
+      );
 
       hub.emit({
         scope: 'session',
@@ -3687,25 +3697,20 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('applies direct run config and conversation progress without host emission', () => {
-    withRunFacts((hub) => {
-      // `onStreamMetadataChanged` reads display config from the summary
-      // mirror (#9947), so the agent name now arrives with `run.start` while
-      // `run.config` supplies model/category through the mirror.
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'run.start',
-          streamId: root,
-          executionId: 'exec-config' as ExecutionId,
-          identity: { kind: 'agent' as const, agent: 'search' },
-        },
+    withRunFacts((hub, session) => {
+      // The agent identity arrives with `run.start` while `run.config`
+      // supplies model/category through the summary mirror (#9947); RUNNING
+      // then mints the execution state that conversation progress lands on.
+      emitRunStart(hub, root, 'exec-config' as ExecutionId, {
+        kind: 'agent',
+        agent: 'search',
       });
       emitRunConfig(hub, root, 'exec-config', {
         input: ['src/Main.lean'],
         context: ['notes/proof.md'],
         output: ['build/Main.olean'],
       });
+      transitionStatus(session, root, STREAM_PHASE.RUNNING, 'lifecycle');
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3715,20 +3720,18 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)).toMatchObject({
-        agent: 'search',
-        model: 'kimi26T',
-        category: AgentCategory.ToolUse,
-        conversation: { toolCallCount: 3 },
+      const metadata = streamMetadataFor(root);
+      expect(metadata?.identity).toEqual({ kind: 'agent', agent: 'search' });
+      expect(metadata?.config?.model).toBe('kimi26T');
+      expect(metadata?.agentCategory).toBe(AgentCategory.ToolUse);
+      expect(streamStateFor(root)?.conversationProgress).toEqual({
+        toolCallCount: 3,
       });
-      // `StreamSlice.files` is dead state after #10498: `run.config` file
-      // lists are no longer projected into the TUI slice at all.
-      expect(streams.get().get(root)).not.toHaveProperty('files');
     });
   });
 
   it('streams every workflow output round into selected-agent state', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       // A real hex id: the snapshot store (now the accumulator the slice is
       // projected from) parses output-file payloads, and ExecutionIdSchema
       // rejects non-hex ids the old slice-spread silently accepted.
@@ -3785,7 +3788,9 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)?.outputFilesByRound).toEqual({
+      expect(
+        projectStreamArtifacts(session.snapshots, root).outputFilesByRound,
+      ).toEqual({
         0: [
           expect.objectContaining({
             location: expect.objectContaining({
@@ -3805,7 +3810,8 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('projects missing-output and compile facts and clears the addressed stream', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
+      const artifacts = () => projectStreamArtifacts(session.snapshots, root);
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3841,7 +3847,7 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)).toMatchObject({
+      expect(artifacts()).toMatchObject({
         missingOutputsByRound: { 0: ['missing.tex'] },
         compileFailuresByRound: {
           0: [expect.objectContaining({ displayName: 'paper.pdf' })],
@@ -3855,7 +3861,7 @@ describe('sessionSignalsAdapter run facts', () => {
           payload: { streamId: root },
         },
       });
-      expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
+      expect(artifacts().missingOutputsByRound).toEqual({});
 
       hub.emit({
         scope: 'run',
@@ -3874,15 +3880,13 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
-      expect(streams.get().get(root)?.compileFailuresByRound[0]).toHaveLength(
-        1,
-      );
+      expect(artifacts().missingOutputsByRound).toEqual({});
+      expect(artifacts().compileFailuresByRound[0]).toHaveLength(1);
     });
   });
 
   it('applies direct usage sequences exactly once', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const storageKey = 'root-direct-sequence-run' as StorageKey;
       const firstUsage = {
         inputTokens: 100,
@@ -3909,7 +3913,9 @@ describe('sessionSignalsAdapter run facts', () => {
       expect(streams.get().get(root)?.usage).toEqual(secondUsage);
       // Summed from the store's per-run map — the one accumulator, which
       // carries reasoningTokens — not a second running sum in the slice.
-      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
+      expect(
+        projectStreamArtifacts(session.snapshots, root).cumulativeUsage,
+      ).toEqual({
         inputTokens: 150,
         outputTokens: 30,
         cost: 1.5,
@@ -3945,10 +3951,9 @@ describe('sessionSignalsAdapter run facts', () => {
     withRunFacts((hub) => {
       emitRunConfig(hub, child1, 'exec-search');
 
-      expect(streams.get().get(child1)).toMatchObject({
-        model: 'kimi26T',
-        category: AgentCategory.ToolUse,
-      });
+      const metadata = streamMetadataFor(child1);
+      expect(metadata?.config?.model).toBe('kimi26T');
+      expect(metadata?.agentCategory).toBe(AgentCategory.ToolUse);
     });
   });
 
@@ -3959,6 +3964,7 @@ describe('sessionSignalsAdapter run facts', () => {
       const queue = session.followUps.queue(lease);
       try {
         queue.enqueue({ text: 'Keep the proof under one page.' });
+        const revisionBefore = sessionStateRevision.get();
         hub.emit({
           scope: 'session',
           event: {
@@ -3967,8 +3973,10 @@ describe('sessionSignalsAdapter run facts', () => {
           },
         });
 
-        let slice = streams.get().get(root);
-        expect(slice?.queuedFollowUpMessages).toEqual([
+        // The fact's remaining job is the repaint: bump the shared-state
+        // revision so renderers re-read the session-owned queue.
+        expect(sessionStateRevision.get()).toBeGreaterThan(revisionBefore);
+        expect(queuedFollowUpsFor(root)).toEqual([
           'Keep the proof under one page.',
         ]);
 
@@ -3981,8 +3989,7 @@ describe('sessionSignalsAdapter run facts', () => {
           },
         });
 
-        slice = streams.get().get(root);
-        expect(slice?.queuedFollowUpMessages).toEqual([]);
+        expect(queuedFollowUpsFor(root)).toEqual([]);
       } finally {
         session.followUps.terminalize(root);
       }
@@ -3990,7 +3997,7 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('keeps latest usage separate from cumulative resume usage', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const storageKey = 'root-run' as StorageKey;
 
       emitUsage(hub, root, storageKey, {
@@ -4014,7 +4021,9 @@ describe('sessionSignalsAdapter run facts', () => {
         cacheReadInputTokens: 5,
         cacheCreationInputTokens: 7,
       });
-      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
+      expect(
+        projectStreamArtifacts(session.snapshots, root).cumulativeUsage,
+      ).toEqual({
         inputTokens: 140,
         outputTokens: 30,
         cost: 3,

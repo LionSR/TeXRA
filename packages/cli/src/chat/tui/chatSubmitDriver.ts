@@ -27,7 +27,10 @@ import {
   CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandContext,
 } from './commands/handlers/slashContext';
-import { parentStream as parentStreamSignal } from './state/childExecutions';
+import {
+  parentStream as parentStreamSignal,
+  streamMetadataFor,
+} from './state/childExecutions';
 import {
   activeStreamId as activeStreamIdSignal,
   sessionMeta as sessionMetaSignal,
@@ -97,9 +100,11 @@ export function restorePendingSkillActivations(
 }
 
 export function chatTuiFocusedChildFollowUpRoute(): FocusedChildFollowUpRoute {
+  const activeStreamId = activeStreamIdSignal.get();
   return focusedChildFollowUpRoute({
-    activeStreamId: activeStreamIdSignal.get(),
+    activeStreamId,
     parentStream: parentStreamSignal.get(),
+    metadata: activeStreamId ? streamMetadataFor(activeStreamId) : undefined,
     streams: streamsSignal.get(),
   });
 }

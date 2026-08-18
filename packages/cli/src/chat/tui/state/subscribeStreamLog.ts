@@ -20,11 +20,8 @@
 // remain only to cover rows persisted before that landed; they are idempotent
 // on already-redacted text.
 
-import { isDeepStrictEqual } from 'node:util';
-
 import { defaultSession } from '@agent/runtime';
 import {
-  ActiveSkillsSnapshotSchema,
   AgentCategory,
   MESSAGE_TYPES,
   type StreamTabId,
@@ -47,7 +44,7 @@ import {
   streams,
   type ConversationEntry,
 } from './cliState';
-import { isChildStreamRemoved } from './childExecutions';
+import { isChildStreamRemoved, streamMetadataFor } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
 import {
   applyStreamChanges,
@@ -272,9 +269,10 @@ export function syncStreamLog(
   const projectFullTranscript =
     currentActiveStreamId === undefined || currentActiveStreamId === streamId;
 
+  const metadata = streamMetadataFor(streamId);
   patchStream(streamId, (slice, lifecycle) => {
-    const workflowStream = slice.category === AgentCategory.Workflow;
-    const fullLogChild = isFullLogChildStream(slice);
+    const workflowStream = metadata?.agentCategory === AgentCategory.Workflow;
+    const fullLogChild = isFullLogChildStream(metadata?.identity);
     const workflowOperationalOnly = workflowStream && !fullLogChild;
     const streamSettled = isTranscriptSettlementPhase(lifecycle.status);
     const streamFinal = options.forceFinal === true || streamSettled;
@@ -382,20 +380,8 @@ export function syncStreamLog(
       live.messageType === MESSAGE_TYPES.THINKING &&
       logEntryStreamIsRunning(live);
 
-    let activeSkills = slice.activeSkills;
-    if (slice.category === AgentCategory.ToolUse && state.activeSkillsEntry) {
-      if (state.activeSkillsParsedFor !== state.activeSkillsEntry) {
-        const parsed = ActiveSkillsSnapshotSchema.safeParse(
-          state.activeSkillsEntry.data,
-        );
-        state.activeSkills = parsed.success ? parsed.data.skills : [];
-        state.activeSkillsParsedFor = state.activeSkillsEntry;
-      }
-      activeSkills = state.activeSkills;
-    }
-
-    // Transcript-derived live status only. `slice.description` is the
-    // runtime's own one-liner and is never written from here.
+    // Transcript-derived live status only. The shared metadata `description`
+    // is the runtime's own one-liner and is never written from here.
     const latestUserPos = state.latestUserPos;
     const latestInstruction =
       latestUserPos >= 0 ? state.items[latestUserPos].rendered.text : undefined;
@@ -439,7 +425,6 @@ export function syncStreamLog(
       slice.workflowAttemptId === state.workflowAttemptId &&
       slice.workflowAttemptBoundaryDeclared ===
         state.workflowAttemptBoundaryDeclared &&
-      isDeepStrictEqual(slice.activeSkills, activeSkills) &&
       slice.taskGroups === taskGroups
     ) {
       return slice;
@@ -449,7 +434,6 @@ export function syncStreamLog(
       transcriptFold: state,
       latestLine,
       entries,
-      activeSkills,
       thinkingActive,
       compactingActive,
       workflowAttemptId: state.workflowAttemptId,
