@@ -38,7 +38,6 @@ import {
   LATEXDIFF_REPLACEMENTS,
 } from './rules';
 import {
-  LEGACY_UNBRACED_S_MIGRATION,
   MAX_STYLE_REPLACEMENTS,
   MAX_REGEX_REPLACEMENTS,
   restoreLatexSectionSign,
@@ -65,14 +64,6 @@ function applyNonRegexPolicy(text: string): string {
 function applyAllPolicy(text: string): string {
   const replacements = getAllReplacements();
   const wrapCritique = shouldWrapCritiqueInAlign();
-  const maxStyleEnabled = getConfig<string[]>(
-    'texra.latex.enabledReplacements',
-    DEFAULT_CORE_SETTINGS.latex.enabledReplacements,
-  ).includes('max_style');
-  const maxStyleRegexEnabled = getConfig<string[]>(
-    'texra.latex.enabledReplacementsRegex',
-    DEFAULT_CORE_SETTINGS.latex.enabledReplacementsRegex,
-  ).includes('max_style_regex');
 
   let result = applyReplacements(text, replacements, {
     cleanupPasses: false,
@@ -81,15 +72,6 @@ function applyAllPolicy(text: string): string {
   result = applyReplacements(result, getAllReplacementsRegex(), {
     cleanupPasses: false,
   }).trim();
-  // The legacy unbraced S migration is a compatibility rule, not an
-  // opt-in regex replacement: run it whenever the direct max-style group
-  // produced the persisted output it repairs. When `max_style_regex` is
-  // enabled, MAX_REGEX_REPLACEMENTS already contains the same rule.
-  if (maxStyleEnabled && !maxStyleRegexEnabled) {
-    result = applyReplacements(result, LEGACY_UNBRACED_S_MIGRATION, {
-      cleanupPasses: false,
-    }).trim();
-  }
   result = applyReplacements(result, replacements).trim();
   return wrapCritique ? wrapCritiqueInAlign(result) : result;
 }

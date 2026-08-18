@@ -95,11 +95,6 @@ export function unregisterLeanServer(id: string): void {
   servers.delete(id);
 }
 
-/** Clear all entries so registry-dependent tests remain isolated. */
-export function clearLeanServerRegistry(): void {
-  servers.clear();
-}
-
 function statusTail(info: LeanServerInfo, now: number): string {
   switch (info.status) {
     case 'error':

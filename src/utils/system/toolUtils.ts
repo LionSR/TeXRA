@@ -166,13 +166,8 @@ async function tryExeca(
 }
 
 /** Whether a probe result carries a version-like pattern (e.g., "3.7.1"). */
-function hasVersionOutput(result: {
-  stdout?: string;
-  stderr?: string;
-}): boolean {
-  return (
-    /\d+\.\d+/.test(result.stdout ?? '') || /\d+\.\d+/.test(result.stderr ?? '')
-  );
+function hasVersionOutput(result: { stdout: string; stderr: string }): boolean {
+  return /\d+\.\d+/.test(result.stdout) || /\d+\.\d+/.test(result.stderr);
 }
 
 /** Split a probe command string into an executable and its arguments. */

@@ -274,34 +274,8 @@ const icons = {
 
 let isRegistered = false;
 
-/**
- * Legacy codicon-to-canonical aliases for backward compatibility with persisted
- * icon names (e.g. in localStorage, settings files, or telemetry events that
- * may still reference the old names). The static migration handled the source
- * code; this map handles data that lives outside the repo.
- *
- * Canonical names first shipped in extension v0.39.10 on 2026-07-29. Retain
- * these aliases through 2026-10-29; remove them only after supported persisted
- * and external extension icon names can no longer contain the legacy spellings
- * tracked in #6981.
- */
-const LEGACY_ICON_ALIASES: Readonly<Record<string, keyof typeof icons>> =
-  Object.freeze({
-    close: 'xmark',
-    diff: 'code-compare',
-    edit: 'pencil',
-    error: 'circle-exclamation',
-    refresh: 'rotate-right',
-    save: 'floppy-disk',
-    search: 'magnifying-glass',
-    'settings-gear': 'gear',
-    tools: 'screwdriver-wrench',
-    warning: 'triangle-exclamation',
-  });
-
 function texraIconResolver(name: string): string {
-  const canonical = LEGACY_ICON_ALIASES[name] ?? name;
-  const icon = icons[canonical as keyof typeof icons];
+  const icon = icons[name as keyof typeof icons];
   return icon ? `data:image/svg+xml,${encodeURIComponent(iconSvg(icon))}` : '';
 }
 

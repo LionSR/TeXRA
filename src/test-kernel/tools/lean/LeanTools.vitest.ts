@@ -10,8 +10,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import { defaultResolveWorkspaceRoot } from '@tools/lean/direct/directLspAdapter';
 import {
-  clearLeanServerRegistry,
+  listLeanServers,
   registerLeanServer,
+  unregisterLeanServer,
   updateLeanServer,
 } from '@tools/lean/leanServerRegistry';
 import { extractHoverText } from '@tools/lean/leanTypes';
@@ -100,7 +101,7 @@ describe('defaultResolveWorkspaceRoot', () => {
 
 describe('Lean external tool status', () => {
   afterEach(() => {
-    clearLeanServerRegistry();
+    for (const server of listLeanServers()) unregisterLeanServer(server.id);
   });
 
   it('counts only starting and running Lean servers as active', async () => {
