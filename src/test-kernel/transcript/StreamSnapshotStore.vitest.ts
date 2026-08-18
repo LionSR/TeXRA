@@ -1231,6 +1231,52 @@ describe('StreamSnapshotStore', () => {
     expect(store.getRunMetadata(STREAM).description).toBeUndefined();
   });
 
+  it('does not start a second concurrent seed read for a mutation racing load()', async () => {
+    // Regression test: the per-stream seed lane must serialize `load()`'s own
+    // disk read with a mutation that arrives while disk provenance is still
+    // 'unknown' — a bug briefly reintroduced by an early PQueue draft let the
+    // mutation start its own independent read concurrently with load()'s,
+    // racing two `applyStreamData` calls onto the same usage accumulator.
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      [RUN]: usage(100, 20, 0.5),
+    });
+
+    const store = new StreamSnapshotStore();
+    const facts = snapshotFacts(store);
+
+    const readDir = StorageFS.readDir.bind(StorageFS);
+    const readGate = pDefer<void>();
+    const readStarted = pDefer<void>();
+    let readCallCount = 0;
+    const readDirSpy = vi
+      .spyOn(StorageFS, 'readDir')
+      .mockImplementation(async (dir: string) => {
+        if (dir !== streamDataDir(STREAM)) return readDir(dir);
+        readCallCount += 1;
+        readStarted.resolve();
+        await readGate.promise;
+        return readDir(dir);
+      });
+
+    const loading = store.load([STREAM]);
+    await readStarted.promise;
+
+    // A live mutation lands while `load()`'s own seed read is still gated
+    // mid-flight and disk provenance is still 'unknown'.
+    facts.addUsage(STREAM, RUN, usage(50, 10, 0.25));
+
+    readGate.resolve();
+    await loading;
+    await store.flush();
+
+    expect(readCallCount).toBe(1);
+    expect(await readStreamFile(STREAM, 'usageStats.json')).toMatchObject({
+      [RUN]: usage(150, 30, 0.75),
+    });
+
+    readDirSpy.mockRestore();
+  });
+
   it('does not overwrite a live description that lands during hydration', async () => {
     await installPlatform();
     const executionId = 'aa77cc88' as ExecutionId;
