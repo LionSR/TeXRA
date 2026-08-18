@@ -11,6 +11,7 @@ import {
   activeSubagentsFor,
   childRosters,
   parentStream,
+  streamMetadataFor,
 } from '@cli/chat/tui/state/childExecutions';
 import {
   activeStreamId as activeStreamIdSignal,
@@ -20,7 +21,6 @@ import {
   clearTransientNotice,
   finishWorkPlanReaderRequest,
   openInfoPane,
-  patchStream,
   sessionMeta,
   setTransientNotice,
   streams,
@@ -91,13 +91,6 @@ export async function showCliWorkPlan(
     setTransientNotice('The focused session has no work plan.');
     return;
   }
-  // The foreground reader still renders from the slice until the StreamSlice
-  // container collapses (Wave A cliState); patch only the two fields it reads.
-  patchStream(streamId, (slice) => ({
-    ...slice,
-    todos: projection.todos,
-    plan: projection.plan,
-  }));
   finishWorkPlanReaderRequest(request);
 }
 
@@ -124,7 +117,11 @@ export async function showCliSessionStatus(
     isActivePhase(child.status),
   ).length;
   // Use root-session access facts only before any stream exists.
-  const model = slice?.model ?? (meta.model || context.initialModel);
+  const model =
+    (activeStreamId
+      ? streamMetadataFor(activeStreamId)?.config?.model
+      : undefined) ??
+    (meta.model || context.initialModel);
   const [subscriptionActive, grokSubscriptionActive, kimiCodeActive] =
     await Promise.all([
       isCodexSubscriptionActive(model),

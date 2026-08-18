@@ -340,34 +340,6 @@ describe('collectResumeUsage', () => {
       reasoningTokens: 5,
     });
   });
-
-  it('prefers cumulative usage over the latest status-bar snapshot', () => {
-    const streams = streamsOf(
-      makeSlice({
-        streamId: 'main@m#root',
-        usage: {
-          inputTokens: 40,
-          outputTokens: 8,
-          cost: 0.1,
-        },
-        cumulativeUsage: {
-          inputTokens: 100,
-          outputTokens: 20,
-          cost: 0.3,
-        },
-      }),
-    );
-
-    expect(collectResumeUsage(streams)).toEqual({
-      inputTokens: 100,
-      outputTokens: 20,
-      cost: 0.3,
-      reasoningTokens: 0,
-      cacheReadInputTokens: 0,
-      cacheMissInputTokens: 0,
-      cacheCreationInputTokens: 0,
-    });
-  });
 });
 
 describe('formatResumeUsage', () => {

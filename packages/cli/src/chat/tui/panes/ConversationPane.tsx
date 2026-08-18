@@ -20,6 +20,10 @@ import {
   type ConversationEntry,
   type StreamSlice,
 } from '../state/cliState';
+import {
+  sessionStateRevision,
+  streamMetadataFor,
+} from '../state/childExecutions';
 import { currentWorkflowPhaseHeading } from '../state/workflowPhase';
 import {
   readStreamArtifacts,
@@ -171,9 +175,10 @@ interface WorkflowStatusSegment {
  */
 export function workflowRunStatusSummary(
   slice: StreamSlice | undefined,
+  category: AgentCategory | undefined,
 ): readonly WorkflowStatusSegment[] | undefined {
-  if (slice?.category !== AgentCategory.Workflow) return undefined;
-  const phase = currentWorkflowPhaseHeading(slice);
+  if (!slice || category !== AgentCategory.Workflow) return undefined;
+  const phase = currentWorkflowPhaseHeading(slice, category);
   const currentCalls = latestWorkflowCallsById(
     slice.entries.flatMap((entry) =>
       entry.role === 'workflowTask' ? [entry.task] : [],
@@ -213,7 +218,11 @@ export function ConversationPane(
   const activeStreamId = useSignal(activeStreamIdSignal);
   const streams = useSignal(streamsSignal);
   useSignal(streamArtifactRevision);
+  useSignal(sessionStateRevision);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const category = activeStreamId
+    ? streamMetadataFor(activeStreamId)?.agentCategory
+    : undefined;
   const artifacts =
     activeStreamId && slice ? readStreamArtifacts(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
@@ -224,7 +233,7 @@ export function ConversationPane(
     props.availableWidth !== undefined && props.width !== undefined
       ? Math.min(props.availableWidth, props.width)
       : (props.availableWidth ?? props.width);
-  const workflowMetadata = workflowRunStatusSummary(slice);
+  const workflowMetadata = workflowRunStatusSummary(slice, category);
   const metadataRows =
     workflowMetadata &&
     maxRows > 0 &&
@@ -252,16 +261,13 @@ export function ConversationPane(
   const workflowFacts = slice
     ? {
         taskGroups: slice.taskGroups,
-        outputFilesByRound:
-          artifacts?.outputFilesByRound ?? slice.outputFilesByRound,
-        missingOutputsByRound:
-          artifacts?.missingOutputsByRound ?? slice.missingOutputsByRound,
-        compileFailuresByRound:
-          artifacts?.compileFailuresByRound ?? slice.compileFailuresByRound,
+        outputFilesByRound: artifacts?.outputFilesByRound ?? {},
+        missingOutputsByRound: artifacts?.missingOutputsByRound ?? {},
+        compileFailuresByRound: artifacts?.compileFailuresByRound ?? {},
       }
     : undefined;
   const visibleWorkflowDetails =
-    slice?.category === AgentCategory.Workflow
+    category === AgentCategory.Workflow
       ? selectWorkflowRunDetailLines(workflowFacts, detailCapacity)
       : [];
   const detailRows = visibleWorkflowDetails.length;

@@ -17,7 +17,7 @@ import {
 } from '@cli/chat/tui/state/workflowDashboardModel';
 import type { StreamView } from '@cli/chat/tui/state/streamViews';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import { type StreamTabId } from '@shared/schemas';
 import {
   loadInk,
   renderInteractive,
@@ -85,12 +85,6 @@ function controlledList(
 function workflowRootSlice(entries: StreamSlice['entries']): StreamSlice {
   return {
     ...emptySlice(root),
-    agent: 'workflow',
-    identity: {
-      kind: 'multiAgentWorkflow' as const,
-      workflowName: 'workflow',
-    },
-    category: AgentCategory.Workflow,
     entries,
   };
 }

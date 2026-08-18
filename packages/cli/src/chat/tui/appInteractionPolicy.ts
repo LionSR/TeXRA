@@ -1,7 +1,7 @@
 /** Pure foreground-surface and keyboard interaction policy for the root TUI. */
 
 // Local imports - shared schemas and utilities
-import { type StreamTabId } from '@shared/schemas';
+import { type RunIdentity, type StreamTabId } from '@shared/schemas';
 import { assertNever, groupBy } from '@utils/core';
 
 // Local imports - TUI state
@@ -12,7 +12,6 @@ import {
   type PendingApprovalKind,
   type PendingApprovalSummary,
 } from './state/approvalQueue';
-import type { StreamSlice } from './state/cliState';
 
 const FORM_FOREGROUND_MAX_ROWS = 18;
 // Match form sizing for approval modals that already budget or scroll their
@@ -293,27 +292,22 @@ export function visibleApprovalRootStreamId(
 // children are driven by their own tool and would no-op here) whose parent
 // stream IS the workflow-script run — one identity hop, which excludes the
 // run stream itself so its row never shows a control that would silently
-// no-op.
+// no-op. Callers read both identities from the shared metadata
+// (`streamMetadataFor`), resolving the parent edge themselves, so this
+// selector stays pure.
 export function selectedChildRowWorkflowControllable({
-  parentStream,
+  parentIdentity,
+  selectedChildIdentity,
   selectedChildKillable,
-  selectedChildStreamId,
-  streams,
 }: {
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly parentIdentity: RunIdentity | undefined;
+  readonly selectedChildIdentity: RunIdentity | undefined;
   readonly selectedChildKillable: boolean;
-  readonly selectedChildStreamId: StreamTabId | undefined;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): boolean {
-  if (!selectedChildKillable || selectedChildStreamId === undefined) {
-    return false;
-  }
-  const parentOfSelectedChild = parentStream.get(selectedChildStreamId);
-  const childIdentity = streams.get(selectedChildStreamId)?.identity;
   return (
-    childIdentity?.kind === 'agent' &&
-    childIdentity.tool === undefined &&
-    parentOfSelectedChild !== undefined &&
-    streams.get(parentOfSelectedChild)?.identity?.kind === 'multiAgentWorkflow'
+    selectedChildKillable &&
+    selectedChildIdentity?.kind === 'agent' &&
+    selectedChildIdentity.tool === undefined &&
+    parentIdentity?.kind === 'multiAgentWorkflow'
   );
 }
