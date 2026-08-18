@@ -14,6 +14,7 @@ import { platform } from '@platform/platform';
 import type { ApiAccessMode } from '@shared/schemas';
 import { AgentCategory, byCategory } from '@shared/schemas';
 import { getFirstRunDone } from '@shared/state/onboardingState';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   firstRunSetupAgentOverride,
@@ -135,7 +136,7 @@ async function canLaunchWithDefaultModel(
     return true;
   } catch (error) {
     log.warn(
-      `Unable to select the default CLI model: ${error instanceof Error ? error.message : String(error)}`,
+      `Unable to select the default CLI model: ${toErrorMessage(error)}`,
     );
     return false;
   }

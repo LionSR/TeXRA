@@ -1442,6 +1442,168 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   /**
+   * Clear a cached compaction result that belongs to a genuinely different
+   * input, before {@link createResponseImpl} decides whether to reuse it.
+   *
+   * A same-turn retry (PocketFlow's Node._exec reuses the same prepRes, hence
+   * the same `messages` reference, across retry attempts) keeps its cached
+   * result instead — otherwise the chain anchor that compaction already
+   * cleared on chainState (which survives retries permanently) would outlive
+   * this payload, forcing a redundant re-compaction on every retry. A retained
+   * pending response is handled by the caller before this state can be
+   * discarded.
+   *
+   * This reference check alone is NOT sufficient to distinguish a same-turn
+   * retry from the next turn, because PocketFlow's ModelInvocationNode.post()
+   * mutates `shared.messages` in place, so the reference is often identical
+   * across turns too. The primary guard against cross-turn reuse is
+   * applyCompactionState() clearing compactionResult on every successful call;
+   * this method only ever matters while a compaction from a still-in-flight
+   * (unsuccessful) attempt is pending.
+   */
+  private invalidateStaleCompactionCache(messages: ResponseInputItem[]): void {
+    if (
+      this.compactionResult !== undefined &&
+      (this.compactionResult.sourceMessages !== messages ||
+        this.compactionResult.sourceFingerprint !==
+          this.messagesTailFingerprint(messages))
+    ) {
+      // Reference or content changed — a follow-up appended after a failed
+      // turn mutates the SAME array in place, so identity alone would replay
+      // a stale pre-follow-up payload and silently drop the user's message.
+      this.compactionResult = undefined;
+    }
+  }
+
+  /**
+   * Decide the execution transport for this request. Extracted from
+   * {@link createResponseImpl} verbatim; owns the mutually-exclusive
+   * background / streaming / WebSocket selection plus the debug logging that
+   * explains why an enabled toggle was skipped.
+   */
+  private resolveExecutionMode(): {
+    useBackgroundResponses: boolean;
+    useStreaming: boolean;
+    useWebSocket: boolean;
+  } {
+    // Route through isBackgroundModeActive() so provider-profile policy actually
+    // gates the request, not just the predicate.
+    const useBackgroundResponses = this.isBackgroundModeActive();
+    const streamingToggleEnabled = useBackgroundResponses
+      ? super.getStreamingConfig()
+      : this.getStreamingConfig();
+    const useStreaming = streamingToggleEnabled && !useBackgroundResponses;
+    const useWebSocket =
+      this.isWebSocketModeEnabled() && !useBackgroundResponses;
+
+    if (
+      !useBackgroundResponses &&
+      this.isBackgroundModeToggleEnabled() &&
+      this.isBackgroundModeEligible()
+    ) {
+      if (this.getOpenAIResponseCapabilities()?.backgroundMode === 'disabled') {
+        this.logger.debug(
+          'Background mode toggle is enabled but the active provider profile disables background execution. Proceeding without background mode.',
+        );
+      } else {
+        this.logger.debug(
+          'Background mode toggle is enabled but this handler does not support background execution. Proceeding without background mode.',
+        );
+      }
+    } else if (streamingToggleEnabled && useBackgroundResponses) {
+      this.logger.debug(
+        'Background mode enabled; skipping streaming to avoid unstable behavior.',
+      );
+    }
+
+    return { useBackgroundResponses, useStreaming, useWebSocket };
+  }
+
+  /**
+   * Resolve the messages actually sent this turn: reuse a cached compaction,
+   * run a fresh compaction at the manual/threshold trigger, or pass the input
+   * through untouched. Extracted from {@link createResponseImpl} verbatim; the
+   * compaction path mutates `this.compactionResult` as a side effect, which the
+   * caller reads back for its downstream slicing and return value.
+   */
+  private async resolveEffectiveMessages(args: {
+    client: OpenAI;
+    messages: ResponseInputItem[];
+    systemPrompt: string | undefined;
+    signal: AbortSignal | undefined;
+    convertedTools: ReturnType<typeof toOpenAIResponseTools> | undefined;
+  }): Promise<{
+    effectiveMessages: ResponseInputItem[];
+    compactedThisCall: boolean;
+    compactedMessages: ResponseInputItem[] | undefined;
+  }> {
+    const { client, messages, systemPrompt, signal, convertedTools } = args;
+
+    // Check if compaction is needed before processing the request
+    let effectiveMessages = messages;
+    // Track if compaction happened in THIS call (not previous calls)
+    let compactedThisCall = false;
+    // Store compacted messages for return value (captured when compaction succeeds)
+    let compactedMessages: ResponseInputItem[] | undefined;
+    const reusableCompaction = this.compactionResult;
+    if (reusableCompaction) {
+      // Anything surviving the staleness check above compacted this exact input.
+      // Same-turn retry of an input that already compacted successfully on a
+      // prior attempt (see the cache check above): reuse it instead of
+      // hitting the compact endpoint again. Re-running compaction here would
+      // be a silent no-op from the caller's perspective but a real, wasted
+      // API round trip, since chainState's anchor clear already committed
+      // permanently and doesn't need redoing.
+      effectiveMessages = reusableCompaction.compactedMessages;
+      compactedThisCall = true;
+      compactedMessages = reusableCompaction.compactedMessages;
+    } else if (this.shouldCompact()) {
+      // Consume the manual compaction request now that compaction is being
+      // attempted. For automatic compaction (threshold-based) no request is
+      // pending, so this reports false and changes nothing.
+      const wasManualRequest = this.consumeCompactionRequest();
+      if (wasManualRequest) {
+        // Requested compactions come from the manual command, the live-count
+        // threshold, or the overflow recovery — each already logged its
+        // trigger; this line records the execution.
+        logProgressStatus(
+          this.logger,
+          `Compacting conversation (requested, ${this.chainState.getCumulativeInputTokens()} input tokens)`,
+        );
+      } else {
+        const threshold = this.getCompactionTokenThreshold();
+        logProgressStatus(
+          this.logger,
+          `Compacting conversation (${this.chainState.getCumulativeInputTokens()} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
+        );
+      }
+      // A backend that keeps no server-side response state (the ChatGPT-
+      // subscription/Codex profile) has nothing for the stateful compact
+      // endpoint to act on, so it always goes through the client-side
+      // summarize-and-resend fallback instead (#7213).
+      effectiveMessages = this.storesResponsesServerSide
+        ? await this.compactConversation(
+            client,
+            messages,
+            systemPrompt,
+            signal,
+            convertedTools,
+          )
+        : await this.compactConversationClientSide(client, messages, signal);
+      // compactionResult is set if compaction succeeded
+      const { compactionResult } = this;
+      compactedThisCall = compactionResult !== undefined;
+      if (compactionResult) {
+        // Note: the chain anchor is already cleared inside compactConversation()
+        // immediately after the compact endpoint succeeds (before token counting).
+        compactedMessages = compactionResult.compactedMessages;
+      }
+    }
+
+    return { effectiveMessages, compactedThisCall, compactedMessages };
+  }
+
+  /**
    * Phase 1: BUILD - Construct the shared base request parameters (including
    * the reasoning config) used by both token counting and the API call.
    * Extracted from {@link createResponseImpl} verbatim.
@@ -1679,63 +1841,12 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       }
     }
 
-    // Clear any stale compaction result from a genuinely different input. A
-    // same-turn retry (PocketFlow's Node._exec reuses the same prepRes, hence
-    // the same `messages` reference, across retry attempts) keeps its cached
-    // result below instead — otherwise the chain anchor that compaction
-    // already cleared on chainState (which survives retries permanently)
-    // would outlive this payload, forcing a redundant re-compaction on every
-    // retry. A retained pending response is handled above before this state
-    // can be discarded.
-    //
-    // This reference check alone is NOT sufficient to distinguish a same-turn
-    // retry from the next turn, because PocketFlow's ModelInvocationNode.post()
-    // mutates `shared.messages` in place, so the reference is often identical
-    // across turns too. The primary guard against cross-turn reuse is
-    // applyCompactionState() clearing compactionResult on every successful
-    // call; this line only ever matters while a compaction from a still-in-
-    // flight (unsuccessful) attempt is pending.
-    if (
-      this.compactionResult !== undefined &&
-      (this.compactionResult.sourceMessages !== messages ||
-        this.compactionResult.sourceFingerprint !==
-          this.messagesTailFingerprint(messages))
-    ) {
-      // Reference or content changed — a follow-up appended after a failed
-      // turn mutates the SAME array in place, so identity alone would replay
-      // a stale pre-follow-up payload and silently drop the user's message.
-      this.compactionResult = undefined;
-    }
+    // Clear any stale compaction cache before deciding whether to reuse it
+    // below (see {@link invalidateStaleCompactionCache}).
+    this.invalidateStaleCompactionCache(messages);
 
-    // Route through isBackgroundModeActive() so provider-profile policy actually
-    // gates the request, not just the predicate.
-    const useBackgroundResponses = this.isBackgroundModeActive();
-    const streamingToggleEnabled = useBackgroundResponses
-      ? super.getStreamingConfig()
-      : this.getStreamingConfig();
-    const useStreaming = streamingToggleEnabled && !useBackgroundResponses;
-    const useWebSocket =
-      this.isWebSocketModeEnabled() && !useBackgroundResponses;
-
-    if (
-      !useBackgroundResponses &&
-      this.isBackgroundModeToggleEnabled() &&
-      this.isBackgroundModeEligible()
-    ) {
-      if (this.getOpenAIResponseCapabilities()?.backgroundMode === 'disabled') {
-        this.logger.debug(
-          'Background mode toggle is enabled but the active provider profile disables background execution. Proceeding without background mode.',
-        );
-      } else {
-        this.logger.debug(
-          'Background mode toggle is enabled but this handler does not support background execution. Proceeding without background mode.',
-        );
-      }
-    } else if (streamingToggleEnabled && useBackgroundResponses) {
-      this.logger.debug(
-        'Background mode enabled; skipping streaming to avoid unstable behavior.',
-      );
-    }
+    const { useBackgroundResponses, useStreaming, useWebSocket } =
+      this.resolveExecutionMode();
 
     // Convert tools early so they're available for both compaction token counting and the API call
     const convertedTools = tools?.length
@@ -1745,66 +1856,16 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
         })
       : undefined;
 
-    // Check if compaction is needed before processing the request
-    let effectiveMessages = messages;
-    // Track if compaction happened in THIS call (not previous calls)
-    let compactedThisCall = false;
-    // Store compacted messages for return value (captured when compaction succeeds)
-    let compactedMessages: ResponseInputItem[] | undefined;
-    const reusableCompaction = this.compactionResult;
-    if (reusableCompaction) {
-      // Anything surviving the staleness check above compacted this exact input.
-      // Same-turn retry of an input that already compacted successfully on a
-      // prior attempt (see the cache check above): reuse it instead of
-      // hitting the compact endpoint again. Re-running compaction here would
-      // be a silent no-op from the caller's perspective but a real, wasted
-      // API round trip, since chainState's anchor clear already committed
-      // permanently and doesn't need redoing.
-      effectiveMessages = reusableCompaction.compactedMessages;
-      compactedThisCall = true;
-      compactedMessages = reusableCompaction.compactedMessages;
-    } else if (this.shouldCompact()) {
-      // Consume the manual compaction request now that compaction is being
-      // attempted. For automatic compaction (threshold-based) no request is
-      // pending, so this reports false and changes nothing.
-      const wasManualRequest = this.consumeCompactionRequest();
-      if (wasManualRequest) {
-        // Requested compactions come from the manual command, the live-count
-        // threshold, or the overflow recovery — each already logged its
-        // trigger; this line records the execution.
-        logProgressStatus(
-          this.logger,
-          `Compacting conversation (requested, ${this.chainState.getCumulativeInputTokens()} input tokens)`,
-        );
-      } else {
-        const threshold = this.getCompactionTokenThreshold();
-        logProgressStatus(
-          this.logger,
-          `Compacting conversation (${this.chainState.getCumulativeInputTokens()} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
-        );
-      }
-      // A backend that keeps no server-side response state (the ChatGPT-
-      // subscription/Codex profile) has nothing for the stateful compact
-      // endpoint to act on, so it always goes through the client-side
-      // summarize-and-resend fallback instead (#7213).
-      effectiveMessages = this.storesResponsesServerSide
-        ? await this.compactConversation(
-            client,
-            messages,
-            systemPrompt,
-            signal,
-            convertedTools,
-          )
-        : await this.compactConversationClientSide(client, messages, signal);
-      // compactionResult is set if compaction succeeded
-      const { compactionResult } = this;
-      compactedThisCall = compactionResult !== undefined;
-      if (compactionResult) {
-        // Note: the chain anchor is already cleared inside compactConversation()
-        // immediately after the compact endpoint succeeds (before token counting).
-        compactedMessages = compactionResult.compactedMessages;
-      }
-    }
+    // Reuse a cached compaction, run a fresh one at the manual/threshold
+    // trigger, or pass the input through unchanged.
+    const { effectiveMessages, compactedThisCall, compactedMessages } =
+      await this.resolveEffectiveMessages({
+        client,
+        messages,
+        systemPrompt,
+        signal,
+        convertedTools,
+      });
 
     // After compaction in THIS call, send all compacted messages.
     // If already compacted (from previous call), also send all messages.
