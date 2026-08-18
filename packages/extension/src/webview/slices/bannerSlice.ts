@@ -1,6 +1,6 @@
 /**
- * Banner slice: API-key, agent-config, dependency, and login banners, plus
- * the dependency recheck and banner-sign-in flows.
+ * Banner slice: the `SET_BANNER` echo, the dependency recheck, and the
+ * banner sign-in/dismiss flows.
  */
 
 import * as vscode from 'vscode';
@@ -21,16 +21,9 @@ import type { MainViewInboundHost } from '../mainViewInboundContext';
 
 export function createBannerHandlers(host: MainViewInboundHost) {
   return {
-    [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) => host.postToActiveView(m),
-    [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: (m) => host.postToActiveView(m),
-    [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) =>
-      host.postToActiveView(m),
-    [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: (m) =>
-      host.postToActiveView(m),
-    [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (m) =>
-      host.postToActiveView(m),
-    [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: (m) =>
-      host.postToActiveView(m),
+    // Webview-initiated banner updates are echoed back to the active view so
+    // the frontend banner state stays the single owner of visibility.
+    [MAIN_VIEW_COMMANDS.SET_BANNER]: (m) => host.postToActiveView(m),
     [MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE]: (m) => {
       const docsCommand = getToolDocsCommand(m.tool);
       if (!docsCommand) return;
@@ -44,17 +37,15 @@ export function createBannerHandlers(host: MainViewInboundHost) {
         return;
       }
       const missingTools = await checkCoreDependencies(true);
-      view.webview.postMessage(
-        missingTools.length === 0
-          ? { command: MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER }
-          : {
-              command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
-              missingTools: [...missingTools],
-            },
-      );
+      view.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_BANNER,
+        banner: 'dependency',
+        visible: missingTools.length > 0,
+        ...(missingTools.length > 0 && {
+          data: { missingTools: [...missingTools] },
+        }),
+      });
     },
-    [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: (m) => host.postToActiveView(m),
-    [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: (m) => host.postToActiveView(m),
     [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
       try {
         const authenticated = await vscode.commands.executeCommand<boolean>(
@@ -62,7 +53,9 @@ export function createBannerHandlers(host: MainViewInboundHost) {
         );
         if (authenticated) {
           host.postToActiveView({
-            command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+            command: MAIN_VIEW_COMMANDS.SET_BANNER,
+            banner: 'login',
+            visible: false,
           });
           await host.refreshAfterCredentialChange();
         }

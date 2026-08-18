@@ -53,11 +53,12 @@ const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
 
 /**
  * Fold the `extractFigures` / `extractTikz` delegation shorthand into the
- * canonical `toolConfig.autoExtract*` flags. Mirrors the runtime mapping in
- * `DelegationTools.execute`, but only sets a flag the input explicitly carried
- * (absent stays undefined so the lenient schema's prefault applies).
+ * canonical `toolConfig.autoExtract*` flags. The single mapping shared by
+ * `DelegationTools.execute` (runtime) and {@link parseDelegationToolInput}
+ * (replay): only a flag the input explicitly carried is set (absent stays
+ * undefined so the caller's defaults/prefaults apply).
  */
-function extractionShorthandToolConfig(
+export function extractionShorthandToolConfig(
   source: Record<string, unknown>,
 ): Record<string, unknown> {
   const existing = isObject(source.toolConfig) ? source.toolConfig : {};
