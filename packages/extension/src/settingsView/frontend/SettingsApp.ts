@@ -19,9 +19,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 // Local imports - shared schemas and constants
 import {
   dispatchSettingsViewOutbound,
-  SETTINGS_TAB,
   SETTINGS_TAB_PANEL_BY_NAME,
-  SETTINGS_TAB_PANEL_NAMES,
   type SettingsTabPanelName,
   type SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
@@ -108,7 +106,7 @@ import {
   quotaAutoSwitched,
   reliabilitySettings,
   resetSettingsState,
-  selectedTabIndex,
+  selectedPanel,
   sessionProblem,
   spendingStatus,
   spendingStatusError,
@@ -195,9 +193,7 @@ export class SettingsApp extends SettingsAppBase {
   }
 
   private selectSettingsEntry(entry: SettingsNavEntry): void {
-    const selectedIndex = SETTINGS_TAB_PANEL_NAMES.indexOf(entry.panel);
-    if (selectedIndex < 0) return;
-    selectedTabIndex.set(selectedIndex);
+    selectedPanel.set(entry.panel);
     requestAnimationFrame(() => {
       const panel =
         this.shadowRoot?.querySelector<HTMLElement>('.settings-panel');
@@ -244,7 +240,7 @@ export class SettingsApp extends SettingsAppBase {
   };
 
   private handleManageProviderKeys(): void {
-    selectedTabIndex.set(SETTINGS_TAB.MODELS);
+    selectedPanel.set(SETTINGS_TAB_PANEL_BY_NAME.MODELS);
   }
 
   private renderProviderKeyModal(): TemplateResult | typeof nothing {
@@ -517,9 +513,7 @@ export class SettingsApp extends SettingsAppBase {
       unsupportedCommands.get(),
       SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
     );
-    const requestedPanel =
-      SETTINGS_TAB_PANEL_NAMES[selectedTabIndex.get()] ??
-      SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT;
+    const requestedPanel = selectedPanel.get();
     const activePanel =
       !desktopHost && requestedPanel === SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS
         ? SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT

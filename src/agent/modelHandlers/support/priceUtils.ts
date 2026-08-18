@@ -35,7 +35,7 @@ export interface LongContextPricingTier {
   outputPrice: number;
 }
 
-export interface StandardPriceTokens {
+interface StandardPriceTokens {
   inputTokens: number;
   outputTokens: number;
   /**

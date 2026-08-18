@@ -16,10 +16,6 @@ import {
   findWorkspaceStoragePath,
 } from './workspaceStorageFixture.js';
 
-const SETTINGS_TAB_INDEX = {
-  MEMORY: 0,
-} as const;
-
 const MEMORY_FILE_NAME = 'playwright-relaunch-memory.md';
 const MEMORY_DISPLAY_PATH = `/memories/${MEMORY_FILE_NAME}`;
 const MEMORY_PREVIEW_TEXT =
@@ -116,7 +112,7 @@ async function waitForMemoryEntry(launched: LaunchedApp): Promise<void> {
 }
 
 async function verifyMemoryEntryIsListed(launched: LaunchedApp): Promise<void> {
-  await setSettingsTab(launched, SETTINGS_TAB_INDEX.MEMORY);
+  await setSettingsTab(launched, 'memory');
   await sendHostCommand(launched, { command: 'getMemoryData' });
   await waitForMemoryEntry(launched);
 }

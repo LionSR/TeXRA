@@ -51,7 +51,7 @@ import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtil
 
 type VscodeLmUsage = undefined;
 
-export interface VscodeLmResponse {
+interface VscodeLmResponse {
   readonly text: string;
   readonly toolCalls: readonly LanguageModelToolCallPart[];
   readonly usage: VscodeLmUsage;

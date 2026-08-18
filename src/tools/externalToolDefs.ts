@@ -113,14 +113,6 @@ export interface ExternalToolDef {
   readonly toggleable?: boolean;
   /** When true, detect setup but show the integration as not yet enabled. */
   readonly comingSoon?: boolean;
-  /**
-   * VS Code command ID invoked by the "fix this" action button in the
-   * "tools were excluded" notification. Overrides the default Tools tab
-   * link — use this when real setup lives elsewhere (e.g. Git tab for a
-   * GitHub token). The label for that button is `installActionLabel`.
-   */
-  readonly installActionCommand?: string;
-  readonly installActionLabel?: string;
 }
 
 // ============================================================
@@ -482,8 +474,6 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes: `Token stored in host secret storage or read from GITHUB_TOKEN/GH_TOKEN. The CLI /config → GitHub token row and the VS Code Git tab both manage the stored token. Requires a git repository in the workspace. Polls every ${PR_POLL_INTERVAL_MS / 1000}s; cap: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PRs and ${MAX_CONCURRENT_REPO_SUBSCRIPTIONS} concurrent repos. Bot-authored events are dropped end-to-end by policy.`,
     authNote: 'Uses personal access token',
     toggleable: true,
-    installActionCommand: 'texra.showGitSettings',
-    installActionLabel: 'Open Git settings',
     ...prerequisitesChecks({
       probe: getGitHubPRPrerequisites,
       resolve: resolveGitHubPRPrerequisites,
