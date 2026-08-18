@@ -1387,6 +1387,28 @@ function seedRunningWorkflow(): void {
   transitionStreamRunning(childStreamId);
 
   const runTrace = createRunTrace(childStreamId, defaultSession().transcripts);
+  // `runTrace.trace` only feeds the transcript recorder (see
+  // `createRunTrace`); a real launch also bridges it onto the session event
+  // hub via `session.attachRunTrace`, which is what lands a `run.start` in
+  // the durable summary mirror (`SessionHandle`'s `attachSessionEvents`) so
+  // `getStreamMetadata(...)` overlays `identity` regardless of the RUNNING
+  // transition's ephemeral metadata reset. Emit straight onto the hub here,
+  // the same way the output-file/compile-failure facts below do —
+  // `SubagentList`'s `workflowDashboardRoot` gate reads that overlay to pick
+  // the two-column task dashboard.
+  defaultSession().events.emit({
+    scope: 'run',
+    streamId: childStreamId,
+    event: {
+      type: 'run.start',
+      streamId: childStreamId,
+      executionId,
+      identity: {
+        kind: 'multiAgentWorkflow',
+        workflowName: 'live-workflow-validation',
+      },
+    },
+  });
   const runStage = runTrace.trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {
@@ -1454,13 +1476,6 @@ function seedRunningWorkflow(): void {
     transitionStreamRunning(child.childStreamId);
   }
   emitChildRoster(childStreamId, workflowChildren);
-  patchStream(childStreamId, (slice) => ({
-    ...slice,
-    identity: {
-      kind: 'multiAgentWorkflow',
-      workflowName: 'live-workflow-validation',
-    },
-  }));
 
   HARNESS_DISPOSERS.push(() => {
     phaseStage.end('cancelled');

@@ -39,7 +39,7 @@ import {
   isChildStreamRemoved,
   unbindChildStreamState,
 } from './childExecutions';
-import { bumpStreamArtifactRevision } from './subscribeStreamArtifacts';
+import { markArtifactStreamHydrated } from './subscribeStreamArtifacts';
 import {
   releaseInactiveStreamTranscript,
   syncStreamLog,
@@ -153,20 +153,26 @@ class TuiSessionRenderer implements SessionRendererPort {
     invalidateChildStreams();
   }
 
-  onFilesChanged(_streamId: StreamTabId): void {
-    // Renderers read `StreamArtifactProjection` directly.
-    bumpStreamArtifactRevision();
+  onFilesChanged(streamId: StreamTabId): void {
+    // Renderers read `StreamArtifactProjection` directly. The write itself is
+    // proof of established provenance for this session — a live fact must not
+    // wait on the focus-driven disk preload (`markArtifactStreamHydrated`'s
+    // other caller) that exists only to seed a stream cold, or a background
+    // (never-focused, or focus-raced) workflow's output files never surface.
+    markArtifactStreamHydrated(streamId);
   }
 
-  onMissingOutputsChanged(_streamId: StreamTabId): void {
+  onMissingOutputsChanged(streamId: StreamTabId): void {
     // Renderers read `StreamArtifactProjection` directly; a disk-restored
-    // clear invalidates the memo like any other change.
-    bumpStreamArtifactRevision();
+    // clear invalidates the memo like any other change. See `onFilesChanged`
+    // for why the write marks the stream hydrated rather than only bumping.
+    markArtifactStreamHydrated(streamId);
   }
 
-  onCompileFailuresChanged(_streamId: StreamTabId): void {
-    // Renderers read `StreamArtifactProjection` directly.
-    bumpStreamArtifactRevision();
+  onCompileFailuresChanged(streamId: StreamTabId): void {
+    // Renderers read `StreamArtifactProjection` directly. See
+    // `onFilesChanged` for why the write marks the stream hydrated.
+    markArtifactStreamHydrated(streamId);
   }
 
   onRunUsageChanged(
@@ -175,20 +181,22 @@ class TuiSessionRenderer implements SessionRendererPort {
     latestUsage: Parameters<SessionRendererPort['onRunUsageChanged']>[2],
   ): void {
     // The latest-usage gauge is payload-only (no synchronous shared read);
-    // the cumulative sum is `StreamArtifactProjection.cumulativeUsage`.
+    // the cumulative sum is `StreamArtifactProjection.cumulativeUsage`. See
+    // `onFilesChanged` for why the write marks the stream hydrated.
     patchStream(streamId, (slice) => ({ ...slice, usage: latestUsage }));
-    bumpStreamArtifactRevision();
+    markArtifactStreamHydrated(streamId);
   }
 
   // Live todos/plan are readable from the snapshot store synchronously: a
   // live update is applied to `getWorkPlan` before the stream seeds
   // (StreamSnapshotStore eager-apply overlay), so renderers read the store.
-  onTodosChanged(_streamId: StreamTabId, _todos: TodoItem[]): void {
-    bumpStreamArtifactRevision();
+  // See `onFilesChanged` for why the write marks the stream hydrated.
+  onTodosChanged(streamId: StreamTabId, _todos: TodoItem[]): void {
+    markArtifactStreamHydrated(streamId);
   }
 
-  onPlanChanged(_streamId: StreamTabId, _plan: Plan | null): void {
-    bumpStreamArtifactRevision();
+  onPlanChanged(streamId: StreamTabId, _plan: Plan | null): void {
+    markArtifactStreamHydrated(streamId);
   }
 
   onQueuedFollowUpsChanged(_streamId: StreamTabId): void {
