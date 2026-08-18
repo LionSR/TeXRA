@@ -99,7 +99,7 @@ export interface StagedDeletionHost {
   evict(stream: StreamTabId): void;
 }
 
-type StagedDeletionPhase = 'live' | 'transitioning' | 'staged' | 'unavailable';
+type StagedDeletionPhase = 'live' | 'transitioning' | 'staged';
 type StagedRecoveryOutcome = 'discarded' | 'restored' | 'unchanged';
 
 interface DeletionStateBase {
@@ -589,7 +589,7 @@ export class StagedDeletionCoordinator {
                 ]);
                 if (hasStagedData) state.phase = 'staged';
                 else if (hasLiveData) state.phase = 'live';
-                else state.phase = 'unavailable';
+                else state.phase = 'transitioning';
               } catch (recoveryError) {
                 failures.push(recoveryError);
               }

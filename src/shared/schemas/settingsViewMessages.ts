@@ -332,8 +332,9 @@ export type UpdateCustomAgentDirMessage = z.infer<
 
 /**
  * Outbound: backend → frontend reliability + orchestration settings. The wire
- * literal stays `updateSuperYoloEnabled` for compatibility with shipped
- * webviews, so only the schema and type carry the payload's real name.
+ * literal stays `updateSuperYoloEnabled` by the literal-freeze convention
+ * (wire literals never chase renames), so only the schema and type carry the
+ * payload's real name.
  */
 const UpdateReliabilityAndOrchestrationMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED),
