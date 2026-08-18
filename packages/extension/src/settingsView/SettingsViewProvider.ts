@@ -12,7 +12,7 @@ import {
   runAfterAgentCatalogAuthRefresh,
 } from '@frontend/auth/agentCatalogRefreshScope';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentCategory, SettingsTab } from '@shared/schemas';
+import type { AgentCategory, SettingsTabPanelName } from '@shared/schemas';
 
 // Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
@@ -58,11 +58,11 @@ export class SettingsViewProvider extends BaseWebviewProvider {
 
   /**
    * Create and show the webview panel (for command palette activation)
-   * @param tabIndex Optional tab to switch to after showing
+   * @param tab Optional panel name to switch to after showing
    * @param agentSubTab Optional sub-tab for the agents tab ('workflow' | 'toolUse')
    */
   public async showSettingsView(
-    tabIndex?: SettingsTab,
+    tab?: SettingsTabPanelName,
     agentSubTab?: AgentCategory,
   ): Promise<void> {
     const isNew = this.createOrShowPanel({
@@ -76,10 +76,10 @@ export class SettingsViewProvider extends BaseWebviewProvider {
       await this.messageHandler.sendAllData(this._view.webview);
     }
 
-    if (tabIndex != null && this._view) {
+    if (tab != null && this._view) {
       await this._view.webview.postMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-        tabIndex,
+        tab,
         ...(agentSubTab && { agentSubTab }),
       });
     }

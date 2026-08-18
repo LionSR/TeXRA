@@ -17,16 +17,20 @@ import type {
   AcceptCopyMeta,
   AgentCategory,
   FileLocation,
-  SettingsTab,
+  SettingsTabPanelName,
 } from '@shared/schemas';
 import {
   AcceptCopyMetaSchema,
   AgentCategorySchema,
   FileLocationSchema,
-  SETTINGS_TAB,
+  SETTINGS_TAB_PANEL_BY_NAME,
   StreamTabIdSchema,
 } from '@shared/schemas';
-import { commandCatalog } from '@shared/commands/catalog';
+import {
+  commandCatalog,
+  settingsTabByCommand,
+  type SettingsTabCommandId,
+} from '@shared/commands/catalog';
 import {
   awaitTrue,
   definedHandler,
@@ -154,7 +158,7 @@ export const EXTENSION_REGISTRY_CATALOG_COMMAND_IDS: readonly ExtensionRegistryC
  */
 export interface ExtensionCommandActions {
   showSettings(
-    tabIndex?: SettingsTab,
+    tab?: SettingsTabPanelName,
     agentSubTab?: AgentCategory,
   ): Promise<void>;
   resetMainView(): Promise<void>;
@@ -215,18 +219,30 @@ export interface ExtensionCommandActions {
   execute(input: unknown): Promise<void>;
 }
 
+/**
+ * `texra.show*` rows derived from the catalog's `settingsTab` field so the
+ * command → tab mapping lives in one place (`settingsTabByCommand`).
+ * `texra.showAgents` is re-declared below: it additionally accepts an
+ * agent-category sub-tab argument.
+ */
+const SETTINGS_TAB_COMMAND_HANDLERS = Object.fromEntries(
+  (
+    Object.entries(settingsTabByCommand) as [
+      SettingsTabCommandId,
+      SettingsTabPanelName,
+    ][]
+  ).map(([id, tab]) => [
+    id,
+    (actions: ExtensionCommandActions) => awaitTrue(actions.showSettings(tab)),
+  ]),
+) as Record<
+  SettingsTabCommandId,
+  (actions: ExtensionCommandActions) => Promise<boolean>
+>;
+
 export const EXTENSION_COMMAND_HANDLERS = {
+  ...SETTINGS_TAB_COMMAND_HANDLERS,
   'texra.showDashboard': (actions) => awaitTrue(actions.showSettings()),
-  'texra.showMemory': (actions) =>
-    awaitTrue(actions.showSettings(SETTINGS_TAB.MEMORY)),
-  'texra.showModels': (actions) =>
-    awaitTrue(actions.showSettings(SETTINGS_TAB.MODELS)),
-  'texra.showTools': (actions) =>
-    awaitTrue(actions.showSettings(SETTINGS_TAB.TOOLS)),
-  'texra.showMultiAgent': (actions) =>
-    awaitTrue(actions.showSettings(SETTINGS_TAB.MULTI_AGENT)),
-  'texra.showGitSettings': (actions) =>
-    awaitTrue(actions.showSettings(SETTINGS_TAB.GIT)),
   'texra.mainView.reset': (actions) => awaitTrue(actions.resetMainView()),
   'texra.cleanOutput': (actions) => awaitTrue(actions.cleanOutput()),
   'texra.cleanBuild': (actions) => awaitTrue(actions.cleanBuild()),
@@ -292,7 +308,7 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.auth.grok.signIn': (actions) => awaitTrue(actions.signInGrok()),
   'texra.auth.signOut': (actions) => awaitTrue(actions.signOut()),
   'texra.auth.viewProfile': (actions) =>
-    awaitTrue(actions.showSettings(SETTINGS_TAB.ACCOUNT)),
+    awaitTrue(actions.showSettings(SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT)),
   [EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT]: (actions) =>
     awaitTrue(actions.runSetupAssistant()),
   [EXTENSION_COMMANDS.OPEN_GETTING_STARTED]: (actions) =>
@@ -352,7 +368,9 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.showAgents': definedHandler(
     ShowAgentsArgsSchema,
     (actions: ExtensionCommandActions, subTab?: AgentCategory) =>
-      awaitTrue(actions.showSettings(SETTINGS_TAB.AGENTS, subTab)),
+      awaitTrue(
+        actions.showSettings(settingsTabByCommand['texra.showAgents'], subTab),
+      ),
   ),
 } as const satisfies Record<
   ExtensionRegistryCommandId,

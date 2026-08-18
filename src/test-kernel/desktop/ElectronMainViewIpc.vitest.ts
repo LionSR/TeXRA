@@ -14,7 +14,7 @@ import {
   PROGRESS_VIEW_COMMANDS,
   SETTINGS_VIEW_COMMANDS,
 } from '@shared/ipc';
-import { AgentCategory, SETTINGS_TAB } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
@@ -485,16 +485,16 @@ describe('desktop main-view IPC', () => {
     expect(capabilities.shellActions.showSettings).toHaveBeenNthCalledWith(1);
     expect(capabilities.shellActions.showSettings).toHaveBeenNthCalledWith(
       2,
-      SETTINGS_TAB.MODELS,
+      'models',
     );
     expect(capabilities.shellActions.showSettings).toHaveBeenNthCalledWith(
       3,
-      SETTINGS_TAB.AGENTS,
+      'agents',
       AgentCategory.ToolUse,
     );
     expect(capabilities.shellActions.showSettings).toHaveBeenNthCalledWith(
       4,
-      SETTINGS_TAB.MULTI_AGENT,
+      'multi-agent',
     );
     expect(capabilities.shellActions.openAgentDirectory).toHaveBeenCalledWith(
       false,

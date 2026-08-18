@@ -78,7 +78,7 @@ export interface InBandSubagentExecutionOptions extends InBandSubagentExecutionB
   readonly parentExecutionId: ExecutionId;
 }
 
-export interface StableInBandSubagentExecutionOptions {
+interface StableInBandSubagentExecutionOptions {
   /** Cryptographic identity of the prompt/options call, stable across restart. */
   readonly executionId: ExecutionId;
   readonly parentExecutionId: ExecutionId;
@@ -100,16 +100,16 @@ export interface StableInBandSubagentExecutionOptions {
  * Options for the XML-delivery API. A one-shot run context need not have a
  * persisted parent execution, so parentage is optional here.
  */
-export interface InBandSubagentDeliveryOptions extends InBandSubagentExecutionBaseOptions {
+interface InBandSubagentDeliveryOptions extends InBandSubagentExecutionBaseOptions {
   readonly parentExecutionId?: ExecutionId;
 }
 
-export interface InBandSubagentExecutionResult {
+interface InBandSubagentExecutionResult {
   readonly executionId: ExecutionId;
   readonly result: AgentFinalResult;
 }
 
-export interface InBandSubagentDeliveryResult extends InBandSubagentExecutionResult {
+interface InBandSubagentDeliveryResult extends InBandSubagentExecutionResult {
   readonly delivery: string;
 }
 

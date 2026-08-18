@@ -8,7 +8,6 @@ import type {
 } from '@desktop/shared/desktopCommandSurface';
 
 // Local imports - command catalog and shared schemas
-import { SETTINGS_TAB } from '@shared/schemas';
 import {
   formatDesktopAccelerator,
   toElectronAccelerator,
@@ -35,12 +34,12 @@ const DESKTOP_DISPATCH_CASES: ReadonlyArray<
   ['texra.desktop.toggleBottomBar', 'toggleBottomBar', []],
   ['texra.desktop.toggleSidePanel', 'toggleSidePanel', []],
   ['texra.desktop.toggleSummaryBar', 'toggleSummaryBar', []],
-  ['texra.showMemory', 'showSettings', [SETTINGS_TAB.MEMORY]],
-  ['texra.showModels', 'showSettings', [SETTINGS_TAB.MODELS]],
-  ['texra.showAgents', 'showSettings', [SETTINGS_TAB.AGENTS]],
-  ['texra.showTools', 'showSettings', [SETTINGS_TAB.TOOLS]],
-  ['texra.showMultiAgent', 'showSettings', [SETTINGS_TAB.MULTI_AGENT]],
-  ['texra.showGitSettings', 'showSettings', [SETTINGS_TAB.GIT]],
+  ['texra.showMemory', 'showSettings', ['memory']],
+  ['texra.showModels', 'showSettings', ['models']],
+  ['texra.showAgents', 'showSettings', ['agents']],
+  ['texra.showTools', 'showSettings', ['tools']],
+  ['texra.showMultiAgent', 'showSettings', ['multi-agent']],
+  ['texra.showGitSettings', 'showSettings', ['git']],
   ['texra.desktop.openWorkspaceFolder', 'openWorkspaceFolder', []],
   ['texra.desktop.saveFile', 'saveFile', []],
   ['texra.desktop.openLogFolder', 'openLogFolder', []],
@@ -264,7 +263,7 @@ describe('desktop command surface', () => {
     launcherItem?.click?.();
     modelsItem?.click?.();
     expect(actions.showLauncher).toHaveBeenCalledOnce();
-    expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
+    expect(actions.showSettings).toHaveBeenCalledWith('models');
 
     const helpMenu = menu.find((item) => item.label === 'Help');
     const helpSubmenu = helpMenu?.submenu ?? [];

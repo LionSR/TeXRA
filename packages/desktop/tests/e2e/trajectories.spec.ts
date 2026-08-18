@@ -22,19 +22,6 @@ import {
  * a regression guard for the trajectory itself, not the full feature.
  */
 
-// SETTINGS_TAB indices (mirror of `src/shared/schemas/settingsViewMessages.ts`
-// `SETTINGS_TAB_ORDER`). Inlined for the same reason as in screenshots.spec.ts:
-// the Playwright ESM loader trips over the schema import.
-const SETTINGS_TAB_INDEX = {
-  MEMORY: 0,
-  MODELS: 1,
-  AGENTS: 2,
-  MULTI_AGENT: 3,
-  TOOLS: 4,
-  LATEX: 7,
-  ACCOUNT: 9,
-} as const;
-
 let launched: LaunchedApp;
 
 test.beforeAll(async () => {
@@ -96,7 +83,7 @@ test('first launch shows a usable launcher chrome', async () => {
 test('settings → models tab mounts and provider settings are reachable', async () => {
   // Confirm the Models panel actually activated; without this we may catch
   // the previous tab's render and report a false positive.
-  await setSettingsTab(launched, SETTINGS_TAB_INDEX.MODELS, 'models');
+  await setSettingsTab(launched, 'models');
   // Sanity: the panel mounted its child custom element. The provider list lives
   // another shadow root deep, so structural presence is sufficient here.
   const panelHasChild = await launched.page.evaluate(() => {
@@ -107,7 +94,7 @@ test('settings → models tab mounts and provider settings are reachable', async
 });
 
 test('account and usage lives in its own settings panel', async () => {
-  await setSettingsTab(launched, SETTINGS_TAB_INDEX.ACCOUNT, 'account');
+  await setSettingsTab(launched, 'account');
 
   const structure = await launched.page.evaluate(() => {
     const root = document.querySelector('settings-app')?.shadowRoot;
@@ -130,7 +117,7 @@ test('account and usage lives in its own settings panel', async () => {
  * the desktop app on a shared Electron user-data directory.
  */
 test('settings → memory tab mounts', async () => {
-  await setSettingsTab(launched, SETTINGS_TAB_INDEX.MEMORY, 'memory');
+  await setSettingsTab(launched, 'memory');
 });
 
 /**
@@ -198,7 +185,7 @@ test('logs workbench renders the desktop log viewer', async () => {
  * surfaces a copy-the-command dialog rather than running it for the user).
  */
 test('settings → tools tab mounts', async () => {
-  await setSettingsTab(launched, SETTINGS_TAB_INDEX.TOOLS, 'tools');
+  await setSettingsTab(launched, 'tools');
 });
 
 /**
@@ -208,14 +195,14 @@ test('settings → tools tab mounts', async () => {
  * covering it cheaply is worth the few hundred ms.
  */
 test('rapid settings-tab switching does not crash the renderer', async () => {
-  for (const idx of [
-    SETTINGS_TAB_INDEX.MEMORY,
-    SETTINGS_TAB_INDEX.MODELS,
-    SETTINGS_TAB_INDEX.AGENTS,
-    SETTINGS_TAB_INDEX.MULTI_AGENT,
-    SETTINGS_TAB_INDEX.LATEX,
-  ]) {
-    await setSettingsTab(launched, idx);
+  for (const tab of [
+    'memory',
+    'models',
+    'agents',
+    'multi-agent',
+    'latex',
+  ] as const) {
+    await setSettingsTab(launched, tab);
   }
   // The chrome must still be alive after the burst.
   await expect(

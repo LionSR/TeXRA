@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared schemas
-import { AgentCategory, SETTINGS_TAB } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { delay } from '@utils/core';
 
 // Local imports - test DOM utilities
@@ -20,7 +20,7 @@ interface DesktopCommandPaletteModule {
     actions: {
       showLauncher(): void;
       openWorkbench(kind: 'settings' | 'logs'): void;
-      showSettings(tabIndex?: number): void;
+      showSettings(tab?: string): void;
       showStream?(streamId: string): void;
     };
     getStreams?: () => DesktopPaletteStream[];
@@ -198,7 +198,7 @@ describe('desktop command palette', () => {
     pressKey(paletteInput(controller.element), { key: 'Enter' });
     await flushDialogTicks();
 
-    expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
+    expect(actions.showSettings).toHaveBeenCalledWith('models');
     expect(controller.element.open).toBe(false);
   });
 
