@@ -244,9 +244,10 @@ export class DesktopProgressBridge {
       },
       showAgentConfigBanner: ({ agentName }) =>
         this.postToRenderer({
-          command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-          agentName,
-          customDirSet: true,
+          command: MAIN_VIEW_COMMANDS.SET_BANNER,
+          banner: 'agentConfig',
+          visible: true,
+          data: { agentName, customDirSet: true },
         }) !== false,
       requestOpenFile: (data: RequestOpenFilePayload) =>
         // Desktop has no editor integration to preview through, so the

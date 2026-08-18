@@ -162,10 +162,9 @@ export function createDesktopFileSelection(
     const inputFiles = await list('input');
     postFileList('base', inputFiles, true);
     options.postToRenderer({
-      command:
-        inputFiles.length === 0
-          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
+      command: MAIN_VIEW_COMMANDS.SET_BANNER,
+      banner: 'gettingStarted',
+      visible: inputFiles.length === 0,
     });
   }
 

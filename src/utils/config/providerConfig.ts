@@ -57,22 +57,10 @@ export function getGlobalStreaming(): boolean {
   return read(GlobalStateKey.STREAMING_GLOBAL, true);
 }
 
-export async function setGlobalStreaming(enabled: boolean): Promise<void> {
-  await platform().globalState.update(GlobalStateKey.STREAMING_GLOBAL, enabled);
-}
-
 export function getProviderStreaming(provider: string): boolean {
   const fallback = getGlobalStreaming();
   const key = entry(provider)?.streamingKey;
   return key ? read(key, fallback) : fallback;
-}
-
-export async function setProviderStreaming(
-  provider: string,
-  enabled: boolean,
-): Promise<void> {
-  const key = entry(provider)?.streamingKey;
-  if (key) await platform().globalState.update(key, enabled);
 }
 
 // ---------------------------------------------------------------------------
@@ -83,14 +71,6 @@ export function getProviderEndpoint(provider: string): string {
   const key = entry(provider)?.endpointKey;
   // Catalog-modeled (see PROVIDER_ENDPOINT_SETTINGS in stateSettings.ts).
   return key ? readPlatformSetting<string>(key) : '';
-}
-
-export async function setProviderEndpoint(
-  provider: string,
-  endpoint: string,
-): Promise<void> {
-  const key = entry(provider)?.endpointKey;
-  if (key) await platform().globalState.update(key, endpoint);
 }
 
 export function supportsCustomEndpoint(provider: string): boolean {
