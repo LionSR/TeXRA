@@ -33,6 +33,10 @@ import {
 import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
+import {
+  queuedFollowUpsFor,
+  sessionStateRevision,
+} from '../state/childExecutions';
 import { type ChildListValue } from '../state/childListSelection';
 import { inputBarContentRows } from '../state/cliState';
 import {
@@ -136,13 +140,16 @@ export function ConversationRegion({
     ? snapshot.streams.get(snapshot.activeStreamId)
     : undefined;
   useSignal(streamArtifactRevision);
+  useSignal(sessionStateRevision);
   const activeArtifacts =
     snapshot.activeStreamId && activeSlice
       ? readStreamArtifacts(snapshot.activeStreamId)
       : undefined;
-  const activeTodos = activeArtifacts?.todos ?? activeSlice?.todos ?? [];
-  const activePlan = activeArtifacts?.plan ?? activeSlice?.plan ?? null;
-  const queuedFollowUpMessages = activeSlice?.queuedFollowUpMessages ?? [];
+  const activeTodos = activeArtifacts?.todos ?? [];
+  const activePlan = activeArtifacts?.plan ?? null;
+  const queuedFollowUpMessages = snapshot.activeStreamId
+    ? queuedFollowUpsFor(snapshot.activeStreamId)
+    : [];
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
   // Round-border chrome is the default input height minus its single content

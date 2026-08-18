@@ -329,7 +329,6 @@ describe('handleTuiSlashCommand', () => {
       ],
     };
     await handleTuiSlashCommand('/plan', context);
-    expect(streams.get().get(streamId)).toMatchObject(canonical);
     expect(snapshots.preload).toHaveBeenCalledTimes(2);
     expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
 
@@ -365,9 +364,6 @@ describe('handleTuiSlashCommand', () => {
     resolvePreload();
     await dispatched;
 
-    expect(streams.get().get(streamId)?.plan?.objective).toBe(
-      'Hydrated historical objective.',
-    );
     expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
   });
 
@@ -1171,7 +1167,6 @@ describe('handleTuiSlashCommand', () => {
     patchSessionMeta({ apiMode: 'personal', model: 'gpt55' });
     patchStream(streamId, (slice) => ({
       ...slice,
-      model: 'gpt55',
       usage: {
         inputTokens: 1_000,
         outputTokens: 100,

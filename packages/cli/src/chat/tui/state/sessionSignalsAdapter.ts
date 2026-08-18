@@ -1,7 +1,5 @@
 // Project shared session facts into the CLI TUI signal state.
 
-import { isDeepStrictEqual } from 'node:util';
-
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
 import type { SessionEventHub, SessionHandle } from '@agent/runtime';
 import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
@@ -12,7 +10,6 @@ import type {
 import { SessionState } from '@controllers/session/SessionState';
 import type { StreamArtifactReader } from '@controllers/session/StreamArtifactProjection';
 import {
-  sumUsageStats,
   type ConversationProgress,
   type GoalStatus,
   type InquiryThreadUpdatedEvent,
@@ -68,46 +65,20 @@ class TuiSessionRenderer implements SessionRendererPort {
   clearPendingConversationProgress(_streamId: StreamTabId): void {}
 
   onStreamMetadataChanged(streamId: StreamTabId): void {
-    // A new RUNNING drops the previous run's retained children and surfaces
-    // only through this callback — roster snapshots must re-derive here too.
+    // Metadata, description, config, and the per-run reset (a new RUNNING
+    // drops retained children and surfaces only here) all live on the shared
+    // state; renderers re-read it. No mirror — `SessionState` is the display
+    // authority (#9947: config comes from the always-resident summary mirror).
     invalidateChildStreams();
     if (isChildStreamRemoved(streamId)) return;
-    const metadata = this.state.getStreamMetadata(streamId);
-    // Display config comes from the always-resident summary mirror, never from
-    // a synchronous per-stream sidecar read (#9947). Run input/context/media
-    // file lists are no longer surfaced by TUI state at all.
-    const config = metadata.config;
-    // Parent-only metadata refreshes must not mint a StreamSlice: an edge
-    // alone is not focusable until attachment (`setActiveStream`) creates one.
-    const hasDisplayFields =
-      metadata.identity != null ||
-      metadata.userFollowUpSupport != null ||
-      metadata.agentCategory != null ||
-      metadata.description != null ||
-      config != null;
-    if (!hasDisplayFields) {
-      // Attachment (`setActiveStream`) calls `streamLogs.ensureStream` before
-      // this notify; mint an empty slice so Tab-children focus works even
-      // when no category/config arrived yet. Parent-only updates do not
-      // touch streamLogs, so they stay slice-free here.
-      if (this.state.streamLogs.has(streamId) && !streams.get().has(streamId)) {
-        patchStream(streamId, (slice) => ({ ...slice }));
-      }
-      return;
+    // Attachment (`setActiveStream`) calls `streamLogs.ensureStream` before
+    // this notify; mint an empty slice so Tab-children focus works even when
+    // no category/config arrived yet. Parent-only edge refreshes do not touch
+    // streamLogs, so they stay slice-free here — an edge alone is not
+    // focusable until attachment creates the transcript.
+    if (this.state.streamLogs.has(streamId) && !streams.get().has(streamId)) {
+      patchStream(streamId, (slice) => ({ ...slice }));
     }
-    const identityAgent =
-      metadata.identity?.kind === 'agent' ? metadata.identity.agent : undefined;
-    patchStream(streamId, (slice) => ({
-      ...slice,
-      identity: metadata.identity ?? slice.identity,
-      userFollowUpSupport: metadata.userFollowUpSupport,
-      agent: identityAgent ?? slice.agent,
-      model: config?.model ?? slice.model,
-      category: metadata.agentCategory ?? slice.category,
-      ...(metadata.description !== undefined
-        ? { description: metadata.description }
-        : {}),
-    }));
   }
 
   onParentStreamChanged(
@@ -149,21 +120,27 @@ class TuiSessionRenderer implements SessionRendererPort {
     focusStream(streamId);
   }
 
-  onStreamDescriptionChanged(streamId: StreamTabId, description: string): void {
-    patchStream(streamId, (slice) => ({ ...slice, description }));
+  onStreamDescriptionChanged(
+    _streamId: StreamTabId,
+    _description: string,
+  ): void {
+    // `SessionState` metadata owns the description; renderers re-read it.
+    invalidateChildStreams();
   }
 
   onConversationProgressChanged(
-    streamId: StreamTabId,
-    progress: ConversationProgress,
+    _streamId: StreamTabId,
+    _progress: ConversationProgress,
   ): void {
-    patchStream(streamId, (slice) => ({ ...slice, conversation: progress }));
+    // `StreamExecutionState.conversationProgress` is written by the applier
+    // before this callback; renderers re-read it.
+    invalidateChildStreams();
   }
 
-  onStageChanged(streamId: StreamTabId, stage: StreamStage): void {
-    patchStream(streamId, (slice) =>
-      isDeepStrictEqual(slice.stage, stage) ? slice : { ...slice, stage },
-    );
+  onStageChanged(_streamId: StreamTabId, _stage: StreamStage): void {
+    // `StreamExecutionState.stage` is written by the applier before this
+    // callback; renderers re-read it.
+    invalidateChildStreams();
   }
 
   onBadgesChanged(
@@ -176,86 +153,48 @@ class TuiSessionRenderer implements SessionRendererPort {
     invalidateChildStreams();
   }
 
-  onFilesChanged(streamId: StreamTabId): void {
-    patchStream(streamId, (slice) => ({
-      ...slice,
-      outputFilesByRound: this.snapshots.getOutputFiles(streamId),
-    }));
+  onFilesChanged(_streamId: StreamTabId): void {
+    // Renderers read `StreamArtifactProjection` directly.
     bumpStreamArtifactRevision();
   }
 
-  onMissingOutputsChanged(streamId: StreamTabId): void {
-    const missingOutputsByRound = this.snapshots.getMissingOutputs(streamId);
-    // The projection reads the store directly, so a disk-restored clear must
-    // still invalidate the memo even when the slice mirror is empty (hydration
-    // no longer copies this field into the slice).
+  onMissingOutputsChanged(_streamId: StreamTabId): void {
+    // Renderers read `StreamArtifactProjection` directly; a disk-restored
+    // clear invalidates the memo like any other change.
     bumpStreamArtifactRevision();
-    // `clearMissingOutputs` on a stream with no slice (or an already-empty
-    // record) must stay a no-op for the slice patch: calling `patchStream`
-    // would mint a slice via the `emptySlice` fallback — and un-retire the id —
-    // just to hold an empty record.
-    const current = streams.get().get(streamId)?.missingOutputsByRound;
-    if (
-      Object.keys(missingOutputsByRound).length === 0 &&
-      Object.keys(current ?? {}).length === 0
-    ) {
-      return;
-    }
-    patchStream(streamId, (slice) => ({ ...slice, missingOutputsByRound }));
   }
 
-  onCompileFailuresChanged(streamId: StreamTabId): void {
-    patchStream(streamId, (slice) => ({
-      ...slice,
-      compileFailuresByRound: this.snapshots.getCompileFailures(streamId),
-    }));
+  onCompileFailuresChanged(_streamId: StreamTabId): void {
+    // Renderers read `StreamArtifactProjection` directly.
     bumpStreamArtifactRevision();
   }
 
   onRunUsageChanged(
     streamId: StreamTabId,
-    storageKey: string,
+    _storageKey: string,
     latestUsage: Parameters<SessionRendererPort['onRunUsageChanged']>[2],
   ): void {
-    const runUsage = this.snapshots.getRunUsage(streamId);
-    patchStream(streamId, (slice) => ({
-      ...slice,
-      usage: latestUsage,
-      cumulativeUsage: runUsage.has(storageKey)
-        ? sumUsageStats([...runUsage.values()])
-        : slice.cumulativeUsage,
-    }));
+    // The latest-usage gauge is payload-only (no synchronous shared read);
+    // the cumulative sum is `StreamArtifactProjection.cumulativeUsage`.
+    patchStream(streamId, (slice) => ({ ...slice, usage: latestUsage }));
     bumpStreamArtifactRevision();
   }
 
-  // Live todos/plan use the event payload (same as LitSessionRenderer). The
-  // snapshot store may still be queueing the write until a stream is seeded,
-  // so getWorkPlan is not a reliable synchronous read here. Disk preload stays
-  // on the focus/`/plan` hydration path only.
-  onTodosChanged(streamId: StreamTabId, todos: TodoItem[]): void {
-    patchStream(streamId, (slice) =>
-      isDeepStrictEqual(slice.todos, todos) ? slice : { ...slice, todos },
-    );
+  // Live todos/plan are readable from the snapshot store synchronously: a
+  // live update is applied to `getWorkPlan` before the stream seeds
+  // (StreamSnapshotStore eager-apply overlay), so renderers read the store.
+  onTodosChanged(_streamId: StreamTabId, _todos: TodoItem[]): void {
     bumpStreamArtifactRevision();
   }
 
-  onPlanChanged(streamId: StreamTabId, plan: Plan | null): void {
-    patchStream(streamId, (slice) =>
-      isDeepStrictEqual(slice.plan, plan) ? slice : { ...slice, plan },
-    );
+  onPlanChanged(_streamId: StreamTabId, _plan: Plan | null): void {
     bumpStreamArtifactRevision();
   }
 
-  onQueuedFollowUpsChanged(streamId: StreamTabId): void {
-    // Prefer the process session queue: tests and production both enqueue
-    // there, while a harness may construct a throwaway SessionHandle for the
-    // hub alone.
-    const messages = this.session.followUps.getAll(streamId);
-    patchStream(streamId, (slice) =>
-      isDeepStrictEqual(slice.queuedFollowUpMessages, messages)
-        ? slice
-        : { ...slice, queuedFollowUpMessages: messages },
-    );
+  onQueuedFollowUpsChanged(_streamId: StreamTabId): void {
+    // The session-owned queue is the single source; renderers read
+    // `queuedFollowUpsFor` at paint.
+    invalidateChildStreams();
   }
 
   onInquiryThreadUpdated(_thread: InquiryThreadUpdatedEvent): void {}

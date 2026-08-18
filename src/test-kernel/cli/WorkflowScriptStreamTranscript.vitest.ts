@@ -28,8 +28,14 @@ import {
   type ConversationEntry,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
+import {
+  bindChildStreamState,
+  invalidateChildStreams,
+  unbindChildStreamState,
+} from '@cli/chat/tui/state/childExecutions';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
   MESSAGE_TYPES,
@@ -42,6 +48,7 @@ import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import { loadInk } from '@test/support/inkTestHarness.ts';
 import { createRunTrace } from '@transcript';
+import type { StreamSummaryMeta } from '@transcript/StreamLogStore';
 
 // The `workflow-script#` prefix is what marks this stream as a child run whose
 // full log output surfaces when focused.
@@ -66,6 +73,25 @@ const WORKFLOW_IDENTITY = {
   kind: 'multiAgentWorkflow',
   workflowName: 'draft-sections',
 } as const;
+
+// Identity/category/model metadata is shared-substrate state now: components
+// and the log projection read it via `streamMetadataFor` from the bound
+// `SessionState`, whose authority is the durable summary mirror. Seed it
+// there, not on the CLI `StreamSlice`.
+let boundState: SessionState;
+
+function seedStreamMeta(streamId: StreamTabId, meta: StreamSummaryMeta): void {
+  defaultSession().transcripts.recordSummaryMeta(streamId, meta);
+  invalidateChildStreams();
+}
+
+function seedWorkflowStreamMeta(): void {
+  seedStreamMeta(STREAM_ID, {
+    identity: WORKFLOW_IDENTITY,
+    agentCategory: AgentCategory.Workflow,
+    model: 'deepseekT',
+  });
+}
 
 function openRunTrace(
   streamId: StreamTabId,
@@ -144,32 +170,30 @@ beforeEach(async () => {
   resetCliState();
   clearAllStreamStatusesForTest(defaultSession().status);
   await defaultSession().transcripts.clear();
-  patchStream(STREAM_ID, (slice) => ({
-    ...slice,
-    identity: WORKFLOW_IDENTITY,
-    category: AgentCategory.Workflow,
-    model: 'deepseekT',
-  }));
+  boundState = new SessionState(defaultSession());
+  bindChildStreamState(boundState);
+  seedWorkflowStreamMeta();
+  patchStream(STREAM_ID, (slice) => ({ ...slice }));
 });
 
 afterEach(() => {
+  unbindChildStreamState(boundState);
   resetCliState();
 });
 
 describe('CLI workflow-script child-stream transcript', () => {
   it('keeps lifecycle headings for full-log SDK children', () => {
     const sdkStreamId = 'claude@agent-sdk#exec-1' as StreamTabId;
-    patchStream(sdkStreamId, (slice) => ({
-      ...slice,
-      // External-CLI agent sessions are full-log children too.
+    // External-CLI agent sessions are full-log children too.
+    seedStreamMeta(sdkStreamId, {
       identity: {
-        kind: 'agent' as const,
+        kind: 'agent',
         agent: 'claude',
         tool: 'claude_code',
       },
-      category: AgentCategory.ToolUse,
+      agentCategory: AgentCategory.ToolUse,
       model: 'claude-sonnet',
-    }));
+    });
     const runTrace = openRunTrace(sdkStreamId);
     onTestFinished(() => defaultSession().status.clearStream(sdkStreamId));
     runTrace.trace.openStage('Claude SDK session', {
@@ -332,13 +356,11 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
 
     // Rebuild CLI state from the durable log after cancellation, before the
-    // bridge has projected its not-reached terminal update.
+    // bridge has projected its not-reached terminal update. The shared
+    // metadata mirror survives the CLI-state reset; only the slice must be
+    // re-created (un-retiring the stream identity).
     resetCliState();
-    patchStream(STREAM_ID, (slice) => ({
-      ...slice,
-      identity: WORKFLOW_IDENTITY,
-      model: 'deepseekT',
-    }));
+    patchStream(STREAM_ID, (slice) => ({ ...slice }));
     setStreamStatusInCliState({
       streamId: STREAM_ID,
       status: STREAM_PHASE.CANCELLED,
@@ -505,8 +527,6 @@ describe('CLI workflow-script child-stream transcript', () => {
     resetCliState();
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
-      identity: WORKFLOW_IDENTITY,
-      model: 'deepseekT',
       entries: syntheticEntry ? [syntheticEntry] : [],
     }));
     setStreamStatusInCliState({
@@ -998,10 +1018,6 @@ describe('CLI workflow-script child-stream transcript', () => {
       splitTranscriptEntries(finalized, STREAM_PHASE.COMPLETED).pending,
     ).toEqual([]);
 
-    patchStream(STREAM_ID, (slice) => ({
-      ...slice,
-      identity: WORKFLOW_IDENTITY,
-    }));
     const staticItems = appendItems([], {
       childStreamEntries: new Map([
         [
