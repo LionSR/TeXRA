@@ -67,6 +67,9 @@ interface ConversationEntryBase {
   readonly finalized: boolean;
   /** Recorder-owned full text, available only through the on-demand reader. */
   readonly spillPath?: string;
+  /** Set by the on-demand reader when the spill artifact failed to load, so
+   *  renderers can show the failure notice without the "Full output:" header. */
+  readonly spillFailed?: boolean;
 }
 
 type ConversationEntryOrigin =
