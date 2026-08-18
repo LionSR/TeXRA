@@ -1441,27 +1441,20 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     return true;
   }
 
-  /**
-   * Clear a cached compaction result that belongs to a genuinely different
-   * input, before {@link createResponseImpl} decides whether to reuse it.
-   *
-   * A same-turn retry (PocketFlow's Node._exec reuses the same prepRes, hence
-   * the same `messages` reference, across retry attempts) keeps its cached
-   * result instead — otherwise the chain anchor that compaction already
-   * cleared on chainState (which survives retries permanently) would outlive
-   * this payload, forcing a redundant re-compaction on every retry. A retained
-   * pending response is handled by the caller before this state can be
-   * discarded.
-   *
-   * This reference check alone is NOT sufficient to distinguish a same-turn
-   * retry from the next turn, because PocketFlow's ModelInvocationNode.post()
-   * mutates `shared.messages` in place, so the reference is often identical
-   * across turns too. The primary guard against cross-turn reuse is
-   * applyCompactionState() clearing compactionResult on every successful call;
-   * this method only ever matters while a compaction from a still-in-flight
-   * (unsuccessful) attempt is pending.
-   */
+  /** Drop a cached compaction result that no longer matches the current input. */
   private invalidateStaleCompactionCache(messages: ResponseInputItem[]): void {
+    // A same-turn retry (PocketFlow's Node._exec reuses the same prepRes, hence
+    // the same `messages` reference, across retry attempts) keeps its cached
+    // result — otherwise the chain anchor that compaction already cleared on
+    // chainState (which survives retries permanently) would outlive this
+    // payload, forcing a redundant re-compaction on every retry. A retained
+    // pending response is handled by the caller before this state can be
+    // discarded. This reference check alone is NOT sufficient to distinguish a
+    // same-turn retry from the next turn, because ModelInvocationNode.post()
+    // mutates `shared.messages` in place, so the reference is often identical
+    // across turns too; the primary cross-turn guard is applyCompactionState()
+    // clearing compactionResult on every successful call. This only matters
+    // while a compaction from a still-in-flight (unsuccessful) attempt is pending.
     if (
       this.compactionResult !== undefined &&
       (this.compactionResult.sourceMessages !== messages ||
@@ -1475,12 +1468,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     }
   }
 
-  /**
-   * Decide the execution transport for this request. Extracted from
-   * {@link createResponseImpl} verbatim; owns the mutually-exclusive
-   * background / streaming / WebSocket selection plus the debug logging that
-   * explains why an enabled toggle was skipped.
-   */
+  /** Select the mutually-exclusive background / streaming / WebSocket transport. */
   private resolveExecutionMode(): {
     useBackgroundResponses: boolean;
     useStreaming: boolean;
@@ -1519,13 +1507,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     return { useBackgroundResponses, useStreaming, useWebSocket };
   }
 
-  /**
-   * Resolve the messages actually sent this turn: reuse a cached compaction,
-   * run a fresh compaction at the manual/threshold trigger, or pass the input
-   * through untouched. Extracted from {@link createResponseImpl} verbatim; the
-   * compaction path mutates `this.compactionResult` as a side effect, which the
-   * caller reads back for its downstream slicing and return value.
-   */
+  /** Resolve the messages sent this turn (reuse / compact / pass through); may set `this.compactionResult`. */
   private async resolveEffectiveMessages(args: {
     client: OpenAI;
     messages: ResponseInputItem[];
