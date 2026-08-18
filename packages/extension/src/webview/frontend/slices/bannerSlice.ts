@@ -1,19 +1,23 @@
 /**
- * Banner slice: API-key, agent-config, dependency, and login banner pushes.
+ * Banner slice: the single `SET_BANNER` handler for every main-view banner
+ * surface (API-key, agent-config, dependency, getting-started, login, and
+ * the orchestrator hint).
  */
 
 // Local imports - shared IPC and schemas
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type { MainViewHandlerRegistry } from '@shared/schemas';
+import type { MainViewBanner, MainViewHandlerRegistry } from '@shared/schemas';
 
 // Local imports - main view
 import {
   agentConfigBanner$,
   apiKeyBanner$,
   dependencyBanner$,
+  gettingStartedVisible$,
   getModelOptionsForSession,
   loginBannerVisible$,
   model$,
+  sessionHintDismissed$,
   sessionType$,
 } from '../mainViewState';
 
@@ -34,45 +38,48 @@ function shouldForceApiKeyBanner(): boolean {
 // `messageDispatcher.ts` spreads all six slices together and is the actual
 // exhaustiveness checkpoint TypeScript enforces.
 export const bannerHandlers = {
-  [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (message) => {
-    apiKeyBanner$.set({
-      visible: true,
-      provider: message.provider ?? '',
-      requiresKey: message.requiresKey ?? false,
-    });
-  },
-  [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () => {
-    if (shouldForceApiKeyBanner()) {
-      return;
-    }
-    apiKeyBanner$.set({ visible: false });
-  },
-
-  [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (message) => {
-    agentConfigBanner$.set({
-      visible: true,
-      agentName: message.agentName ?? '',
-      customDirSet: message.customDirSet ?? false,
-    });
-  },
-  [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: () => {
-    agentConfigBanner$.set({ visible: false });
-  },
-
-  [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (message) => {
-    dependencyBanner$.set({
-      visible: true,
-      missingTools: message.missingTools ?? [],
-    });
-  },
-  [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: () => {
-    dependencyBanner$.set({ visible: false });
-  },
-
-  [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: () => {
-    loginBannerVisible$.set(true);
-  },
-  [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () => {
-    loginBannerVisible$.set(false);
+  [MAIN_VIEW_COMMANDS.SET_BANNER]: (message) => {
+    const { visible, data } = message;
+    const apply: Record<MainViewBanner, () => void> = {
+      apiKey: () => {
+        if (visible) {
+          apiKeyBanner$.set({
+            visible: true,
+            provider: data?.provider ?? '',
+            requiresKey: data?.requiresKey ?? false,
+          });
+        } else if (!shouldForceApiKeyBanner()) {
+          apiKeyBanner$.set({ visible: false });
+        }
+      },
+      agentConfig: () => {
+        agentConfigBanner$.set(
+          visible
+            ? {
+                visible: true,
+                agentName: data?.agentName ?? '',
+                customDirSet: data?.customDirSet ?? false,
+              }
+            : { visible: false },
+        );
+      },
+      dependency: () => {
+        dependencyBanner$.set(
+          visible
+            ? { visible: true, missingTools: data?.missingTools ?? [] }
+            : { visible: false },
+        );
+      },
+      gettingStarted: () => {
+        gettingStartedVisible$.set(visible);
+      },
+      login: () => {
+        loginBannerVisible$.set(visible);
+      },
+      orchestrator: () => {
+        sessionHintDismissed$.set(!visible);
+      },
+    };
+    apply[message.banner]();
   },
 } satisfies Partial<MainViewHandlerRegistry>;

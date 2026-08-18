@@ -16,7 +16,6 @@ import {
 import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { setProviderEndpoint } from '@utils/config/providerConfig';
 
 describe('coding-plan subscription runtime', () => {
   let includedAccessEnabled = false;
@@ -47,7 +46,7 @@ describe('coding-plan subscription runtime', () => {
 
   afterEach(async () => {
     setIncludedModelAccess(null);
-    await setProviderEndpoint('glm', '');
+    await platform().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
   });
 
   it('freezes every runtime catalog entry', () => {
@@ -57,7 +56,7 @@ describe('coding-plan subscription runtime', () => {
 
   it('classifies only the resolved official GLM coding endpoint as plan usage', async () => {
     await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-    await setProviderEndpoint('glm', '');
+    await platform().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
 
     expect(
       resolveProxyEndpoint({
@@ -67,7 +66,10 @@ describe('coding-plan subscription runtime', () => {
       }),
     ).toMatchObject({ usageRoute: 'glm-coding-plan-subscription' });
 
-    await setProviderEndpoint('glm', 'proxy.test/api/coding/paas/v4');
+    await platform().globalState.update(
+      GlobalStateKey.ENDPOINT_GLM,
+      'proxy.test/api/coding/paas/v4',
+    );
     expect(
       resolveProxyEndpoint({
         route: 'direct',
@@ -119,7 +121,10 @@ describe('coding-plan subscription runtime', () => {
 
   it('does not classify a custom coding-shaped GLM endpoint as plan usage', async () => {
     await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-    await setProviderEndpoint('glm', 'proxy.test/api/coding/paas/v4');
+    await platform().globalState.update(
+      GlobalStateKey.ENDPOINT_GLM,
+      'proxy.test/api/coding/paas/v4',
+    );
 
     await expect(activeCodingPlanForModel('glm52')).resolves.toBeUndefined();
   });

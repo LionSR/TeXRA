@@ -56,7 +56,9 @@ function createController(
 describe('MainViewStartupController', () => {
   it('shows the orchestrator banner by default', () => {
     expect(createController().getOrchestratorBannerMessage()).toStrictEqual({
-      command: MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER,
+      command: MAIN_VIEW_COMMANDS.SET_BANNER,
+      banner: 'orchestrator',
+      visible: true,
     });
   });
 
@@ -68,7 +70,9 @@ describe('MainViewStartupController', () => {
     });
 
     expect(controller.getOrchestratorBannerMessage()).toStrictEqual({
-      command: MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
+      command: MAIN_VIEW_COMMANDS.SET_BANNER,
+      banner: 'orchestrator',
+      visible: false,
     });
   });
 
@@ -90,7 +94,7 @@ describe('MainViewStartupController', () => {
         command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
         optionsData: STARTUP_OPTIONS.teamOptions,
       },
-      { command: MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER },
+      { command: MAIN_VIEW_COMMANDS.SET_BANNER, banner: 'login', visible: true },
     ]);
   });
 
@@ -101,6 +105,10 @@ describe('MainViewStartupController', () => {
 
     const messages = await controller.getOptionsAndLoginMessages();
 
-    expect(messages.at(-1)?.command).toBe(MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER);
+    expect(messages.at(-1)).toStrictEqual({
+      command: MAIN_VIEW_COMMANDS.SET_BANNER,
+      banner: 'login',
+      visible: false,
+    });
   });
 });

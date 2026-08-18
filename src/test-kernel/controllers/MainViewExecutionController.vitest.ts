@@ -46,7 +46,7 @@ describe('MainViewExecutionController', () => {
         inputFiles: ['paper/main.tex'],
         mediaFiles: ['diagram.png', null],
       },
-      toolConfig: { attachDiagnostics: true },
+      toolConfig: { attachTeXCount: true },
     });
 
     expect(result.valid).toBe(true);
@@ -60,7 +60,7 @@ describe('MainViewExecutionController', () => {
       mediaFiles: ['diagram.png'],
       editedFile: null,
       toolConfig: {
-        attachDiagnostics: false,
+        attachTeXCount: true,
       },
     });
   });
