@@ -325,7 +325,7 @@ async function settleRetryContinuation(): Promise<void> {
 const PERSONAL_KEY_RETRY: ApprovalDecision = {
   accepted: true,
   apiMode: 'personal',
-  disableChatGptSubscription: true,
+  disableQuotaRoute: 'chatgpt',
 };
 
 async function waitForApproval(

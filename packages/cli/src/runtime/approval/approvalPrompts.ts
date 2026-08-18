@@ -4,7 +4,6 @@ import { defaultSession } from '@agent/runtime';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkError/relayDetection';
 import { warn as logWarning } from '@logger/logUtils';
 import {
-  isChatGptSubscriptionLimitError,
   isCredentialExhausted,
   type AgentProposalPermission,
   type ExhaustionReason,
@@ -13,9 +12,10 @@ import {
   type ApprovalDecision,
 } from '@shared/schemas';
 import {
-  CODING_PLAN_SUBSCRIPTIONS,
-  type CodingPlanSubscriptionId,
-} from '@shared/codingPlanSubscriptions';
+  quotaFallbackRouteById,
+  quotaFallbackRouteForExhaustion,
+  type QuotaFallbackRouteId,
+} from '@shared/quotaFallbackRoutes';
 import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -52,9 +52,6 @@ export type CliDecisionApprovalRequest =
 
 const CLI_PERSONAL_API_RETRY_HINT =
   'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to your own API keys.';
-
-const CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT =
-  'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch from your ChatGPT subscription to your own API keys.';
 
 export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
@@ -108,35 +105,40 @@ export function warnApprovalDenied(context: CliContext, gate?: string): void {
  * `RetryPermission` maps to exactly one action; consumers (the retry modal's
  * switch decision, the retry request message, and the auto-switch) switch on
  * this instead of re-deriving precedence from overlapping predicates.
- * Precedence: a ChatGPT-subscription limit wins over a coding-plan
- * exhaustion, which wins over relay exhaustion.
+ * Precedence: a catalogued quota-fallback route (ChatGPT, Grok, coding
+ * plan) wins over relay exhaustion.
  */
 export type CliRetryAction =
-  | 'disable-chatgpt'
-  | `disable-coding-plan:${CodingPlanSubscriptionId}`
-  | 'switch-to-personal'
-  | 'none';
+  `disable-quota-route:${QuotaFallbackRouteId}` | 'switch-to-personal' | 'none';
+
+const DISABLE_QUOTA_ROUTE_PREFIX = 'disable-quota-route:';
+
+function quotaRouteIdFromAction(
+  action: CliRetryAction,
+): QuotaFallbackRouteId | undefined {
+  if (!action.startsWith(DISABLE_QUOTA_ROUTE_PREFIX)) return undefined;
+  return action.slice(
+    DISABLE_QUOTA_ROUTE_PREFIX.length,
+  ) as QuotaFallbackRouteId;
+}
 
 export function classifyCliRetryAction(
   payload: RetryPermission,
 ): CliRetryAction {
   const details = payload.errorDetails;
-  if (isChatGptSubscriptionLimitError(details)) return 'disable-chatgpt';
-  const codingPlan = CODING_PLAN_SUBSCRIPTIONS.find(
-    (plan) => plan.exhaustionReason === details?.exhaustionReason,
-  );
-  if (codingPlan) {
+  const route = quotaFallbackRouteForExhaustion(details?.exhaustionReason);
+  if (route) {
     // Kimi Code-exclusive models are served only by the coding endpoint, so
     // turning the plan off cannot reroute them to a Moonshot fallback. They
     // keep the retry modal without an API-key switch, exactly like the
     // auto-switch gate in the TUI.
     if (
-      codingPlan.id === 'kimiCode' &&
+      route.id === 'kimiCode' &&
       isKimiCodeExclusiveRetryModel(payload.model)
     ) {
       return 'none';
     }
-    return `disable-coding-plan:${codingPlan.id}`;
+    return `${DISABLE_QUOTA_ROUTE_PREFIX}${route.id}`;
   }
   if (
     details != null &&
@@ -151,18 +153,11 @@ export function classifyCliRetryAction(
 
 /** The switch hint line for a retry action, or undefined for 'none'. */
 export function cliRetryActionHint(action: CliRetryAction): string | undefined {
-  if (action.startsWith('disable-coding-plan:')) {
-    const id = action.slice(
-      'disable-coding-plan:'.length,
-    ) as CodingPlanSubscriptionId;
-    const plan = CODING_PLAN_SUBSCRIPTIONS.find(
-      (candidate) => candidate.id === id,
-    );
-    if (!plan) return undefined;
-    return `Use \`/api personal\` in the chat TUI, or press \`k\` on the retry prompt, to switch from your ${plan.retrySourceName} to ${plan.retryFallbackName}.`;
-  }
-  if (action === 'disable-chatgpt') {
-    return CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT;
+  const routeId = quotaRouteIdFromAction(action);
+  if (routeId !== undefined) {
+    const route = quotaFallbackRouteById(routeId);
+    if (!route) return undefined;
+    return `Use \`/api personal\` in the chat TUI, or press \`k\` on the retry prompt, to switch from your ${route.retrySourceName} to ${route.retryFallbackName}.`;
   }
   return action === 'switch-to-personal'
     ? CLI_PERSONAL_API_RETRY_HINT
@@ -184,34 +179,24 @@ export function isCliApiSwitchableRetry(payload: RetryPermission): boolean {
 interface CliRetryApiSwitchDecision {
   readonly accepted: true;
   readonly apiMode: 'personal';
-  readonly disableChatGptSubscription?: boolean;
-  readonly disableCodingPlan?: CodingPlanSubscriptionId;
+  readonly disableQuotaRoute?: QuotaFallbackRouteId;
 }
 
 /**
- * Map a failed retry to the subscription/plan toggle it disables. Every
- * switch flips API mode to personal keys; a subscription or coding-plan retry
- * additionally turns off the preference that routed onto the exhausted
- * credential. Drives off {@link classifyCliRetryAction} so the modal cannot
- * drift from the classifier.
+ * Map a failed retry to the quota-fallback route it disables. Every switch
+ * flips API mode to personal keys; a catalogued route additionally turns
+ * off the preference that routed onto the exhausted credential. Drives off
+ * {@link classifyCliRetryAction} so the modal cannot drift from the classifier.
  */
 export function cliRetryApiSwitchDecision(
   payload: RetryPermission,
 ): CliRetryApiSwitchDecision {
   const action = classifyCliRetryAction(payload);
-  if (action.startsWith('disable-coding-plan:')) {
+  const routeId = quotaRouteIdFromAction(action);
+  if (routeId !== undefined) {
     return {
       accepted: true,
-      disableCodingPlan: action.slice(
-        'disable-coding-plan:'.length,
-      ) as CodingPlanSubscriptionId,
-      apiMode: 'personal',
-    };
-  }
-  if (action === 'disable-chatgpt') {
-    return {
-      accepted: true,
-      disableChatGptSubscription: true,
+      disableQuotaRoute: routeId,
       apiMode: 'personal',
     };
   }

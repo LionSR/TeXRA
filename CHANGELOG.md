@@ -13,6 +13,10 @@ All notable changes to this project will be documented in this file.
   older Flash models keep working while Google serves them.
 - **Lean Project remotes are available after sign-in** — the hosted Lean
   agents no longer need a special access group.
+- **Grok subscription quota can fall back to an xAI API key** — when a SuperGrok
+  plan hits its usage limit, the retry prompt can turn off the Grok preference
+  and continue on a saved xAI key, the same way ChatGPT, Kimi Code, and GLM
+  Coding Plan already do.
 
 #### Bug Fixes
 

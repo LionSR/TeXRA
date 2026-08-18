@@ -63,7 +63,12 @@ import {
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
+import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { platform } from '@platform/platform';
+import {
+  isCodingPlanQuotaRoute,
+  type QuotaFallbackRouteId,
+} from '@shared/quotaFallbackRoutes';
 import {
   isUpstreamCreditDepletedError,
   type AgentProposalPermission,
@@ -86,6 +91,7 @@ import {
   setCliCodingPlanSubscription,
   setCliCodexSubscription,
 } from './codexSubscription';
+import { setCliXaiSubscription } from './xaiSubscription';
 import {
   approveQueuedDelegatedWorkForStream,
   approvalPayloadStreamId,
@@ -136,13 +142,19 @@ function maybeAutoSwitchRetry(
 
   // Coding-plan quotas (Kimi Code, GLM Coding Plan) have a fallback route that
   // re-uses an already-stored key, so auto-switch when that key exists.
+  // OAuth subscriptions (ChatGPT, Grok) stay explicit: the user must confirm.
   // Kimi Code-exclusive models never reach this branch: the classifier above
   // gates them to 'none', keeping the modal without an API-key switch.
-  if (action.startsWith('disable-coding-plan:')) {
+  if (action.startsWith('disable-quota-route:')) {
+    const decision = cliRetryApiSwitchDecision(payload);
+    if (
+      decision.disableQuotaRoute === undefined ||
+      !isCodingPlanQuotaRoute(decision.disableQuotaRoute)
+    ) {
+      return undefined;
+    }
     if (payload.personalApiKeyAvailable !== true) return undefined;
-    // The switch decision's single owner is the classifier's sibling, so the
-    // auto-switch cannot drift from the modal.
-    return cliRetryApiSwitchDecision(payload);
+    return decision;
   }
 
   return undefined;
@@ -444,8 +456,7 @@ async function requestRetryInteraction(
     }
     if (
       decision.apiMode !== undefined ||
-      decision.disableChatGptSubscription === true ||
-      decision.disableCodingPlan !== undefined
+      decision.disableQuotaRoute !== undefined
     ) {
       await switchRetryToPersonalCredentials(decision, promptRequest, {
         prepareRetry: options?.prepareRetry,
@@ -458,7 +469,8 @@ async function requestRetryInteraction(
       // the user must not be told a switch happened that did not.
       if (
         retryDecision.source === 'automatic' &&
-        decision.disableCodingPlan !== undefined
+        decision.disableQuotaRoute !== undefined &&
+        isCodingPlanQuotaRoute(decision.disableQuotaRoute)
       ) {
         notify('credentialSwitched');
       }
@@ -667,6 +679,34 @@ function throwWithRollbackFailures(
   throw error;
 }
 
+interface OauthCliPreference {
+  readonly label: string;
+  readonly isPrefer: () => boolean;
+  readonly setPrefer: (
+    enabled: boolean,
+  ) => Promise<{ readonly effective: boolean }>;
+}
+
+function oauthCliPreference(
+  id: QuotaFallbackRouteId | undefined,
+): OauthCliPreference | undefined {
+  if (id === 'chatgpt') {
+    return {
+      label: 'ChatGPT',
+      isPrefer: isPreferCodexSubscription,
+      setPrefer: setCliCodexSubscription,
+    };
+  }
+  if (id === 'grok') {
+    return {
+      label: 'Grok',
+      isPrefer: isPreferXaiSubscription,
+      setPrefer: setCliXaiSubscription,
+    };
+  }
+  return undefined;
+}
+
 /** Commit the access-mode and subscription writes for a retry switch.
  *
  *  Runs while the commit queue already holds its slot. On failure it rolls
@@ -681,7 +721,8 @@ async function applyRetryCredentialCommit(
   signal.throwIfAborted();
   const previousApiMode = getCliApiMode();
   const previousOpenRouter = cliOpenRouterEnabled();
-  const previousSubscriptionPreference = isPreferCodexSubscription();
+  const oauth = oauthCliPreference(decision.disableQuotaRoute);
+  const previousOauthPreference = oauth?.isPrefer() ?? false;
   let apiModeWriteStarted = false;
   let subscriptionWriteStarted = false;
   try {
@@ -691,15 +732,12 @@ async function applyRetryCredentialCommit(
       await runRetryTask(() => setCliApiMode(apiMode), signal);
       signal.throwIfAborted();
     }
-    if (decision.disableChatGptSubscription) {
+    if (oauth) {
       subscriptionWriteStarted = true;
-      const update = await runRetryTask(
-        () => setCliCodexSubscription(false),
-        signal,
-      );
+      const update = await runRetryTask(() => oauth.setPrefer(false), signal);
       if (update.effective) {
         throw new Error(
-          'ChatGPT subscription remains enabled by a more specific setting.',
+          `${oauth.label} subscription remains enabled by a more specific setting.`,
         );
       }
       signal.throwIfAborted();
@@ -717,26 +755,26 @@ async function applyRetryCredentialCommit(
     // off.
     let openRouterToPreserve = previousOpenRouter;
     const rollbackFailures = await rollbackChangedSettings([
-      {
-        writeStarted: subscriptionWriteStarted,
-        needsRollback: () => !isPreferCodexSubscription(),
-        restore: async () => {
-          const update = await setCliCodexSubscription(
-            previousSubscriptionPreference,
-          );
-          if (update.effective !== previousSubscriptionPreference) {
-            throw new Error(
-              `ChatGPT subscription preference remained ${String(update.effective)}.`,
-            );
-          }
-        },
-        restoredInMemory: () =>
-          isPreferCodexSubscription() === previousSubscriptionPreference,
-        memoryRestoredContext:
-          'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed',
-        restoreFailedContext:
-          'Could not restore the ChatGPT subscription preference',
-      },
+      ...(oauth === undefined
+        ? []
+        : [
+            {
+              writeStarted: subscriptionWriteStarted,
+              needsRollback: () => !oauth.isPrefer(),
+              restore: async () => {
+                const update = await oauth.setPrefer(previousOauthPreference);
+                if (update.effective !== previousOauthPreference) {
+                  throw new Error(
+                    `${oauth.label} subscription preference remained ${String(update.effective)}.`,
+                  );
+                }
+              },
+              restoredInMemory: () =>
+                oauth.isPrefer() === previousOauthPreference,
+              memoryRestoredContext: `The previous ${oauth.label} subscription preference appears restored in memory, but persistence could not be confirmed`,
+              restoreFailedContext: `Could not restore the ${oauth.label} subscription preference`,
+            },
+          ]),
       ...(codingPlanRollback ? [codingPlanRollback] : []),
       {
         writeStarted: apiModeWriteStarted,
@@ -822,7 +860,11 @@ async function switchRetryToPersonalCredentials(
   // disable, preparation, and rollback all stay inside one commit-queue slot
   // so a second coding-plan retry cannot interleave: its disable must wait
   // until this retry's rollback (if any) has finished.
-  const codingPlanId = decision.disableCodingPlan;
+  const codingPlanId =
+    decision.disableQuotaRoute !== undefined &&
+    isCodingPlanQuotaRoute(decision.disableQuotaRoute)
+      ? decision.disableQuotaRoute
+      : undefined;
   const codingPlanRuntime = codingPlanId
     ? codingPlanSubscriptionRuntimes.find(
         (runtime) => runtime.descriptor.id === codingPlanId,
@@ -846,19 +888,6 @@ async function switchRetryToPersonalCredentials(
               signal,
             );
             signal.throwIfAborted();
-          } catch (error) {
-            throwWithRollbackFailures(
-              error,
-              await rollbackChangedSettings([
-                codingPlanRollbackConfig(
-                  runtime,
-                  previousCodingPlanEnabled,
-                  codingPlanWriteStarted,
-                ),
-              ]),
-            );
-          }
-          try {
             await prepareRetryClient(prepareRetry, 'personal', signal);
           } catch (error) {
             throwWithRollbackFailures(
