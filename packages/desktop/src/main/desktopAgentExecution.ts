@@ -65,10 +65,6 @@ import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
-import {
-  isPreferCodexSubscription,
-  setPreferCodexSubscription,
-} from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import {
   COMMON_COMMANDS,
@@ -534,10 +530,6 @@ export class DesktopProgressBridge {
         getServerSideKeyService().getUseIncludedModelAccess(),
       setUseIncludedModelAccess: async (enabled) => {
         await getServerSideKeyService().setUseIncludedModelAccess(enabled);
-      },
-      getPreferChatGptSubscription: isPreferCodexSubscription,
-      setPreferChatGptSubscription: async (enabled) => {
-        await setPreferCodexSubscription(enabled);
       },
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>

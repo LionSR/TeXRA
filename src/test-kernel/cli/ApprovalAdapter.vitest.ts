@@ -913,11 +913,11 @@ describe('formatRetryRequestMessage', () => {
       'Kimi Code subscription',
     );
     expect(formatRetryRequestMessage(retry)).toContain('Moonshot API keys');
-    expect(classifyCliRetryAction(retry)).toBe('disable-coding-plan:kimiCode');
+    expect(classifyCliRetryAction(retry)).toBe('disable-quota-route:kimiCode');
     expect(cliRetryApiSwitchDecision(retry)).toEqual({
       accepted: true,
       apiMode: 'personal',
-      disableCodingPlan: 'kimiCode',
+      disableQuotaRoute: 'kimiCode',
     });
   });
 
@@ -932,12 +932,12 @@ describe('formatRetryRequestMessage', () => {
     };
 
     expect(classifyCliRetryAction(retry)).toBe(
-      'disable-coding-plan:glmCodingPlan',
+      'disable-quota-route:glmCodingPlan',
     );
     expect(cliRetryApiSwitchDecision(retry)).toEqual({
       accepted: true,
       apiMode: 'personal',
-      disableCodingPlan: 'glmCodingPlan',
+      disableQuotaRoute: 'glmCodingPlan',
     });
     expect(formatRetryRequestMessage(retry)).toContain('regular GLM endpoint');
   });

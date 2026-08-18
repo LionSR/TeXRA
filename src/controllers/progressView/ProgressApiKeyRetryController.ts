@@ -3,9 +3,9 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
 import type { ApiProvider } from '@model/apiProviders';
-import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveDirectModelApiKeyProvider } from '@model/openRouterRouting';
+import { quotaFallbackRuntimes } from '@model/quotaFallbackRoutes';
 import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
 import {
   isKimiCodeExclusiveModel,
@@ -30,15 +30,15 @@ export interface ProgressApiKeyRetryRequest {
 }
 
 /**
- * One API-key-based coding-plan subscription (GLM Coding Plan, Kimi Code) that
- * the retry controller can turn off when its quota is exhausted. Both share the
- * same shape: a toggle that routes requests through a coding endpoint, and a
- * quota-exhaustion reason that signals the toggle should be disabled so requests
- * re-route through the regular pay-as-you-go endpoint.
+ * One quota-fallback route (ChatGPT, Grok, GLM Coding Plan, Kimi Code) the
+ * retry controller can turn off when its quota is exhausted. Accepting the
+ * switch disables the route's preference so the same model retries on the
+ * fallback credential.
  */
-interface CodingPlanToggle {
-  /** The exhaustion reason that signals this plan's quota ran out. */
+export interface QuotaFallbackToggle {
   readonly exhaustionReason: ExhaustionReason;
+  readonly disableIncludedAccess: boolean;
+  readonly fallbackApiProvider?: ApiProvider;
   readonly getEnabled: () => boolean;
   readonly setEnabled: (enabled: boolean) => Promise<void>;
   readonly restoreEnabled?: (enabled: boolean) => Promise<void>;
@@ -47,9 +47,8 @@ interface CodingPlanToggle {
 interface ProgressApiKeyPreparationResult {
   proceeded: boolean;
   disabledIncludedModelAccess: boolean;
-  disabledChatGptSubscription: boolean;
-  /** Exhaustion reasons whose coding-plan toggle was turned off. */
-  disabledCodingPlans: readonly ExhaustionReason[];
+  /** Exhaustion reasons whose quota-fallback toggle was turned off. */
+  disabledQuotaRoutes: readonly ExhaustionReason[];
 }
 
 export interface ProgressApiKeyRetryResult extends ProgressApiKeyPreparationResult {
@@ -58,8 +57,7 @@ export interface ProgressApiKeyRetryResult extends ProgressApiKeyPreparationResu
 
 interface ProgressApiRoutingSnapshot {
   readonly useIncludedModelAccess: boolean;
-  readonly preferChatGptSubscription: boolean;
-  readonly codingPlans: ReadonlyMap<ExhaustionReason, boolean>;
+  readonly quotaRoutes: ReadonlyMap<ExhaustionReason, boolean>;
 }
 
 function noRetryResult(): ProgressApiKeyRetryResult {
@@ -67,8 +65,7 @@ function noRetryResult(): ProgressApiKeyRetryResult {
     proceeded: false,
     retried: false,
     disabledIncludedModelAccess: false,
-    disabledChatGptSubscription: false,
-    disabledCodingPlans: [],
+    disabledQuotaRoutes: [],
   };
 }
 
@@ -79,10 +76,9 @@ export interface ProgressApiKeyRetryControllerDeps {
   promptForApiKey(provider?: ApiProvider): Promise<void>;
   getUseIncludedModelAccess(): boolean;
   setUseIncludedModelAccess(enabled: boolean): Promise<void>;
-  getPreferChatGptSubscription(): boolean;
-  setPreferChatGptSubscription(enabled: boolean): Promise<void>;
-  /** API-key-based coding-plan subscriptions (GLM Coding Plan, Kimi Code). */
-  codingPlanToggles?: readonly CodingPlanToggle[];
+  /** Quota-fallback routes (ChatGPT, Grok, GLM, Kimi). Defaults to the
+   *  shared runtime catalog. Tests inject a local table. */
+  quotaFallbackToggles?: readonly QuotaFallbackToggle[];
   invalidateModelOptionsCache(): void;
   isRetryPending(stream: StreamTabId, requestId: string): boolean;
   triggerRetry(
@@ -134,11 +130,13 @@ export class ProgressApiKeyRetryController {
     );
   }
 
-  private get codingPlanToggles(): readonly CodingPlanToggle[] {
+  private get quotaFallbackToggles(): readonly QuotaFallbackToggle[] {
     return (
-      this.deps.codingPlanToggles ??
-      codingPlanSubscriptionRuntimes.map((runtime) => ({
+      this.deps.quotaFallbackToggles ??
+      quotaFallbackRuntimes.map((runtime) => ({
         exhaustionReason: runtime.descriptor.exhaustionReason,
+        disableIncludedAccess: runtime.descriptor.disableIncludedAccess,
+        fallbackApiProvider: runtime.descriptor.fallbackApiProvider,
         getEnabled: runtime.getEnabled,
         setEnabled: runtime.setEnabled,
         restoreEnabled: runtime.restoreEnabled,
@@ -229,33 +227,70 @@ export class ProgressApiKeyRetryController {
     return this.hasAnyUsableKey(providersToCheck);
   }
 
-  // chatgpt-subscription auth is OpenAI-only (providerCapabilities.ts), so
-  // that exhaustion reason always means the OpenAI key, regardless of provider.
+  // OAuth subscriptions pin the fallback key provider (ChatGPT → openai,
+  // Grok → xai) so a mislabeled SDK provider cannot prompt for the wrong key.
   private resolveProvider(
     request: Pick<ProgressApiKeyRetryRequest, 'provider' | 'exhaustionReason'>,
   ): ApiProvider | undefined {
-    return request.exhaustionReason === 'chatgpt-subscription'
-      ? 'openai'
-      : request.provider;
+    const route = this.quotaFallbackToggles.find(
+      (candidate) => candidate.exhaustionReason === request.exhaustionReason,
+    );
+    return route?.fallbackApiProvider ?? request.provider;
   }
 
   private shouldDisableIncludedModelAccess(
     request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
   ): boolean {
-    return (
-      request.viaRelay === true ||
-      request.exhaustionReason === 'chatgpt-subscription' ||
-      request.exhaustionReason === 'copilot-subscription'
+    if (request.viaRelay === true) return true;
+    if (request.exhaustionReason === 'copilot-subscription') return true;
+    return this.matchingQuotaToggles(request).some(
+      (toggle) => toggle.disableIncludedAccess,
     );
   }
 
-  private isSubscriptionExhausted(
+  /** Whether this toggle should turn off for `request`. Catalog match plus
+   *  the two request-specific extras that are not their own exhaustion
+   *  reason: Copilot→ChatGPT, and a dual-backend Kimi credit reroute. */
+  private shouldDisableToggle(
+    toggle: QuotaFallbackToggle,
     request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
   ): boolean {
-    if (request.exhaustionReason === 'chatgpt-subscription') return true;
-    return (
+    if (request.exhaustionReason === toggle.exhaustionReason) return true;
+    if (
+      toggle.exhaustionReason === 'chatgpt-subscription' &&
       request.exhaustionReason === 'copilot-subscription' &&
       request.chatGptSubscriptionEligible === true
+    ) {
+      return true;
+    }
+    // An `upstream-credit` failure on a dual-backend Kimi model means the
+    // broken credential is the `kimiCode` key, but the forwarded SDK
+    // provider is `moonshot`. The coding-plan quota reason does not match,
+    // so without this branch the "Prefer Kimi Code" switch would stay on
+    // and the retry rebuild would re-select the exhausted coding endpoint
+    // instead of the newly entered Moonshot key.
+    //
+    // Deliberately conservative: do not consult the live route resolver
+    // here. The failed handler was dispatched under the persisted
+    // `ModelHandlerKimi` compatibility key, and the retry rebuild pins that
+    // same key, so a later OpenRouter preference change cannot make the
+    // rebuild take a non-coding route. The request's
+    // `kimiCodeRoutedOnFailure` flag is captured from that failed handler,
+    // so unrelated `kimi3` failures through OpenRouter, Moonshot, or the
+    // relay leave the preference untouched.
+    return (
+      toggle.exhaustionReason === 'kimi-code-subscription' &&
+      request.exhaustionReason === 'upstream-credit' &&
+      request.kimiCodeRoutedOnFailure === true &&
+      this.isDualBackendKimiCodeModel(request.model)
+    );
+  }
+
+  private matchingQuotaToggles(
+    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
+  ): readonly QuotaFallbackToggle[] {
+    return this.quotaFallbackToggles.filter((toggle) =>
+      this.shouldDisableToggle(toggle, request),
     );
   }
 
@@ -268,8 +303,7 @@ export class ProgressApiKeyRetryController {
     // persistence, so a throw midway must roll back every switch that may
     // have landed instead of stranding global toggles the retry never uses.
     let disabledIncludedModelAccess = false;
-    let disabledChatGptSubscription = false;
-    const disabledCodingPlans: ExhaustionReason[] = [];
+    const disabledQuotaRoutes: ExhaustionReason[] = [];
     try {
       // Disable relay (included access) so the retry uses the user's own key,
       // not the relay JWT, whenever the switch promises "your own API key".
@@ -282,47 +316,12 @@ export class ProgressApiKeyRetryController {
         this.deps.invalidateModelOptionsCache();
       }
 
-      // The subscription quota is exhausted, so turn off the preference and let
-      // Codex-eligible models route through the now-usable OpenAI key on retry.
-      // Remark: prefer-off sticks after the quota resets — users may forget to
-      // re-enable it. A temporary / resume-on-reset override would be kinder.
-      if (
-        this.deps.getPreferChatGptSubscription() &&
-        this.isSubscriptionExhausted(request)
-      ) {
-        disabledChatGptSubscription = true;
-        await this.deps.setPreferChatGptSubscription(false);
-        this.deps.invalidateModelOptionsCache();
-      }
-
-      // Any API-key-based coding-plan subscription (GLM Coding Plan, Kimi Code)
-      // whose quota is exhausted: turn off its toggle so requests re-route through
-      // the regular pay-as-you-go endpoint on retry.
-      for (const toggle of this.codingPlanToggles) {
-        const planExhaustion =
-          request.exhaustionReason === toggle.exhaustionReason;
-        // An `upstream-credit` failure on a dual-backend Kimi model means the
-        // broken credential is the `kimiCode` key, but the forwarded SDK
-        // provider is `moonshot`. The coding-plan quota reason does not match,
-        // so without this branch the "Prefer Kimi Code" switch would stay on
-        // and the retry rebuild would re-select the exhausted coding endpoint
-        // instead of the newly entered Moonshot key.
-        //
-        // Deliberately conservative: do not consult the live route resolver
-        // here. The failed handler was dispatched under the persisted
-        // `ModelHandlerKimi` compatibility key, and the retry rebuild pins that
-        // same key, so a later OpenRouter preference change cannot make the
-        // rebuild take a non-coding route. The request's
-        // `kimiCodeRoutedOnFailure` flag is captured from that failed handler,
-        // so unrelated `kimi3` failures through OpenRouter, Moonshot, or the
-        // relay leave the preference untouched.
-        const kimiCodeCreditReroute =
-          toggle.exhaustionReason === 'kimi-code-subscription' &&
-          request.exhaustionReason === 'upstream-credit' &&
-          request.kimiCodeRoutedOnFailure === true &&
-          this.isDualBackendKimiCodeModel(request.model);
-        if (toggle.getEnabled() && (planExhaustion || kimiCodeCreditReroute)) {
-          disabledCodingPlans.push(toggle.exhaustionReason);
+      // One chain: turn off every matching quota-fallback preference so the
+      // retry rebuilds onto the fallback credential. Remark: prefer-off
+      // sticks after the quota resets — users may forget to re-enable it.
+      for (const toggle of this.quotaFallbackToggles) {
+        if (toggle.getEnabled() && this.shouldDisableToggle(toggle, request)) {
+          disabledQuotaRoutes.push(toggle.exhaustionReason);
           await toggle.setEnabled(false);
           this.deps.invalidateModelOptionsCache();
         }
@@ -331,15 +330,13 @@ export class ProgressApiKeyRetryController {
       return {
         proceeded: true,
         disabledIncludedModelAccess,
-        disabledChatGptSubscription,
-        disabledCodingPlans,
+        disabledQuotaRoutes,
       };
     } catch (error) {
       await this.restoreAfterError(before, {
         proceeded: true,
         disabledIncludedModelAccess,
-        disabledChatGptSubscription,
-        disabledCodingPlans,
+        disabledQuotaRoutes,
       });
       throw error;
     }
@@ -378,9 +375,8 @@ export class ProgressApiKeyRetryController {
   private routingSnapshot(): ProgressApiRoutingSnapshot {
     return {
       useIncludedModelAccess: this.deps.getUseIncludedModelAccess(),
-      preferChatGptSubscription: this.deps.getPreferChatGptSubscription(),
-      codingPlans: new Map(
-        this.codingPlanToggles.map((toggle) => [
+      quotaRoutes: new Map(
+        this.quotaFallbackToggles.map((toggle) => [
           toggle.exhaustionReason,
           toggle.getEnabled(),
         ]),
@@ -392,28 +388,21 @@ export class ProgressApiKeyRetryController {
     before: ProgressApiRoutingSnapshot,
     prepared: ProgressApiKeyPreparationResult,
   ): Promise<void> {
-    // Roll back in reverse application order: the coding-plan toggles
+    // Roll back in reverse application order: quota-fallback toggles
     // switched last, so they come back first. Every restore is attempted
     // even when an earlier one fails; the first failure rethrows once the
     // rest have run (compensation per the error-handling checklist's L2).
     const restores: Array<() => Promise<void>> = [];
-    for (const reason of [...prepared.disabledCodingPlans].reverse()) {
-      const toggle = this.codingPlanToggles.find(
+    for (const reason of [...prepared.disabledQuotaRoutes].reverse()) {
+      const toggle = this.quotaFallbackToggles.find(
         (candidate) => candidate.exhaustionReason === reason,
       );
       if (toggle)
         restores.push(() =>
           (toggle.restoreEnabled ?? toggle.setEnabled)(
-            before.codingPlans.get(reason) ?? false,
+            before.quotaRoutes.get(reason) ?? false,
           ),
         );
-    }
-    if (prepared.disabledChatGptSubscription) {
-      restores.push(() =>
-        this.deps.setPreferChatGptSubscription(
-          before.preferChatGptSubscription,
-        ),
-      );
     }
     if (prepared.disabledIncludedModelAccess) {
       restores.push(() =>
