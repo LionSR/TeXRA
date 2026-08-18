@@ -84,8 +84,8 @@ function createHostHarness(
       getPendingProposal: () => undefined,
       restoreRunConfig: async () => false,
       openFile: vi.fn(),
-      settleProposal: (proposalId, result) => {
-        settledProposals.push({ proposalId, result });
+      settleProposal: (requestId, result) => {
+        settledProposals.push({ requestId, result });
       },
     },
     commands: {
@@ -163,7 +163,7 @@ describe('ProgressViewHost', () => {
     });
     await host.commandHandlers[PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]?.({
       command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-      proposalId: 'proposal-1',
+      requestId: 'proposal-1',
       action: 'approve',
     });
 
@@ -177,7 +177,7 @@ describe('ProgressViewHost', () => {
     assert.deepEqual(harness.infoMessages, ['Label "main-thm" not found.']);
     assert.deepEqual(harness.settledProposals, [
       {
-        proposalId: 'proposal-1',
+        requestId: 'proposal-1',
         result: { action: 'approve' },
       },
     ]);
