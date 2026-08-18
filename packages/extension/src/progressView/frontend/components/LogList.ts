@@ -257,27 +257,26 @@ export class LogList extends LitElement {
     if (!(event instanceof MouseEvent)) return;
     if (this.activateLinkFromEvent(event)) return;
 
-    // Handle copy buttons - content is stored in the copy registry
     const copyButton = getComposedPathElement<HTMLElement>(
       event,
       '[data-copy-id]',
     );
-    if (copyButton) {
-      event.stopPropagation();
-      const copyId = copyButton.dataset.copyId;
-      const textToCopy = copyId ? (getCopyContent(copyId) ?? '') : '';
-      if (!textToCopy.trim()) return;
+    if (!copyButton) return;
 
-      const isCodeBlock = copyButton.dataset.copyType === 'code-block';
-      await copyWithFeedback(copyButton, textToCopy, {
-        defaultTitle:
-          copyButton.dataset.defaultTitle ||
-          copyButton.getAttribute('title') ||
-          'Copy to clipboard',
-        successTitle: copyButton.dataset.successTitle || 'Copied!',
-        successClass: isCodeBlock ? 'copied' : undefined,
-      });
-    }
+    event.stopPropagation();
+    const copyId = copyButton.dataset.copyId;
+    const textToCopy = copyId ? (getCopyContent(copyId) ?? '') : '';
+    if (!textToCopy.trim()) return;
+
+    const isCodeBlock = copyButton.dataset.copyType === 'code-block';
+    await copyWithFeedback(copyButton, textToCopy, {
+      defaultTitle:
+        copyButton.dataset.defaultTitle ||
+        copyButton.getAttribute('title') ||
+        'Copy to clipboard',
+      successTitle: copyButton.dataset.successTitle || 'Copied!',
+      successClass: isCodeBlock ? 'copied' : undefined,
+    });
   }
 
   /**

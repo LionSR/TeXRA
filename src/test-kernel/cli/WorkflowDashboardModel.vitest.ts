@@ -391,7 +391,7 @@ describe('workflow dashboard model', () => {
     );
     try {
       await waitFor(() => stdout.output.includes('Explore · 0/0'));
-      expect(stdout.output).toContain('workflow · 0/0 done');
+      expect(stdout.output).toContain('workflow · Explore · 0/0 done');
     } finally {
       instance.unmount();
     }

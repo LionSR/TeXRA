@@ -163,13 +163,12 @@ export class SettingsApp extends SettingsAppBase {
     if (this.monthlyProfileRefreshTimer !== undefined) {
       clearTimeout(this.monthlyProfileRefreshTimer);
     }
-    const now = Date.now();
-    const date = new Date(now);
+    const now = new Date();
     const nextMonthUtc = utcMonthStart(
-      date.getUTCFullYear(),
-      date.getUTCMonth() + 1,
+      now.getUTCFullYear(),
+      now.getUTCMonth() + 1,
     ).getTime();
-    const delay = Math.min(nextMonthUtc - now, MAX_TIMEOUT_MS);
+    const delay = Math.min(nextMonthUtc - now.getTime(), MAX_TIMEOUT_MS);
     this.monthlyProfileRefreshTimer = setTimeout(() => {
       if (Date.now() >= nextMonthUtc) {
         const view = this.getAttribute('data-desktop-view');
@@ -413,7 +412,7 @@ export class SettingsApp extends SettingsAppBase {
         // Touch the acknowledgement generation so a same-value rebroadcast
         // after a rejected/failed write still re-renders this branch and lets
         // live() restore the committed number-row value.
-        multiAgentSettingsRevision.get();
+        const ackGeneration = multiAgentSettingsRevision.get();
         return html`
           <multi-agent-tab
             .customPresets=${customPresets.get()}
@@ -422,7 +421,7 @@ export class SettingsApp extends SettingsAppBase {
             .detachSubagentsOnStop=${detachSubagentsOnStop.get()}
             .childRunConcurrencyBudget=${childRunConcurrencyBudget.get()}
             .worktreeSupport=${gitWorktreeSupport.get()}
-            .ackGeneration=${multiAgentSettingsRevision.get()}
+            .ackGeneration=${ackGeneration}
           ></multi-agent-tab>
         `;
       }

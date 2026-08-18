@@ -122,8 +122,9 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
    * a directory an unreachable hole in keyboard navigation.
    */
   function requestOpenFromRow(row: HTMLElement | null | undefined): void {
-    const path = row?.dataset.path;
-    if (path && row?.dataset.kind === 'file') callbacks.onRequestOpen(path);
+    if (row?.dataset.kind !== 'file') return;
+    const path = row.dataset.path;
+    if (path) callbacks.onRequestOpen(path);
   }
 
   function treeTemplate(): TemplateResult {

@@ -3,9 +3,9 @@
  *
  * Public entry point and single home for the settings-view wire format:
  * combines the messages re-exported from MemoryView and ProfileView with the
- * settings-specific data schemas, the outbound
- * (backend → webview) message union, and the inbound (webview → backend)
- * message union plus their dispatchers.
+ * settings-specific data schemas, the outbound (backend → webview) message
+ * union, and the inbound (webview → backend) message union plus their
+ * dispatchers.
  */
 import { z } from 'zod';
 
@@ -68,7 +68,7 @@ import {
 import { commandOnly } from './messageFactories';
 import { WebviewReadyMessageSchema } from './commonViewMessages';
 
-// SETTINGS_VIEW_CMD is defined in commands.ts to avoid a circular dependency;
+// SETTINGS_VIEW_CMD is defined in ipc.ts to avoid a circular dependency;
 // re-exported here for consumers that expect it from the schema module.
 export { SETTINGS_VIEW_CMD } from '@shared/ipc';
 

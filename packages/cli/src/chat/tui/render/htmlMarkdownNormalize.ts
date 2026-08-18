@@ -116,74 +116,39 @@ function quoteHtmlBlock(body: string): string {
     .join('\n');
 }
 
-const BLOCKQUOTE_OPEN_CAPTURE_RE = new RegExp(
-  `<(blockquote)${HTML_ATTRIBUTES}${HTML_TAG_END}`,
+const BLOCKQUOTE_TAG_EVENT_RE = new RegExp(
+  `<blockquote${HTML_ATTRIBUTES}${HTML_TAG_END}|<\\/blockquote>`,
   'gi',
 );
-const BLOCKQUOTE_CLOSE_CAPTURE_RE = /<\/(blockquote)>/gi;
-
-interface HtmlTagEvent {
-  readonly index: number;
-  readonly end: number;
-  readonly name: string;
-  readonly closing: boolean;
-}
 
 interface HtmlTagPair {
   readonly start: number;
   readonly end: number;
   readonly bodyStart: number;
   readonly bodyEnd: number;
-  readonly name: string;
 }
 
 function findBlockquotePairs(content: string): HtmlTagPair[] {
-  const events: HtmlTagEvent[] = [];
-  for (const match of content.matchAll(BLOCKQUOTE_OPEN_CAPTURE_RE)) {
-    const index = match.index ?? 0;
-    events.push({
-      index,
-      end: index + match[0].length,
-      name: match[1]!.toLowerCase(),
-      closing: false,
-    });
-  }
-  for (const match of content.matchAll(BLOCKQUOTE_CLOSE_CAPTURE_RE)) {
-    const index = match.index ?? 0;
-    events.push({
-      index,
-      end: index + match[0].length,
-      name: match[1]!.toLowerCase(),
-      closing: true,
-    });
-  }
-  events.sort((a, b) => a.index - b.index);
-
-  const stack: Array<{ name: string; start: number; bodyStart: number }> = [];
+  const stack: Array<{ start: number; bodyStart: number }> = [];
   const pairs: HtmlTagPair[] = [];
-  for (const event of events) {
-    if (!event.closing) {
+  for (const match of content.matchAll(BLOCKQUOTE_TAG_EVENT_RE)) {
+    if (!match[0].startsWith('</')) {
       stack.push({
-        name: event.name,
-        start: event.index,
-        bodyStart: event.end,
+        start: match.index,
+        bodyStart: match.index + match[0].length,
       });
       continue;
     }
-    for (let index = stack.length - 1; index >= 0; index--) {
-      if (stack[index]!.name !== event.name) continue;
-      const open = stack[index]!;
-      stack.splice(index, 1);
-      pairs.push({
-        start: open.start,
-        end: event.end,
-        bodyStart: open.bodyStart,
-        bodyEnd: event.index,
-        name: event.name,
-      });
-      break;
-    }
+    const open = stack.pop();
+    if (open === undefined) continue;
+    pairs.push({
+      start: open.start,
+      end: match.index + match[0].length,
+      bodyStart: open.bodyStart,
+      bodyEnd: match.index,
+    });
   }
+  // Nested pairs close inner-first, so closing order is not start order.
   return pairs.sort((a, b) => a.start - b.start);
 }
 

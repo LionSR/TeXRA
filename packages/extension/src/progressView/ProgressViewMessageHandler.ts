@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { defaultSession } from '@agent/runtime';
@@ -24,6 +25,12 @@ import {
   createProgressViewSecondTierHandlers,
   type ProgressViewSecondTierActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
+import { ChatExportController } from '@controllers/progressView/ChatExportController';
+import {
+  TRANSCRIPT_EXPORT_FORMAT_CHOICES,
+  type TranscriptExportFormat,
+  type TranscriptExportOpenKind,
+} from '@controllers/progressView/exportTranscript';
 import { SecretManager } from '@frontend/secretManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { RecordingManager } from '@frontend/media/RecordingManager';
@@ -33,6 +40,7 @@ import { apiKeySecretName } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';
+import latexPreamble from '@resources/templates/chatExport.tex';
 import type {
   GettingStartedAction,
   ProgressViewInboundHandlerRegistry,
@@ -79,6 +87,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly apiKeyRetryController: ProgressApiKeyRetryController;
   private readonly followUpController: ProgressFollowUpController;
   private readonly followUpPolishController: ProgressFollowUpPolishController;
+  private chatExportController: ChatExportController | undefined;
 
   /**
    * Type-safe handler registry - handlers receive typed data.
@@ -86,9 +95,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly handlerRegistry: ProgressViewInboundHandlerRegistry;
 
   /** The one info-notification adapter the controller ports are wired to. */
-  private readonly showInfo = async (message: string): Promise<void> => {
-    await this.host.info(message);
-  };
+  private readonly showInfo = (message: string): Promise<void> =>
+    this.host.info(message);
 
   constructor(
     private readonly provider: ProgressViewProvider,
@@ -177,12 +185,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       restoreRunConfig: async (config) => {
         await this.runViewCommand('texra.restoreState', [config]);
       },
-      applyFollowUpPlan: async (plan) => {
-        await this.applyFollowUpPlan(plan);
-      },
-      applyPolishResult: async (result) => {
-        await this.applyFollowUpPolishResult(result);
-      },
+      applyFollowUpPlan: (plan) => this.applyFollowUpPlan(plan),
+      applyPolishResult: (result) => this.applyFollowUpPolishResult(result),
       onPolishProgress: (message) => {
         polishProgress?.report({ message });
       },
@@ -213,11 +217,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             action: 'retry',
             feedback,
           }),
-        cancel: (stream, requestId) => {
+        cancel: (stream, requestId) =>
           this.interactions.submitRetryDecision(stream, requestId, {
             action: 'cancel',
-          });
+          }),
+      },
+      transcriptExport: {
+        pickFormat: () => this.pickTranscriptExportFormat(),
+        openPath: (filePath, kind) => this.openExportPath(filePath, kind),
+        showInfo: this.showInfo,
+        showWarning: (message) => this.host.warning(message),
+        showError: (message) => this.host.error(message),
+        reportDetail: (message, data) => {
+          this.logger.error(this.channel, message, { data });
         },
+        getController: () => Promise.resolve(this.getChatExportController()),
+        getTraceViewerTemplate: () => this.getTraceViewerTemplate(),
       },
     };
 
@@ -365,48 +380,38 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           preload: (stream) => this.provider.state.snapshots.preload([stream]),
         },
         host: {
-          compareFiles: async (baseFile, editedFile) => {
-            await this.runViewCommand('texra.compare', [
+          compareFiles: (baseFile, editedFile) =>
+            this.runViewCommand('texra.compare', [
               pathToLocation(''), // inputFile unused
               pathToLocation(baseFile),
               pathToLocation(editedFile),
-            ]);
-          },
-          acceptEditedFile: async (baseFile, editedFile, copyMeta) => {
-            return this.runViewCommand<boolean>('texra.acceptEdited', [
+            ]),
+          acceptEditedFile: (baseFile, editedFile, copyMeta) =>
+            this.runViewCommand<boolean>('texra.acceptEdited', [
               pathToLocation(''), // inputFile unused
               pathToLocation(baseFile),
               pathToLocation(editedFile),
               copyMeta,
-            ]);
-          },
-          mergeFile: async (baseFile, editedFile) => {
-            await this.runViewCommand('texra.merge', [
+            ]),
+          mergeFile: (baseFile, editedFile) =>
+            this.runViewCommand('texra.merge', [
               undefined,
               baseFile,
               editedFile,
-            ]);
-          },
-          latexdiffFile: async (baseFile, editedFile) => {
-            await this.runViewCommand('texra.latexdiff', [
+            ]),
+          latexdiffFile: (baseFile, editedFile) =>
+            this.runViewCommand('texra.latexdiff', [
               undefined,
               baseFile,
               editedFile,
-            ]);
-          },
-          openDirectory: async (directory) => {
-            await this.runViewCommand('revealFileInOS', [
-              vscode.Uri.file(directory),
-            ]);
-          },
-          openLabel: async (label) => {
-            return (
-              (await this.runViewCommand<boolean>('texra.openLabel', [
-                label,
-                { notifyNotFound: false },
-              ])) ?? false
-            );
-          },
+            ]),
+          openDirectory: (directory) =>
+            this.runViewCommand('revealFileInOS', [vscode.Uri.file(directory)]),
+          openLabel: (label) =>
+            this.runViewCommand<boolean>('texra.openLabel', [
+              label,
+              { notifyNotFound: false },
+            ]).then((result) => result ?? false),
           readFile: (file) => AbsoluteFS.read(file),
           showInfo: this.showInfo,
           showError: async (message) => {
@@ -432,9 +437,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             ])) === true
           );
         },
-        openFile: async (file) => {
-          await this.runViewCommand('texra.openFile', [file]);
-        },
+        openFile: (file) => this.runViewCommand('texra.openFile', [file]),
         settleProposal: (proposalId, result) => {
           const resolved = this.interactions.submitProposalDecision(
             proposalId,
@@ -544,6 +547,55 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
       },
     });
+  }
+
+  private getChatExportController(): ChatExportController {
+    this.chatExportController ??= new ChatExportController({ latexPreamble });
+    return this.chatExportController;
+  }
+
+  private getTraceViewerTemplate(): string {
+    return path.join(
+      this.provider.extensionPath,
+      'resources',
+      'traceViewer',
+      'index.html',
+    );
+  }
+
+  private async pickTranscriptExportFormat(): Promise<
+    TranscriptExportFormat | undefined
+  > {
+    const picked = await vscode.window.showQuickPick(
+      TRANSCRIPT_EXPORT_FORMAT_CHOICES.map((choice) => ({
+        label: choice.label,
+        description: choice.description,
+        format: choice.format,
+      })),
+      {
+        title: 'Export transcript',
+        placeHolder: 'Choose a format',
+        ignoreFocusOut: true,
+      },
+    );
+    return picked?.format;
+  }
+
+  private async openExportPath(
+    filePath: string,
+    kind: TranscriptExportOpenKind,
+  ): Promise<void> {
+    const uri = vscode.Uri.file(filePath);
+    if (kind === 'external') {
+      await vscode.env.openExternal(uri);
+      return;
+    }
+    if (kind === 'pdf') {
+      await vscode.commands.executeCommand('vscode.open', uri);
+      return;
+    }
+    const document = await vscode.workspace.openTextDocument(filePath);
+    await vscode.window.showTextDocument(document, { preview: false });
   }
 
   private createWorkflowActionsController(): ProgressWorkflowActionsController {

@@ -16,9 +16,11 @@ import {
   replaceMessagesInPlace,
   saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
-import type { FinalTool } from '@agent/types/ModelHandlerContracts';
+import type {
+  FinalTool,
+  ModelCredentialSelection,
+} from '@agent/types/ModelHandlerContracts';
 import { createKimiCodeFallbackHandler } from '@agent/runtime/ModelFactory';
-import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import {
   hasContextWindowErrorMarker,
   hasMissingApiKeyErrorMarker,
@@ -80,8 +82,10 @@ interface ManualRetryPromptResult {
   retrySource?: RetryAttemptSource;
 }
 
-/** The failed handler's effective config and model id, captured from the
- *  live cell as one pair when the retry panel opens. */
+/**
+ * The failed handler's effective config and model id, captured from the live
+ * cell as one pair when the retry panel opens.
+ */
 interface FailedModelIdentity {
   readonly config: ResolvedModelConfig;
   readonly modelId: string;
@@ -241,11 +245,9 @@ export class ModelInvocationNode<
     }
     fallback.setAgentCategory(this.services.config.agentCategory);
     fallback.setLogger(this.services.logger);
-    try {
-      signal?.throwIfAborted();
-    } catch (error) {
+    if (signal?.aborted) {
       fallback.dispose();
-      throw error;
+      signal.throwIfAborted();
     }
     modelCell.swap(fallback, failedModel.modelId);
   }
@@ -286,18 +288,12 @@ export class ModelInvocationNode<
   ): InvocationSuccess {
     // An empty response resolves the provider call but carries nothing the
     // cycle can use, so the lifecycle records it as a failed attempt.
-    if (result.response) {
-      this.logRetryLifecycle('attempt_succeeded', {
-        decisionSource: attemptSource,
-        ...details,
-      });
-    } else {
-      this.logRetryLifecycle('attempt_failed', {
-        decisionSource: attemptSource,
-        failureKind: 'invalid_result',
-        ...details,
-      });
-    }
+    const succeeded = Boolean(result.response);
+    this.logRetryLifecycle(succeeded ? 'attempt_succeeded' : 'attempt_failed', {
+      decisionSource: attemptSource,
+      ...(succeeded ? {} : { failureKind: 'invalid_result' }),
+      ...details,
+    });
     return result;
   }
 
@@ -479,7 +475,7 @@ export class ModelInvocationNode<
     // handling; an interrupt is read back off the same signal in
     // `getFallbackResult`, so there is nothing to register or clear here.
     this.signal = this.services.runScope.signal;
-    return await super._exec(prepRes);
+    return super._exec(prepRes);
   }
 
   async retryPrompt(_prepRes: unknown, error: Error): Promise<boolean> {
@@ -515,8 +511,10 @@ export class ModelInvocationNode<
   protected async handleManualRetryPrompt(
     error: Error,
   ): Promise<ManualRetryPromptResult> {
-    const { logger, runScope } = this.services;
-    const { session, streamId } = runScope;
+    const {
+      logger,
+      runScope: { session, streamId },
+    } = this.services;
     const streamStatus = session.status;
     const operationName = this._config.operationName;
     const formatted = normalizeProviderError(error);
@@ -706,9 +704,7 @@ export class ModelInvocationNode<
           systemPrompt: prepRes.systemPrompt,
           endTag: this._config.getEndTag?.(services),
           signal,
-          tools: this._config.getTools
-            ? this._config.getTools(services)
-            : services.setting.tools,
+          tools: this._config.getTools?.(services) ?? services.setting.tools,
           finalTool: prepRes.finalTool,
         });
 

@@ -83,6 +83,18 @@ export function createDesktopDiffHost(
     return removal;
   }
 
+  async function cleanupFallbackDir(
+    tempDir: string,
+    warning: string,
+  ): Promise<void> {
+    try {
+      await removeTempDir(tempDir);
+      externalPatchDirs.delete(tempDir);
+    } catch (cleanupError) {
+      console.warn(`${warning}: ${toErrorMessage(cleanupError)}`);
+    }
+  }
+
   // Returns an idempotent settle function for a promise held in
   // `inFlightFallbacks`. The promise resolves only, so callers never have to
   // handle a rejection from the bookkeeping slot.
@@ -94,6 +106,13 @@ export function createDesktopDiffHost(
     inFlightFallbacks.add(setup);
     void setup.finally(() => inFlightFallbacks.delete(setup));
     return settle;
+  }
+
+  function takeDirSnapshot(): string[] {
+    drainComplete = true;
+    const tempDirs = [...externalPatchDirs];
+    externalPatchDirs.clear();
+    return tempDirs;
   }
 
   // Waits for fallback setup to reach a stable empty state, up to a fixed
@@ -108,10 +127,7 @@ export function createDesktopDiffHost(
     while (true) {
       if (inFlightFallbacks.size === 0) {
         if (observedEmpty) {
-          drainComplete = true;
-          const tempDirs = [...externalPatchDirs];
-          externalPatchDirs.clear();
-          return tempDirs;
+          return takeDirSnapshot();
         }
         observedEmpty = true;
         await Promise.resolve();
@@ -120,10 +136,7 @@ export function createDesktopDiffHost(
       observedEmpty = false;
       const remainingMs = deadline - performance.now();
       if (remainingMs <= 0) {
-        drainComplete = true;
-        const tempDirs = [...externalPatchDirs];
-        externalPatchDirs.clear();
-        return tempDirs;
+        return takeDirSnapshot();
       }
       const abort = new AbortController();
       try {
@@ -185,14 +198,10 @@ export function createDesktopDiffHost(
         if (!drainComplete) {
           externalPatchDirs.add(tempDir);
         }
-        try {
-          await removeTempDir(tempDir);
-          externalPatchDirs.delete(tempDir);
-        } catch (cleanupError) {
-          console.warn(
-            `[desktop] Failed to remove the temporary diff directory after the window closed; cleanup will continue through disposal if still tracked, otherwise it is left to OS temp cleanup: ${toErrorMessage(cleanupError)}`,
-          );
-        }
+        await cleanupFallbackDir(
+          tempDir,
+          'Failed to remove the temporary diff directory after the window closed; cleanup will continue through disposal if still tracked, otherwise it is left to OS temp cleanup',
+        );
         throw new Error(
           'Desktop window closed before the diff could be opened.',
         );
@@ -211,14 +220,10 @@ export function createDesktopDiffHost(
         // waiting for window close, and preserve the original failure for the
         // caller. Keep the directory recorded when the removal fails so
         // dispose() can retry it, and log instead of swallowing the failure.
-        try {
-          await removeTempDir(tempDir);
-          externalPatchDirs.delete(tempDir);
-        } catch (cleanupError) {
-          console.warn(
-            `[desktop] Failed to remove the temporary diff directory; will retry when the window closes: ${toErrorMessage(cleanupError)}`,
-          );
-        }
+        await cleanupFallbackDir(
+          tempDir,
+          'Failed to remove the temporary diff directory; will retry when the window closes',
+        );
         throw error;
       }
 
@@ -254,23 +259,21 @@ export function createDesktopDiffHost(
     const retryResults = await Promise.allSettled(
       firstFailures.map((tempDir) => removeTempDir(tempDir)),
     );
-    const stillFailed = firstFailures.filter(
-      (_, index) => retryResults[index].status === 'rejected',
-    );
-    if (stillFailed.length > 0) {
+    const retryReasons = retryResults
+      .filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected',
+      )
+      .map((failure) => failure.reason);
+    if (retryReasons.length > 0) {
       // `dispose()` runs once per host, so there is no later cleanup pass that
       // can read a re-recorded directory. Surface the failure loudly and leave
       // the directories to the OS temp-directory cleanup instead of
       // pretending another dispose will retry them.
       throw new AggregateError(
-        retryResults
-          .filter(
-            (result): result is PromiseRejectedResult =>
-              result.status === 'rejected',
-          )
-          .map((failure) => failure.reason),
-        `Failed to remove ${stillFailed.length} diff temp ${
-          stillFailed.length === 1 ? 'directory' : 'directories'
+        retryReasons,
+        `Failed to remove ${retryReasons.length} diff temp ${
+          retryReasons.length === 1 ? 'directory' : 'directories'
         }; the directories are left for OS temp cleanup.`,
       );
     }

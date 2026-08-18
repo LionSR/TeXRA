@@ -91,22 +91,23 @@ export function workflowDashboardModel(
     root.entries,
     root.workflowAttemptBoundaryDeclared,
   );
-  const currentCalls = new Set(
+  const currentCallIds = new Set(
     latestWorkflowCallsById(
       root.entries.flatMap((entry) =>
         entry.role === 'workflowTask' ? [entry.task] : [],
       ),
       currentAttemptId,
-    ),
+    ).map((call) => call.id),
   );
   for (const entry of root.entries) {
     if (entry.role !== 'phase' && entry.role !== 'workflowTask') continue;
-    if (entry.role === 'workflowTask' && !currentCalls.has(entry.task))
+    if (entry.role === 'workflowTask' && !currentCallIds.has(entry.task.id))
       continue;
     if (
       entry.role === 'phase' &&
-      currentAttemptId !== undefined &&
-      (currentAttemptId === null || entry.attemptId !== currentAttemptId)
+      (currentAttemptId === null ||
+        (currentAttemptId !== undefined &&
+          entry.attemptId !== currentAttemptId))
     ) {
       continue;
     }

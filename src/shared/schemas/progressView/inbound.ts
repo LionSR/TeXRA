@@ -270,6 +270,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.PACK_STREAM),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.CLEAN_STREAM),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.RESTORE_STATE),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.EXPORT_TRANSCRIPT),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER),
     SendFollowUpMessageSchema,

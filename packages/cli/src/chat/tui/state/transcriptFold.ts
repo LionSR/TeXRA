@@ -241,12 +241,10 @@ function baseLogEntryFields<R extends ConversationEntry['role']>(
 
 function spillPathOf(entry: StreamLogEntry): string | undefined {
   const data = entry.data;
-  return typeof data === 'object' &&
-    data !== null &&
-    'spillPath' in data &&
-    typeof data.spillPath === 'string'
-    ? data.spillPath
-    : undefined;
+  if (typeof data !== 'object' || data === null || !('spillPath' in data)) {
+    return undefined;
+  }
+  return typeof data.spillPath === 'string' ? data.spillPath : undefined;
 }
 
 /**
@@ -794,6 +792,78 @@ function retrackFoldSingletons(
   );
 }
 
+function workflowCallAttemptId(entry: StreamLogEntry): string | undefined {
+  const data = entry.data;
+  if (typeof data !== 'object' || data === null || !('attemptId' in data)) {
+    return undefined;
+  }
+  const attemptId = data.attemptId;
+  return typeof attemptId === 'string' && attemptId.length > 0
+    ? attemptId
+    : undefined;
+}
+
+/** Tagged rows from an earlier attempt, or any tagged row after a malformed
+ *  current-attempt boundary. Untagged legacy rows stay. */
+function isSupersededAttemptId(
+  state: TranscriptFoldState,
+  attemptId: string | undefined,
+): boolean {
+  if (!state.workflowAttemptBoundaryDeclared || attemptId === undefined) {
+    return false;
+  }
+  return (
+    state.workflowAttemptId === undefined ||
+    attemptId !== state.workflowAttemptId
+  );
+}
+
+function isPriorWorkflowAttemptLogEntry(
+  state: TranscriptFoldState,
+  entry: StreamLogEntry,
+): boolean {
+  if (!state.workflowAttemptBoundaryDeclared) return false;
+  const phase = phaseGroupData(entry);
+  if (phase) return isSupersededAttemptId(state, phase.attemptId);
+  if (entry.messageType === MESSAGE_TYPES.WORKFLOW_TASK) {
+    return isSupersededAttemptId(state, workflowCallAttemptId(entry));
+  }
+  return (
+    entry.messageType === MESSAGE_TYPES.DEFAULT &&
+    entry.seqNo < state.workflowAttemptSeqNo
+  );
+}
+
+function isPriorWorkflowAttemptItem(
+  state: TranscriptFoldState,
+  item: TranscriptFoldItem,
+): boolean {
+  const rendered = item.rendered;
+  if (rendered.role === 'workflowTask') {
+    return isSupersededAttemptId(state, rendered.task.attemptId);
+  }
+  if (rendered.role === 'phase') {
+    return isSupersededAttemptId(state, rendered.attemptId);
+  }
+  return (
+    rendered.messageType === MESSAGE_TYPES.DEFAULT &&
+    rendered.sourceSeqNo !== undefined &&
+    rendered.sourceSeqNo < state.workflowAttemptSeqNo
+  );
+}
+
+function evictPriorWorkflowAttemptItems(
+  state: TranscriptFoldState,
+  flags: FoldChangeFlags,
+): void {
+  if (!state.workflowAttemptBoundaryDeclared) return;
+  for (let index = state.items.length - 1; index >= 0; index -= 1) {
+    if (isPriorWorkflowAttemptItem(state, state.items[index]!)) {
+      removeFoldItemAt(state, index, flags);
+    }
+  }
+}
+
 /** Fold one changed (appended or dirtied) log entry into the items array. */
 function applyChangedLogEntry(
   state: TranscriptFoldState,
@@ -801,28 +871,29 @@ function applyChangedLogEntry(
   ctx: FoldContext,
 ): void {
   const messageType = entry.messageType ?? '';
-  const markerCandidate =
-    typeof entry.data === 'object' &&
-    entry.data !== null &&
-    'kind' in entry.data &&
-    entry.data.kind === 'workflowAttempt';
-  if (
+  const data = entry.data;
+  const isAttemptBoundary =
     messageType === MESSAGE_TYPES.INTERNAL &&
-    markerCandidate &&
-    entry.seqNo >= state.workflowAttemptSeqNo
-  ) {
+    typeof data === 'object' &&
+    data !== null &&
+    'kind' in data &&
+    data.kind === 'workflowAttempt' &&
+    entry.seqNo >= state.workflowAttemptSeqNo;
+  if (isAttemptBoundary) {
     // A malformed declared boundary must supersede the preceding attempt.
     // Retaining its identifier would project prior-run rows as current.
+    const attemptId = 'attemptId' in data ? data.attemptId : undefined;
     state.workflowAttemptId =
-      typeof entry.data === 'object' &&
-      entry.data !== null &&
-      'attemptId' in entry.data &&
-      typeof entry.data.attemptId === 'string' &&
-      entry.data.attemptId.length > 0
-        ? entry.data.attemptId
+      typeof attemptId === 'string' && attemptId.length > 0
+        ? attemptId
         : undefined;
     state.workflowAttemptBoundaryDeclared = true;
     state.workflowAttemptSeqNo = entry.seqNo;
+    // The dashboard already shows only the current attempt. The live
+    // transcript must match: a retry that appends a fresh attempt would
+    // otherwise leave the failed first-attempt task cards and their
+    // default-log leftovers in the streaming feed.
+    evictPriorWorkflowAttemptItems(state, ctx.flags);
   }
   const wOO = state.workflowOperationalOnly;
   // Detached child runs surface their full log output (phase group rows and
@@ -849,6 +920,12 @@ function applyChangedLogEntry(
     trackedPos !== undefined && state.items[trackedPos].rank === 1
       ? trackedPos
       : undefined;
+
+  if (isPriorWorkflowAttemptLogEntry(state, entry)) {
+    if (existingPos !== undefined)
+      removeFoldItemAt(state, existingPos, ctx.flags);
+    return;
+  }
 
   if (
     !transcriptCandidate &&

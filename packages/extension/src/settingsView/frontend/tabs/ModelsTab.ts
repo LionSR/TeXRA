@@ -7,12 +7,12 @@ import { customElement, property } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
-import type {
-  ModelSelectionItem,
-  ProviderKeyStatus,
-  SpendingStatus,
+import {
+  type ModelSelectionItem,
+  type ProviderKeyStatus,
+  type SpendingStatus,
+  isSpendingQuotaExceeded,
 } from '@shared/schemas';
-import { isSpendingQuotaExceeded } from '@shared/schemas';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ApiAccessSection';

@@ -217,7 +217,7 @@ function protectByPatterns(
   patterns: readonly RegExp[],
   tag: string,
   preserveBlockquotePrefixes = false,
-): { content: string; items: string[]; placeholder: RegExp } {
+): { content: string; restore: (value: string) => string } {
   const items: string[] = [];
   const selectedTag = selectPlaceholderTag(content, tag);
   const protectedContent = protectPatternsInto(
@@ -227,10 +227,10 @@ function protectByPatterns(
     items,
     preserveBlockquotePrefixes,
   );
+  const placeholder = new RegExp(`@@${selectedTag}-(\\d+)@@`, 'g');
   return {
     content: protectedContent,
-    items,
-    placeholder: new RegExp(`@@${selectedTag}-(\\d+)@@`, 'g'),
+    restore: (value) => restorePlaceholders(value, placeholder, items),
   };
 }
 
@@ -703,6 +703,18 @@ function restorePlaceholders(
 let normalizeEnvironmentProbe: BegEndEnvironmentProbe | undefined;
 
 /**
+ * Inline/display math shield for the HTML normalizer's first pass. It keeps
+ * the lax inline `$…$` contract but leaves environments for the second,
+ * structural pass so HTML block containers can be unwrapped in between.
+ */
+export function protectLatexMathSpansForNormalizeInline(content: string): {
+  content: string;
+  restore: (value: string) => string;
+} {
+  return protectByPatterns(content, MATH_SPAN_PATTERNS, 'LATEX-MATH', true);
+}
+
+/**
  * `htmlMarkdownNormalize`'s math shield: the lax inline `$…$` set plus the
  * container/fence-aware environment probe. The normalize pass runs before the
  * renderer, so it needs the same list-continuation/blockquote awareness or a
@@ -713,32 +725,6 @@ let normalizeEnvironmentProbe: BegEndEnvironmentProbe | undefined;
  * too: the probe and `applyEnvironmentShields` must always slice the same LF
  * string markdown-it's block parser sees.
  */
-/**
- * Inline/display math shield for the HTML normalizer's first pass. It keeps
- * the lax inline `$…$` contract but leaves environments for the second,
- * structural pass so HTML block containers can be unwrapped in between.
- */
-export function protectLatexMathSpansForNormalizeInline(content: string): {
-  content: string;
-  restore: (value: string) => string;
-} {
-  const protectedMath = protectByPatterns(
-    content,
-    MATH_SPAN_PATTERNS,
-    'LATEX-MATH',
-    true,
-  );
-  return {
-    content: protectedMath.content,
-    restore: (value) =>
-      restorePlaceholders(
-        value,
-        protectedMath.placeholder,
-        protectedMath.items,
-      ),
-  };
-}
-
 export function protectLatexMathSpansForNormalize(content: string): {
   content: string;
   restore: (value: string) => string;
@@ -827,7 +813,7 @@ export function createMarkdownProcessor(
     const mathProtected = mathProtection.content;
     const macroProtection = config.protectLatexMath
       ? protectByPatterns(mathProtected, [LATEX_MACRO], 'LATEX-MACRO')
-      : { content: mathProtected, items: [], placeholder: /$^/g };
+      : { content: mathProtected, restore: (value: string) => value };
     const protectedContent = macroProtection.content;
     // OpenAI reasoning summaries sometimes omit the line break before a bold
     // heading mid-sentence (".**Heading**" → no break). Force one.
@@ -836,11 +822,7 @@ export function createMarkdownProcessor(
     const restoreProtectedLatex = (value: string): string => {
       let restored = value;
       if (config.protectLatexMath) {
-        restored = restorePlaceholders(
-          restored,
-          macroProtection.placeholder,
-          macroProtection.items,
-        );
+        restored = macroProtection.restore(restored);
         restored = mathProtection.restore(restored);
       }
       return restoreLatexReferences(restored, refPlaceholder, refs, format);

@@ -46,7 +46,6 @@ export interface ViewBundle {
  * stylesheet under `dist/`. Covers the main, progress, and settings views.
  */
 export class BundledViewContentProvider {
-  private readonly channel: string;
   private readonly viewPath: string;
   private readonly log: ReturnType<typeof createLog>;
 
@@ -56,11 +55,10 @@ export class BundledViewContentProvider {
     private readonly bundle: ViewBundle,
     viewPath?: string,
   ) {
-    this.channel = `${viewName}ContentProvider`;
     // Default: convert 'HistoryView' to 'historyView'
     this.viewPath =
       viewPath ?? viewName.charAt(0).toLowerCase() + viewName.slice(1);
-    this.log = createLog(this.channel);
+    this.log = createLog(`${viewName}ContentProvider`);
   }
 
   public getHtmlContent(webview: vscode.Webview): string {

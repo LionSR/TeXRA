@@ -20,6 +20,7 @@ import {
   type ConversationEntry,
   type StreamSlice,
 } from '../state/cliState';
+import { currentWorkflowPhaseHeading } from '../state/workflowPhase';
 import {
   readStreamArtifacts,
   streamArtifactRevision,
@@ -172,22 +173,16 @@ export function workflowRunStatusSummary(
   slice: StreamSlice | undefined,
 ): readonly WorkflowStatusSegment[] | undefined {
   if (slice?.category !== AgentCategory.Workflow) return undefined;
-  const currentAttemptId = currentWorkflowAttemptId(
-    slice.workflowAttemptId,
-    slice.entries,
-    slice.workflowAttemptBoundaryDeclared,
-  );
-  const phase = slice.entries.findLast(
-    (entry): entry is Extract<ConversationEntry, { readonly role: 'phase' }> =>
-      entry.role === 'phase' &&
-      (currentAttemptId === undefined ||
-        (currentAttemptId !== null && entry.attemptId === currentAttemptId)),
-  );
+  const phase = currentWorkflowPhaseHeading(slice);
   const currentCalls = latestWorkflowCallsById(
     slice.entries.flatMap((entry) =>
       entry.role === 'workflowTask' ? [entry.task] : [],
     ),
-    currentAttemptId,
+    currentWorkflowAttemptId(
+      slice.workflowAttemptId,
+      slice.entries,
+      slice.workflowAttemptBoundaryDeclared,
+    ),
   );
   const { done, total } = workflowPhaseCallProgress(
     phase ? currentCalls.filter((call) => call.phase === phase.phaseLabel) : [],

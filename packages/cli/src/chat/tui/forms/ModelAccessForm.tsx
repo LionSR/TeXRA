@@ -52,21 +52,17 @@ export function ModelAccessForm(
     [props.apiMode],
   );
 
-  const items =
+  const items = buildCliModelAccessItems(
     status?.state === 'loaded'
-      ? buildCliModelAccessItems({
-          kind: 'loaded',
-          access: status.overview.access,
-        })
-      : buildCliModelAccessItems({
-          kind: 'pending',
-          state: status?.state ?? 'loading',
-        });
-  const detailLines = (() => {
-    if (status?.state === 'loaded') return status.overview.lines;
-    if (status?.state === 'failed') return [status.message];
-    return undefined;
-  })();
+      ? { kind: 'loaded', access: status.overview.access }
+      : { kind: 'pending', state: status?.state ?? 'loading' },
+  );
+  let detailLines: readonly string[] | undefined;
+  if (status?.state === 'loaded') {
+    detailLines = status.overview.lines;
+  } else if (status?.state === 'failed') {
+    detailLines = [status.message];
+  }
 
   return (
     <ListForm

@@ -90,8 +90,8 @@ function wrapWithErrorHandling<T extends MessageType>(
 function getToolUseRenderLabel(
   message: LogMessageOf<typeof MESSAGE_TYPES.TOOL_USE>,
 ): string {
-  const toolName = message.data.toolName ?? '';
-  return toolName.trim() ? `tool use (${toolName.trim()})` : 'tool use';
+  const toolName = message.data.toolName?.trim() ?? '';
+  return toolName ? `tool use (${toolName})` : 'tool use';
 }
 
 /** Map of message types to their formatter functions. */

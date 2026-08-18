@@ -1,6 +1,6 @@
 import type { SelectItem } from '@cli/tui/ui/Select';
 import type { StateSettingEntry } from '@shared/schemas';
-import { formatResultCount } from '@utils/text/stringUtils';
+import { capitalize, formatResultCount } from '@utils/text/stringUtils';
 
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   git: 'Git and worktrees',
@@ -15,11 +15,7 @@ const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
 export function configCategoryLabel(category: string): string {
   return (
     CONFIG_CATEGORY_LABELS[category] ??
-    category
-      .split('-')
-      .filter(Boolean)
-      .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
-      .join(' ')
+    category.split('-').filter(Boolean).map(capitalize).join(' ')
   );
 }
 

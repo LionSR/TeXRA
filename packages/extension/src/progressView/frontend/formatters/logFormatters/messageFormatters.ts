@@ -59,7 +59,7 @@ export function formatUserMessageTemplate(
 
 /** Format progress status entry as TemplateResult. */
 export function formatProgressStatusTemplate(
-  message: LogMessageData,
+  message: LogMessageOf<typeof MESSAGE_TYPES.PROGRESS_STATUS>,
 ): FormatResult {
   const { level = 'info', id, groupId, timestamp, text, data } = message;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } =

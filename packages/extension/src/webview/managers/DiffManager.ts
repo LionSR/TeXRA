@@ -53,7 +53,7 @@ export class DiffManager extends BaseWebviewManager {
         )) ?? [])
       : [];
 
-    if (notifyWhenEmpty && (commits.length === 0 || !isGitRepo)) {
+    if (notifyWhenEmpty && commits.length === 0) {
       const infoMessage = isGitRepo
         ? 'No recent commits found for this repository.'
         : 'This workspace is not a Git repository.';

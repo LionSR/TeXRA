@@ -305,7 +305,7 @@ export function createSessionExitController(
     }
   };
 
-  const beginTeardown = (cause: ExitCause): Promise<void> => {
+  const beginTeardown = async (cause: ExitCause): Promise<void> => {
     removeProcessHandlers();
     clearExitConfirmation();
     if (cause.kind === 'signal') {
@@ -322,53 +322,51 @@ export function createSessionExitController(
       );
     }
 
-    return (async () => {
-      let disposalFailed = false;
-      let disposalFailure: unknown;
-      try {
-        ctx.disposables.dispose();
-      } catch (error) {
-        disposalFailed = true;
-        disposalFailure = error;
+    let disposalFailed = false;
+    let disposalFailure: unknown;
+    try {
+      ctx.disposables.dispose();
+    } catch (error) {
+      disposalFailed = true;
+      disposalFailure = error;
+    }
+    await ctx.followUpQueue.onIdle();
+    // A suspended (idle/WAITING) root session is resumable: its flow record
+    // survives only if we DON'T interrupt the flow (interrupt clears it). See
+    // chatTuiIsResumableIdleOnExit for the live-flow check that distinguishes
+    // this state from a resume slot that is still rehydrating.
+    const resumableIdle = ctx.isResumableIdle();
+    if (chatTuiRunPending(session) && !resumableIdle) {
+      session.stopRequested = true;
+      ctx.interruptActive();
+      // Only await a run we actually interrupted/finished. A resumableIdle run
+      // is parked at the WAIT node and its runPromise NEVER resolves, so
+      // awaiting it would hang the process here.
+      await session.runPromise;
+    }
+    await persistAndReleaseResumableIdleLease(resumableIdle);
+    cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
+    ctx.disposeTerminalRestoreOnExit();
+    // Print the resume hint after the terminal modes are restored, but before
+    // resetCliState() clears the stream tree the hint is built from.
+    printResumeHintOnExit();
+    resetCliState();
+    if (resumableIdle) {
+      // The dangling runPromise keeps the event loop alive, so a normal return
+      // would never let the process exit. Force-exit here, AFTER persistence is
+      // flushed and the resume hint is printed, preserving the suspended flow
+      // record on disk for `texra resume`. Run platform shutdown first so queued
+      // usage logs flush — bin/texra.ts's finally won't on exit().
+      if (disposalFailed) {
+        log.error(
+          `Session resource disposal failed during exit: ${toErrorMessage(disposalFailure)}`,
+        );
       }
-      await ctx.followUpQueue.onIdle();
-      // A suspended (idle/WAITING) root session is resumable: its flow record
-      // survives only if we DON'T interrupt the flow (interrupt clears it). See
-      // chatTuiIsResumableIdleOnExit for the live-flow check that distinguishes
-      // this state from a resume slot that is still rehydrating.
-      const resumableIdle = ctx.isResumableIdle();
-      if (chatTuiRunPending(session) && !resumableIdle) {
-        session.stopRequested = true;
-        ctx.interruptActive();
-        // Only await a run we actually interrupted/finished. A resumableIdle run
-        // is parked at the WAIT node and its runPromise NEVER resolves, so
-        // awaiting it would hang the process here.
-        await session.runPromise;
-      }
-      await persistAndReleaseResumableIdleLease(resumableIdle);
-      cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
-      ctx.disposeTerminalRestoreOnExit();
-      // Print the resume hint after the terminal modes are restored, but before
-      // resetCliState() clears the stream tree the hint is built from.
-      printResumeHintOnExit();
-      resetCliState();
-      if (resumableIdle) {
-        // The dangling runPromise keeps the event loop alive, so a normal return
-        // would never let the process exit. Force-exit here, AFTER persistence is
-        // flushed and the resume hint is printed, preserving the suspended flow
-        // record on disk for `texra resume`. Run platform shutdown first so queued
-        // usage logs flush — bin/texra.ts's finally won't on exit().
-        if (disposalFailed) {
-          log.error(
-            `Session resource disposal failed during exit: ${toErrorMessage(disposalFailure)}`,
-          );
-        }
-        await runPlatformShutdown();
-        if (disposalFailed) session.runExitCode = CliExitCode.AgentError;
-        process.exit(session.runExitCode);
-      }
-      if (disposalFailed) throw disposalFailure;
-    })();
+      await runPlatformShutdown();
+      if (disposalFailed) session.runExitCode = CliExitCode.AgentError;
+      process.exit(session.runExitCode);
+    }
+    if (disposalFailed) throw disposalFailure;
   };
 
   const teardown = (cause: ExitCause): Promise<void> => {

@@ -296,21 +296,18 @@ export async function initCliPlatform(
     try {
       const { added, removed, reordered, routePreferencesCleared } =
         await refreshModelListStateIfNeeded(stateStores.globalState);
-      if (
-        added.length > 0 ||
-        removed.length > 0 ||
-        reordered ||
-        routePreferencesCleared.length > 0
-      ) {
+      const changed = added.length > 0 || removed.length > 0 || reordered;
+      const clearedRoutes = routePreferencesCleared.length > 0;
+      if (changed || clearedRoutes) {
         invalidateModelOptionsCache();
-        if (added.length > 0 || removed.length > 0 || reordered) {
+        if (changed) {
           logAt(
             'info',
             'cli.models',
             `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
           );
         }
-        if (routePreferencesCleared.length > 0) {
+        if (clearedRoutes) {
           logAt(
             'info',
             'cli.models',

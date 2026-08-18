@@ -75,8 +75,7 @@ export function removePermissionsForStream(
   streamId: string,
 ): PermissionState[] {
   return permissions.filter(
-    (permission) =>
-      !permission.data.streamId || permission.data.streamId !== streamId,
+    (permission) => permission.data.streamId !== streamId,
   );
 }
 

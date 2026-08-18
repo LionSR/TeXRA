@@ -68,7 +68,7 @@ export class InstructionManager extends BaseWebviewManager {
     }
   }
 
-  /** Build file context for AI text polishing, filtering empty/placeholder values */
+  /** Build file context for AI text polishing, filtering null values. */
   private buildFileContext(message: PolishInstructionMessage): FileContext {
     const context: FileContext = { agent: message.agent };
 

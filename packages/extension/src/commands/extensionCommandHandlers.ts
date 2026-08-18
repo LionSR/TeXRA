@@ -13,18 +13,16 @@ import {
   type PackConfig,
 } from '@commands/housekeeping/fileOpSchemas';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
-import type {
-  AcceptCopyMeta,
-  AgentCategory,
-  FileLocation,
-  SettingsTabPanelName,
-} from '@shared/schemas';
 import {
   AcceptCopyMetaSchema,
   AgentCategorySchema,
   FileLocationSchema,
   SETTINGS_TAB_PANEL_BY_NAME,
   StreamTabIdSchema,
+  type AcceptCopyMeta,
+  type AgentCategory,
+  type FileLocation,
+  type SettingsTabPanelName,
 } from '@shared/schemas';
 import {
   commandCatalog,

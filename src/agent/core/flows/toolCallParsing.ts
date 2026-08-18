@@ -1,8 +1,6 @@
-// Third-party imports
 import stableStringify from 'fast-json-stable-stringify';
 import { z } from 'zod';
 
-// Local imports
 import type { AgentTrace } from '@agent/trace';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { safeParseJson } from '@common/parsing/safeParseJson';
@@ -46,7 +44,7 @@ export function partitionDuplicateCalls(
   const segmentPrimaries = new Map<string, number>();
   const unsafeSeen = new Map<string, number>();
   for (const [index, call] of toolCalls.entries()) {
-    const key = call.name + '\0' + stableStringify(call.input);
+    const key = `${call.name}\0${stableStringify(call.input)}`;
     if (isParallelSafe(call)) {
       const primary = segmentPrimaries.get(key);
       if (primary !== undefined) {

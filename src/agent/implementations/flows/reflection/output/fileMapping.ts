@@ -1,7 +1,5 @@
-// Node imports
 import * as path from 'node:path';
 
-// Local imports
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
@@ -32,28 +30,28 @@ export function createFileMapping(
     return fileMapping;
   }
 
+  const normalizeName = roundAware
+    ? (name: string) => name.split('_r')[0]
+    : (name: string) => name;
+
   for (const target of targetFiles) {
     const targetPath = getComparablePath(target);
     const targetBaseName = path.basename(targetPath);
-    const targetName = path.parse(targetBaseName).name;
-    const targetNameNormalized = roundAware
-      ? targetName.split('_r')[0]
-      : targetName;
+    const targetName = normalizeName(path.parse(targetBaseName).name);
 
     let bestMatchSourcePath: string | null = null;
     let bestMatchScore = 0;
 
     for (const sourceFile of sourceFiles) {
       const sourcePath = getComparablePath(sourceFile);
-      const sourceName = path.parse(path.basename(sourcePath)).name;
-      const sourceNameNormalized = roundAware
-        ? sourceName.split('_r')[0]
-        : sourceName;
+      const sourceName = normalizeName(
+        path.parse(path.basename(sourcePath)).name,
+      );
 
       let matchScore = 0;
       if (matchStrategy === 'basename') {
-        if (sourceNameNormalized === targetNameNormalized) {
-          matchScore = sourceNameNormalized.length;
+        if (sourceName === targetName) {
+          matchScore = sourceName.length;
         }
       } else if (targetBaseName.includes(sourceName)) {
         matchScore = sourceName.length;

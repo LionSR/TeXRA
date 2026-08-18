@@ -1,16 +1,16 @@
 /**
  * Host-neutral loader for a stored execution's chat export input.
  *
- * Both the CLI (`texra history show <id> --export`) and the extension's
- * Settings "Export chat" action need to read the same execution triple
- * (config, conversation, meta) and assemble the same format-agnostic
+ * Both the CLI (`texra history show <id> --export`) and the progress-view
+ * toolbar export need to read the same execution triple (config,
+ * conversation, meta) and assemble the same format-agnostic
  * {@link ChatExportInput} the html/markdown/LaTeX formatters consume, so the
  * two hosts render a stored conversation identically. This module is the
  * single place that does that read + assemble; each host wraps it with its
  * own status vocabulary (see `readCliHistoryExportInput` in
  * `packages/cli/src/runtime/history.ts` and
  * `ChatExportController.buildExportInput` in
- * `src/controllers/settingsView/ChatExportController.ts`).
+ * `src/controllers/progressView/ChatExportController.ts`).
  *
  * The conversation comes from the completed-run archive facade
  * (`readCompletedRunConversation`): the transcript sidecar owns completed-run

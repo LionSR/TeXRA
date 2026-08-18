@@ -2,9 +2,14 @@
  * Chat export orchestration controller.
  *
  * Owns execution loading, export input construction, formatter selection,
- * storage writes, HTML asset staging, and LaTeX compilation. The Settings
- * handler calls this controller and performs only host UI actions (opening
- * a file, showing a message, opening a browser).
+ * storage writes, HTML asset staging, and LaTeX compilation. The progress-view
+ * toolbar (`EXPORT_TRANSCRIPT`) is the GUI caller; the CLI's
+ * `texra history --export` shares the same loaders and formatters. Hosts
+ * perform only UI actions (opening a file, showing a message, opening a
+ * browser).
+ *
+ * Not a Settings History leftover — that tab was retired. Do not delete this
+ * writer as part of settings-view cleanup.
  *
  * This module is VS Code-free — all platform wiring lives in the caller. The
  * LaTeX document preamble is a host-supplied asset (the `.tex` template lives
@@ -40,7 +45,8 @@ import { StorageFS } from '@utils/files/storageFS';
 // ============================================================
 
 /** Outcome of loading execution data for export. */
-type ExportInputStatus = 'ok' | 'config_missing' | 'conversation_missing';
+export type ExportInputStatus =
+  'ok' | 'config_missing' | 'conversation_missing';
 
 type ExportInputResult =
   | { readonly status: 'ok'; readonly exportInput: ChatExportInput }

@@ -178,24 +178,40 @@ interface ScrollableModalTextProps {
 export function ScrollableModalText(
   props: ScrollableModalTextProps,
 ): React.JSX.Element {
-  const { maxRows, text, width } = props;
+  const {
+    continuationPrefix,
+    firstLinePrefix,
+    hiddenNoun,
+    marginWhenSpacious,
+    maxRows,
+    minContentWidth,
+    preWrapped,
+    resetKey,
+    scrollActive,
+    scrollHint,
+    showScrollHints,
+    startAtEnd,
+    text,
+    trimWrappedLeadingWhitespace,
+    width,
+  } = props;
   const lines = useMemo(
     () =>
       modalTextDisplayLines({
-        continuationPrefix: props.continuationPrefix,
-        firstLinePrefix: props.firstLinePrefix,
-        minContentWidth: props.minContentWidth,
-        preWrapped: props.preWrapped,
+        continuationPrefix,
+        firstLinePrefix,
+        minContentWidth,
+        preWrapped,
         text,
-        trimWrappedLeadingWhitespace: props.trimWrappedLeadingWhitespace,
+        trimWrappedLeadingWhitespace,
         width,
       }),
     [
-      props.continuationPrefix,
-      props.firstLinePrefix,
-      props.minContentWidth,
-      props.preWrapped,
-      props.trimWrappedLeadingWhitespace,
+      continuationPrefix,
+      firstLinePrefix,
+      minContentWidth,
+      preWrapped,
+      trimWrappedLeadingWhitespace,
       text,
       width,
     ],
@@ -205,10 +221,10 @@ export function ScrollableModalText(
     totalLines: lines.length,
   });
   const { scrollOffset, scrollable } = useScrollableOffset({
-    active: props.scrollActive !== false,
-    initialOffset: props.startAtEnd ? maxScrollOffset : 0,
+    active: scrollActive !== false,
+    initialOffset: startAtEnd ? maxScrollOffset : 0,
     maxScrollOffset,
-    resetKey: props.resetKey ?? text,
+    resetKey: resetKey ?? text,
     pageRows: scrollPageRows({
       compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
       maxDisplayLines: maxRows,
@@ -216,21 +232,19 @@ export function ScrollableModalText(
   });
   const compactLayout = maxRows <= COMPACT_SCROLLABLE_CONTENT_ROWS;
   const displayLines = boundedModalTextLines({
-    hiddenNoun: props.hiddenNoun,
+    hiddenNoun,
     lines,
     maxRows,
     scrollOffset,
     width,
   });
-  const contentWidth = clampModalWidth(width, props.minContentWidth);
+  const contentWidth = clampModalWidth(width, minContentWidth);
 
   return (
     <>
       <Box
         marginY={
-          scrollable || compactLayout || props.marginWhenSpacious === false
-            ? 0
-            : 1
+          scrollable || compactLayout || marginWhenSpacious === false ? 0 : 1
         }
         flexDirection="column"
       >
@@ -241,17 +255,17 @@ export function ScrollableModalText(
         ))}
       </Box>
       {scrollable &&
-      maxRows > 1 &&
-      props.scrollActive !== false &&
-      props.showScrollHints !== false ? (
-        <KeyHints
-          confirmCancel={false}
-          hints={[
-            { key: '↑/↓', action: props.scrollHint },
-            { key: 'PgUp/PgDn', action: 'page' },
-          ]}
-        />
-      ) : null}
+        maxRows > 1 &&
+        scrollActive !== false &&
+        showScrollHints !== false && (
+          <KeyHints
+            confirmCancel={false}
+            hints={[
+              { key: '↑/↓', action: scrollHint },
+              { key: 'PgUp/PgDn', action: 'page' },
+            ]}
+          />
+        )}
     </>
   );
 }

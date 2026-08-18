@@ -48,7 +48,7 @@ export async function showInstructionWithSuppress(
   const prompt = vscode.window.showInformationMessage(message, ...buttons);
 
   if (options.deferDismissal) {
-    void Promise.resolve(prompt)
+    void prompt
       .then((choice) =>
         handleInstructionChoice(stateKey, showSuppress, actions, choice),
       )

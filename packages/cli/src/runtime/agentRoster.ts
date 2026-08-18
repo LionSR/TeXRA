@@ -1,11 +1,11 @@
 import { createWorkspaceAgentRosterController, loadAgents } from '@agent/index';
 import { platform } from '@platform/platform';
-import type {
-  AgentRosterCategorySelection,
-  AgentRosterSelection,
-  ByCategory,
+import {
+  byCategory,
+  type AgentRosterCategorySelection,
+  type AgentRosterSelection,
+  type ByCategory,
 } from '@shared/schemas';
-import { byCategory } from '@shared/schemas';
 import { loadWorkspaceCliConfig, resolveConfiguredAgent } from './cliConfig';
 
 export interface CliAgentRosterRecord {

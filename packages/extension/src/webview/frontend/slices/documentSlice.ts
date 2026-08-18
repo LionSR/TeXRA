@@ -5,14 +5,12 @@
 
 // Local imports - shared IPC and schemas
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  DocumentFileType,
-  MainViewHandlerRegistry,
-  MainViewMessage,
-} from '@shared/schemas';
 import {
   DocumentFileTypeSchema,
   isMultipleDocumentFileType,
+  type DocumentFileType,
+  type MainViewHandlerRegistry,
+  type MainViewMessage,
 } from '@shared/schemas';
 import { unique } from '@utils/core';
 

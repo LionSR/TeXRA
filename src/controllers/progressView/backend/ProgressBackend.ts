@@ -350,19 +350,21 @@ export class ProgressBackend {
     const failures = hydration.filter(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );
-    if (generation !== this.activationGeneration) {
-      if (transcriptLeaseResult.status === 'fulfilled')
+    const closeTranscriptLease = () => {
+      if (transcriptLeaseResult.status === 'fulfilled') {
         transcriptLeaseResult.value.close();
+      }
+    };
+    if (generation !== this.activationGeneration) {
+      closeTranscriptLease();
       return false;
     }
     if (!this.state.streamLogs.has(stream)) {
-      if (transcriptLeaseResult.status === 'fulfilled')
-        transcriptLeaseResult.value.close();
+      closeTranscriptLease();
       return false;
     }
     if (failures.length > 0) {
-      if (transcriptLeaseResult.status === 'fulfilled')
-        transcriptLeaseResult.value.close();
+      closeTranscriptLease();
       if (failures.length === 1) throw failures[0].reason;
       throw new AggregateError(
         failures.map((failure) => failure.reason),
@@ -432,16 +434,26 @@ export class ProgressBackend {
     return this.factApplier.setStreamStatus(...args);
   }
 
-  /** Inject a session fact (tests / rare host seeds). Prefer the hub in production. */
-  applySessionFact(
-    ...args: Parameters<SessionFactApplier['handleSessionFact']>
+  /**
+   * Admit one session fact through the applier, then apply presentation
+   * policy for an accepted attachment. A refused attachment (removed stream)
+   * must not activate or lease.
+   */
+  private admitSessionFact(
+    fact: Parameters<SessionFactApplier['handleSessionFact']>[0],
   ): boolean {
-    const admitted = this.factApplier.handleSessionFact(...args);
-    const [fact] = args;
+    const admitted = this.factApplier.handleSessionFact(fact);
     if (admitted && fact.type === 'setActiveStream') {
       this.handleStreamPresentationRequest(fact.payload);
     }
     return admitted;
+  }
+
+  /** Inject a session fact (tests / rare host seeds). Prefer the hub in production. */
+  applySessionFact(
+    ...args: Parameters<SessionFactApplier['handleSessionFact']>
+  ): boolean {
+    return this.admitSessionFact(args[0]);
   }
 
   /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */
@@ -649,7 +661,7 @@ export class ProgressBackend {
     wasActive: boolean,
     activationGenerationAtStart: number,
     expectedIncarnation?: number,
-  ): Promise<'deleted' | 'active' | 'failed' | 'superseded' | undefined> {
+  ): Promise<DeleteStreamResult | undefined> {
     // `undefined` means the deletion never ran (reserved id / cannot-use data
     // dir), not "deleted": the command path relies on a committed deletion
     // being reported as `deleted` so it keeps the tombstone it just installed.
@@ -911,13 +923,7 @@ export class ProgressBackend {
       this.session.events.subscribe(
         (sessionEvent) => {
           if (sessionEvent.scope !== 'session') return;
-          const admitted = this.factApplier.handleSessionFact(
-            sessionEvent.event,
-          );
-          // A refused attachment (removed stream) must not activate or lease.
-          if (admitted && sessionEvent.event.type === 'setActiveStream') {
-            this.handleStreamPresentationRequest(sessionEvent.event.payload);
-          }
+          this.admitSessionFact(sessionEvent.event);
         },
         { scope: 'session' },
       ),

@@ -1,3 +1,4 @@
+import type { BrowserWindow } from 'electron';
 import type {
   MainViewAuthStatus,
   MainViewStartupOptions,
@@ -20,7 +21,6 @@ import {
   type DesktopShellActions,
 } from './desktopShellIpc.js';
 import { createDesktopViewStateIpc } from './desktopViewStateIpc.js';
-import type { BrowserWindow } from 'electron';
 import type { DesktopProgressIpc } from './desktopProgressIpc.js';
 import type { DesktopPromptIpc } from './desktopPromptController.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';

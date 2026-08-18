@@ -80,9 +80,9 @@ export function formatWebSearchTemplate(
   }
 
   const contentTemplate =
-    sections.length === 0
-      ? html`<pre>Web search executed</pre>`
-      : html`${sections}`;
+    sections.length > 0
+      ? html`${sections}`
+      : html`<pre>Web search executed</pre>`;
 
   return buildToolUseDetails({
     message,
@@ -139,9 +139,9 @@ export function formatWebFetchTemplate(
   }
 
   const contentTemplate =
-    sections.length === 0
-      ? html`<pre>Web fetch executed</pre>`
-      : html`${sections}`;
+    sections.length > 0
+      ? html`${sections}`
+      : html`<pre>Web fetch executed</pre>`;
 
   return buildToolUseDetails({
     message,

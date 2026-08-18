@@ -158,6 +158,7 @@ async function createExecution(options: {
       session,
       sessionStores: processStores.stores,
       presentationSignal: options.presentationSignal,
+      resourcesPath: '/tmp/texra-test-resources',
       host: createStubDesktopAgentExecutionHost({
         ...(options.opener?.openPath
           ? { openPath: options.opener.openPath }

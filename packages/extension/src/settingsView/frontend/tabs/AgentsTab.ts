@@ -21,14 +21,14 @@ import {
 // Local imports - shared schemas
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type {
-  AgentCategory,
-  AgentScanIssue,
-  AgentSelectionItem,
-  ByCategory,
-  NumberSetting,
+import {
+  type AgentCategory,
+  type AgentScanIssue,
+  type AgentSelectionItem,
+  type ByCategory,
+  type NumberSetting,
+  byCategory,
 } from '@shared/schemas';
-import { byCategory } from '@shared/schemas';
 import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {

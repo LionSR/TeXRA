@@ -71,8 +71,14 @@ export const SESSION_LIST = {
   openAction: 'sessions',
   /** Help / prose for the same Tab binding. */
   openHelp: 'selects sessions',
-  /** Input-bar placeholder while the list owns keys. */
-  choosing: 'Choosing a session; press Esc to return to the prompt.',
+  /**
+   * Input-bar placeholder while the list owns keys. Esc here only returns
+   * typing to this view — it does not walk to the parent session.
+   */
+  choosing:
+    'Session list. Enter opens a session. Esc stays here and returns to typing.',
+  /** Status-bar Esc action while a nested session is focused: walk to its parent. */
+  parentAction: 'parent',
 } as const;
 
 /**

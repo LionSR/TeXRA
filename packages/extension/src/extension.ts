@@ -507,9 +507,7 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     }
   } catch (error) {
-    const initError =
-      error instanceof Error ? error : new Error(toErrorMessage(error));
-    SupabaseClient.setInitError(initError);
+    SupabaseClient.setInitError(ensureError(error));
     log.error(
       `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
     );
