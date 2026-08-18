@@ -849,7 +849,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       '/api',
-      'Choose ChatGPT, Grok, Kimi Code, inc…',
+      'Choose ChatGPT, Grok, Kimi Code, GLM…',
       '/auth',
       'Show signed-in accounts and active',
       '/models',
@@ -1403,9 +1403,11 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       '/api',
-      'Your own API keys',
+      'Model access',
+      'Prefer ChatGPT subscrip',
+      'Prefer Grok subscription',
       '↑/↓ navigate',
-      '1-6/Enter select',
+      '1-4/Enter select',
       'Esc close',
     ],
   },
