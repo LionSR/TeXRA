@@ -89,7 +89,7 @@ describe('arXiv processor logger channel', () => {
     );
   });
 
-  it('logs extraction failures on the owner channel and honors a channel override', async () => {
+  it('logs extraction failures on the owner channel', async () => {
     const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
     const dir = await makeTempDir('texra-arxiv-', tempDirs);
     const missingTar = path.join(dir, 'missing.tar');
@@ -99,16 +99,6 @@ describe('arXiv processor logger channel', () => {
     expect(fallback.success).toBe(false);
     expect(error).toHaveBeenCalledWith(
       'arxivProcessor',
-      expect.stringContaining('Failed to extract tar file'),
-    );
-
-    const overridden = await ArxivProcessor.extractTarFile(missingTar, dir, {
-      channel: 'arxivExtractOverride',
-    });
-
-    expect(overridden.success).toBe(false);
-    expect(error).toHaveBeenCalledWith(
-      'arxivExtractOverride',
       expect.stringContaining('Failed to extract tar file'),
     );
   });

@@ -28,15 +28,6 @@ export type GetProgressStreamControls = (
   stream: StreamTabId,
 ) => ProgressStreamControls;
 
-export function getDefaultProgressStreamControls(): ProgressStreamControls {
-  return {
-    bashBypass: false,
-    toolEditBypass: false,
-    superYoloBypass: false,
-    goalActive: false,
-  };
-}
-
 export function getProgressStreamControls(
   streamId: StreamTabId,
   session?: SessionHandle,

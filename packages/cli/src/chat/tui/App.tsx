@@ -153,7 +153,6 @@ export interface AppProps {
   /** Suspend the process (Ctrl-Z). Raw mode swallows the tty driver's own
    *  ^Z→SIGTSTP translation, so the parsed key must be routed explicitly. */
   readonly onSuspend?: () => void;
-  readonly inputDisabled?: boolean;
   readonly history?: InputHistory;
 }
 
@@ -214,8 +213,7 @@ export function App(props: AppProps): React.JSX.Element {
   const childInputHidden =
     focusedChildFollowUpRoute({ activeStreamId, parentStream, streams })
       .kind === 'reject';
-  const appInputDisabled =
-    props.inputDisabled === true || foregroundOpen || childListFocused;
+  const appInputDisabled = foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
     ? SESSION_LIST.choosing
     : undefined;

@@ -13,9 +13,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * CLI is the only consumer.
  */
 export interface LogFields {
-  readonly streamId?: string;
-  readonly runId?: string;
-  readonly groupId?: string;
   readonly [key: string]: unknown;
 }
 
@@ -170,9 +167,8 @@ export async function askCliQuestion(
 
 class StderrTextSink implements LogSink {
   write(record: LogRecord): void {
-    const stream = record.fields.streamId ? ` [${record.fields.streamId}]` : '';
     writeTextStderr(
-      `${record.ts} ${record.level.toUpperCase()}${stream} ${record.message}`,
+      `${record.ts} ${record.level.toUpperCase()} ${record.message}`,
     );
   }
 }

@@ -41,6 +41,7 @@ function recordingHandlers(
       unused,
       (message) => messages.push(message),
       () => true,
+      () => '',
     ),
     canSend: () => true,
     overrides,
