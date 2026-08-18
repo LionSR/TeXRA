@@ -14,9 +14,7 @@ function profileMessage(remaining: number) {
     authenticated: true,
     user: null,
     tier: 'Ultra',
-    remoteAgents: [],
     apiAccessMode: 'personal' as const,
-    tierConstants: { ultra: 'Ultra', max: 'Max' },
     sessionProblem: null,
     spendingStatus: {
       currentSpend: 100 - remaining,

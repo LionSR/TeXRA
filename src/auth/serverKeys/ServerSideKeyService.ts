@@ -420,10 +420,6 @@ export class ServerSideKeyService {
     return modelName ? this.canUseModelSync(modelName) : this.hasFullAccess();
   }
 
-  getAccessExpirationDate(): Date | null {
-    return this.tierService.getExpirationDate();
-  }
-
   getRelayBaseUrl(provider: ModelProvider): string {
     const suffix = RELAY_PATH_SUFFIXES[provider] ?? '';
     return `${this.baseUrl}/functions/v1/relay/${provider}${suffix}`;
