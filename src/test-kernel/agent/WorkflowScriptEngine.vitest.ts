@@ -241,7 +241,6 @@ return await agent('Inspect src', { id: 'core' })`,
       {
         id: 'core',
         label: 'Audit core',
-        stageTitle: 'Audit',
         status: 'stageBlocked',
       },
     ]);
@@ -254,7 +253,6 @@ return await agent('Inspect src', { id: 'core' })`,
       {
         id: 'core',
         label: 'Audit core',
-        stageTitle: 'Audit',
         status: 'completed',
       },
     ]);
@@ -708,7 +706,6 @@ return await parallel([
     expect(snapshots.at(-1)?.calls).toMatchObject([
       {
         stageId: 'stage-1',
-        stageTitle: 'Work',
         status: 'failed',
         error: expect.stringContaining('checkpoint offline'),
         model: 'checkpoint-model',
@@ -833,7 +830,6 @@ return await agent('Inspect src', { id: 'inspect' })`,
         id: 'inspect',
         label: 'Audit implementation',
         stageId: 'stage-1',
-        stageTitle: 'Audit',
         status: 'cached',
       },
     ]);
@@ -1103,7 +1099,6 @@ return null`,
         id: 'call-0',
         label: 'labelled',
         stageId: 'stage-1',
-        stageTitle: 'Work',
         status: 'completed',
       },
     ]);
@@ -1133,8 +1128,8 @@ return await agent('active', { label: 'Active' })`,
       { id: 'stage-1', title: 'Work', order: 0 },
     ]);
     expect(run.snapshot.calls).toMatchObject([
-      { label: 'Early', stageId: 'stage-1', stageTitle: 'Work' },
-      { label: 'Active', stageId: 'stage-1', stageTitle: 'Work' },
+      { label: 'Early', stageId: 'stage-1' },
+      { label: 'Active', stageId: 'stage-1' },
     ]);
   });
 
