@@ -6,6 +6,7 @@ import {
   ContextManagementDataSchema,
   STREAM_PHASE,
   STREAM_STATUS,
+  StreamSnapshotSchema,
 } from '@shared/schemas';
 
 // Minimal NormalizedUsage fixture: all required fields, no optionals.
@@ -128,5 +129,26 @@ describe('ActiveChildInfoSchema — flat roster row', () => {
         status: STREAM_STATUS.INITIALIZING,
       }),
     ).toThrow();
+  });
+});
+
+describe('StreamSnapshotSchema.status — legacy-inbound normalization', () => {
+  // Archived trace.json exports (the permanently-fenced §8.3 boundary) still
+  // carry the retired 7-value StreamStatus. The parse entry point normalizes
+  // them into StreamPhase once; downstream never sees a legacy value.
+  it.each([
+    { legacy: STREAM_STATUS.INITIALIZING, expected: STREAM_PHASE.RUNNING },
+    { legacy: STREAM_STATUS.RESUMING, expected: STREAM_PHASE.RUNNING },
+    { legacy: STREAM_STATUS.ERROR, expected: STREAM_PHASE.FAILED },
+    { legacy: STREAM_STATUS.STOPPED, expected: STREAM_PHASE.COMPLETED },
+    // `ready` has no phase equivalent ("no run recorded") → absent.
+    { legacy: STREAM_STATUS.READY, expected: undefined },
+  ])('normalizes legacy "$legacy" to "$expected"', ({ legacy, expected }) => {
+    const result = StreamSnapshotSchema.parse({
+      streamId: 'stream:legacy',
+      status: legacy,
+    });
+
+    expect(result.status).toBe(expected);
   });
 });
