@@ -5,7 +5,7 @@
  * `StreamLogStore` (the round/thinking/tool-call timeline), and
  * `StreamSnapshotStore` (todos/plan/usage sidecars).
  *
- * Host-neutral, following `ChatExportController.buildExportInput`'s
+ * Host-neutral, following `loadChatExportInput`'s (`@agent/export`)
  * discriminated-status pattern so callers can show a precise error instead of
  * a generic failure.
  */

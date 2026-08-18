@@ -7,7 +7,7 @@
 
 import { SignalWatcher, signal, Signal } from '@lit-labs/signals';
 
-export { SignalWatcher, signal, Signal };
+export { SignalWatcher, Signal };
 
 /**
  * Selector: extracts a field from a monolithic signal.
