@@ -12,6 +12,7 @@ import {
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
 import {
   RUN_OUTCOME,
+  stageTitleFor,
   WORKFLOW_CALL_STATUS,
   WORKFLOW_EXECUTION_LIFECYCLE,
   type RunOutcome,
@@ -368,11 +369,13 @@ export async function runPersistedWorkflowScriptWithProgress(
   const cardFor = (
     call: WorkflowExecutionCall,
     status: WorkflowCallProgress['status'],
+    stages: WorkflowExecutionSnapshot['stages'],
   ): WorkflowCallProgress => {
+    const phase = stageTitleFor({ stages }, call);
     const identity = {
       id: call.id,
       label: call.label,
-      ...(call.stageTitle !== undefined ? { phase: call.stageTitle } : {}),
+      ...(phase !== undefined ? { phase } : {}),
       ...(call.childStreamId !== undefined
         ? { childStreamId: call.childStreamId }
         : {}),
@@ -495,7 +498,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         // and the stage itself opens (with its declared position) when the
         // stage loop above sees the run enter it — planned cards must not
         // open their phase early.
-        const card = cardFor(call, status);
+        const card = cardFor(call, status, snapshot.stages);
         const previousStatus = projected?.status;
         emitCall(card);
         if (status === previousStatus) continue;
@@ -513,7 +516,9 @@ export async function runPersistedWorkflowScriptWithProgress(
             // The phase recorded on the card's first emission owns which
             // group the failure marks.
             markPhaseFailed(
-              projected ? projected.definition.phase : call.stageTitle,
+              projected
+                ? projected.definition.phase
+                : stageTitleFor(snapshot, call),
             );
           }
           recordTerminalActivity(card as WorkflowCallTerminalProgress);

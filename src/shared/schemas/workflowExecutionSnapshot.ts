@@ -68,11 +68,10 @@ const WorkflowExecutionAttemptSchema = z.strictObject({
   startedAt: z.iso.datetime(),
   completedAt: z.iso.datetime().optional(),
 });
-const WorkflowExecutionCallSchema = z.strictObject({
+const WorkflowExecutionCallShape = z.strictObject({
   id: z.string().min(1),
   label: z.string(),
   stageId: z.string().min(1).optional(),
-  stageTitle: z.string().min(1).optional(),
   agent: z.string().optional(),
   model: z.string().optional(),
   files: z.strictObject({
@@ -97,6 +96,23 @@ const WorkflowExecutionCallSchema = z.strictObject({
   costUsd: z.number().nonnegative().optional(),
   timestamps: WorkflowExecutionTimestampsSchema,
 });
+/**
+ * `stageTitle` was removed as a denormalized duplicate of the referenced
+ * stage's title (resolve it with `stageTitleFor` instead). Strip it here,
+ * ahead of the strict shape, so a `meta.json` snapshot persisted before that
+ * removal — e.g. by an interrupted run `hydrate()` must still recover —
+ * keeps parsing instead of failing strictObject's unrecognized-key check.
+ */
+const WorkflowExecutionCallSchema = z.preprocess((value) => {
+  if (value && typeof value === 'object' && 'stageTitle' in value) {
+    const { stageTitle: _stageTitle, ...rest } = value as Record<
+      string,
+      unknown
+    >;
+    return rest;
+  }
+  return value;
+}, WorkflowExecutionCallShape);
 export type WorkflowExecutionCall = z.infer<typeof WorkflowExecutionCallSchema>;
 
 type WorkflowExecutionCounts = Record<WorkflowExecutionCallStatus, number> & {
@@ -122,6 +138,18 @@ export function deriveWorkflowCounts(
     waiting: byStatus.planned + byStatus.stageBlocked,
     ...byStatus,
   };
+}
+
+/**
+ * A call's stage title, resolved from `stageId` against the snapshot's own
+ * stages — the one owner, so a call can never carry a stage name that
+ * disagrees with the stage it points at.
+ */
+export function stageTitleFor(
+  snapshot: Pick<WorkflowExecutionSnapshot, 'stages'>,
+  call: Pick<WorkflowExecutionCall, 'stageId'>,
+): string | undefined {
+  return snapshot.stages.find((stage) => stage.id === call.stageId)?.title;
 }
 
 export const TERMINAL_WORKFLOW_CALL_STATUSES: ReadonlySet<WorkflowExecutionCallStatus> =
@@ -209,21 +237,14 @@ export const WorkflowExecutionSnapshotSchema = z
           message: `Duplicate workflow call id "${call.id}".`,
         });
       callIds.add(call.id);
-      if (call.stageId !== undefined) {
-        const stage = snapshot.stages.find(
-          (candidate) => candidate.id === call.stageId,
-        );
-        if (!stage || call.stageTitle !== stage.title)
-          context.addIssue({
-            code: 'custom',
-            path: ['calls', index, 'stageId'],
-            message: 'A workflow call stage must reference a matching stage.',
-          });
-      } else if (call.stageTitle !== undefined) {
+      if (
+        call.stageId !== undefined &&
+        !snapshot.stages.some((stage) => stage.id === call.stageId)
+      ) {
         context.addIssue({
           code: 'custom',
-          path: ['calls', index, 'stageTitle'],
-          message: 'Workflow call stageTitle requires stageId.',
+          path: ['calls', index, 'stageId'],
+          message: 'A workflow call stage must reference a matching stage.',
         });
       }
       for (const [attemptIndex, attempt] of call.attempts.entries()) {

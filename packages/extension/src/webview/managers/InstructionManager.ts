@@ -72,15 +72,11 @@ export class InstructionManager extends BaseWebviewManager {
   private buildFileContext(message: PolishInstructionMessage): FileContext {
     const context: FileContext = { agent: message.agent };
 
-    // Multi-file fields (check active flag and array content)
-    const multiFields = [
-      ['inputFiles', 'inputFilesActive'],
-      ['contextFiles', 'contextFilesActive'],
-      ['mediaFiles', 'mediaFilesActive'],
-    ] as const;
-    for (const [field, activeField] of multiFields) {
+    // Multi-file fields with array content
+    const multiFields = ['inputFiles', 'contextFiles', 'mediaFiles'] as const;
+    for (const field of multiFields) {
       const files: (string | null)[] | undefined = message[field];
-      if (message[activeField] && Array.isArray(files) && files.length > 0) {
+      if (Array.isArray(files) && files.length > 0) {
         context[field] = files.filter(filterNotNull);
       }
     }
