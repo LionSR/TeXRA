@@ -11,7 +11,7 @@ import {
   childExecutionLabel,
   focusOrderDescendants,
   visibleSubagentRows,
-  type ChildStreamEntries,
+  type ChildRosters,
 } from './childExecutions';
 import type { StreamSlice } from './cliState';
 
@@ -99,20 +99,17 @@ export function nearestActiveStreamAncestor<T>(init: {
 
 function childStreamReferenceLabel(
   parentStreamId: StreamTabId,
-  childStreamEntries: ChildStreamEntries,
-  streams: ReadonlyMap<StreamTabId, StreamSlice>,
+  childRosters: ChildRosters,
   streamId: StreamTabId,
 ): string {
-  const child = visibleSubagentRows(
-    parentStreamId,
-    childStreamEntries,
-    streams,
-  ).find((entry) => entry.childStreamId === streamId);
+  const child = visibleSubagentRows(parentStreamId, childRosters).find(
+    (entry) => entry.childStreamId === streamId,
+  );
   return child ? childExecutionLabel(child) : streamId;
 }
 
 export function streamDisplayLabel(init: {
-  readonly childStreamEntries: ChildStreamEntries;
+  readonly childRosters: ChildRosters;
   /** Batch-resolved labels from {@link streamTreeViews}; single lookups compute on demand. */
   readonly labels?: ReadonlyMap<StreamTabId, string>;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
@@ -125,15 +122,14 @@ export function streamDisplayLabel(init: {
   if (precomputed !== undefined) return precomputed;
   return childStreamReferenceLabel(
     parentStreamId,
-    init.childStreamEntries,
-    init.streams,
+    init.childRosters,
     init.streamId,
   );
 }
 
 export function streamViewForId(init: {
   readonly activeStreamId: StreamTabId | undefined;
-  readonly childStreamEntries: ChildStreamEntries;
+  readonly childRosters: ChildRosters;
   /** Batch-resolved labels from {@link streamTreeViews}; single lookups compute on demand. */
   readonly labels?: ReadonlyMap<StreamTabId, string>;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
@@ -141,17 +137,19 @@ export function streamViewForId(init: {
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): StreamView {
   const parentId = init.parentStream.get(init.streamId);
-  const childEntry = init.childStreamEntries.get(init.streamId);
-  const liveSummary =
-    childEntry?.kind === 'live' ? childEntry.summary : undefined;
+  const rosterRow = parentId
+    ? visibleSubagentRows(parentId, init.childRosters).find(
+        (child) => child.childStreamId === init.streamId,
+      )
+    : undefined;
   return {
     id: init.streamId,
     label: streamDisplayLabel(init),
-    identity: liveSummary?.identity,
+    identity: rosterRow?.identity,
     parentId,
     parentLabel: parentId
       ? streamDisplayLabel({
-          childStreamEntries: init.childStreamEntries,
+          childRosters: init.childRosters,
           labels: init.labels,
           parentStream: init.parentStream,
           streamId: parentId,
@@ -165,7 +163,7 @@ export function streamViewForId(init: {
 
 interface StreamTreeViewInput {
   readonly activeStreamId: StreamTabId | undefined;
-  readonly childStreamEntries: ChildStreamEntries;
+  readonly childRosters: ChildRosters;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly rootStreamId: StreamTabId | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -182,7 +180,8 @@ export function streamTreeEntries(
   // started, keeping the row a user is most likely watching near the top.
   const ordered = focusOrderDescendants(
     root,
-    init.childStreamEntries,
+    init.childRosters,
+    init.parentStream,
     init.streams,
   ).toReversed();
   const out: ActiveStreamTreeEntry[] = [];
@@ -198,16 +197,13 @@ export function streamTreeEntries(
 
 /**
  * Display labels for a batch of stream ids in one pass: grouping ids by
- * parent runs `visibleSubagentRows` once per parent rather than once per
- * child, so a wide child list costs one roster scan per distinct parent per
- * render instead of one per row. A parentless id gets no entry here —
+ * parent walks each parent's roster once rather than once per child, so a
+ * wide child list costs one roster scan per distinct parent per render
+ * instead of one per row. A parentless id gets no entry here —
  * `streamDisplayLabel` answers 'main' for it without consulting the map.
  */
 function childStreamLabels(
-  init: Pick<
-    StreamTreeViewInput,
-    'childStreamEntries' | 'parentStream' | 'streams'
-  >,
+  init: Pick<StreamTreeViewInput, 'childRosters' | 'parentStream'>,
   streamIds: readonly StreamTabId[],
 ): ReadonlyMap<StreamTabId, string> {
   const idsByParent = new Map<StreamTabId, StreamTabId[]>();
@@ -223,8 +219,7 @@ function childStreamLabels(
     const unresolved = new Set(ids);
     for (const child of visibleSubagentRows(
       parentStreamId,
-      init.childStreamEntries,
-      init.streams,
+      init.childRosters,
     )) {
       if (unresolved.delete(child.childStreamId)) {
         labels.set(child.childStreamId, childExecutionLabel(child));
@@ -242,9 +237,9 @@ export function streamTreeViews(
 ): readonly StreamView[] {
   const ordered = streamTreeEntries(init);
   if (ordered.length < 2) return [];
-  // Resolve every row's label in one pass: `visibleSubagentRows` scans the
-  // full child-entry map, so looking it up per row (and again per parent
-  // label) costs one scan per child per render.
+  // Resolve every row's label in one pass: per-row resolution searches the
+  // parent's roster, so looking it up per row (and again per parent label)
+  // costs one roster scan per child per render.
   const labels = childStreamLabels(
     init,
     ordered.map((entry) => entry.id),
@@ -252,7 +247,7 @@ export function streamTreeViews(
   return ordered.map((entry) =>
     streamViewForId({
       activeStreamId: init.activeStreamId,
-      childStreamEntries: init.childStreamEntries,
+      childRosters: init.childRosters,
       labels,
       parentStream: init.parentStream,
       streamId: entry.id,

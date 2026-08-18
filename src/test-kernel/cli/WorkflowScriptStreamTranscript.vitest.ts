@@ -1005,20 +1005,15 @@ describe('CLI workflow-script child-stream transcript', () => {
     const staticItems = appendItems([], {
       childStreamEntries: new Map([
         [
-          STREAM_ID,
-          {
-            kind: 'live' as const,
-            active: true,
-            parent: {
-              kind: 'roster' as const,
-              retained: { streamId: PARENT_STREAM_ID, order: 1 },
-            },
-            summary: {
-              agentName: 'draft-sections',
+          PARENT_STREAM_ID,
+          [
+            {
               executionId: 'exec-1',
+              childStreamId: STREAM_ID,
               identity: WORKFLOW_IDENTITY,
+              agentName: 'draft-sections',
             },
-          },
+          ],
         ],
       ]),
       parentStream: new Map([[STREAM_ID, PARENT_STREAM_ID]]),

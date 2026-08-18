@@ -48,7 +48,7 @@ import {
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import { buildChildStreamEntries } from '@test/support/childStreamEntries';
+import { buildChildRosters } from '@test/support/childStreamEntries';
 import {
   loadInk,
   renderOutputAtTerminalSize,
@@ -859,9 +859,9 @@ describe('CLI child list display model', () => {
       [bash, run],
       [agent, run],
     ]);
-    const childStreamEntries = buildChildStreamEntries({
+    const childRosters = buildChildRosters({
       parentStreamId: run,
-      retained: [
+      rows: [
         {
           executionId: 'bash-exec',
           agentName: 'bash',
@@ -882,7 +882,7 @@ describe('CLI child list display model', () => {
     });
     const sessions = streamTreeViews({
       activeStreamId: run,
-      childStreamEntries,
+      childRosters,
       parentStream,
       rootStreamId: run,
       streams,

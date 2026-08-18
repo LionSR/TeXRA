@@ -10,11 +10,12 @@ import {
   type ResumeTarget,
 } from '@cli/chat/tui/state/resumeHint';
 import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
-import { type StreamTabId, type TokenUsageStats } from '@shared/schemas';
 import {
-  buildChildStreamEntries,
-  type ChildStreamEntryRow,
-} from '@test/support/childStreamEntries';
+  type ActiveChildInfo,
+  type StreamTabId,
+  type TokenUsageStats,
+} from '@shared/schemas';
+import { buildChildRosters } from '@test/support/childStreamEntries';
 
 function makeSlice(
   over: Partial<StreamSlice> & { streamId: string },
@@ -26,16 +27,18 @@ function makeSlice(
   };
 }
 
+/** A finished roster row retained for display — the resume-target shape. */
 function child(
-  over: Partial<ChildStreamEntryRow> & {
+  over: Partial<ActiveChildInfo> & {
     executionId: string;
     childStreamId: StreamTabId;
   },
-): ChildStreamEntryRow {
+): ActiveChildInfo {
   return {
     agentName: 'agent',
     identity: { kind: 'agent', agent: 'agent' },
     resumeEligible: true,
+    finishedAt: 1,
     ...over,
   };
 }
@@ -46,7 +49,7 @@ function streamsOf(
   return new Map(slices.map((s) => [s.streamId, s]));
 }
 
-const EMPTY_CHILD_STREAM_ENTRIES = buildChildStreamEntries({
+const EMPTY_CHILD_ROSTERS = buildChildRosters({
   parentStreamId: 'main@m#root' as StreamTabId,
 });
 
@@ -61,7 +64,7 @@ describe('collectResumeTargets', () => {
     const streams = streamsOf(makeSlice({ streamId: 'main@m#root' }));
     expect(
       collectResumeTargets({
-        childStreamEntries: EMPTY_CHILD_STREAM_ENTRIES,
+        childRosters: EMPTY_CHILD_ROSTERS,
         rootExecutionId: 'root',
         streams,
       }),
@@ -72,9 +75,9 @@ describe('collectResumeTargets', () => {
     const root = makeSlice({ streamId: 'main@m#root' });
     const reviewer = makeSlice({ streamId: 'reviewer@m#rev' });
     const builder = makeSlice({ streamId: 'builder@m#flow' });
-    const childStreamEntries = buildChildStreamEntries({
+    const childRosters = buildChildRosters({
       parentStreamId: root.streamId,
-      retained: [
+      rows: [
         child({
           executionId: 'rev',
           agentName: 'reviewer',
@@ -93,7 +96,7 @@ describe('collectResumeTargets', () => {
 
     expect(
       collectResumeTargets({
-        childStreamEntries,
+        childRosters,
         rootExecutionId: 'root',
         streams: streamsOf(root, reviewer, builder),
       }),
@@ -106,9 +109,9 @@ describe('collectResumeTargets', () => {
   it('skips children whose roster row has no resume eligibility', () => {
     const root = makeSlice({ streamId: 'main@m#root' });
     const shell = makeSlice({ streamId: 'bash@tool#sh' });
-    const childStreamEntries = buildChildStreamEntries({
+    const childRosters = buildChildRosters({
       parentStreamId: root.streamId,
-      retained: [
+      rows: [
         child({
           executionId: 'sh',
           agentName: 'bash',
@@ -120,7 +123,7 @@ describe('collectResumeTargets', () => {
 
     expect(
       collectResumeTargets({
-        childStreamEntries,
+        childRosters,
         rootExecutionId: 'root',
         streams: streamsOf(root, shell),
       }),
@@ -130,7 +133,7 @@ describe('collectResumeTargets', () => {
   it('returns nothing when there is no root execution yet', () => {
     expect(
       collectResumeTargets({
-        childStreamEntries: EMPTY_CHILD_STREAM_ENTRIES,
+        childRosters: EMPTY_CHILD_ROSTERS,
         rootExecutionId: undefined,
         streams: new Map(),
       }),
