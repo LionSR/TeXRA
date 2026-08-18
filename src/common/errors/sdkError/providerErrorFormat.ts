@@ -39,19 +39,11 @@ import {
   firstBodyStringField,
   getErrorClassNames,
   getHeaderValue,
-  safeGetReasonPhrase,
-} from './errorInspection';
-import {
-  getRelayRequestLimitReason,
-  getRelayRequestLimitRetryAfterMs,
   inferStatusCodeFromBody,
   isModelScopedRateLimitBody,
-  isRelayError,
-  isRelayMonthlyLimitBody,
-  isRelayMonthlyLimitMessage,
-  isRelayRequestLimitBody,
   isUpstreamCreditDepletedBody,
-} from './relayDetection';
+  safeGetReasonPhrase,
+} from './errorInspection';
 import {
   describeChatGptSubscriptionLimit,
   parseChatGptSubscriptionLimit,
@@ -77,8 +69,8 @@ import {
   isRetryableStatusCode,
 } from './sdkErrorKinds';
 
-/** Partial result before relay detection (isRelayError/rawErrorBody added later). */
-type SdkMatchResult = Omit<ProviderError, 'isRelayError' | 'rawErrorBody'>;
+/** Partial result before body detection (rawErrorBody added later). */
+type SdkMatchResult = Omit<ProviderError, 'rawErrorBody'>;
 
 interface QuotaLimitMatch {
   readonly exhaustionReason: ExhaustionReason;
@@ -295,12 +287,9 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const partialText = detectPartialText(err);
   const extractedMessage = extractErrorMessage(err);
   const sdkExhaustionReason = detectSdkErrorMetadata(err)?.exhaustionReason;
-  const isRelayMonthlyLimitByMessage =
-    isRelayMonthlyLimitMessage(extractedMessage);
-  const isRelay = isRelayError(rawErrorBody) || isRelayMonthlyLimitByMessage;
-  // Credit exhaustion matches regardless of relay status: a direct
-  // Anthropic 400 "credit balance is too low" still wants the "Use your
-  // own API key" affordance so the user can switch credentials.
+  // Credit exhaustion wants the "Use your own API key" affordance so the
+  // user can switch credentials — e.g. a direct Anthropic 400 "credit
+  // balance is too low".
   const isUpstreamCreditDepleted = isUpstreamCreditDepletedBody(rawErrorBody);
   const quotaLimit = detectQuotaLimit(err, rawErrorBody);
   // GLM Coding Plan transient rate limit / overload (codes 1302/1305): surface
@@ -314,30 +303,24 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const subscriptionLimitMessage =
     quotaLimit?.message ?? glmCodingPlanRateLimitMessage;
   // Priority: an explicit SDK stamp wins; then the first matching
-  // quota-fallback detector; then upstream-credit; then relay monthly limit.
+  // quota-fallback detector; then upstream-credit.
   let exhaustionReason: ExhaustionReason | undefined = sdkExhaustionReason;
   if (exhaustionReason === undefined) {
     if (quotaLimit !== undefined) {
       exhaustionReason = quotaLimit.exhaustionReason;
     } else if (isUpstreamCreditDepleted) {
       exhaustionReason = 'upstream-credit';
-    } else if (
-      isRelayMonthlyLimitBody(rawErrorBody) ||
-      isRelayMonthlyLimitByMessage
-    ) {
-      exhaustionReason = 'relay-limit';
     }
   }
   const isCredentialExhausted = exhaustionReason !== undefined;
 
   // Terminal failures (user abort, local disk-full): never retryable and never
-  // a relay/credential affordance. Carries diagnostics but deliberately opts
+  // a credential affordance. Carries diagnostics but deliberately opts
   // out of the credential classification computed below.
   function terminalError(message: string): ProviderError {
     return {
       message,
       userRetryable: false,
-      isRelayError: false,
       rawErrorBody,
       streamDiagnostics,
       partialText,
@@ -381,10 +364,9 @@ export function formatProviderHttpError(err: unknown): ProviderError {
 
   // Classification flags + diagnostics carried by BOTH the SDK-matched and the
   // unrecognized returns below. The abort / disk-full early returns above
-  // deliberately opt out (always non-relay, no credential flags). Single source
+  // deliberately opt out (no credential flags). Single source
   // for these fields so adding a future flag touches one place, not two.
   const classification = {
-    isRelayError: isRelay,
     exhaustionReason,
     rawErrorBody,
     streamDiagnostics,
@@ -402,7 +384,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       // panel surfaces with the "Use your own API key" affordance, but
       // shouldAutoRetry separately suppresses auto-retry for them — a
       // fresh attempt with the same depleted credential would just fail.
-      userRetryable: isRelay || sdkMatch.userRetryable || isCredentialExhausted,
+      userRetryable: sdkMatch.userRetryable || isCredentialExhausted,
     };
   }
 
@@ -420,7 +402,6 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // No status code on an unrecognized error likely means a network-level failure
   // (DNS, proxy, TLS, etc.) — show retry button for safety.
   const userRetryable =
-    isRelay ||
     isCredentialExhausted ||
     (statusCode ? isRetryableStatusCode(statusCode) : true);
 
@@ -501,16 +482,7 @@ function detectRetryAfterMs(chain: readonly unknown[]): number | undefined {
 }
 
 /** Which recovery scope owns a 429, read from the normalized provider error. */
-function detectRateLimitScope(
-  formatted: ProviderError,
-): 'model' | 'relay-limit' | 'relay-user' | 'wire' {
-  if (
-    formatted.isRelayError &&
-    isRelayRequestLimitBody(formatted.rawErrorBody)
-  ) {
-    return 'relay-user';
-  }
-  if (formatted.exhaustionReason === 'relay-limit') return 'relay-limit';
+function detectRateLimitScope(formatted: ProviderError): 'model' | 'wire' {
   if (formatted.exhaustionReason !== undefined) return 'wire';
   return isModelScopedRateLimitBody(formatted.rawErrorBody) ? 'model' : 'wire';
 }
@@ -518,34 +490,26 @@ function detectRateLimitScope(
 /**
  * What one failed model call proves about the recovery routes it ran under.
  * Every route asks a different question of the same failure — the shared wire
- * route, the model-specific limit scope and the relay's per-user request gate
- * — and each answer reads the same cause chain, status code and rate-limit
- * scope, so the call site classifies once and reads the verdict.
+ * route and the model-specific limit scope — and each answer reads the same
+ * cause chain, status code and rate-limit scope, so the call site classifies
+ * once and reads the verdict.
  */
 export interface ModelRouteVerdict {
   /** The scope that owns the limit. Defined only for a 429. */
-  readonly rateLimitScope:
-    'model' | 'relay-limit' | 'relay-user' | 'wire' | undefined;
-  /** Credential exhaustion (relay monthly limit, subscription quota, credit). */
+  readonly rateLimitScope: 'model' | 'wire' | undefined;
+  /** Credential exhaustion (subscription quota, upstream credit). */
   readonly exhaustionReason: ExhaustionReason | undefined;
   /**
    * The failure carries evidence about a shared wire route (provider +
    * credential + endpoint): a transport failure, a 5xx/408 server failure, or
-   * a rate limit with neither an explicit model scope nor the relay's per-user
-   * request gate — those use their own recovery scopes.
+   * a rate limit without an explicit model scope — that one uses its own
+   * recovery scope.
    * Retryable failures outside this set (e.g. 409 conflicts) stay node-local —
-   * a conflict does not imply the route is unhealthy. Relay 401s are also
-   * deliberately absent: token refresh is single-flighted at the auth boundary
-   * and repaired by each call's own reactive recovery, so cooling the route
-   * would only serialize peers.
+   * a conflict does not imply the route is unhealthy.
    */
   readonly wireRouteFailure: boolean;
   /** `retry-after` / `retry-after-ms` guidance from the cause chain's headers. */
   readonly retryAfterMs: number | undefined;
-  /** The relay request gate's delay: the longer of its body and the headers. */
-  readonly relayRequestRetryAfterMs: number | undefined;
-  /** The relay gate rejected on request rate rather than on concurrency. */
-  readonly relayRequestRateLimited: boolean;
 }
 
 /** Classifies a failed model call for every recovery route it ran under. */
@@ -555,7 +519,7 @@ export function classifyModelRouteFailure(error: Error): ModelRouteVerdict {
   // Per-element field reads with an HTTP range guard, so a wrapper's non-HTTP
   // numeric `code` (an errno, a gRPC status) cannot shadow a real status
   // deeper in the chain. The normalized error is the fallback for statuses
-  // only inferable from provider bodies (e.g. relay).
+  // only inferable from provider bodies.
   const statusCode =
     chain
       .map((current) => detectStatusCode(current))
@@ -603,9 +567,6 @@ export function classifyModelRouteFailure(error: Error): ModelRouteVerdict {
     });
 
   const retryAfterMs = detectRetryAfterMs(chain);
-  const relayBodyDelayMs = getRelayRequestLimitRetryAfterMs(
-    formatted.rawErrorBody,
-  );
   return {
     rateLimitScope,
     exhaustionReason: formatted.exhaustionReason,
@@ -615,17 +576,11 @@ export function classifyModelRouteFailure(error: Error): ModelRouteVerdict {
       (statusCode != null && statusCode >= 500) ||
       transportFailure,
     retryAfterMs,
-    relayRequestRetryAfterMs:
-      retryAfterMs === undefined && relayBodyDelayMs === undefined
-        ? undefined
-        : Math.max(retryAfterMs ?? 0, relayBodyDelayMs ?? 0),
-    relayRequestRateLimited:
-      getRelayRequestLimitReason(formatted.rawErrorBody) === 'rate',
   };
 }
 
-/** Whether a normalized provider error is a 401 (relay/auth token rejected). */
-export function isUnauthorizedProviderError(formatted: ProviderError): boolean {
+/** Whether a normalized provider error is a 401 (auth token rejected). */
+function isUnauthorizedProviderError(formatted: ProviderError): boolean {
   return formatted.statusCode === StatusCodes.UNAUTHORIZED;
 }
 

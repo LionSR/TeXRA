@@ -11,8 +11,7 @@ const UsageLogMetadataSchema = z.object({
   provider: UsageProviderSchema,
   agentName: z.string().optional(),
   agentCategory: z.enum(AgentCategory).optional(),
-  usedRelay: z.boolean().optional(),
-  /** Canonical route used to account for relay/API-key/subscription usage. */
+  /** Canonical route used to account for API-key/subscription usage. */
   usageRoute: UsageRouteSchema.optional(),
   streamId: z.string().optional(),
 });

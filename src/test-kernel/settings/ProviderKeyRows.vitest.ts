@@ -6,7 +6,6 @@ import {
   API_KEY_PROVIDER_IDS,
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
-  SERVER_SIDE_PROVIDER_IDS,
 } from '@shared/constants/providers';
 
 describe('settings provider key rows', () => {
@@ -14,14 +13,6 @@ describe('settings provider key rows', () => {
     for (const provider of API_KEY_PROVIDER_IDS) {
       expect(PROVIDER_DISPLAY_NAMES[provider]).toEqual(expect.any(String));
       expect(PROVIDER_URLS[provider]).toEqual(expect.stringMatching(/^https:/));
-    }
-  });
-
-  it('keeps server-side provider keys available in the direct-key defaults', () => {
-    const apiKeyProviders = new Set<string>(API_KEY_PROVIDER_IDS);
-
-    for (const provider of SERVER_SIDE_PROVIDER_IDS) {
-      expect(apiKeyProviders.has(provider)).toBe(true);
     }
   });
 

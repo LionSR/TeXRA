@@ -9,7 +9,6 @@ import {
 import { CliUsageError, type CliContext } from './cliContext';
 import { initCliPlatform } from './initPlatform';
 import { writeTextStderr } from './logSinks';
-import { effectiveCliApiMode } from './apiAccessMode';
 import { selectCliRunnableModel } from './modelAccess';
 import { shouldRenderRunProgress } from './runProgressRenderer';
 
@@ -51,13 +50,10 @@ export async function selectCliRunModel(
   role: 'chat' | 'run',
 ): Promise<string> {
   await initCliPlatform({ ...context, quietLogs: true });
-  const apiMode = effectiveCliApiMode(context);
   try {
     const resolution = await selectCliRunnableModel(
       cliRunModelCandidates(context, modelOverride, role),
-      {
-        apiMode,
-      },
+      {},
     );
     if (resolution.notice && context.quietLogs !== true) {
       writeTextStderr(resolution.notice);

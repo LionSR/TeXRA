@@ -2,7 +2,6 @@ import { Box, Text, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { useMemo, useRef, useState } from 'react';
 
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
@@ -15,7 +14,6 @@ import {
   isXaiSubscriptionActive,
 } from '@model/providerCapabilities';
 import type {
-  SpendingStatus,
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
 } from '@shared/schemas';
@@ -52,7 +50,6 @@ import {
 } from './statusBarDisplay';
 
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
-const RELAY_QUOTA_REFRESH_MS = 10_000;
 const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
 interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
@@ -130,7 +127,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const kimiCodeActive = resolution?.kimiCodeActive ?? false;
   const glmCodingPlanActive = resolution?.glmCodingPlanActive ?? false;
   const modelAccess = resolveCliModelAccessRoute({
-    apiMode: sessionMeta.apiMode,
     subscriptionActive,
     grokSubscriptionActive,
     kimiCodeActive,
@@ -191,18 +187,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     },
     CODEX_SUBSCRIPTION_REFRESH_MS,
     `${accessModel}:${codexPreferenceVersion}`,
-  );
-
-  // The relay spend snapshot only changes when the tier config is refetched
-  // (5-minute TTL), so poll the cached accessor rather than waiting for the
-  // next launch: a quota warning that only appears at startup is useless to a
-  // session that crosses the threshold mid-run. `getSpendingStatus` returns
-  // the retained snapshot object, so an unchanged read re-renders nothing.
-  const [relayQuota, setRelayQuota] = useState<SpendingStatus>();
-  usePollingInterval(
-    () =>
-      setRelayQuota(getServerSideKeyService().getSpendingStatus() ?? undefined),
-    RELAY_QUOTA_REFRESH_MS,
   );
 
   const subscriptionUsageProvider = subscriptionUsageProviderForStatus({
@@ -283,7 +267,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     approvalKind: approvals.kind,
     model: accessModel,
     modelAccess,
-    relayQuota,
     subscriptionQuota,
     transcriptMode: sessionMeta.transcriptMode,
     approvalPolicy: sessionMeta.approvalPolicy,

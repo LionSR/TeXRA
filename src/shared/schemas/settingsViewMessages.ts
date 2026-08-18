@@ -37,7 +37,6 @@ import { ChildRunConcurrencyBudgetSchema } from './coreSettings';
 import { ModelAvailabilityFieldsSchema } from './mainView/state';
 import {
   NumberSettingSchema,
-  SetApiAccessModeInboundMessageSchema,
   SignInMessageSchema,
   SignOutMessageSchema,
   UpdateProfileMessageSchema,
@@ -84,10 +83,7 @@ export { type Goal } from './goal';
 export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
 
 export {
-  API_ACCESS_MODE_OPTIONS,
   DEFAULT_GLOBAL_STREAMING,
-  DEFAULT_QUOTA_AUTO_SWITCHED,
-  type ApiAccessMode,
   type NumberSetting,
   type ProviderKeyStatus,
   type ProviderSetting,
@@ -273,8 +269,6 @@ const ModelSelectionItemSchema = z.object({
   defaultReasoningLevel: ReasoningLevelSchema.optional(),
   /** The user's chosen reasoning level override (undefined = use default). */
   reasoningLevel: ReasoningLevelSchema.optional(),
-  /** Included access relay cap applied to the default xhigh effort, if any. */
-  includedAccessReasoningCap: ReasoningLevelSchema.optional(),
   /** Whether this model qualifies as a "fast first response" pick (price-based). */
   isFast: z.boolean().optional(),
   // Resolved once by computeModelOptionsData and carried verbatim so the
@@ -1018,7 +1012,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Profile messages
     SignInMessageSchema,
     SignOutMessageSchema,
-    SetApiAccessModeInboundMessageSchema,
     SetProviderKeyMessageSchema,
     RemoveProviderKeyMessageSchema,
     OpenProviderKeyUrlMessageSchema,

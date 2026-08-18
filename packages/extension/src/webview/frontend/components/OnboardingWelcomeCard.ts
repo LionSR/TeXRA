@@ -11,7 +11,6 @@ import {
   ONBOARDING_CARD_TITLE,
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
-  ONBOARDING_CHOICE_SIGN_IN,
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
 
@@ -22,10 +21,9 @@ const { openWalkthrough: OPEN_WALKTHROUGH } =
 
 /**
  * State 0 welcome card (PRD: agent-native onboarding) — a port of the CLI
- * first-run picker, not a new design: ChatGPT subscription first, Researcher
- * Access/API-key alternatives, and a quiet "Skip for now" link last.
- * Stateless: renders the
- * shared onboarding copy verbatim and emits `welcome-sign-in` /
+ * first-run picker, not a new design: ChatGPT subscription first, the API-key
+ * alternative, and a quiet "Skip for now" link last.
+ * Stateless: renders the shared onboarding copy verbatim and emits
  * `welcome-chatgpt` / `welcome-api-key` / setup navigation events; the host
  * owns the funnel state.
  */
@@ -218,10 +216,6 @@ export class OnboardingWelcomeCard extends LitElement {
     `,
   ];
 
-  private handleSignIn(): void {
-    this.dispatchEvent(MainViewEvents.welcomeSignIn());
-  }
-
   private handleApiKey(): void {
     this.dispatchEvent(MainViewEvents.welcomeApiKey());
   }
@@ -307,21 +301,6 @@ export class OnboardingWelcomeCard extends LitElement {
               </wa-button>
               <span class="choice-description">
                 ${ONBOARDING_CHOICE_CHATGPT.description}
-              </span>
-            </div>
-            <div class="choice">
-              <wa-button
-                id="onboardingSignInButton"
-                class="btn-secondary"
-                appearance="outlined"
-                size="m"
-                @click=${this.handleSignIn}
-              >
-                ${waIcon('right-to-bracket', { slot: 'start' })}
-                ${ONBOARDING_CHOICE_SIGN_IN.label}
-              </wa-button>
-              <span class="choice-description">
-                ${ONBOARDING_CHOICE_SIGN_IN.description}
               </span>
             </div>
             <div class="choice">

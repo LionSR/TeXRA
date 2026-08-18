@@ -10,10 +10,6 @@
 
 // Local imports
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
-import {
-  fetchRelayTokenStatus,
-  getConfiguredRelayToken,
-} from '@auth/relayToken';
 import { getCodexStatus } from '@auth/codex';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
@@ -116,29 +112,20 @@ export async function getSetupAuthStatus(): Promise<{
   authenticated: boolean;
   remoteAgentCatalogAvailable: boolean;
   email?: string;
-  tier?: string;
 }> {
-  const relayToken = getConfiguredRelayToken();
-  if (relayToken) {
-    // Prime the relay-status cache that isAuthenticated() consults below.
-    await fetchRelayTokenStatus(relayToken);
-  }
-
   const authenticated = await SupabaseClient.isAuthenticated();
   if (!authenticated) {
     return { authenticated: false, remoteAgentCatalogAvailable: false };
   }
 
-  const [user, tier, remoteAgentCatalogAvailable] = await Promise.all([
+  const [user, remoteAgentCatalogAvailable] = await Promise.all([
     SupabaseClient.getUser(),
-    SupabaseClient.getUserTier(),
     SupabaseClient.canAccessRemoteAgentCatalog(),
   ]);
   return {
     authenticated: true,
     remoteAgentCatalogAvailable,
     email: user?.email,
-    tier,
   };
 }
 

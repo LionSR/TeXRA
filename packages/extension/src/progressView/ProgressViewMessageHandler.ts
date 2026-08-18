@@ -6,7 +6,6 @@ import {
   validateExecutionRequest,
   type ExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { BaseViewMessageHandler } from '@common/webview';
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
@@ -637,10 +636,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       promptForApiKey: async (provider) => {
         await this.runViewCommand(apiKeyCommands.setApiKey, [provider]);
       },
-      getUseIncludedModelAccess: () =>
-        getServerSideKeyService().getUseIncludedModelAccess(),
-      setUseIncludedModelAccess: (enabled) =>
-        getServerSideKeyService().setUseIncludedModelAccess(enabled),
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
         this.interactions.isRetryPending(stream, requestId),
@@ -749,7 +744,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     let prepared = await this.apiKeyRetryController.ensureOwnApiKey({
       provider: fallback.provider,
       exhaustionReason: data.exhaustionReason,
-      viaRelay: data.viaRelay,
     });
     if (!prepared) return;
     if (!this.interactions.isRetryPending(data.stream, data.requestId)) return;
@@ -767,7 +761,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       prepared = await this.apiKeyRetryController.ensureOwnApiKey({
         provider: fallback.provider,
         exhaustionReason: data.exhaustionReason,
-        viaRelay: data.viaRelay,
       });
       if (!prepared) return;
       if (!this.interactions.isRetryPending(data.stream, data.requestId)) {
@@ -803,7 +796,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           model: fallback.model,
           exhaustionReason: data.exhaustionReason,
           chatGptSubscriptionEligible: fallback.chatGptSubscriptionEligible,
-          viaRelay: data.viaRelay,
         },
         async (copilotRouteOverride) => {
           if (!this.interactions.isRetryPending(data.stream, data.requestId)) {

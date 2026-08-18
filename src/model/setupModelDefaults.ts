@@ -129,3 +129,6 @@ export const SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> =
 
 /** Codex-eligible setup model used to prove ChatGPT subscription access. */
 export const CHATGPT_SETUP_MODEL = SETUP_MODEL_BY_PROVIDER.openai;
+
+/** xAI-eligible setup model used to prove Grok subscription access. */
+export const XAI_SETUP_MODEL = SETUP_MODEL_BY_PROVIDER.xai;

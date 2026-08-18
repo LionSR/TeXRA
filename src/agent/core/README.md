@@ -29,8 +29,7 @@ depend on neither. Don't introduce imports that point back outward (e.g.
 This diagram covers dependencies _within_ `core`. Flow files may still call a
 canonical host-agnostic collaborator outside `core` directly instead of
 injecting a second reference to the same run-owned service. For example,
-`ModelInvocationNode.ts` reads the current session through its run scope and
-calls `includedModelAccess()` for relay-401 token refresh. This
+`ModelInvocationNode.ts` reads the current session through its run scope. This
 is the same pattern `@agent/modelHandlers` already uses, not a `core`-specific
 exception. None of this pulls in `vscode` or `packages/*`; it's still
 host-agnostic, just not self-contained within `core`'s own module boundaries.

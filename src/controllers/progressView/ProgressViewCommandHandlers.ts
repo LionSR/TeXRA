@@ -482,7 +482,6 @@ export function createProgressViewSecondTierHandlers(
         model: data.model,
         provider: providerArg,
         exhaustionReason: data.exhaustionReason,
-        viaRelay: data.viaRelay,
         kimiCodeRoutedOnFailure: data.kimiCodeRoutedOnFailure,
       });
       if (result.proceeded && !result.retried) {

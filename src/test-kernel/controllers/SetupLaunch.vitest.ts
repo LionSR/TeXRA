@@ -4,22 +4,17 @@ import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
 } from '@model/setupModelDefaults';
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 
 /**
  * `selectSetupCredentialModelExcludingOpenRouter` is the credential-priority core
  * shared by the VS Code extension (`selectLaunchModel`) and desktop
  * (`selectDesktopSetupModel`) setup-launch paths. Exercising it directly
- * guards the priority order (ChatGPT subscription > server-side default >
- * server-side per-provider > direct provider key) against silently
- * drifting between hosts again.
+ * guards the priority order (ChatGPT subscription > direct provider key)
+ * against silently drifting between hosts again.
  */
 
 const mocks = vi.hoisted(() => ({
   isCodexSubscriptionActive: vi.fn<() => Promise<boolean>>(),
-  canUseServerSideKeys: vi.fn<() => Promise<boolean>>(),
-  canUseServerSideKeysForModel: vi.fn<(model: string) => Promise<boolean>>(),
-  canUseModelSync: vi.fn<(model: string) => boolean>(),
   lookupApiKey:
     vi.fn<
       (secrets: unknown, provider: string) => Promise<string | undefined>
@@ -35,14 +30,6 @@ vi.mock('@model/providerCapabilities', async (importOriginal) => {
     isCodexSubscriptionActive: mocks.isCodexSubscriptionActive,
   };
 });
-
-vi.mock('@auth/serverKeys', () => ({
-  getServerSideKeyService: () => ({
-    canUseServerSideKeys: mocks.canUseServerSideKeys,
-    canUseServerSideKeysForModel: mocks.canUseServerSideKeysForModel,
-    canUseModelSync: mocks.canUseModelSync,
-  }),
-}));
 
 vi.mock('@model/apiProviders', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@model/apiProviders')>();
@@ -65,9 +52,6 @@ const {
 
 beforeEach(() => {
   mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
-  mocks.canUseServerSideKeys.mockReset().mockResolvedValue(false);
-  mocks.canUseServerSideKeysForModel.mockReset().mockResolvedValue(false);
-  mocks.canUseModelSync.mockReset().mockReturnValue(false);
   mocks.lookupApiKey.mockReset().mockResolvedValue(undefined);
   mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
 });
@@ -90,42 +74,9 @@ function mockDirectApiKey(provider: string, key: string): void {
 describe('selectSetupCredentialModelExcludingOpenRouter', () => {
   it('prefers an active ChatGPT subscription over every other credential', async () => {
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
-    mocks.canUseServerSideKeysForModel.mockResolvedValue(true);
     mocks.lookupApiKey.mockResolvedValue('sk-test');
 
     await expect(selectCredentialModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
-  });
-
-  it('falls back to the default agent model when server-side keys cover it', async () => {
-    mocks.canUseServerSideKeysForModel.mockResolvedValue(true);
-
-    await expect(selectCredentialModel()).resolves.toBe(DEFAULT_AGENT_MODEL);
-    expect(mocks.canUseServerSideKeysForModel).toHaveBeenCalledWith(
-      DEFAULT_AGENT_MODEL,
-    );
-  });
-
-  it('scans per-provider setup models when the default is out of tier', async () => {
-    mocks.canUseServerSideKeysForModel.mockResolvedValue(false);
-    mocks.canUseServerSideKeys.mockResolvedValue(true);
-    mocks.canUseModelSync.mockImplementation(
-      (model) => model === SETUP_MODEL_BY_PROVIDER.google,
-    );
-
-    await expect(selectCredentialModel()).resolves.toBe(
-      SETUP_MODEL_BY_PROVIDER.google,
-    );
-  });
-
-  it('skips the openRouter entry when scanning per-provider server-side models', async () => {
-    mocks.canUseServerSideKeys.mockResolvedValue(true);
-    // Only the openRouter-mapped model would satisfy this — it must never
-    // be picked here, since server-side keys route directly, not via OR.
-    mocks.canUseModelSync.mockImplementation(
-      (model) => model === SETUP_MODEL_BY_PROVIDER.openRouter,
-    );
-
-    await expect(selectCredentialModel()).resolves.toBeNull();
   });
 
   it('falls back to a direct provider API key, skipping openRouter', async () => {
@@ -147,7 +98,6 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
       SETUP_MODEL_BY_PROVIDER.kimiCode,
     );
     expect(mocks.isCodexSubscriptionActive).not.toHaveBeenCalled();
-    expect(mocks.canUseServerSideKeys).not.toHaveBeenCalled();
   });
 
   it('returns null when no credential resolves to a runnable model', async () => {
