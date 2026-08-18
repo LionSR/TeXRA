@@ -8,6 +8,7 @@ import {
   setPreferXaiSubscription,
 } from '@model/xai/xaiPreference';
 import {
+  isCodingPlanQuotaRoute,
   QUOTA_FALLBACK_ROUTES,
   type QuotaFallbackRoute,
   type QuotaFallbackRouteId,
@@ -20,24 +21,24 @@ export interface QuotaFallbackRuntime {
   readonly restoreEnabled: (enabled: boolean) => Promise<void>;
 }
 
+async function setCodexEnabled(enabled: boolean): Promise<void> {
+  await setPreferCodexSubscription(enabled);
+}
+
+async function setXaiEnabled(enabled: boolean): Promise<void> {
+  await setPreferXaiSubscription(enabled);
+}
+
 const OAUTH_RUNTIME_BY_ID = {
   chatgpt: {
     getEnabled: isPreferCodexSubscription,
-    setEnabled: async (enabled) => {
-      await setPreferCodexSubscription(enabled);
-    },
-    restoreEnabled: async (enabled) => {
-      await setPreferCodexSubscription(enabled);
-    },
+    setEnabled: setCodexEnabled,
+    restoreEnabled: setCodexEnabled,
   },
   grok: {
     getEnabled: isPreferXaiSubscription,
-    setEnabled: async (enabled) => {
-      await setPreferXaiSubscription(enabled);
-    },
-    restoreEnabled: async (enabled) => {
-      await setPreferXaiSubscription(enabled);
-    },
+    setEnabled: setXaiEnabled,
+    restoreEnabled: setXaiEnabled,
   },
 } as const satisfies Record<
   Extract<QuotaFallbackRouteId, 'chatgpt' | 'grok'>,
@@ -47,9 +48,9 @@ const OAUTH_RUNTIME_BY_ID = {
 function runtimeFor(
   descriptor: QuotaFallbackRoute,
 ): Omit<QuotaFallbackRuntime, 'descriptor'> {
-  if (descriptor.codingPlanId !== undefined) {
+  if (isCodingPlanQuotaRoute(descriptor.id)) {
     const coding = codingPlanSubscriptionRuntimes.find(
-      (candidate) => candidate.descriptor.id === descriptor.codingPlanId,
+      (candidate) => candidate.descriptor.id === descriptor.id,
     );
     if (coding === undefined) {
       throw new Error(`Unknown coding-plan subscription: ${descriptor.id}`);
@@ -60,7 +61,7 @@ function runtimeFor(
       restoreEnabled: coding.restoreEnabled,
     };
   }
-  return OAUTH_RUNTIME_BY_ID[descriptor.id as 'chatgpt' | 'grok'];
+  return OAUTH_RUNTIME_BY_ID[descriptor.id];
 }
 
 /** Runtime catalog consumed by retry policy. */
