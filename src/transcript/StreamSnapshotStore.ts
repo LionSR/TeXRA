@@ -18,6 +18,7 @@
 
 import { Mutex } from 'async-mutex';
 import pMap from 'p-map';
+import PQueue from 'p-queue';
 import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
@@ -350,10 +351,20 @@ interface StreamRecord {
 
   // -- Lazy seeding: a stream's existing disk data is read into memory BEFORE
   // the first mutation so an accumulate/merge can't overwrite unloaded disk
-  // data. `diskState` = this record's disk provenance; `seedChain` serializes
-  // refresh/seed/mutate for it.
+  // data. `diskState` = this record's disk provenance; `seedChain` is the
+  // latest unit of work queued on this stream's `seedQueueFor` lane, published
+  // for readers that await seed/mutate quiescence (`awaitSeeded`, `flush`,
+  // staged deletion) — the lane itself, not this field, serializes the work.
   diskState: DiskState;
   seedChain: Promise<void> | undefined;
+  /**
+   * Single-flight guard for a lazily-triggered disk read: sibling mutations
+   * queued for the same unseeded stream before this read settles share it
+   * instead of each paying for their own `readSeed`. Cleared once the read
+   * settles (see `ensureSeedReadStarted`), so the next stream is free to
+   * retry after a failure instead of being wedged on a stale promise.
+   */
+  pendingSeedRead: Promise<void> | undefined;
   /** Incremented for each refresh attempt; seed-gated mutations do not change it. */
   seedRefreshGeneration: number;
   /** Authoritative disk provenance captured before the current refresh chain began. */
@@ -394,6 +405,7 @@ export class StreamSnapshotStore {
     summaryMetaHydrationFallback: undefined,
     diskState: 'unknown',
     seedChain: undefined,
+    pendingSeedRead: undefined,
     seedRefreshGeneration: 0,
     seedRefreshBaseline: undefined,
     metaOverlay: false,
@@ -430,6 +442,24 @@ export class StreamSnapshotStore {
   private readonly writeMutexes = new Map<string, Mutex>();
   /** Latest ordinary sidecar value not yet confirmed durable, by write lock. */
   private readonly dirtyWrites = new Map<string, DirtySidecarWrite>();
+
+  /**
+   * Per-stream FIFO lane (concurrency 1) that serializes seed reads and the
+   * mutations queued behind them — the same `PQueue({ concurrency: 1 })`-
+   * per-key precedent as `streamApprovalQueue.ts`. Each queued unit of work
+   * still publishes its promise onto `record.seedChain` for the readers that
+   * await it (`awaitSeeded`, `seedUsageOnly`, `flush`, staged deletion).
+   */
+  private readonly seedQueues = new Map<StreamTabId, PQueue>();
+
+  private seedQueueFor(stream: StreamTabId): PQueue {
+    let queue = this.seedQueues.get(stream);
+    if (!queue) {
+      queue = new PQueue({ concurrency: 1 });
+      this.seedQueues.set(stream, queue);
+    }
+    return queue;
+  }
 
   /** Streams already warned about a pre-identity execution row (#9590 Stage
    *  7), so repeated hydrations of the same old row stay one warning each. */
@@ -684,44 +714,65 @@ export class StreamSnapshotStore {
     return undefined;
   }
 
+  /**
+   * Start (or join) the single disk read shared by every mutation queued for
+   * this stream before it settles: two mutations queued back-to-back capture
+   * the SAME `pendingSeedRead` promise synchronously, so only the first pays
+   * for `readSeed` — the rest just await it. Cleared on settle (guarded by
+   * identity, so a newer read that has already replaced this one is left
+   * alone) so a later, genuinely fresh attempt is free to retry.
+   */
+  private ensureSeedReadStarted(
+    stream: StreamTabId,
+    version: number,
+  ): Promise<void> {
+    const record = this.getOrCreateRecord(stream);
+    if (record.pendingSeedRead) return record.pendingSeedRead;
+    const seed = this.readSeed(stream, version).finally(() => {
+      const current = this.records.get(stream);
+      if (current?.pendingSeedRead === seed)
+        current.pendingSeedRead = undefined;
+    });
+    record.pendingSeedRead = seed;
+    return seed;
+  }
+
+  /**
+   * Queue a mutation onto the stream's seed lane: the lane's FIFO order (not
+   * manual chaining) is what guarantees this runs after every mutation queued
+   * ahead of it. `ensureSeedReadStarted` is captured synchronously, before
+   * enqueueing, so sibling mutations queued in the same tick share one read
+   * instead of each starting their own.
+   */
   private queueAfterSeed(
     stream: StreamTabId,
     version: number,
     apply: () => unknown,
   ): Promise<void> {
-    const next: Promise<void> = this.ensureSeeded(stream, version)
-      .catch((err: unknown) => {
-        if (!this.hasDiskProvenance(stream)) throw err;
-      })
-      .then(() => {
+    const seedRead = this.hasDiskProvenance(stream)
+      ? undefined
+      : this.ensureSeedReadStarted(stream, version);
+    const next: Promise<void> = this.seedQueueFor(stream)
+      .add(async () => {
+        if (seedRead) {
+          try {
+            await seedRead;
+          } catch (err: unknown) {
+            if (!this.hasDiskProvenance(stream)) throw err;
+          }
+        }
         if (this.streamVersion(stream) !== version) return;
         const record = this.records.get(stream);
-        if (!record || record.diskState === 'unknown') {
-          if (record?.seedChain === next) record.seedChain = undefined;
-          return;
-        }
+        if (!record || record.diskState === 'unknown') return;
         apply();
       })
       .catch((err: unknown) => {
-        const record = this.records.get(stream);
-        if (record?.diskState === 'unknown' && record.seedChain === next) {
-          record.seedChain = undefined;
-        }
         log.warn(`Deferred update failed for stream ${stream}`, {
           data: err,
         });
-      });
+      }) as Promise<void>;
     this.getOrCreateRecord(stream).seedChain = next;
     return next;
-  }
-
-  /** Read a stream's existing disk data into memory once. */
-  private ensureSeeded(stream: StreamTabId, version: number): Promise<void> {
-    const existing = this.records.get(stream)?.seedChain;
-    if (existing) return existing;
-    const seed = this.readSeed(stream, version);
-    this.getOrCreateRecord(stream).seedChain = seed;
-    return seed;
   }
 
   private async readSeed(stream: StreamTabId, version: number): Promise<void> {
@@ -1123,6 +1174,7 @@ export class StreamSnapshotStore {
   private evict(stream: StreamTabId): void {
     this.records.evict(stream);
     this.kvHandles.invalidate(stream);
+    this.seedQueues.delete(stream);
     for (const key of [...this.writeMutexes.keys()]) {
       if (!key.startsWith(`${stream}::`)) continue;
       this.writeMutexes.delete(key);
@@ -1136,6 +1188,7 @@ export class StreamSnapshotStore {
   evictAll(): void {
     this.records.evictAll();
     this.kvHandles.invalidateAll();
+    this.seedQueues.clear();
     this.writeMutexes.clear();
     this.dirtyWrites.clear();
     this.unseededReadWarned.clear();
@@ -1890,40 +1943,45 @@ export class StreamSnapshotStore {
     record.seedRefreshBaseline = refreshBaseline;
     const refreshGeneration = ++record.seedRefreshGeneration;
     record.diskState = 'unknown';
-    const prev = record.seedChain?.catch(() => undefined) ?? Promise.resolve();
-    const work = prev.then(async () => {
-      if (this.streamVersion(stream) !== version) return;
-      await this.retryDirtyWrites(stream);
-      if (this.streamVersion(stream) !== version) return;
-      this.invalidateKvHandles(stream);
-      await this.seedFromDisk(stream, version);
-    });
-    const next = work.then(
-      () => {
-        const current = this.records.get(stream);
-        if (
-          current?.seedRefreshGeneration === refreshGeneration &&
-          this.streamVersion(stream) === version
-        ) {
-          current.seedRefreshBaseline = undefined;
-        }
-      },
-      (error: unknown) => {
-        const current = this.records.get(stream);
-        if (
-          current?.seedRefreshGeneration === refreshGeneration &&
-          this.streamVersion(stream) === version
-        ) {
-          current.diskState = refreshBaseline;
-          current.seedRefreshBaseline = undefined;
-          if (refreshBaseline !== 'unknown') {
-            this.persistEagerOverlays(stream, current);
+    // A forced refresh supersedes any lazily-started read still in flight for
+    // the OLD (now-stale) diskState; a `queueAfterSeed` call arriving after
+    // this point must not join it.
+    record.pendingSeedRead = undefined;
+    const queue = this.seedQueueFor(stream);
+    const next: Promise<void> = queue
+      .add(async () => {
+        if (this.streamVersion(stream) !== version) return;
+        await this.retryDirtyWrites(stream);
+        if (this.streamVersion(stream) !== version) return;
+        this.invalidateKvHandles(stream);
+        await this.seedFromDisk(stream, version);
+      })
+      .then(
+        () => {
+          const current = this.records.get(stream);
+          if (
+            current?.seedRefreshGeneration === refreshGeneration &&
+            this.streamVersion(stream) === version
+          ) {
+            current.seedRefreshBaseline = undefined;
           }
-          if (current.seedChain === next) current.seedChain = undefined;
-        }
-        throw error;
-      },
-    );
+        },
+        (error: unknown) => {
+          const current = this.records.get(stream);
+          if (
+            current?.seedRefreshGeneration === refreshGeneration &&
+            this.streamVersion(stream) === version
+          ) {
+            current.diskState = refreshBaseline;
+            current.seedRefreshBaseline = undefined;
+            if (refreshBaseline !== 'unknown') {
+              this.persistEagerOverlays(stream, current);
+            }
+            if (current.seedChain === next) current.seedChain = undefined;
+          }
+          throw error;
+        },
+      ) as Promise<void>;
     record.seedChain = next;
     return next;
   }
