@@ -105,7 +105,7 @@ function findCommitInHistory(
     return sanitizedCommit;
   }
 
-  return labelResult.stdout ?? sanitizedCommit;
+  return labelResult.stdout;
 }
 
 async function promptInput(

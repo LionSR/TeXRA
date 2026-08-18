@@ -35,7 +35,6 @@ describe('SettingsViewHost', () => {
     });
     const modelSelection = createModelSelectionController(globalState);
     const messages: unknown[] = [];
-    const beforeModelSelectionMessage = vi.fn();
     const host = new SettingsViewHost({
       state: {
         workspaceState: new FakeStateStore(),
@@ -48,7 +47,6 @@ describe('SettingsViewHost', () => {
       respond: (message) => {
         messages.push(message);
       },
-      beforeModelSelectionMessage,
       controllers: {
         modelSelection,
       },
@@ -82,6 +80,5 @@ describe('SettingsViewHost', () => {
     expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
       'sonnet46T',
     ]);
-    expect(beforeModelSelectionMessage).toHaveBeenCalledTimes(2);
   });
 });

@@ -9,7 +9,7 @@ import {
   FileInteractionState,
   WorkPlanState,
 } from '@agent/core/state/AgentWorkspaceState';
-import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
+import { withToolEnvironment } from '@test/support/toolEnvironment';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import { platform, type Platform } from '@platform/platform';
 import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
