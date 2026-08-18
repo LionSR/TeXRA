@@ -38,11 +38,7 @@ import type {
   CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
 import { isActivePhase } from '@shared/streams/streamStatus';
-import {
-  applyChildStreamRemoval,
-  isChildStreamRemoved,
-  resetChildStreamEntries,
-} from './childExecutions';
+import { isChildStreamRemoved } from './childExecutions';
 
 // ---------------------------------------------------------------------------
 // types
@@ -852,11 +848,11 @@ export function bumpCodexPreferenceVersion(): void {
 // removeStream
 // ---------------------------------------------------------------------------
 
-// Cross-slice cleanup when a stream goes away: drops it from the streams map,
-// clears focus if it was active, and tombstones the stream identity in the
-// child-stream relationship map (childExecutions.ts) so no later roster,
-// edge, attachment, or status fact for it — or, if it was itself a parent,
-// for its former children — can resurrect it.
+// Cross-slice cleanup when a stream goes away: drops it from the streams map
+// and clears focus if it was active. The removal tombstone itself — what
+// refuses later roster, edge, attachment, and status facts for the identity —
+// is owned by the shared `SessionState` (the applier installs it before this
+// runs), not by CLI view state.
 
 export function removeStream(streamId: StreamTabId): void {
   const current = streams.get();
@@ -871,7 +867,6 @@ export function removeStream(streamId: StreamTabId): void {
   if (FOREGROUND_READER.get()?.streamId === streamId) {
     FOREGROUND_READER.set(undefined);
   }
-  applyChildStreamRemoval(streamId);
 }
 
 // ---------------------------------------------------------------------------
@@ -923,7 +918,6 @@ export function resetCliState(
   rootRunStartAvailable.set(true);
   rootRunPending.set(false);
   rootRunStreamId.set(undefined);
-  resetChildStreamEntries();
   activeForm.set(undefined);
   INFO_PANE_QUEUE.set([]);
   FOREGROUND_READER.set(undefined);

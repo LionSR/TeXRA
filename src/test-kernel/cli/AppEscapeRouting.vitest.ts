@@ -29,14 +29,17 @@ import {
   streams,
 } from '@cli/chat/tui/state/cliState';
 import {
-  projectChildRoster,
-  setParentStream,
+  bindChildStreamState,
+  invalidateChildStreams,
+  unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
+import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
   STREAM_PHASE,
   USER_FOLLOW_UP_SUPPORT,
+  type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
 import {
@@ -97,7 +100,7 @@ function runningChild(
   executionId: string,
   agentName: string,
   childStreamId: StreamTabId,
-): Parameters<typeof projectChildRoster>[1][number] {
+): ActiveChildInfo {
   return {
     executionId,
     agentName,
@@ -105,6 +108,33 @@ function runningChild(
     childStreamId,
     status: STREAM_PHASE.RUNNING,
   };
+}
+
+// Child rosters, parent edges, and tombstones live on the adapter-bound
+// `SessionState`; these helpers write through its public API and re-derive
+// the reactive snapshots the App renders from.
+let childState: SessionState;
+
+function seedChildRoster(
+  parentStreamId: StreamTabId,
+  rows: readonly ActiveChildInfo[],
+): void {
+  childState.streamLogs.ensureStream(parentStreamId);
+  childState.getOrCreateStreamState(parentStreamId, AgentCategory.ToolUse);
+  childState.updateStreamState(parentStreamId, (state) => ({
+    ...state,
+    subagents: [...rows],
+  }));
+  invalidateChildStreams();
+}
+
+function seedParentEdge(
+  streamId: StreamTabId,
+  parentStreamId: StreamTabId | null,
+): void {
+  childState.streamLogs.ensureStream(streamId);
+  childState.setStreamParent(streamId, parentStreamId);
+  invalidateChildStreams();
 }
 
 function seedRootStream(): void {
@@ -118,14 +148,14 @@ function seedChildHierarchy(): void {
   seedRootStream();
   setRunning(CHILD, GRANDCHILD);
   markToolUseAgent(CHILD, GRANDCHILD);
-  projectChildRoster(ROOT, [
+  seedChildRoster(ROOT, [
     runningChild('escape-child-execution', 'child', CHILD),
   ]);
-  projectChildRoster(CHILD, [
+  seedChildRoster(CHILD, [
     runningChild('escape-grandchild-execution', 'grandchild', GRANDCHILD),
   ]);
-  setParentStream(CHILD, ROOT);
-  setParentStream(GRANDCHILD, CHILD);
+  seedParentEdge(CHILD, ROOT);
+  seedParentEdge(GRANDCHILD, CHILD);
 }
 
 function finishNestedHierarchyAndFocusRoot(): void {
@@ -197,9 +227,14 @@ function fakeHistory(entries: readonly string[]): InputHistory {
   };
 }
 
-beforeEach(() => resetCliState());
+beforeEach(() => {
+  resetCliState();
+  childState = new SessionState(defaultSession());
+  bindChildStreamState(childState);
+});
 afterEach(() => {
   clearApprovals();
+  unbindChildStreamState(childState);
   resetCliState();
 });
 
@@ -299,12 +334,12 @@ describe('App foreground Escape ownership', () => {
       });
     }
     syncStreamLog(ROOT);
-    projectChildRoster(ROOT, [
+    seedChildRoster(ROOT, [
       runningChild('workflow-child-execution', 'duplicate', CHILD),
       runningChild('workflow-review-execution', 'duplicate', GRANDCHILD),
     ]);
-    setParentStream(CHILD, ROOT);
-    setParentStream(GRANDCHILD, ROOT);
+    seedParentEdge(CHILD, ROOT);
+    seedParentEdge(GRANDCHILD, ROOT);
     const { instance, stdin, stdout, onInterruptStream } =
       await renderWithInterrupt();
 
@@ -368,10 +403,10 @@ describe('App foreground Escape ownership', () => {
   it('preserves workflow selection when tasks share a child stream', async () => {
     seedRootStream();
     setRunning(CHILD);
-    projectChildRoster(ROOT, [
+    seedChildRoster(ROOT, [
       runningChild('shared-child-execution', 'shared-child', CHILD),
     ]);
-    setParentStream(CHILD, ROOT);
+    seedParentEdge(CHILD, ROOT);
     patchStream(ROOT, (slice) => ({
       ...slice,
       agent: 'ambiguous-workflow',
@@ -526,7 +561,7 @@ describe('App foreground Escape ownership', () => {
     try {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
-      setParentStream(CHILD, null);
+      seedParentEdge(CHILD, null);
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeStreamId.get()).toBe(CHILD);
@@ -544,7 +579,7 @@ describe('App foreground Escape ownership', () => {
     try {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
-      setParentStream(CHILD, null);
+      seedParentEdge(CHILD, null);
       stdin.write(ESC);
       await waitFor(() => onInterruptStream.mock.calls.length === 1);
 
@@ -676,7 +711,7 @@ describe('App foreground Escape ownership', () => {
     try {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
-      setParentStream(CHILD, null);
+      seedParentEdge(CHILD, null);
       stdin.write('x');
       await sleep(50);
 
@@ -1101,7 +1136,7 @@ describe('App foreground Escape ownership', () => {
 
   it('interrupts a promoted top-level stream because it has no back relation', async () => {
     seedChildHierarchy();
-    setParentStream(CHILD, null);
+    seedParentEdge(CHILD, null);
     focusStream(CHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
@@ -1206,10 +1241,10 @@ describe('App approval surface ownership', () => {
   it('focuses a dashboard root before presenting its bound approval', async () => {
     seedRootStream();
     setRunning(CHILD);
-    projectChildRoster(ROOT, [
+    seedChildRoster(ROOT, [
       runningChild('approval-task-execution', 'approval-task', CHILD),
     ]);
-    setParentStream(CHILD, ROOT);
+    seedParentEdge(CHILD, ROOT);
     patchStream(ROOT, (slice) => ({
       ...slice,
       agent: 'approval-workflow',

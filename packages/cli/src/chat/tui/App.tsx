@@ -84,7 +84,7 @@ import {
 import { appendLocalAssistantTranscript } from './state/transcript';
 import {
   activeSubagentsFor,
-  childStreamEntries as childStreamEntriesSignal,
+  childRosters as childRostersSignal,
   parentStream as parentStreamSignal,
   subagentExecutionLabels as subagentExecutionLabelsSignal,
 } from './state/childExecutions';
@@ -119,7 +119,7 @@ interface InputEventEmitterLike {
 function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
   const visibleListRootStreamId = resolveChildListTarget({
     activeStreamId: streamId,
-    childStreamEntries: childStreamEntriesSignal.get(),
+    childRosters: childRostersSignal.get(),
     parentStream: parentStreamSignal.get(),
     streams: streamsSignal.get(),
   }).streamId;
@@ -164,7 +164,7 @@ export function App(props: AppProps): React.JSX.Element {
   const rootStreamId = useSignal(rootStreamIdSignal);
   const streams = useSignal(streamsSignal);
   const parentStream = useSignal(parentStreamSignal);
-  const childStreamEntries = useSignal(childStreamEntriesSignal);
+  const childRosters = useSignal(childRostersSignal);
   const subagentExecutionLabels = useSignal(subagentExecutionLabelsSignal);
   const activeForm = useSignal(activeFormSignal);
   const formProgress = useSignal(formProgressSignal);
@@ -197,11 +197,11 @@ export function App(props: AppProps): React.JSX.Element {
     () =>
       resolveChildListTarget({
         activeStreamId,
-        childStreamEntries,
+        childRosters,
         parentStream,
         streams,
       }),
-    [activeStreamId, childStreamEntries, parentStream, streams],
+    [activeStreamId, childRosters, parentStream, streams],
   );
 
   const stdin = useStdin();
@@ -258,7 +258,7 @@ export function App(props: AppProps): React.JSX.Element {
     () =>
       streamTreeViews({
         activeStreamId,
-        childStreamEntries,
+        childRosters,
         parentStream,
         rootStreamId: childListTarget.streamId,
         streams,
@@ -266,7 +266,7 @@ export function App(props: AppProps): React.JSX.Element {
     [
       activeStreamId,
       childListTarget.streamId,
-      childStreamEntries,
+      childRosters,
       parentStream,
       streams,
     ],
@@ -288,16 +288,12 @@ export function App(props: AppProps): React.JSX.Element {
         .filter((parentId): parentId is StreamTabId => parentId !== undefined),
     );
     for (const parentId of parentIds) {
-      for (const child of activeSubagentsFor(
-        parentId,
-        childStreamEntries,
-        streams,
-      )) {
+      for (const child of activeSubagentsFor(parentId, childRosters)) {
         executionIds.set(child.childStreamId, child.executionId);
       }
     }
     return executionIds;
-  }, [childStreamEntries, sessionViews, streams]);
+  }, [childRosters, sessionViews]);
   const workflowDashboardRoot =
     childListTarget.slice?.identity?.kind === 'multiAgentWorkflow'
       ? childListTarget.slice
@@ -474,7 +470,7 @@ export function App(props: AppProps): React.JSX.Element {
         if (foregroundReader?.kind !== 'transcript') return null;
         const title = transcriptReaderTitle(
           streamDisplayLabel({
-            childStreamEntries,
+            childRosters,
             parentStream,
             streamId: foregroundReader.streamId,
             streams,
@@ -494,7 +490,7 @@ export function App(props: AppProps): React.JSX.Element {
         if (foregroundReader?.kind !== 'workPlan') return null;
         const title = workPlanReaderTitle(
           streamDisplayLabel({
-            childStreamEntries,
+            childRosters,
             parentStream,
             streamId: foregroundReader.streamId,
             streams,
@@ -548,7 +544,7 @@ export function App(props: AppProps): React.JSX.Element {
     if (digit !== undefined) {
       const target = numericFocusTargetForActiveStream({
         activeStreamId,
-        childStreamEntries,
+        childRosters,
         parentStream,
         streams,
         zeroBasedIndex: digit - 1,
