@@ -105,6 +105,10 @@ function presetById(presetId: string): AgentModePreset | undefined {
   return AGENT_MODE_PRESETS.find((preset) => preset.id === presetId);
 }
 
+const VISIBLE_WORK_TYPES = WORK_TYPES.filter((entry) =>
+  presetById(entry.presetId),
+);
+
 export function createStartupTeamPanel({
   dismiss: postDismissed,
   onVisibilityChanged,
@@ -159,7 +163,7 @@ export function createStartupTeamPanel({
         </div>
       </header>
       <div class="desktop-onboarding-choices">
-        ${WORK_TYPES.filter((entry) => presetById(entry.presetId)).map(
+        ${VISIBLE_WORK_TYPES.map(
           (entry) => html`
             <wa-button
               class="desktop-onboarding-choice"

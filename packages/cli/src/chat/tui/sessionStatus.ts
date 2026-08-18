@@ -101,7 +101,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
         ? 'not started'
         : formatCliStatusLabel(input.status, input.substate)
     }`,
-    ...(input.activeChildSessions && input.activeChildSessions > 0
+    ...((input.activeChildSessions ?? 0) > 0
       ? [`active ${BACKGROUND_TASK.inlinePlural}: ${input.activeChildSessions}`]
       : []),
     ...(input.goal

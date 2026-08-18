@@ -40,9 +40,7 @@ export function deliverLiveNotification(delivery: {
   void submitFollowUp(streamId, delivery.followUp, {
     session,
     mode: 'live_notification',
-    ...(delivery.expectedGenerationId !== undefined
-      ? { expectedGenerationId: delivery.expectedGenerationId }
-      : {}),
+    expectedGenerationId: delivery.expectedGenerationId,
   })
     .then((result) => {
       if (result.status !== 'sent' && result.status !== 'queued') return;

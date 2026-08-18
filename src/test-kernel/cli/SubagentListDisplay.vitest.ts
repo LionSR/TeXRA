@@ -1137,7 +1137,7 @@ describe('CLI child list display model', () => {
     const wideOutput = await renderAtColumns(100);
     const narrowOutput = await renderAtColumns(99);
 
-    expect(wideOutput).toContain('research-workflow · 2/4 done');
+    expect(wideOutput).toContain('research-workflow · Map (1/2) · 2/4 done');
     expect(wideOutput).toContain('Map (1/2) · 0/2');
     expect(wideOutput).toContain('Duplicate · Planned');
     expect(wideOutput).toContain('Duplicate · Running');

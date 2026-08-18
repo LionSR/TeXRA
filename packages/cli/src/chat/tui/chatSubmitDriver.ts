@@ -64,11 +64,11 @@ export function takePendingSkillActivations(
   }
 
   const entries = [...pendingSkillActivations.entries()].map(
-    ([name, activationPrompt]) => ({ name, activationPrompt }),
+    ([name, activationPrompt]) => {
+      pendingSkillActivations.delete(name);
+      return { name, activationPrompt };
+    },
   );
-  for (const { name } of entries) {
-    pendingSkillActivations.delete(name);
-  }
 
   const activations = entries
     .map(({ activationPrompt }) => activationPrompt)

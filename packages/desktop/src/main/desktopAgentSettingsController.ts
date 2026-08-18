@@ -23,14 +23,14 @@ import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  AgentCategory,
-  AgentSource,
-  SettingsMessageFor,
-  SettingsViewInboundHandlerRegistry,
-  SettingsViewInboundMessage,
+import {
+  agentKey,
+  type AgentCategory,
+  type AgentSource,
+  type SettingsMessageFor,
+  type SettingsViewInboundHandlerRegistry,
+  type SettingsViewInboundMessage,
 } from '@shared/schemas';
-import { agentKey } from '@shared/schemas';
 import {
   buildAgentModePresetsMessage,
   buildAgentSelectionMessage,
@@ -263,7 +263,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     this.renderer.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       optionsData: await this.registry.loadAgentOptionsData(),
-      ...(selectedToolUseAgent ? { selectedToolUseAgent } : {}),
+      ...(selectedToolUseAgent && { selectedToolUseAgent }),
     });
   }
 

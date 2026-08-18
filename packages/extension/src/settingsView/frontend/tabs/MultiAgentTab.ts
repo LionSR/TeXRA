@@ -28,8 +28,6 @@ import {
 } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-// Local imports - shared schemas
-
 // Local imports - catalog-driven settings rows
 import {
   postStateSetting,

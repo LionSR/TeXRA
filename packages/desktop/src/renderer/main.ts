@@ -49,11 +49,11 @@ import {
   streams$,
   topLevelStreams$,
 } from '@progressView/frontend/progressState';
-import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { COMMON_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
-import type { StreamTabId, DesktopThemeKind } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 
 import { Signal } from '@shared/signals';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
@@ -1057,7 +1057,7 @@ function shellTemplate(): TemplateResult {
             streamCount: streams$.get().length,
             workspaceName: workspaceName(workspacePath),
             commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
-            ...(workspacePath ? { workspacePath } : {}),
+            workspacePath,
           },
           {
             onNewTask: returnToLauncher,
@@ -1316,13 +1316,13 @@ const shortcutRegistry = bootstrapFailed
       actions: desktopRendererCommandActions,
       openCommands: () => commandPalette?.open(),
     });
-if (!bootstrapFailed) {
+if (shortcutRegistry) {
   commandPalette = createDesktopCommandPalette({
     document,
     canOpen: () => true,
     actions: desktopRendererCommandActions,
     getStreams: () => streams$.get(),
-    getShortcuts: () => shortcutRegistry?.entries() ?? [],
+    getShortcuts: () => shortcutRegistry.entries(),
   });
   document.body.append(commandPalette.element);
 }
@@ -1371,7 +1371,10 @@ const MESSAGE_ROUTES = createMessageRoutes({
     show: () => startupTeamPanel.show(),
     hide: () => startupTeamPanel.hide(),
   },
-  applyTheme: applyDesktopTheme,
+  applyTheme(theme) {
+    applyHostBodyTheme(theme);
+    reviewPane.setTheme(theme);
+  },
   logs: { applySnapshot: (message) => logsController.applySnapshot(message) },
   review: {
     open: (message) => reviewPane.open(message),
@@ -1446,44 +1449,26 @@ function wireRailTabs(): void {
 
 let conversationWired = false;
 
+const CONVERSATION_EVENTS: ReadonlyArray<[string, EventListener]> = [
+  ['stream-switch', handleStreamSwitch as EventListener],
+  ['toolbar-command', handleToolbarCommand as EventListener],
+  ['permission-action', handlePermissionAction as EventListener],
+  ['file-action', handleFileAction as EventListener],
+  ['compile-fixer-run', runCompileFixer as EventListener],
+  ['getting-started-action', handleGettingStartedAction as EventListener],
+  ['followup-change', handleFollowUpChange as EventListener],
+  ['followup-send', handleFollowUpSend as EventListener],
+  ['followup-polish', handleFollowUpPolish as EventListener],
+  // followup-focus-complete clears the focus/polish/transcribe trigger flags.
+  ['followup-focus-complete', handleFollowUpFocusComplete as EventListener],
+];
+
 function wireConversation(): void {
   if (conversationWired) return;
   conversationWired = true;
-  conversationView.addEventListener(
-    'stream-switch',
-    handleStreamSwitch as EventListener,
-  );
-  conversationView.addEventListener(
-    'toolbar-command',
-    handleToolbarCommand as EventListener,
-  );
-  conversationView.addEventListener(
-    'permission-action',
-    handlePermissionAction as EventListener,
-  );
-  conversationView.addEventListener(
-    'file-action',
-    handleFileAction as EventListener,
-  );
-  conversationView.addEventListener('compile-fixer-run', runCompileFixer);
-  conversationView.addEventListener(
-    'getting-started-action',
-    handleGettingStartedAction as EventListener,
-  );
-  conversationView.addEventListener(
-    'followup-change',
-    handleFollowUpChange as EventListener,
-  );
-  conversationView.addEventListener(
-    'followup-send',
-    handleFollowUpSend as EventListener,
-  );
-  conversationView.addEventListener('followup-polish', handleFollowUpPolish);
-  // followup-focus-complete: clear the focus/polish/transcribe trigger flags.
-  conversationView.addEventListener(
-    'followup-focus-complete',
-    handleFollowUpFocusComplete,
-  );
+  for (const [event, handler] of CONVERSATION_EVENTS) {
+    conversationView.addEventListener(event, handler);
+  }
 }
 
 if (!bootstrapFailed) {
@@ -1522,9 +1507,4 @@ function postWebviewReady(): void {
   // single renderer plays both roles.
   postMessage(COMMON_COMMANDS.WEBVIEW_READY, { view: 'main' });
   postMessage(COMMON_COMMANDS.WEBVIEW_READY, { view: 'progress' });
-}
-
-function applyDesktopTheme(theme: DesktopThemeKind): void {
-  applyHostBodyTheme(theme);
-  reviewPane.setTheme(theme);
 }

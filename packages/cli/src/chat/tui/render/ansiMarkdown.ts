@@ -15,8 +15,8 @@ import { LRUCache } from 'lru-cache';
 import MarkdownIt, { type RendererRule, type Token } from 'markdown-it';
 import pico from 'picocolors';
 
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   createMarkdownProcessor,
   type MarkdownProcessorRenderEnv,
@@ -144,13 +144,12 @@ function tableColWidths(
 // ANSI- and display-width-aware wrapper; ordinary cells retain cli-table3's
 // word-boundary wrapping.
 function tableCell(content: string, colWidth: number | undefined): string {
-  if (colWidth !== undefined) {
-    const contentWidth = colWidth - TABLE_CELL_PADDING;
-    if (
-      content.split(/\s/u).some((word) => textDisplayWidth(word) > contentWidth)
-    ) {
-      return wrapAnsiToWidth(content, contentWidth);
-    }
+  if (colWidth === undefined) return content;
+  const contentWidth = colWidth - TABLE_CELL_PADDING;
+  if (
+    content.split(/\s/u).some((word) => textDisplayWidth(word) > contentWidth)
+  ) {
+    return wrapAnsiToWidth(content, contentWidth);
   }
   return content;
 }

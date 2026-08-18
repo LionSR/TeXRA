@@ -130,13 +130,11 @@ export function streamPreferredUsage(
   streamId: StreamTabId | undefined,
   slice: StreamSlice | undefined,
 ): TokenUsageStats | undefined {
-  return (
-    (streamId !== undefined
+  const projected =
+    streamId !== undefined
       ? readStreamArtifacts(streamId)?.cumulativeUsage
-      : undefined) ??
-    slice?.cumulativeUsage ??
-    slice?.usage
-  );
+      : undefined;
+  return projected ?? slice?.cumulativeUsage ?? slice?.usage;
 }
 
 function streamCanReceiveArtifacts(

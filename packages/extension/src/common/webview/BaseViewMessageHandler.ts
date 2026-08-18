@@ -11,28 +11,10 @@ import {
 } from '@shared/utils/dispatcher';
 
 /** The channel-first logging surface this view and its subclasses use. */
-type ViewMessageLogger = {
-  debug: (
-    channel: string,
-    message: string,
-    options?: logger.LogUtilsOptions,
-  ) => void;
-  info: (
-    channel: string,
-    message: string,
-    options?: logger.LogUtilsOptions,
-  ) => void;
-  warn: (
-    channel: string,
-    message: string,
-    options?: logger.LogUtilsOptions,
-  ) => void;
-  error: (
-    channel: string,
-    message: string,
-    options?: logger.LogUtilsOptions,
-  ) => void;
-};
+type ViewMessageLogger = Pick<
+  typeof logger,
+  'debug' | 'info' | 'warn' | 'error'
+>;
 
 type CommandMessage = { command: string };
 

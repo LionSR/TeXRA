@@ -328,8 +328,7 @@ export function App(props: AppProps): React.JSX.Element {
   );
   const workflowDashboardRootHasApproval =
     workflowDashboard !== undefined &&
-    (pendingApprovalsForRows.get(workflowDashboard.root.streamId)?.length ??
-      0) > 0;
+    !!pendingApprovalsForRows.get(workflowDashboard.root.streamId)?.length;
   const childListAvailable =
     childListValues.length > 0 || workflowDashboardRootHasApproval;
   const selectedWorkflowTask =

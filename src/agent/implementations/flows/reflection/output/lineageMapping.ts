@@ -30,12 +30,11 @@ interface BaseEntry extends PathKeys {
 function computePathKeys(filePath: string): PathKeys {
   const relativePath = normalizeFilePath(filePath);
   const parsed = path.posix.parse(relativePath);
-  const baseName = path.posix.basename(relativePath);
   return {
     relativePath,
     relativePathNoExt: path.posix.join(parsed.dir, parsed.name),
-    baseName,
-    baseNameNoExt: path.posix.parse(baseName).name,
+    baseName: parsed.base,
+    baseNameNoExt: parsed.name,
   };
 }
 

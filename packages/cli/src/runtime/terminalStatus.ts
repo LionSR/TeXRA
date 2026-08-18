@@ -60,12 +60,15 @@ export function runOutcomeExitCode(outcome: TurnOutcome): CliExitCode {
 export async function readCliRunOutcomeState(
   result: ExecuteAgentResult,
   reportReadFailure?: (error: Error) => void,
-) {
+): Promise<{ outcome: RunOutcome; outcomePersisted: boolean }> {
   try {
     const meta = await getExecutionStore(result.executionId).readMeta();
-    return meta?.outcome === undefined
-      ? { outcome: result.outcome, outcomePersisted: false }
-      : { outcome: meta.outcome, outcomePersisted: true };
+    const persistedOutcome = meta?.outcome;
+    return {
+      outcome:
+        persistedOutcome === undefined ? result.outcome : persistedOutcome,
+      outcomePersisted: persistedOutcome !== undefined,
+    };
   } catch (error) {
     reportReadFailure?.(
       new Error(

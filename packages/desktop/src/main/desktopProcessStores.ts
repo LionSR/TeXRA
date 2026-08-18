@@ -13,21 +13,6 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
   await stores.sweepLeftoverStreams();
   const streamIncarnations = new Map<StreamTabId, number>();
   const pendingRemovals = new Map<StreamTabId, number>();
-  const deletionGuards = new Map<
-    StreamTabId,
-    { readonly incarnation: number; readonly guard: () => boolean }
-  >();
-  const deletionGuard = (
-    streamId: StreamTabId,
-    expectedIncarnation: number,
-  ): (() => boolean) => {
-    const cached = deletionGuards.get(streamId);
-    if (cached?.incarnation === expectedIncarnation) return cached.guard;
-    const guard = (): boolean =>
-      (streamIncarnations.get(streamId) ?? 0) === expectedIncarnation;
-    deletionGuards.set(streamId, { incarnation: expectedIncarnation, guard });
-    return guard;
-  };
 
   const detachStreamRemoval = session.events.subscribe(
     (sessionEvent) => {
@@ -66,7 +51,8 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
           }
           void stores
             .deleteStreamAfterOwnedExecutionRelease(streamId, {
-              shouldDelete: deletionGuard(streamId, expectedIncarnation),
+              shouldDelete: () =>
+                (streamIncarnations.get(streamId) ?? 0) === expectedIncarnation,
               expectedIncarnation,
             })
             .then((outcome) => {
@@ -99,7 +85,6 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
     dispose() {
       detachStreamRemoval();
       detachArtifactFlusher();
-      deletionGuards.clear();
     },
   };
 }

@@ -38,8 +38,6 @@ import {
   renderModelOptions,
 } from '@shared/utils/selectTemplates';
 
-// Local imports - shared schemas
-
 // Local imports - shared utilities
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
@@ -121,8 +119,11 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     const isWorkflow = data.agentCategory === AgentCategory.Workflow;
     const workflowScript = isWorkflow ? data.workflowScript : undefined;
     let categoryLabel = 'Tool-Use';
-    if (isWorkflow) categoryLabel = 'Workflow';
-    if (workflowScript) categoryLabel = 'Multi-agent workflow';
+    if (workflowScript) {
+      categoryLabel = 'Multi-agent workflow';
+    } else if (isWorkflow) {
+      categoryLabel = 'Workflow';
+    }
     const currentModel = this.selectedModel ?? data.model;
     const currentAgent = this.selectedAgent ?? data.agent;
     const hasModelOptions = !workflowScript && modelOptions.length > 0;

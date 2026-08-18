@@ -12,19 +12,23 @@ import {
 } from '@shared/subscriptionUsagePresentation';
 import type { SubscriptionUsageSnapshot } from '@shared/schemas';
 
-function unavailableDetail(
-  reason: Extract<
-    SubscriptionUsageSnapshot,
-    { state: 'unavailable' }
-  >['reason'],
-): string {
-  if (reason === 'invalid_credentials') {
-    return 'The provider rejected the configured credentials.';
-  }
-  if (reason === 'malformed_response') {
-    return 'The provider returned usage data TeXRA could not read.';
-  }
-  return 'The provider usage request failed. Try refreshing again shortly.';
+type UnavailableReason = Extract<
+  SubscriptionUsageSnapshot,
+  { state: 'unavailable' }
+>['reason'];
+
+const UNAVAILABLE_DETAILS: Record<UnavailableReason, string | undefined> = {
+  invalid_credentials: 'The provider rejected the configured credentials.',
+  malformed_response: 'The provider returned usage data TeXRA could not read.',
+  missing_credentials: undefined,
+  request_failed: undefined,
+};
+
+function unavailableDetail(reason: UnavailableReason): string {
+  return (
+    UNAVAILABLE_DETAILS[reason] ??
+    'The provider usage request failed. Try refreshing again shortly.'
+  );
 }
 
 @customElement('subscription-usage-row')

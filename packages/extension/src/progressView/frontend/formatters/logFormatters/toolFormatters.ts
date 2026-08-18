@@ -77,10 +77,8 @@ export function formatToolUseTemplate(
   const normalizedToolLog = normalizeToolUseForRender(data);
   // Malformed payloads still produce a visible failed tool row through the
   // shared fallback, instead of falling through to the default log template.
-  // Keep the raw value local to this render so fallback sections can include
-  // fields outside the common schema without retaining a second copy in UI
-  // state.
-  const parsed = data;
+  // Keep the raw payload local so fallback sections can include fields outside
+  // the common schema without retaining a second copy in UI state.
 
   const {
     toolName,
@@ -139,7 +137,7 @@ export function formatToolUseTemplate(
     toolName,
     input,
     filePath,
-    parsedOutput: parsed.output,
+    parsedOutput: data.output,
     outputText,
   });
 
@@ -193,7 +191,7 @@ export function formatToolUseTemplate(
   // Fallback: show raw YAML
   const contentTemplate =
     sections.length === 0
-      ? buildCodeBlock(stringifyWithLanguage(parsed).text, {
+      ? buildCodeBlock(stringifyWithLanguage(data).text, {
           language: 'yaml',
           showLanguage: true,
           showCopy: true,

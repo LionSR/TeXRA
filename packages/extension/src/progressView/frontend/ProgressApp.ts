@@ -141,11 +141,11 @@ export class ProgressApp extends ProgressAppBase {
 
   render(): TemplateResult {
     const isEditorMode = placement.get() === 'editor';
-    const isDesktopMode = this.hasAttribute('data-desktop-view');
+    const desktopView = this.getAttribute('data-desktop-view');
+    const isDesktopMode = desktopView !== null;
     const compactTabs = narrowLayout.get() && !isEditorMode;
     const hasAnyStreams = hasAnyStreams$.get();
-    const splitPosition =
-      this.getAttribute('data-desktop-view') === 'progress' ? 68 : 80;
+    const splitPosition = desktopView === 'progress' ? 68 : 80;
 
     return html`
       <div

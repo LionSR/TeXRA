@@ -1,4 +1,4 @@
-import { isAbsolute, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 import {
   getEditedFileListConfig,
@@ -103,7 +103,7 @@ export async function listDesktopWorkspaceFiles(
 }
 
 function resolveWorkspaceFile(workspacePath: string, filePath: string): string {
-  return isAbsolute(filePath) ? filePath : resolve(workspacePath, filePath);
+  return resolve(workspacePath, filePath);
 }
 
 function toWorkspaceRelative(workspacePath: string, filePath: string): string {
@@ -257,7 +257,7 @@ export function createDesktopFileSelection(
   // types or presence.
   function handleMessage(message: DesktopCommandMessage): boolean {
     const parsed = MainViewInboundMessageSchema.safeParse(message);
-    return parsed.success ? dispatch(parsed.data) : false;
+    return parsed.success && dispatch(parsed.data);
   }
 
   return { handleMessage };

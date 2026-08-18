@@ -48,6 +48,10 @@ type SpillHydration =
 
 const EMPTY_SPILL_HYDRATIONS: ReadonlyMap<string, SpillHydration> = new Map();
 
+function spillFailureNotice(verb: string, error: unknown): string {
+  return `[Unable to ${verb} full output. Close and reopen the transcript to retry: ${toErrorMessage(error)}]`;
+}
+
 async function loadSpill(
   spillPath: string,
   flushError: unknown,
@@ -57,15 +61,9 @@ async function loadSpill(
     if (text !== undefined) return { kind: 'loaded', text };
     return flushError === undefined
       ? { kind: 'failed', notice: MISSING_SPILL_TEXT }
-      : {
-          kind: 'failed',
-          notice: `[Unable to prepare full output. Close and reopen the transcript to retry: ${toErrorMessage(flushError)}]`,
-        };
+      : { kind: 'failed', notice: spillFailureNotice('prepare', flushError) };
   } catch (error) {
-    return {
-      kind: 'failed',
-      notice: `[Unable to read full output. Close and reopen the transcript to retry: ${toErrorMessage(error)}]`,
-    };
+    return { kind: 'failed', notice: spillFailureNotice('read', error) };
   }
 }
 

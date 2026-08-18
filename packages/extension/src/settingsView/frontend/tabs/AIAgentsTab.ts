@@ -11,16 +11,14 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
-import type {
-  ClaudeAgentEffort,
-  ClaudeAgentModel,
-  ClaudeAgentPermissionMode,
-  CodexApprovalPolicy,
-  CodexReasoningEffort,
-  CodexSandboxMode,
-  ToolDashboardItem,
-} from '@shared/schemas';
 import {
+  type ClaudeAgentEffort,
+  type ClaudeAgentModel,
+  type ClaudeAgentPermissionMode,
+  type CodexApprovalPolicy,
+  type CodexReasoningEffort,
+  type CodexSandboxMode,
+  type ToolDashboardItem,
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
   CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
@@ -32,7 +30,6 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderLoadingState } from '@shared/wa/loadingState';
 
-// Local imports - shared schemas
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSelectValue } from '@shared/utils/selectTemplates';
 

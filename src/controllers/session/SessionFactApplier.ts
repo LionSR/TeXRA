@@ -831,15 +831,7 @@ export class SessionFactApplier {
       this.state.getOrCreateStreamState(streamId, category);
     }
 
-    if (isNewStream) {
-      this.pushStreamMetadata(streamId, {
-        streamStates: this.buildStreamStatesForRefresh(
-          streamId,
-          status,
-          substate,
-        ),
-      });
-    } else if (isNewRunningTransition) {
+    if (isNewStream || isNewRunningTransition) {
       this.pushStreamMetadata(streamId, {
         streamStates: this.buildStreamStatesForRefresh(
           streamId,

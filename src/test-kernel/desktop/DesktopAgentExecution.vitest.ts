@@ -502,6 +502,7 @@ async function createBridge(
   const bridgeOptions: DesktopProgressBridgeOptions = {
     session,
     sessionStores,
+    resourcesPath: '/tmp/texra-test-resources',
     ...(options.loggerErrorSpy
       ? { logger: { ...noopTrace, error: options.loggerErrorSpy } }
       : {}),
@@ -2737,6 +2738,7 @@ describe('DesktopProgressBridge', () => {
       const bridgeAOptions: DesktopProgressBridgeOptions = {
         session: processSession,
         sessionStores,
+        resourcesPath: '/tmp/texra-test-resources',
         host: createStubDesktopAgentExecutionHost({
           openDiff: async (original, proposed, title) => {
             diffPathsA.push({
@@ -2814,6 +2816,7 @@ describe('DesktopProgressBridge', () => {
         const bridgeBOptions: DesktopProgressBridgeOptions = {
           session: processSession,
           sessionStores,
+          resourcesPath: '/tmp/texra-test-resources',
           host: createStubDesktopAgentExecutionHost({
             showErrorMessage: async (message) => {
               errorsB.push(message);

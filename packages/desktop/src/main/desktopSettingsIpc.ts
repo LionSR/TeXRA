@@ -356,7 +356,7 @@ export function createDesktopSettingsIpc(
     getMemoryPreview: (message) =>
       settingsHost.sendMemoryPreview(message, { onError }),
     openMemoryFile,
-    openMemoryFolder: () => openMemoryFolder(),
+    openMemoryFolder,
     deleteMemory: (message) => settingsHost.deleteMemory(message),
     setMemoryEnabled: (message) =>
       settingsHost.setMemoryEnabled(message.enabled),
@@ -378,8 +378,8 @@ export function createDesktopSettingsIpc(
     // the subscription registry are host-agnostic (`@tools/github`); only the
     // secret prompt, the browser hand-off, and the stream reveal differ here.
     getGitHubTokenStatus: postGitHubTokenStatus,
-    setGitHubToken: () => setGitHubToken(),
-    removeGitHubToken: () => removeGitHubToken(),
+    setGitHubToken,
+    removeGitHubToken,
     openGitHubTokenUrl: async () => {
       await options.ui.openExternal?.(GITHUB_TOKEN_CREATE_URL);
     },

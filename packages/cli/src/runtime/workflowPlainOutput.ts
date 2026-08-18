@@ -38,11 +38,7 @@ interface WorkflowStreamProjection {
   readonly complete: (outcome: RunOutcome) => void;
 }
 
-/**
- * Calls that arrived before their stage opened, grouped by stageId. Owns the
- * get-or-create/take bookkeeping so callers never touch the nested map shape
- * directly.
- */
+/** Workflow calls that arrived before their stage opened, grouped by stageId. */
 class PendingCallsByStage {
   private readonly byStage = new Map<
     string,
@@ -59,7 +55,7 @@ class PendingCallsByStage {
   /** Removes and returns the calls pending for `stageId`, if any. */
   take(stageId: string): Map<string, WorkflowCallProgress> | undefined {
     const stage = this.byStage.get(stageId);
-    if (stage) this.byStage.delete(stageId);
+    this.byStage.delete(stageId);
     return stage;
   }
 
@@ -119,6 +115,12 @@ function createWorkflowStreamProjection(
       }
     }
   };
+  const finish = (outcome: RunOutcome): void => {
+    if (completed) return;
+    completed = true;
+    flushPendingPhases();
+    write(completionLine(outcome, agentName));
+  };
 
   return {
     event: (event) => {
@@ -149,20 +151,11 @@ function createWorkflowStreamProjection(
           }
           break;
         case 'result':
-          if (!completed) {
-            completed = true;
-            flushPendingPhases();
-            write(completionLine(event.outcome, agentName));
-          }
+          finish(event.outcome);
           break;
       }
     },
-    complete: (outcome) => {
-      if (completed) return;
-      completed = true;
-      flushPendingPhases();
-      write(completionLine(outcome, agentName));
-    },
+    complete: finish,
   };
 }
 

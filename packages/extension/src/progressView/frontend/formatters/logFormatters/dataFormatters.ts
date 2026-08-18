@@ -19,11 +19,7 @@ import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared schemas and utilities
-import type {
-  ExtendedTokenUsageStats,
-  LogMessageData,
-  LogMessageOf,
-} from '@shared/schemas';
+import type { ExtendedTokenUsageStats, LogMessageOf } from '@shared/schemas';
 import {
   MESSAGE_TYPES,
   OUTPUT_DOCUMENTS_TAG,
@@ -115,7 +111,9 @@ export function formatMissingOutputsTemplate(
 // =============================================================================
 
 /** Format latexdiff entry as TemplateResult. */
-export function formatLatexdiffTemplate(message: LogMessageData): FormatResult {
+export function formatLatexdiffTemplate(
+  message: LogMessageOf<typeof MESSAGE_TYPES.LATEXDIFF>,
+): FormatResult {
   const { id, data } = message;
   const entries = parseDiffResultEntries(data);
   if (entries.length === 0) return null;
@@ -191,12 +189,11 @@ export function formatStatisticsTemplate(
   message: LogMessageOf<typeof MESSAGE_TYPES.STATISTICS>,
 ): FormatResult {
   const { id, data } = message;
-  const stats = data;
-  const items = STAT_FIELDS.filter(([key]) => stats[key] !== undefined).map(
+  const items = STAT_FIELDS.filter(([key]) => data[key] !== undefined).map(
     ([key, icon, label, formatter]) => ({
       icon,
       label,
-      value: formatter(stats[key]!),
+      value: formatter(data[key]!),
     }),
   );
 

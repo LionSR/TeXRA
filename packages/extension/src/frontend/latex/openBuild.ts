@@ -233,35 +233,23 @@ async function prepareLatexBuild(
  */
 export function scheduleViewerDisplay(): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
-    setTimeout(() => {
-      // Route the viewer-open command through a promise chain so a synchronous
-      // throw from `executeCommand` becomes a rejection instead of escaping the
-      // timer callback and leaving the delivery promise pending forever (#10556).
-      void Promise.resolve()
-        .then(() => vscode.commands.executeCommand('latex-workshop.view'))
-        .then(
-          () => {
-            setTimeout(() => {
-              // Apply the same sync-throw normalization to the refresh command:
-              // a synchronous throw is warn-logged instead of escaping this
-              // nested timer callback as an uncaught exception (#10556).
-              void Promise.resolve()
-                .then(() =>
-                  vscode.commands.executeCommand(
-                    'latex-workshop.refresh-viewer',
-                  ),
-                )
-                .then(undefined, (err: unknown) => {
-                  log.warn(`Viewer refresh failed: ${toErrorMessage(err)}`);
-                });
-            }, LATEX_VIEWER_REFRESH_DELAY_MS);
-            resolve(true);
-          },
-          (err: unknown) => {
-            log.warn(`Viewer display failed: ${toErrorMessage(err)}`);
-            resolve(false);
-          },
-        );
+    setTimeout(async () => {
+      try {
+        await vscode.commands.executeCommand('latex-workshop.view');
+        setTimeout(async () => {
+          try {
+            await vscode.commands.executeCommand(
+              'latex-workshop.refresh-viewer',
+            );
+          } catch (err) {
+            log.warn(`Viewer refresh failed: ${toErrorMessage(err)}`);
+          }
+        }, LATEX_VIEWER_REFRESH_DELAY_MS);
+        resolve(true);
+      } catch (err) {
+        log.warn(`Viewer display failed: ${toErrorMessage(err)}`);
+        resolve(false);
+      }
     }, LATEX_VIEWER_OPEN_DELAY_MS);
   });
 }

@@ -121,13 +121,14 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
       // else sharing the "no parent" shape is a nested round/phase/session.
       continue;
     }
-    if (entry.data.status === END_GROUP_STATUS.ERROR) {
+    const { status } = entry.data;
+    if (status === END_GROUP_STATUS.ERROR) {
       return STREAM_PHASE.FAILED;
     }
-    if (entry.data.status === END_GROUP_STATUS.STOPPED) {
+    if (status === END_GROUP_STATUS.STOPPED) {
       return STREAM_PHASE.COMPLETED;
     }
-    if (entry.data.status !== undefined) return entry.data.status;
+    if (status !== undefined) return status;
   }
   return trace.snapshot.status
     ? streamStatusToLifecycleStatus(trace.snapshot.status)

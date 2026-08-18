@@ -16,9 +16,11 @@ import {
   replaceMessagesInPlace,
   saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
-import type { FinalTool } from '@agent/types/ModelHandlerContracts';
+import type {
+  FinalTool,
+  ModelCredentialSelection,
+} from '@agent/types/ModelHandlerContracts';
 import { createKimiCodeFallbackHandler } from '@agent/runtime/ModelFactory';
-import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import {
   hasContextWindowErrorMarker,
   hasMissingApiKeyErrorMarker,
@@ -80,8 +82,10 @@ interface ManualRetryPromptResult {
   retrySource?: RetryAttemptSource;
 }
 
-/** The failed handler's effective config and model id, captured from the
- *  live cell as one pair when the retry panel opens. */
+/**
+ * The failed handler's effective config and model id, captured from the live
+ * cell as one pair when the retry panel opens.
+ */
 interface FailedModelIdentity {
   readonly config: ResolvedModelConfig;
   readonly modelId: string;
@@ -241,11 +245,9 @@ export class ModelInvocationNode<
     }
     fallback.setAgentCategory(this.services.config.agentCategory);
     fallback.setLogger(this.services.logger);
-    try {
-      signal?.throwIfAborted();
-    } catch (error) {
+    if (signal?.aborted) {
       fallback.dispose();
-      throw error;
+      signal.throwIfAborted();
     }
     modelCell.swap(fallback, failedModel.modelId);
   }
@@ -286,18 +288,12 @@ export class ModelInvocationNode<
   ): InvocationSuccess {
     // An empty response resolves the provider call but carries nothing the
     // cycle can use, so the lifecycle records it as a failed attempt.
-    if (result.response) {
-      this.logRetryLifecycle('attempt_succeeded', {
-        decisionSource: attemptSource,
-        ...details,
-      });
-    } else {
-      this.logRetryLifecycle('attempt_failed', {
-        decisionSource: attemptSource,
-        failureKind: 'invalid_result',
-        ...details,
-      });
-    }
+    const succeeded = Boolean(result.response);
+    this.logRetryLifecycle(succeeded ? 'attempt_succeeded' : 'attempt_failed', {
+      decisionSource: attemptSource,
+      ...(succeeded ? {} : { failureKind: 'invalid_result' }),
+      ...details,
+    });
     return result;
   }
 
@@ -439,15 +435,17 @@ export class ModelInvocationNode<
     }
   }
 
-  /** Auth/permission errors (401, 403), credential-exhausted errors (relay
-   *  monthly limit, upstream credit/quota depletion), and context-window
-   *  overflows skip auto-retries — they need human attention (switching
-   *  keys, topping up, shrinking the request) rather than an identical retry
-   *  that can only fail the same way again. A provider handler that knows
-   *  how to recover from an overflow (e.g. OpenAI Responses' compaction
-   *  retry) does so and never lets the error reach this gate; only overflow
-   *  errors nobody already recovered from are stopped here. `userRetryable`
-   *  only gates the manual retry UI; auto-retry is a stricter subset. */
+  /**
+   * Auth/permission errors (401, 403), credential-exhausted errors (relay
+   * monthly limit, upstream credit/quota depletion), and context-window
+   * overflows skip auto-retries — they need human attention (switching keys,
+   * topping up, shrinking the request) rather than an identical retry that can
+   * only fail the same way again. A provider handler that knows how to recover
+   * from an overflow (e.g. OpenAI Responses' compaction retry) does so and
+   * never lets the error reach this gate; only overflow errors nobody already
+   * recovered from are stopped here. `userRetryable` only gates the manual
+   * retry UI; auto-retry is a stricter subset.
+   */
   shouldAutoRetry(error: Error): boolean {
     return isProviderErrorAutoRetryable(error);
   }
@@ -479,7 +477,7 @@ export class ModelInvocationNode<
     // handling; an interrupt is read back off the same signal in
     // `getFallbackResult`, so there is nothing to register or clear here.
     this.signal = this.services.runScope.signal;
-    return await super._exec(prepRes);
+    return super._exec(prepRes);
   }
 
   async retryPrompt(_prepRes: unknown, error: Error): Promise<boolean> {
@@ -515,8 +513,10 @@ export class ModelInvocationNode<
   protected async handleManualRetryPrompt(
     error: Error,
   ): Promise<ManualRetryPromptResult> {
-    const { logger, runScope } = this.services;
-    const { session, streamId } = runScope;
+    const {
+      logger,
+      runScope: { session, streamId },
+    } = this.services;
     const streamStatus = session.status;
     const operationName = this._config.operationName;
     const formatted = normalizeProviderError(error);
@@ -706,6 +706,8 @@ export class ModelInvocationNode<
           systemPrompt: prepRes.systemPrompt,
           endTag: this._config.getEndTag?.(services),
           signal,
+          // `?? services.setting.tools` would be wrong here: a configured
+          // getTools that returns undefined is an explicit "no tools".
           tools: this._config.getTools
             ? this._config.getTools(services)
             : services.setting.tools,

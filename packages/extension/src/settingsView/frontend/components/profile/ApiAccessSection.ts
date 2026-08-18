@@ -40,10 +40,9 @@ export class ApiAccessSection extends LitElement {
     const target = event.currentTarget as WaRadioGroup | null;
     const mode = target?.value === 'included' ? 'included' : 'personal';
     if (target) target.value = this.mode;
+    if (mode === this.mode) return;
     if (mode === 'included' && this.includedAccessExhausted) return;
-    if (mode !== this.mode) {
-      postMessage(SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE, { mode });
-    }
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE, { mode });
   }
 
   override render(): TemplateResult {

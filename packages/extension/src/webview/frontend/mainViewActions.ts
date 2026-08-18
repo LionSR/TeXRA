@@ -541,17 +541,22 @@ export function runLatexDiffsAction(
 
 export function runApiKeyBannerAction(action: 'set' | 'guide'): void {
   const { provider } = apiKeyBanner$.get();
+  const payload = provider ? { provider } : undefined;
   if (action === 'set') {
-    const command = provider
-      ? MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY
-      : MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY;
-    postMessage(command, provider ? { provider } : undefined);
+    postMessage(
+      provider
+        ? MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY
+        : MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY,
+      payload,
+    );
     return;
   }
-  const command = provider
-    ? MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL
-    : MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE;
-  postMessage(command, provider ? { provider } : undefined);
+  postMessage(
+    provider
+      ? MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL
+      : MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE,
+    payload,
+  );
 }
 
 export function runAgentConfigAction(action: 'edit' | 'dir' | 'docs'): void {

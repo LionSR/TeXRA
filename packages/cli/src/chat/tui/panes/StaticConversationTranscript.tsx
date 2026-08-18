@@ -13,6 +13,7 @@ import { shortCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { StreamPhase, StreamTabId } from '@shared/schemas';
+import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { safeHomedir } from '@utils/system/platformPaths';
 
@@ -30,6 +31,7 @@ import {
 } from '../state/childExecutions';
 import { staticTranscriptEraseEpoch } from '../state/staticTranscriptRepaint';
 import { streamViewForId } from '../state/streamViews';
+import { ancestorWorkflowPhaseHeading } from '../state/workflowPhase';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import {
@@ -140,7 +142,15 @@ export function sessionHeaderIdentityLine(
       slice?.identity?.kind === 'multiAgentWorkflow'
         ? 'workflow script'
         : 'subagent';
-    return `${streamKind}: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;
+    const phase = ancestorWorkflowPhaseHeading({
+      parentStream,
+      streamId: context.streamId,
+      streams: context.streams,
+    });
+    const phaseText = phase ? formatWorkflowPhaseHeading(phase) : undefined;
+    return phaseText
+      ? `${streamKind}: ${view.label} · ${phaseText} · parent: ${view.parentLabel} · model: ${model}`
+      : `${streamKind}: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;
   }
   const model = getRuntimeModelLabel(meta.model || '—');
   const agent = meta.agent || 'chat';
@@ -616,18 +626,18 @@ function staticTranscriptItemsEquivalent(
 }
 
 function shouldWaitForChildIdentity({
-  currentItems,
+  hasHeader,
   parentStream,
   scrollbackStreamId,
   streams,
 }: {
-  readonly currentItems: readonly StaticTranscriptItem[];
+  readonly hasHeader: boolean;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): boolean {
   return (
-    !currentItems.some((item) => item.id === SESSION_HEADER_ID) &&
+    !hasHeader &&
     scrollbackStreamId !== undefined &&
     parentStream.has(scrollbackStreamId) &&
     !streams.get(scrollbackStreamId)?.model
@@ -669,7 +679,7 @@ function ensureStaticSessionHeader({
   }
   if (
     shouldWaitForChildIdentity({
-      currentItems: items,
+      hasHeader: false,
       parentStream,
       scrollbackStreamId,
       streams,
@@ -789,7 +799,7 @@ export function buildStaticTranscriptItems(
   let nextItems: StaticTranscriptItem[] | undefined;
   if (
     shouldWaitForChildIdentity({
-      currentItems,
+      hasHeader: seen.has(SESSION_HEADER_ID),
       parentStream,
       scrollbackStreamId,
       streams,
@@ -994,7 +1004,7 @@ export function buildStaticTranscriptState({
   // pending when the model arrives; scanning them now would mark them
   // consumed and drop them later.
   const waitingForChildIdentity = shouldWaitForChildIdentity({
-    currentItems: [],
+    hasHeader: false,
     parentStream,
     scrollbackStreamId,
     streams,
@@ -1134,7 +1144,7 @@ export function advanceStaticTranscriptState(
 
   if (
     shouldWaitForChildIdentity({
-      currentItems: current.items,
+      hasHeader: current.items.some((item) => item.id === SESSION_HEADER_ID),
       parentStream,
       scrollbackStreamId,
       streams,
@@ -1342,7 +1352,6 @@ export function StaticConversationTranscript({
         meta: sessionMeta,
         ownerKey,
         parentStream,
-        ringBudgets: DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
         scrollbackStreamId,
         streams,
         width: normalizedWidth,

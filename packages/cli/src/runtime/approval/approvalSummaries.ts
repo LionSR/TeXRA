@@ -109,8 +109,9 @@ function equalLines(
 function formatAgentProposalFileGroup(
   label: string,
   files: readonly string[],
+  maxFiles = AGENT_PROPOSAL_FILE_GROUP_MAX_FILES,
 ): string {
-  const visibleFiles = files.slice(0, AGENT_PROPOSAL_FILE_GROUP_MAX_FILES);
+  const visibleFiles = files.slice(0, maxFiles);
   const hiddenCount = files.length - visibleFiles.length;
   const suffix = hiddenCount > 0 ? `, +${hiddenCount} more` : '';
   return `${label}: ${visibleFiles.join(', ')}${suffix}`;
@@ -131,7 +132,7 @@ function agentProposalApprovalSummary(
     ...getProposalFileGroups(proposal).map((group) =>
       boundFileGroups
         ? formatAgentProposalFileGroup(group.label, group.files)
-        : `${group.label}: ${group.files.join(', ')}`,
+        : formatAgentProposalFileGroup(group.label, group.files, Infinity),
     ),
     'Instruction:',
     ...instructionLines.map((line) => `  ${line}`),
@@ -144,9 +145,10 @@ export function buildAgentProposalApprovalContent(
   const instructionLines = agentProposalInstructionLines(proposal.instruction);
   const boundedInstructionLines =
     boundedAgentProposalInstructionLines(instructionLines);
+  const fileGroups = getProposalFileGroups(proposal);
   const hasHiddenContent =
     !equalLines(boundedInstructionLines, instructionLines) ||
-    getProposalFileGroups(proposal).some(
+    fileGroups.some(
       (group) => group.files.length > AGENT_PROPOSAL_FILE_GROUP_MAX_FILES,
     );
   const summary = agentProposalApprovalSummary(

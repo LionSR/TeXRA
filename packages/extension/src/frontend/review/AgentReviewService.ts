@@ -194,8 +194,9 @@ class AgentReviewServiceImpl {
     } catch (err) {
       // Backstop for anything executeReview's own handling missed — the
       // summary must never stay stuck on "Reviewing changes…".
-      this.summary = `Review failed: ${toErrorMessage(err)}`;
-      log.warn(`Agent review failed unexpectedly: ${toErrorMessage(err)}`);
+      const errorMsg = toErrorMessage(err);
+      this.summary = `Review failed: ${errorMsg}`;
+      log.warn(`Agent review failed unexpectedly: ${errorMsg}`);
     } finally {
       if (this.reviewRuns.finish(run)) {
         const pending = this.pendingCommitReview;
@@ -324,9 +325,10 @@ class AgentReviewServiceImpl {
       if (!this.reviewRuns.isCurrent(run)) return;
       // Run-lifecycle failures are already logged and surfaced; keep the
       // panel state honest without a second notification.
+      const errorMsg = toErrorMessage(err);
       const restored = this.restorePreviousResults(previous);
-      this.summary = `Review failed: ${toErrorMessage(err)}${restored ? ' · showing previous results' : ''}`;
-      log.warn(`Agent review session failed: ${toErrorMessage(err)}`);
+      this.summary = `Review failed: ${errorMsg}${restored ? ' · showing previous results' : ''}`;
+      log.warn(`Agent review session failed: ${errorMsg}`);
       return;
     }
 

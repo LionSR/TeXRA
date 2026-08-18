@@ -177,17 +177,12 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     ): boolean {
       if (closed) return false;
 
-      if (context.outputFormat === 'ndjson') {
-        ndjsonHandlers ??=
-          createRuntimePresentationNdjsonHandlers(ensureLogger());
-        return (
-          dispatchPresentationEvent(ndjsonHandlers, event, payload) === true
-        );
-      }
-
-      return (
-        dispatchPresentationEvent(textModeHandlers, event, payload) === true
-      );
+      const handlers =
+        context.outputFormat === 'ndjson'
+          ? (ndjsonHandlers ??=
+              createRuntimePresentationNdjsonHandlers(ensureLogger()))
+          : textModeHandlers;
+      return dispatchPresentationEvent(handlers, event, payload) === true;
     },
     async close() {
       closed = true;

@@ -18,9 +18,10 @@ export function looksLikeCredentialPlaceholder(
   value: string,
   kind: 'provider' | 'github' = 'provider',
 ): boolean {
+  if (value.length < 8) return true;
   const patterns =
     kind === 'github'
       ? GITHUB_PLACEHOLDER_PATTERNS
       : PROVIDER_PLACEHOLDER_PATTERNS;
-  return value.length < 8 || patterns.some((pattern) => pattern.test(value));
+  return patterns.some((pattern) => pattern.test(value));
 }

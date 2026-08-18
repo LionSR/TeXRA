@@ -517,6 +517,85 @@ describe('transcript fold vs from-scratch oracle', () => {
     });
   });
 
+  it('evicts a failed prior attempt when a new workflow attempt starts', () => {
+    withStreamSubscription(() => {
+      configureStreams(CONFIGS[2]);
+      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
+        id: 'workflow-attempt-old',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 1,
+        messageType: MESSAGE_TYPES.INTERNAL,
+        text: '',
+        data: { kind: 'workflowAttempt', attemptId: 'attempt-old' },
+      });
+      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
+        id: 'old-failed',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.ERROR,
+        timestamp: 2,
+        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+        text: 'Failed: Agent runtime + its tests — HTTP 402 Payment Required',
+        data: {
+          id: 'agent-runtime',
+          label: 'Agent runtime + its tests',
+          status: 'failed',
+          error: 'HTTP 402 Payment Required',
+          attemptId: 'attempt-old',
+        },
+      });
+      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
+        id: 'survey-complete-old',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 3,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'Survey complete: 0/32 areas reported, 0 raw candidates',
+      });
+      syncStreamLog(FOLD_STREAM);
+      expect(
+        streams
+          .get()
+          .get(FOLD_STREAM)
+          ?.entries.map((entry) => entry.id),
+      ).toEqual(expect.arrayContaining(['old-failed', 'survey-complete-old']));
+
+      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
+        id: 'workflow-attempt-new',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 4,
+        messageType: MESSAGE_TYPES.INTERNAL,
+        text: '',
+        data: { kind: 'workflowAttempt', attemptId: 'attempt-new' },
+      });
+      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
+        id: 'new-running',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 5,
+        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+        text: 'Running: Agent runtime + its tests',
+        data: {
+          id: 'agent-runtime',
+          label: 'Agent runtime + its tests',
+          status: 'running',
+          attemptId: 'attempt-new',
+        },
+      });
+      syncStreamLog(FOLD_STREAM);
+
+      const ids =
+        streams
+          .get()
+          .get(FOLD_STREAM)
+          ?.entries.map((entry) => entry.id) ?? [];
+      expect(ids).not.toContain('old-failed');
+      expect(ids).not.toContain('survey-complete-old');
+      expect(ids).toContain('new-running');
+    });
+  });
+
   it('does not settle a running compaction on a turn-boundary forceFinal', () => {
     // Regression: `forceFinal` (turn-boundary syncStreamLog callers)
     // must only drive settled-prefix promotion. Compaction settlement derives

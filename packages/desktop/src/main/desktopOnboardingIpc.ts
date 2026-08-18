@@ -115,7 +115,8 @@ export function createDesktopOnboardingIpc(
     // completion, which must NOT block the serialized funnel-refresh chain —
     // otherwise a later "skip setup" / sign-out / credential-removal refresh
     // would queue behind the entire setup run, leaving the card stuck on 'setup'.
-    void Promise.resolve(options.kickoffSetup())
+    void options
+      .kickoffSetup()
       .catch(() => {
         // Swallow — the kickoff handler already surfaced the error to the user.
       })

@@ -32,7 +32,7 @@ import {
   type TaskGroupStatus,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
-import { formatCompactDuration } from '@utils/core';
+import { filterNotNullish, formatCompactDuration } from '@utils/core';
 
 type WorkflowRunDetailTone =
   'neutral' | 'muted' | 'success' | 'warning' | 'error';
@@ -143,9 +143,9 @@ function workflowRunDetailGroups(
 
   const plannedTotal = Math.max(
     0,
-    ...[...roundGroups.values()].flatMap((group) =>
-      group.total === undefined ? [] : [group.total],
-    ),
+    ...[...roundGroups.values()]
+      .map((group) => group.total)
+      .filter(filterNotNullish),
   );
   const currentRound = Math.max(-1, ...roundGroups.keys());
   for (const round of [...rounds].toSorted((left, right) => left - right)) {

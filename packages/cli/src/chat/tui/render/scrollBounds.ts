@@ -1,10 +1,10 @@
+import { clipToWidth, textDisplayWidth } from '@cli/runtime/terminalText';
 import {
   hiddenRowsText,
   moreRowsText,
   previousRowsText,
   scrollStatusText,
 } from '@cli/tui/overflowText';
-import { clipToWidth, textDisplayWidth } from '@cli/runtime/terminalText';
 import { clamp } from '@utils/core';
 
 /**
