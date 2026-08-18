@@ -393,7 +393,10 @@ export class ModelSelectionList extends LitElement {
             ?checked=${this.preferShortModelNames}
             @change=${(e: Event) => {
               const enabled = (e.target as WaSwitch).checked;
-              postStateSetting(GlobalStateKey.PREFER_SHORT_MODEL_NAMES, enabled);
+              postStateSetting(
+                GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+                enabled,
+              );
             }}
           >
             Use short model names

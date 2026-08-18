@@ -155,7 +155,7 @@ function runConfigEvent(overrides: RunConfigOverrides = {}): SessionEvent {
           autoExtractFigure: false,
           autoExtractTikzFigure: false,
           attachTeXCount: false,
-                autoCompileInputPdf: false,
+          autoCompileInputPdf: false,
         },
         memories: [],
         instruction: '',
