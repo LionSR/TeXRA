@@ -29,7 +29,6 @@ import { ToolUseDispatchNode } from '@agent/implementations/flows/tooluse/toolUs
 import { createToolUseRoundFlow } from '@agent/implementations/flows/tooluse/ToolUseRoundFlow';
 import type { ToolUseRoundShared } from '@agent/implementations/flows/tooluse/toolUseRound/roundShared';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
-import { withToolEnvironment } from '@test/support/toolEnvironment';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -46,6 +45,7 @@ import {
   type ToolResult,
   AgentCategory,
 } from '@shared/schemas';
+import { withToolEnvironment } from '@test/support/toolEnvironment';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
