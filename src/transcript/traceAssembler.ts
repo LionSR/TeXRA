@@ -5,9 +5,8 @@
  * `StreamLogStore` (the round/thinking/tool-call timeline), and
  * `StreamSnapshotStore` (todos/plan/usage sidecars).
  *
- * Host-neutral, following `ChatExportController.buildExportInput`'s
- * discriminated-status pattern so callers can show a precise error instead of
- * a generic failure.
+ * Host-neutral, following {@link loadChatExportInput}'s discriminated-status
+ * pattern so callers can show a precise error instead of a generic failure.
  */
 import { getExecutionStore } from '@agent/storage';
 import type { ExecutionId } from '@shared/schemas';
