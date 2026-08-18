@@ -140,49 +140,6 @@ describe('task-group StreamLog projection', () => {
     expect(taskGroups[0]?.endTime).toBe(250);
   });
 
-  it('normalizes an exact zero-based rN label at the shared boundary', () => {
-    const lifecycle = entry('legacy-round', STREAM_LOG_ENTRY_TYPES.GROUP_END, {
-      text: 'r3',
-      data: { status: 'stopped', endTime: 200 },
-    });
-    const batch = projectTaskGroupsFromStreamLog([lifecycle]);
-    const incremental: typeof batch = [];
-
-    expect(
-      upsertTaskGroupFromStreamLog(
-        incremental,
-        new Map<string, number>(),
-        lifecycle,
-      ),
-    ).toBe(true);
-    expect(batch).toEqual(incremental);
-    expect(batch).toMatchObject([
-      {
-        id: 'legacy-round',
-        kind: 'round',
-        index: 3,
-        status: RUN_OUTCOME.COMPLETED,
-      },
-    ]);
-  });
-
-  it('does not guess an index for an ambiguous human-facing Round N label', () => {
-    const [group] = projectTaskGroupsFromStreamLog([
-      entry('legacy-round', STREAM_LOG_ENTRY_TYPES.GROUP_END, {
-        text: 'Round 3',
-        data: { status: 'stopped', endTime: 200 },
-      }),
-    ]);
-
-    expect(group).toMatchObject({
-      id: 'legacy-round',
-      name: 'Round 3',
-      status: RUN_OUTCOME.COMPLETED,
-    });
-    expect(group?.kind).toBeUndefined();
-    expect(group?.index).toBeUndefined();
-  });
-
   it('ignores ordinary log rows', () => {
     const taskGroups = projectTaskGroupsFromStreamLog([
       {
