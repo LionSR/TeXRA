@@ -28,10 +28,6 @@ import {
 
 const logger = createLog('InquiryTool');
 
-type InquirySubmitAction = Extract<
-  InquiryActionMessage,
-  { readonly action: 'submit' }
->;
 type InquiryDropBase = Omit<
   Extract<InquiryActionMessage, { readonly action: 'drop' }>,
   'feedback'
@@ -54,7 +50,9 @@ type InquiryDropAction = InquiryDropBase &
         readonly cause: string;
       }
   );
-type ExternalInquiryAction = InquirySubmitAction | InquiryDropAction;
+type ExternalInquiryAction =
+  | Extract<InquiryActionMessage, { readonly action: 'submit' }>
+  | InquiryDropAction;
 
 export type ExternalInquiryTransition =
   | {

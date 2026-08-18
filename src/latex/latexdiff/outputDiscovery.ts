@@ -37,17 +37,19 @@ import { isDirectory, isFile } from '@utils/files/fsEntryType';
 import { hasBetweenRoundDiffSuffix } from './diffFileNameManager';
 import type { LatexExecutionDiscoveryPort } from './executionDiscovery';
 
+/** Logger handle shared by the discovery scan (created once per scan). */
+type Log = ReturnType<typeof createLog>;
+
 /**
  * Recursively collect all `.tex` file paths under `dir`, returned as paths
  * relative to `dir` using forward slashes (e.g. `"chapters/main.tex"`).
  */
 async function collectTexFiles(
   dir: string,
-  channel: string,
+  log: Log,
   prefix = '',
 ): Promise<string[]> {
   const fs = platform().fs;
-  const log = createLog(channel);
   let entries: [string, number][];
   try {
     entries = await fs.readDirectory(dir);
@@ -68,7 +70,7 @@ async function collectTexFiles(
     if (isFile(type) && hasExtension(name, '.tex')) {
       results.push(relative);
     } else if (isDirectory(type)) {
-      results.push(...(await collectTexFiles(absPath, channel, relative)));
+      results.push(...(await collectTexFiles(absPath, log, relative)));
     }
   }
   return results;
@@ -133,7 +135,7 @@ export async function scanRunDirForOutputs(
       const outputs: OutputFileInfo[] = [];
       // Collect .tex files recursively — extracted docs may live in subdirs
       // (e.g. r0/chapters/main.tex) when source names include path segments.
-      const allTexFiles = await collectTexFiles(roundDirAbsolute, channel);
+      const allTexFiles = await collectTexFiles(roundDirAbsolute, log);
       // Between-round artifacts written to run storage always carry both round
       // numbers (e.g. output_diffr1r0.tex). The bare _diff suffix only appears
       // in workspace-side diffs, never here, so a legitimately-named source

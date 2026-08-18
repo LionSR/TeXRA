@@ -88,16 +88,14 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
 
   /** Subscription usage is billed by plan, not per token. */
   protected override standardPricingConfig(): StandardPricingConfig {
+    const base = super.standardPricingConfig();
     if (
       this.activeCredentialRoute === 'xai-subscription' ||
       this.getLastCredentialUsageRoute() === 'xai-subscription'
     ) {
-      return {
-        ...super.standardPricingConfig(),
-        inputPrice: 0,
-        outputPrice: 0,
-      };
+      return { ...base, inputPrice: 0, outputPrice: 0 };
     }
+
     // API-key usage bills per token, with xAI's long-context tier past the
     // model's documented prompt-token threshold. llm-zoo's xAI entries carry
     // the default cacheDiscountFactor of 1, which would zero the cached-token
@@ -117,7 +115,6 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
         },
       );
     }
-    const base = super.standardPricingConfig();
     return {
       ...base,
       cacheDiscountFactor:

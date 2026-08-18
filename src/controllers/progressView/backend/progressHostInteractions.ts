@@ -147,11 +147,15 @@ export function createProgressHostInteractions(
     retryPreparations.get(streamId) === preparation &&
     isRetryPending(streamId, requestId);
 
-  /** Whether this exact preparation is still the one stored for the stream. */
-  const isStoredRetryPreparation = (
+  /** Delete the stream's stored preparation only when it is still this one. */
+  const dropStoredPreparation = (
     streamId: StreamTabId,
     preparation: PendingRetryPreparation,
-  ): boolean => retryPreparations.get(streamId) === preparation;
+  ): void => {
+    if (retryPreparations.get(streamId) === preparation) {
+      retryPreparations.delete(streamId);
+    }
+  };
 
   /**
    * Complete one retry settlement without letting a dismiss-delivery failure
@@ -218,9 +222,7 @@ export function createProgressHostInteractions(
           // this abort rejection ran. If the map still stores this exact
           // preparation, remove it so a cancelled stream does not retain the
           // preparation callback and its captured state.
-          if (isStoredRetryPreparation(streamId, preparation)) {
-            retryPreparations.delete(streamId);
-          }
+          dropStoredPreparation(streamId, preparation);
           return false;
         }
         retryPreparations.delete(streamId);
@@ -235,9 +237,7 @@ export function createProgressHostInteractions(
         return denialResult;
       }
       if (!isCurrentRetryPreparation(streamId, requestId, preparation)) {
-        if (isStoredRetryPreparation(streamId, preparation)) {
-          retryPreparations.delete(streamId);
-        }
+        dropStoredPreparation(streamId, preparation);
         return false;
       }
       retryPreparations.delete(streamId);

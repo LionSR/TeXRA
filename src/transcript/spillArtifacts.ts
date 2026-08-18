@@ -1,7 +1,5 @@
-// Node imports
 import * as path from 'node:path';
 
-// Local imports
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { ExecutionIdSchema } from '@shared/schemas';

@@ -130,10 +130,11 @@ export class ProgressWorkflowFileActionsController {
       }
     }
 
-    if (activeStream && file) await this.deps.state.preload?.(activeStream);
-
-    const copyMeta =
-      activeStream && file ? this.buildCopyMeta(activeStream, file) : undefined;
+    let copyMeta: AcceptCopyMeta | undefined;
+    if (activeStream && file) {
+      await this.deps.state.preload?.(activeStream);
+      copyMeta = this.buildCopyMeta(activeStream, file);
+    }
 
     const accepted = await this.executeWithBaseFile(
       file,

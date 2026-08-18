@@ -37,24 +37,15 @@ export interface ExtendedCompletionUsage extends CompletionUsage {
 }
 
 /**
- * Union of native usage payloads from different providers.
- * This is the raw usage object returned by each provider's API.
- *
- * - ExtendedCompletionUsage: OpenAI Chat Completions API (includes DeepSeek extension)
- * - OpenAIResponseUsage: OpenAI Responses API
- * - AnthropicUsage: Anthropic Messages API
- * - Interactions.Usage: Google Gemini API
+ * Provider usage type for API responses.
+ * Union of native usage payloads from different providers, allowing
+ * null/undefined when the provider doesn't return usage data.
  */
-type NativeUsagePayload =
+export type ProviderUsage =
   | ExtendedCompletionUsage
   | OpenAIResponseUsage
   | AnthropicUsage
   | Interactions.Usage
-  | OpenRouterChatUsage;
-
-/**
- * Provider usage type for API responses.
- * Same as NativeUsagePayload but allows null/undefined for cases where
- * the provider doesn't return usage data.
- */
-export type ProviderUsage = NativeUsagePayload | null | undefined;
+  | OpenRouterChatUsage
+  | null
+  | undefined;

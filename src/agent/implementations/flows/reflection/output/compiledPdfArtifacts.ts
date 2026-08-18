@@ -73,11 +73,9 @@ async function copyArtifactFile(
 ): Promise<void> {
   const fs = platform().fs;
   await fs.createDirectory(path.dirname(destination));
-  try {
-    await fs.delete(destination, { recursive: true });
-  } catch (error) {
+  await fs.delete(destination, { recursive: true }).catch((error) => {
     if (!isFileNotFoundError(error)) throw error;
-  }
+  });
   await fs.copy(source, destination, { overwrite: true });
 }
 

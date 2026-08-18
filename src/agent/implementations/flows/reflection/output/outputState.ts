@@ -134,7 +134,7 @@ export function getOutputFilesByRound(
   state: OutputState,
 ): RoundIndexed<OutputFileInfo> {
   return Object.fromEntries(
-    [...state.rounds].map(([round, data]) => [round, data.outputs] as const),
+    Array.from(state.rounds, ([round, data]) => [round, data.outputs]),
   );
 }
 

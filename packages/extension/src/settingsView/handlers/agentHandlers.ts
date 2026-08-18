@@ -35,8 +35,11 @@ import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalog
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import type { SettingsMessageFor } from '@shared/schemas';
-import { agentKey, SETTINGS_VIEW_CMD } from '@shared/schemas';
+import {
+  agentKey,
+  SETTINGS_VIEW_CMD,
+  type SettingsMessageFor,
+} from '@shared/schemas';
 import {
   buildAgentSelectionMessage,
   buildCustomAgentDirMessage,
@@ -95,8 +98,7 @@ export class AgentHandlers {
           vscode.Uri.file(filePath),
         );
       },
-      confirmAction: (message, confirmLabel) =>
-        confirmModal(message, confirmLabel),
+      confirmAction: confirmModal,
       showInfoMessage: async (message) => {
         void vscode.window.showInformationMessage(message);
       },

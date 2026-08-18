@@ -12,7 +12,7 @@ import {
   type OSPlatform,
 } from '@shared/constants/latexToolchain';
 
-// `CORE_LATEX_TOOLS`/`IMAGE_TOOLS` (`@shared/constants/latex`) are the
+// `CORE_LATEX_TOOLS`/`IMAGE_TOOLS` (`@shared/constants/latexToolchain`) are the
 // single source of truth for the LaTeX toolchain probe set, shared with
 // `probe_environment`/`verify_setup`. Do not re-list tool names here.
 const LATEX_PROBE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;

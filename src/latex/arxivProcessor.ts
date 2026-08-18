@@ -62,10 +62,7 @@ class ArxivSourceProcessor {
   // `[arxivProcessor] ...`, so keep it stable for anything filtering on the
   // channel name — a class-identifier rename must not change this value.
   private readonly channel = 'arxivProcessor';
-
-  private get log() {
-    return createLog(this.channel);
-  }
+  private readonly log = createLog(this.channel);
 
   /** Best-effort delete that logs failures at debug level instead of throwing. */
   private async cleanUpBestEffort(

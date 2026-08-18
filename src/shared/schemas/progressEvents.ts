@@ -23,11 +23,6 @@ import type { ExtendedTokenUsageStats } from './usage';
  * never a new key on a host compatibility map.
  */
 
-/** Payload base for stream-scoped run facts (one run per workflow tab). */
-interface StreamScopedPayload {
-  streamId: StreamTabId;
-}
-
 export interface SetActiveStreamPayload {
   streamId: StreamTabId | null;
   agentCategory?: AgentCategory;
@@ -62,28 +57,35 @@ export interface RemoveStreamPayload {
   streamId: StreamTabId;
 }
 
+type UpdateStreamStatusMessage = z.infer<
+  typeof UpdateStreamStatusMessageSchema
+>;
+
 export interface UpdateStreamStatusPayload {
   streamId: StreamTabId;
-  status: z.infer<typeof UpdateStreamStatusMessageSchema>['status'];
+  status: UpdateStreamStatusMessage['status'];
   /** Diagnostic transition cause retained for legacy host/public output. */
   cause?: string;
   /** Previous phase before this update, for detecting transitions. */
-  previousStatus?: z.infer<typeof UpdateStreamStatusMessageSchema>['status'];
+  previousStatus?: UpdateStreamStatusMessage['status'];
   /** Narrower in-flight display state for launch/resume overlays. */
-  substate?: z.infer<typeof UpdateStreamStatusMessageSchema>['substate'];
+  substate?: UpdateStreamStatusMessage['substate'];
 }
 
-export interface AddOutputFilesPayload extends StreamScopedPayload {
+export interface AddOutputFilesPayload {
+  streamId: StreamTabId;
   filesByRound: NonNullable<z.infer<typeof UpdateFilesMessageSchema>['rounds']>;
 }
 
-export interface UpdateMissingOutputsPayload extends StreamScopedPayload {
+export interface UpdateMissingOutputsPayload {
+  streamId: StreamTabId;
   filesByRound: NonNullable<
     z.infer<typeof UpdateMissingOutputsMessageSchema>['rounds']
   >;
 }
 
-export interface UpdateCompileFailuresPayload extends StreamScopedPayload {
+export interface UpdateCompileFailuresPayload {
+  streamId: StreamTabId;
   filesByRound: NonNullable<
     z.infer<typeof UpdateCompileFailuresMessageSchema>['rounds']
   >;

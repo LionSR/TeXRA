@@ -133,9 +133,8 @@ export function proposalResultToToolResult(
   const classification = classifyRejection(result);
   switch (classification.kind) {
     case 'cancelled': {
-      const detail = classification.cause?.trim()
-        ? `\n${classification.cause.trim()}`
-        : '';
+      const cause = classification.cause?.trim();
+      const detail = cause ? `\n${cause}` : '';
       return errorResult(
         `Delegation approval for '${agentName}' was cancelled.\nYour delegation was: ${echo}${detail}`,
         { summary: `Delegation approval cancelled for '${agentName}'` },

@@ -410,16 +410,9 @@ export class XmlOutputManager {
     const roundDir = getFileDirectory(outputLocation);
 
     for (const doc of latexDocuments) {
-      if (!doc.name || doc.name === 'unknown' || !doc.content) {
-        this.logger.debug(`Skipping document with empty name or content`);
-        continue;
-      }
-
       const source = doc.name.trim();
-      if (!source) {
-        this.logger.debug(
-          `Skipping document with empty source name after trimming`,
-        );
+      if (!source || doc.name === 'unknown' || !doc.content) {
+        this.logger.debug(`Skipping document with empty name or content`);
         continue;
       }
 
@@ -456,14 +449,11 @@ export class XmlOutputManager {
 
     const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;
     const openTag = `<${OUTPUT_DOCUMENTS_TAG}>`;
-    const hasOpenTag = content.includes(openTag);
-    const hasCloseTag = content.includes(closeTag);
 
-    if (hasOpenTag && !content.endsWith(closeTag)) {
-      if (hasCloseTag) {
-        content = content.replace(new RegExp(`${closeTag}.*$`, 's'), '');
-      }
-      content += `\n${closeTag}`;
+    if (content.includes(openTag) && !content.endsWith(closeTag)) {
+      content =
+        content.replace(new RegExp(`${closeTag}.*$`, 's'), '') +
+        `\n${closeTag}`;
     }
 
     if (content !== originalContent) {

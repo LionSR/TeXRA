@@ -1909,8 +1909,7 @@ export class StreamSnapshotStore {
     record.seedRefreshBaseline = refreshBaseline;
     const refreshGeneration = ++record.seedRefreshGeneration;
     record.diskState = 'unknown';
-    const queue = this.seedQueueFor(stream);
-    const next: Promise<void> = queue
+    const next: Promise<void> = this.seedQueueFor(stream)
       .add(async () => {
         if (this.streamVersion(stream) !== version) return;
         await this.retryDirtyWrites(stream);

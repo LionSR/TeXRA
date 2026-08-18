@@ -39,13 +39,13 @@ import {
   codingPlanForApiProvider,
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
-import type {
-  ApiAccessMode,
-  SettingsViewInboundHandlerRegistry,
-  SpendingStatus,
-  SubscriptionUsageSnapshots,
+import {
+  SUBSCRIPTION_USAGE_PROVIDERS,
+  type ApiAccessMode,
+  type SettingsViewInboundHandlerRegistry,
+  type SpendingStatus,
+  type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
-import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
 import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import {

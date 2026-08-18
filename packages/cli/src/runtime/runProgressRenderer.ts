@@ -366,10 +366,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     ) {
       return;
     }
-    this.refreshActiveSubagents();
-  }
-
-  private refreshActiveSubagents(): void {
     this.updateHeartbeat();
     this.render(true);
   }
@@ -386,7 +382,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       ) {
         return;
       }
-      this.refreshActiveSubagents();
+      this.updateHeartbeat();
+      this.render(true);
       return;
     }
 

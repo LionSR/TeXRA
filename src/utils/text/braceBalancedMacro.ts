@@ -75,23 +75,18 @@ export function findBraceBalancedMacroCalls(
 
     const args: string[] = [];
     let cursor = macroAt + macroName.length;
-    let complete = true;
     for (let i = 0; i < argCount; i++) {
       const group = readBraceGroup(source, skipWhitespace(source, cursor));
-      if (!group) {
-        complete = false;
-        break;
-      }
+      if (!group) break;
       args.push(group.content);
       cursor = group.end;
     }
 
-    if (!complete) {
-      searchFrom = cursor;
-      continue;
+    // A call is only recognized when all argCount groups were present; either
+    // way, scanning resumes past the last consumed group.
+    if (args.length === argCount) {
+      out.push({ args, start: macroAt, end: cursor });
     }
-
-    out.push({ args, start: macroAt, end: cursor });
     searchFrom = cursor;
   }
   return out;

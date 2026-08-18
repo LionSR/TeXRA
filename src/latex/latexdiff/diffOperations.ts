@@ -37,10 +37,6 @@ import type {
   LatexdiffRuntime,
 } from './types';
 
-function getCanonicalSource(info: OutputFileInfo): string {
-  return getSafeDocumentRelativePath(info.source);
-}
-
 async function executeDiffOperations(
   operations: DiffOperation[],
   mathMarkup: MathMarkupOption | undefined,
@@ -49,7 +45,8 @@ async function executeDiffOperations(
   immediateResults: DiffRunResult[] = [],
 ): Promise<DiffRunOutcome> {
   const results: DiffRunResult[] = [...immediateResults];
-  const incrementPct = operations.length > 0 ? 100 / operations.length : 0;
+  // Zero operations never enter the loop, so the bare division is safe.
+  const incrementPct = 100 / operations.length;
   const log = createLog(latexdiff.channel);
 
   for (const operation of operations) {
@@ -58,10 +55,10 @@ async function executeDiffOperations(
       message: `Running ${operation.type} diff for ${operation.description}`,
     });
 
-    const baseExists = await AbsoluteFS.exists(operation.base.absolutePath);
-    const revisedExists = await AbsoluteFS.exists(
-      operation.revised.absolutePath,
-    );
+    const [baseExists, revisedExists] = await Promise.all([
+      AbsoluteFS.exists(operation.base.absolutePath),
+      AbsoluteFS.exists(operation.revised.absolutePath),
+    ]);
 
     if (!baseExists || !revisedExists) {
       results.push({
@@ -125,7 +122,7 @@ export async function runLatexdiffFromMetadata(params: {
   for (const [round, infos] of roundIndexedEntries(rounds)) {
     for (const info of infos) {
       const base = getEffectiveDiffBase(info.lineage);
-      const source = getCanonicalSource(info);
+      const source = getSafeDocumentRelativePath(info.source);
       const description = `${source} (r${round})`;
 
       if (!base) {
@@ -159,7 +156,7 @@ export async function runLatexdiffFromMetadata(params: {
         const previous = group[index];
         const base = previous.info.location;
         const revised = current.info.location;
-        const description = `${getCanonicalSource(current.info)} (r${previous.round}→r${current.round})`;
+        const description = `${getSafeDocumentRelativePath(current.info.source)} (r${previous.round}→r${current.round})`;
 
         operations.push({
           type: 'between-rounds',

@@ -302,6 +302,10 @@ export class ExternalInquiryTool extends defineTool({
       );
     }
 
+    const questionContext = input.context ?? undefined;
+    const suggestSearch = input.suggestSearch ?? undefined;
+    const attachFiles = input.attachFiles ?? undefined;
+
     logger.info(`Inquiry dispatch [${input.thread_id ?? 'new'}]`, {
       data: input.question.slice(0, 100),
     });
@@ -311,9 +315,9 @@ export class ExternalInquiryTool extends defineTool({
       parentStreamId: streamId,
       parentGenerationId,
       question: input.question,
-      context: input.context ?? undefined,
-      suggestSearch: input.suggestSearch ?? undefined,
-      attachFiles: input.attachFiles ?? undefined,
+      context: questionContext,
+      suggestSearch,
+      attachFiles,
     });
     // Use the manifest recordOpenQuestion just wrote under the thread lock —
     // a re-read would only reintroduce the write/read race the continuation
@@ -344,9 +348,9 @@ export class ExternalInquiryTool extends defineTool({
       requestId: persisted.threadId, // legacy field — panel addresses by threadId now
       question: input.question,
       threadId: persisted.threadId,
-      context: input.context ?? undefined,
-      suggestSearch: input.suggestSearch ?? undefined,
-      attachFiles: input.attachFiles ?? undefined,
+      context: questionContext,
+      suggestSearch,
+      attachFiles,
       allowBypass: false,
       streamId,
     };

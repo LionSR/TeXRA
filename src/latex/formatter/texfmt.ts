@@ -13,13 +13,10 @@ export async function runTexFmt(filePath: string): Promise<boolean> {
   try {
     const texfmtConfig = getConfig<string>(TEXFMT_CONFIG_KEY);
 
-    const args: string[] = [];
-    if (texfmtConfig) {
-      args.push('--config', texfmtConfig);
-    } else {
-      args.push('--nowrap');
-    }
-    args.push(filePath);
+    const args = [
+      ...(texfmtConfig ? ['--config', texfmtConfig] : ['--nowrap']),
+      filePath,
+    ];
 
     const result = await runToolWithCheck('tex-fmt', args, {
       channel: CHANNEL,

@@ -66,10 +66,8 @@ function absoluteOutputDestination(
   destination: string | undefined,
   cwd: string,
 ): string | undefined {
-  if (destination == null || destination.length === 0) return undefined;
-  return path.isAbsolute(destination)
-    ? destination
-    : path.join(cwd, destination);
+  if (!destination) return undefined;
+  return path.resolve(cwd, destination);
 }
 
 interface WorkflowRunInit {
@@ -190,14 +188,6 @@ export async function executeCliWorkflowConfig(
         : undefined;
     return lastError == null;
   };
-  const hasViableRecovery = async (
-    executionId: ExecutionId,
-  ): Promise<boolean> => {
-    const resumability = await deriveResumability(executionId);
-    return (
-      resumability.resumable && canAdvertiseInterruptedExecution(resumability)
-    );
-  };
   const writeResumeHint = (
     executionId: ExecutionId,
     waitForWrite = false,
@@ -213,6 +203,16 @@ export async function executeCliWorkflowConfig(
       recoveryProcessCwd,
     );
     return writeInterruptedResumeHint(hint, waitForWrite);
+  };
+  const maybeAdvertiseRecovery = async (executionId: ExecutionId) => {
+    if (!execution.ok || !execution.outcomePersisted) return;
+    const resumability = await deriveResumability(executionId);
+    if (
+      resumability.resumable &&
+      canAdvertiseInterruptedExecution(resumability)
+    ) {
+      writeResumeHint(executionId);
+    }
   };
   const execution = await executeCliConfig(config, runContext, {
     enforceCategory: true,
@@ -256,12 +256,7 @@ export async function executeCliWorkflowConfig(
     );
     writeErrorStderr(workflowOutputError);
     if (result.outcome === RUN_OUTCOME.CANCELLED) {
-      if (
-        execution.outcomePersisted &&
-        (await hasViableRecovery(result.executionId))
-      ) {
-        writeResumeHint(result.executionId);
-      }
+      await maybeAdvertiseRecovery(result.executionId);
       return CliExitCode.Interrupted;
     }
     return CliExitCode.AgentError;
@@ -290,12 +285,7 @@ export async function executeCliWorkflowConfig(
   });
 
   if (result.outcome === RUN_OUTCOME.CANCELLED) {
-    if (
-      execution.outcomePersisted &&
-      (await hasViableRecovery(result.executionId))
-    ) {
-      writeResumeHint(result.executionId);
-    }
+    await maybeAdvertiseRecovery(result.executionId);
   }
 
   return runOutcomeExitCode(result.outcome);

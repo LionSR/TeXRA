@@ -362,13 +362,10 @@ export class ExecutionRegistry {
   requestManualCompaction(
     streamId: StreamTabId | undefined,
   ): ManualCompactionRequestResult {
-    const context = streamId ? this.getToolUseFlowContext(streamId) : undefined;
-    if (!streamId || !context) {
-      return {
-        kind: 'no_active_tool_use',
-        ...(streamId && { streamId }),
-      };
-    }
+    if (!streamId) return { kind: 'no_active_tool_use' };
+    const context = this.getToolUseFlowContext(streamId);
+    if (!context) return { kind: 'no_active_tool_use', streamId };
+
     if (!context.modelHandler.supportsManualCompaction) {
       return { kind: 'unsupported', streamId };
     }
@@ -506,20 +503,27 @@ export class ExecutionRegistry {
     });
   }
 
+  private *activeChildActivations(
+    parentStreamId: StreamTabId,
+  ): Generator<ChildExecutionActivation> {
+    for (const activation of this.childActivations.values()) {
+      if (
+        activation.parentStreamId === parentStreamId &&
+        !activation.isDetached()
+      ) {
+        yield activation;
+      }
+    }
+  }
+
   /** Interrupt all active subagents of a parent stream, including descendants. */
   private interruptActiveChildren(
     parentStreamId: StreamTabId,
     visited: Set<string>,
     options: TerminateOptions,
   ): void {
-    for (const activation of this.childActivations.values()) {
-      if (
-        activation.parentStreamId !== parentStreamId ||
-        activation.isDetached() ||
-        visited.has(activation.executionId)
-      ) {
-        continue;
-      }
+    for (const activation of this.activeChildActivations(parentStreamId)) {
+      if (visited.has(activation.executionId)) continue;
       visited.add(activation.executionId);
       activation.interrupt();
     }
@@ -538,13 +542,7 @@ export class ExecutionRegistry {
    */
   detachActiveChildren(parentStreamId: StreamTabId): void {
     const detachedChildStreamIds: StreamTabId[] = [];
-    for (const activation of this.childActivations.values()) {
-      if (
-        activation.parentStreamId !== parentStreamId ||
-        activation.isDetached()
-      ) {
-        continue;
-      }
+    for (const activation of this.activeChildActivations(parentStreamId)) {
       activation.detach();
       this.approvals?.detachStreamFromParent(activation.childStreamId);
       detachedChildStreamIds.push(activation.childStreamId);
@@ -712,13 +710,8 @@ export class ExecutionRegistry {
   }
 
   hasActiveChildren(parentStreamId: StreamTabId): boolean {
-    for (const activation of this.childActivations.values()) {
-      if (
-        activation.parentStreamId === parentStreamId &&
-        !activation.isDetached()
-      ) {
-        return true;
-      }
+    for (const activation of this.activeChildActivations(parentStreamId)) {
+      return true;
     }
     for (const handle of this.handles.values()) {
       if (isChildExecution(handle, parentStreamId)) return true;

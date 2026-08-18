@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Text, useWindowSize } from 'ink';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
@@ -43,10 +43,10 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
   const commandWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
-  const cwdLine = useMemo(
-    () => bashCwdDisplayLine({ cwd: props.payload.cwd, width: commandWidth }),
-    [commandWidth, props.payload.cwd],
-  );
+  const cwdLine = bashCwdDisplayLine({
+    cwd: props.payload.cwd,
+    width: commandWidth,
+  });
   const maxCommandRows = scrollableModalTextRowsBudget({
     availableRows: props.availableRows,
     columns,
@@ -64,7 +64,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
       onFeedbackModeChange={setFeedbackMode}
       onDecide={props.onDecide}
     >
-      {cwdLine ? <Text dimColor>{cwdLine}</Text> : null}
+      {cwdLine && <Text dimColor>{cwdLine}</Text>}
       <ScrollableModalText
         firstLinePrefix="$ "
         continuationPrefix="  "

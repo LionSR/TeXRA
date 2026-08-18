@@ -17,7 +17,6 @@ import { ExecutionIdSchema } from './identifiers';
 import { formatZodIssuesMessage } from './toolResult';
 import {
   TokenUsageStatsSchema,
-  UsageRouteSchema,
   isEmptyUsage,
   type TokenUsageStats,
 } from './usage';
@@ -72,7 +71,6 @@ export const TokenUsageStatsParsingBaseSchema = TokenUsageStatsSchema.extend({
   cacheMissInputTokens: FiniteNumber.optional().prefault(0),
   cacheCreationInputTokens: FiniteNumber.optional().prefault(0),
   reasoningTokens: FiniteNumber.optional().prefault(0),
-  usageRoute: UsageRouteSchema.optional(),
 });
 
 export interface ParsedUsageData {

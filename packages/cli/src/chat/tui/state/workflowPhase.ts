@@ -1,0 +1,66 @@
+// Current workflow-script phase for orientation chrome (header, status bar).
+
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import {
+  formatWorkflowPhaseHeading,
+  type WorkflowPhaseHeading,
+} from '@shared/copy/workflowCall';
+
+import {
+  currentWorkflowAttemptId,
+  type ConversationEntry,
+  type StreamSlice,
+} from './cliState';
+
+/** The open phase of one workflow-script stream, if it has emitted one. */
+export function currentWorkflowPhaseHeading(
+  slice: StreamSlice | undefined,
+): WorkflowPhaseHeading | undefined {
+  if (slice?.category !== AgentCategory.Workflow) return undefined;
+  const currentAttemptId = currentWorkflowAttemptId(
+    slice.workflowAttemptId,
+    slice.entries,
+    slice.workflowAttemptBoundaryDeclared,
+  );
+  const phase = slice.entries.findLast(
+    (entry): entry is Extract<ConversationEntry, { readonly role: 'phase' }> =>
+      entry.role === 'phase' &&
+      (currentAttemptId === undefined ||
+        (currentAttemptId !== null && entry.attemptId === currentAttemptId)),
+  );
+  if (!phase) return undefined;
+  return {
+    phaseLabel: phase.phaseLabel,
+    phaseIndex: phase.phaseIndex,
+    phaseTotal: phase.phaseTotal,
+  };
+}
+
+/** Nearest workflow-script ancestor's current phase, walking parent links. */
+export function ancestorWorkflowPhaseHeading(init: {
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly streamId: StreamTabId;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+}): WorkflowPhaseHeading | undefined {
+  let id: StreamTabId | undefined = init.streamId;
+  const seen = new Set<StreamTabId>();
+  while (id && !seen.has(id)) {
+    seen.add(id);
+    const heading = currentWorkflowPhaseHeading(init.streams.get(id));
+    if (heading) return heading;
+    id = init.parentStream.get(id);
+  }
+  return undefined;
+}
+
+/** Status-bar location while a nested session is focused. */
+export function focusedSessionLocationText(init: {
+  readonly isChildStream: boolean;
+  readonly label: string;
+  readonly phaseHeading?: WorkflowPhaseHeading;
+}): string | undefined {
+  if (!init.isChildStream) return undefined;
+  return init.phaseHeading
+    ? `${formatWorkflowPhaseHeading(init.phaseHeading)} › ${init.label}`
+    : init.label;
+}

@@ -34,6 +34,12 @@ export function streamScopedCommand<T extends string>(command: T) {
   return StreamScopedBaseSchema.extend({ command: z.literal(command) });
 }
 
+/** A stream tab id, or the empty-string sentinel meaning "no active stream". */
+export const StreamSelectionSchema = z.union([
+  StreamTabIdSchema,
+  z.literal(''),
+]);
+
 // ============================================================
 // Progress View Data Schemas
 // ============================================================

@@ -578,14 +578,10 @@ function sortAgentEntries(
   entries: AgentEntry[],
   preferredNames: readonly string[],
 ): AgentEntry[] {
-  const preferredSet = new Map(
-    preferredNames
-      .map((name, i) => [entries.find((e) => e.name === name), i] as const)
-      .filter(([entry]) => entry != null),
-  );
+  const preferredIndex = new Map(preferredNames.map((name, i) => [name, i]));
   return entries.toSorted((a, b) => {
-    const aIdx = preferredSet.get(a);
-    const bIdx = preferredSet.get(b);
+    const aIdx = preferredIndex.get(a.name);
+    const bIdx = preferredIndex.get(b.name);
     if (aIdx != null && bIdx != null) return aIdx - bIdx;
     if (aIdx != null) return -1;
     if (bIdx != null) return 1;

@@ -21,17 +21,15 @@ import {
   type SelectWindowSize,
 } from '@cli/tui/selectWindow';
 import { platform } from '@platform/platform';
-import type {
-  AgentCategory,
-  AgentModePreset,
-  AgentRosterCategorySelection,
-  ByCategory,
-} from '@shared/schemas';
 import {
   AGENT_MODE_PRESETS,
   agentKeyOf,
   byCategory,
   STARTER_AGENT_MODE_PRESET,
+  type AgentCategory,
+  type AgentModePreset,
+  type AgentRosterCategorySelection,
+  type ByCategory,
 } from '@shared/schemas';
 
 import { FormFrame, renderAsyncListFormTransient } from './_shared/FormFrame';

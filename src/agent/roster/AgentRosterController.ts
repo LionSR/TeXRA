@@ -116,14 +116,11 @@ function repairLegacySelection(raw: unknown): AgentRosterSelection | undefined {
   // canonical schema (missing `agentKeys`) nor the strict legacy schema
   // (rejects `kind`) accepts. Drop the discriminant before parsing so both
   // the pure and hybrid legacy shapes repair to the same canonical value.
-  const candidate =
-    raw !== null && typeof raw === 'object' && 'kind' in raw
-      ? Object.fromEntries(
-          Object.entries(raw as Record<string, unknown>).filter(
-            ([key]) => key !== 'kind',
-          ),
-        )
-      : raw;
+  let candidate: unknown = raw;
+  if (raw !== null && typeof raw === 'object' && 'kind' in raw) {
+    const { kind: _ignored, ...rest } = raw as Record<string, unknown>;
+    candidate = rest;
+  }
   const legacy = AgentDelegationScopeLegacySchema.safeParse(candidate);
   if (!legacy.success) return undefined;
   return {

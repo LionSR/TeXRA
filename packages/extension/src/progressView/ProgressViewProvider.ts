@@ -75,6 +75,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   public static readonly viewType = 'texra.progress';
   private static _instance: ProgressViewProvider | undefined;
 
+  /** Packaged extension root, for host-bundled assets such as the trace viewer. */
+  get extensionPath(): string {
+    return this.context.extensionPath;
+  }
+
   public readonly backend: ProgressBackend;
   public readonly toolEditApprovals: ToolEditApprovalController;
   public readonly state: ProgressBackend['state'];
@@ -362,11 +367,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     );
   }
 
-  public async setActiveStream(
+  public setActiveStream(
     streamId: StreamTabId | '',
     requestId?: string,
   ): Promise<void> {
-    await this.backend.activateStream(streamId, requestId);
+    return this.backend.activateStream(streamId, requestId);
   }
 
   private reportTranscriptLoadError(

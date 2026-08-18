@@ -1718,6 +1718,85 @@ describe('CLI conversation transcript', () => {
       }),
     ).toBe('subagent: search · parent: main · model: Kimi K2.6 (Thinking)');
 
+    const WORKFLOW = 'workflow-stream' as StreamTabId;
+    const TASK = 'task-stream' as StreamTabId;
+    const workflowStreams = new Map<StreamTabId, StreamSlice>([
+      [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [], { model: 'deepseekT' })],
+      [
+        WORKFLOW,
+        sliceWithEntries(
+          WORKFLOW,
+          [
+            {
+              id: 'phase-1',
+              role: 'phase',
+              text: 'Survey',
+              finalized: true,
+              phaseLabel: 'Survey',
+              phaseIndex: 0,
+              phaseTotal: 1,
+            },
+          ],
+          {
+            category: AgentCategory.Workflow,
+            identity: { kind: 'multiAgentWorkflow', workflowName: 'survey' },
+            model: 'kimi26T',
+          },
+        ),
+      ],
+      [
+        TASK,
+        sliceWithEntries(TASK, [entry('a1', 'assistant', 'ok', true)], {
+          model: 'kimi26T',
+        }),
+      ],
+    ]);
+    const workflowChildren = new Map([
+      ...buildChildStreamEntries({
+        parentStreamId: ROOT_STREAM,
+        activeOnly: [
+          {
+            executionId: 'ei_wf',
+            agentName: 'survey',
+            identity: {
+              kind: 'multiAgentWorkflow' as const,
+              workflowName: 'survey',
+            },
+            childStreamId: WORKFLOW,
+            status: STREAM_PHASE.RUNNING,
+          },
+        ],
+      }),
+      ...buildChildStreamEntries({
+        parentStreamId: WORKFLOW,
+        activeOnly: [
+          {
+            executionId: 'ei_task',
+            agentName: 'Agent runtime + its tests',
+            identity: {
+              kind: 'agent' as const,
+              agent: 'Agent runtime + its tests',
+            },
+            childStreamId: TASK,
+            status: STREAM_PHASE.RUNNING,
+          },
+        ],
+      }),
+    ]);
+    expect(
+      sessionHeaderIdentityLine(SESSION_META, {
+        childStreamEntries: workflowChildren,
+        parentStream: new Map([
+          [WORKFLOW, ROOT_STREAM],
+          [TASK, WORKFLOW],
+        ]),
+        streamId: TASK,
+        streams: workflowStreams,
+      }),
+    ).toBe(
+      'subagent: Agent runtime + its tests · Survey (1/1) · parent: survey · model: Kimi K2.6 (Thinking)',
+    );
+
     expect(
       buildStaticTranscriptItems({
         scrollbackStreamId: CHILD,

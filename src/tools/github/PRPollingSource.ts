@@ -578,21 +578,20 @@ export class PRPollingSource extends PollingSourceBase<
       // See `ciTerminalStatus` for the gating rationale (empty/partial run
       // sets, page-shift safety).
       const { complete, passed } = ciTerminalStatus(
-        state.currentShaState?.sha,
+        headSha,
         runs,
         checksRes.data.total_count,
       );
-      if (complete && state.currentShaState?.sha) {
-        const headSha = state.currentShaState.sha;
-        if (!state.currentShaState.ciComplete) {
-          state.currentShaState.ciComplete = true;
+      if (complete && currentShaState && headSha) {
+        if (!currentShaState.ciComplete) {
+          currentShaState.ciComplete = true;
           this.emit(
             state,
             formatCIComplete(state.slug, pr.pullNumber, headSha, runs),
           );
         }
-        if (!state.currentShaState.ciPassed && passed) {
-          state.currentShaState.ciPassed = true;
+        if (!currentShaState.ciPassed && passed) {
+          currentShaState.ciPassed = true;
           this.emit(
             state,
             formatCIPassed(state.slug, pr.pullNumber, headSha, runs),

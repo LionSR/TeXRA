@@ -32,11 +32,6 @@ interface ServerSideKeyLogger {
   info(message: string, options?: { data?: unknown }): void;
 }
 
-const NOOP_SERVER_SIDE_KEY_LOGGER: ServerSideKeyLogger = {
-  error: () => undefined,
-  info: () => undefined,
-};
-
 /**
  * When the last access fetch was anonymous (dead session), the authenticated
  * cache gate discards it and every model-dispatch call retries the full relay
@@ -142,7 +137,7 @@ export class ServerSideKeyService {
     private readonly baseUrl: string,
     private readonly tierService: TierService,
     private readonly globalState: StateStore | null = null,
-    private readonly logger: ServerSideKeyLogger = NOOP_SERVER_SIDE_KEY_LOGGER,
+    private readonly logger?: ServerSideKeyLogger,
     private readonly notifyIncludedModelAccessChanged: (
       enabled: boolean,
     ) => void = () => {},
@@ -151,9 +146,11 @@ export class ServerSideKeyService {
     // nor surfaced in any settings UI, so included (relay) access starts off
     // rather than silently routing that process's model traffic through
     // TeXRA's servers. Only a host that owns state can opt in.
-    this.useIncludedModelAccess = this.globalState
-      ? (this.globalState.get<boolean>(USE_INCLUDED_ACCESS_KEY, true) ?? true)
-      : false;
+    // `?? true` normalizes a hand-edited persisted `null`, which `get` casts
+    // through rather than coercing; without it, access silently flips off.
+    this.useIncludedModelAccess =
+      this.globalState !== null &&
+      (this.globalState.get<boolean>(USE_INCLUDED_ACCESS_KEY, true) ?? true);
   }
 
   private hasFullAccess(): boolean {
@@ -218,7 +215,7 @@ export class ServerSideKeyService {
       try {
         this.notifyIncludedModelAccessChanged(value);
       } catch (error) {
-        this.logger.error(`Event listener failed: ${toErrorMessage(error)}`);
+        this.logger?.error(`Event listener failed: ${toErrorMessage(error)}`);
       }
     }
   }
@@ -240,15 +237,6 @@ export class ServerSideKeyService {
     return this.tierService.getProviders().includes(provider);
   }
 
-  private isAccessCacheValid(): boolean {
-    const cachedAt = this.access?.cachedAt ?? null;
-    return (
-      this.accessFetchPromise !== null &&
-      cachedAt !== null &&
-      Date.now() - cachedAt < SERVER_SIDE_CACHE_TTL_MS
-    );
-  }
-
   /**
    * Compute the account access status without changing cached service state.
    * The calling fetch commits this result only if it is still the most recent
@@ -265,7 +253,7 @@ export class ServerSideKeyService {
     } catch (error) {
       // Denied by error (auth/network failure), not by policy — log so the two
       // are distinguishable.
-      this.logger.error(
+      this.logger?.error(
         `Access check failed, treating as denied: ${toErrorMessage(error)}`,
       );
       return { hasAccess: false, userTier: null };
@@ -283,15 +271,17 @@ export class ServerSideKeyService {
     }
 
     const cached = this.access;
+    const existingFetch = this.accessFetchPromise;
 
     // Authenticated cache: full TTL, plus the access/tier-config gate.
     if (
-      this.isAccessCacheValid() &&
-      cached !== null &&
-      cached.authenticated &&
+      existingFetch &&
+      cached?.authenticated &&
+      cached.cachedAt !== null &&
+      Date.now() - cached.cachedAt < SERVER_SIDE_CACHE_TTL_MS &&
       (this.hasFullAccess() || this.tierService.getConfigSync() !== null)
     ) {
-      return this.accessFetchPromise!;
+      return existingFetch;
     }
 
     // Anonymous-fetch backoff: when the session is dead AND access was
@@ -305,14 +295,14 @@ export class ServerSideKeyService {
     // missing piece is the relay auth token, which may be available on the
     // next attempt — those are allowed to retry.
     if (
-      this.accessFetchPromise !== null &&
-      cached !== null &&
-      cached.cachedAt !== null &&
+      existingFetch &&
+      cached &&
       !cached.authenticated &&
       !cached.granted &&
+      cached.cachedAt !== null &&
       Date.now() - cached.cachedAt < ANONYMOUS_FETCH_BACKOFF_MS
     ) {
-      return this.accessFetchPromise;
+      return existingFetch;
     }
 
     // Start the fetch and store the promise synchronously so overlapping
@@ -334,10 +324,10 @@ export class ServerSideKeyService {
       let accessGranted = accessStatus.hasAccess && providers.length > 0;
 
       if (this.tierService.isAccessExpired()) {
-        this.logger.info('User access has expired');
+        this.logger?.info('User access has expired');
         accessGranted = false;
       } else if (!hasFullAccess && tierConfig === null) {
-        this.logger.info(
+        this.logger?.info(
           'Tier config unavailable for non-Ultra user, denying access',
         );
         accessGranted = false;
@@ -360,8 +350,7 @@ export class ServerSideKeyService {
         };
       }
 
-      if (!isLatest) return accessGranted;
-      if (!accessGranted) return false;
+      if (!isLatest || !accessGranted) return accessGranted;
 
       // Auto-flip useIncludedModelAccess to false when the user's
       // monthly relay quota is exhausted. The toggle change is visible
@@ -374,7 +363,7 @@ export class ServerSideKeyService {
         this.tierService.isQuotaExceeded()
       ) {
         this.quotaFlipApplied = true;
-        this.logger.info(
+        this.logger?.info(
           'Relay quota exhausted; switching useIncludedModelAccess off',
         );
         // Await so the persisted toggle state, the cleared cache, and

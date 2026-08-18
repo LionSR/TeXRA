@@ -45,9 +45,8 @@ export function createTuiViewportController(inkRef: {
         queueMicrotask(() => {
           // Defensive only: a future caller whose instance never mounts must
           // not invalidate again, or it would re-enter this branch forever.
-          if (inkRef.current !== undefined) {
-            invalidateStaticTranscriptForRepaint();
-          }
+          if (inkRef.current === undefined) return;
+          invalidateStaticTranscriptForRepaint();
         });
         return;
       }

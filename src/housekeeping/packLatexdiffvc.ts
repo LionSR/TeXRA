@@ -10,21 +10,13 @@ const log = createLog(CHANNEL);
 
 export type LatexdiffPackResult =
   | {
-      status: 'no-files';
-      inputFile: string;
-    }
-  | {
-      status: 'cleaned';
+      status: 'no-files' | 'cleaned' | 'processed';
       inputFile: string;
     }
   | {
       status: 'packed';
       inputFile: string;
       outputFolder: string;
-    }
-  | {
-      status: 'processed';
-      inputFile: string;
     };
 
 export async function runPackLatexdiffvc(
@@ -59,31 +51,32 @@ export async function runPackLatexdiffvc(
     return { status: 'cleaned', inputFile };
   }
 
-  const now = generateTimestamp();
+  // Only temp files matched: delete them and report nothing packed.
+  if (mainFiles.size === 0) {
+    for (const file of tempFiles) {
+      await WorkspaceFS.delete(file);
+    }
+    return { status: 'processed', inputFile };
+  }
+
   const outputFolder = path.join(
     inputDir,
     'Diffs',
-    `${now}_${baseName}_${commitHash}`,
+    `${generateTimestamp()}_${baseName}_${commitHash}`,
   );
 
-  if (mainFiles.size > 0) {
-    await WorkspaceFS.createDir(outputFolder);
-    for (const file of mainFiles) {
-      await WorkspaceFS.rename(
-        file,
-        path.join(outputFolder, path.basename(file)),
-      );
-    }
+  await WorkspaceFS.createDir(outputFolder);
+  for (const file of mainFiles) {
+    await WorkspaceFS.rename(
+      file,
+      path.join(outputFolder, path.basename(file)),
+    );
   }
 
   for (const file of tempFiles) {
     await WorkspaceFS.delete(file);
   }
 
-  if (mainFiles.size > 0) {
-    log.info(`Files packed into ${outputFolder}`);
-    return { status: 'packed', inputFile, outputFolder };
-  }
-
-  return { status: 'processed', inputFile };
+  log.info(`Files packed into ${outputFolder}`);
+  return { status: 'packed', inputFile, outputFolder };
 }

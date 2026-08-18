@@ -75,7 +75,7 @@ export function getValidatedConfig<T>(
   if (result.success) return result.data;
   // Warn only when the user explicitly set the value (global, workspace, or
   // workspace folder); an unset setting failing the schema is normal.
-  if (configProvider()?.isExplicitlySet(path)) {
+  if (configProvider().isExplicitlySet(path)) {
     log.warn(
       `Ignoring invalid value for setting "${path}": ${toErrorMessage(result.error)}`,
     );

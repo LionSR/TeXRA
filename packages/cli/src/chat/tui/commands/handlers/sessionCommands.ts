@@ -108,34 +108,33 @@ export async function showCliSessionStatus(
   const activeStreamId = activeStreamIdSignal.get();
   const streamSlices = streams.get();
   const slice = activeStreamId ? streamSlices.get(activeStreamId) : undefined;
+  const childEntries = childStreamEntries.get();
   const directActiveChildren = activeStreamId
-    ? activeSubagentsFor(activeStreamId, childStreamEntries.get(), streamSlices)
+    ? activeSubagentsFor(activeStreamId, childEntries, streamSlices)
     : [];
-  const workflowStreamId =
-    activeStreamId && directActiveChildren.length === 0
-      ? activeStreamParentOrSelfId({
-          activeStreamId,
-          parentStream: parentStream.get(),
-        })
-      : activeStreamId;
   let workflowChildren = directActiveChildren;
-  if (workflowStreamId !== activeStreamId) {
-    workflowChildren = workflowStreamId
-      ? activeSubagentsFor(
-          workflowStreamId,
-          childStreamEntries.get(),
-          streamSlices,
-        )
-      : [];
+  if (activeStreamId && directActiveChildren.length === 0) {
+    const parentOrSelfStreamId = activeStreamParentOrSelfId({
+      activeStreamId,
+      parentStream: parentStream.get(),
+    });
+    workflowChildren = activeSubagentsFor(
+      parentOrSelfStreamId,
+      childEntries,
+      streamSlices,
+    );
   }
   const activeChildSessions = workflowChildren.filter((child) =>
     isActivePhase(child.status),
   ).length;
   // Use root-session access facts only before any stream exists.
   const model = slice?.model ?? (meta.model || context.initialModel);
-  const subscriptionActive = await isCodexSubscriptionActive(model);
-  const grokSubscriptionActive = await isXaiSubscriptionActive(model);
-  const kimiCodeActive = await isKimiCodeSubscriptionActive(model);
+  const [subscriptionActive, grokSubscriptionActive, kimiCodeActive] =
+    await Promise.all([
+      isCodexSubscriptionActive(model),
+      isXaiSubscriptionActive(model),
+      isKimiCodeSubscriptionActive(model),
+    ]);
   appendLocalAssistantTranscript(
     formatCliSessionStatus({
       agent: meta.agent || context.initialAgent,

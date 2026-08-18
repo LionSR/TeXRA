@@ -160,6 +160,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   DIFF_STREAM: 'diffStream',
   PACK_STREAM: 'packStream',
   RESTORE_STATE: 'restoreState',
+  EXPORT_TRANSCRIPT: 'exportTranscript',
   SEND_FOLLOW_UP: 'sendFollowUp',
   POLISH_FOLLOW_UP: 'polishFollowUp',
   UPDATE_FOLLOW_UP_TEXT: 'updateFollowUpText',

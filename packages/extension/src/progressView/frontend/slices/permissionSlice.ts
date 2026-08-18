@@ -56,13 +56,13 @@ function upsertProposalPermission(
       p.kind === PERMISSION_KIND.PROPOSAL &&
       p.data.proposalId === permission.data.proposalId,
   );
-  if (idx >= 0) {
-    const updated = [...permissions];
-    updated[idx] = permission;
-    permissions$.set(updated);
-  } else {
+  if (idx < 0) {
     permissions$.set([permission, ...permissions]);
+    return;
   }
+  const updated = [...permissions];
+  updated[idx] = permission;
+  permissions$.set(updated);
 }
 
 export function removePrompt(

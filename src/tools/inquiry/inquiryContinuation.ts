@@ -123,6 +123,19 @@ async function emitInquiryThreadUpdate(
   });
 }
 
+/** Archive a thread that has nothing to continue: emit the summary update. */
+async function archiveAsParentFinished(
+  threadId: InquiryThreadId,
+  session?: SessionHandle,
+): Promise<InjectionOutcome> {
+  await emitInquiryThreadUpdate(
+    threadId,
+    { resumeOutcome: 'parent_finished' },
+    session,
+  );
+  return 'archived';
+}
+
 function mapSubmissionToInquiryOutcome(
   result: SubmitFollowUpResult,
 ): InjectionOutcome {
@@ -152,12 +165,7 @@ async function deliverContinuation(params: {
     logger.warn(
       `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} has no session.`,
     );
-    await emitInquiryThreadUpdate(
-      params.threadId,
-      { resumeOutcome: 'parent_finished' },
-      params.session,
-    );
-    return 'archived';
+    return archiveAsParentFinished(params.threadId, params.session);
   }
 
   const outcome = mapSubmissionToInquiryOutcome(result);
@@ -195,23 +203,11 @@ async function injectContinuation(
     logger.warn(
       `Inquiry continuation for ${threadId}: manifest has no turns; archiving.`,
     );
-    await emitInquiryThreadUpdate(
-      threadId,
-      { resumeOutcome: 'parent_finished' },
-      session,
-    );
-    return 'archived';
+    return archiveAsParentFinished(threadId, session);
   }
   if (event === 'answered' && lastTurn.kind !== 'answered') return 'archived';
   if (manifest.parentStreamId == null) {
-    await emitInquiryThreadUpdate(
-      threadId,
-      {
-        resumeOutcome: 'parent_finished',
-      },
-      session,
-    );
-    return 'archived';
+    return archiveAsParentFinished(threadId, session);
   }
 
   const stillOpen = await listThreadsByStatus({

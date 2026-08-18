@@ -431,9 +431,9 @@ export async function runChat(
   };
 
   const resetSessionForClear = (): void => {
-    const activeStreamId = session.streamId ?? activeStreamIdSignal.get();
-    const activeStatus = activeStreamId
-      ? streamsSignal.get().get(activeStreamId)?.status
+    const currentStreamId = session.streamId ?? activeStreamIdSignal.get();
+    const activeStatus = currentStreamId
+      ? streamsSignal.get().get(currentStreamId)?.status
       : undefined;
     const isRunPending = chatTuiRunPending(session);
 

@@ -41,7 +41,7 @@ function readStoredEnabledModels(): readonly string[] | undefined {
 /** Models currently shown in pickers (never empty — falls back to defaults). */
 export function getCliEnabledModels(): readonly string[] {
   const enabled = readStoredEnabledModels();
-  return enabled && enabled.length > 0 ? enabled : DEFAULT_MODELS;
+  return enabled?.length ? enabled : DEFAULT_MODELS;
 }
 
 function modelLabel(id: string): string {

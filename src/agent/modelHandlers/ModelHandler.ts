@@ -1227,17 +1227,15 @@ export abstract class ModelHandler<
   createResponse(
     options: CreateResponseOptions<M, C>,
   ): Promise<CreateResponseResult<Resp, M>> {
-    let credentialRoute: ModelCredentialRoute | undefined;
-    if (typeof options.client === 'object' && options.client !== null) {
-      credentialRoute = this.clientWireIdentities.get(options.client)?.route;
-    }
+    const identity =
+      typeof options.client === 'object' && options.client !== null
+        ? this.clientWireIdentities.get(options.client)
+        : undefined;
+    const credentialRoute = identity?.route;
     return this.withCreateResponseGuard(async () => {
       this.activeAttemptCredentialRoute = credentialRoute;
       this.lastAttemptCredentialRoute = credentialRoute;
-      this.lastAttemptUsageRoute =
-        typeof options.client === 'object' && options.client !== null
-          ? this.clientWireIdentities.get(options.client)?.usageRoute
-          : undefined;
+      this.lastAttemptUsageRoute = identity?.usageRoute;
       try {
         return await this.createResponseImpl(options);
       } catch (err) {

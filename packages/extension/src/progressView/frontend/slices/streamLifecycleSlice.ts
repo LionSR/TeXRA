@@ -162,7 +162,7 @@ export const streamLifecycleHandlers = {
     );
     if (
       nextActiveStreamId === prev.activeStreamId &&
-      prev.pendingStreamSelection === null
+      !prev.pendingStreamSelection
     )
       return;
     appState.set(

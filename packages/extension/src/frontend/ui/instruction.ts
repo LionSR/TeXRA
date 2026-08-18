@@ -48,6 +48,7 @@ export async function showInstructionWithSuppress(
   const prompt = vscode.window.showInformationMessage(message, ...buttons);
 
   if (options.deferDismissal) {
+    // `showInformationMessage` returns a Thenable, which has no `.catch`.
     void Promise.resolve(prompt)
       .then((choice) =>
         handleInstructionChoice(stateKey, showSuppress, actions, choice),

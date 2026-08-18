@@ -1,5 +1,3 @@
-import { differenceInMinutes } from 'date-fns';
-
 import type {
   SubscriptionUsageSnapshot,
   SubscriptionUsageWindow,
@@ -60,8 +58,7 @@ export function formatSubscriptionUsageUpdated(
 ): string {
   const age = Math.max(0, now - fetchedAt);
   if (age >= STALE_AFTER_MS) {
-    const minutes = differenceInMinutes(now, fetchedAt);
-    return `stale · updated ${minutes}m ago`;
+    return `stale · updated ${Math.floor(age / 60_000)}m ago`;
   }
   return 'updated just now';
 }

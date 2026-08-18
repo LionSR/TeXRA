@@ -495,27 +495,15 @@ export function buildOpenAIWebSearchResult(
       : 'in_progress';
 
   const action = searchItem.action;
-
-  // Handle case when action is not present (default API response)
-  if (!action) {
-    return {
-      query: '',
-      results: [],
-      provider: 'openai',
-      callId: searchItem.id,
-      status,
-    };
-  }
-
-  // Handle case when action is present (include sources was used)
-  const entries: WebSearchResultEntry[] = (action.sources ?? []).map((s) => ({
-    url: s.url,
-    title: '', // OpenAI sources don't include titles in basic response
-    domain: extractDomain(s.url),
-  }));
+  const entries: WebSearchResultEntry[] =
+    action?.sources?.map((s) => ({
+      url: s.url,
+      title: '', // OpenAI sources don't include titles in basic response
+      domain: extractDomain(s.url),
+    })) ?? [];
 
   return {
-    query: action.query ?? '',
+    query: action?.query ?? '',
     results: entries,
     provider: 'openai',
     callId: searchItem.id,
@@ -531,8 +519,7 @@ export function buildOpenAIWebSearchResult(
 export function hasOpenAIWebSearchData(
   item: ResponseFunctionWebSearch,
 ): boolean {
-  const searchItem = item as ResponseFunctionWebSearchWithAction;
-  return Boolean(searchItem.action?.query);
+  return Boolean((item as ResponseFunctionWebSearchWithAction).action?.query);
 }
 
 /**

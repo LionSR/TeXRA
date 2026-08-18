@@ -84,18 +84,16 @@ export function createRunTrace(
   const trace = new TraceEmitter();
   let unsubscribeChannel: (() => void) | undefined;
   let transcript: ReturnType<typeof attachTranscriptRecorder>;
+  const toolOutputDir = `${WORKSPACE_STORAGE_LAYOUT.runs}/${ownerKey}/toolOutput`;
   try {
     unsubscribeChannel = attachChannelSubscriber(trace, {
       channel: streamId,
       isAgent: true,
     });
     transcript = attachTranscriptRecorder(trace, writer, {
-      pathFor: (entryId) =>
-        `${WORKSPACE_STORAGE_LAYOUT.runs}/${ownerKey}/toolOutput/${entryId}.txt`,
+      pathFor: (entryId) => `${toolOutputDir}/${entryId}.txt`,
       write: async (path, content) => {
-        await StorageFS.ensureDir(
-          `${WORKSPACE_STORAGE_LAYOUT.runs}/${ownerKey}/toolOutput`,
-        );
+        await StorageFS.ensureDir(toolOutputDir);
         await StorageFS.writeAtomic(path, content);
       },
     });

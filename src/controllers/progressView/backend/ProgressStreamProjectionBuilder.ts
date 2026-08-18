@@ -136,10 +136,10 @@ export class ProgressStreamProjectionBuilder {
 
   private metadataFor(
     streamInfo: StreamTabInfo,
-    streamStates?: Map<StreamTabId, StreamPhaseState>,
+    streamStates: Map<StreamTabId, StreamPhaseState>,
   ): StreamMetadata {
     const current = this.state.getStreamState(streamInfo.name);
-    const status = streamStates?.get(streamInfo.name);
+    const status = streamStates.get(streamInfo.name);
     return buildStreamMetadata({
       category: streamInfo.agentCategory,
       status: status?.phase,

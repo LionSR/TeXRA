@@ -2,20 +2,17 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 
-/**
- * Toolbar actions the header carries out itself instead of posting to the
- * backend. A clipboard write has no backend leg, so such a button declares
- * `localAction` in place of `command` rather than inventing a round trip.
- */
-type ProgressToolbarLocalAction = 'copyRunContext';
-
 export interface ProgressToolbarButton {
   id: string;
   icon: TeXRAIconName;
   /** Backend command. Omitted exactly when `localAction` is set. */
   command?: string;
-  /** Frontend-only action. Omitted exactly when `command` is set. */
-  localAction?: ProgressToolbarLocalAction;
+  /**
+   * Frontend-only action the header carries out itself instead of posting to
+   * the backend. A clipboard write has no backend leg, so such a button
+   * declares `localAction` rather than inventing a round trip.
+   */
+  localAction?: 'copyRunContext';
   title: string;
   titleActive?: string;
   /**
@@ -53,6 +50,7 @@ export const ELEMENT_IDS = {
   RUN_NEW_BTN: 'runNewBtn',
   RESUME_BTN: 'resumeBtn',
   RESTORE_STATE_BTN: 'restoreStateBtn',
+  EXPORT_TRANSCRIPT_BTN: 'exportTranscriptBtn',
   DIFF_STREAM_BTN: 'diffStreamBtn',
   CLEAN_STREAM_BTN: 'cleanStreamBtn',
   PACK_STREAM_BTN: 'packStreamBtn',
@@ -104,6 +102,15 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   disabled: true,
 });
 
+const EXPORT_TRANSCRIPT_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
+  icon: 'file-export',
+  command: PROGRESS_VIEW_COMMANDS.EXPORT_TRANSCRIPT,
+  title: 'Export this conversation as Markdown, HTML, or PDF',
+  className: 'export-button',
+  disabled: true,
+});
+
 const COPY_RUN_CONTEXT_BUTTON = Object.freeze({
   id: ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
   icon: 'copy',
@@ -134,6 +141,7 @@ const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
   },
   RESTORE_STATE_BUTTON,
   OPEN_TASK_STORAGE_BUTTON,
+  EXPORT_TRANSCRIPT_BUTTON,
   COPY_RUN_CONTEXT_BUTTON,
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
@@ -202,6 +210,7 @@ const TOOL_USE_TOOLBAR: readonly ProgressToolbarButton[] = [
   COMPACT_RESPONSE_BUTTON,
   RESTORE_STATE_BUTTON,
   OPEN_TASK_STORAGE_BUTTON,
+  EXPORT_TRANSCRIPT_BUTTON,
 ];
 
 export const TOOLBAR_BUTTONS = {
@@ -217,4 +226,5 @@ export const TOOLBAR_BUTTONS = {
 export const NEUTRAL_TOOLBAR: readonly ProgressToolbarButton[] = [
   STOP_STREAM_BUTTON,
   OPEN_TASK_STORAGE_BUTTON,
+  EXPORT_TRANSCRIPT_BUTTON,
 ];

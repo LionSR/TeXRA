@@ -1,4 +1,3 @@
-// Local imports
 import type { PromptHost } from '@hosts/uiHosts';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';

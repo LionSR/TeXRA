@@ -310,7 +310,9 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write('\t');
-      await waitFor(() => stdout.output.includes('workflow · 0/2 done'));
+      await waitFor(() =>
+        stdout.output.includes('workflow · Map (1/1) · 0/2 done'),
+      );
       stdin.write('\r');
       await waitFor(() => stdout.output.includes('Inspect · Running'));
       stdin.write('\r');
@@ -860,7 +862,7 @@ describe('App foreground Escape ownership', () => {
       const rootRows = visibleTranscriptRows();
 
       focusStream(CHILD);
-      await waitFor(() => currentFrame(stdout).includes('Esc back'));
+      await waitFor(() => currentFrame(stdout).includes('Esc parent'));
       const supportedChildRows = visibleTranscriptRows();
       expect(rootRows).toBe(2);
       expect(supportedChildRows).toBe(7);
@@ -936,21 +938,21 @@ describe('App foreground Escape ownership', () => {
     try {
       await waitFor(() => visibleTranscriptRows() === 10);
       expect(visibleTranscriptRows()).toBe(10);
-      expect(currentFrame(stdout)).not.toContain('Choosing a session');
+      expect(currentFrame(stdout)).not.toContain('Session list');
 
       stdin.write('\t');
       await waitFor(
         () =>
-          currentFrame(stdout).includes('Choosing a session') &&
+          currentFrame(stdout).includes('Session list') &&
           visibleTranscriptRows() === 4,
       );
-      expect(currentFrame(stdout)).toContain('Choosing a session');
+      expect(currentFrame(stdout)).toContain('Session list');
       expect(visibleTranscriptRows()).toBe(4);
 
       stdin.write('\t');
       await waitFor(() => visibleTranscriptRows() === 10);
       expect(visibleTranscriptRows()).toBe(10);
-      expect(currentFrame(stdout)).not.toContain('Choosing a session');
+      expect(currentFrame(stdout)).not.toContain('Session list');
     } finally {
       instance.unmount();
     }
@@ -1054,11 +1056,11 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write('\t');
-      await waitFor(() => stdout.output.includes('Choosing a session'));
+      await waitFor(() => stdout.output.includes('Session list'));
       const beforeListCancel = stdout.output.length;
       stdin.write(ESC);
       await waitFor(() =>
-        stdout.output.slice(beforeListCancel).includes('Esc back'),
+        stdout.output.slice(beforeListCancel).includes('Esc parent'),
       );
 
       expect(activeStreamId.get()).toBe(CHILD);
@@ -1067,12 +1069,12 @@ describe('App foreground Escape ownership', () => {
       const beforeListFocus = stdout.output.length;
       stdin.write('\t');
       await waitFor(() =>
-        stdout.output.slice(beforeListFocus).includes('Choosing a session'),
+        stdout.output.slice(beforeListFocus).includes('Session list'),
       );
       const beforeTabReturn = stdout.output.length;
       stdin.write('\t');
       await waitFor(() =>
-        stdout.output.slice(beforeTabReturn).includes('Esc back'),
+        stdout.output.slice(beforeTabReturn).includes('Esc parent'),
       );
     } finally {
       instance.unmount();
@@ -1090,7 +1092,7 @@ describe('App foreground Escape ownership', () => {
       }
       await sleep(30);
 
-      expect(stdout.output).not.toContain('Choosing a session');
+      expect(stdout.output).not.toContain('Session list');
       expect(activeStreamId.get()).toBe(ROOT);
     } finally {
       instance.unmount();
@@ -1139,7 +1141,7 @@ describe('App foreground Escape ownership', () => {
       stdin.write(ARROW_KEYS.Down);
       await waitFor(() => stdout.output.includes('latest prompt'));
 
-      expect(stdout.output).not.toContain('Choosing a session');
+      expect(stdout.output).not.toContain('Session list');
     } finally {
       instance.unmount();
     }
@@ -1176,7 +1178,7 @@ describe('App approval surface ownership', () => {
 
     try {
       stdin.write('\t');
-      await waitFor(() => stdout.output.includes('Choosing a session'));
+      await waitFor(() => stdout.output.includes('Session list'));
       stdin.write(ARROW_KEYS.Down);
       await waitFor(() =>
         stripAnsi(stdout.output)

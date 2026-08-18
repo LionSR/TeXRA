@@ -24,7 +24,8 @@ function getSafeDocumentPathParts(source: string): {
 
   return {
     dir,
-    name: path.basename(parsed.name) || 'extracted',
+    // `parsed.name` never contains a separator (parse already stripped it).
+    name: parsed.name || 'extracted',
     ext: parsed.ext || '.tex',
   };
 }
@@ -39,9 +40,10 @@ function getSafeDocumentPathParts(source: string): {
  */
 export function getSafeDocumentRelativePath(source: string): string {
   const safe = getSafeDocumentPathParts(source);
-  // Document-relative paths use a forward-slash convention regardless of host
-  // platform (they are workflow names, not host paths), so normalize the join.
-  return normalizeFilePath(path.join(safe.dir, `${safe.name}${safe.ext}`));
+  // `safe.dir` is already forward-slash separated and separator-free names
+  // make posix.join portable regardless of host platform (these are workflow
+  // names, not host paths).
+  return path.posix.join(safe.dir, `${safe.name}${safe.ext}`);
 }
 
 /**
