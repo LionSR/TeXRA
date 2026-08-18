@@ -90,23 +90,4 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
     expect(provider.isExplicitlySet('files.exclude')).toBe(false);
     expect(workspaceStore.snapshot()).toEqual({});
   });
-
-  it('canonicalizes watcher keys supplied through the configuration API', async () => {
-    const { provider } = await createProvider();
-    let prefixedChanges = 0;
-    let unprefixedChanges = 0;
-
-    provider.watch('texra.files.exclude', () => {
-      prefixedChanges += 1;
-    });
-    provider.watch('files.exclude', () => {
-      unprefixedChanges += 1;
-    });
-
-    await provider.update('files.exclude', ['node_modules']);
-    await provider.update('texra.files.exclude', ['dist']);
-
-    expect(prefixedChanges).toBe(2);
-    expect(unprefixedChanges).toBe(2);
-  });
 });

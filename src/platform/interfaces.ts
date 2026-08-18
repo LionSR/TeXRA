@@ -25,10 +25,8 @@ export interface Disposable {
 export type ConfigTarget = 'global' | 'workspace';
 
 export interface ConfigInspection<T = unknown> {
-  defaultValue?: T;
   globalValue?: T;
   workspaceValue?: T;
-  workspaceFolderValue?: T;
 }
 
 /**
@@ -39,10 +37,6 @@ export interface ConfigProvider {
   update<T>(key: string, value: T, target?: ConfigTarget): Promise<void>;
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined;
   isExplicitlySet(key: string): boolean;
-  watch(
-    key: string | readonly string[] | RegExp,
-    listener: () => void,
-  ): Disposable;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,11 +95,6 @@ export interface FileSystemProvider {
   isSymlink(path: string): Promise<boolean>;
   realPath(path: string): Promise<string>;
   readFile(path: string): Promise<Uint8Array>;
-  readFileChunk(
-    path: string,
-    offset: number,
-    length: number,
-  ): Promise<Uint8Array>;
   writeFile(path: string, content: Uint8Array): Promise<void>;
   /**
    * Crash-safe write: stage to a temp file and atomically rename over the

@@ -40,7 +40,6 @@ async function installApprovalSkippingPlatform(): Promise<void> {
     update: async () => {},
     inspect: () => undefined,
     isExplicitlySet: () => false,
-    watch: () => ({ dispose: () => {} }),
   };
   await installPlatform({}, { config: stubConfig });
 }

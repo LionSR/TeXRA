@@ -82,7 +82,6 @@ vi.mock('@frontend/agents/optionsLoader', () => ({
 vi.mock('@frontend/agents/teamOptionsLoader', () => ({
   loadMainViewTeamOptions: vi.fn(),
 }));
-vi.mock('@utils/config/configUtils', () => ({ watchConfig: vi.fn() }));
 
 const { SIDEBAR_VIEWS, getActiveSidebarView, setActiveSidebarView } =
   await import('@common/webview');

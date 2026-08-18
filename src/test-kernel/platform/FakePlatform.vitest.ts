@@ -125,17 +125,12 @@ describe('FakePlatform', () => {
     );
   });
 
-  it('supports fake config updates and watchers', async () => {
+  it('supports fake config updates', async () => {
     const platform = createFakePlatform({
       config: { enabled: true },
     });
-    let changes = 0;
-    const subscription = platform.config.watch('enabled', () => {
-      changes += 1;
-    });
 
     await platform.config.update('enabled', false, 'global');
-    subscription.dispose();
     await platform.config.update('enabled', true, 'global');
 
     assert.equal(platform.config.get('enabled', true), true);
@@ -144,18 +139,12 @@ describe('FakePlatform', () => {
       globalValue: true,
       workspaceValue: undefined,
     });
-    assert.equal(changes, 1);
   });
 
-  it('mirrors texra config aliases and nested watcher matching', async () => {
+  it('mirrors texra config aliases', async () => {
     const platform = createFakePlatform();
-    let changes = 0;
-    const subscription = platform.config.watch('files', () => {
-      changes += 1;
-    });
 
     await platform.config.update('texra.files.exclude', ['node_modules']);
-    subscription.dispose();
     await platform.config.update('texra.files.include', ['src']);
 
     assert.deepEqual(platform.config.get('files.exclude', []), [
@@ -166,7 +155,6 @@ describe('FakePlatform', () => {
       globalValue: undefined,
       workspaceValue: ['node_modules'],
     });
-    assert.equal(changes, 1);
   });
 
   it('writes config aliases to the exact caller key', async () => {
@@ -184,20 +172,6 @@ describe('FakePlatform', () => {
 
     assert.deepEqual(platform.config.get('files.exclude', []), ['dist']);
     assert.equal(platform.config.isExplicitlySet('texra.files.exclude'), true);
-  });
-
-  it('does not notify texra watchers for unprefixed config changes', async () => {
-    const platform = createFakePlatform();
-    let changes = 0;
-
-    platform.config.watch('texra.files', () => {
-      changes += 1;
-    });
-
-    await platform.config.update('files.exclude', ['node_modules']);
-    await platform.config.update('texra.files.include', ['src']);
-
-    assert.equal(changes, 1);
   });
 
   it('supports custom overrides while retaining other fakes', () => {
@@ -238,12 +212,6 @@ describe('FakePlatform', () => {
       assert.equal(
         text(await provider.readFile(resolve('/workspace/docs/a.txt'))),
         'AB',
-      );
-      assert.equal(
-        text(
-          await provider.readFileChunk(resolve('/workspace/docs/a.txt'), 1, 1),
-        ),
-        'B',
       );
       assert.deepEqual(
         sortedEntries(await provider.readDirectory(resolve('/workspace/docs'))),
