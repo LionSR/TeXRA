@@ -8,7 +8,6 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
-import { SETTINGS_TAB } from '@shared/schemas';
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 import type { DesktopShortcutEntry } from '@shared/commands/shortcutPreferences';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
@@ -340,7 +339,7 @@ export function createDesktopCommandPalette({
             size="s"
             @click=${() => {
               close();
-              actions.showSettings(SETTINGS_TAB.SHORTCUTS);
+              actions.showSettings('shortcuts');
             }}
           >
             ${waIcon('code', { slot: 'start' })} Customize shortcuts

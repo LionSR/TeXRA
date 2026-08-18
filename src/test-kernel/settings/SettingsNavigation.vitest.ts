@@ -14,7 +14,8 @@ vi.mock('@shared/hostBridge', () => ({
 import type { SettingsNavGroup } from '@settingsView/frontend/settingsNav';
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { SETTINGS_TAB, SETTINGS_TAB_PANEL_BY_NAME } from '@shared/schemas';
+import { SETTINGS_TAB_PANEL_BY_NAME } from '@shared/schemas';
+import type { SettingsTabPanelName } from '@shared/schemas';
 
 import {
   mountComponent,
@@ -29,12 +30,12 @@ const THIRTY_ONE_DAYS_MS = 31 * 24 * 60 * 60 * 1_000;
 let navGroups: readonly SettingsNavGroup[] = [];
 let settingsState: typeof import('@settingsView/frontend/settingsState');
 
-function setSelectedTabIndex(index: number): void {
-  settingsState.selectedTabIndex.set(index);
+function setSelectedPanel(panel: SettingsTabPanelName): void {
+  settingsState.selectedPanel.set(panel);
 }
 
-function getSelectedTabIndex(): number {
-  return settingsState.selectedTabIndex.get();
+function getSelectedPanel(): SettingsTabPanelName {
+  return settingsState.selectedPanel.get();
 }
 
 function declareAllCommandsSupported(): void {
@@ -42,12 +43,12 @@ function declareAllCommandsSupported(): void {
 }
 
 async function mountSettingsApp(
-  initialTab = SETTINGS_TAB.ACCOUNT,
+  initialTab: SettingsTabPanelName = SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT,
 ): Promise<LitElementLike> {
   const app = document.createElement('settings-app') as LitElementLike;
   app.setAttribute('data-desktop-view', 'settings');
   declareAllCommandsSupported();
-  setSelectedTabIndex(initialTab);
+  setSelectedPanel(initialTab);
   document.body.append(app);
   await app.updateComplete;
   return app;
@@ -99,7 +100,7 @@ describe('hierarchical settings navigation', () => {
   });
 
   beforeEach(() => {
-    setSelectedTabIndex(SETTINGS_TAB.ACCOUNT);
+    setSelectedPanel(SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT);
   });
 
   it('refreshes settings at the UTC monthly quota rollover', async () => {
@@ -179,7 +180,7 @@ describe('hierarchical settings navigation', () => {
       categoryButton(app, group.label).click();
       await app.updateComplete;
 
-      expect(getSelectedTabIndex()).toBe(SETTINGS_TAB[group.entries[0]!.name]);
+      expect(getSelectedPanel()).toBe(group.entries[0]!.panel);
       expect(activePanelLabel(app)).toBe(group.entries[0]!.label);
       expect(
         app.shadowRoot?.querySelectorAll('.settings-page-button'),
@@ -188,14 +189,14 @@ describe('hierarchical settings navigation', () => {
       for (const entry of group.entries) {
         pageButton(app, entry.panel).click();
         await app.updateComplete;
-        expect(getSelectedTabIndex()).toBe(SETTINGS_TAB[entry.name]);
+        expect(getSelectedPanel()).toBe(entry.panel);
         expect(activePanelLabel(app)).toBe(entry.label);
       }
     }
   });
 
-  it('activates the page addressed by a wire index', async () => {
-    const app = await mountSettingsApp(SETTINGS_TAB.LATEX);
+  it('activates the page addressed by a wire panel name', async () => {
+    const app = await mountSettingsApp(SETTINGS_TAB_PANEL_BY_NAME.LATEX);
 
     expect(activePanelLabel(app)).toBe('LaTeX');
     expect(
@@ -211,7 +212,7 @@ describe('hierarchical settings navigation', () => {
 
     for (const group of navGroups) {
       for (const entry of group.entries) {
-        setSelectedTabIndex(SETTINGS_TAB[entry.name]);
+        setSelectedPanel(entry.panel);
         await app.updateComplete;
 
         const header = app.shadowRoot?.querySelector('.settings-page-header');
@@ -240,7 +241,7 @@ describe('hierarchical settings navigation', () => {
     );
     await app.updateComplete;
 
-    expect(getSelectedTabIndex()).toBe(SETTINGS_TAB.MODELS);
+    expect(getSelectedPanel()).toBe(SETTINGS_TAB_PANEL_BY_NAME.MODELS);
     expect(activePanelLabel(app)).toBe('Providers & Models');
     expect(app.shadowRoot?.querySelector('models-tab')).not.toBeNull();
     expect(app.shadowRoot?.querySelector('account-tab')).toBeNull();
@@ -282,7 +283,7 @@ describe('hierarchical settings navigation', () => {
   it('keeps desktop-only shortcuts out of the extension navigation', async () => {
     const app = document.createElement('settings-app') as LitElementLike;
     declareAllCommandsSupported();
-    setSelectedTabIndex(SETTINGS_TAB.SHORTCUTS);
+    setSelectedPanel(SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS);
     document.body.append(app);
     await app.updateComplete;
 

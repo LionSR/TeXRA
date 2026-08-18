@@ -84,7 +84,7 @@ test('launcher screenshot', async ({}, testInfo) => {
 
 test('settings screenshot', async ({}, testInfo) => {
   // Open the Multi-Agent settings page — the most visually rich area.
-  await setSettingsTab(launched, 4, 'multi-agent');
+  await setSettingsTab(launched, 'multi-agent');
   await launched.page.screenshot({
     path: getScreenshotPath(testInfo, 'settings.png'),
     fullPage: false,

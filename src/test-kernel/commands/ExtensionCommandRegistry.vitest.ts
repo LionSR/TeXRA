@@ -9,7 +9,6 @@ import {
   type ExtensionCommandActions,
   type ExtensionRegistryCommandId,
 } from '@commands/extensionCommandHandlers';
-import { SETTINGS_TAB } from '@shared/schemas';
 import {
   commandCatalog,
   type CommandCatalogEntry,
@@ -154,17 +153,13 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
     await expect(dispatch(actions, 'texra.auth.viewProfile')).resolves.toBe(
       true,
     );
-    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
-      SETTINGS_TAB.ACCOUNT,
-    );
+    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith('account');
   });
 
-  it('texra.showMemory passes the memory tab index', async () => {
+  it('texra.showMemory passes the memory panel name', async () => {
     const actions = makeActions();
     await expect(dispatch(actions, 'texra.showMemory')).resolves.toBe(true);
-    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
-      SETTINGS_TAB.MEMORY,
-    );
+    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith('memory');
   });
 
   it('texra.showAgents forwards parsed agent-category sub-tab', async () => {
@@ -173,7 +168,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       dispatch(actions, 'texra.showAgents', 'toolUse'),
     ).resolves.toBe(true);
     expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
-      SETTINGS_TAB.AGENTS,
+      'agents',
       'toolUse',
     );
   });
@@ -182,7 +177,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
     const actions = makeActions();
     await expect(dispatch(actions, 'texra.showAgents')).resolves.toBe(true);
     expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
-      SETTINGS_TAB.AGENTS,
+      'agents',
       undefined,
     );
   });

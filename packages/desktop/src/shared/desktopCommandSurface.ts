@@ -1,16 +1,20 @@
 import type {
   AgentCategory,
   GettingStartedAction,
-  SettingsTab,
+  SettingsTabPanelName,
   StreamTabId,
 } from '@shared/schemas';
-import { SETTINGS_TAB } from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   toElectronAccelerator,
   toPlatformAccelerator,
 } from '@shared/commands/accelerators';
-import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
+import {
+  commandCatalogById,
+  settingsTabByCommand,
+  type CommandId,
+  type SettingsTabCommandId,
+} from '@shared/commands/catalog';
 import {
   dispatchCommandFromRegistry,
   type CommandHandler,
@@ -148,7 +152,7 @@ export interface DesktopCommandMenuEntry {
 export interface DesktopCommandActions {
   showLauncher(): void;
   openWorkbench(kind: DesktopWorkbenchKind): void;
-  showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
+  showSettings(tab?: SettingsTabPanelName, agentSubTab?: AgentCategory): void;
   showStream?(streamId: StreamTabId): void;
   openDesktopDocs(): void;
   openLogFolder(): void;
@@ -163,7 +167,7 @@ export interface DesktopCommandActions {
 
 export interface DesktopSettingsTabMessage {
   command: typeof SETTINGS_VIEW_COMMANDS.SET_TAB;
-  tabIndex: SettingsTab;
+  tab: SettingsTabPanelName;
   agentSubTab?: AgentCategory;
 }
 
@@ -312,14 +316,16 @@ const DESKTOP_COMMAND_HANDLERS = {
   ),
   'texra.showDashboard': action((a) => a.showSettings()),
   'texra.mainView.reset': action((a) => a.resetMainView()),
-  'texra.showMemory': action((a) => a.showSettings(SETTINGS_TAB.MEMORY)),
-  'texra.showModels': action((a) => a.showSettings(SETTINGS_TAB.MODELS)),
-  'texra.showAgents': action((a) => a.showSettings(SETTINGS_TAB.AGENTS)),
-  'texra.showTools': action((a) => a.showSettings(SETTINGS_TAB.TOOLS)),
-  'texra.showMultiAgent': action((a) =>
-    a.showSettings(SETTINGS_TAB.MULTI_AGENT),
-  ),
-  'texra.showGitSettings': action((a) => a.showSettings(SETTINGS_TAB.GIT)),
+  // `texra.show*` rows derived from the catalog's `settingsTab` field
+  // (`settingsTabByCommand`) — same source the extension handler map uses.
+  ...(Object.fromEntries(
+    (
+      Object.entries(settingsTabByCommand) as [
+        SettingsTabCommandId,
+        SettingsTabPanelName,
+      ][]
+    ).map(([id, tab]) => [id, action((a) => a.showSettings(tab))]),
+  ) as Record<SettingsTabCommandId, DesktopCommandHandler>),
   [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: action((a) => a.openLogFolder()),
   [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: action((a) =>
     a.openWorkspaceFolder(),
@@ -363,12 +369,12 @@ function isDesktopLocalCommandId(id: string): id is DesktopLocalCommandId {
 }
 
 export function buildDesktopSettingsTabMessage(
-  tabIndex: SettingsTab,
+  tab: SettingsTabPanelName,
   agentSubTab?: AgentCategory,
 ): DesktopSettingsTabMessage {
   return {
     command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-    tabIndex,
+    tab,
     ...(agentSubTab && { agentSubTab }),
   };
 }
@@ -380,15 +386,15 @@ export function buildDesktopSettingsTabMessage(
  */
 export function postDesktopSettingsView(
   postToRenderer: (message: unknown) => void,
-  tabIndex?: SettingsTab,
+  tab?: SettingsTabPanelName,
   agentSubTab?: AgentCategory,
 ): void {
   postToRenderer({
     command: DESKTOP_SHELL_COMMANDS.OPEN_WORKBENCH,
     kind: 'settings',
   });
-  if (tabIndex == null) return;
-  postToRenderer(buildDesktopSettingsTabMessage(tabIndex, agentSubTab));
+  if (tab == null) return;
+  postToRenderer(buildDesktopSettingsTabMessage(tab, agentSubTab));
 }
 
 export function buildDesktopMainViewResetMessage(): DesktopMainViewResetMessage {
