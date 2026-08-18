@@ -13,7 +13,6 @@ const log = createLog('AgentRegister');
 export async function promptToAddAgentToConfig(
   agentName: string,
   source: AgentSource,
-  autoAdd = false,
   category: 'workflow' | 'toolUse' = 'workflow',
 ): Promise<void> {
   const roster = createWorkspaceAgentRosterController();
@@ -25,7 +24,6 @@ export async function promptToAddAgentToConfig(
   }
 
   const shouldAdd =
-    autoAdd ||
     (await vscode.window.showInformationMessage(
       `Agent "${agentName}" was created or modified. Show it in the agent dropdown?`,
       'Add Agent',

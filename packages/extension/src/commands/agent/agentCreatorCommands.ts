@@ -186,8 +186,8 @@ function buildVSCodeUI(): AgentCreatorUI {
       void vscode.window.showInformationMessage(`Created agent at ${filePath}`);
     },
 
-    async promptAddToConfig(agentName, isEdited, category) {
-      await promptToAddAgentToConfig(agentName, 'custom', isEdited, category);
+    async promptAddToConfig(agentName, category) {
+      await promptToAddAgentToConfig(agentName, 'custom', category);
     },
 
     async openCreatedFile(filePath) {

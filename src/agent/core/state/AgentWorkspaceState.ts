@@ -304,12 +304,6 @@ export class WorkPlanState {
     if (!a || !b) return false;
     return a.objective === b.objective;
   }
-
-  reset(): void {
-    this._todos = [];
-    this._plan = null;
-    this._planSummary = null;
-  }
 }
 
 const AgentWorkspaceSnapshotFieldsSchema = z.object({

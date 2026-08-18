@@ -109,11 +109,7 @@ describe('agent creator orchestration', () => {
       resolve('/agents/editor.yaml'),
       'generated: true',
     );
-    expect(ui.promptAddToConfig).toHaveBeenCalledWith(
-      'editor',
-      false,
-      'workflow',
-    );
+    expect(ui.promptAddToConfig).toHaveBeenCalledWith('editor', 'workflow');
     expect(ui.openCreatedFile).toHaveBeenCalledWith(
       resolve('/agents/editor.yaml'),
     );
@@ -151,11 +147,7 @@ describe('agent creator orchestration', () => {
         ),
       }),
     );
-    expect(ui.promptAddToConfig).toHaveBeenCalledWith(
-      'researcher',
-      false,
-      'toolUse',
-    );
+    expect(ui.promptAddToConfig).toHaveBeenCalledWith('researcher', 'toolUse');
   });
 
   it('stops before description when name selection is cancelled', async () => {

@@ -11,7 +11,6 @@ import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import {
   AgentFileLocationSchema,
-  CompileResultSchema,
   RetryErrorInfoSchema,
   RoundOutputSchema,
 } from '@shared/schemas';
@@ -34,7 +33,6 @@ export const ReflectionFlowStateSchema = z.object({
   conversation: ProviderMessageArraySchema,
   runStateSnapshot: AgentRunStateSnapshotSchema,
 
-  roundStateSnapshots: z.array(ConversationRoundStateSnapshotSchema),
   roundOutputs: z.array(RoundOutputSchema),
 
   continueRounds: z.boolean(),
@@ -45,9 +43,6 @@ export const ReflectionFlowStateSchema = z.object({
 
   /** Provider-message format used by the persisted conversation. */
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
-
-  /** Final LaTeX compile status for the last completed round, when checked. */
-  lastCompileResult: CompileResultSchema.optional(),
 
   /** One-shot repair context injected into the next round's user request. */
   compileFailureContext: z.string().optional(),
