@@ -25,7 +25,12 @@
 import { z } from 'zod';
 
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
-import { StreamStatusSchema } from './stream';
+import {
+  STREAM_STATUS,
+  StreamPhaseSchema,
+  StreamStatusSchema,
+  streamStatusToLifecycleStatus,
+} from './stream';
 import {
   BackendOwnedFieldsSchema,
   RoundKeyedOutputSidecarValueSchemas,
@@ -76,10 +81,31 @@ export const PersistedWorkPlanSchema = z.object({
 // StreamSnapshot — the assembled logical view (durable + log-derived + liveness)
 // ============================================================================
 
+/**
+ * Legacy-inbound member for `status`: archived `trace.json` exports (the §8.3
+ * permanently-fenced boundary — a static exported file stays legacy-shaped
+ * forever) still carry the retired 7-value `StreamStatus` vocabulary.
+ * Normalized once here, at the parse entry point, into the canonical
+ * `StreamPhase` via the same collapse `streamStatusToLifecycleStatus` performs
+ * everywhere else; `ready` has no phase equivalent ("no run recorded") and
+ * normalizes to absent. Downstream code never sees a legacy value.
+ */
+const LegacyStreamStatusAsPhaseSchema = StreamStatusSchema.transform(
+  (status) => {
+    const lifecycle = streamStatusToLifecycleStatus(status);
+    return lifecycle === STREAM_STATUS.READY ? undefined : lifecycle;
+  },
+);
+
 export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
+  /**
+   * Missing on legacy assemblies/exports → current version; a PRESENT wrong
+   * version fails the parse loudly (`.prefault`, not `.catch` — a swallowed
+   * future version would consume unknown-shaped fields as v1).
+   */
   schemaVersion: z
     .literal(STREAM_SNAPSHOT_SCHEMA_VERSION)
-    .catch(STREAM_SNAPSHOT_SCHEMA_VERSION),
+    .prefault(STREAM_SNAPSHOT_SCHEMA_VERSION),
   streamId: StreamTabIdSchema,
 
   // -- Durable display state (persisted in field-scoped files) --------------
@@ -110,7 +136,9 @@ export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
   description: z.string().optional(),
 
   // -- Log-derived (recomputed from the StreamLog on load) ------------------
-  status: StreamStatusSchema.optional(),
+  status: z
+    .union([StreamPhaseSchema, LegacyStreamStatusAsPhaseSchema])
+    .optional(),
   // conversationProgress comes from SharedBackendOwnedFieldsSchema above.
 
   // -- Liveness (NEVER restored as live — clamp on hydrate) -----------------
