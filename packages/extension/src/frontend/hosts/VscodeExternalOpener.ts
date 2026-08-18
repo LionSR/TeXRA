@@ -8,8 +8,4 @@ export class VscodeExternalOpener implements ExternalOpener {
   async openExternal(url: string): Promise<void> {
     await vscode.env.openExternal(vscode.Uri.parse(url));
   }
-
-  async openPath(filePath: string): Promise<void> {
-    await vscode.env.openExternal(vscode.Uri.file(filePath));
-  }
 }

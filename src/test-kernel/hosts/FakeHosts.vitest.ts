@@ -71,15 +71,12 @@ describe('FakeHosts', () => {
     });
 
     await hosts.externalOpener.openExternal('https://texra.ai');
-    await hosts.externalOpener.openPath('/workspace/main.pdf');
     assert.deepEqual(hosts.externalOpener.externalUrls, ['https://texra.ai']);
-    assert.deepEqual(hosts.externalOpener.paths, ['/workspace/main.pdf']);
 
     const session = await hosts.diff.openDiff(
       { filePath: '/tmp/original.tex' },
       { filePath: '/tmp/proposed.tex' },
       'Changes',
-      { preserveFocus: false },
     );
     await hosts.diff.revealFirstChange(session, 12);
     await hosts.diff.closeDiff(session);
@@ -90,7 +87,6 @@ describe('FakeHosts', () => {
         original: { filePath: '/tmp/original.tex' },
         proposed: { filePath: '/tmp/proposed.tex' },
         title: 'Changes',
-        options: { preserveFocus: false },
       },
     ]);
     assert.deepEqual(hosts.diff.revealed, [{ session, line: 12 }]);

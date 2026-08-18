@@ -1,6 +1,5 @@
 // Local imports - hosts
 import type {
-  DiffOptions,
   DiffSession,
   DiffSource,
   DiffViewHost,
@@ -32,7 +31,6 @@ interface DiffOpenEvent {
   original: DiffSource;
   proposed: DiffSource;
   title: string;
-  options?: DiffOptions;
 }
 
 interface DiffRevealEvent {
@@ -124,14 +122,8 @@ export class FakePromptHost implements PromptHost {
 class FakeExternalOpener implements ExternalOpener {
   readonly externalUrls: string[] = [];
 
-  readonly paths: string[] = [];
-
   async openExternal(url: string): Promise<void> {
     this.externalUrls.push(url);
-  }
-
-  async openPath(filePath: string): Promise<void> {
-    this.paths.push(filePath);
   }
 }
 
@@ -154,9 +146,8 @@ class FakeDiffViewHost implements DiffViewHost {
     original: DiffSource,
     proposed: DiffSource,
     title: string,
-    options?: DiffOptions,
   ): Promise<DiffSession> {
-    this.opened.push({ original, proposed, title, options });
+    this.opened.push({ original, proposed, title });
     return { original, proposed, title };
   }
 
