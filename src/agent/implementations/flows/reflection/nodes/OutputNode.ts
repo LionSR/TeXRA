@@ -210,11 +210,6 @@ export class OutputNode<C = unknown> extends Node<
       rawOutput: null,
       outputs: [],
       compileFailures: [],
-      xmlSummary: {
-        tagContents: {},
-        singleOutputFile: null,
-        sourceLocation: null,
-      },
     });
 
     return {
@@ -297,19 +292,14 @@ export class OutputNode<C = unknown> extends Node<
 
     // Project the canonical live collection into PersistedFlow's cloned state.
     shared.roundOutputs = roundsToPersisted(outputState);
-    if (execRes.compileResult) {
-      shared.lastCompileResult = execRes.compileResult;
-      const compileFailureContext =
-        workflowOutputPolicy.shouldRejectOnCompileFailure()
-          ? formatCompileFailureRoundContext(execRes.compileResult)
-          : undefined;
-      if (compileFailureContext) {
-        shared.compileFailureContext = compileFailureContext;
-      } else {
-        delete shared.compileFailureContext;
-      }
+    const compileFailureContext =
+      execRes.compileResult &&
+      workflowOutputPolicy.shouldRejectOnCompileFailure()
+        ? formatCompileFailureRoundContext(execRes.compileResult)
+        : undefined;
+    if (compileFailureContext) {
+      shared.compileFailureContext = compileFailureContext;
     } else {
-      delete shared.lastCompileResult;
       delete shared.compileFailureContext;
     }
 

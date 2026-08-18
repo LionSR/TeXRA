@@ -4,7 +4,6 @@ import { RunUsageAccumulatorJSONSchema } from '@agent/core/usage/RunUsageAccumul
 import {
   ActiveChildInfoSchema,
   ContextManagementDataSchema,
-  OutputXmlSummarySchema,
   STREAM_PHASE,
   STREAM_STATUS,
 } from '@shared/schemas';
@@ -44,43 +43,6 @@ describe('RunUsageAccumulatorJSONSchema — canonical shape', () => {
         normalizedSnapshots: [{ round: 0, usage: usageFixture }],
       }),
     ).toThrow();
-  });
-});
-
-describe('OutputXmlSummarySchema — tagContents values', () => {
-  it('passes a string[] value through unchanged', () => {
-    const result = OutputXmlSummarySchema.parse({
-      tagContents: { authors: ['Alice', 'Bob'] },
-    });
-
-    expect(result.tagContents['authors']).toEqual(['Alice', 'Bob']);
-  });
-
-  it('defaults a missing tagContents to an empty record', () => {
-    const result = OutputXmlSummarySchema.parse({});
-
-    expect(result.tagContents).toEqual({});
-  });
-
-  it.each([
-    ['a retired bare-string value', { tagContents: { title: 'My Paper' } }],
-    ['a malformed value', { tagContents: { broken: 42 } }],
-  ])('rejects %s instead of coercing it', (_label, payload) => {
-    // The string-to-array coercion and its .catch([]) are retired: persisted
-    // data that no longer parses must fail loudly, not degrade silently.
-    expect(() => OutputXmlSummarySchema.parse(payload)).toThrow();
-  });
-});
-
-describe('OutputXmlSummarySchema — strict shape', () => {
-  it.each([
-    [
-      'an unrecognized key on a record without documents',
-      { tagContents: {}, unexpected: 1 },
-    ],
-    ['the retired documents key', { tagContents: {}, documents: [] }],
-  ])('rejects %s', (_label, payload) => {
-    expect(() => OutputXmlSummarySchema.parse(payload)).toThrow();
   });
 });
 

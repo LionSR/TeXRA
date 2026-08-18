@@ -138,7 +138,7 @@ export const CompileFailureSummarySchema = z.object({
 });
 type CompileFailureSummary = z.infer<typeof CompileFailureSummarySchema>;
 
-export const CompileResultSchema = z.discriminatedUnion('status', [
+const CompileResultSchema = z.discriminatedUnion('status', [
   z.strictObject({
     status: z.literal('ok'),
     round: RoundNumberSchema,
@@ -152,20 +152,11 @@ export const CompileResultSchema = z.discriminatedUnion('status', [
 ]);
 export type CompileResult = z.infer<typeof CompileResultSchema>;
 
-export const OutputXmlSummarySchema = z.strictObject({
-  tagContents: z.record(z.string(), z.array(z.string())).prefault(() => ({})),
-  singleOutputFile: z.string().nullable().prefault(null),
-  sourceLocation: FileLocationSchema.nullable().prefault(null),
-});
-
-export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
-
 export const RoundOutputSchema = z.strictObject({
   round: RoundNumberSchema,
   rawOutput: FileLocationSchema.nullable(),
   outputs: OutputFileInfoSchema.array(),
   compileFailures: CompileFailureSchema.array().prefault(() => []),
-  xmlSummary: OutputXmlSummarySchema,
 });
 export type RoundOutput = z.infer<typeof RoundOutputSchema>;
 

@@ -16,7 +16,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { RunScope } from '@agent/runtime/RunScope';
 import {
-  OutputXmlSummarySchema,
   type CompileFailure,
   type FileLocation,
   type OutputFileInfo,
@@ -118,7 +117,6 @@ export function ensureRoundData(
     rawOutput: null,
     outputs: [],
     compileFailures: [],
-    xmlSummary: OutputXmlSummarySchema.parse({}),
   };
   state.rounds.set(round, data);
   return data;

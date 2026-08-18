@@ -16,7 +16,6 @@ import type { RunOutcome, UpdateStreamUsagePayload } from '@shared/schemas';
 import type {
   AgentEvent,
   ContextStateData,
-  LogEvent,
   ResponseFinalizedEvent,
   StreamKind,
   ToolStatus,
@@ -39,11 +38,6 @@ export interface StageOptions {
   readonly total?: number;
   /** Physical workflow attempt that owns this stage, when applicable. */
   readonly attemptId?: string;
-  /**
-   * Outcome to emit at stage.end when no explicit status is supplied.
-   * Defaults to `completed`.
-   */
-  readonly defaultStatus?: RunOutcome;
   /**
    * Skip stage creation but propagate parent context to nested calls.
    * `handle.id` is undefined; `handle.within(fn)` runs `fn` in the parent
@@ -72,8 +66,6 @@ export interface StageHandle {
 export interface StreamOptions {
   /** Explicit id; otherwise a fresh one is generated. */
   readonly id?: string;
-  /** Level used for the underlying log entries. */
-  readonly level?: LogEvent['level'];
   /** Stage id stamped on the start event; defaults to the active scope. */
   readonly stageId?: string;
   /**

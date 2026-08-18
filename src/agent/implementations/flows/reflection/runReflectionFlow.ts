@@ -230,7 +230,6 @@ export async function runReflectionFlow<C = unknown>(
       conversation: [],
       modelHandlerCompatibilityKey: compatibilityKey,
       runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-      roundStateSnapshots: [],
       roundOutputs: [],
       continueRounds: true,
       endTurn: false,

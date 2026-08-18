@@ -185,11 +185,7 @@ export interface AgentCreatorUI {
   ): Promise<{ tools: string[]; groups: string[] } | undefined>;
   getCustomAgentDir(): Promise<string>;
   showCreatedInfo(filePath: string): void;
-  promptAddToConfig(
-    agentName: string,
-    isEdited: boolean,
-    category: AgentCategory,
-  ): Promise<void>;
+  promptAddToConfig(agentName: string, category: AgentCategory): Promise<void>;
   openCreatedFile(filePath: string): Promise<void>;
   renderTemplate(template: string, vars: Record<string, unknown>): string;
 }
@@ -394,6 +390,6 @@ export async function runAgentCreator(
   const yamlContent = await generateAgentYaml(config, blueprint, ui);
   await AbsoluteFS.write(blueprint.filePath, yamlContent);
   ui.showCreatedInfo(blueprint.filePath);
-  await ui.promptAddToConfig(agentName, false, category);
+  await ui.promptAddToConfig(agentName, category);
   await ui.openCreatedFile(blueprint.filePath);
 }

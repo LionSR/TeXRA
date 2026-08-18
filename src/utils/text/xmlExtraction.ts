@@ -93,7 +93,7 @@ function extractNamedDocuments(
  * Extract multiple document elements from an XML container tag
  * Used as a fallback for extracting documents when XML parsing fails
  */
-export function extractMultipleTextFromTag(
+function extractMultipleTextFromTag(
   inputContent: string,
   containerTag?: string,
 ): Array<{ content: string; name: string }> {
