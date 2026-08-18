@@ -87,7 +87,10 @@ export function createLifecycleHost(
     const deadline = new AbortController();
     // Deliberately not unref'd: this timer is what keeps the process alive to
     // perform the orderly abort when a handler hangs on non-I/O work.
-    const timer = setTimeout(() => deadline.abort(), SHUTDOWN_PHASE_DEADLINE_MS);
+    const timer = setTimeout(
+      () => deadline.abort(),
+      SHUTDOWN_PHASE_DEADLINE_MS,
+    );
     try {
       for (const registration of registrations) {
         try {
