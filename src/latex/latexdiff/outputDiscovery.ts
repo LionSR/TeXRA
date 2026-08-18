@@ -143,15 +143,7 @@ export async function scanRunDirForOutputs(
       const nonArtifact = allTexFiles.filter(
         (f) => !hasBetweenRoundDiffSuffix(path.parse(f).name),
       );
-      // Raw round output is output.xml (never collected by collectTexFiles).
-      // Guard for pre-refactor runs where non-scratchpad agents wrote output.tex
-      // as the raw wrapper: drop it when real extracted outputs exist alongside.
-      const rawStem = `${WORKFLOW_OUTPUT_BASENAME}.tex`;
-      const texFiles =
-        nonArtifact.length > 1 && nonArtifact.includes(rawStem)
-          ? nonArtifact.filter((f) => f !== rawStem)
-          : nonArtifact;
-      for (const fileRelToRound of texFiles) {
+      for (const fileRelToRound of nonArtifact) {
         const relativePath = path.join(entryName, fileRelToRound);
         const location = createRunStorageLocation(
           path.join(runDirAbsolute, relativePath),

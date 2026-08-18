@@ -35,7 +35,6 @@ interface SettingsViewHostOptions {
   readonly memoryPrompt: MemoryControllerOptions['prompt'];
   readonly respond?: SettingsRespond;
   readonly modelSelectionExtras?: ModelSelectionExtras;
-  readonly beforeModelSelectionMessage?: () => Awaitable<void>;
   readonly controllers?: {
     readonly memory?: SettingsMemoryController;
     readonly modelSelection?: SettingsModelSelectionController;
@@ -140,7 +139,6 @@ export class SettingsViewHost {
   }
 
   async sendModelSelectionData(respond?: SettingsRespond): Promise<void> {
-    await this.options.beforeModelSelectionMessage?.();
     await this.post(
       await this.modelSelectionController.buildModelSelectionMessage(),
       respond,

@@ -152,19 +152,8 @@ export type TeamOptionData = z.infer<typeof TeamOptionDataSchema>;
 // Persisted State Schema
 // ============================================================
 
-// The retired pre-#9705 flat-field spellings. An ordinary object parse would
-// strip them and prefault the canonical records, silently resetting the
-// user's saved selections — degradation must be loud, so their presence
-// fails the parse and the caller's warn-and-reset path runs instead.
-const RETIRED_FLAT_FIELD_KEYS = [
-  'workflowAgent',
-  'toolUseAgent',
-  'workflowInstruction',
-  'toolUseInstruction',
-] as const;
-
 // Composes: UIFileFieldsSchema (file fields) + workflow tool options.
-const MainViewPersistedStateObjectSchema = UIFileFieldsSchema.merge(
+export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
   ToolConfigFieldsSchema,
 ).extend({
   sessionType: SessionTypeSchema.prefault('toolUse'),
@@ -189,20 +178,6 @@ const MainViewPersistedStateObjectSchema = UIFileFieldsSchema.merge(
   latexdiffsVisible: z.boolean().prefault(false),
   openedFiles: z.array(z.string()).nullish(),
 });
-
-export const MainViewPersistedStateSchema = z
-  .unknown()
-  .superRefine((raw, context) => {
-    if (raw === null || typeof raw !== 'object') return;
-    const retained = RETIRED_FLAT_FIELD_KEYS.filter((key) => key in raw);
-    if (retained.length > 0) {
-      context.addIssue({
-        code: 'custom',
-        message: `retired flat-field main-view state (pre-#9705): ${retained.join(', ')}`,
-      });
-    }
-  })
-  .pipe(MainViewPersistedStateObjectSchema);
 export type MainViewPersistedState = z.infer<
   typeof MainViewPersistedStateSchema
 >;

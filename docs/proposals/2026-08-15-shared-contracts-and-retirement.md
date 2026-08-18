@@ -398,7 +398,9 @@ one mechanical PR.
 
 ### Scheduled retirements (dated — put on the calendar, not in a PR now)
 
-- `LEGACY_ICON_ALIASES` — in-file retention date **2026-10-29** (~14 L).
+- `LEGACY_ICON_ALIASES` — was dated **2026-10-29**; retired early by
+  maintainer ruling 2026-08-18 (dated compat horizons for intermediate-era
+  data are void — delete now, no migration).
 - `midEraWorkflowOutputStem` + readers (~110 L) — looks like a textbook
   intermediate-era reader with zero writers, but ledgered with a horizon of
   **no earlier than 2027-04-21** (`2026-07-05-architecture-checkpoints.md:342`).

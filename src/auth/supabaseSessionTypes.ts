@@ -13,13 +13,6 @@ const SupabaseSessionSchema = z.object({
     label: z.string().transform((label) => label.trim()),
   }),
   expiresAt: z.number(),
-  /**
-   * Present only on sessions stored before VS Code GitHub sign-in moved to
-   * native GoTrue sessions; no sign-in flow sets it today. It keeps those
-   * sessions refreshing through the custom endpoint rather than forcing a
-   * re-sign-in.
-   */
-  useCustomRefresh: z.boolean().optional(),
 });
 export type SupabaseSession = z.infer<typeof SupabaseSessionSchema>;
 
@@ -167,7 +160,6 @@ export function toStorableSupabaseSession(
   options?: {
     fallbackLabel?: string;
     defaultExpiryMs?: number;
-    useCustomRefresh?: boolean;
   },
 ): SupabaseSession {
   return {
@@ -187,8 +179,5 @@ export function toStorableSupabaseSession(
       nativeSession.expires_in,
       options?.defaultExpiryMs ?? DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
     ),
-    ...(options?.useCustomRefresh === undefined
-      ? {}
-      : { useCustomRefresh: options.useCustomRefresh }),
   };
 }
