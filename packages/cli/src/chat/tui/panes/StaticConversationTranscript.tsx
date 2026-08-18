@@ -27,6 +27,8 @@ import {
 import {
   childRosters as childRostersSignal,
   parentStream as parentStreamSignal,
+  sessionStateRevision,
+  streamMetadataFor,
   type ChildRosters,
 } from '../state/childExecutions';
 import { staticTranscriptEraseEpoch } from '../state/staticTranscriptRepaint';
@@ -129,8 +131,10 @@ export function sessionHeaderIdentityLine(
   const parentStreamId =
     context.streamId && parentStream?.get(context.streamId);
   if (context.streamId && parentStreamId && parentStream && context.streams) {
-    const slice = context.streams.get(context.streamId);
-    const model = getRuntimeModelLabel(slice?.model || meta.model || '—');
+    const metadata = streamMetadataFor(context.streamId);
+    const model = getRuntimeModelLabel(
+      metadata?.config?.model || meta.model || '—',
+    );
     const view = streamViewForId({
       activeStreamId: context.streamId,
       childRosters: context.childStreamEntries ?? new Map(),
@@ -139,10 +143,11 @@ export function sessionHeaderIdentityLine(
       streams: context.streams,
     });
     const streamKind =
-      slice?.identity?.kind === 'multiAgentWorkflow'
+      metadata?.identity?.kind === 'multiAgentWorkflow'
         ? 'workflow script'
         : 'subagent';
     const phase = ancestorWorkflowPhaseHeading({
+      categoryOf: (id) => streamMetadataFor(id)?.agentCategory,
       parentStream,
       streamId: context.streamId,
       streams: context.streams,
@@ -629,18 +634,16 @@ function shouldWaitForChildIdentity({
   hasHeader,
   parentStream,
   scrollbackStreamId,
-  streams,
 }: {
   readonly hasHeader: boolean;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly scrollbackStreamId: StreamTabId | undefined;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): boolean {
   return (
     !hasHeader &&
     scrollbackStreamId !== undefined &&
     parentStream.has(scrollbackStreamId) &&
-    !streams.get(scrollbackStreamId)?.model
+    !streamMetadataFor(scrollbackStreamId)?.config?.model
   );
 }
 
@@ -682,7 +685,6 @@ function ensureStaticSessionHeader({
       hasHeader: false,
       parentStream,
       scrollbackStreamId,
-      streams,
     })
   ) {
     return { items, rowCount, byteCount, inserted: false };
@@ -802,7 +804,6 @@ export function buildStaticTranscriptItems(
       hasHeader: seen.has(SESSION_HEADER_ID),
       parentStream,
       scrollbackStreamId,
-      streams,
     })
   ) {
     const totals = staticTranscriptItemsTotals(
@@ -1007,7 +1008,6 @@ export function buildStaticTranscriptState({
     hasHeader: false,
     parentStream,
     scrollbackStreamId,
-    streams,
   });
   const scan = waitingForChildIdentity
     ? incrementalStaticTranscriptEntries(
@@ -1147,7 +1147,6 @@ export function advanceStaticTranscriptState(
       hasHeader: current.items.some((item) => item.id === SESSION_HEADER_ID),
       parentStream,
       scrollbackStreamId,
-      streams,
     })
   ) {
     return current;
@@ -1310,6 +1309,10 @@ export function StaticConversationTranscript({
   const parentStream = useSignal(parentStreamSignal);
   const childStreamEntries = useSignal(childRostersSignal);
   const eraseRequest = useSignal(staticTranscriptEraseEpoch);
+  // Header identity and the child-identity latch read stream metadata from the
+  // bound SessionState; the revision drives the advance effect when metadata
+  // (e.g. a focused child's model) lands without any other dependency moving.
+  const sessionRevision = useSignal(sessionStateRevision);
 
   const buildFreshItems = (): readonly StaticTranscriptItem[] =>
     buildStaticTranscriptItems({
@@ -1365,6 +1368,7 @@ export function StaticConversationTranscript({
     parentStream,
     scrollbackStreamId,
     sessionMeta,
+    sessionRevision,
     streams,
     subagentExecutionLabels,
     normalizedWidth,

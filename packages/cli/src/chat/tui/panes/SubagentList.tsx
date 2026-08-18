@@ -23,6 +23,7 @@ import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   WORKFLOW_TASK_STATUS_LABEL,
   isTerminalWorkflowCallProgress,
+  runIdentityDisplayName,
   type StreamTabId,
   type TokenUsageStats,
   type WorkflowCallProgress,
@@ -48,6 +49,11 @@ import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
 
 // Local imports - TUI state and controls
 import { childElapsed } from '../state/childControls';
+import {
+  sessionStateRevision,
+  streamMetadataFor,
+  streamStateFor,
+} from '../state/childExecutions';
 import {
   streamArtifactRevision,
   streamPreferredUsage,
@@ -127,6 +133,9 @@ function SessionRow({
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
   readonly session: StreamView;
 }): React.JSX.Element {
+  useSignal(sessionStateRevision);
+  const metadata = streamMetadataFor(session.id);
+  const streamState = streamStateFor(session.id);
   const status = session.slice?.status;
   const substate = session.slice?.substate;
   const statusLabel = formatCliStatusLabel(
@@ -145,25 +154,26 @@ function SessionRow({
   // then this truncate-end text sheds inline elapsed, model, stage, and label.
   // The actionable approval kind and metadata column never shrink.
   const approval = pendingApprovalRowDisplay(pendingKinds);
-  const stageLabel = formatStageLabel(session.slice?.stage);
+  const stageLabel = formatStageLabel(streamState?.stage);
   // The resolved model is per-agent identity (a workflow run's grandchildren
   // can each resolve a different model); the list-root row is the conversation
   // itself, whose model already rides the status bar. A background bash stream
   // inherits its parent's configuration, but the shell does not use a model.
+  const identity = session.identity ?? metadata?.identity;
   const model =
-    !isListRoot && session.slice?.identity?.kind !== 'process'
-      ? session.slice?.model
+    !isListRoot && identity?.kind !== 'process'
+      ? metadata?.config?.model
       : undefined;
   const modelLabel = model ? getRuntimeModelLabel(model) : undefined;
   // The right-aligned `elapsed · ↓tokens` column is pushed to the terminal edge
   // so the figures line up across rows. Lower-priority inline segments yield;
   // rows drop the column entirely on narrow terminals (see
   // `CHILD_ROW_METADATA_MIN_COLUMNS`).
-  const metadata = metadataColumn
+  const metadataText = metadataColumn
     ? childRowMetadataText({
         elapsed,
-        outputTokens: (cumulativeUsage ?? session.slice?.usage)?.outputTokens,
-        toolCallCount: session.slice?.conversation?.toolCallCount,
+        outputTokens: cumulativeUsage?.outputTokens,
+        toolCallCount: streamState?.conversationProgress.toolCallCount,
       })
     : undefined;
   // Child rows summarize what the subagent is doing: the runtime's own
@@ -174,7 +184,7 @@ function SessionRow({
   // is scoped).
   const summary = isListRoot
     ? undefined
-    : (session.slice?.description ?? session.slice?.latestLine);
+    : (metadata?.description ?? session.slice?.latestLine);
   return (
     <Box
       flexDirection="row"
@@ -223,11 +233,11 @@ function SessionRow({
           <Text dimColor wrap="truncate-end">{` · ${hiddenRowSummary}`}</Text>
         </Box>
       ) : null}
-      {metadata ? (
+      {metadataText ? (
         <>
           <Box flexGrow={1} />
           <Box flexShrink={0}>
-            <Text dimColor>{`  ${metadata}`}</Text>
+            <Text dimColor>{`  ${metadataText}`}</Text>
           </Box>
         </>
       ) : null}
@@ -238,6 +248,7 @@ function SessionRow({
 function workflowTaskMetadata(
   call: WorkflowCallProgress,
   child: StreamSlice | undefined,
+  configModel: string | undefined,
   streamId: StreamTabId | undefined,
   nowMs: number,
 ): string | undefined {
@@ -250,14 +261,14 @@ function workflowTaskMetadata(
     if ('durationMs' in call && call.durationMs !== undefined) {
       elapsed = formatCompactDuration(call.durationMs);
     }
-    model = ('model' in call ? call.model : undefined) ?? child?.model;
+    model = ('model' in call ? call.model : undefined) ?? configModel;
     cost =
       ('totalCostUsd' in call ? call.totalCostUsd : undefined) ?? usage?.cost;
   } else {
     if (child?.runStartedAt !== undefined) {
       elapsed = formatCompactDuration(nowMs - child.runStartedAt);
     }
-    model = child?.model;
+    model = configModel;
     cost = usage?.cost;
   }
   const parts = [
@@ -286,8 +297,21 @@ function WorkflowTaskRow({
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
   readonly streamId: StreamTabId | undefined;
 }): React.JSX.Element {
+  useSignal(sessionStateRevision);
   const style = WORKFLOW_TASK_STATUS_STYLE[entry.task.status];
-  const metadata = workflowTaskMetadata(entry.task, child, streamId, nowMs);
+  // The resolved model rides the task's stream metadata, not the slice; a
+  // terminal call's own recorded model still wins inside the formatter.
+  const configModel =
+    streamId === undefined
+      ? undefined
+      : streamMetadataFor(streamId)?.config?.model;
+  const metadata = workflowTaskMetadata(
+    entry.task,
+    child,
+    configModel,
+    streamId,
+    nowMs,
+  );
   const approval = pendingApprovalRowDisplay(pendingKinds);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
@@ -343,6 +367,7 @@ function WorkflowDashboard({
   readonly selectedValue: ChildListValue | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): React.JSX.Element | null {
+  useSignal(sessionStateRevision);
   const { groups, tasks, taskByValue, groupByValue, wide } = model;
   const { selectedGroup, selectedTask, selectedTaskGroup, activeGroup } =
     workflowDashboardSelection(model, selectedValue);
@@ -429,9 +454,16 @@ function WorkflowDashboard({
           : {}),
       })
     : undefined;
+  // The heading leads with the run identity's display name — for a
+  // multi-agent workflow root that is the workflow name, matching what the
+  // retired slice `agent` field carried from `run.config`.
+  const rootIdentity = streamMetadataFor(model.root.streamId)?.identity;
+  const rootAgent = rootIdentity
+    ? runIdentityDisplayName(rootIdentity)
+    : undefined;
   const heading = headingPhase
-    ? `${model.root.agent ?? 'Workflow'} · ${headingPhase} · ${done}/${total} done`
-    : `${model.root.agent ?? 'Workflow'} · ${done}/${total} done`;
+    ? `${rootAgent ?? 'Workflow'} · ${headingPhase} · ${done}/${total} done`
+    : `${rootAgent ?? 'Workflow'} · ${done}/${total} done`;
   const { failed } = workflowCallFailureTally(calls);
   const renderTask = (
     item: SelectItem<ChildListValue>,

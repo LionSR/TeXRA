@@ -24,7 +24,10 @@ import {
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
-import { streams as streamsSignal } from '../state/cliState';
+import {
+  readStreamArtifacts,
+  streamArtifactRevision,
+} from '../state/subscribeStreamArtifacts';
 import { useSignal } from '../state/useSignal';
 
 const TODO_STATUS_LABELS: Record<TodoStatus, string> = {
@@ -111,8 +114,8 @@ export function WorkPlanReader({
   readonly title: string;
 }): React.JSX.Element {
   const { columns } = useWindowSize();
-  const streams = useSignal(streamsSignal);
-  const slice = streams.get(streamId);
+  useSignal(streamArtifactRevision);
+  const artifacts = readStreamArtifacts(streamId);
   const frameWidth = formFrameWidth(columns);
   const width = Math.max(1, frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION);
   const hints = loading ? WORK_PLAN_LOADING_HINTS : READER_SCROLL_HINTS;
@@ -124,7 +127,7 @@ export function WorkPlanReader({
   });
   const text = loading
     ? WORK_PLAN_LOADING_TEXT
-    : formatWorkPlanReaderText(slice?.plan ?? null, slice?.todos ?? []);
+    : formatWorkPlanReaderText(artifacts?.plan ?? null, artifacts?.todos ?? []);
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) onClose();

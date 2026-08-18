@@ -51,7 +51,6 @@ import {
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
-  sumUsageStats,
   AgentCategory,
 } from '@shared/schemas';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
@@ -564,34 +563,17 @@ export function createChatSessionController(
       // the cost of bounded warnIfUnseeded notices until the seed completes.
       loadedStreamsReconcile.dropStale();
       await snapshotStore.load([resolution.streamId]);
-      // Mark the retained root before the awaited read/patch can render a
-      // stale pre-resume projection.
+      // Mark the retained root before the log sync below can render a stale
+      // pre-resume projection.
       loadedStreamsReconcile.reconcile();
-      const restored = await snapshotStore.read(resolution.streamId);
-      // A rehydrated stream never re-emits `run.start`, so its identity is
-      // seeded from the durable store (ExecutionMeta by FK) on this cold
-      // read — mirroring `tryResumeStream()`'s seeding.
-      const restoredIdentity = snapshotStore.getRunMetadata(
-        resolution.streamId,
-      ).identity;
-      patchStream(resolution.streamId, (slice) => {
-        const runUsages = Object.values(restored.runUsage);
-        return {
-          ...slice,
-          ...(restoredIdentity && !slice.identity
-            ? { identity: restoredIdentity }
-            : {}),
-          cumulativeUsage: runUsages.length
-            ? sumUsageStats(runUsages)
-            : slice.cumulativeUsage,
-          todos: restored.todos,
-          plan: restored.plan,
-        };
-      });
+      // A resumed stream may be one the user /clear-ed; the empty patch mints
+      // the slice and drops the retired mark so `syncStreamLog` and
+      // `focusStream` accept it again.
+      patchStream(resolution.streamId, (slice) => ({ ...slice }));
       syncStreamLog(resolution.streamId);
       focusStream(resolution.streamId);
       // Re-reconcile now that focus has moved: a stale in-flight preload for the
-      // previous stream that re-added it during the awaited read above is cleared
+      // previous stream that re-added it during the awaited load above is cleared
       // again, while any stream preloaded in the meantime is preserved. Later
       // hydrations for the old stream also fail requestIsCurrent.
       loadedStreamsReconcile.reconcile();
@@ -602,7 +584,7 @@ export function createChatSessionController(
       session.presentationHost = presentationHost;
 
       // A Ctrl-C during the rehydration awaits above (resume resolution,
-      // `ensureLoaded`, `snapshotStore.load`/`read`) lands here as
+      // `ensureLoaded`, `snapshotStore.load`) lands here as
       // `session.stopRequested`. Honor it before starting the real run chain —
       // matching `tryResumeStream()`'s stop-check after its own preparatory
       // awaits — instead of starting an agent the user already cancelled.
@@ -723,16 +705,10 @@ export function createChatSessionController(
           rootStreamId.set(streamId);
         }
         // A follow-up wake may target a stream the user /clear-ed;
-        // resuming it un-retires it (patchStream drops the retired mark),
+        // resuming it un-retires it (the empty patch drops the retired mark),
         // matching the explicit resume path, or focusStream would refuse
-        // and the resumed run would stay invisible. A rehydrated stream never
-        // re-emits `run.start`, so its identity is seeded from the durable
-        // store (ExecutionMeta by FK) on this cold read.
-        patchStream(streamId, (slice) =>
-          runMetadata.identity && !slice.identity
-            ? { ...slice, identity: runMetadata.identity }
-            : slice,
-        );
+        // and the resumed run would stay invisible.
+        patchStream(streamId, (slice) => ({ ...slice }));
         focusStream(streamId);
         session.runExitCode = CliExitCode.Success;
 

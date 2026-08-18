@@ -54,10 +54,15 @@ import {
   type StreamSlice,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
+import {
+  bindChildStreamState,
+  unbindChildStreamState,
+} from '@cli/chat/tui/state/childExecutions';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
+import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -1208,50 +1213,51 @@ describe('CLI conversation transcript', () => {
       [CHILD, ROOT_STREAM],
     ]);
     const childEntry = entry('a1', 'assistant', 'checking', true);
-    // Keep one shared entries array so the model patch reuses the same
+    // Keep one shared entries array so the metadata arrival reuses the same
     // `entriesRef` and exercises the `sameEntries && scannedIndex < length`
     // rescan guard rather than falling through to the new-array path.
     const childEntries = [childEntry];
-    const streamsWithoutChildModel = new Map<StreamTabId, StreamSlice>([
+    const streamSlices = new Map<StreamTabId, StreamSlice>([
       [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
       [CHILD, sliceWithEntries(CHILD, childEntries)],
     ]);
-    const initial = buildStaticTranscriptState({
-      childStreamEntries: new Map(),
-      maxRows: undefined,
-      meta: SESSION_META,
-      ownerKey: `stream:${CHILD}`,
-      parentStream,
-      repaintEpoch: 0,
-      scrollbackStreamId: CHILD,
-      streams: streamsWithoutChildModel,
-      width: 80,
+    withBoundSessionState((childState) => {
+      const initial = buildStaticTranscriptState({
+        childStreamEntries: new Map(),
+        maxRows: undefined,
+        meta: SESSION_META,
+        ownerKey: `stream:${CHILD}`,
+        parentStream,
+        repaintEpoch: 0,
+        scrollbackStreamId: CHILD,
+        streams: streamSlices,
+        width: 80,
+      });
+
+      expect(initial.items).toEqual([]);
+      expect(initial.scan.entriesRef).toBe(childEntries);
+      expect(initial.scan.scannedIndex).toBe(0);
+
+      childState.updateStreamMetadata(CHILD, {
+        config: { model: 'kimi26T' },
+      });
+      const advanced = advanceStaticTranscriptState(initial, {
+        childStreamEntries: new Map(),
+        maxRows: undefined,
+        meta: SESSION_META,
+        ownerKey: `stream:${CHILD}`,
+        parentStream,
+        scrollbackStreamId: CHILD,
+        streams: streamSlices,
+        width: 80,
+      });
+
+      expect(advanced.items.map((item) => item.id)).toEqual([
+        'session-header',
+        'a1',
+      ]);
+      expect(advanced.scan.scannedIndex).toBe(1);
     });
-
-    expect(initial.items).toEqual([]);
-    expect(initial.scan.entriesRef).toBe(childEntries);
-    expect(initial.scan.scannedIndex).toBe(0);
-
-    const streamsWithChildModel = new Map<StreamTabId, StreamSlice>([
-      [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
-      [CHILD, sliceWithEntries(CHILD, childEntries, { model: 'kimi26T' })],
-    ]);
-    const advanced = advanceStaticTranscriptState(initial, {
-      childStreamEntries: new Map(),
-      maxRows: undefined,
-      meta: SESSION_META,
-      ownerKey: `stream:${CHILD}`,
-      parentStream,
-      scrollbackStreamId: CHILD,
-      streams: streamsWithChildModel,
-      width: 80,
-    });
-
-    expect(advanced.items.map((item) => item.id)).toEqual([
-      'session-header',
-      'a1',
-    ]);
-    expect(advanced.scan.scannedIndex).toBe(1);
   });
 
   it('keeps the scan cursor and state identical while the scrollback slice is missing', () => {
@@ -1667,27 +1673,28 @@ describe('CLI conversation transcript', () => {
 
   it('keeps session metadata authoritative for root stream identity', () => {
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        ROOT_STREAM,
-        sliceWithEntries(ROOT_STREAM, [], {
-          model: 'previous-model',
-        }),
-      ],
+      [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
     ]);
+    withBoundSessionState((childState) => {
+      // Stale stream metadata must not leak into an unparented root header.
+      childState.updateStreamMetadata(ROOT_STREAM, {
+        config: { model: 'previous-model' },
+      });
 
-    expect(
-      sessionHeaderIdentityLine(
-        {
-          ...SESSION_META,
-          agent: 'current-agent',
-          model: 'current-model',
-        },
-        {
-          streamId: ROOT_STREAM,
-          streams,
-        },
-      ),
-    ).toBe('agent: current-agent · model: current-model');
+      expect(
+        sessionHeaderIdentityLine(
+          {
+            ...SESSION_META,
+            agent: 'current-agent',
+            model: 'current-model',
+          },
+          {
+            streamId: ROOT_STREAM,
+            streams,
+          },
+        ),
+      ).toBe('agent: current-agent · model: current-model');
+    });
   });
 
   it('labels focused subagent scrollback with the child stream identity', () => {
@@ -1695,20 +1702,11 @@ describe('CLI conversation transcript', () => {
     const streams = new Map<StreamTabId, StreamSlice>([
       [
         ROOT_STREAM,
-        sliceWithEntries(
-          ROOT_STREAM,
-          [entry('u1', 'user', 'send scouts', true)],
-          {
-            model: 'deepseekT',
-          },
-        ),
+        sliceWithEntries(ROOT_STREAM, [
+          entry('u1', 'user', 'send scouts', true),
+        ]),
       ],
-      [
-        CHILD,
-        sliceWithEntries(CHILD, [entry('a1', 'assistant', 'ok', true)], {
-          model: 'kimi26T',
-        }),
-      ],
+      [CHILD, sliceWithEntries(CHILD, [entry('a1', 'assistant', 'ok', true)])],
     ]);
     const childStreamEntries = buildChildRosters({
       parentStreamId: ROOT_STREAM,
@@ -1723,24 +1721,27 @@ describe('CLI conversation transcript', () => {
       ],
     });
 
-    expect(
-      sessionHeaderIdentityLine(SESSION_META, {
-        childStreamEntries,
-        parentStream: new Map([[CHILD, ROOT_STREAM]]),
-        streamId: CHILD,
-        streams,
-      }),
-    ).toBe('subagent: search · parent: main · model: Kimi K2.6 (Thinking)');
+    withBoundSessionState((childState) => {
+      childState.updateStreamMetadata(CHILD, {
+        config: { model: 'kimi26T' },
+      });
 
-    const WORKFLOW = 'workflow-stream' as StreamTabId;
-    const TASK = 'task-stream' as StreamTabId;
-    const workflowStreams = new Map<StreamTabId, StreamSlice>([
-      [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [], { model: 'deepseekT' })],
-      [
-        WORKFLOW,
-        sliceWithEntries(
+      expect(
+        sessionHeaderIdentityLine(SESSION_META, {
+          childStreamEntries,
+          parentStream: new Map([[CHILD, ROOT_STREAM]]),
+          streamId: CHILD,
+          streams,
+        }),
+      ).toBe('subagent: search · parent: main · model: Kimi K2.6 (Thinking)');
+
+      const WORKFLOW = 'workflow-stream' as StreamTabId;
+      const TASK = 'task-stream' as StreamTabId;
+      const workflowStreams = new Map<StreamTabId, StreamSlice>([
+        [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
+        [
           WORKFLOW,
-          [
+          sliceWithEntries(WORKFLOW, [
             {
               id: 'phase-1',
               role: 'phase',
@@ -1750,80 +1751,78 @@ describe('CLI conversation transcript', () => {
               phaseIndex: 0,
               phaseTotal: 1,
             },
+          ]),
+        ],
+        [TASK, sliceWithEntries(TASK, [entry('a1', 'assistant', 'ok', true)])],
+      ]);
+      childState.updateStreamMetadata(WORKFLOW, {
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'survey' },
+        agentCategory: AgentCategory.Workflow,
+        config: { model: 'kimi26T' },
+      });
+      childState.updateStreamMetadata(TASK, {
+        config: { model: 'kimi26T' },
+      });
+      const workflowChildren = new Map([
+        ...buildChildRosters({
+          parentStreamId: ROOT_STREAM,
+          rows: [
+            {
+              executionId: 'ei_wf',
+              agentName: 'survey',
+              identity: {
+                kind: 'multiAgentWorkflow' as const,
+                workflowName: 'survey',
+              },
+              childStreamId: WORKFLOW,
+              status: STREAM_PHASE.RUNNING,
+            },
           ],
-          {
-            category: AgentCategory.Workflow,
-            identity: { kind: 'multiAgentWorkflow', workflowName: 'survey' },
-            model: 'kimi26T',
-          },
-        ),
-      ],
-      [
-        TASK,
-        sliceWithEntries(TASK, [entry('a1', 'assistant', 'ok', true)], {
-          model: 'kimi26T',
         }),
-      ],
-    ]);
-    const workflowChildren = new Map([
-      ...buildChildRosters({
-        parentStreamId: ROOT_STREAM,
-        rows: [
-          {
-            executionId: 'ei_wf',
-            agentName: 'survey',
-            identity: {
-              kind: 'multiAgentWorkflow' as const,
-              workflowName: 'survey',
+        ...buildChildRosters({
+          parentStreamId: WORKFLOW,
+          rows: [
+            {
+              executionId: 'ei_task',
+              agentName: 'Agent runtime + its tests',
+              identity: {
+                kind: 'agent' as const,
+                agent: 'Agent runtime + its tests',
+              },
+              childStreamId: TASK,
+              status: STREAM_PHASE.RUNNING,
             },
-            childStreamId: WORKFLOW,
-            status: STREAM_PHASE.RUNNING,
-          },
-        ],
-      }),
-      ...buildChildRosters({
-        parentStreamId: WORKFLOW,
-        rows: [
-          {
-            executionId: 'ei_task',
-            agentName: 'Agent runtime + its tests',
-            identity: {
-              kind: 'agent' as const,
-              agent: 'Agent runtime + its tests',
-            },
-            childStreamId: TASK,
-            status: STREAM_PHASE.RUNNING,
-          },
-        ],
-      }),
-    ]);
-    expect(
-      sessionHeaderIdentityLine(SESSION_META, {
-        childStreamEntries: workflowChildren,
-        parentStream: new Map([
-          [WORKFLOW, ROOT_STREAM],
-          [TASK, WORKFLOW],
-        ]),
-        streamId: TASK,
-        streams: workflowStreams,
-      }),
-    ).toBe(
-      'subagent: Agent runtime + its tests · Survey (1/1) · parent: survey · model: Kimi K2.6 (Thinking)',
-    );
+          ],
+        }),
+      ]);
+      expect(
+        sessionHeaderIdentityLine(SESSION_META, {
+          childStreamEntries: workflowChildren,
+          parentStream: new Map([
+            [WORKFLOW, ROOT_STREAM],
+            [TASK, WORKFLOW],
+          ]),
+          streamId: TASK,
+          streams: workflowStreams,
+        }),
+      ).toBe(
+        'subagent: Agent runtime + its tests · Survey (1/1) · parent: survey · model: Kimi K2.6 (Thinking)',
+      );
 
-    expect(
-      buildStaticTranscriptItems({
-        scrollbackStreamId: CHILD,
-        currentItems: [],
-        streams,
-        childStreamEntries,
-        meta: SESSION_META,
-        parentStream: new Map([[CHILD, ROOT_STREAM]]),
-      }).items[0],
-    ).toMatchObject({
-      kind: 'header',
-      identityLine:
-        'subagent: search · parent: main · model: Kimi K2.6 (Thinking)',
+      expect(
+        buildStaticTranscriptItems({
+          scrollbackStreamId: CHILD,
+          currentItems: [],
+          streams,
+          childStreamEntries,
+          meta: SESSION_META,
+          parentStream: new Map([[CHILD, ROOT_STREAM]]),
+        }).items[0],
+      ).toMatchObject({
+        kind: 'header',
+        identityLine:
+          'subagent: search · parent: main · model: Kimi K2.6 (Thinking)',
+      });
     });
   });
 
@@ -1833,40 +1832,36 @@ describe('CLI conversation transcript', () => {
       [CHILD, ROOT_STREAM],
     ]);
     const childEntry = entry('a1', 'assistant', 'checking', true);
-    const streamsWithoutChildModel = new Map<StreamTabId, StreamSlice>([
+    const streamSlices = new Map<StreamTabId, StreamSlice>([
       [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
       [CHILD, sliceWithEntries(CHILD, [childEntry])],
     ]);
 
-    expect(
-      buildStaticTranscriptItems({
-        scrollbackStreamId: CHILD,
-        currentItems: [],
-        streams: streamsWithoutChildModel,
-        meta: SESSION_META,
-        parentStream,
-      }).items,
-    ).toEqual([]);
+    withBoundSessionState((childState) => {
+      expect(
+        buildStaticTranscriptItems({
+          scrollbackStreamId: CHILD,
+          currentItems: [],
+          streams: streamSlices,
+          meta: SESSION_META,
+          parentStream,
+        }).items,
+      ).toEqual([]);
 
-    const streamsWithChildModel = new Map<StreamTabId, StreamSlice>([
-      [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
-      [
-        CHILD,
-        sliceWithEntries(CHILD, [childEntry], {
-          model: 'kimi26T',
-        }),
-      ],
-    ]);
+      childState.updateStreamMetadata(CHILD, {
+        config: { model: 'kimi26T' },
+      });
 
-    expect(
-      buildStaticTranscriptItems({
-        scrollbackStreamId: CHILD,
-        currentItems: [],
-        streams: streamsWithChildModel,
-        meta: SESSION_META,
-        parentStream,
-      }).items.map((item) => item.id),
-    ).toEqual(['session-header', 'a1']);
+      expect(
+        buildStaticTranscriptItems({
+          scrollbackStreamId: CHILD,
+          currentItems: [],
+          streams: streamSlices,
+          meta: SESSION_META,
+          parentStream,
+        }).items.map((item) => item.id),
+      ).toEqual(['session-header', 'a1']);
+    });
   });
 
   it('only feeds the root scrollback stream, not background subagents', () => {
@@ -2125,6 +2120,18 @@ function sliceWithEntries(
   init: Partial<StreamSlice> = {},
 ): StreamSlice {
   return { ...emptySlice(streamId), entries, ...init };
+}
+
+/** Bind a fresh `SessionState` for tests that read stream metadata (child
+ *  identity latch, header model labels), unbinding on the way out. */
+function withBoundSessionState(run: (state: SessionState) => void): void {
+  const state = new SessionState(defaultSession());
+  bindChildStreamState(state);
+  try {
+    run(state);
+  } finally {
+    unbindChildStreamState(state);
+  }
 }
 
 /** A root stream with one user entry plus a background child stream. */
