@@ -18,6 +18,7 @@
 
 import { Mutex } from 'async-mutex';
 import pMap from 'p-map';
+import PQueue from 'p-queue';
 import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
@@ -350,8 +351,10 @@ interface StreamRecord {
 
   // -- Lazy seeding: a stream's existing disk data is read into memory BEFORE
   // the first mutation so an accumulate/merge can't overwrite unloaded disk
-  // data. `diskState` = this record's disk provenance; `seedChain` serializes
-  // refresh/seed/mutate for it.
+  // data. `diskState` = this record's disk provenance; `seedChain` is the
+  // latest unit of work queued on this stream's `seedQueueFor` lane, published
+  // for readers that await seed/mutate quiescence (`awaitSeeded`, `flush`,
+  // staged deletion) — the lane itself, not this field, serializes the work.
   diskState: DiskState;
   seedChain: Promise<void> | undefined;
   /** Incremented for each refresh attempt; seed-gated mutations do not change it. */
@@ -430,6 +433,24 @@ export class StreamSnapshotStore {
   private readonly writeMutexes = new Map<string, Mutex>();
   /** Latest ordinary sidecar value not yet confirmed durable, by write lock. */
   private readonly dirtyWrites = new Map<string, DirtySidecarWrite>();
+
+  /**
+   * Per-stream FIFO lane (concurrency 1) that serializes seed reads and the
+   * mutations queued behind them — the same `PQueue({ concurrency: 1 })`-
+   * per-key precedent as `streamApprovalQueue.ts`. Each queued unit of work
+   * still publishes its promise onto `record.seedChain` for the readers that
+   * await it (`awaitSeeded`, `seedUsageOnly`, `flush`, staged deletion).
+   */
+  private readonly seedQueues = new Map<StreamTabId, PQueue>();
+
+  private seedQueueFor(stream: StreamTabId): PQueue {
+    let queue = this.seedQueues.get(stream);
+    if (!queue) {
+      queue = new PQueue({ concurrency: 1 });
+      this.seedQueues.set(stream, queue);
+    }
+    return queue;
+  }
 
   /** Streams already warned about a pre-identity execution row (#9590 Stage
    *  7), so repeated hydrations of the same old row stay one warning each. */
@@ -684,44 +705,44 @@ export class StreamSnapshotStore {
     return undefined;
   }
 
+  /**
+   * Queue a mutation onto the stream's seed lane: the lane's single-flight
+   * FIFO order (concurrency 1, shared with `refreshSeed`) is what guarantees
+   * this runs after every unit of work queued ahead of it, seed reads
+   * included — the read itself must run INSIDE a queued task, not before
+   * enqueueing, or a `refreshSeed` racing on the same stream could start its
+   * own disk read concurrently with this one (the queue only serializes what
+   * it dispatches; anything started outside `add()` runs unguarded). Each
+   * task re-checks `hasDiskProvenance` before reading, so once the first
+   * queued task establishes it, every task queued behind it skips straight
+   * to `apply`.
+   */
   private queueAfterSeed(
     stream: StreamTabId,
     version: number,
     apply: () => unknown,
   ): Promise<void> {
-    const next: Promise<void> = this.ensureSeeded(stream, version)
-      .catch((err: unknown) => {
-        if (!this.hasDiskProvenance(stream)) throw err;
-      })
-      .then(() => {
+    const next: Promise<void> = this.seedQueueFor(stream)
+      .add(async () => {
+        if (!this.hasDiskProvenance(stream)) {
+          try {
+            await this.readSeed(stream, version);
+          } catch (err: unknown) {
+            if (!this.hasDiskProvenance(stream)) throw err;
+          }
+        }
         if (this.streamVersion(stream) !== version) return;
         const record = this.records.get(stream);
-        if (!record || record.diskState === 'unknown') {
-          if (record?.seedChain === next) record.seedChain = undefined;
-          return;
-        }
+        if (!record || record.diskState === 'unknown') return;
         apply();
       })
       .catch((err: unknown) => {
-        const record = this.records.get(stream);
-        if (record?.diskState === 'unknown' && record.seedChain === next) {
-          record.seedChain = undefined;
-        }
         log.warn(`Deferred update failed for stream ${stream}`, {
           data: err,
         });
-      });
+      }) as Promise<void>;
     this.getOrCreateRecord(stream).seedChain = next;
     return next;
-  }
-
-  /** Read a stream's existing disk data into memory once. */
-  private ensureSeeded(stream: StreamTabId, version: number): Promise<void> {
-    const existing = this.records.get(stream)?.seedChain;
-    if (existing) return existing;
-    const seed = this.readSeed(stream, version);
-    this.getOrCreateRecord(stream).seedChain = seed;
-    return seed;
   }
 
   private async readSeed(stream: StreamTabId, version: number): Promise<void> {
@@ -1123,6 +1144,7 @@ export class StreamSnapshotStore {
   private evict(stream: StreamTabId): void {
     this.records.evict(stream);
     this.kvHandles.invalidate(stream);
+    this.seedQueues.delete(stream);
     for (const key of [...this.writeMutexes.keys()]) {
       if (!key.startsWith(`${stream}::`)) continue;
       this.writeMutexes.delete(key);
@@ -1136,6 +1158,7 @@ export class StreamSnapshotStore {
   evictAll(): void {
     this.records.evictAll();
     this.kvHandles.invalidateAll();
+    this.seedQueues.clear();
     this.writeMutexes.clear();
     this.dirtyWrites.clear();
     this.unseededReadWarned.clear();
@@ -1890,40 +1913,41 @@ export class StreamSnapshotStore {
     record.seedRefreshBaseline = refreshBaseline;
     const refreshGeneration = ++record.seedRefreshGeneration;
     record.diskState = 'unknown';
-    const prev = record.seedChain?.catch(() => undefined) ?? Promise.resolve();
-    const work = prev.then(async () => {
-      if (this.streamVersion(stream) !== version) return;
-      await this.retryDirtyWrites(stream);
-      if (this.streamVersion(stream) !== version) return;
-      this.invalidateKvHandles(stream);
-      await this.seedFromDisk(stream, version);
-    });
-    const next = work.then(
-      () => {
-        const current = this.records.get(stream);
-        if (
-          current?.seedRefreshGeneration === refreshGeneration &&
-          this.streamVersion(stream) === version
-        ) {
-          current.seedRefreshBaseline = undefined;
-        }
-      },
-      (error: unknown) => {
-        const current = this.records.get(stream);
-        if (
-          current?.seedRefreshGeneration === refreshGeneration &&
-          this.streamVersion(stream) === version
-        ) {
-          current.diskState = refreshBaseline;
-          current.seedRefreshBaseline = undefined;
-          if (refreshBaseline !== 'unknown') {
-            this.persistEagerOverlays(stream, current);
+    const queue = this.seedQueueFor(stream);
+    const next: Promise<void> = queue
+      .add(async () => {
+        if (this.streamVersion(stream) !== version) return;
+        await this.retryDirtyWrites(stream);
+        if (this.streamVersion(stream) !== version) return;
+        this.invalidateKvHandles(stream);
+        await this.seedFromDisk(stream, version);
+      })
+      .then(
+        () => {
+          const current = this.records.get(stream);
+          if (
+            current?.seedRefreshGeneration === refreshGeneration &&
+            this.streamVersion(stream) === version
+          ) {
+            current.seedRefreshBaseline = undefined;
           }
-          if (current.seedChain === next) current.seedChain = undefined;
-        }
-        throw error;
-      },
-    );
+        },
+        (error: unknown) => {
+          const current = this.records.get(stream);
+          if (
+            current?.seedRefreshGeneration === refreshGeneration &&
+            this.streamVersion(stream) === version
+          ) {
+            current.diskState = refreshBaseline;
+            current.seedRefreshBaseline = undefined;
+            if (refreshBaseline !== 'unknown') {
+              this.persistEagerOverlays(stream, current);
+            }
+            if (current.seedChain === next) current.seedChain = undefined;
+          }
+          throw error;
+        },
+      ) as Promise<void>;
     record.seedChain = next;
     return next;
   }
