@@ -33,7 +33,30 @@ import type {
 
 const log = createLog('toolConversion');
 
-type JSONSchemaObject = Record<string, unknown>;
+/**
+ * A JSON Schema node, typed for the keywords this file actually reads or
+ * writes. The index signature keeps it open to the many other keywords
+ * (minimum, pattern, format, ...) this file passes through untouched —
+ * JSON Schema is an inherently extensible format, not a closed shape.
+ */
+interface JSONSchemaObject {
+  type?: string | string[];
+  properties?: Record<string, JSONSchemaObject>;
+  required?: string[];
+  enum?: unknown[];
+  const?: unknown;
+  description?: string;
+  oneOf?: JSONSchemaObject[];
+  anyOf?: JSONSchemaObject[];
+  allOf?: JSONSchemaObject[];
+  items?: JSONSchemaObject | JSONSchemaObject[];
+  $ref?: string;
+  $schema?: string;
+  $defs?: Record<string, JSONSchemaObject>;
+  definitions?: Record<string, JSONSchemaObject>;
+  additionalProperties?: boolean | JSONSchemaObject;
+  [key: string]: unknown;
+}
 
 function schemaLiteralValue(schema: JSONSchemaObject): unknown {
   if (schema.const !== undefined) return schema.const;
@@ -68,30 +91,25 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
 
   const rawVariants = schema[variantKey] as unknown[];
   const variants = rawVariants.filter(
-    (v): v is JSONSchemaObject =>
-      typeof v === 'object' &&
-      v !== null &&
-      (v as JSONSchemaObject).type === 'object',
+    (v): v is JSONSchemaObject => isSchemaObject(v) && v.type === 'object',
   );
   if (variants.length === 0 || variants.length !== rawVariants.length) {
     return schema;
   }
 
-  const variantProperties: JSONSchemaObject[] = variants.map(
-    (v) => (v.properties as JSONSchemaObject | undefined) ?? {},
+  const variantProperties: Record<string, JSONSchemaObject>[] = variants.map(
+    (v) => v.properties ?? {},
   );
 
   const allPropNames = new Set(
     variantProperties.flatMap((props) => Object.keys(props)),
   );
 
-  const mergedProperties: JSONSchemaObject = {};
+  const mergedProperties: Record<string, JSONSchemaObject> = {};
   for (const name of allPropNames) {
     const branchSchemas = variantProperties
       .map((props) => props[name])
-      .filter(
-        (s): s is JSONSchemaObject => typeof s === 'object' && s !== null,
-      );
+      .filter((s): s is JSONSchemaObject => s !== undefined);
     if (branchSchemas.length === 1) {
       mergedProperties[name] = branchSchemas[0];
       continue;
@@ -124,9 +142,7 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
     mergedProperties[name] = branchSchemas[0];
   }
 
-  const requiredSets = variants.map(
-    (v) => new Set<string>((v.required as string[] | undefined) ?? []),
-  );
+  const requiredSets = variants.map((v) => new Set<string>(v.required ?? []));
   const commonRequired = [...allPropNames].filter((p) =>
     requiredSets.every((s) => s.has(p)),
   );
@@ -336,7 +352,7 @@ function toGoogleOpenApiSchemaNode(value: unknown): unknown {
           name,
           toGoogleOpenApiSchemaNode(schema),
         ]),
-      );
+      ) as Record<string, JSONSchemaObject>;
       continue;
     }
     converted[key] = toGoogleOpenApiSchemaNode(child);

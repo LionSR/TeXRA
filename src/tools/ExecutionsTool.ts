@@ -44,6 +44,7 @@ import {
   ExecutionIdSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
+  stageTitleFor,
   STREAM_LOG_ENTRY_TYPES,
   TERMINAL_WORKFLOW_CALL_STATUSES,
   ToolError,
@@ -443,7 +444,7 @@ function workflowExecutionView(snapshot: WorkflowExecutionSnapshot): unknown {
         id: compactWorkflowText(call.id),
         label: compactWorkflowText(call.label),
         stageId: compactWorkflowText(call.stageId),
-        stageTitle: compactWorkflowText(call.stageTitle),
+        stageTitle: compactWorkflowText(stageTitleFor(snapshot, call)),
         agent: compactWorkflowText(call.agent),
         model: compactWorkflowText(call.model),
         files: {

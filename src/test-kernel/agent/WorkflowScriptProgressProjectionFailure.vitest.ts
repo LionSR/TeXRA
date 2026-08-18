@@ -32,7 +32,6 @@ function snapshot(
         id: 'retry-review',
         label: 'Retry review',
         stageId: 'stage-review',
-        stageTitle: 'Review',
         status,
         attempts: [{}],
         files: {},

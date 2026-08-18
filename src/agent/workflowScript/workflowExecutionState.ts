@@ -70,7 +70,6 @@ export class WorkflowExecutionState {
           label: task.label,
           ...(task.phase !== undefined && {
             stageId: stageIdFor(stageIndex),
-            stageTitle: task.phase,
           }),
           files: { input: [], context: [], media: [] },
           attempts: [],
@@ -199,7 +198,6 @@ export class WorkflowExecutionState {
     const canonical = {
       label: definition.label,
       stageId: stageIndex < 0 ? undefined : stageIdFor(stageIndex),
-      stageTitle: definition.phase,
       files: definition.files,
       ...(definition.agent !== undefined && { agent: definition.agent }),
     };
@@ -510,7 +508,6 @@ function hydrate(
       ...prior,
       label: call.label,
       stageId: call.stageId,
-      stageTitle: call.stageTitle,
       // Reusable completed/cached calls keep their resolved file lists. The
       // fresh meta.tasks stub has empty arrays; overwriting would flush blank
       // files on the constructor emit before the script re-issues those calls.
@@ -542,7 +539,6 @@ function hydrate(
       snapshot.calls.push({
         ...prior,
         stageId: undefined,
-        stageTitle: undefined,
         attempts,
         costUsd: totalAttemptCost(attempts),
         status: reusable ? prior.status : WORKFLOW_CALL_STATUS.PLANNED,
