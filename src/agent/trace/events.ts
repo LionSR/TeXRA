@@ -61,7 +61,7 @@ interface StageStamp {
 }
 
 /** Plain log line — sugar for debug/info/warn/error converges here. */
-export interface LogEvent extends StageStamp {
+interface LogEvent extends StageStamp {
   readonly type: 'log';
   readonly level: 'debug' | 'info' | 'warn' | 'error';
   readonly message: string;

@@ -359,7 +359,6 @@ describe('buildTeamOptions', () => {
       source: 'custom',
       icon: 'bookmark',
       description: 'A custom team.',
-      rootAgentName: null,
       disabled: true,
       disabledReason: 'No runnable team lead.',
     });
@@ -403,7 +402,6 @@ describe('loadTeamOptions', () => {
     expect(refreshRemote).toHaveBeenCalledOnce();
     expect(options.find((option) => option.value === custom.id)).toMatchObject({
       disabled: undefined,
-      rootAgentName: 'lead',
       unavailableMembers: [],
     });
   });

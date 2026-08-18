@@ -248,7 +248,6 @@ export function buildTeamOptions(
         source: plan.preset.source,
         description: plan.preset.description,
         unavailableMembers: missingMemberNames(plan),
-        rootAgentName: plan.rootAgent?.name ?? null,
         disabled: blockReason ? true : undefined,
         disabledReason: blockReason
           ? formatTeamOptionDisabledReason(blockReason)

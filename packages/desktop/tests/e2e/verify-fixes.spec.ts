@@ -13,13 +13,10 @@ import {
 // resolve a relative .js import of a TS file under src/shared (see
 // packages/desktop/tests/e2e/README.md § Cross-package imports;
 // settingsPersistence.spec.ts does the same). Source of truth:
-// SETTINGS_VIEW_CMD.SET_TAB in src/shared/ipc.ts; SETTINGS_TAB_INDEX.TOOLS
-// (index of 'TOOLS' in SETTINGS_TAB_ORDER) in
+// SETTINGS_VIEW_CMD.SET_TAB in src/shared/ipc.ts; the panel name is the
+// `SettingsTabPanelName` wire value from
 // src/shared/schemas/settingsViewMessages.ts.
 const SET_TAB_COMMAND = 'setTab';
-const SETTINGS_TAB_INDEX = {
-  TOOLS: 4,
-} as const;
 
 let launched: LaunchedApp;
 
@@ -147,12 +144,12 @@ test('command palette keeps each icon and label in one compact row', async ({}, 
 test('settings workbench scrolls (Tools tab top + bottom)', async ({}, testInfo) => {
   await openWorkbench(launched, 'settings');
   await launched.page.evaluate(
-    ({ command, tabIndex }) => {
-      window.postMessage({ command, tabIndex }, '*');
+    ({ command, tab }) => {
+      window.postMessage({ command, tab }, '*');
     },
     {
       command: SET_TAB_COMMAND,
-      tabIndex: SETTINGS_TAB_INDEX.TOOLS,
+      tab: 'tools',
     },
   );
   // Wait for the Tools page to be marked active AND its content to have

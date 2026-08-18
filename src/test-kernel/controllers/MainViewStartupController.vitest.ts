@@ -34,7 +34,6 @@ const STARTUP_OPTIONS: MainViewStartupOptions = {
       source: 'built-in',
       description: 'A physics research team.',
       unavailableMembers: [],
-      rootAgentName: 'orchestrator',
     },
   ],
 };
@@ -43,7 +42,6 @@ function createController(
   overrides: Partial<MainViewStartupControllerDeps> = {},
 ): MainViewStartupController {
   return new MainViewStartupController({
-    getConfig: (_key, defaultValue) => defaultValue,
     loadOptions: async () => ({
       modelOptionsByCategory: { workflow: [], toolUse: [] },
       agentOptions: {},
@@ -56,17 +54,9 @@ function createController(
 }
 
 describe('MainViewStartupController', () => {
-  it('uses config to choose the orchestrator banner message', () => {
+  it('shows the orchestrator banner by default', () => {
     expect(createController().getOrchestratorBannerMessage()).toStrictEqual({
       command: MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER,
-    });
-  });
-
-  it('hides the orchestrator banner when disabled', () => {
-    const controller = createController({ getConfig: <T>() => false as T });
-
-    expect(controller.getOrchestratorBannerMessage()).toStrictEqual({
-      command: MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
     });
   });
 

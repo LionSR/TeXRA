@@ -77,7 +77,7 @@ export function publishAgentCliStreamUsage(
   );
 }
 
-export interface AgentCliResumeLabels {
+interface AgentCliResumeLabels {
   notActiveLabel: string;
   idParamName: string;
   summaryLabel: string;
@@ -175,7 +175,7 @@ async function resumeOrLaunchAgentCliSession(
   }
 }
 
-export interface AgentCliLaunchParams {
+interface AgentCliLaunchParams {
   parentStreamId: StreamTabId;
   parentExecutionId: ExecutionId | undefined;
   agentName: string;
@@ -298,7 +298,7 @@ async function withAgentCliApproval(
 
 /** Run context resolved for an agent-CLI launch, handed to the provider's
  * `launch` callback by {@link dispatchAgentCliTool}. */
-export interface AgentCliLaunchContext {
+interface AgentCliLaunchContext {
   parentStreamId: StreamTabId;
   parentExecutionId: ExecutionId | undefined;
   parentWorkingDirectory: string | undefined;
@@ -376,7 +376,7 @@ interface AgentCliTurnUsage {
   output_tokens?: number;
 }
 
-export interface AgentCliLoopParams<TTurn> {
+interface AgentCliLoopParams<TTurn> {
   childStream: ChildStream;
   parentStreamId: StreamTabId;
   executionId: ExecutionId;

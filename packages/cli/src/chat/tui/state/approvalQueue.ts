@@ -16,7 +16,7 @@
 import { computed, signal, type Signal } from '@lit-labs/signals';
 
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import type { CodingPlanSubscriptionId } from '@shared/codingPlanSubscriptions';
+import type { QuotaFallbackRouteId } from '@shared/quotaFallbackRoutes';
 import type {
   AgentProposalPermission,
   ApiAccessMode,
@@ -68,11 +68,8 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   readonly bypass?: ApprovalBypassKind;
   /** Credential mode to apply before accepting this approval. */
   readonly apiMode?: ApiAccessMode;
-  /** Turn off the "prefer ChatGPT subscription" preference before accepting,
-   *  so a Codex usage-limit retry routes through the OpenAI API key. */
-  readonly disableChatGptSubscription?: boolean;
-  /** Turn off the exhausted coding-plan preference before accepting. */
-  readonly disableCodingPlan?: CodingPlanSubscriptionId;
+  /** Turn off the matching quota-fallback preference before accepting. */
+  readonly disableQuotaRoute?: QuotaFallbackRouteId;
   /** Plan-only approval action when plain approve/reject is not specific enough. */
   readonly planAction?: Extract<PlanApprovalAction, 'approve_and_goal'>;
 }

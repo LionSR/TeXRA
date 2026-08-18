@@ -217,7 +217,6 @@ describe('runReflectionFlow persisted-state recovery', () => {
       outputLocation: null,
       conversation: [],
       runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-      roundStateSnapshots: [],
       roundOutputs: [],
       continueRounds: true,
       endTurn: false,

@@ -8,7 +8,7 @@ import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
-import type { DiffOptions, DiffSession, DiffSource } from '@hosts/uiHosts';
+import type { DiffSession, DiffSource } from '@hosts/uiHosts';
 
 import type { ToolEditPermission } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
@@ -444,7 +444,6 @@ describe('desktop tool edit approval', () => {
           original: DiffSource,
           proposed: DiffSource,
           title: string,
-          _options?: DiffOptions,
         ): Promise<DiffSession> => ({ original, proposed, title }),
       );
       const { requestToolEditApproval, controller, interactions } =
@@ -469,9 +468,8 @@ describe('desktop tool edit approval', () => {
 
       await vi.waitFor(() => expect(openDiff).toHaveBeenCalledTimes(2));
       expect(openPath).not.toHaveBeenCalled();
-      const [original, proposed, title, options] = openDiff.mock.calls[0];
+      const [original, proposed, title] = openDiff.mock.calls[0];
       expect(title).toBe('Tool edit: main.tex');
-      expect(options).toEqual({ preserveFocus: true });
       await expect(pathExists(original.filePath)).resolves.toBe(true);
       await expect(pathExists(proposed.filePath)).resolves.toBe(true);
 

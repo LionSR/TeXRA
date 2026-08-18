@@ -8,16 +8,11 @@ export interface DiffSession {
   title: string;
 }
 
-export interface DiffOptions {
-  preserveFocus?: boolean;
-}
-
 export interface DiffViewHost {
   openDiff(
     original: DiffSource,
     proposed: DiffSource,
     title: string,
-    options?: DiffOptions,
   ): Promise<DiffSession>;
   closeDiff(session: DiffSession): Promise<void>;
   revealFirstChange(session: DiffSession, line: number): Promise<void>;
@@ -26,7 +21,6 @@ export interface DiffViewHost {
 
 export interface ExternalOpener {
   openExternal(url: string): Promise<void>;
-  openPath(filePath: string): Promise<void>;
 }
 
 export type PromptMessageItem<T extends string = string> =

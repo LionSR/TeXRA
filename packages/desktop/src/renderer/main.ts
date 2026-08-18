@@ -53,11 +53,7 @@ import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
-import {
-  SETTINGS_TAB,
-  type StreamTabId,
-  type DesktopThemeKind,
-} from '@shared/schemas';
+import type { StreamTabId, DesktopThemeKind } from '@shared/schemas';
 
 import { Signal } from '@shared/signals';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
@@ -153,7 +149,7 @@ const startupTeamPanel = createStartupTeamPanel({
   dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
   onVisibilityChanged: rerenderShell,
   showLauncher: returnToLauncher,
-  openMultiAgent: () => openSettingsTab(SETTINGS_TAB.MULTI_AGENT),
+  openMultiAgent: () => openSettingsTab('multi-agent'),
 });
 
 // =============================================================================
@@ -1266,13 +1262,13 @@ try {
 type ShowSettingsArgs = Parameters<DesktopCommandActions['showSettings']>;
 
 function openSettingsTab(
-  tabIndex?: ShowSettingsArgs[0],
+  tab?: ShowSettingsArgs[0],
   agentSubTab?: ShowSettingsArgs[1],
 ): void {
   openKind('settings');
-  if (tabIndex == null) return;
+  if (tab == null) return;
   window.postMessage(
-    buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
+    buildDesktopSettingsTabMessage(tab, agentSubTab),
     resolvePostMessageTargetOrigin(window.location.origin),
   );
 }

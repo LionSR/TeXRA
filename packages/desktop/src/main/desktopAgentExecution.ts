@@ -65,10 +65,6 @@ import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
-import {
-  isPreferCodexSubscription,
-  setPreferCodexSubscription,
-} from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import {
   COMMON_COMMANDS,
@@ -82,10 +78,10 @@ import type {
   MainViewExecuteMessage,
   MainViewPersistedState,
   RequestOpenFilePayload,
-  SettingsTab,
+  SettingsTabPanelName,
   StreamTabId,
 } from '@shared/schemas';
-import { INSTRUCTION_ACTION, SETTINGS_TAB } from '@shared/schemas';
+import { INSTRUCTION_ACTION } from '@shared/schemas';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   formatActiveStreamRetention,
@@ -525,7 +521,7 @@ export class DesktopProgressBridge {
       readKey: (provider) => lookupApiKey(platform().secrets, provider),
       hasUsableKey: (provider) => hasUsableApiKey(platform().secrets, provider),
       promptForApiKey: async () => {
-        this.showSettings(SETTINGS_TAB.MODELS);
+        this.showSettings('models');
         await this.options.host.showInfoMessage(
           'Add a provider API key in Models, then use "Retry" on the request.',
         );
@@ -534,10 +530,6 @@ export class DesktopProgressBridge {
         getServerSideKeyService().getUseIncludedModelAccess(),
       setUseIncludedModelAccess: async (enabled) => {
         await getServerSideKeyService().setUseIncludedModelAccess(enabled);
-      },
-      getPreferChatGptSubscription: isPreferCodexSubscription,
-      setPreferChatGptSubscription: async (enabled) => {
-        await setPreferCodexSubscription(enabled);
       },
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
@@ -1068,11 +1060,8 @@ export class DesktopProgressBridge {
    * owner the rail and menu commands use, so a stream-initiated navigation
    * lands identically.
    */
-  private showSettings(tabIndex?: SettingsTab): void {
-    postDesktopSettingsView(
-      (message) => this.postToRenderer(message),
-      tabIndex,
-    );
+  private showSettings(tab?: SettingsTabPanelName): void {
+    postDesktopSettingsView((message) => this.postToRenderer(message), tab);
   }
 
   private handlePresentationEvent<K extends RuntimePresentationEvent>(

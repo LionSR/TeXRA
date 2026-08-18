@@ -16,7 +16,7 @@ import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
-  SETTINGS_TAB,
+  SETTINGS_TAB_PANEL_BY_NAME,
   type ChatGptAuthStatus,
   type CopilotRouteInfo,
   type GrokAuthStatus,
@@ -191,7 +191,7 @@ export class SubscriptionsTab extends LitElement {
                 appearance: 'outlined',
                 onClick: () =>
                   postMessage(SETTINGS_VIEW_COMMANDS.SET_TAB, {
-                    tabIndex: SETTINGS_TAB.MODELS,
+                    tab: SETTINGS_TAB_PANEL_BY_NAME.MODELS,
                   }),
               })}
             </div>

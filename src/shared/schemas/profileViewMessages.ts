@@ -30,13 +30,15 @@ export const DEFAULT_GLOBAL_STREAMING = true;
 
 const ProfileUserSchema = z.object({
   email: z.string(),
-  id: z.string(),
 });
 
 /**
  * Remote agent data for the profile view.
  * Extends AgentMetadataBaseSchema (name, category, description) with
  * profile-specific fields. Description is required (non-optional) here.
+ *
+ * No longer carried on UPDATE_PROFILE; kept only because
+ * `settingsViewMessages.ts` re-exports the type (follow-up removal).
  */
 const RemoteAgentSchema = AgentMetadataBaseSchema.extend({
   description: z.string(), // override optional → required for display
@@ -56,11 +58,6 @@ export const API_ACCESS_MODE_OPTIONS: readonly {
   { value: 'included', ...INCLUDED_ACCESS.option },
   { value: 'personal', ...OWN_API_KEYS.option },
 ] as const;
-
-const TierConstantsSchema = z.object({
-  ultra: z.string(),
-  max: z.string(),
-});
 
 /**
  * A native configuration toggle surfaced in a provider's expanded settings.
@@ -105,10 +102,7 @@ export const UpdateProfileMessageSchema = z.object({
   authenticated: z.boolean(),
   user: ProfileUserSchema.nullable(),
   tier: z.string(),
-  remoteAgents: z.array(RemoteAgentSchema),
   apiAccessMode: ApiAccessModeSchema,
-  tierConstants: TierConstantsSchema,
-  accessExpiresAt: z.string().nullish(),
   /**
    * Why a stored session could not provide a fresh token. Invalid credentials
    * require reconnection; transient failures should instead invite a retry.

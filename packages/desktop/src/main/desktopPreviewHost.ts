@@ -25,6 +25,8 @@ interface DesktopShellAdapter {
 }
 
 export interface DesktopPreviewHost extends ExternalOpener {
+  /** Open a workspace file in the OS default application. */
+  openPath(filePath: string): Promise<void>;
   openBuildDisplay: BuildDisplayFn;
 }
 

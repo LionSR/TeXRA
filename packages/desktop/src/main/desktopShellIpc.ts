@@ -1,10 +1,9 @@
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type { MainViewInboundMessage, SettingsTab } from '@shared/schemas';
-import {
-  AgentCategory,
-  MainViewInboundMessageSchema,
-  SETTINGS_TAB,
+import type {
+  MainViewInboundMessage,
+  SettingsTabPanelName,
 } from '@shared/schemas';
+import { AgentCategory, MainViewInboundMessageSchema } from '@shared/schemas';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,
@@ -70,10 +69,13 @@ export function createDesktopShellActions(
     });
   }
 
-  function showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory) {
+  function showSettings(
+    tab?: SettingsTabPanelName,
+    agentSubTab?: AgentCategory,
+  ) {
     postDesktopSettingsView(
       (message) => renderer.postToRenderer(message),
-      tabIndex,
+      tab,
       agentSubTab,
     );
   }
@@ -85,7 +87,7 @@ export function createDesktopShellActions(
 
   function openAgentDirectory(customDirSet?: boolean) {
     if (customDirSet !== true) {
-      showSettings(SETTINGS_TAB.AGENTS);
+      showSettings('agents');
       return;
     }
     void openCustomAgentDirectory().catch(reportAsyncError);
@@ -193,24 +195,24 @@ function dispatchMainViewInboundOnShell(
     }
     case MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS:
       actions.showSettings(
-        SETTINGS_TAB.AGENTS,
+        'agents',
         message.sessionType === AgentCategory.ToolUse
           ? AgentCategory.ToolUse
           : undefined,
       );
       return true;
     case MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS:
-      actions.showSettings(SETTINGS_TAB.MODELS);
+      actions.showSettings('models');
       return true;
     case MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER:
       actions.signIn();
       return true;
     case MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY:
     case MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY:
-      actions.showSettings(SETTINGS_TAB.MODELS);
+      actions.showSettings('models');
       return true;
     case MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS:
-      actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
+      actions.showSettings('multi-agent');
       return true;
     case MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY:
       actions.openAgentDirectory(message.customDirSet === true);

@@ -33,7 +33,6 @@ export interface MainViewStartupOptions {
 }
 
 export interface MainViewStartupControllerDeps {
-  getConfig<T>(key: string, defaultValue: T): T;
   loadOptions(): Promise<MainViewStartupOptions>;
   getAuthStatus(): Promise<MainViewAuthStatus>;
   globalState: StateStore;
@@ -55,22 +54,15 @@ export class MainViewStartupController {
 
   /**
    * Banner dismissals live in global state and are written only by the
-   * banner's own close button. They were `texra.ui.show*Banner` settings until
-   * they moved here, so a pre-move `false` still counts as dismissed; nothing
-   * writes the legacy key back.
+   * banner's own close button.
    */
-  private isBannerDismissed(
-    key: GlobalStateKey,
-    legacySettingPath: string,
-  ): boolean {
-    if (this.deps.globalState.get<boolean>(key) === true) return true;
-    return this.deps.getConfig<boolean>(legacySettingPath, true) === false;
+  private isBannerDismissed(key: GlobalStateKey): boolean {
+    return this.deps.globalState.get<boolean>(key) === true;
   }
 
   getOrchestratorBannerMessage(): MainViewStartupMessage {
     const dismissed = this.isBannerDismissed(
       GlobalStateKey.ORCHESTRATOR_BANNER_DISMISSED,
-      'ui.showOrchestratorBanner',
     );
     return {
       command: dismissed
@@ -85,10 +77,7 @@ export class MainViewStartupController {
 
     const showLoginBanner =
       !authStatus.authenticated &&
-      !this.isBannerDismissed(
-        GlobalStateKey.LOGIN_BANNER_DISMISSED,
-        'ui.showLoginBanner',
-      );
+      !this.isBannerDismissed(GlobalStateKey.LOGIN_BANNER_DISMISSED);
 
     return [
       {

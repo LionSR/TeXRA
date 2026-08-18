@@ -260,8 +260,6 @@ describe.skipIf(process.platform === 'win32')(
 
       const storageCommit = vi.spyOn(storage, 'commitWorkspaceStorageChange');
       const configReplacement = vi.spyOn(config, 'replaceWorkspaceStore');
-      const listener = vi.fn();
-      config.watch('texra.bib.zoteroPort', listener);
 
       fireWorkspaceFolderChange();
       await config.update('texra.bib.zoteroPort', 25000);
@@ -270,7 +268,6 @@ describe.skipIf(process.platform === 'win32')(
       expect(storageCommit).not.toHaveBeenCalled();
       expect(configReplacement).not.toHaveBeenCalled();
       expect(mocks.showErrorMessage).not.toHaveBeenCalled();
-      expect(listener).toHaveBeenCalledOnce();
       await expectConfigContains(projectConfigPath(workspace), '25000');
     });
 
@@ -406,8 +403,6 @@ describe.skipIf(process.platform === 'win32')(
         operations,
         storagePaths,
       });
-      const listener = vi.fn();
-      config.watch('texra.bib.zoteroPort', listener);
 
       workspaceRoot = secondWorkspace;
       fireWorkspaceFolderChange();
@@ -432,13 +427,11 @@ describe.skipIf(process.platform === 'win32')(
       expect(config.get('texra.bib.zoteroPort')).toBe(24002);
       expect(storage.getStoragePath()).toBe(storagePaths.get(secondWorkspace));
 
-      const callsAfterRollback = listener.mock.calls.length;
       failedRoots.clear();
       fireWorkspaceFolderChange();
       await config.update('texra.bib.zoteroPort', 25003);
 
       expect(config.get('texra.bib.zoteroPort')).toBe(25003);
-      expect(listener.mock.calls.length).toBeGreaterThan(callsAfterRollback);
       await expectConfigContains(projectConfigPath(thirdWorkspace), '25003');
     });
   },

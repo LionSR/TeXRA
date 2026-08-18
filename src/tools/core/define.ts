@@ -50,9 +50,9 @@ interface DefinedToolHosts {
  * protected member on an anonymous class type. Naming the type sidesteps that
  * without widening `BaseTool.execute` to public.
  */
-export type DefinedToolClass<T> = abstract new (
-  override?: Partial<ToolDefinition>,
-) => BaseTool<T> & DefinedToolFlags & DefinedToolHosts;
+export type DefinedToolClass<T> = abstract new () => BaseTool<T> &
+  DefinedToolFlags &
+  DefinedToolHosts;
 
 /**
  * Define a tool with type-safe schema and either a static or dynamic description.
@@ -76,20 +76,6 @@ export function defineTool<T>(
   const getDescription = (): string =>
     typeof def.description === 'function' ? def.description() : def.description;
 
-  const buildDefinition = (
-    override?: Partial<ToolDefinition>,
-  ): ToolDefinition => ({
-    name: def.name,
-    description: getDescription(),
-    parameters: toToolParameters(def.schema),
-    // Include original Zod schema for SDK-native conversions (OpenAI, Anthropic)
-    zodSchema: def.schema,
-    ...(def.availabilityCategory && {
-      availabilityCategory: def.availabilityCategory,
-    }),
-    ...override,
-  });
-
   abstract class GeneratedTool extends BaseTool<T> {
     // The return annotation checks these fields against EXECUTION_FLAGS.
     readonly parallelSafe = def.parallelSafe;
@@ -99,8 +85,20 @@ export function defineTool<T>(
     readonly streamsOutput = def.streamsOutput;
     readonly hosts = def.hosts;
 
-    constructor(override?: Partial<ToolDefinition>) {
-      super(buildDefinition(override), def.schema);
+    constructor() {
+      super(
+        {
+          name: def.name,
+          description: getDescription(),
+          parameters: toToolParameters(def.schema),
+          // Include original Zod schema for SDK-native conversions (OpenAI, Anthropic)
+          zodSchema: def.schema,
+          ...(def.availabilityCategory && {
+            availabilityCategory: def.availabilityCategory,
+          }),
+        },
+        def.schema,
+      );
     }
   }
 

@@ -14,7 +14,8 @@ import type {
   DeleteExecutionResult,
 } from '@agent/storage/executionListing';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import {
   ProgressBackend,
   type ProgressBackendOptions,
@@ -62,6 +63,14 @@ export async function createLiveStoreSession(): Promise<SessionHandle> {
   });
 }
 
+/** Stream controls with every bypass off and no goal — the pre-run default. */
+export const stubStreamControls: GetProgressStreamControls = () => ({
+  bashBypass: false,
+  toolEditBypass: false,
+  superYoloBypass: false,
+  goalActive: false,
+});
+
 export function toolUseConfig(agent: string, model: string): AgentConfig {
   return {
     agent,
@@ -78,6 +87,7 @@ export function createRecordingBackend(): {
   const backend = track(
     new ProgressBackend({
       storage: new FakeStateStore(),
+      session: defaultSession(),
       sendMessage: (message) => {
         messages.push(message);
         return true;
@@ -86,6 +96,7 @@ export function createRecordingBackend(): {
       reportTranscriptLoadError: vi.fn(),
       approvals: createApprovalOptions(),
       lifecycle: createLifecycleOptions(),
+      getStreamControls: stubStreamControls,
     }),
   );
   return { backend, messages };
@@ -116,6 +127,7 @@ export function createIsolatedRecordingBackend(
       reportTranscriptLoadError,
       approvals: createApprovalOptions(),
       lifecycle,
+      getStreamControls: stubStreamControls,
     }),
   );
   return { backend, lifecycle, messages, reportTranscriptLoadError, session };

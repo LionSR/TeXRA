@@ -14,7 +14,6 @@ import {
   type ConfigInspection,
   type ConfigProvider,
   type ConfigTarget,
-  type Disposable,
   type StateStore,
   type StorageProvider,
   type WorkspaceProvider,
@@ -63,11 +62,6 @@ export class FakeConfigProvider implements ConfigProvider {
 
   private readonly targets = new Map<string, ConfigTarget>();
 
-  private readonly watchers = new Set<{
-    key: string | readonly string[] | RegExp;
-    listener: () => void;
-  }>();
-
   constructor(values: Record<string, unknown> = {}) {
     for (const [key, value] of Object.entries(values)) {
       this.values.set(key, value);
@@ -86,7 +80,6 @@ export class FakeConfigProvider implements ConfigProvider {
   set(key: string, value: unknown): void {
     this.values.set(key, value);
     this.targets.set(key, 'workspace');
-    this.notifyWatchers(key);
   }
 
   async update<T>(
@@ -101,7 +94,6 @@ export class FakeConfigProvider implements ConfigProvider {
       this.values.set(key, value);
       this.targets.set(key, target);
     }
-    this.notifyWatchers(key);
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
@@ -121,65 +113,12 @@ export class FakeConfigProvider implements ConfigProvider {
     return this.resolveExistingKey(key) !== undefined;
   }
 
-  watch(
-    key: string | readonly string[] | RegExp,
-    listener: () => void,
-  ): Disposable {
-    const watcher = { key, listener };
-    this.watchers.add(watcher);
-    return {
-      dispose: () => {
-        this.watchers.delete(watcher);
-      },
-    };
-  }
-
-  private notifyWatchers(changedKey: string): void {
-    for (const watcher of this.watchers) {
-      if (this.matchesWatchedKey(watcher.key, changedKey)) {
-        watcher.listener();
-      }
-    }
-  }
-
-  private matchesWatchedKey(
-    watchedKey: string | readonly string[] | RegExp,
-    changedKey: string,
-  ): boolean {
-    if (watchedKey instanceof RegExp) {
-      // Host adapters do not expose changed keys uniformly for regex watchers,
-      // so regex subscriptions conservatively refresh.
-      return true;
-    }
-    if (typeof watchedKey === 'string') {
-      return this.affectsConfiguration(watchedKey, changedKey);
-    }
-    return watchedKey.some((key) => this.affectsConfiguration(key, changedKey));
-  }
-
   private resolveExistingKey(key: string): string | undefined {
     return this.configKeys(key).find((candidate) => this.values.has(candidate));
   }
 
   private configKeys(key: string): string[] {
     return key.startsWith('texra.') ? [key] : [key, `texra.${key}`];
-  }
-
-  private affectsConfiguration(
-    watchedKey: string,
-    changedKey: string,
-  ): boolean {
-    return this.configKeys(watchedKey).some((watchedCandidate) =>
-      this.isSameOrNestedKey(watchedCandidate, changedKey),
-    );
-  }
-
-  private isSameOrNestedKey(first: string, second: string): boolean {
-    return (
-      first === second ||
-      first.startsWith(`${second}.`) ||
-      second.startsWith(`${first}.`)
-    );
   }
 }
 
@@ -258,9 +197,6 @@ export class FakeScopedConfigProvider implements ConfigProvider {
       workspaceValue: this.workspaceValues.has(key)
         ? (this.workspaceValues.get(key) as T)
         : undefined,
-      workspaceFolderValue: this.workspaceFolderValues.has(key)
-        ? (this.workspaceFolderValues.get(key) as T)
-        : undefined,
     };
   }
 
@@ -270,10 +206,6 @@ export class FakeScopedConfigProvider implements ConfigProvider {
       this.workspaceValues.has(key) ||
       this.workspaceFolderValues.has(key)
     );
-  }
-
-  watch(): Disposable {
-    return { dispose: () => {} };
   }
 
   /** Seeds a legacy global value directly, without going through `update()`. */
@@ -362,15 +294,6 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   async readFile(target: string): Promise<Uint8Array> {
     const content = await this.fs.promises.readFile(normalizePath(target));
     return typeof content === 'string' ? Buffer.from(content) : content;
-  }
-
-  async readFileChunk(
-    target: string,
-    offset: number,
-    length: number,
-  ): Promise<Uint8Array> {
-    const content = await this.readFile(target);
-    return content.subarray(offset, offset + length);
   }
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {

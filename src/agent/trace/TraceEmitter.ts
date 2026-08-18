@@ -216,7 +216,6 @@ export class TraceEmitter implements AgentTrace {
   // ─── Stages ────────────────────────────────────────────────────────
 
   openStage(label: string, options: StageOptions = {}): StageHandle {
-    const defaultStatus = options.defaultStatus ?? RUN_OUTCOME.COMPLETED;
     const parentId =
       options.parent?.id ?? options.parentId ?? this.activeStageId();
 
@@ -235,7 +234,7 @@ export class TraceEmitter implements AgentTrace {
       total: options.total,
       attemptId: options.attemptId,
     });
-    return new StageHandleImpl(this, id, defaultStatus);
+    return new StageHandleImpl(this, id);
   }
 
   // ─── Streams ───────────────────────────────────────────────────────
@@ -277,7 +276,6 @@ class StageHandleImpl implements StageHandle {
   constructor(
     private readonly trace: TraceEmitter,
     readonly id: string,
-    private readonly defaultStatus: RunOutcome,
   ) {}
 
   end(status?: RunOutcome): void {
@@ -286,7 +284,7 @@ class StageHandleImpl implements StageHandle {
     this.trace.emit({
       type: 'stage.end',
       id: this.id,
-      status: status ?? this.defaultStatus,
+      status: status ?? RUN_OUTCOME.COMPLETED,
     });
   }
 

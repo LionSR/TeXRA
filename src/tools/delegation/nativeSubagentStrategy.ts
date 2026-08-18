@@ -129,7 +129,7 @@ export interface ChildRunLaunchOptions {
   readonly onStreamResolved?: (streamId: StreamTabId) => void;
 }
 
-export interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
+interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
   readonly config: AgentConfig;
   readonly agentCategoryExplicit: boolean;
   readonly executionId: ExecutionId;

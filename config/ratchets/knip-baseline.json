@@ -37,6 +37,16 @@
       "name": "packages/trace-viewer/vite.standalone.config.ts"
     },
     {
+      "file": "src/shared/schemas/profileViewMessages.ts",
+      "category": "types",
+      "name": "RemoteAgent"
+    },
+    {
+      "file": "src/shared/schemas/settingsViewMessages.ts",
+      "category": "types",
+      "name": "RemoteAgent"
+    },
+    {
       "file": "src/test-kernel/support/setupFakePlatform.ts",
       "category": "files",
       "name": "src/test-kernel/support/setupFakePlatform.ts"

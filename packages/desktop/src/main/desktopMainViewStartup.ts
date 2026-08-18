@@ -9,7 +9,6 @@ import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { getConfig } from '@utils/config/configUtils';
 
 import {
   createCommandHandler,
@@ -37,7 +36,6 @@ export function createDesktopMainViewStartup({
   globalState,
 }: DesktopMainViewStartupOptions): DesktopMessageHandler {
   const startupController = new MainViewStartupController({
-    getConfig,
     loadOptions: async () => {
       if (loadOptions != null) return loadOptions();
       const [agentOptions, teamOptions, modelOptions] = await Promise.all([

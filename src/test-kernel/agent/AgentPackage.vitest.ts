@@ -315,14 +315,11 @@ describe('agent package Node configuration', () => {
       storageDir: '/storage',
       workspaceDir: '/workspace',
     }).config;
-    const listener = vi.fn();
-    config.watch('goal.enabled', listener);
 
     await config.update('texra.goal.enabled', true, 'global');
     expect(config.get('goal.enabled')).toBe(true);
     expect(config.inspect('goal.enabled')?.globalValue).toBe(true);
     expect(config.isExplicitlySet('goal.enabled')).toBe(true);
-    expect(listener).toHaveBeenCalledOnce();
 
     await config.update('goal.enabled', undefined, 'global');
     // With no explicit value, resolution matches every host: the core-schema
@@ -331,6 +328,5 @@ describe('agent package Node configuration', () => {
     // A key outside the core schema still falls back to the caller default.
     expect(config.get('custom.nonCoreKey', false)).toBe(false);
     expect(config.isExplicitlySet('texra.goal.enabled')).toBe(false);
-    expect(listener).toHaveBeenCalledTimes(2);
   });
 });

@@ -2123,20 +2123,19 @@ describe('StreamLogStore summary metadata mirror', () => {
     expect(store.getSummaryMeta('alpha')).toBeUndefined();
   });
 
-  it('holds metadata for an unregistered stream without minting a tab and lands it on registration', async () => {
+  it('registers an unknown stream at metadata projection', async () => {
     mockStorage({ logs: {}, summaries: {} });
     const store = await StreamLogStore.open();
 
+    // Run facts can legitimately project before the stream's first append;
+    // recording metadata registers the stream so the metadata is immediately
+    // readable, and a later ensureStream is a no-op.
     store.recordSummaryMeta('gamma', META);
-    // Not registered: the antechamber never mints a phantom tab...
-    expect(store.has('gamma')).toBe(false);
-    expect(store.keys()).toEqual([]);
-    // ...but the metadata is already readable, because run facts can
-    // legitimately project before registration.
+    expect(store.has('gamma')).toBe(true);
     expect(store.getSummaryMeta('gamma')).toEqual(META);
 
     store.ensureStream('gamma');
-    expect(store.has('gamma')).toBe(true);
+    expect(store.keys()).toEqual(['gamma']);
     expect(store.getSummaryMeta('gamma')).toEqual(META);
     await store.flush();
   });

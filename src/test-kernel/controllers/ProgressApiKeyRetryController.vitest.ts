@@ -7,6 +7,8 @@ import {
 } from '@controllers/progressView/ProgressApiKeyRetryController';
 import type { ApiProvider } from '@model/apiProviders';
 import { prefersCopilotRoute } from '@model/copilotRouting';
+import type { QuotaFallbackRuntime } from '@model/quotaFallbackRoutes';
+import type { QuotaFallbackRoute } from '@shared/quotaFallbackRoutes';
 import { installPlatform } from '@test/support/setupPlatform';
 
 const PROVIDERS = [
@@ -20,22 +22,41 @@ const IDLE_RESULT = {
   proceeded: false,
   retried: false,
   disabledIncludedModelAccess: false,
-  disabledChatGptSubscription: false,
-  disabledCodingPlans: [],
+  disabledQuotaRoutes: [],
 };
 const RETRIED_WITH_OWN_KEY_RESULT = {
   proceeded: true,
   retried: true,
   disabledIncludedModelAccess: true,
-  disabledChatGptSubscription: false,
-  disabledCodingPlans: [],
+  disabledQuotaRoutes: [],
 };
+
+function testRuntime(
+  descriptor: Pick<
+    QuotaFallbackRoute,
+    'id' | 'exhaustionReason' | 'disableIncludedAccess' | 'fallbackApiProvider'
+  >,
+  getEnabled: () => boolean,
+  setEnabled: (enabled: boolean) => Promise<void>,
+): QuotaFallbackRuntime {
+  return {
+    descriptor: {
+      retryFallbackName: descriptor.id,
+      retrySourceName: descriptor.id,
+      ...descriptor,
+    },
+    getEnabled,
+    setEnabled,
+    restoreEnabled: setEnabled,
+  };
+}
 
 interface HarnessOptions {
   keys?: Partial<Record<ApiProvider, string | undefined>>;
   prompt?(keys: Map<ApiProvider, string | undefined>): void;
   glmCodingPlan?: boolean;
   kimiCode?: boolean;
+  grok?: boolean;
   retryAvailable?: boolean;
   retryPending?: boolean;
   triggerRetry?: ProgressApiKeyRetryControllerDeps['triggerRetry'];
@@ -50,6 +71,7 @@ function createHarness(options: HarnessOptions = {}): {
   chatGptSubscriptionValues: boolean[];
   glmCodingPlanValues: boolean[];
   kimiCodeValues: boolean[];
+  grokSubscriptionValues: boolean[];
   invalidations: number;
   retries: string[];
 } {
@@ -63,7 +85,9 @@ function createHarness(options: HarnessOptions = {}): {
   const chatGptSubscriptionValues: boolean[] = [];
   const glmCodingPlanValues: boolean[] = [];
   const kimiCodeValues: boolean[] = [];
+  const grokSubscriptionValues: boolean[] = [];
   let preferChatGptSubscription = true;
+  let preferGrokSubscription = options.grok ?? true;
   let glmCodingPlan = options.glmCodingPlan ?? true;
   let kimiCode = options.kimiCode ?? true;
   let invalidations = 0;
@@ -76,6 +100,7 @@ function createHarness(options: HarnessOptions = {}): {
     chatGptSubscriptionValues,
     glmCodingPlanValues,
     kimiCodeValues,
+    grokSubscriptionValues,
     get invalidations() {
       return invalidations;
     },
@@ -93,28 +118,57 @@ function createHarness(options: HarnessOptions = {}): {
       setUseIncludedModelAccess: async (enabled) => {
         includedAccessValues.push(enabled);
       },
-      getPreferChatGptSubscription: () => preferChatGptSubscription,
-      setPreferChatGptSubscription: async (enabled) => {
-        preferChatGptSubscription = enabled;
-        chatGptSubscriptionValues.push(enabled);
-      },
-      codingPlanToggles: [
-        {
-          exhaustionReason: 'glm-coding-plan',
-          getEnabled: () => glmCodingPlan,
-          setEnabled: async (enabled) => {
+      quotaFallbackRuntimes: [
+        testRuntime(
+          {
+            id: 'chatgpt',
+            exhaustionReason: 'chatgpt-subscription',
+            disableIncludedAccess: true,
+            fallbackApiProvider: 'openai',
+          },
+          () => preferChatGptSubscription,
+          async (enabled) => {
+            preferChatGptSubscription = enabled;
+            chatGptSubscriptionValues.push(enabled);
+          },
+        ),
+        testRuntime(
+          {
+            id: 'grok',
+            exhaustionReason: 'xai-subscription',
+            disableIncludedAccess: true,
+            fallbackApiProvider: 'xai',
+          },
+          () => preferGrokSubscription,
+          async (enabled) => {
+            preferGrokSubscription = enabled;
+            grokSubscriptionValues.push(enabled);
+          },
+        ),
+        testRuntime(
+          {
+            id: 'glmCodingPlan',
+            exhaustionReason: 'glm-coding-plan',
+            disableIncludedAccess: false,
+          },
+          () => glmCodingPlan,
+          async (enabled) => {
             glmCodingPlan = enabled;
             glmCodingPlanValues.push(enabled);
           },
-        },
-        {
-          exhaustionReason: 'kimi-code-subscription',
-          getEnabled: () => kimiCode,
-          setEnabled: async (enabled) => {
+        ),
+        testRuntime(
+          {
+            id: 'kimiCode',
+            exhaustionReason: 'kimi-code-subscription',
+            disableIncludedAccess: false,
+          },
+          () => kimiCode,
+          async (enabled) => {
             kimiCode = enabled;
             kimiCodeValues.push(enabled);
           },
-        },
+        ),
       ],
       invalidateModelOptionsCache: () => {
         invalidations += 1;
@@ -314,8 +368,7 @@ describe('ProgressApiKeyRetryController', () => {
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: true,
-      disabledChatGptSubscription: true,
-      disabledCodingPlans: [],
+      disabledQuotaRoutes: ['chatgpt-subscription'],
     });
     // The subscription quota failed, not the key — a stored key is already
     // usable, so "Use your own API key" must not jump to the key-input prompt.
@@ -324,6 +377,31 @@ describe('ProgressApiKeyRetryController', () => {
     expect(harness.chatGptSubscriptionValues).toStrictEqual([false]);
     expect(harness.invalidations).toBe(2);
     expect(harness.retries).toStrictEqual(['stream-d']);
+  });
+
+  it('disables the Grok subscription and retries with the existing xAI key, no prompt', async () => {
+    const harness = createHarness({
+      keys: { xai: 'stored-xai' },
+    });
+
+    const result = await harness.controller.useOwnApiKey({
+      stream: 'stream-grok',
+      requestId: 'retry-grok',
+      provider: 'xai',
+      exhaustionReason: 'xai-subscription',
+    });
+
+    expect(result).toStrictEqual({
+      proceeded: true,
+      retried: true,
+      disabledIncludedModelAccess: true,
+      disabledQuotaRoutes: ['xai-subscription'],
+    });
+    expect(harness.prompts).toStrictEqual([]);
+    expect(harness.includedAccessValues).toStrictEqual([false]);
+    expect(harness.grokSubscriptionValues).toStrictEqual([false]);
+    expect(harness.invalidations).toBe(2);
+    expect(harness.retries).toStrictEqual(['stream-grok']);
   });
 
   it('does not disable the subscription when no usable OpenAI key is available', async () => {
@@ -359,8 +437,7 @@ describe('ProgressApiKeyRetryController', () => {
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: false,
-      disabledChatGptSubscription: false,
-      disabledCodingPlans: ['glm-coding-plan'],
+      disabledQuotaRoutes: ['glm-coding-plan'],
     });
     // The coding-plan quota failed, not the key — a stored key is already
     // usable, so "Use your own API key" must not jump to the key-input prompt.
@@ -388,8 +465,7 @@ describe('ProgressApiKeyRetryController', () => {
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: false,
-      disabledChatGptSubscription: false,
-      disabledCodingPlans: [],
+      disabledQuotaRoutes: [],
     });
     expect(harness.glmCodingPlanValues).toStrictEqual([]);
   });
@@ -581,8 +657,7 @@ describe('ProgressApiKeyRetryController', () => {
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: true,
-      disabledChatGptSubscription: true,
-      disabledCodingPlans: [],
+      disabledQuotaRoutes: ['chatgpt-subscription'],
     });
     expect(harness.includedAccessValues).toStrictEqual([false, true, false]);
     expect(harness.chatGptSubscriptionValues).toStrictEqual([
@@ -657,8 +732,7 @@ describe('ProgressApiKeyRetryController', () => {
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: false,
-      disabledChatGptSubscription: false,
-      disabledCodingPlans: [],
+      disabledQuotaRoutes: [],
     });
     // The SDK error identifies the open-platform Moonshot provider, but the
     // exclusive handler rebinds with `kimiCode`; the prompt and key check must
@@ -692,8 +766,7 @@ describe('ProgressApiKeyRetryController', () => {
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: false,
-      disabledChatGptSubscription: false,
-      disabledCodingPlans: ['kimi-code-subscription'],
+      disabledQuotaRoutes: ['kimi-code-subscription'],
     });
     // The forwarded SDK provider is `moonshot`, so that is the credential the
     // panel asks to replace; the routing step then turns off "Prefer Kimi
@@ -732,8 +805,7 @@ describe('ProgressApiKeyRetryController', () => {
       proceeded: true,
       retried: true,
       disabledIncludedModelAccess: false,
-      disabledChatGptSubscription: false,
-      disabledCodingPlans: [],
+      disabledQuotaRoutes: [],
     });
     // A canonical `kimi3` can also fail through OpenRouter, Moonshot, or the
     // relay. Those failed handlers were not dispatched onto the Kimi Code

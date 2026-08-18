@@ -89,7 +89,12 @@ interface SyncHarness {
 }
 
 async function createSyncHarness(
-  getControls?: GetProgressStreamControls,
+  getControls: GetProgressStreamControls = () => ({
+    bashBypass: false,
+    toolEditBypass: false,
+    superYoloBypass: false,
+    goalActive: false,
+  }),
 ): Promise<SyncHarness> {
   const state = new SessionState();
   await state.snapshots.load([]);
@@ -112,6 +117,7 @@ async function createSyncHarness(
       messages.push(payload);
     },
     () => true,
+    () => '',
   );
   return { state, messages, bridge, renderer };
 }

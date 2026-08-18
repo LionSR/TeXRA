@@ -493,7 +493,7 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
     .toBeLessThanOrEqual(520);
 
   await page.evaluate(() => {
-    window.postMessage({ command: 'setTab', tabIndex: 4 }, '*');
+    window.postMessage({ command: 'setTab', tab: 'tools' }, '*');
   });
   await expect(page.locator('tools-tab tool-card').first()).toBeVisible({
     timeout: 5_000,
@@ -531,7 +531,7 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
   }
 
   await page.evaluate(() => {
-    window.postMessage({ command: 'setTab', tabIndex: 10 }, '*');
+    window.postMessage({ command: 'setTab', tab: 'shortcuts' }, '*');
   });
   const shortcuts = page.locator('shortcuts-tab');
   await expect(
@@ -568,8 +568,8 @@ test('keeps settings banners consistent in a narrow side panel', async () => {
   // Memory/Models/Teams/Goals pages dropped theirs in the native-settings
   // consolidation, so they are no longer part of this consistency check.
   const bannerTabs = [
-    { index: 10, tag: 'account-tab' },
-    { index: 11, tag: 'shortcuts-tab' },
+    { tab: 'account', tag: 'account-tab' },
+    { tab: 'shortcuts', tag: 'shortcuts-tab' },
   ] as const;
   const bannerMetrics: Array<{
     readonly borderRadius: string;
@@ -580,9 +580,9 @@ test('keeps settings banners consistent in a narrow side panel', async () => {
 
   await openSidebarWorkbench('Settings');
   for (const tab of bannerTabs) {
-    await page.evaluate((tabIndex) => {
-      window.postMessage({ command: 'setTab', tabIndex }, '*');
-    }, tab.index);
+    await page.evaluate((panel) => {
+      window.postMessage({ command: 'setTab', tab: panel }, '*');
+    }, tab.tab);
 
     const banner = page.locator(`${tab.tag} .settings-banner`).first();
     await expect(banner).toBeVisible();

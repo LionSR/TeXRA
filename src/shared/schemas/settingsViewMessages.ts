@@ -106,13 +106,11 @@ export type {
 } from './agentCliSettings';
 
 /**
- * Tab name order — single source of truth for tab indices, and a wire format:
- * `SETTINGS_TAB.X` indices travel over IPC (`SET_TAB.tabIndex`) and are
- * hand-copied as integer tables in the desktop e2e specs and the walkthrough
- * capture script.
- *
- * New entries append at the end. Retired internal panels are removed together
- * with their producers and command surfaces so no stale IPC target remains.
+ * The set of settings tabs — single source of truth for tab names. The wire
+ * format is the derived panel name (`SET_TAB.tab`), so order carries no
+ * meaning beyond stable iteration. Retired internal panels are removed
+ * together with their producers and command surfaces so no stale IPC target
+ * remains.
  */
 export const SETTINGS_TAB_ORDER = [
   'MEMORY',
@@ -167,24 +165,11 @@ export const SETTINGS_TAB_PANEL_BY_NAME = Object.fromEntries(
 export const SETTINGS_TAB_PANEL_NAMES: readonly SettingsTabPanelName[] =
   SETTINGS_TAB_ORDER.map((name) => SETTINGS_TAB_PANEL_BY_NAME[name]);
 
-/** Tab indices derived from ordered array */
-export const SETTINGS_TAB = Object.fromEntries(
-  SETTINGS_TAB_ORDER.map((name, index) => [name, index]),
-) as Record<SettingsTabName, number>;
-
-export type SettingsTab = (typeof SETTINGS_TAB)[keyof typeof SETTINGS_TAB];
-
 /**
- * Presentation-only grouping for the settings top navigation.
- *
- * Deliberately a second, independent layer: `SETTINGS_TAB_ORDER` is the wire
- * format (indices cross IPC and are hand-copied into e2e index tables), so nav
- * grouping and nav display order must never be expressed by reordering it.
- * Groups address panels by `SettingsTabName`, which the nav renders as the
- * panel name (`SETTINGS_TAB_PANEL_BY_NAME`) and `SettingsApp.handleTabShow`
- * resolves back to an index via `SETTINGS_TAB_PANEL_NAMES.indexOf(...)` — so
- * regrouping or reordering the nav changes no index and no `SETTINGS_TAB.X`
- * call site.
+ * Presentation-only grouping for the settings top navigation. Groups address
+ * panels by `SettingsTabName`, which the nav renders as the panel name
+ * (`SETTINGS_TAB_PANEL_BY_NAME`) — the same name that travels over IPC as
+ * `SET_TAB.tab`.
  *
  * Every tab must appear in exactly one group, or its panel becomes unreachable
  * from the nav while still being a valid IPC target. `SharedSchemas.vitest.ts`
@@ -203,13 +188,10 @@ export const SETTINGS_TAB_GROUPS = [
   tabs: readonly SettingsTabName[];
 }[];
 
-/** Outbound schema to switch tabs */
+/** Outbound schema to switch tabs, addressed by panel name. */
 const SetTabMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.SET_TAB),
-  tabIndex: z
-    .int()
-    .min(0)
-    .max(SETTINGS_TAB_ORDER.length - 1),
+  tab: z.enum(SETTINGS_TAB_PANEL_NAMES),
   agentSubTab: AgentCategorySchema.optional(),
 });
 

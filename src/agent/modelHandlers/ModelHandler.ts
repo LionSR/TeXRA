@@ -62,6 +62,7 @@ import {
   isUserAbort,
 } from '@common/errors/sdkError/errorPatterns';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import { attachSdkCredentialRoute } from '@common/errors/sdkError/sdkRequestEndpoint';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import {
   allowsModelRelay,
@@ -1242,6 +1243,9 @@ export abstract class ModelHandler<
       } catch (err) {
         this.sdkErrorTagger(err, this.config.provider);
         this.attachSdkRequestEndpoint(err, options.client);
+        if (credentialRoute !== undefined) {
+          attachSdkCredentialRoute(err, credentialRoute);
+        }
         throw err;
       } finally {
         this.activeAttemptCredentialRoute = undefined;

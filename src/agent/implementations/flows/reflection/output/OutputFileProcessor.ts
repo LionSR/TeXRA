@@ -1,16 +1,8 @@
 import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
-import type {
-  FileLocation,
-  OutputFileInfo,
-  OutputXmlSummary,
-} from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
 import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import {
-  extractMultipleTextFromTag,
-  extractTextFromTag,
-} from '@utils/text/xmlExtraction';
 import { replaceInputCommands } from './fileMapping';
 
 import { tryOperation } from './outputOperations';
@@ -32,7 +24,6 @@ export class OutputFileProcessor {
   async processMultipleOutputs(
     outputLocation: FileLocation,
     currRound: number,
-    rawLocation: FileLocation,
   ): Promise<void> {
     const { logger } = this.deps;
 
@@ -54,7 +45,7 @@ export class OutputFileProcessor {
           logger.debug(
             `No processed files were generated from ${outputLocation.absolutePath}`,
           );
-          await this.handleNoOutputs(currRound, outputLocation, rawLocation);
+          await this.handleNoOutputs(currRound, outputLocation);
           return;
         }
 
@@ -63,14 +54,12 @@ export class OutputFileProcessor {
           await replaceInputCommands(this.deps.baseFiles, locations, logger);
         }
         ensureRoundData(this.state, currRound).outputs = processedPairs;
-        await this.captureXmlSummary(currRound, rawLocation, processedPairs);
       },
       {
         logger,
         level: 'debug',
         label: 'Error processing output file',
-        recover: () =>
-          this.handleNoOutputs(currRound, outputLocation, rawLocation),
+        recover: () => this.handleNoOutputs(currRound, outputLocation),
       },
     );
   }
@@ -122,11 +111,9 @@ export class OutputFileProcessor {
   private async handleNoOutputs(
     currRound: number,
     outputLocation: FileLocation,
-    rawLocation: FileLocation,
   ): Promise<void> {
     await this.emitMissingOutputs(currRound, outputLocation);
     ensureRoundData(this.state, currRound).outputs = [];
-    await this.captureXmlSummary(currRound, rawLocation, []);
   }
 
   /** Logs and signals the UI that a round produced no extractable output files. */
@@ -159,71 +146,5 @@ export class OutputFileProcessor {
       missing: [],
       xmlFile: outputLocation.absolutePath,
     });
-  }
-
-  private async captureXmlSummary(
-    round: number,
-    rawOutput: FileLocation | null,
-    processed: OutputFileInfo[],
-  ): Promise<void> {
-    const data = ensureRoundData(this.state, round);
-    const singleFile =
-      processed.length === 1 ? processed[0].location.absolutePath : null;
-
-    const buildSummary = (
-      tagContents: Record<string, string[]> = {},
-    ): OutputXmlSummary => ({
-      tagContents,
-      singleOutputFile: singleFile,
-      sourceLocation: rawOutput,
-    });
-
-    if (!rawOutput?.absolutePath) {
-      data.xmlSummary = buildSummary();
-      return;
-    }
-
-    await tryOperation(
-      async () => {
-        const rawContent = await AbsoluteFS.read(rawOutput.absolutePath);
-        const tagContents: Record<string, string[]> = {};
-
-        const documentEntries = extractMultipleTextFromTag(
-          rawContent,
-          OUTPUT_DOCUMENTS_TAG,
-        );
-        if (documentEntries.length > 0) {
-          tagContents[OUTPUT_DOCUMENTS_TAG] = documentEntries.map((e) =>
-            e.content.trim(),
-          );
-        } else {
-          const singleDocument = extractTextFromTag(
-            rawContent,
-            OUTPUT_DOCUMENTS_TAG,
-          ).trim();
-          if (singleDocument) {
-            tagContents[OUTPUT_DOCUMENTS_TAG] = [singleDocument];
-          }
-        }
-
-        const scratchpadContent = extractTextFromTag(
-          rawContent,
-          'scratchpad',
-        ).trim();
-        if (scratchpadContent) {
-          tagContents.scratchpad = [scratchpadContent];
-        }
-
-        data.xmlSummary = buildSummary(tagContents);
-      },
-      {
-        logger: this.deps.logger,
-        level: 'debug',
-        label: `Failed to collect XML summary for round ${round}`,
-        recover: () => {
-          data.xmlSummary = buildSummary();
-        },
-      },
-    );
   }
 }

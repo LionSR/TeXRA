@@ -10,13 +10,13 @@ import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import {
   agentSubTab,
-  selectedTabIndex,
+  selectedPanel,
   unsupportedCommands,
 } from '../settingsState';
 
 export const tabHandlers = {
   [SETTINGS_VIEW_COMMANDS.SET_TAB]: (data) => {
-    selectedTabIndex.set(data.tabIndex);
+    selectedPanel.set(data.tab);
     agentSubTab.set(data.agentSubTab);
   },
   [SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS]: (data) => {

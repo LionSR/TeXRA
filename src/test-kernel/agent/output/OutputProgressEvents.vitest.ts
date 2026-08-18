@@ -266,7 +266,6 @@ describe('output progress events', () => {
       },
     );
 
-    expect(shared.lastCompileResult).toEqual(fixture.compileResult);
     if (rejectOnCompileFailure) {
       expect(shared.compileFailureContext).toContain(
         'previous workflow round was rejected',
@@ -285,12 +284,6 @@ describe('output progress events', () => {
     const shared = {
       roundOutputs: [],
       compileFailureContext: 'old context',
-      lastCompileResult: {
-        status: 'failed',
-        round: 0,
-        failures: [],
-        logExcerpt: 'old log',
-      },
     } as unknown as ReflectionFlowShared;
 
     await runOutputPost(
@@ -310,7 +303,6 @@ describe('output progress events', () => {
       },
     );
 
-    expect(shared.lastCompileResult).toEqual(compileResult);
     expect(shared.compileFailureContext).toBeUndefined();
   });
 
@@ -342,11 +334,7 @@ describe('output progress events', () => {
         state,
         processorDeps(logger),
         xmlManager,
-      ).processMultipleOutputs(
-        createLocation(outputPath),
-        round,
-        createLocation('/tmp/raw-output.xml'),
-      );
+      ).processMultipleOutputs(createLocation(outputPath), round);
 
       expect(runEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
@@ -385,11 +373,7 @@ describe('output progress events', () => {
         createOutputState(),
         processorDeps(logger),
         xmlManager,
-      ).processMultipleOutputs(
-        createLocation('/tmp/output.xml'),
-        5,
-        createLocation('/tmp/output.xml'),
-      );
+      ).processMultipleOutputs(createLocation('/tmp/output.xml'), 5);
 
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('no files could be extracted');

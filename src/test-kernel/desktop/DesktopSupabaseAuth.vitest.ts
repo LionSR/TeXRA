@@ -18,7 +18,6 @@ import {
   type DesktopOAuthClient,
   type DesktopSupabaseAuthHost,
 } from '@desktop/main/desktopSupabaseAuth';
-import { AgentCategory } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 
@@ -884,22 +883,9 @@ describe('desktop Supabase auth', () => {
     );
   });
 
-  it('refreshes desktop session state and exposes remote agents in profile data', async () => {
+  it('refreshes desktop session state for profile data without a token fetch', async () => {
     const { ensureFreshToken, getSessionTokens, getStoredSessionState } =
       installAuthenticatedSupabaseProvider();
-    const loadAgents = vi
-      .spyOn(agentRegistry, 'loadAgents')
-      .mockResolvedValue(undefined);
-    vi.spyOn(agentRegistry, 'getAgentsBySource').mockReturnValue([
-      {
-        name: 'remoteWriter',
-        source: 'remote',
-        path: '',
-        defaultOutputFiles: ['main.tex'],
-        category: AgentCategory.Workflow,
-        description: 'Remote writer',
-      },
-    ]);
 
     const message = await buildProfileMessage({
       getProviderKeyStatuses: async () => [],
@@ -908,40 +894,10 @@ describe('desktop Supabase auth', () => {
     expect(getStoredSessionState).toHaveBeenCalledOnce();
     expect(getSessionTokens).not.toHaveBeenCalled();
     expect(ensureFreshToken).not.toHaveBeenCalled();
-    expect(loadAgents).toHaveBeenCalled();
     expect(message).toMatchObject({
       authenticated: true,
-      user: { email: 'user@example.com', id: 'user-1' },
+      user: { email: 'user@example.com' },
       tier: 'free',
-      remoteAgents: [
-        {
-          name: 'remoteWriter',
-          description: 'Remote writer',
-          category: 'workflow',
-          supportsMultipleOutput: true,
-        },
-      ],
     });
-  });
-
-  it('keeps authenticated profile data when remote agent refresh fails', async () => {
-    installAuthenticatedSupabaseProvider();
-    vi.spyOn(agentRegistry, 'loadAgents').mockRejectedValue(
-      new Error('agent directory unavailable'),
-    );
-    const getAgentsBySource = vi
-      .spyOn(agentRegistry, 'getAgentsBySource')
-      .mockReturnValue([]);
-
-    const message = await buildProfileMessage({
-      getProviderKeyStatuses: async () => [],
-    });
-
-    expect(message).toMatchObject({
-      authenticated: true,
-      user: { email: 'user@example.com', id: 'user-1' },
-      remoteAgents: [],
-    });
-    expect(getAgentsBySource).not.toHaveBeenCalled();
   });
 });

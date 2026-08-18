@@ -46,7 +46,6 @@ import {
 } from '@shared/state/onboardingState';
 import { assertKnownOutboundMessage } from '@shared/utils/dispatcher';
 import { debounce } from '@utils/core';
-import { watchConfig } from '@utils/config/configUtils';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 
 // Local file imports
@@ -115,7 +114,6 @@ export class MainViewProvider
     );
     this.setupFileWatcher();
     this.setupAgentWatcher();
-    this.setupConfigurationWatcher();
     this.setupWorkspaceWatcher();
     this.setupAuthListener();
   }
@@ -135,10 +133,6 @@ export class MainViewProvider
       message,
     );
     webviewView.webview.postMessage(message);
-  }
-
-  private setupConfigurationWatcher() {
-    watchConfig(this.context, ['texra.files'], this.refreshFiles.bind(this));
   }
 
   private setupWorkspaceWatcher(): void {
