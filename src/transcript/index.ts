@@ -25,7 +25,7 @@ export { createRunTrace, type RunTrace } from './runTrace';
 export { findTranscriptSpillFile, readTranscriptSpill } from './spillArtifacts';
 export { streamDataDir } from './streamDataPaths';
 export { StreamSnapshotStore } from './StreamSnapshotStore';
-export { assembleTrace } from './traceAssembler';
+export { assembleTrace, type AssembleTraceResult } from './traceAssembler';
 export type { TraceDocument } from './traceDocumentSchema';
 export {
   hasCompletedRunConversationEvidence,

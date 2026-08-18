@@ -96,13 +96,13 @@ async function runHistoryShow(
 /**
  * Export a stored conversation to stdout as a standalone document.
  *
- * `md` uses `loadChatExportInput` (`@agent/export`), the host-neutral
- * loader/formatter shared with the rest of the CLI's history commands.
+ * `md` mirrors the extension's ChatExportController.buildExportInput so the
+ * CLI and the extension render the same conversation identically.
  *
- * `html` assembles the execution's trace (`assembleTrace`) and embeds it
- * into the trace-viewer — the same faithful Progress View replay, not a
- * separate hand-written exporter. Default mode writes one self-contained
- * page to stdout (JS/CSS/
+ * `html` assembles the execution's trace (`assembleTrace`, shared with the
+ * extension's "Export as HTML" button) and embeds it into the trace-viewer —
+ * the same faithful Progress View replay, not a separate hand-written
+ * exporter. Default mode writes one self-contained page to stdout (JS/CSS/
  * fonts all inlined, so `> out.html` opens correctly via `file://` with no
  * server). `--assets-dir <dir>` switches to
  * the shared-assets mode for a site publishing many traces: stages the
