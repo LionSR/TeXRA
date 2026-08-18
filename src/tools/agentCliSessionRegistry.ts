@@ -141,14 +141,13 @@ export class AgentCliSessionRegistry {
   }
 
   /**
-   * Interrupt every registered CLI-backed session, or only those owned by
-   * `ownedBy` when one session tears down while others stay live (the agent
-   * package disposes a per-run session on every `runAgent` return).
+   * Interrupt every registered CLI-backed session. Registries are keyed by
+   * runtime session (`agentCliSessionStores`), so "every" is already scoped
+   * to one session's own agent-CLI children.
    */
-  interruptAll(ownedBy?: ExecutionRegistry): void {
+  interruptAll(): void {
     const interrupted = new Set<ExecutionId>();
     const interrupt = (entry: AgentCliSessionEntry): void => {
-      if (ownedBy && entry.executions !== ownedBy) return;
       if (interrupted.has(entry.executionId)) return;
       const { childStreamId, executions } = entry;
       const handle = executions.getAgentHandleByStream(childStreamId);

@@ -322,15 +322,6 @@ export function getCustomAgentScanIssues(): readonly AgentScanIssue[] {
 }
 
 /**
- * Whether the local registry has been loaded so `getAgent` lookups are
- * meaningful. Callers that distinguish "agent absent" from "registry not yet
- * loaded" must check this first — an empty cache looks identical otherwise.
- */
-export function isAgentRegistryReady(): boolean {
-  return catalog !== undefined;
-}
-
-/**
  * Force a new load after every older one has settled, superseding any load
  * still queued from before. The cache keeps serving the catalog it already
  * published until the new one lands, including when the refresh fails.

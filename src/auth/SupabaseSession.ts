@@ -5,10 +5,8 @@ import {
   parseAuthCallbackCode,
   type AuthCallbackUriParts,
 } from './authCallback';
-import { fetchWithTimeout } from './fetchWithTimeout';
 import {
   parseStoredSupabaseSession,
-  parseTokenExchangeResponse,
   toStorableSupabaseSession,
   type SupabaseCallbackResult,
   type SupabaseSession,
@@ -45,10 +43,6 @@ export interface SupabaseSessionCoordinatorOptions {
   getClient: () => Client;
   whenReady: () => Promise<void>;
   tokenRefreshThresholdMs: number;
-  defaultSessionExpiryMs: number;
-  githubTokenRefreshUrl: string;
-  edgeFunctionTimeoutMs: number;
-  fetch?: typeof fetch;
   log?: SupabaseSessionLog;
 }
 
@@ -259,11 +253,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     return { success: true, session: toStorableSupabaseSession(data.session) };
   }
 
-  /**
-   * Refresh session with concurrency protection.
-   * Routes to custom endpoint for GitHub auth sessions, otherwise uses Supabase
-   * native refresh.
-   */
+  /** Refresh session via Supabase native refresh, with concurrency protection. */
   async refreshSession(
     session: SupabaseSession,
     expectedVersion = this.sessionMutationVersion,
@@ -273,11 +263,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     }
 
     this.lastRefreshFailure = null;
-    this.refreshPromise = (
-      session.useCustomRefresh
-        ? this.refreshViaCustomEndpoint(session)
-        : this.refreshViaSupabase(session)
-    )
+    this.refreshPromise = this.refreshViaSupabase(session)
       .then((refreshed) =>
         refreshed
           ? this.storeRefreshIfCurrent(refreshed, expectedVersion)
@@ -402,9 +388,6 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     }
 
     await this.storeSession(refreshed);
-    if (refreshed.useCustomRefresh) {
-      this.log.info('SupabaseSession', 'Token refreshed via custom endpoint');
-    }
     return this.isCurrentStoredSession(refreshed)
       ? refreshed
       : this.loadStableSession();
@@ -417,37 +400,5 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       this.lastStoredSession.refreshToken === session.refreshToken &&
       this.lastStoredSession.id === session.id
     );
-  }
-
-  private async refreshViaCustomEndpoint(
-    session: SupabaseSession,
-  ): Promise<SupabaseSession | null> {
-    const response = await fetchWithTimeout(
-      this.options.githubTokenRefreshUrl,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: session.refreshToken }),
-      },
-      this.options.edgeFunctionTimeoutMs,
-      'Token refresh timeout',
-      this.options.fetch,
-    );
-
-    if (!response.ok) {
-      this.lastRefreshFailure = classifyAuthFailureStatus(response.status);
-      this.log.warn(
-        'SupabaseSession',
-        `Token refresh failed: ${response.status}`,
-      );
-      return null;
-    }
-
-    const data = await parseTokenExchangeResponse(response, this.log);
-    this.lastRefreshFailure = null;
-    return toStorableSupabaseSession(data, {
-      fallbackLabel: session.account.label,
-      defaultExpiryMs: this.options.defaultSessionExpiryMs,
-    });
   }
 }

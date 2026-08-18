@@ -56,6 +56,12 @@ import type {
   AgentCliSessionRegistry,
 } from './agentCliSessionRegistry';
 
+/** Session-keyed registry accessor (`codexThreadsFor`/`claudeAgentSessionsFor`);
+ * dispatch and loop resolve it once against the ambient session. */
+export type AgentCliSessionStoreAccessor = (
+  session: SessionHandle,
+) => AgentCliSessionRegistry;
+
 /**
  * Publish a turn's token usage to the progress UI for an agent-CLI child stream.
  * Shared by the codex and claudeAgent session strategies.
@@ -321,7 +327,7 @@ interface AgentCliLaunchContext {
 export function dispatchAgentCliTool(params: {
   agentName: string;
   approvalLabel: string;
-  store: AgentCliSessionRegistry;
+  store: AgentCliSessionStoreAccessor;
   resumeId: string | undefined;
   /** Existing live session read by a fresh launch, such as a fork source. */
   sourceId?: string;
@@ -340,9 +346,10 @@ export function dispatchAgentCliTool(params: {
     launch,
   } = params;
   return withAgentCliApproval(agentName, approvalLabel, (runContext) => {
+    const registry = store(currentSession());
     const callerStreamId = getRunContextStreamId(runContext);
     if (sourceId) {
-      const source = store.lookup(sourceId);
+      const source = registry.lookup(sourceId);
       requireCallerOwnership(
         sourceId,
         callerStreamId,
@@ -350,7 +357,7 @@ export function dispatchAgentCliTool(params: {
         labels,
       );
     }
-    return resumeOrLaunchAgentCliSession(store, {
+    return resumeOrLaunchAgentCliSession(registry, {
       id: resumeId,
       prompt,
       callerStreamId,
@@ -390,7 +397,7 @@ interface AgentCliLoopParams<TTurn> {
   stageLabel: string;
   initialPrompt: string;
   /** Session/thread registry the loop tracks in-flight and successful turns in. */
-  store: AgentCliSessionRegistry;
+  store: AgentCliSessionStoreAccessor;
   /**
    * The disk-based fallback session/thread id claimed synchronously before the
    * loop starts, if any. Release it if the loop exits before promoting it.
@@ -462,13 +469,16 @@ export function startAgentCliLoop<TTurn>(
     loopFailedMessage,
   } = params;
   const { childStreamId, logger } = childStream;
+  // Resolved once against the ambient session — the same session
+  // `startChildRunLoop` captures for its strategy callbacks below.
+  const registry = store(currentSession());
 
   // Fresh and resumed session/thread ids are registered after the first
   // successful turn is persisted, immediately before its result reaches the
   // parent.
   const registerSessionId = (id: string, session: SessionHandle): void => {
-    if (store.lookup(id)) return;
-    store.register(id, buildEntry(session));
+    if (registry.lookup(id)) return;
+    registry.register(id, buildEntry(session));
   };
 
   // The joined prompt text for whichever turn is currently in flight —
@@ -498,7 +508,7 @@ export function startAgentCliLoop<TTurn>(
     isTurnError,
     onTurnError,
     onLoopStart: (session) => {
-      store.trackInFlight(buildEntry(session));
+      registry.trackInFlight(buildEntry(session));
     },
     onTurnSuccess: (turn, session) => {
       for (const id of resolveSessionIds(turn)) {
@@ -516,7 +526,7 @@ export function startAgentCliLoop<TTurn>(
     formatError: (turn, err) => formatError(turn, err, lastPrompt),
     releaseSessionOwnership: () => {
       releaseFallbackClaim?.();
-      store.releaseByExecutionId(executionId);
+      registry.releaseByExecutionId(executionId);
     },
   };
 
