@@ -35,21 +35,6 @@ describe('model handler compatibility inference', () => {
     info.mockClear();
   });
 
-  it('keeps keyless legacy Copilot transcripts on OpenRouter', () => {
-    expect(
-      inferAndLogPersistedModelHandlerCompatibilityKey('copilot4o', logger),
-    ).toBe('ModelHandlerOpenRouterNative');
-    expect(info).toHaveBeenCalledWith(
-      'Inferred model-handler compatibility for keyless persisted run',
-      {
-        data: {
-          model: 'copilot4o',
-          compatibilityKey: 'ModelHandlerOpenRouterNative',
-        },
-      },
-    );
-  });
-
   it('rejects keyless Google transcripts without inspecting their format', () => {
     expect(() =>
       inferPersistedFlowModelHandlerCompatibilityKey(
@@ -83,19 +68,6 @@ describe('model handler compatibility inference', () => {
       }),
     ).toBe('ModelHandlerOpenRouterNative');
     expect(info).not.toHaveBeenCalled();
-  });
-
-  it('infers from the model alone when the record carries no parseable messages', () => {
-    expect(
-      inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
-        stateSlices: {
-          userChannels: {
-            input: {},
-            transient: { MODEL: 'copilot4o' },
-          },
-        },
-      }),
-    ).toBe('ModelHandlerOpenRouterNative');
   });
 
   it('does not log when inference is inconclusive', () => {

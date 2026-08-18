@@ -66,17 +66,12 @@ export async function extractFilesFromXml(
 
       const data = ensureRoundData(state, currRound);
       data.rawOutput ??= outputLocation;
-      const rawLocation = data.rawOutput;
 
       const fileProcessor = new OutputFileProcessor(state, deps, xmlManager);
 
       // The unified protocol emits <documents><document name="..."> containers
       // (N >= 1), so all agents route through the multi-document path.
-      await fileProcessor.processMultipleOutputs(
-        outputLocation,
-        currRound,
-        rawLocation,
-      );
+      await fileProcessor.processMultipleOutputs(outputLocation, currRound);
     },
   );
 }

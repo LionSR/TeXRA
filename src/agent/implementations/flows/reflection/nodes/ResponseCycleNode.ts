@@ -182,7 +182,6 @@ export class ResponseCycleNode<C = unknown> extends Node<
       excludeAssemblyStrings: true,
     });
     shared.conversation = prepRes.context.messages;
-    shared.roundStateSnapshots.push(prepRes.context.stateRoundSnapshot);
 
     return FlowTransition.DEFAULT;
   }
