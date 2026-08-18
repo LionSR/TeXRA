@@ -6,6 +6,10 @@ import {
   codingPlanForUsageRoute,
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
+import {
+  QUOTA_FALLBACK_ROUTES,
+  quotaFallbackRouteForExhaustion,
+} from '@shared/quotaFallbackRoutes';
 import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
@@ -43,6 +47,22 @@ describe('coding-plan subscription catalog', () => {
     );
     expect(codingPlanForUsageSetting(GlobalStateKey.GLM_USE_CHINA)?.id).toBe(
       'glmCodingPlan',
+    );
+  });
+});
+
+describe('quota-fallback route catalog', () => {
+  it('covers ChatGPT, Grok, and every coding plan exactly once', () => {
+    expect(QUOTA_FALLBACK_ROUTES.map((route) => route.id)).toEqual([
+      'chatgpt',
+      'grok',
+      ...CODING_PLAN_SUBSCRIPTIONS.map((plan) => plan.id),
+    ]);
+    expect(quotaFallbackRouteForExhaustion('xai-subscription')?.id).toBe(
+      'grok',
+    );
+    expect(quotaFallbackRouteForExhaustion('chatgpt-subscription')?.id).toBe(
+      'chatgpt',
     );
   });
 });

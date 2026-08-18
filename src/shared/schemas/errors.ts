@@ -52,6 +52,11 @@ export const ExhaustionReasonSchema = z.enum([
    *  exhausted; accepting the switch turns off the Coding Plan toggle so GLM
    *  requests route through the regular pay-as-you-go endpoint. */
   'glm-coding-plan',
+  /** A Grok (xAI SuperGrok) subscription request was rejected because the
+   *  plan's usage quota is exhausted; accepting the switch disables the
+   *  "prefer Grok subscription" preference so xAI models re-route through
+   *  the stored xAI API key. */
+  'xai-subscription',
 ]);
 export type ExhaustionReason = z.infer<typeof ExhaustionReasonSchema>;
 
@@ -188,20 +193,6 @@ export const ProviderErrorPartialSchema = z.preprocess(
   ProviderErrorObjectSchema.partial(),
 );
 export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
-
-/** Single source of truth for "this error is a ChatGPT-subscription (Codex)
- *  usage-limit rejection". Both hosts (VS Code progress view, CLI approval
- *  policy) branch on this to switch the retry from the relay/personal-key path
- *  to disabling the subscription preference. Accepts any error shape carrying
- *  the field (full `ProviderError`, `ProviderErrorPartial`, or `RetryErrorInfo`)
- *  so the predicate stays the one place that owns the verdict.
- *  Remark: that disable-prefer design is a known tradeoff — after the quota
- *  resets, users may forget the preference was turned off. */
-export function isChatGptSubscriptionLimitError(
-  errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
-): boolean {
-  return errorDetails?.exhaustionReason === 'chatgpt-subscription';
-}
 
 /** Single source of truth for "the upstream provider account itself is out of
  *  credit/quota" — the key the user has IS the broken one, so the auto-resume

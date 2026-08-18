@@ -106,7 +106,7 @@ describe('CLI retry request', () => {
       await expect(decision).resolves.toEqual({
         accepted: true,
         apiMode: 'personal',
-        disableChatGptSubscription: true,
+        disableQuotaRoute: 'chatgpt',
       });
       expect(currentApproval.get()).toBeUndefined();
     } finally {
