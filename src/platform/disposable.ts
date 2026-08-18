@@ -19,6 +19,16 @@ export class DisposableStore implements Disposable {
     return disposable;
   }
 
+  /**
+   * Transfer ownership of every entry out of the store without disposing it.
+   * For success paths whose resources outlive the assembling scope: the caller
+   * (or the object the entries were built into) becomes the owner, and a later
+   * `dispose()` of this store no longer reaches them.
+   */
+  move(): void {
+    this.disposables.length = 0;
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

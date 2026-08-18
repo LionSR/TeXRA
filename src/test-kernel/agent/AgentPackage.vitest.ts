@@ -80,8 +80,12 @@ vi.mock('@agent/runtime', () => ({
 }));
 
 vi.mock('@tools/agentCliSessionStores', () => ({
-  ClaudeAgentSessions: { interruptAll: mocks.interruptClaudeAgentSessions },
-  CodexThreads: { interruptAll: mocks.interruptCodexThreads },
+  claudeAgentSessionsFor: (session: unknown) => ({
+    interruptAll: () => mocks.interruptClaudeAgentSessions(session),
+  }),
+  codexThreadsFor: (session: unknown) => ({
+    interruptAll: () => mocks.interruptCodexThreads(session),
+  }),
 }));
 
 vi.mock('@platform/defaults/nodeHost', () => ({
@@ -219,14 +223,14 @@ describe('agent package run lifecycle', () => {
   it('stops the run session background children before disposing it', async () => {
     await runAgent(INPUT).result;
 
-    const sessionExecutions = {
-      killBackgroundProcesses: mocks.killBackgroundProcesses,
-    };
     expect(mocks.killBackgroundProcesses).toHaveBeenCalledOnce();
-    expect(mocks.interruptCodexThreads).toHaveBeenCalledWith(sessionExecutions);
-    expect(mocks.interruptClaudeAgentSessions).toHaveBeenCalledWith(
-      sessionExecutions,
-    );
+    // Session-keyed registries: interruption is scoped by the per-run session
+    // handed to the accessor, not by an ownedBy filter argument.
+    expect(mocks.interruptCodexThreads).toHaveBeenCalledOnce();
+    expect(mocks.interruptClaudeAgentSessions).toHaveBeenCalledOnce();
+    expect(mocks.interruptCodexThreads.mock.calls[0]?.[0]).toMatchObject({
+      dispose: mocks.disposeSession,
+    });
     const [killOrder] = mocks.killBackgroundProcesses.mock.invocationCallOrder;
     const [disposeOrder] = mocks.disposeSession.mock.invocationCallOrder;
     expect(killOrder).toBeLessThan(disposeOrder);
