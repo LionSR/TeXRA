@@ -134,6 +134,19 @@ return await agent('work', { id: 'work-call' })`,
       candidate.calls[0]!.attempts[0]!.id = '' as ExecutionId;
     });
 
+    // A meta.json persisted before stageTitle was removed still carries the
+    // key on disk; the read path must tolerate it rather than fail closed.
+    const legacy = structuredClone(result.snapshot) as unknown as {
+      calls: Array<Record<string, unknown>>;
+    };
+    legacy.calls[0]!.stageTitle = 'Work';
+    const legacyParsed = WorkflowExecutionSnapshotSchema.safeParse(legacy);
+    expect(legacyParsed.success).toBe(true);
+    expect(
+      (legacyParsed.data?.calls[0] as { stageTitle?: unknown } | undefined)
+        ?.stageTitle,
+    ).toBeUndefined();
+
     const active = structuredClone(
       snapshots.find(
         (snapshot) =>
