@@ -138,10 +138,11 @@ the provider. Your unpublished proofs, manuscripts, and API keys
 never leave your machine except to the provider endpoint.
 
 **Provider subscriptions** (ChatGPT, Grok, Kimi Code, GLM Coding Plan).
-Requests still go straight from your machine to that provider —
-authenticated with the subscription instead of an API key. Connect one
-from the **Dashboard → Subscriptions** tab (VS Code extension), or with
-`texra auth chatgpt login` / `/api` in the CLI.
+Requests still go straight from your machine to that provider — ChatGPT
+and Grok via OAuth sign-in, Kimi Code and the GLM Coding Plan via a
+plan-specific key. Connect one from the **Dashboard → Subscriptions** tab
+(VS Code extension), or with `texra auth chatgpt login` / `/api` in the
+CLI.
 
 API keys, whichever mode you use, stay on your machine — VS Code's
 built-in Secret Storage in the extension, an owner-only `secrets.json`
