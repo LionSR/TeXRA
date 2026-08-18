@@ -72,7 +72,6 @@ const WorkflowExecutionCallSchema = z.strictObject({
   id: z.string().min(1),
   label: z.string(),
   stageId: z.string().min(1).optional(),
-  stageTitle: z.string().min(1).optional(),
   agent: z.string().optional(),
   model: z.string().optional(),
   files: z.strictObject({
@@ -122,6 +121,18 @@ export function deriveWorkflowCounts(
     waiting: byStatus.planned + byStatus.stageBlocked,
     ...byStatus,
   };
+}
+
+/**
+ * A call's stage title, resolved from `stageId` against the snapshot's own
+ * stages — the one owner, so a call can never carry a stage name that
+ * disagrees with the stage it points at.
+ */
+export function stageTitleFor(
+  snapshot: Pick<WorkflowExecutionSnapshot, 'stages'>,
+  call: Pick<WorkflowExecutionCall, 'stageId'>,
+): string | undefined {
+  return snapshot.stages.find((stage) => stage.id === call.stageId)?.title;
 }
 
 export const TERMINAL_WORKFLOW_CALL_STATUSES: ReadonlySet<WorkflowExecutionCallStatus> =
@@ -209,21 +220,14 @@ export const WorkflowExecutionSnapshotSchema = z
           message: `Duplicate workflow call id "${call.id}".`,
         });
       callIds.add(call.id);
-      if (call.stageId !== undefined) {
-        const stage = snapshot.stages.find(
-          (candidate) => candidate.id === call.stageId,
-        );
-        if (!stage || call.stageTitle !== stage.title)
-          context.addIssue({
-            code: 'custom',
-            path: ['calls', index, 'stageId'],
-            message: 'A workflow call stage must reference a matching stage.',
-          });
-      } else if (call.stageTitle !== undefined) {
+      if (
+        call.stageId !== undefined &&
+        !snapshot.stages.some((stage) => stage.id === call.stageId)
+      ) {
         context.addIssue({
           code: 'custom',
-          path: ['calls', index, 'stageTitle'],
-          message: 'Workflow call stageTitle requires stageId.',
+          path: ['calls', index, 'stageId'],
+          message: 'A workflow call stage must reference a matching stage.',
         });
       }
       for (const [attemptIndex, attempt] of call.attempts.entries()) {

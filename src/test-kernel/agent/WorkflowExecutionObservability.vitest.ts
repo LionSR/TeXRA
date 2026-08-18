@@ -126,7 +126,6 @@ return await agent('work', { id: 'work-call' })`,
     });
     expectEmptyFieldRejected((candidate) => {
       candidate.stages[0]!.title = '';
-      candidate.calls[0]!.stageTitle = '';
     });
     expectEmptyFieldRejected((candidate) => {
       candidate.calls[0]!.id = '';
