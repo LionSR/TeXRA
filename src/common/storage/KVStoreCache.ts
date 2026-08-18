@@ -68,12 +68,11 @@ export class KVStoreCache<
 
   /** The id's handle, created and cached on first access. */
   get(id: TId): TStore {
-    let handle = this.handles.get(id);
-    if (!handle) {
-      handle = this.create(id);
-      this.handles.set(id, handle);
-    }
-    return handle;
+    const handle = this.handles.get(id);
+    if (handle) return handle;
+    const created = this.create(id);
+    this.handles.set(id, created);
+    return created;
   }
 
   /** Drop the id's cached handle so the next {@link get} re-resolves it. */

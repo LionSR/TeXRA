@@ -5,6 +5,7 @@ import type {
   RequestShowInstructionPayload,
   ShowAgentConfigBannerPayload,
 } from '@shared/schemas';
+import { isThenable } from '@utils/core';
 
 import type { HostInteractions } from './HostInteractions';
 
@@ -116,14 +117,8 @@ export type PresentationDelivery = boolean | Promise<boolean>;
  */
 export function toPresentationDelivery(result: unknown): PresentationDelivery {
   if (typeof result === 'boolean') return result;
-  if (
-    typeof result === 'object' &&
-    result !== null &&
-    typeof (result as { then?: unknown }).then === 'function'
-  ) {
-    return Promise.resolve(result as PromiseLike<unknown>).then(
-      (delivered) => delivered === true,
-    );
+  if (isThenable(result)) {
+    return Promise.resolve(result).then((delivered) => delivered === true);
   }
   return false;
 }

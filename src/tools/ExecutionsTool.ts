@@ -298,28 +298,26 @@ async function listRunDirectoryFiles(runDir: string): Promise<SizedEntry[]> {
   return entries.filter((entry) => !isKVFile(path.basename(entry.path)));
 }
 
-/** Config fields only relevant to workflow agents — hidden for toolUse. */
-const WORKFLOW_ONLY_CONFIG_FIELDS = new Set([
-  'inputFile',
-  'inputFiles',
-  'contextFile',
-  'contextFiles',
-  'mediaFile',
-  'mediaFiles',
-  'outputFiles',
-  'editedFile',
-  'editedFiles',
-]);
-
-/** Config fields only relevant to toolUse agents — hidden for workflow. */
-const TOOL_USE_ONLY_CONFIG_FIELDS = new Set(['toolConfig']);
-
-/** Per-category field-exclusion sets; unknown categories get no filtering. */
+/**
+ * Per-category config-field exclusions: `toolUse` hides the workflow-only
+ * file fields, `workflow` hides the toolUse-only `toolConfig`. Unknown
+ * categories get no filtering.
+ */
 const HIDDEN_CONFIG_FIELDS_BY_CATEGORY: Readonly<
   Record<string, ReadonlySet<string>>
 > = {
-  toolUse: WORKFLOW_ONLY_CONFIG_FIELDS,
-  workflow: TOOL_USE_ONLY_CONFIG_FIELDS,
+  toolUse: new Set([
+    'inputFile',
+    'inputFiles',
+    'contextFile',
+    'contextFiles',
+    'mediaFile',
+    'mediaFiles',
+    'outputFiles',
+    'editedFile',
+    'editedFiles',
+  ]),
+  workflow: new Set(['toolConfig']),
 };
 
 /**
@@ -1452,12 +1450,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
     const runDir = await findExistingRunStoragePath(executionId);
-    if (!runDir) {
-      return executed('No files generated for this execution.');
-    }
-
-    const entries = await listRunDirectoryFiles(runDir);
-
+    const entries = runDir ? await listRunDirectoryFiles(runDir) : [];
     if (entries.length === 0) {
       return executed('No files generated for this execution.');
     }

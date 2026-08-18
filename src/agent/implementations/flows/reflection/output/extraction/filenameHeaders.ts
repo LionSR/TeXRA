@@ -233,10 +233,7 @@ function makeUniquePercentHeaderName(
 }
 
 function safeDocumentName(source: string): string {
-  return getSafeDocumentRelativePath(source.replaceAll('\\', '/')).replaceAll(
-    '\\',
-    '/',
-  );
+  return getSafeDocumentRelativePath(source);
 }
 
 function stripDocumentsEnvelope(

@@ -239,26 +239,21 @@ export function createChildStream(
         }),
     };
   } catch (error) {
-    const failures = [error];
-    try {
-      removeSpillFlusher();
-    } catch (cleanupError) {
-      failures.push(cleanupError);
-    }
-    try {
-      detachStatus?.();
-    } catch (cleanupError) {
-      failures.push(cleanupError);
-    }
-    try {
-      detachSessionTrace?.();
-    } catch (cleanupError) {
-      failures.push(cleanupError);
-    }
-    try {
-      runTrace.dispose();
-    } catch (cleanupError) {
-      failures.push(cleanupError);
+    // Roll back every fallible setup step in reverse-ish order; a cleanup
+    // failure must neither mask the original error nor skip later steps.
+    const failures: unknown[] = [error];
+    const cleanups: (() => void)[] = [
+      () => removeSpillFlusher(),
+      () => detachStatus?.(),
+      () => detachSessionTrace?.(),
+      () => runTrace.dispose(),
+    ];
+    for (const cleanup of cleanups) {
+      try {
+        cleanup();
+      } catch (cleanupError) {
+        failures.push(cleanupError);
+      }
     }
     if (failures.length > 1) {
       throw new AggregateError(

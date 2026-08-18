@@ -350,6 +350,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     // anchor and resume still replays completed calls (#8712). The journal
     // itself stays on the orchestrator store, where the checkpoint lives.
     const runExecutionId = deriveExecutionId({ checkpointId });
+    const runStreamId = getChildStreamId(runExecutionId, STREAM_PREFIX);
 
     // Captured now, while the launching tool call's ALS frame is live, so the
     // detached run can still roll its cost into the parent after this call
@@ -456,7 +457,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
         },
         meta.name,
         {
-          streamId: getChildStreamId(runExecutionId, STREAM_PREFIX),
+          streamId: runStreamId,
           identity: { kind: 'multiAgentWorkflow', workflowName: meta.name },
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           parentExecutionId: runScope.executionId,
@@ -498,7 +499,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
         await startDetachedChildRunLoop({
           executionId: runExecutionId,
           parentStreamId: runScope.streamId,
-          childStreamId: getChildStreamId(runExecutionId, STREAM_PREFIX),
+          childStreamId: runStreamId,
           agentName: meta.name,
           recordCost,
           buildLaunch: async () => {

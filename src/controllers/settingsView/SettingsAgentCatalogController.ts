@@ -12,13 +12,6 @@ import {
   type TeamRosterPresetResolution,
   type TeamRosterResolution,
 } from '@common/teams/TeamRoster';
-import type {
-  AgentCategory,
-  AgentModePreset,
-  AgentSelectionItem,
-  AgentSource,
-  ByCategory,
-} from '@shared/schemas';
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS_BY_ID,
@@ -26,6 +19,11 @@ import {
   agentMatchesIdentifier,
   byCategory,
   parseAgentModePresets,
+  type AgentCategory,
+  type AgentModePreset,
+  type AgentSelectionItem,
+  type AgentSource,
+  type ByCategory,
 } from '@shared/schemas';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';

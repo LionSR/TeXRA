@@ -250,7 +250,7 @@ interface SourceRange {
 interface BegEndEnvironmentProbe {
   collect(
     content: string,
-    excludedRanges?: readonly SourceRange[],
+    excludedRanges: readonly SourceRange[],
   ): readonly BegEndEnvironmentMatch[];
 }
 
@@ -279,6 +279,23 @@ function createProbeMarkdownIt(options: {
   return probe;
 }
 
+// Binary search over a non-decreasing `valueAt(index)`: the first index whose
+// value is strictly greater than `target` (== the count of entries <= target).
+function upperBoundIndex(
+  length: number,
+  target: number,
+  valueAt: (index: number) => number,
+): number {
+  let low = 0;
+  let high = length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (valueAt(mid) <= target) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
 function createBegEndEnvironmentProbe(
   probe: MarkdownItInstance,
 ): BegEndEnvironmentProbe {
@@ -289,26 +306,22 @@ function createBegEndEnvironmentProbe(
   const beginEnvPattern = /\\begin\{([a-z]+)\}/y;
 
   const isInsideExcludedRange = (position: number): boolean => {
-    let low = 0;
-    let high = excludedRanges.length;
-    while (low < high) {
-      const mid = (low + high) >> 1;
-      if (excludedRanges[mid]!.start <= position) low = mid + 1;
-      else high = mid;
-    }
-    const range = excludedRanges[low - 1];
+    const after = upperBoundIndex(
+      excludedRanges.length,
+      position,
+      (index) => excludedRanges[index]!.start,
+    );
+    const range = excludedRanges[after - 1];
     return range !== undefined && position < range.end;
   };
 
   const firstCloserAfter = (closers: readonly number[], openEnd: number) => {
-    let low = 0;
-    let high = closers.length;
-    while (low < high) {
-      const mid = (low + high) >> 1;
-      if (closers[mid]! > openEnd) high = mid;
-      else low = mid + 1;
-    }
-    return low < closers.length ? closers[low]! : undefined;
+    const after = upperBoundIndex(
+      closers.length,
+      openEnd,
+      (index) => closers[index]!,
+    );
+    return after < closers.length ? closers[after]! : undefined;
   };
 
   const rule = (
@@ -332,14 +345,13 @@ function createBegEndEnvironmentProbe(
     const closeStart = firstCloserAfter(closers, openEnd);
     if (closeStart === undefined) return false;
     const closeEnd = closeStart + 4 + name.length + 2; // \end{name}
-    let low = 0;
-    let high = state.bMarks.length - 1;
-    while (low < high) {
-      const mid = (low + high + 1) >> 1;
-      if (state.bMarks[mid]! <= closeStart) low = mid;
-      else high = mid - 1;
-    }
-    const closerLine = low;
+    // Last line whose block starts at or before the closer (bMarks[0] is 0).
+    const closerLine =
+      upperBoundIndex(
+        state.bMarks.length,
+        closeStart,
+        (index) => state.bMarks[index]!,
+      ) - 1;
     if (silent) return true;
 
     const lineContentStarts: number[] = [];
@@ -365,7 +377,7 @@ function createBegEndEnvironmentProbe(
   return {
     collect(
       content: string,
-      ranges: readonly SourceRange[] = [],
+      ranges: readonly SourceRange[],
     ): readonly BegEndEnvironmentMatch[] {
       matches = [];
       excludedRanges = ranges;
@@ -384,8 +396,7 @@ function createBegEndEnvironmentProbe(
       if (openerNames.size === 0) return matches;
 
       closersByEnv = new Map();
-      const closerPattern = /\\(?:end)\{([a-z]+)\}/g;
-      for (const closer of content.matchAll(closerPattern)) {
+      for (const closer of content.matchAll(/\\end\{([a-z]+)\}/g)) {
         const name = closer[1]!;
         const positions = closersByEnv.get(name) ?? [];
         positions.push(closer.index);
@@ -405,8 +416,8 @@ function createBegEndEnvironmentProbe(
 
       // Only pay for a second (plain) parse when a candidate match could cross
       // a fence; the probe parse consumed math blocks, so it cannot enumerate
-      // fences for the decline check.
-      active = false;
+      // fences for the decline check. (The finally block above already
+      // deactivated the probe rule.)
       const fenceTokens = probe.parse(content, {});
       const fenceRanges: Array<readonly [number, number]> = [];
       for (const token of fenceTokens) {

@@ -20,6 +20,11 @@ import { assertNever, generateShortId } from '@utils/core';
 
 const logger = createLog('UserQuestionTool');
 
+/** `"<base>: <detail>"` when a detail exists, else `"<base>."` */
+function withDetail(base: string, detail: string | undefined): string {
+  return detail ? `${base}: ${detail}` : `${base}.`;
+}
+
 const AskUserQuestionInputSchema = z.strictObject({
   questions: z
     .array(UserQuestionPromptSchema)
@@ -71,21 +76,15 @@ The tool returns a JSON object whose keys are the original question texts and wh
       switch (classification.kind) {
         case 'cancelled':
           return executed(
-            classification.cause
-              ? `The user question was cancelled: ${classification.cause}`
-              : 'The user question was cancelled.',
+            withDetail('The user question was cancelled', classification.cause),
           );
         case 'policy':
           return executed(
-            classification.reason
-              ? `The user question was denied: ${classification.reason}`
-              : 'The user question was denied.',
+            withDetail('The user question was denied', classification.reason),
           );
         case 'feedback':
           return executed(
-            classification.feedback
-              ? `The user declined to answer: ${classification.feedback}`
-              : 'The user declined to answer.',
+            withDetail('The user declined to answer', classification.feedback),
           );
         default:
           return assertNever(

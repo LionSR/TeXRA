@@ -250,6 +250,9 @@ export class StagedDeletionCoordinator {
     const restored: StreamTabId[] = [];
     const pendingCleanup: StreamTabId[] = [];
     const discarded: StreamTabId[] = [];
+    /** Streams outside the caller's selection are left for a later sweep. */
+    const inScope = (stream: StreamTabId): boolean =>
+      selectedStreams === undefined || selectedStreams.has(stream);
     await pMap(
       entries.filter(([, type]) => isDirectory(type)),
       async ([encoded]) => {
@@ -263,7 +266,7 @@ export class StagedDeletionCoordinator {
           return;
         }
         const stream = parsedStream.data;
-        if (selectedStreams && !selectedStreams.has(stream)) return;
+        if (!inScope(stream)) return;
         const deletionState = this.deletionStates.get(stream);
         if (deletionState?.kind === 'staging') return;
 
@@ -274,11 +277,10 @@ export class StagedDeletionCoordinator {
             stream,
             deletionState,
           );
-          if (outcome === 'discarded') discarded.push(stream);
-          else if (outcome === 'restored' && liveStreams.has(stream)) {
-            restored.push(stream);
-          } else if (outcome === 'restored') {
-            pendingCleanup.push(stream);
+          if (outcome === 'restored') {
+            (liveStreams.has(stream) ? restored : pendingCleanup).push(stream);
+          } else if (outcome === 'discarded') {
+            discarded.push(stream);
           }
           return;
         }
@@ -298,10 +300,7 @@ export class StagedDeletionCoordinator {
       { concurrency: DELETION_IO_CONCURRENCY },
     );
     await pMap(
-      [...this.deletionStates].filter(
-        ([stream]) =>
-          selectedStreams === undefined || selectedStreams.has(stream),
-      ),
+      [...this.deletionStates].filter(([stream]) => inScope(stream)),
       async ([stream, state]) => {
         if (!liveStreams.has(stream) || state.kind === 'staging') return;
         await this.recoverFailedRollback(stream, state);

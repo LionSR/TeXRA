@@ -37,7 +37,7 @@ import {
   makePatchText,
   type TextDiff,
 } from '@utils/text/diff';
-import { countLines } from '@utils/text/stringUtils';
+import { countLines, isNonEmptyString } from '@utils/text/stringUtils';
 
 /**
  * Tool-edit approval request / result shapes.
@@ -306,7 +306,6 @@ function finalizeApprovalResult(
 
   return {
     ...result,
-    appliedContent,
     userPatch,
     lineChanges:
       result.lineChanges ??
@@ -412,12 +411,11 @@ export function buildApprovalRejectedResult(
   if (isPolicyDenial) {
     summary = `Tool edit denied: ${sourceTool} for ${path}.`;
   }
+  // Cancellation outranks policy denial in the summary.
   if (isAutomaticCancellation) {
     summary = `Tool edit approval cancelled: ${sourceTool} for ${path}.`;
   }
-  const details = [reason, cause].filter(
-    (detail): detail is string => detail !== undefined && detail.length > 0,
-  );
+  const details = [reason, cause].filter(isNonEmptyString);
   const error =
     details.length > 0 ? `${summary}\n\n${details.join('\n')}` : summary;
   return errorResult(error, {

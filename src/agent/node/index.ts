@@ -179,8 +179,6 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
     return cloned;
   }
   async _exec(prepRes: unknown): Promise<unknown> {
-    const effectiveMaxRetries = this.maxRetries;
-
     // Track the last exec error so we can forward it to execFallback when
     // the abort signal fires during the inter-retry delay (p-retry would
     // otherwise rethrow signal.reason, discarding the original failure).
@@ -218,7 +216,7 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
 
     let retryError: Error;
     try {
-      return await runAttempts(effectiveMaxRetries - 1);
+      return await runAttempts(this.maxRetries - 1);
     } catch (e) {
       // User cancellation surfaces here as p-retry's aborted-delay rejection
       // (signal.reason) or as the unwrapped error from our pre-attempt check

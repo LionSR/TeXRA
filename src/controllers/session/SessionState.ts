@@ -147,16 +147,6 @@ export class SessionState {
    * proven horizon for in-flight facts.
    */
   private readonly _removedStreams = new Map<StreamTabId, number>();
-  /**
-   * Stable deletion guards, one per (stream, incarnation). `SessionStores`
-   * dedups pending work by incarnation, while every participant still uses
-   * its guard to stop that shared deletion when the identity is re-claimed.
-   * A fresh incarnation gets a new guard and a new deletion slot.
-   */
-  private readonly _deletionGuards = new Map<
-    StreamTabId,
-    { readonly incarnation: number; readonly guard: () => boolean }
-  >();
 
   readonly streamStatus: StreamStatusMachine;
   readonly followUps: ToolUseFollowUpQueue;
@@ -207,21 +197,6 @@ export class SessionState {
   }
 
   /**
-   * The single writer for {@link StoredStreamMetadata}: every mutation site
-   * below builds a `Partial<StoredStreamMetadata>` patch and routes it
-   * through here rather than assigning fields by hand. A field the patch
-   * doesn't mention is preserved verbatim from `current` — callers that want
-   * to clear a field (e.g. detaching a parent) do so by including that key
-   * in the patch with an explicit `undefined`.
-   */
-  private applyMetadataPatch(
-    current: StoredStreamMetadata,
-    patch: Partial<StoredStreamMetadata>,
-  ): StoredStreamMetadata {
-    return { ...current, ...patch };
-  }
-
-  /**
    * Overlay the durable metadata authority — the snapshot-fed summary
    * mirror, always resident for every known stream (#9947) — on top of this
    * session's live-only patches. Applied at read time, so there is no stored
@@ -263,20 +238,19 @@ export class SessionState {
   }
 
   /**
-   * Apply metadata known before durable task state catches up. The durable
-   * authority is overlaid at read time (`getStreamMetadata`), so late events
-   * cannot override authoritative config, execution, hierarchy, or
-   * description data.
+   * Apply metadata known before durable task state catches up. Mentioned
+   * fields replace the stored ones — a key with an explicit `undefined`
+   * clears it (e.g. detaching a parent); unmentioned fields pass through
+   * verbatim. The durable authority is overlaid at read time
+   * (`getStreamMetadata`), so late events cannot override authoritative
+   * config, execution, hierarchy, or description data.
    */
   updateStreamMetadata(
     stream: StreamTabId,
     patch: Partial<StoredStreamMetadata>,
   ): void {
-    const state = this.getOrCreateSession(stream);
-    this.setStoredStreamMetadata(
-      stream,
-      this.applyMetadataPatch(state.metadata, patch),
-    );
+    const { metadata } = this.getOrCreateSession(stream);
+    this.setStoredStreamMetadata(stream, { ...metadata, ...patch });
   }
 
   /** Start a run fresh, dropping this session's live-only metadata. */
@@ -328,21 +302,11 @@ export class SessionState {
     stream: StreamTabId,
     parent: StreamTabId | null | undefined,
   ): void {
-    const state = this.getOrCreateSession(stream);
-    this.setStoredStreamMetadata(
-      stream,
-      this.applyMetadataPatch(state.metadata, {
-        parentStreamId: parent ?? undefined,
-      }),
-    );
+    this.updateStreamMetadata(stream, { parentStreamId: parent ?? undefined });
   }
 
   setStreamDescription(stream: StreamTabId, description: string): void {
-    const state = this.getOrCreateSession(stream);
-    this.setStoredStreamMetadata(
-      stream,
-      this.applyMetadataPatch(state.metadata, { description }),
-    );
+    this.updateStreamMetadata(stream, { description });
   }
 
   // todos/plan are owned + persisted by StreamSnapshotStore (workPlan.json).
@@ -547,24 +511,6 @@ export class SessionState {
     return this.incarnationOf(stream) === incarnation;
   }
 
-  /** Stable per-incarnation fence for {@link SessionStores.deleteStream}. */
-  private deletionGuard(
-    stream: StreamTabId,
-    expectedIncarnation: number,
-  ): () => boolean {
-    const cached = this._deletionGuards.get(stream);
-    if (cached && cached.incarnation === expectedIncarnation) {
-      return cached.guard;
-    }
-    const guard = (): boolean =>
-      this.isCurrentIncarnation(stream, expectedIncarnation);
-    this._deletionGuards.set(stream, {
-      incarnation: expectedIncarnation,
-      guard,
-    });
-    return guard;
-  }
-
   async clearStream(
     stream: StreamTabId,
     options?: { readonly expectedIncarnation?: number },
@@ -580,7 +526,10 @@ export class SessionState {
     // this storage await, and that caller owns its retirement and buffered-fact
     // replay. This method only commits the durable delete and the tombstone.
     const deletion = await this.stores.deleteStream(stream, {
-      shouldDelete: this.deletionGuard(stream, expectedIncarnation),
+      // Per-incarnation fence: a re-claimed identity (newer incarnation)
+      // cancels this deletion mid-flight.
+      shouldDelete: () =>
+        this.isCurrentIncarnation(stream, expectedIncarnation),
       expectedIncarnation,
     });
     if (deletion !== 'deleted') return deletion;
@@ -682,10 +631,9 @@ export class SessionState {
 
   /**
    * Drop workspace-scoped caches before loading a replacement storage root.
-   * The incarnation generations and deletion-guard memoization are identity
-   * projections over the old root's stream ids, so they reset with the
-   * tombstones: a re-claimed identity in the new root must start from
-   * incarnation 0 again.
+   * The incarnation generations are an identity projection over the old
+   * root's stream ids, so they reset with the tombstones: a re-claimed
+   * identity in the new root must start from incarnation 0 again.
    */
   resetAfterStorageRootChange(): void {
     this._sessionState.clear();
@@ -693,7 +641,6 @@ export class SessionState {
     this._streamMetadataCache.clear();
     this._removedStreams.clear();
     this._streamIncarnations.clear();
-    this._deletionGuards.clear();
   }
 
   /**

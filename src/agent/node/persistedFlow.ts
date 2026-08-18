@@ -469,9 +469,7 @@ export class PersistedFlow<
     ];
 
     for (let index = 0; index < queue.length; index += 1) {
-      const item = queue[index];
-      if (!item) continue;
-      const { node, id } = item;
+      const { node, id } = queue[index]!;
       if (ids.has(node)) continue;
 
       ids.set(node, id);

@@ -23,33 +23,30 @@ const BLANK_TOOL_RESULT_CONTINUATION =
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 
 function hasToolResultContent(value: unknown): boolean {
-  if (!Array.isArray(value)) return false;
-  return value.some((item) => {
-    if (!isObject(item)) return false;
-    return (
-      item.type === 'tool_result' ||
-      item.kind === 'toolResult' ||
-      isObject(item.functionResponse)
-    );
-  });
+  return (
+    Array.isArray(value) &&
+    value.some((item) => {
+      if (!isObject(item)) return false;
+      return (
+        item.type === 'tool_result' ||
+        item.kind === 'toolResult' ||
+        isObject(item.functionResponse)
+      );
+    })
+  );
 }
 
 function isToolResultMessage(message: ProviderMessage | undefined): boolean {
   if (!isObject(message)) return false;
   const record: Record<string, unknown> = message;
 
-  if (
+  return (
     record['type'] === 'function_call_output' ||
     record['type'] === 'function_result' ||
-    record['role'] === 'tool'
-  ) {
-    return true;
-  }
-
-  return (
-    record['role'] === 'user' &&
-    (hasToolResultContent(record['content']) ||
-      hasToolResultContent(record['parts']))
+    record['role'] === 'tool' ||
+    (record['role'] === 'user' &&
+      (hasToolResultContent(record['content']) ||
+        hasToolResultContent(record['parts'])))
   );
 }
 

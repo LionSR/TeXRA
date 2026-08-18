@@ -125,27 +125,26 @@ export function buildAgentFinalResult(
       outcome === RUN_OUTCOME.FAILED && result.error !== undefined
         ? { error: result.error }
         : {};
-    if (result.category === 'workflow') {
-      return AgentFinalResultSchema.parse({
-        category: result.category,
-        outcome,
-        outputs: result.outputs,
-        compileFailures: result.compileFailures,
-        diffs: source.diffs,
-        cost: result.totalCostUsd,
-        diffsUnavailable: source.diffsUnavailable,
-        structured,
-        ...error,
-      });
-    }
-    return AgentFinalResultSchema.parse({
+    const common = {
       category: result.category,
       outcome,
-      response: result.response,
-      files: result.files,
       cost: result.totalCostUsd,
       structured,
       ...error,
+    };
+    if (result.category === 'workflow') {
+      return AgentFinalResultSchema.parse({
+        ...common,
+        outputs: result.outputs,
+        compileFailures: result.compileFailures,
+        diffs: source.diffs,
+        diffsUnavailable: source.diffsUnavailable,
+      });
+    }
+    return AgentFinalResultSchema.parse({
+      ...common,
+      response: result.response,
+      files: result.files,
     });
   }
 

@@ -44,6 +44,9 @@ import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 // Shared utilities
 // ============================================================================
 
+const LOG_CHANNEL = 'childRunLoop';
+const log = createLog(LOG_CHANNEL);
+
 /**
  * One compact trace line per child progress update, for the in-band arm where
  * progress degrades to the parent run's trace instead of follow-up delivery.
@@ -234,10 +237,9 @@ export async function executeSubagent(
       buildLaunch: async () => ({
         strategy: createNativeSubagentStrategy(strategyParams),
         onLoopFailed: (error: unknown): void => {
-          createLog('childRunLoop').error(
-            `Subagent '${agentName}' run loop failed after launch`,
-            { data: error },
-          );
+          log.error(`Subagent '${agentName}' run loop failed after launch`, {
+            data: error,
+          });
         },
       }),
     });

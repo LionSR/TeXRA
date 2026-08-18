@@ -1,11 +1,11 @@
 import type { StateStore } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { UpdateGitAuthorSettingsMessage } from '@shared/schemas';
 import {
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_MARK_COMMITS,
   DEFAULT_GIT_WORKTREE_SUPPORT,
+  type UpdateGitAuthorSettingsMessage,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { setWorktreeSupportEnabled } from '@utils/config/worktreeConfig';

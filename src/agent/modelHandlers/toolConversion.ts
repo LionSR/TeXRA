@@ -58,6 +58,10 @@ interface JSONSchemaObject {
   [key: string]: unknown;
 }
 
+function isSchemaObject(value: unknown): value is JSONSchemaObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function schemaLiteralValue(schema: JSONSchemaObject): unknown {
   if (schema.const !== undefined) return schema.const;
   if (Array.isArray(schema.enum) && schema.enum.length === 1) {
@@ -189,10 +193,6 @@ export function convertToolSchema(
   }
   if (!schema) return null;
   return stripDollarSchema(flattenTopLevelUnion(schema));
-}
-
-function isSchemaObject(value: unknown): value is JSONSchemaObject {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 const GOOGLE_TOOL_JSON_SCHEMA_OPTIONS = Object.freeze({

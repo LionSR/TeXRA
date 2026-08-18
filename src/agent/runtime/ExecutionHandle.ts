@@ -351,9 +351,7 @@ export class AgentExecutionHandle {
     if (this.suspension?.state !== 'parked') return undefined;
     if (!this.claimTerminalFinalize()) return undefined;
     const { teardown } = this.suspension;
-    const completion = (async (): Promise<void> => {
-      await teardown();
-    })();
+    const completion = Promise.resolve().then(() => teardown());
     // The registry normally awaits this before terminal persistence. Retain a
     // rejection handler for the lease-loss branch, which intentionally skips
     // durable finalization but must not create an unhandled rejection.

@@ -1,6 +1,3 @@
-// Node imports
-import { createHash } from 'node:crypto';
-
 // Third-party imports
 import stableStringify from 'fast-json-stable-stringify';
 
@@ -38,9 +35,7 @@ export function deriveWorkflowScriptCheckpointId(identity: {
 export function workflowScriptCheckpointKvKey(checkpointId: string): string {
   // JSON.stringify preserves lone UTF-16 surrogates as escapes, unlike direct
   // UTF-8 encoding, which would conflate them with the replacement character.
-  const digest = createHash('sha256')
-    .update(JSON.stringify(checkpointId))
-    .digest('hex');
+  const digest = truncatedHexId(JSON.stringify(checkpointId), 64);
   return `${WORKFLOW_SCRIPT_CHECKPOINT_KEY_PREFIX}${digest}`;
 }
 

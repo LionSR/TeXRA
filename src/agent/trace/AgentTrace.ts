@@ -6,8 +6,8 @@
  * every {@link AgentEvent}. Every other method on this interface is sugar
  * over `emit()` so the trace channel remains a single source of truth.
  *
- * TeXRA-specific helpers (`logError`/`logProgress`/`latexDiff`/
- * `userMessage`/etc.) are plain functions in `helpers.ts` and
+ * TeXRA-specific helpers (`logSdkError`/`logProgressStatus`/
+ * `logUserMessage`/etc.) are plain functions in `helpers.ts` and
  * `toolUseHelpers.ts` that operate on this interface — there is no host
  * subtype. SDK consumers program directly against `AgentTrace`.
  */

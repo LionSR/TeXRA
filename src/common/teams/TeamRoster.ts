@@ -1,14 +1,12 @@
-import type {
-  AgentCategory,
-  AgentModePreset,
-  AgentSource,
-  ByCategory,
-} from '@shared/schemas';
 import {
   AGENT_CATEGORIES,
   agentKeyOf,
   agentMatchesIdentifier,
   byCategory,
+  type AgentCategory,
+  type AgentModePreset,
+  type AgentSource,
+  type ByCategory,
 } from '@shared/schemas';
 
 export interface TeamRosterState {

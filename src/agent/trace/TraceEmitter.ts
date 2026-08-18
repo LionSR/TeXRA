@@ -73,10 +73,7 @@ export class TraceEmitter implements AgentTrace {
     const stamped: AgentEvent =
       event.stageId !== undefined
         ? event
-        : ({
-            ...event,
-            stageId: this.currentStageStack().at(-1),
-          } as AgentEvent);
+        : { ...event, stageId: this.currentStageStack().at(-1) };
 
     for (const sub of this.subscribers) {
       try {

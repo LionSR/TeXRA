@@ -527,6 +527,8 @@ export class ProgressBackend {
     }
     releaseDeletionClaim();
 
+    const retainedOutcome =
+      retained === 'active' || retained === 'failed' ? retained : undefined;
     if (commandRemoval) {
       // Retire a retained command-owned tombstone before rebuilding the tab
       // rail. selectableStreamNames() deliberately hides provisional
@@ -538,14 +540,14 @@ export class ProgressBackend {
         retained,
         commandRemoval.created,
       );
-    } else if (retained === 'active' || retained === 'failed') {
+    } else if (retainedOutcome) {
       // A fact-path removal owns its barrier in SessionFactApplier. Let it
       // retire and replay before this retained-state rebuild enumerates the
       // selectable rail, which deliberately hides provisional removals.
-      beforeRetainedRepair?.(retained);
+      beforeRetainedRepair?.(retainedOutcome);
     }
 
-    if (retained === 'active' || retained === 'failed') {
+    if (retainedOutcome) {
       // Best-effort presentation repair, each failure isolated so a broken
       // rebuild cannot suppress the retention notification and neither can
       // make the deletion outcome disappear. The session-fact applier must
@@ -562,8 +564,8 @@ export class ProgressBackend {
       }
       try {
         await this.lifecycle.notifyDeletionRetained(
-          retained === 'active' ? 1 : 0,
-          retained === 'failed' ? 1 : 0,
+          retainedOutcome === 'active' ? 1 : 0,
+          retainedOutcome === 'failed' ? 1 : 0,
         );
       } catch (error) {
         log.warn('Failed to notify after a retained stream deletion', {
@@ -622,6 +624,26 @@ export class ProgressBackend {
     return this.prepareStreamDeletionCore(stream);
   }
 
+  /**
+   * Whether an activation that started after `generationAtStart` expresses a
+   * selection intent a finishing deletion must respect: an explicit
+   * deselection, or a switch to some stream other than the deleted one that
+   * still has a transcript. Anything else (a switch to the deleted stream
+   * itself, or to an identity that no longer exists) lets the deletion path
+   * choose the surviving selection.
+   */
+  private newerIntentControlsSelection(
+    generationAtStart: number,
+    deletedStream?: StreamTabId,
+  ): boolean {
+    if (generationAtStart === this.activationGeneration) return false;
+    const target = this.latestActivationTarget;
+    return (
+      target === '' ||
+      (target !== deletedStream && this.state.streamLogs.has(target))
+    );
+  }
+
   private async deleteStreamNow(
     stream: StreamTabId,
     wasActive: boolean,
@@ -634,10 +656,11 @@ export class ProgressBackend {
     if (!canUseStreamDataDir(stream)) return undefined;
 
     const hadDeletableData = this.hasDeletableStreamData(stream);
-    const deletion =
-      expectedIncarnation === undefined
-        ? await this.state.clearStream(stream)
-        : await this.state.clearStream(stream, { expectedIncarnation });
+    // An undefined expectedIncarnation falls back to the current incarnation
+    // inside `clearStream`, matching the no-options call this replaces.
+    const deletion = await this.state.clearStream(stream, {
+      expectedIncarnation,
+    });
     if (deletion !== 'deleted') {
       return deletion;
     }
@@ -660,11 +683,10 @@ export class ProgressBackend {
       activeAfterClear !== '' && remainingStreams.includes(activeAfterClear);
     const newerActivationPending =
       activationGenerationAtStart !== this.activationGeneration;
-    const newerIntentControlsSelection =
-      newerActivationPending &&
-      (this.latestActivationTarget === '' ||
-        (this.latestActivationTarget !== stream &&
-          this.state.streamLogs.has(this.latestActivationTarget)));
+    const newerIntentControlsSelection = this.newerIntentControlsSelection(
+      activationGenerationAtStart,
+      stream,
+    );
     // A concurrent switch to a surviving stream still needs reassertion after
     // DELETE_STREAM. A concurrent explicit deselection is presentation intent
     // and must remain empty rather than being replaced by a fallback.
@@ -705,9 +727,7 @@ export class ProgressBackend {
     );
     if (!outcome) return;
     const newerIntentControlsSelection =
-      activationGeneration !== this.activationGeneration &&
-      (this.latestActivationTarget === '' ||
-        this.state.streamLogs.has(this.latestActivationTarget));
+      this.newerIntentControlsSelection(activationGeneration);
     try {
       await this.lifecycle.rebuildRenderedStreams({
         syncActiveStream: !outcome.allDeleted && !newerIntentControlsSelection,

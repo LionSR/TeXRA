@@ -84,7 +84,7 @@ export async function scanDirectory(
         continue;
       }
       issues.push({
-        path: relativeScanPath(dir, entry.path),
+        path: path.relative(dir, entry.path),
         message: scanned.message,
       });
     }
@@ -114,7 +114,7 @@ function entriesWithUniqueNames(
       );
       for (const match of matches) {
         issues.push({
-          path: relativeScanPath(dir, match.path),
+          path: path.relative(dir, match.path),
           message: `Duplicate agent name "${name}".`,
         });
       }
@@ -131,7 +131,7 @@ async function readYamlDefinition(
 ): Promise<
   { ok: true; value: ParsedAgentYaml } | { ok: false; issue: AgentScanIssue }
 > {
-  const displayPath = relativeScanPath(dir, yamlPath);
+  const displayPath = path.relative(dir, yamlPath);
   try {
     const content = await AbsoluteFS.read(yamlPath);
     const parsed = parseYamlWith(content, AgentDefinitionSchema);
@@ -155,17 +155,10 @@ async function readYamlDefinition(
   }
 }
 
-function relativeScanPath(dir: string, yamlPath: string): string {
-  const relative = path.relative(dir, yamlPath);
-  return relative || yamlPath;
-}
-
 function formatScanFailure(error: unknown): string {
   if (error instanceof ZodError) {
-    const formatted = error.issues
-      .map((issue) => formatSchemaIssue(issue))
-      .filter((part) => part.length > 0);
-    if (formatted.length > 0) return formatted.join('; ');
+    const formatted = error.issues.map(formatSchemaIssue).filter(Boolean);
+    if (formatted.length) return formatted.join('; ');
   }
   return toErrorMessage(error);
 }

@@ -233,8 +233,8 @@ export function isRunningStreamingTextEntry(entry: StreamLogEntry): boolean {
 /**
  * The workflow-call progress carried by a workflow-task row that has not
  * reached a terminal status, or `undefined` for every other entry. Returns the
- * parsed call rather than a boolean so the recovery sweep that rewrites such a
- * row does not parse the same payload a second time.
+ * call itself rather than a boolean so the recovery sweep that rewrites such a
+ * row need not re-derive the payload a second time.
  */
 export function nonterminalWorkflowCall(
   entry: StreamLogEntry,

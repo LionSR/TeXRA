@@ -63,14 +63,20 @@ function throwIfResumeStorageUnreadable(
   resumability: ResumabilityDecision,
 ): void {
   if (resumability.resumable) return;
-  if (
-    resumability.cause !== RESUMABILITY_CAUSE.UNREADABLE_FLOW &&
-    resumability.cause !== RESUMABILITY_CAUSE.UNREADABLE_META &&
-    resumability.cause !== RESUMABILITY_CAUSE.INVALID_META
-  ) {
-    return;
+  switch (resumability.cause) {
+    case RESUMABILITY_CAUSE.UNREADABLE_FLOW:
+    case RESUMABILITY_CAUSE.UNREADABLE_META:
+    case RESUMABILITY_CAUSE.INVALID_META:
+      throw new Error(`Unable to read resume storage: ${resumability.cause}`);
+    case RESUMABILITY_CAUSE.TERMINAL_COMPLETED:
+    case RESUMABILITY_CAUSE.TERMINAL_FAILED:
+    case RESUMABILITY_CAUSE.MISSING_FLOW:
+    case RESUMABILITY_CAUSE.INVALID_FLOW:
+      return;
+    default:
+      resumability satisfies never;
+      return;
   }
-  throw new Error(`Unable to read resume storage: ${resumability.cause}`);
 }
 
 /** Agent-type label used in resume-retrieval warnings and error messages. */

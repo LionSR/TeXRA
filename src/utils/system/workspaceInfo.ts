@@ -82,10 +82,10 @@ async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
   if (branchResult.timedOut || statusResult.timedOut) return null;
 
   const branch = branchResult.success ? branchResult.stdout : null;
-  // execUtils normalizes empty/whitespace-only output to the empty string (see the
-  // ExecResult.stdout contract in src/shared/schemas/opResults.ts), so a
-  // clean `git status --porcelain` yields an empty string and that test is what
-  // distinguishes clean from dirty.
+  // execUtils normalizes empty/whitespace-only output to the empty string
+  // (see the ExecResult.stdout contract in src/shared/schemas/opResults.ts),
+  // so a clean `git status --porcelain` yields an empty string and that
+  // test is what distinguishes clean from dirty.
   const dirty = statusResult.success && statusResult.stdout !== '';
 
   return { branch, dirty };

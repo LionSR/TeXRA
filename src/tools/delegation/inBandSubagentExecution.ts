@@ -377,6 +377,7 @@ async function executeInBand(
   const startedAt = Date.now();
   const workingDirectory = config.workingDirectory ?? undefined;
   const childStreamId = getStreamTabId(config.agent, { executionId });
+  const store = getExecutionStore(executionId);
 
   let runWithOwnership: OwnedExecutionLeaseScope;
   try {
@@ -428,7 +429,7 @@ async function executeInBand(
         }
         let persisted: ResultMeta | null;
         try {
-          persisted = await getExecutionStore(executionId).readResultMeta();
+          persisted = await store.readResultMeta();
         } catch (cause) {
           throw new SubagentCommitError(
             `Failed to verify durable completion for subagent ${executionId}.`,
@@ -441,7 +442,7 @@ async function executeInBand(
           );
         }
         try {
-          await writeStableSubagentAttempt(getExecutionStore(executionId), {
+          await writeStableSubagentAttempt(store, {
             ...stableAttempt,
             phase: 'committed',
           });
@@ -458,7 +459,7 @@ async function executeInBand(
         // setup: a throw here releases the owned-execution lease.
         if (stableAttempt) {
           try {
-            await writeStableSubagentAttempt(getExecutionStore(executionId), {
+            await writeStableSubagentAttempt(store, {
               ...stableAttempt,
               phase: 'launched',
             });
@@ -515,6 +516,7 @@ async function executeInBand(
     const result = resultMeta.result;
     const childFailed =
       settledTurn.isError || result.outcome === RUN_OUTCOME.FAILED;
+    const turnMessage = settledTurn.message;
 
     if (loopFailure instanceof SubagentCommitError) throw loopFailure;
     if (loopFailure !== undefined && stableCompletionCommitted) {
@@ -533,7 +535,7 @@ async function executeInBand(
       // work rather than executing it twice.
       let persisted: ResultMeta | null;
       try {
-        persisted = await getExecutionStore(executionId).readResultMeta();
+        persisted = await store.readResultMeta();
       } catch (cause) {
         persisted = null;
         void cause;
@@ -596,7 +598,7 @@ async function executeInBand(
     return {
       executionId,
       result,
-      ...(mode === 'best-effort-delivery' && { delivery: settledTurn.message }),
+      ...(mode === 'best-effort-delivery' && { delivery: turnMessage }),
     };
   });
 
@@ -731,16 +733,9 @@ export async function executeStableSubagentInBand(
         `Prepared subagent ${executionId} changed its parent execution.`,
       );
     }
-    const completed = await executeInBand(
-      prepared,
-      'required-result',
-      executionId,
-      attempt,
-    );
-    return {
-      executionId: completed.executionId,
-      result: completed.result,
-    };
+    // The in-band driver never attaches a delivery in required-result mode, so
+    // the completed record already matches the typed result contract.
+    return executeInBand(prepared, 'required-result', executionId, attempt);
   });
 }
 

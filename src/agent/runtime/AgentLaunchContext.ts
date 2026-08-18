@@ -74,6 +74,10 @@ import { currentSession, type SessionHandle } from './SessionHandle';
 import { AgentLaunchResources } from './AgentLaunchResources';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { SessionHostInteractions } from './HostInteractions';
+import type {
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from './runtimePresentationEvents';
 
 const logger = createLog('AgentLaunchContext');
 
@@ -154,6 +158,34 @@ export async function withExecutionRunContext<T>(
   );
 }
 
+/**
+ * Present an error through the host and throw it, tracking whether the host
+ * actually rendered it so the caller can avoid a duplicate fallback toast.
+ */
+async function presentLaunchError<K extends RuntimePresentationEvent>(
+  interactions: Pick<SessionHostInteractions, 'emit'>,
+  err: AgentError,
+  event: K,
+  payload: RuntimePresentationEventPayloads[K],
+): Promise<never> {
+  const delivered = await interactions.emit(event, payload, {
+    replayWhenAttached: true,
+    onReplayScheduled: () => attachErrorPresentationPending(err),
+    onReplayDelivered: () => attachErrorPresented(err),
+    onReplayNotDelivered: (host) => {
+      host.emit?.('requestShowError', { message: toErrorMessage(err) });
+    },
+  });
+  // Mark "presented" only when a live host confirmed it rendered the
+  // targeted notice. A queued replay marks it as presentation-pending; the
+  // replay either attaches the presented marker on confirmed delivery or
+  // emits the generic fallback on non-delivery. A live-host emit that throws
+  // synchronously is normalized to `false` by `SessionHostInteractions.emit`,
+  // leaving the marker unset so the launch catch emits the generic fallback.
+  if (delivered) attachErrorPresented(err);
+  throw err;
+}
+
 export async function getAgentPath(
   agentIdentifier: string,
   interactions: Pick<SessionHostInteractions, 'emit'>,
@@ -168,28 +200,12 @@ export async function getAgentPath(
   const result = resolveAgentForLaunch(category, agentIdentifier, source);
   if (result) return result;
 
-  const err = new AgentError(`Could not find agent: ${agentIdentifier}`);
-  const delivered = await interactions.emit(
+  throw await presentLaunchError(
+    interactions,
+    new AgentError(`Could not find agent: ${agentIdentifier}`),
     'showAgentConfigBanner',
     { agentName: agentIdentifier },
-    {
-      replayWhenAttached: true,
-      onReplayScheduled: () => attachErrorPresentationPending(err),
-      onReplayDelivered: () => attachErrorPresented(err),
-      onReplayNotDelivered: (host) => {
-        host.emit?.('requestShowError', { message: toErrorMessage(err) });
-      },
-    },
   );
-  // Mark "presented" only when a live host confirmed it rendered the
-  // targeted banner. A queued replay instead marks the error as presentation
-  // pending; the replay either attaches the presented marker on confirmed
-  // delivery or emits the generic fallback on non-delivery. A live-host emit
-  // that throws synchronously is normalized to `false` by
-  // `SessionHostInteractions.emit`, so that path leaves the marker unset and
-  // lets the launch catch emit the generic fallback on the same host.
-  if (delivered) attachErrorPresented(err);
-  throw err;
 }
 
 async function validateModelExists(
@@ -199,8 +215,9 @@ async function validateModelExists(
   const modelConfig = await resolveRuntimeModelConfig(modelName);
   if (modelConfig) return modelConfig;
 
-  const err = new AgentError(`Model ${modelName} is not registered`);
-  const delivered = await interactions.emit(
+  throw await presentLaunchError(
+    interactions,
+    new AgentError(`Model ${modelName} is not registered`),
     'requestShowInstruction',
     {
       key: 'modelNotRecognized',
@@ -208,26 +225,7 @@ async function validateModelExists(
       actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
       showSuppress: false,
     },
-    {
-      replayWhenAttached: true,
-      onReplayScheduled: () => attachErrorPresentationPending(err),
-      onReplayDelivered: () => attachErrorPresented(err),
-      onReplayNotDelivered: (host) => {
-        host.emit?.('requestShowError', { message: toErrorMessage(err) });
-      },
-    },
   );
-  // As with `getAgentPath`: mark only after a live host confirms the
-  // instruction was rendered (or let the queued replay settle the marker and
-  // fallback itself). A live-host emit that throws synchronously is likewise
-  // normalized to `false`, leaving the marker unset for the launch catch.
-  // The extension resolves its emit when the instruction is handed off to VS
-  // Code, not when the dialog is dismissed, so launch cleanup no longer waits
-  // on user interaction there. Desktop resolves with its window-modal dialog
-  // (#10399) — a wait bounded by the modal itself, since the user must
-  // dismiss it to keep using the window.
-  if (delivered) attachErrorPresented(err);
-  throw err;
 }
 
 async function inferLaunchModelHandlerCompatibilityKey(
@@ -376,28 +374,26 @@ async function assembleAgentLaunchContext(
   );
   const runTrace = resources.ownRunTrace(rawRunTrace, () => {
     let traceDisposed = false;
-    let removeSpillFlusher = (): void => {};
-    removeSpillFlusher = session.useArtifactFlusher(async () => {
+    const removeSpillFlusher = session.useArtifactFlusher(async () => {
       await rawRunTrace.flushSpills();
       if (traceDisposed) removeSpillFlusher();
     });
-    let detachTrace = (): void => {};
+    let detachTrace: (() => void) | undefined;
+    let detachStatus: (() => void) | undefined;
     try {
       detachTrace = session.attachRunTrace(rawRunTrace.trace, streamId);
       // Status is a session fact, not an AgentEvent: bridge the hub's canonical
       // status rail into the recorder's transcript-boundary port.
-      const detachStatus = session.events.subscribeStatus(
-        rawRunTrace.handleStatus,
-      );
+      detachStatus = session.events.subscribeStatus(rawRunTrace.handleStatus);
       return () => {
         // Keep the flusher through the execution lease's post-dispose drain.
         // Its next successful flush removes it from the session.
         traceDisposed = true;
-        detachStatus();
-        detachTrace();
+        detachStatus?.();
+        detachTrace?.();
       };
     } catch (error) {
-      detachTrace();
+      detachTrace?.();
       removeSpillFlusher();
       throw error;
     }

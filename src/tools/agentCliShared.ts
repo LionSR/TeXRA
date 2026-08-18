@@ -341,10 +341,14 @@ export function dispatchAgentCliTool(params: {
   } = params;
   return withAgentCliApproval(agentName, approvalLabel, (runContext) => {
     const callerStreamId = getRunContextStreamId(runContext);
-    const source = sourceId ? store.lookup(sourceId) : undefined;
-    const sourceHandle = source?.executions.getHandle(source.executionId);
     if (sourceId) {
-      requireCallerOwnership(sourceId, callerStreamId, sourceHandle, labels);
+      const source = store.lookup(sourceId);
+      requireCallerOwnership(
+        sourceId,
+        callerStreamId,
+        source?.executions.getHandle(source.executionId),
+        labels,
+      );
     }
     return resumeOrLaunchAgentCliSession(store, {
       id: resumeId,
@@ -525,6 +529,6 @@ export function startAgentCliLoop<TTurn>(
     strategy,
   });
   void completion.catch((error: unknown) => {
-    childStream.logger.error(loopFailedMessage, { data: error });
+    logger.error(loopFailedMessage, { data: error });
   });
 }

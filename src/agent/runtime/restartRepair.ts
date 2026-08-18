@@ -108,6 +108,21 @@ function livenessCacheKey(owner: InstanceOwnerRecord): string {
   return `${owner.hostname}\0${owner.instanceId}\0${owner.socketPath}`;
 }
 
+function createCachedLivenessProbe(
+  probeOwner: (owner: InstanceOwnerRecord) => Promise<InstanceLiveness>,
+): (owner: InstanceOwnerRecord) => Promise<InstanceLiveness> {
+  const ownerLiveness = new Map<string, Promise<InstanceLiveness>>();
+  return (owner) => {
+    const key = livenessCacheKey(owner);
+    let liveness = ownerLiveness.get(key);
+    if (!liveness) {
+      liveness = probeOwner(owner);
+      ownerLiveness.set(key, liveness);
+    }
+    return liveness;
+  };
+}
+
 type ExecutionSettlement =
   | { readonly kind: 'unsettled' }
   | { readonly kind: 'settled'; readonly outcome: RunOutcome };
@@ -223,18 +238,8 @@ export async function repairRestartedStreams(
 ): Promise<RestartRepairResult> {
   const result: RestartRepairResult = { activeOwners: [] };
   const now = options.now ?? Date.now();
-  const probeOwner = options.probeOwner ?? probeInstance;
-  const ownerLiveness = new Map<string, Promise<InstanceLiveness>>();
   const inactiveLeaseOptions: InactiveExecutionLeaseOptions = {
-    probeOwner: (owner) => {
-      const key = livenessCacheKey(owner);
-      let liveness = ownerLiveness.get(key);
-      if (!liveness) {
-        liveness = probeOwner(owner);
-        ownerLiveness.set(key, liveness);
-      }
-      return liveness;
-    },
+    probeOwner: createCachedLivenessProbe(options.probeOwner ?? probeInstance),
   };
 
   for (const streamId of repairCandidates(
@@ -324,6 +329,31 @@ export async function repairRestartedStreams(
   return result;
 }
 
+async function closeStreamAsCancelled(
+  options: RestartRepairOptions,
+  streamId: StreamTabId,
+  now: number,
+): Promise<void> {
+  await options.closeRunningGroups([streamId], RUN_OUTCOME.CANCELLED, now);
+}
+
+async function closeStreamAsFailed(
+  options: RestartRepairOptions,
+  streamId: StreamTabId,
+  executionId: ExecutionId | undefined,
+  now: number,
+): Promise<void> {
+  await options.closeRunningGroups([streamId], RUN_OUTCOME.FAILED, now);
+  if (executionId) {
+    await writeFailedOutcome(
+      streamId,
+      executionId,
+      options.finalizeExecution ?? defaultFinalizeExecution,
+      options.logger,
+    );
+  }
+}
+
 async function repairRestartedStream(
   options: RestartRepairOptions,
   streamId: StreamTabId,
@@ -333,57 +363,54 @@ async function repairRestartedStream(
   if (options.signal?.aborted) return;
   const currentStatus = options.streamStatus.get(streamId);
   const isWaitingStream = options.waitingStreams.has(streamId);
-  let closeWaitingGroup = false;
-  let closeFailedGroup = false;
-  let markedFailed = false;
 
   if (currentStatus == null) {
     if (isWaitingStream) {
-      closeWaitingGroup = true;
       repairToWaiting(options.streamStatus, streamId, options.logger);
-    } else {
-      closeFailedGroup = true;
+      await closeStreamAsCancelled(options, streamId, now);
+      return;
     }
-  } else if (
+    // No in-memory phase: close the group as failed but leave the execution
+    // un-terminalized — nothing here observed it reach a terminal state.
+    await options.closeRunningGroups([streamId], RUN_OUTCOME.FAILED, now);
+    return;
+  }
+
+  if (
     options.retryFailedStreams === true &&
     currentStatus === STREAM_PHASE.FAILED &&
     !isWaitingStream
   ) {
-    markedFailed = true;
-    closeFailedGroup = true;
-  } else if (!RESTART_REPAIR_PHASES.has(currentStatus)) {
-    if (isWaitingStream) closeWaitingGroup = true;
-  } else if (isWaitingStream) {
-    closeWaitingGroup = true;
+    await closeStreamAsFailed(options, streamId, executionId, now);
+    return;
+  }
+
+  if (!RESTART_REPAIR_PHASES.has(currentStatus)) {
+    if (isWaitingStream) {
+      await closeStreamAsCancelled(options, streamId, now);
+    }
+    return;
+  }
+
+  if (isWaitingStream) {
     repairToWaiting(options.streamStatus, streamId, options.logger);
-  } else if (
+    await closeStreamAsCancelled(options, streamId, now);
+    return;
+  }
+
+  if (
     options.streamStatus.transitionToTerminal(
       streamId,
       STREAM_PHASE.FAILED,
       STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
     )
   ) {
-    markedFailed = true;
-    closeFailedGroup = true;
     options.logger?.debug(
       `Stream ${streamId} set to FAILED during restart repair`,
     );
-  } else {
-    options.logger?.warn(`Failed to repair stream ${streamId} after restart`);
+    await closeStreamAsFailed(options, streamId, executionId, now);
+    return;
   }
 
-  if (closeWaitingGroup) {
-    await options.closeRunningGroups([streamId], RUN_OUTCOME.CANCELLED, now);
-  }
-  if (closeFailedGroup) {
-    await options.closeRunningGroups([streamId], RUN_OUTCOME.FAILED, now);
-  }
-  if (markedFailed && executionId) {
-    await writeFailedOutcome(
-      streamId,
-      executionId,
-      options.finalizeExecution ?? defaultFinalizeExecution,
-      options.logger,
-    );
-  }
+  options.logger?.warn(`Failed to repair stream ${streamId} after restart`);
 }

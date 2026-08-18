@@ -20,10 +20,6 @@ import {
   type OutputDependencies,
 } from './outputState';
 
-// ============================================================================
-// Public API
-// ============================================================================
-
 /** Checks that expected output files exist. */
 export async function checkExpectedOutputs(
   state: OutputState,

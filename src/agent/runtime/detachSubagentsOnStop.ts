@@ -13,10 +13,8 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
  * The platform must be initialized before a run can be stopped or killed.
  */
 export function detachSubagentsOnStop(): boolean {
-  return (
-    platform().workspaceState.get<boolean>(
-      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-      false,
-    ) === true
+  return platform().workspaceState.get<boolean>(
+    WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+    false,
   );
 }

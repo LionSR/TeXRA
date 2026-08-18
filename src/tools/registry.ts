@@ -79,7 +79,7 @@ import {
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
-let defaultToolsInstance: ReturnType<typeof createDefaultTools> | null = null;
+let defaultToolsInstance: DefaultTools | null = null;
 
 /**
  * Canonical tool factory — single source of truth for all registered tools.
@@ -149,13 +149,15 @@ function createDefaultTools() {
   } satisfies Record<string, ITool>;
 }
 
-function getDefaultTools(): ReturnType<typeof createDefaultTools> {
+type DefaultTools = ReturnType<typeof createDefaultTools>;
+
+function getDefaultTools(): DefaultTools {
   defaultToolsInstance ??= createDefaultTools();
   return defaultToolsInstance;
 }
 
 /** Union of all tool names registered in the default registry. */
-export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
+export type RegisteredToolName = keyof DefaultTools;
 
 /**
  * Compile-time guard: every canonical tool with specialized display treatment
@@ -183,10 +185,8 @@ export function getDefaultToolRegistry(): IToolRegistry {
 export function getDefaultUnavailableToolNames(
   host: ToolHost,
 ): readonly RegisteredToolName[] {
-  return Object.keys(getDefaultTools()).flatMap((name) =>
-    isDefaultToolUnavailableOnHost(name as RegisteredToolName, host)
-      ? [name as RegisteredToolName]
-      : [],
+  return (Object.keys(getDefaultTools()) as RegisteredToolName[]).filter(
+    (name) => isDefaultToolUnavailableOnHost(name, host),
   );
 }
 

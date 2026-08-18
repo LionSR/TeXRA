@@ -55,11 +55,7 @@ function runtimeFor(
     if (coding === undefined) {
       throw new Error(`Unknown coding-plan subscription: ${descriptor.id}`);
     }
-    return {
-      getEnabled: coding.getEnabled,
-      setEnabled: coding.setEnabled,
-      restoreEnabled: coding.restoreEnabled,
-    };
+    return coding;
   }
   return OAUTH_RUNTIME_BY_ID[descriptor.id];
 }

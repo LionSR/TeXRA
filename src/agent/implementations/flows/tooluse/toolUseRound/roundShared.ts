@@ -10,18 +10,8 @@ import type {
 import { NormalizedUsageSchema } from '@agent/types/NormalizedUsage';
 
 /**
- * Schema for serializable tool-use round fields.
- *
- * Extends BaseCycleFieldsSchema with tool-specific fields.
- * Uses the same flat pattern as ResponseCycleFlow for consistency.
- *
- * ## Field Categories
- *
- * From BaseCycleFieldsSchema (shared with ResponseCycleFlow):
- * - messages, shouldStop, endTurn, responseTimeMs, stopReason, lastError
- *
- * Tool-use specific fields:
- * - response, toolCalls, text, roundIndex, roundResponseTimeMs, roundNormalizedUsage
+ * Schema for serializable tool-use round fields. Extends BaseCycleFieldsSchema
+ * with tool-specific fields using the same flat pattern as ResponseCycleFlow.
  */
 const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
   /**

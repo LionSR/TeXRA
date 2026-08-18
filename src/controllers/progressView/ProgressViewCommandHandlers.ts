@@ -67,11 +67,11 @@ export async function resolveNativeAgentRun(
     );
     return null;
   }
-  const { config, ...rest } = metadata;
+  const { config } = metadata;
   if (!config) return null;
   // The config guard above guarantees the resolved metadata carries a config,
   // so the return type narrows `config` to defined for callers.
-  return { ...rest, config };
+  return { ...metadata, config };
 }
 
 type ProgressViewMessage<C extends ProgressViewInboundMessage['command']> =

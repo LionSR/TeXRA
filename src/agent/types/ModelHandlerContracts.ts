@@ -128,27 +128,22 @@ export interface CreateResponseResult<
   updatedMessages?: M[];
 }
 
-/**
- * Result from extracting response data from a provider response.
- */
-export interface ExtractResponseResult {
+interface ExtractResponseBase<TUsage> {
   /** Extracted response text */
   text: string;
   /** Usage/token statistics from the provider */
-  usage: ProviderUsage;
+  usage: TUsage;
   /** Reason why the model stopped generating */
   stopReason: ProviderStopReason;
 }
 
+/** Result from extracting response data from a provider response. */
+export type ExtractResponseResult = ExtractResponseBase<ProviderUsage>;
+
 /** Provider response data after usage crosses the model-handler boundary. */
-export interface ExtractNormalizedResponseResult {
-  /** Extracted response text */
-  text: string;
-  /** Unified usage statistics, when the provider reports them. */
-  usage: NormalizedUsage | undefined;
-  /** Reason why the model stopped generating */
-  stopReason: ProviderStopReason;
-}
+export type ExtractNormalizedResponseResult = ExtractResponseBase<
+  NormalizedUsage | undefined
+>;
 
 /**
  * Result from checking stop conditions.

@@ -21,7 +21,7 @@ import {
  * the authoritative names. Extending the full base instead would inherit
  * those dead fields and duplicate `cacheMissInputTokens`.
  */
-const NormalizedUsageBaseSchema = TokenUsageStatsSchema.pick({
+export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
   inputTokens: true,
   outputTokens: true,
   cost: true,
@@ -51,7 +51,5 @@ const NormalizedUsageBaseSchema = TokenUsageStatsSchema.pick({
   /** Original API response payload (for debugging) */
   _native: z.unknown().optional(),
 });
-
-export const NormalizedUsageSchema = NormalizedUsageBaseSchema;
 
 export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;

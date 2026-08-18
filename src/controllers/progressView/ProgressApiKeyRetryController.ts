@@ -145,33 +145,46 @@ export class ProgressApiKeyRetryController {
       return noRetryResult();
     }
 
+    const committed = await this.commitOwnApiKeyRouting(request, () =>
+      this.deps.triggerRetry(request.stream, request.requestId),
+    );
+    return committed ? { ...committed, retried: true } : noRetryResult();
+  }
+
+  /**
+   * Serialize one own-API-key routing commit: snapshot the routing, switch it
+   * for `action`, and restore the snapshot when `action` throws or reports it
+   * never used the switches. Resolves to the preparation (whose switches stay
+   * on for the retry) or undefined when the retry identity is no longer
+   * pending.
+   *
+   * The request may have been dismissed or replaced while this callback
+   * waited behind another stream's routing commit. The pending identity is
+   * re-checked once inside the queue, before touching global routing, so a
+   * stale switch cannot briefly rebind credentials.
+   */
+  private commitOwnApiKeyRouting(
+    request: ProgressApiKeyRetryRequest,
+    action: () => boolean | Promise<boolean>,
+  ): Promise<ProgressApiKeyPreparationResult | undefined> {
     return this.routingCommitQueue.add(async () => {
-      // The request may have been dismissed or replaced while this callback
-      // waited behind another stream's routing commit. Re-check before touching
-      // global routing so a stale switch cannot briefly rebind credentials.
       if (!this.deps.isRetryPending(request.stream, request.requestId)) {
-        return noRetryResult();
+        return undefined;
       }
       const routingBefore = this.routingSnapshot();
       const prepared = await this.applyOwnApiKeyRouting(request, routingBefore);
-      let retried = false;
+      let actionSucceeded = false;
       try {
-        retried = await this.deps.triggerRetry(
-          request.stream,
-          request.requestId,
-        );
+        actionSucceeded = await action();
       } catch (error) {
         await this.restoreAfterError(routingBefore, prepared);
         throw error;
       }
-      if (!retried) {
+      if (!actionSucceeded) {
         await this.restoreOwnApiKeyRouting(routingBefore, prepared);
-        return noRetryResult();
+        return undefined;
       }
-      return {
-        ...prepared,
-        retried: true,
-      };
+      return prepared;
     });
   }
 
@@ -325,29 +338,13 @@ export class ProgressApiKeyRetryController {
     request: ProgressApiKeyRetryRequest,
     start: (copilotRouteOverride: CopilotRouteOverride) => Promise<boolean>,
   ): Promise<boolean> {
-    return this.routingCommitQueue.add(async () => {
-      // Mirror `useOwnApiKey`: this callback may have waited behind another
-      // stream's routing commit. Re-check the exact retry identity before
-      // touching global routing so a dismissed/replaced request cannot apply
-      // a stale switch.
-      if (!this.deps.isRetryPending(request.stream, request.requestId)) {
-        return false;
-      }
-      const before = this.routingSnapshot();
-      const prepared = await this.applyOwnApiKeyRouting(request, before);
-      // The user chose "use own API key" for this retry. The direct-route
-      // override travels only with the replacement launch; the standing
-      // preference remains visible to concurrent and future runs.
-      let started = false;
-      try {
-        started = await start('direct');
-      } catch (error) {
-        await this.restoreAfterError(before, prepared);
-        throw error;
-      }
-      if (!started) await this.restoreOwnApiKeyRouting(before, prepared);
-      return started;
-    });
+    // The user chose "use own API key" for this retry. The direct-route
+    // override travels only with the replacement launch; the standing
+    // preference remains visible to concurrent and future runs.
+    const committed = await this.commitOwnApiKeyRouting(request, () =>
+      start('direct'),
+    );
+    return committed !== undefined;
   }
 
   private routingSnapshot(): ProgressApiRoutingSnapshot {

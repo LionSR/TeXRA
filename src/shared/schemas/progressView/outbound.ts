@@ -44,13 +44,14 @@ import { pickProjection } from './projectionShape';
 import {
   ProgressViewPlacementSchema,
   StreamScopedBaseSchema,
+  StreamSelectionSchema,
   streamScopedCommand,
 } from './data';
 
 const UpdateStreamsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS),
   streams: z.array(StreamTabInfoSchema),
-  activeStream: z.union([StreamTabIdSchema, z.literal('')]),
+  activeStream: StreamSelectionSchema,
   streamStates: z.record(z.string(), StreamMetadataSchema).optional(),
   /**
    * Commands this host's inbound registry declares `unsupported(...)` —
@@ -66,19 +67,19 @@ const UpdateStreamMetadataMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA),
   streamInfo: StreamTabInfoSchema,
   streamState: StreamMetadataSchema,
-  activeStream: z.union([StreamTabIdSchema, z.literal('')]).optional(),
+  activeStream: StreamSelectionSchema.optional(),
 });
 
 const SetActiveStreamMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
-  activeStream: z.union([StreamTabIdSchema, z.literal('')]),
+  activeStream: StreamSelectionSchema,
 });
 
 const SettleStreamSelectionMessageSchema = z.strictObject({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SETTLE_STREAM_SELECTION),
   requestId: z.string().min(1),
   status: z.enum(['accepted', 'rejected', 'superseded']),
-  activeStream: z.union([StreamTabIdSchema, z.literal('')]),
+  activeStream: StreamSelectionSchema,
 });
 
 const ReleaseStreamContentMessageSchema = z.strictObject({

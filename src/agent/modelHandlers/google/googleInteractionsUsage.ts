@@ -35,7 +35,7 @@ function tokenCounts(usage: InteractionsUsage | null): GoogleTokenCounts {
 
   return {
     inputTokens,
-    outputTokens: directOutput > 0 ? directOutput : derivedOutput,
+    outputTokens: Math.max(directOutput, derivedOutput),
     reasoningTokens,
   };
 }

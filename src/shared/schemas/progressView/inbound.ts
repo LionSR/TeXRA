@@ -23,9 +23,12 @@ import {
   InquiryDropActionSchema,
   InquirySubmitActionSchema,
 } from '../inquiry';
-import { StreamTabIdSchema } from '../identifiers';
 import { AgentProposalSchema, UserQuestionAnswersSchema } from '../prompts';
-import { StreamScopedBaseSchema, streamScopedCommand } from './data';
+import {
+  StreamScopedBaseSchema,
+  StreamSelectionSchema,
+  streamScopedCommand,
+} from './data';
 import { GettingStartedActionSchema } from '../mainView/state';
 import { ExhaustionReasonSchema } from '../errors';
 
@@ -36,7 +39,7 @@ const TrimmedStringSchema = z
 
 const SwitchStreamMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM),
-  stream: z.union([StreamTabIdSchema, z.literal('')]),
+  stream: StreamSelectionSchema,
   requestId: z.string().min(1),
 });
 
