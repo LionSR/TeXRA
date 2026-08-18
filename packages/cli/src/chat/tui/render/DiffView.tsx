@@ -116,32 +116,21 @@ export function editPatchGroups(
   return groups.length > 0 ? groups : undefined;
 }
 
-export function diffDisplayLines(
-  hunks: readonly Hunk[],
-  maxHunkLines = 0,
-): DiffDisplayLine[] {
+export function diffDisplayLines(hunks: readonly Hunk[]): DiffDisplayLine[] {
   return hunks.flatMap((hunk) => {
     const lines = hunk.lines.filter(
       (line) => !line.startsWith(NO_NEWLINE_MARKER),
     );
-    const visible = maxHunkLines > 0 ? lines.slice(0, maxHunkLines) : lines;
-    const remaining = maxHunkLines > 0 ? lines.length - maxHunkLines : 0;
     const hunkHeader = `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
     const rendered: DiffDisplayLine[] = [
       { kind: 'header', text: hunkHeader },
-      ...visible.map((line): DiffDisplayLine => {
+      ...lines.map((line): DiffDisplayLine => {
         const marker = line.at(0);
         if (marker === '+') return { kind: 'added', text: line };
         if (marker === '-') return { kind: 'removed', text: line };
         return { kind: 'context', text: line };
       }),
     ];
-    if (remaining > 0) {
-      rendered.push({
-        kind: 'overflow',
-        text: `… ${remaining} more lines`,
-      });
-    }
     return rendered;
   });
 }
@@ -149,10 +138,9 @@ export function diffDisplayLines(
 export function wrappedDiffDisplayLines(
   hunks: readonly Hunk[],
   width: number,
-  maxHunkLines = 0,
 ): DiffDisplayLine[] {
   const diffWidth = clampModalWidth(width);
-  return diffDisplayLines(hunks, maxHunkLines).flatMap((line) =>
+  return diffDisplayLines(hunks).flatMap((line) =>
     wrapAnsiToWidth(line.text, diffWidth)
       .split('\n')
       .map((text): DiffDisplayLine => ({ ...line, text })),
@@ -278,15 +266,14 @@ function compactBoundedDiffDisplayLines(
 
 export function scrollBoundedDiffDisplayLines(
   hunks: readonly Hunk[],
-  maxHunkLines = 0,
   maxDisplayLines = 0,
   scrollOffset = 0,
   width?: number,
 ): DiffDisplayLine[] {
   const lines =
     width === undefined
-      ? diffDisplayLines(hunks, maxHunkLines)
-      : wrappedDiffDisplayLines(hunks, width, maxHunkLines);
+      ? diffDisplayLines(hunks)
+      : wrappedDiffDisplayLines(hunks, width);
   if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
   if (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS) {
     return compactBoundedDiffDisplayLines(lines, maxDisplayLines, width);
@@ -323,8 +310,6 @@ interface DiffViewProps {
   readonly hunks: readonly Hunk[];
   /** Maximum total rendered diff rows before truncating; 0 = no truncation. */
   readonly maxDisplayLines?: number;
-  /** Maximum context lines per hunk before truncating; 0 = no truncation. */
-  readonly maxHunkLines?: number;
   /** Starting diff row when maxDisplayLines truncates the display. */
   readonly scrollOffset?: number;
   readonly width?: number;
@@ -332,11 +317,9 @@ interface DiffViewProps {
 
 export function DiffView(props: DiffViewProps): React.JSX.Element {
   const maxDisplayLines = props.maxDisplayLines ?? 0;
-  const max = props.maxHunkLines ?? 0;
   const width = clampModalWidth(props.width ?? DEFAULT_DIFF_WIDTH);
   const lines = scrollBoundedDiffDisplayLines(
     props.hunks,
-    max,
     maxDisplayLines,
     props.scrollOffset ?? 0,
     width,
