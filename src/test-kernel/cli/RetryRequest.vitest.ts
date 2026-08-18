@@ -105,7 +105,6 @@ describe('CLI retry request', () => {
       stdin.write('k');
       await expect(decision).resolves.toEqual({
         accepted: true,
-        apiMode: 'personal',
         disableQuotaRoute: 'chatgpt',
       });
       expect(currentApproval.get()).toBeUndefined();
@@ -114,72 +113,21 @@ describe('CLI retry request', () => {
     }
   });
 
-  it.each([
-    ['subscription', subscriptionLimitPayload(false), 'OpenAI'],
-    [
-      'relay',
-      {
-        requestId: 'relay-limit',
-        streamId: 'retry-stream' as StreamTabId,
-        operation: 'Tool-use call',
-        errorMessage: 'Relay monthly limit reached.',
-        errorDetails: {
-          message: 'Relay monthly limit reached.',
-          exhaustionReason: 'relay-limit' as const,
-          isRelayError: true,
-          provider: 'anthropic',
-        },
-        personalApiKeyAvailable: false,
-        missingPersonalApiKeyMessage:
-          'No Anthropic API key is configured. Press n to dismiss, then use `/key` to add one.',
-      },
-      'Anthropic',
-    ],
-  ] as const)(
-    'hides the impossible %s switch and names the missing key',
-    async (_route, payload, provider) => {
-      const { ink, React } = await loadInk();
-      const output = await renderOutputAtTerminalSize(
-        ink,
-        React.createElement(RetryRequest, {
-          payload,
-          onDecide: vi.fn(),
-        }),
-        100,
-        { until: (frame) => frame.includes('API key is configured.') },
-      );
-
-      expect(output).toContain(`No ${provider} API key is configured.`);
-      expect(output).toContain('Press n to dismiss');
-      expect(output).toContain('/key');
-      expect(output).not.toContain('k use API key and retry');
-    },
-  );
-
-  it('derives the fallback copy from the failed provider', async () => {
+  it('hides the impossible subscription switch and names the missing key', async () => {
     const { ink, React } = await loadInk();
     const output = await renderOutputAtTerminalSize(
       ink,
       React.createElement(RetryRequest, {
-        payload: {
-          requestId: 'anthropic-fallback',
-          streamId: 'retry-stream' as StreamTabId,
-          operation: 'Tool-use call',
-          errorDetails: {
-            message: 'Relay monthly limit reached.',
-            exhaustionReason: 'relay-limit',
-            isRelayError: true,
-            provider: 'anthropic',
-          },
-          personalApiKeyAvailable: false,
-        },
+        payload: subscriptionLimitPayload(false),
         onDecide: vi.fn(),
       }),
       100,
       { until: (frame) => frame.includes('API key is configured.') },
     );
 
-    expect(output).toContain('No Anthropic API key is configured.');
-    expect(output).not.toContain('OpenAI API key');
+    expect(output).toContain('No OpenAI API key is configured.');
+    expect(output).toContain('Press n to dismiss');
+    expect(output).toContain('/key');
+    expect(output).not.toContain('k use API key and retry');
   });
 });

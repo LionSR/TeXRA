@@ -574,10 +574,6 @@ const SCENARIOS = [
       'On · key configured',
       'Prefer GLM Coding Plan',
       'Off · key configured',
-      'Included access',
-      'Your own API keys',
-      // ChatGPT + Grok + Kimi + GLM + Included + Personal → Personal is item 6.
-      '✓ 6. Your own API keys',
       'Esc back',
     ],
     unexpect: [
@@ -656,33 +652,13 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'orchestrate-relay-model-pick',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ORCHESTRATION: '1',
-      HARNESS_API_MODE: 'included',
-    },
-    bootExpect: 'Start a session or configure model access.',
-    keys: ['\r'],
-    exitKeys: [ESC, ESC],
-    expectExit: true,
-    expect: [
-      'Model',
-      'Model for the first message.',
-      'Sonnet 4.6 (Thinking) — included access: available',
-      'GPT-5.4 — included access: available',
-      'Esc back',
-    ],
-    unexpect: ['DeepSeek V4 Flash', 'api: api key set', 'your own API keys'],
-  },
-  {
     name: 'orchestrate-personal-model-pick',
     frame: 'scrollback',
     // Orchestration scenarios use harness model fixtures for provider-key
     // availability; API-key env fixtures are only needed by the real /model list.
     env: {
       HARNESS_ORCHESTRATION: '1',
-      HARNESS_API_MODE: 'personal',
+      HARNESS_API_MODE: '1',
     },
     bootExpect: 'Start a session or configure model access.',
     keys: ['\r'],
@@ -693,12 +669,6 @@ const SCENARIOS = [
       'Model for the first message.',
       'DeepSeek V4 Flash — api: api key set',
       'Esc back',
-    ],
-    unexpect: [
-      'Sonnet 4.6 (Thinking)',
-      'GPT-5.4',
-      'relay: included',
-      'included relay',
     ],
   },
   {
@@ -1186,29 +1156,6 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'model-form-included-empty',
-    env: {
-      HARNESS_AUTHENTICATED: '1',
-      HARNESS_API_MODE: 'included',
-      HARNESS_ENTRIES: '4',
-    },
-    keys: ['/model', '\r'],
-    frame: 'viewport',
-    expect: [
-      '/model · Included access',
-      'No model choices in this API mode.',
-      'No models are available with included access.',
-      'Switch to your own API keys',
-      'with `/api personal` or try again later.',
-      'Enter close',
-    ],
-    unexpect: [
-      'Available models.',
-      'Finish the active response before switching models.',
-      'No models are available in this API mode.',
-    ],
-  },
-  {
     name: 'api-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/api', '\r'],
@@ -1221,9 +1168,8 @@ const SCENARIOS = [
       'Otherwise:',
       'Researcher Access:',
       'Your own API keys',
-      'Included access',
     ],
-    unexpect: ['loading API status...', 'ServerSideKeyService not initialized'],
+    unexpect: ['loading API status...'],
   },
   {
     name: 'config-form',
@@ -1462,17 +1408,6 @@ const SCENARIOS = [
       '1-6/Enter select',
       'Esc close',
     ],
-    unexpect: ['ServerSideKeyService not initialized'],
-  },
-  {
-    name: 'api-form-buffered-hotkey',
-    rows: 12,
-    cols: 80,
-    env: { HARNESS_ENTRIES: '4' },
-    keys: ['/api', '\r', '51'],
-    frame: 'viewport',
-    expect: ['API fallback set to included.'],
-    unexpect: ['ServerSideKeyService not initialized'],
   },
   {
     name: 'api-form-chatgpt-hotkey',
@@ -1482,7 +1417,6 @@ const SCENARIOS = [
     keys: ['/api', '\r', '1'],
     frame: 'viewport',
     expect: ['chatgpt preference set to on.'],
-    unexpect: ['ServerSideKeyService not initialized'],
   },
   {
     name: 'api-form-kimi-hotkey',
@@ -1496,10 +1430,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: ['Prefer Kimi Code subscription enabled'],
     expectCollapsed: ['other models still use your own API keys'],
-    unexpect: [
-      'No Kimi Code API key configured',
-      'ServerSideKeyService not initialized',
-    ],
+    unexpect: ['No Kimi Code API key configured'],
   },
   {
     name: 'compact-approval-form',
@@ -2501,7 +2432,7 @@ const SCENARIOS = [
     bootExpect: '· Ctrl-C ',
     keys: ['k'],
     frame: 'viewport',
-    expect: ['RETRY-API-MODE personal', '/status details', '/model models'],
+    expect: ['RETRY-PERSONAL-CREDENTIALS', '/status details', '/model models'],
     unexpect: ['Retry the failed call?', '1 approval'],
   },
   {
@@ -3116,7 +3047,6 @@ const SCENARIOS = [
     expectPatterns: [RUNNING_STATUS_PATTERN],
     unexpect: [
       'agent: harness-agent',
-      'api: relay',
       'entry-1 chat history line',
       'entry-4 chat history line',
       '✓ ● main running',

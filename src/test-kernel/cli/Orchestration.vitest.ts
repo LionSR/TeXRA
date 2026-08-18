@@ -294,9 +294,9 @@ describe('CLI orchestration items', () => {
 
   it('preserves the longest fitting status prefix before hiding all status lines', () => {
     const statusLines = [
-      'mode: included access',
+      'mode: your own API keys',
       'auth: signed out',
-      'actions: `texra login` unlocks included models',
+      'actions: `texra login` unlocks remote agents',
     ];
 
     const layout = launcherLayout({ rows: 14, statusLines });
@@ -310,13 +310,13 @@ describe('CLI orchestration items', () => {
   });
 
   it('keeps compact signed-in auth after the API mode on short launchers', () => {
-    const statusLines = ['api: included access', SIGNED_IN_AUTH_STATUS];
+    const statusLines = ['api: your own API keys', SIGNED_IN_AUTH_STATUS];
 
     const layout = launcherLayout({ rows: 14, statusLines });
 
     expect(layout).toEqual({
       statusLines: [
-        'api: included access',
+        'api: your own API keys',
         'auth: signed in as researcher@example.com',
       ],
       footerHints: [],
@@ -326,13 +326,13 @@ describe('CLI orchestration items', () => {
   });
 
   it('keeps footer hints when compact auth creates enough room', () => {
-    const statusLines = ['api: included access', SIGNED_IN_AUTH_STATUS];
+    const statusLines = ['api: your own API keys', SIGNED_IN_AUTH_STATUS];
     const footerHints = ['Team settings are available from the launcher.'];
 
     const layout = launcherLayout({ rows: 16, statusLines, footerHints });
 
     expect(layout.statusLines).toEqual([
-      'api: included access',
+      'api: your own API keys',
       'auth: signed in as researcher@example.com',
     ]);
     expect(layout.footerHints).toEqual(footerHints);
@@ -377,7 +377,6 @@ describe('CLI orchestration items', () => {
 
   it('keeps model access directly below new chat and presents every access route', () => {
     const status = {
-      apiFallback: 'included' as const,
       preferences: {
         chatGpt: 'off',
         grok: 'off',
@@ -392,7 +391,7 @@ describe('CLI orchestration items', () => {
     expect(items[1]).toEqual({
       label: 'Model access',
       description:
-        'ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: included access',
+        'ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
       value: { kind: 'configure-model-access' },
     });
     expect(
@@ -434,22 +433,11 @@ describe('CLI orchestration items', () => {
         label: 'Prefer GLM Coding Plan',
         description: 'Off · key required to enable',
       },
-      {
-        value: { kind: 'api-fallback', apiMode: 'included' },
-        label: 'Included access',
-        description: 'Covered by your TeXRA plan',
-      },
-      {
-        value: { kind: 'api-fallback', apiMode: 'personal' },
-        label: 'Your own API keys',
-        description: 'Use keys configured on this computer',
-      },
     ]);
   });
 
   it('describes the Kimi Code route by key state and activity', () => {
     const kimiOff = kimiCodePreferenceItem({
-      apiFallback: 'personal',
       preferences: {
         chatGpt: 'off',
         grok: 'off',
@@ -469,7 +457,6 @@ describe('CLI orchestration items', () => {
     });
 
     const kimiOnAccess: CliModelAccessStatus = {
-      apiFallback: 'personal',
       preferences: {
         chatGpt: 'off',
         grok: 'off',
@@ -494,7 +481,6 @@ describe('CLI orchestration items', () => {
     const items = buildCliModelAccessItems({
       kind: 'loaded',
       access: {
-        apiFallback: 'personal',
         preferences: {
           chatGpt: 'on',
           grok: 'off',
@@ -593,47 +579,6 @@ describe('CLI orchestration items', () => {
         value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       }),
     ]);
-    expect(
-      buildCliModelAccessItems({
-        kind: 'loaded',
-        access: {
-          apiFallback: 'personal',
-          preferences: {
-            chatGpt: 'off',
-            grok: 'off',
-          },
-          codingPlans: codingPlans(),
-          chatGptSignedIn: false,
-          grokSignedIn: false,
-          texraSignedIn: false,
-        },
-      }).find(
-        (item) =>
-          item.value.kind === 'api-fallback' &&
-          item.value.apiMode === 'included',
-      )?.description,
-    ).toBe('Sign in from Account first');
-  });
-
-  it('does not offer to sign out an environment-managed relay token', () => {
-    const items = buildCliAccountItems({
-      texraSignedIn: true,
-      texraCredentialSource: 'relayToken',
-      chatGptSignedIn: false,
-      grokSignedIn: false,
-    });
-
-    expect(
-      items.find(
-        (item) =>
-          item.value.kind === 'account' && item.value.provider === 'texra',
-      ),
-    ).toMatchObject({
-      label: 'Log out of TeXRA',
-      value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
-      disabled: true,
-      description: 'Managed by the TEXRA_RELAY_TOKEN environment variable',
-    });
   });
 
   it('places Team before Resume and Agent when all three are available', () => {
@@ -884,7 +829,6 @@ describe('CLI orchestration items', () => {
         toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
       }),
       [modelAccess('deepseekT', 'provider-key', false)],
-      'personal',
     );
 
     const disabledLabels = view.items
@@ -895,9 +839,7 @@ describe('CLI orchestration items', () => {
       view.items.find((item) => item.label === 'Resume'),
     ).not.toHaveProperty('disabled');
     expect(view.items.at(-1)).toMatchObject({ label: 'Help' });
-    expect(view.items[0]?.description).toBe(
-      'No models are available with your own API keys',
-    );
+    expect(view.items[0]?.description).toBe('No models are available');
     expect(view.modelItems).toEqual([]);
   });
 
@@ -905,7 +847,6 @@ describe('CLI orchestration items', () => {
     const view = orchestrationModelAccessView(
       buildCliTeamItems([leanProjectPlan()], {}),
       [modelAccess('deepseekT', 'provider-key', false)],
-      'personal',
     );
 
     expect(
@@ -914,39 +855,6 @@ describe('CLI orchestration items', () => {
       disabled: true,
       description: 'unavailable; no team root; 1/2 tools; Lean Project',
     });
-  });
-
-  it('scopes startup model choices to the active API mode', () => {
-    const items = orchestrationItems({
-      presetPlans: [readyPresetPlan()],
-      history: [historyEntry('aaaaaaaaaaaa', { agent: 'review' })],
-      toolUseAgents: [toolUseAgent('review')],
-    });
-    const models = [
-      modelAccess('sonnet46T', 'included-access', true, 'included'),
-      modelAccess('deepseekT', 'provider-key', true, 'api key set'),
-      modelAccess('gemini31p', 'missing-key', false),
-    ];
-
-    const relayView = orchestrationModelAccessView(items, models, 'included');
-    const personalView = orchestrationModelAccessView(
-      items,
-      models,
-      'personal',
-    );
-
-    expect(relayView.modelItems.map((item) => item.value)).toEqual([
-      'sonnet46T',
-    ]);
-    expect(relayView.modelItems.map((item) => item.description)).toEqual([
-      'included access: available',
-    ]);
-    expect(personalView.modelItems.map((item) => item.value)).toEqual([
-      'deepseekT',
-    ]);
-    expect(personalView.modelItems.map((item) => item.description)).toEqual([
-      'api: api key set',
-    ]);
   });
 
   it('names Kimi Code subscription access in model rows', () => {
@@ -963,7 +871,6 @@ describe('CLI orchestration items', () => {
           },
         },
       ],
-      'personal',
     );
 
     expect(view.modelItems).toMatchObject([
@@ -978,7 +885,6 @@ describe('CLI orchestration items', () => {
     const view = orchestrationModelAccessView(
       orchestrationItems({ presetPlans: [readyPresetPlan()] }),
       [],
-      'personal',
     );
 
     expect(view.items.some((item) => item.disabled)).toBe(false);
@@ -988,24 +894,10 @@ describe('CLI orchestration items', () => {
     const view = orchestrationModelAccessView(
       orchestrationItems({ presetPlans: [readyPresetPlan()] }),
       [modelAccess('deepseekT', 'provider-key', false)],
-      'personal',
       { allowDefaultModelLaunch: true },
     );
 
     expect(view.items.some((item) => item.disabled)).toBe(false);
     expect(view.modelItems).toEqual([]);
-  });
-
-  it('uses relay-specific disabled text when included access needs login', () => {
-    const view = orchestrationModelAccessView(
-      orchestrationItems(),
-      [modelAccess('sonnet46T', 'included-login-required', false)],
-      'included',
-    );
-
-    expect(view.items[0]).toMatchObject({
-      disabled: true,
-      description: 'Sign in to use included access',
-    });
   });
 });

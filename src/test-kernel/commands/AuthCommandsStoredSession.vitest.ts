@@ -65,7 +65,6 @@ vi.mock('@utils/config/configUtils', () => ({
 
 // Local imports
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { RELAY_CI_TOKEN_PREFIX, RELAY_TOKEN_ENV_VAR } from '@auth/relayToken';
 import { signIn, signOut } from '@commands/auth/authCommands';
 
 function mockUnavailableStoredSession(failure: 'invalid' | 'transient'): void {
@@ -82,7 +81,7 @@ describe('auth commands for unavailable stored sessions', () => {
 
   it('clears an invalid session before opening the sign-in chooser', async () => {
     mockUnavailableStoredSession('invalid');
-    const relayAuthentication = vi
+    const authenticatedProbe = vi
       .spyOn(SupabaseClient, 'isAuthenticated')
       .mockResolvedValue(true);
     authMocks.showQuickPick.mockResolvedValue(undefined);
@@ -92,7 +91,7 @@ describe('auth commands for unavailable stored sessions', () => {
     expect(authMocks.clearStoredSession).toHaveBeenCalledOnce();
     expect(authMocks.getSession).not.toHaveBeenCalled();
     expect(authMocks.showQuickPick).toHaveBeenCalledOnce();
-    expect(relayAuthentication).not.toHaveBeenCalled();
+    expect(authenticatedProbe).not.toHaveBeenCalled();
   });
 
   it('preserves the session and defers sign-in during a transient outage', async () => {
@@ -159,17 +158,5 @@ describe('auth commands for unavailable stored sessions', () => {
     expect(authMocks.getSession).not.toHaveBeenCalled();
     expect(authMocks.removeStoredSession).toHaveBeenCalledOnce();
     expect(authMocks.showInformationMessage).toHaveBeenCalledWith('Signed out');
-  });
-
-  it('says a configured relay token keeps authenticating after sign-out', async () => {
-    vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}ci-token`);
-    mockUnavailableStoredSession('invalid');
-    authMocks.showWarningMessage.mockResolvedValue('Sign out');
-
-    await signOut();
-
-    expect(authMocks.showInformationMessage).toHaveBeenCalledWith(
-      expect.stringContaining(RELAY_TOKEN_ENV_VAR),
-    );
   });
 });

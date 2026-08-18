@@ -137,11 +137,11 @@ to the model provider you chose. TeXRA does not sit between you and
 the provider. Your unpublished proofs, manuscripts, and API keys
 never leave your machine except to the provider endpoint.
 
-**Hosted access** (signed in with GitHub or Google). Requests to
-hosted models are proxied through TeXRA's service so we can manage
-provider credentials and quota on your behalf. Switch any run back
-to direct mode with `--api-mode personal` (CLI) or by adding your own
-key in the **Dashboard → Providers & Models** tab (VS Code extension).
+**Provider subscriptions** (ChatGPT, Grok, Kimi Code, GLM Coding Plan).
+Requests still go straight from your machine to that provider —
+authenticated with the subscription instead of an API key. Connect one
+from the **Dashboard → Subscriptions** tab (VS Code extension), or with
+`texra auth chatgpt login` / `/api` in the CLI.
 
 API keys, whichever mode you use, stay on your machine — VS Code's
 built-in Secret Storage in the extension, an owner-only `secrets.json`

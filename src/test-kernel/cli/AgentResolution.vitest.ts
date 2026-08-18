@@ -69,21 +69,6 @@ describe('CLI agent resolution', () => {
     expect(canAccessRemoteAgentCatalogSpy).not.toHaveBeenCalled();
   });
 
-  it('does not treat relay-only model access as remote-catalog access', async () => {
-    const local = agent('lean');
-    isAuthenticatedSpy.mockResolvedValue(true);
-    canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
-    agentCatalogMock.getAgent.mockReturnValue(local);
-
-    await expect(resolveCliAgent('lean')).resolves.toBe(local);
-
-    expect(agentCatalogMock.loadAgents).toHaveBeenCalledOnce();
-    expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith({
-      includeRemote: false,
-    });
-    expect(isAuthenticatedSpy).not.toHaveBeenCalled();
-  });
-
   it('uses launch target category for authenticated remote-priority reloads', async () => {
     const local = agent('lean');
     const remote = agent('lean', 'remote');

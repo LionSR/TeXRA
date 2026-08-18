@@ -2,7 +2,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const providerMocks = vi.hoisted(() => ({
-  clearAllCaches: vi.fn(),
   getUser: vi.fn(),
   invalidateModelOptionsCache: vi.fn(),
   invalidateRemoteAgentsAfterSignOut: vi.fn(async () => {}),
@@ -50,12 +49,6 @@ vi.mock('@auth/SupabaseClient', () => ({
 vi.mock('@agent/index', () => ({
   invalidateRemoteAgentsAfterSignOut:
     providerMocks.invalidateRemoteAgentsAfterSignOut,
-}));
-
-vi.mock('@auth/serverKeys', () => ({
-  getServerSideKeyService: () => ({
-    clearAllCaches: providerMocks.clearAllCaches,
-  }),
 }));
 
 vi.mock('@model/computeModelOptions', () => ({
@@ -209,7 +202,6 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
 
     expect(clearSessionIfCurrent).toHaveBeenCalledOnce();
     expect(showSignInPrompt).not.toHaveBeenCalled();
-    expect(providerMocks.clearAllCaches).not.toHaveBeenCalled();
     expect(providerMocks.signOut).not.toHaveBeenCalled();
   });
 

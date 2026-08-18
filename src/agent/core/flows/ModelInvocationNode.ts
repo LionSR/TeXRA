@@ -1,8 +1,8 @@
 /**
  * The model invocation node and everything its retry lifecycle owns: node-level
- * retry configuration, the shared-route recovery gate, relay credential
- * recovery, the manual retry prompt, and the cancelled/failed fallbacks — one
- * deep module behind the plain `Node` interface the cycle flows compose.
+ * retry configuration, the shared-route recovery gate, the manual retry
+ * prompt, and the cancelled/failed fallbacks — one deep module behind the
+ * plain `Node` interface the cycle flows compose.
  */
 
 import { Node } from '@agent/node';
@@ -29,11 +29,9 @@ import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   classifyModelRouteFailure,
   isProviderErrorAutoRetryable,
-  isUnauthorizedProviderError,
   normalizeProviderError,
   type ModelRouteVerdict,
 } from '@common/errors/sdkError/providerErrorFormat';
-import { includedModelAccess } from '@model/includedModelAccess';
 import type { ResolvedModelConfig } from '@model/openRouterRouting';
 import {
   DEFAULT_CORE_SETTINGS,
@@ -50,8 +48,6 @@ import { getValidatedConfig } from '@utils/config/configUtils';
 import { FlowTransition } from './FlowTransitions';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;
-
-const RELAY_USER_REQUEST_GATE_ROUTE = 'relay:user-request-gate';
 
 const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
@@ -167,7 +163,6 @@ export class ModelInvocationNode<
 > extends Node<TShared, TServices> {
   private readonly _config: ModelInvocationConfig<TShared, TServices>;
   protected _userCancelled = false;
-  protected _hasAttemptedTokenRefresh = false;
   private _retryLifecycle: RetryLifecycleState | undefined;
 
   constructor(config: ModelInvocationConfig<TShared, TServices>) {
@@ -178,7 +173,6 @@ export class ModelInvocationNode<
   clone(): this {
     const cloned = super.clone();
     cloned._userCancelled = false;
-    cloned._hasAttemptedTokenRefresh = false;
     cloned._retryLifecycle = undefined;
     return cloned;
   }
@@ -297,48 +291,8 @@ export class ModelInvocationNode<
     return result;
   }
 
-  /**
-   * Attempts a reactive token refresh after a relay 401 error, then retries the operation once.
-   * Returns the retry result on success, or rethrows on persistent 401 / refresh failure.
-   */
-  private async attemptRelay401Recovery(
-    originalError: unknown,
-    operation: (signal: AbortSignal) => Promise<InvocationSuccess>,
-    signal: AbortSignal,
-  ): Promise<InvocationSuccess> {
-    const { logger } = this.services;
-    this._hasAttemptedTokenRefresh = true;
-    logger.debug('Relay 401, refreshing token before retry loop');
-
-    const refreshed = await includedModelAccess().getAccessToken(true);
-    if (!refreshed) {
-      logger.debug('Token refresh failed, skipping auto-retries');
-      throw originalError;
-    }
-
-    await this.rebindClient('after token refresh', signal);
-
-    logger.debug('Token refreshed, retrying immediately');
-
-    try {
-      const result = await operation(signal);
-      // Success — reset flag so future expirations can trigger refresh again
-      this._hasAttemptedTokenRefresh = false;
-      return result;
-    } catch (retryErr) {
-      const retryFormatted = normalizeProviderError(retryErr);
-      if (
-        retryFormatted.isRelayError &&
-        isUnauthorizedProviderError(retryFormatted)
-      ) {
-        logger.debug('Still 401 after token refresh, skipping auto-retries');
-      }
-      throw retryErr;
-    }
-  }
-
-  /** Runs the operation under the run signal, with relay token refresh. */
-  protected async invokeWithRelayRecovery(
+  /** Runs the operation under the run signal, recording the retry lifecycle. */
+  protected async invokeWithRetryLifecycle(
     operation: (signal: AbortSignal) => Promise<InvocationSuccess>,
   ): Promise<InvocationSuccess> {
     const services = this.services;
@@ -360,84 +314,23 @@ export class ModelInvocationNode<
       // retry attempt and must therefore remain inside this lifecycle guard.
       await services.modelCell.getClient();
 
-      // Proactive relay token refresh before the request. Only relay-route
-      // clients present a relay session token, so only they consult the expiry
-      // clock — personal-key / openrouter / subscription clients must never
-      // rebuild for a credential the call doesn't use.
-      const includedAccess = includedModelAccess();
-      if (
-        services.modelCell.route === 'relay' &&
-        includedAccess.isAccessTokenExpiringSoon()
-      ) {
-        // Threshold-gated and mutex-deduped: refreshes the session (updating
-        // tokenExpiresAt) only when actually near expiry. For a configured CI
-        // relay token this is a cache-only read with no side effects.
-        await includedAccess.getAccessToken();
-        // Rebuild only when the token actually rotated — rebuilding with the
-        // same JWT changes nothing, and is exactly the loop this branch caused.
-        if (!includedAccess.isAccessTokenExpiringSoon()) {
-          await this.rebindClient('proactive pre-invocation', signal);
-        }
-      }
-
       const result = await operation(signal);
       return this.recordResolvedAttempt(result, attemptSource);
     } catch (err) {
       const formatted = normalizeProviderError(err);
-      // Reactive 401 recovery: refresh token (single-flighted at the auth
-      // boundary) and retry once within this same node attempt. 401 is not
-      // auto-retryable, so without this the run would halt at the manual
-      // retry prompt on every token rotation.
-      if (
-        (formatted.isRelayError || services.modelCell.route === 'relay') &&
-        isUnauthorizedProviderError(formatted) &&
-        !this._hasAttemptedTokenRefresh
-      ) {
-        this.logRetryLifecycle('attempt_failed', {
-          decisionSource: attemptSource,
-          credentialRefresh: true,
-          recoveryPending: true,
-          userRetryable: formatted.userRetryable,
-          statusCode: formatted.statusCode,
-          provider: formatted.provider,
-          isRelayError: formatted.isRelayError,
-        });
-        try {
-          const result = await this.attemptRelay401Recovery(
-            err,
-            operation,
-            signal,
-          );
-          return this.recordResolvedAttempt(result, attemptSource, {
-            credentialRefresh: true,
-          });
-        } catch (retryErr) {
-          const retryFormatted = normalizeProviderError(retryErr);
-          this.logRetryLifecycle('attempt_failed', {
-            decisionSource: attemptSource,
-            credentialRefresh: true,
-            userRetryable: retryFormatted.userRetryable,
-            statusCode: retryFormatted.statusCode,
-            provider: retryFormatted.provider,
-            isRelayError: retryFormatted.isRelayError,
-          });
-          throw retryErr;
-        }
-      }
       this.logRetryLifecycle('attempt_failed', {
         decisionSource: attemptSource,
         userRetryable: formatted.userRetryable,
         statusCode: formatted.statusCode,
         provider: formatted.provider,
-        isRelayError: formatted.isRelayError,
       });
       throw err;
     }
   }
 
   /**
-   * Auth/permission errors (401, 403), credential-exhausted errors (relay
-   * monthly limit, upstream credit/quota depletion), and context-window
+   * Auth/permission errors (401, 403), credential-exhausted errors (upstream
+   * credit/quota depletion), and context-window
    * overflows skip auto-retries — they need human attention (switching keys,
    * topping up, shrinking the request) rather than an identical retry that can
    * only fail the same way again. A provider handler that knows how to recover
@@ -495,13 +388,12 @@ export class ModelInvocationNode<
       if (this._retryLifecycle) {
         this._retryLifecycle.nextAttemptSource = result.retrySource ?? 'human';
       }
-      this._hasAttemptedTokenRefresh = false;
       // Always refresh the client on manual retry. The user may have
       // taken actions between failure and retry that change how the
       // client should be built — setting a new API key (quota /
-      // credit-depletion flow), toggling included-access mode, rotating
-      // a token after a relay 401, etc. Refreshing is cheap and keeps
-      // the cached client in sync with current secrets/config.
+      // credit-depletion flow), toggling a subscription preference, etc.
+      // Refreshing is cheap and keeps the cached client in sync with
+      // current secrets/config.
       if (result.clientPrepared !== true) {
         await this.rebindClient('before manual retry');
       }
@@ -674,15 +566,14 @@ export class ModelInvocationNode<
     const modelHandler = services.modelCell.handler;
     modelHandler.setOutputStreaming(this._config.streaming);
 
-    return this.invokeWithRelayRecovery(async (signal) => {
+    return this.invokeWithRetryLifecycle(async (signal) => {
       // Read per attempt: a retry that rebound the credential must run on the
       // replacement client, not the one the failed attempt used.
       const client = await services.modelCell.getClient();
       const wireRoute = modelHandler.getWireRouteKey(client);
       const modelRetryRoute = modelHandler.getModelRetryRouteKey(client);
       const gate = services.runScope.session.modelRetries;
-      const usesRelay = services.modelCell.route === 'relay';
-      // The three routes ask different questions of the same failure, so the
+      // The two routes ask different questions of the same failure, so the
       // verdict is computed once per failed call and read by each of them.
       let classified: { error: Error; verdict: ModelRouteVerdict } | undefined;
       const verdictFor = (error: Error): ModelRouteVerdict => {
@@ -690,12 +581,6 @@ export class ModelInvocationNode<
           classified = { error, verdict: classifyModelRouteFailure(error) };
         }
         return classified.verdict;
-      };
-      const isRelayAdmissionFailure = (error: Error): boolean => {
-        const { rateLimitScope } = verdictFor(error);
-        return (
-          rateLimitScope === 'relay-limit' || rateLimitScope === 'relay-user'
-        );
       };
       const invoke = async () => {
         const start = Date.now();
@@ -729,8 +614,7 @@ export class ModelInvocationNode<
           baseBackoffMs: RETRY_BACKOFF_MS,
           // One wire route owns transport and server-failure cooling. A second
           // ordered scope keeps model-specific limits from blocking healthy
-          // sibling models on the same credential and endpoint. Relay calls
-          // also share the server's cross-provider per-user request gate.
+          // sibling models on the same credential and endpoint.
           classifyFailure: (error) => {
             const verdict = verdictFor(error);
             return verdict.wireRouteFailure
@@ -739,7 +623,6 @@ export class ModelInvocationNode<
           },
           isReachableFailure: (error) =>
             verdictFor(error).rateLimitScope === 'model',
-          isUnobservedFailure: isRelayAdmissionFailure,
           additionalRoutes: [
             {
               key: modelRetryRoute,
@@ -749,39 +632,8 @@ export class ModelInvocationNode<
                   ? { retryAfterMs: verdict.retryAfterMs }
                   : undefined;
               },
-              isUnobservedFailure: isRelayAdmissionFailure,
             },
           ],
-          trailingRoutes: usesRelay
-            ? [
-                {
-                  key: RELAY_USER_REQUEST_GATE_ROUTE,
-                  classifyFailure: (error) => {
-                    const verdict = verdictFor(error);
-                    if (verdict.rateLimitScope !== 'relay-user') {
-                      return undefined;
-                    }
-                    return {
-                      retryAfterMs: verdict.relayRequestRetryAfterMs,
-                      ...(verdict.relayRequestRateLimited
-                        ? { releaseProbeBeforeOperation: true }
-                        : {}),
-                    };
-                  },
-                  // An upstream rate limit proves the gate admitted the call.
-                  isReachableFailure: (error) => {
-                    const { rateLimitScope } = verdictFor(error);
-                    return (
-                      rateLimitScope === 'model' || rateLimitScope === 'wire'
-                    );
-                  },
-                  // The relay rejected the call before its per-user gate.
-                  isUnobservedFailure: (error) =>
-                    verdictFor(error).exhaustionReason === 'relay-limit',
-                  releaseEarlierProbesBeforeWait: true,
-                },
-              ]
-            : undefined,
           onWait: (delayMs) =>
             services.logger.debug(
               `Waiting ${delayMs}ms for the model recovery probe.`,

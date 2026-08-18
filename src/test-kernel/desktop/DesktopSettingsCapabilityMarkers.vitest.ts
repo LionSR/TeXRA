@@ -81,12 +81,6 @@ function realCredentialController(): DefaultDesktopCredentialSettingsController 
       showErrorMessage: noOp,
     },
     auth: { signIn: noOp, signOut: noOp },
-    setUseIncludedModelAccess: noOp,
-    refreshSpendingStatus: async () => null,
-    modelSelectionExtras: {
-      useIncludedAccess: () => false,
-      getUserTier: () => undefined,
-    },
     onCredentialChanged: noOp,
     onError: () => undefined,
   });

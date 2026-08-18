@@ -12,7 +12,6 @@
  * `subscribeStreamLog.ts`.
  */
 
-import { appendCliApiSwitchHint } from '@cli/runtime/approval/approvalPrompts';
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { formatCliWorkflowCallLine } from '@cli/runtime/workflowCallText';
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
@@ -205,15 +204,14 @@ function renderErrorLogEntryText(
   data: ErrorLogData | undefined,
 ): string {
   const safeSummary = redactSecrets(safeTerminalText(text));
-  if (!data) return appendCliApiSwitchHint(safeSummary);
+  if (!data) return safeSummary;
   const detail = truncateSummary(
     redactSecrets(safeTerminalText(data.message)),
     MAX_ERROR_DETAIL_LENGTH,
   );
-  const withDetail = detail
+  return detail
     ? `${safeSummary}\n${TOOL_OUTPUT_CORNER} ${detail}`
     : safeSummary;
-  return appendCliApiSwitchHint(withDetail, data.exhaustionReason);
 }
 
 /**

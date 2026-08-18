@@ -23,14 +23,13 @@ function createRetryPermission(
   return {
     kind: PERMISSION_KIND.RETRY,
     data: {
-      requestId: 'relay-retry',
+      requestId: 'retry-1',
       streamId: 'stream-1',
       operation: 'model request',
       model: 'test-model',
-      errorMessage: 'Relay quota exhausted',
+      errorMessage: 'Provider quota exhausted',
       errorDetails: {
-        exhaustionReason: 'relay-limit',
-        isRelayError: true,
+        exhaustionReason: 'upstream-credit',
         userRetryable: true,
       },
       ...overrides,
@@ -66,7 +65,6 @@ function formatPartialOutput(
   partialText: string,
 ): string {
   const text = formatRetryDetails(element, {
-    isRelayError: false,
     userRetryable: true,
     partialText,
   });
@@ -87,7 +85,6 @@ describe('retry-request-panel', () => {
       model: 'kimiCoding',
       errorDetails: {
         exhaustionReason: 'kimi-code-subscription',
-        isRelayError: false,
         userRetryable: true,
       },
     });
@@ -107,7 +104,6 @@ describe('retry-request-panel', () => {
       model: 'kimiCoding',
       errorDetails: {
         exhaustionReason: 'kimi-code-subscription',
-        isRelayError: false,
         userRetryable: true,
       },
     });
@@ -124,7 +120,6 @@ describe('retry-request-panel', () => {
       model: 'kimiCoding',
       errorDetails: {
         exhaustionReason: 'upstream-credit',
-        isRelayError: false,
         userRetryable: true,
       },
     });
@@ -160,7 +155,6 @@ describe('retry-request-panel', () => {
       errorMessage: 'Copilot quota exhausted',
       errorDetails: {
         exhaustionReason: 'copilot-subscription',
-        isRelayError: false,
         userRetryable: true,
       },
     });

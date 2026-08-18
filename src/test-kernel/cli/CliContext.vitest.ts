@@ -250,53 +250,6 @@ describe('CLI context config defaults', () => {
     expect(context.envModel).toBeUndefined();
     expect(context.configWarnings?.join('\n')).toContain('TEXRA_MODEL');
   });
-
-  it('parses TEXRA_API_MODE aliases before runtime initialization', async () => {
-    const context = await buildCliContext({
-      ambient,
-      env: { TEXRA_API_MODE: 'byok' },
-      globalArgs: { cwd: tmpdir() },
-    });
-
-    expect(context.apiMode).toBe('personal');
-  });
-
-  it('lets --api-mode override TEXRA_API_MODE', async () => {
-    const context = await buildCliContext({
-      ambient,
-      env: { TEXRA_API_MODE: 'personal' },
-      globalArgs: {
-        apiMode: 'included',
-        cwd: tmpdir(),
-      },
-    });
-
-    expect(context.apiMode).toBe('included');
-  });
-
-  it('rejects invalid explicit --api-mode values', async () => {
-    await expect(
-      buildCliContext({
-        ambient,
-        env: { TEXRA_API_MODE: 'included' },
-        globalArgs: {
-          apiMode: 'unknown-mode',
-          cwd: tmpdir(),
-        },
-      }),
-    ).rejects.toThrow('Invalid value for argument: --api-mode');
-  });
-
-  it('reports invalid TEXRA_API_MODE values without failing', async () => {
-    const context = await buildCliContext({
-      ambient,
-      env: { TEXRA_API_MODE: 'unknown-mode' },
-      globalArgs: { cwd: tmpdir() },
-    });
-
-    expect(context.apiMode).toBeUndefined();
-    expect(context.configWarnings?.join('\n')).toContain('TEXRA_API_MODE');
-  });
 });
 
 describe('CLI --cwd validation', () => {

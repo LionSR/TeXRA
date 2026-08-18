@@ -46,8 +46,8 @@ function batchId(batch: unknown): string {
   return (batch as { batchId: string }).batchId;
 }
 
-function stubRelayToken(): void {
-  vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
+function stubAccessToken(): void {
+  vi.spyOn(SupabaseClient, 'getAccessToken').mockResolvedValue('token');
 }
 
 // ky passes a Request object; read each batch body from it. `beforeRespond`
@@ -93,7 +93,7 @@ describe('UsageLogService', () => {
   });
 
   it('drains entries queued while another flush is in flight', async () => {
-    stubRelayToken();
+    stubAccessToken();
 
     const { promise: firstFetchReleased, resolve: releaseFirstFetch } =
       createDeferred();
@@ -122,7 +122,7 @@ describe('UsageLogService', () => {
   });
 
   it('waits for successive active batches during disposal', async () => {
-    stubRelayToken();
+    stubAccessToken();
 
     const { promise: firstFetchReleased, resolve: releaseFirstFetch } =
       createDeferred();
@@ -163,7 +163,7 @@ describe('UsageLogService', () => {
   });
 
   it('warns after five seconds without bounding disposal', async () => {
-    stubRelayToken();
+    stubAccessToken();
     const warn = vi.spyOn(logger, 'warn');
 
     const { promise: fetchReleased, resolve: releaseFetch } = createDeferred();
@@ -203,7 +203,7 @@ describe('UsageLogService', () => {
   });
 
   it('keeps queued entries when setup fails before dequeue', async () => {
-    vi.spyOn(SupabaseClient, 'getRelayAccessToken')
+    vi.spyOn(SupabaseClient, 'getAccessToken')
       .mockRejectedValueOnce(new Error('auth unavailable'))
       .mockResolvedValue('token');
 
@@ -233,7 +233,7 @@ describe('UsageLogService', () => {
     ],
     ['partial acknowledgement', { success: true, accepted: 0 }],
   ])('requeues entries after a %s', async (_case, firstFailure) => {
-    stubRelayToken();
+    stubAccessToken();
 
     const { batches, fetchMock } = stubBatchFetch((callCount) => {
       if (callCount !== 1) return;
@@ -255,7 +255,7 @@ describe('UsageLogService', () => {
   });
 
   it('discards a permanent rejection and continues with later entries', async () => {
-    stubRelayToken();
+    stubAccessToken();
 
     const { promise: rejectionReleased, resolve: releaseRejection } =
       createDeferred();
@@ -295,7 +295,7 @@ describe('UsageLogService', () => {
   });
 
   it('keeps a failed batch id separate from later queued entries', async () => {
-    stubRelayToken();
+    stubAccessToken();
 
     const { batches, fetchMock } = stubBatchFetch((callCount) => {
       if (callCount === 1) {
@@ -348,21 +348,21 @@ describe('UsageLogService', () => {
     }
 
     it('sends nothing while the setting is off', async () => {
-      stubRelayToken();
+      stubAccessToken();
       await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
 
       await expectOptedOutFlush();
     });
 
     it('honours a workspace-scoped telemetry opt-out', async () => {
-      stubRelayToken();
+      stubAccessToken();
       await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'workspace');
 
       await expectOptedOutFlush();
     });
 
     it('does not let a project opt in over a user-wide opt-out', async () => {
-      stubRelayToken();
+      stubAccessToken();
       await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
       await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'workspace');
 
@@ -372,7 +372,7 @@ describe('UsageLogService', () => {
     // The setting is read live, so turning it off has to drop rounds already
     // queued under the old value rather than letting the next flush ship them.
     it('discards entries queued before the setting was turned off', async () => {
-      stubRelayToken();
+      stubAccessToken();
 
       const { batches, fetchMock } = stubBatchFetch();
 
@@ -390,7 +390,7 @@ describe('UsageLogService', () => {
     });
 
     it('resumes sending once the setting is turned back on', async () => {
-      stubRelayToken();
+      stubAccessToken();
       await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
 
       const { batches, fetchMock } = stubBatchFetch();
@@ -409,11 +409,10 @@ describe('UsageLogService', () => {
       expect(batches.map(batchModels)).toEqual([['sent']]);
     });
 
-    // The relay enforces the monthly spend cap from the aggregate that these
-    // records populate, so an opt-out that suppressed them would let hosted
+    // Plan accounting is derived from the aggregate that these records
+    // populate, so an opt-out that suppressed them would let plan-covered
     // calls run on against a stale total. Only `api-key` rounds are optional.
     it.each([
-      'relay',
       'chatgpt-subscription',
       'xai-subscription',
       'kimi-code-subscription',
@@ -421,7 +420,7 @@ describe('UsageLogService', () => {
     ] as const)(
       'still sends %s usage while the setting is off',
       async (usageRoute) => {
-        stubRelayToken();
+        stubAccessToken();
         await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
 
         const { batches, fetchMock } = stubBatchFetch();
@@ -437,12 +436,15 @@ describe('UsageLogService', () => {
     );
 
     it('drops optional entries from a batch but keeps the accounted ones', async () => {
-      stubRelayToken();
+      stubAccessToken();
 
       const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log({ ...usageEntry('byok'), usageRoute: 'api-key' });
-      UsageLogService.log({ ...usageEntry('hosted'), usageRoute: 'relay' });
+      UsageLogService.log({
+        ...usageEntry('hosted'),
+        usageRoute: 'chatgpt-subscription',
+      });
       await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
 
       await expect(UsageLogService.flush()).resolves.toBe(
@@ -453,12 +455,12 @@ describe('UsageLogService', () => {
       expect(batches.map(batchModels)).toEqual([['hosted']]);
     });
 
-    // getRelayAccessToken() is awaited before the batch is sent, so an opt-out
+    // getAccessToken() is awaited before the batch is sent, so an opt-out
     // that lands during that await must still take effect.
     it('honours an opt-out that lands while the token lookup is in flight', async () => {
       const { promise: tokenReleased, resolve: releaseToken } =
         createDeferred();
-      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockImplementation(
+      vi.spyOn(SupabaseClient, 'getAccessToken').mockImplementation(
         async () => {
           await tokenReleased;
           return 'token';
@@ -486,7 +488,7 @@ describe('UsageLogService', () => {
       ['TEXRA_NO_TELEMETRY', 'true'],
       ['DO_NOT_TRACK', '1'],
     ])('sends nothing while %s=%s is set', async (name, value) => {
-      stubRelayToken();
+      stubAccessToken();
       await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
       vi.stubEnv(name, value);
 
@@ -496,7 +498,7 @@ describe('UsageLogService', () => {
     it.each(['0', 'false', ''])(
       'ignores TEXRA_NO_TELEMETRY=%p',
       async (value) => {
-        stubRelayToken();
+        stubAccessToken();
         await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
         vi.stubEnv('TEXRA_NO_TELEMETRY', value);
 
@@ -512,15 +514,18 @@ describe('UsageLogService', () => {
       },
     );
 
-    // Same carve-out as the setting: the spend cap is enforced from these
+    // Same carve-out as the setting: plan accounting is derived from these
     // records, so the environment switch must not suppress them either.
-    it('still sends relay usage while TEXRA_NO_TELEMETRY is set', async () => {
-      stubRelayToken();
+    it('still sends plan usage while TEXRA_NO_TELEMETRY is set', async () => {
+      stubAccessToken();
       vi.stubEnv('TEXRA_NO_TELEMETRY', '1');
 
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log({ ...usageEntry('hosted'), usageRoute: 'relay' });
+      UsageLogService.log({
+        ...usageEntry('hosted'),
+        usageRoute: 'chatgpt-subscription',
+      });
       await expect(UsageLogService.flush()).resolves.toBe(
         USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
       );
@@ -534,7 +539,7 @@ describe('UsageLogService', () => {
     it.each(['false', '0', 0, null])(
       'treats the non-boolean value %p as opted out',
       async (value) => {
-        stubRelayToken();
+        stubAccessToken();
         await platform().config.update(TELEMETRY_ENABLED_KEY, value, 'global');
 
         const { batches, fetchMock } = stubBatchFetch();
@@ -548,7 +553,7 @@ describe('UsageLogService', () => {
     );
 
     it('fails closed for a malformed workspace value despite a valid global opt-in', async () => {
-      stubRelayToken();
+      stubAccessToken();
       await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
       await platform().config.update(
         TELEMETRY_ENABLED_KEY,

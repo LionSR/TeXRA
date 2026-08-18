@@ -11,7 +11,7 @@ import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
 import { createLog } from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
-import { AgentCategory, byCategory, type ApiAccessMode } from '@shared/schemas';
+import { AgentCategory, byCategory } from '@shared/schemas';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -53,12 +53,10 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '../runtime/modelAccess';
-import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import { loadCliApiStatus } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
 import {
-  contextForCliModelAccess,
   readCliModelAccessStatus,
   updateCliModelAccess,
 } from '../runtime/modelAccessSelection';
@@ -70,11 +68,7 @@ import {
   grokSignOutOutcomeMessage,
   signOutCliGrok,
 } from '../runtime/grokLogin';
-import {
-  getCliAuthProfile,
-  signOutCliSupabase,
-  supabaseSignOutOutcomeMessage,
-} from '../runtime/supabaseAuth';
+import { getCliAuthProfile, signOutCliSupabase } from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
@@ -116,7 +110,6 @@ const SUBSCRIPTION_SIGN_OUT = {
 async function canLaunchWithDefaultModel(
   context: CliContext,
   models: readonly CliModelAccess[],
-  apiMode: ApiAccessMode,
 ): Promise<boolean> {
   if (models.length === 0) return true;
 
@@ -128,7 +121,6 @@ async function canLaunchWithDefaultModel(
   try {
     await selectCliRunnableModel(defaults.model, {
       fallbackReason: defaults.modelSource,
-      apiMode,
       accessList: models,
     });
     return true;
@@ -166,8 +158,8 @@ async function runOrchestration(context: CliContext): Promise<number> {
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
   // First-run gate: a credential-less interactive user picks sign-in or a key
   // here instead of landing on a launcher full of "login required" models. On
-  // success the apiMode/models read below re-reads the freshly-set credentials
-  // in-process — the relay / key paths invalidate the relevant caches — so no
+  // success the models read below re-reads the freshly-set credentials
+  // in-process — the key paths invalidate the relevant caches — so no
   // relaunch is needed.
   const { maybeRunCliOnboarding } = await import('../onboarding/runOnboarding');
   const onboarding = await maybeRunCliOnboarding(context);
@@ -197,29 +189,23 @@ async function runOrchestration(context: CliContext): Promise<number> {
     return result.exitCode;
   }
 
-  let launcherApiModeOverride: ApiAccessMode | undefined;
   launcher: while (true) {
     const history = await listCliHistoryEntries();
     const presets = readCliMultiAgentPresets();
     const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
-    const apiMode = launcherApiModeOverride ?? effectiveCliApiMode(context);
-    const launchContext = contextForCliModelAccess(
-      context,
-      launcherApiModeOverride,
-    );
+    const launchContext = context;
     const presetLaunchBlockReason =
       launchContext.approvalPolicy === 'never'
         ? 'delegation-denied'
         : undefined;
     const [modelAccess, authProfile] = await Promise.all([
-      readCliModelAccessStatus(apiMode),
+      readCliModelAccessStatus(),
       getCliAuthProfile(),
     ]);
     const toolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
     const accountStatus = {
       texraSignedIn: authProfile.authenticated,
       texraAccountLabel: authProfile.accountLabel,
-      texraCredentialSource: authProfile.credentialSource,
       chatGptSignedIn: modelAccess.chatGptSignedIn,
       chatGptAccountLabel: modelAccess.chatGptAccountLabel,
       grokSignedIn: modelAccess.grokSignedIn,
@@ -242,15 +228,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // after an agent/team choice. Best-effort: an unavailable registry just
     // launches with the default model instead of blocking the launcher.
     const [models, statusLines] = await Promise.all([
-      getCliModelAccessList({
-        apiMode,
-      }).catch((): readonly CliModelAccess[] => []),
-      loadCliApiStatus({ apiMode }),
+      getCliModelAccessList().catch((): readonly CliModelAccess[] => []),
+      loadCliApiStatus(),
     ]);
     const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
       launchContext,
       models,
-      apiMode,
     );
     const { runOrchestrationTui } =
       await import('../orchestration/runOrchestrationTui');
@@ -265,7 +248,6 @@ async function runOrchestration(context: CliContext): Promise<number> {
         launchBlockReason: presetLaunchBlockReason,
       }),
       accountItems: buildCliAccountItems(accountStatus),
-      apiMode,
       modelAccess: launcherModelAccess,
       version: context.version,
       statusLines,
@@ -399,14 +381,11 @@ async function runOrchestration(context: CliContext): Promise<number> {
                 },
                 { writeProgress: writeTextStdout },
               );
-              launcherApiModeOverride = result.apiMode;
               writeTextStdout(result.message);
             }
           } else if (action.operation === 'sign-out') {
             await signOutCliSupabase();
-            writeTextStdout(
-              supabaseSignOutOutcomeMessage('Signed out of TeXRA.'),
-            );
+            writeTextStdout('Signed out of TeXRA.');
           } else {
             await runLoginCommand(launchContext, loginInitFromArgs({}));
           }
@@ -423,7 +402,6 @@ async function runOrchestration(context: CliContext): Promise<number> {
             action.access,
             { writeProgress: writeTextStdout },
           );
-          launcherApiModeOverride = result.apiMode;
           writeTextStdout(result.message);
         } catch (error: unknown) {
           writeErrorStderr(error);
