@@ -3,10 +3,9 @@ import PQueue from 'p-queue';
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
 import type { DeleteStreamResult, SessionStores } from '@agent/storage';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
-import {
-  defaultSession,
-  type SessionHandle,
-  type WorkspaceStorageTransitionHooks,
+import type {
+  SessionHandle,
+  WorkspaceStorageTransitionHooks,
 } from '@agent/runtime/SessionHandle';
 import {
   WebviewBridge,
@@ -70,9 +69,9 @@ export interface ProgressBackendOptions {
   approvals: ProgressBackendApprovalOptions;
   lifecycle: ProgressBackendLifecycleOptions;
   reportTranscriptLoadError(error: unknown, stream: StreamTabId | ''): void;
-  getStreamControls?: GetProgressStreamControls;
-  /** Session that owns this backend's coordination state (defaults to the process session). */
-  session?: SessionHandle;
+  getStreamControls: GetProgressStreamControls;
+  /** Session that owns this backend's coordination state. */
+  session: SessionHandle;
   /**
    * `session` when the caller has already loaded and swept the session's
    * stores at process start. A process-owned session has opened the canonical
@@ -124,7 +123,7 @@ export class ProgressBackend {
   private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
-    this.session = options.session ?? defaultSession();
+    this.session = options.session;
     this.stateOwnership = options.stateOwnership ?? 'backend';
     this.lifecycle = options.lifecycle;
     this.reportTranscriptLoadError = options.reportTranscriptLoadError;

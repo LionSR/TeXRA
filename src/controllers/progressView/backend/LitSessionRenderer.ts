@@ -58,7 +58,7 @@ export class LitSessionRenderer implements SessionRendererPort {
     private readonly webviewBridge: WebviewBridge,
     private readonly send: (message: ProgressViewOutboundMessage) => void,
     private readonly hasTarget: () => boolean,
-    private readonly getActiveStream: () => PresentedStreamId = () => '',
+    private readonly getActiveStream: () => PresentedStreamId,
     /**
      * Commands this host's inbound registry declares `unsupported(...)`
      * (see `unsupportedCommands` in `@shared/utils/dispatcher`). Included

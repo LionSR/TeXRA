@@ -42,6 +42,7 @@ import {
   createRecordingBackend,
   emitActiveStream,
   emitRunConfig,
+  stubStreamControls,
   toolUseConfig,
   track,
 } from './progressBackendHarness';
@@ -1128,6 +1129,7 @@ describe('ProgressBackend', () => {
         reportTranscriptLoadError: vi.fn(),
         approvals: createApprovalOptions(),
         lifecycle,
+        getStreamControls: stubStreamControls,
       }),
     );
     backendRef.current = backend;
@@ -1152,11 +1154,13 @@ describe('ProgressBackend', () => {
     const backend = track(
       new ProgressBackend({
         storage: new FakeStateStore(),
+        session: track(createTestSession()),
         sendMessage: sent,
         hasTarget: () => hasTarget,
         reportTranscriptLoadError: vi.fn(),
         approvals: createApprovalOptions(),
         lifecycle: createLifecycleOptions(),
+        getStreamControls: stubStreamControls,
       }),
     );
 
@@ -1183,11 +1187,13 @@ describe('ProgressBackend', () => {
     const backend = track(
       new ProgressBackend({
         storage: new FakeStateStore(),
+        session: track(createTestSession()),
         sendMessage: sent,
         hasTarget: () => true,
         reportTranscriptLoadError: vi.fn(),
         approvals: createApprovalOptions(),
         lifecycle: createLifecycleOptions(),
+        getStreamControls: stubStreamControls,
       }),
     );
 

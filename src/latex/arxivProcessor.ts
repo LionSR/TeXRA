@@ -26,7 +26,6 @@ interface ExtractResult {
 
 interface ExtractOptions {
   timeout?: number;
-  channel?: string;
 }
 
 // AbortSignal.timeout() covers the entire request including body streaming,
@@ -236,8 +235,7 @@ class ArxivSourceProcessor {
     destDir: string,
     options: ExtractOptions = {},
   ): Promise<ExtractResult> {
-    const channel = options.channel ?? this.channel;
-    const log = createLog(channel);
+    const log = this.log;
     log.debug(`Extracting tar file: ${tarPath} to ${destDir}`);
 
     try {

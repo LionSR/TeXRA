@@ -1,10 +1,7 @@
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 
 // Local imports - progress view
-import {
-  getDefaultProgressStreamControls,
-  type GetProgressStreamControls,
-} from '@controllers/progressView/progressStreamControls';
+import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 // Local imports - session
 import {
   buildStreamInfo,
@@ -42,7 +39,7 @@ export interface ProjectedStreamRoster {
 export class ProgressStreamProjectionBuilder {
   constructor(
     private readonly state: SessionState,
-    private readonly getStreamControls: GetProgressStreamControls = getDefaultProgressStreamControls,
+    private readonly getStreamControls: GetProgressStreamControls,
   ) {}
 
   streamMetadata(
