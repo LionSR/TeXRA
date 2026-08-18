@@ -181,11 +181,6 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
 
-  // Rows registered before `identity` stamping existed. Their reader (derive
-  // + write-back healing) was retired per #9590 Stage 7; they now list as
-  // `incomplete`, loudly, and are never reconstructed.
-  const preIdentityIds: ExecutionId[] = [];
-
   // Read meta + config with bounded concurrency. Large histories should not
   // enqueue one storage read pair per execution all at once.
   const results = await pMap(
@@ -209,7 +204,6 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
         };
         const agentRecord = record && isAgentRunRecord(record) ? record : null;
         const identity = meta.identity;
-        if (!identity) preIdentityIds.push(id);
         if (!record || !identity) {
           return { ...base, kind: 'incomplete' };
         }
@@ -227,14 +221,6 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     },
     { concurrency: EXECUTION_STORAGE_CONCURRENCY },
   );
-
-  // One warning per listing pass, not one per row — a directory full of old
-  // rows must degrade loudly, not spam.
-  if (preIdentityIds.length > 0) {
-    log.warn(
-      `${preIdentityIds.length} pre-identity execution row(s) listed as incomplete (e.g. ${preIdentityIds[0]}): reader retired per #9590 Stage 7`,
-    );
-  }
 
   return toNewestFirstByTimestamp(
     results.filter(filterNotNull),

@@ -20,7 +20,7 @@ const REPRESENTATIVE_RECORDS: CliNdjsonRecord[] = [
   { kind: 'tool-toggle', tool: { id: 'codex', enabled: false } },
   { kind: 'tool-guide', guide: { id: 'codex', operation: 'install' } },
   { kind: 'version', version: '0.39.1' },
-  { kind: 'model', model: { value: 'sonnet45', label: 'Sonnet 4.5' } },
+  { kind: 'model', model: { id: 'sonnet45', label: 'Sonnet 4.5' } },
   {
     kind: 'model-catalog',
     model: { id: 'grok45', enabled: true, provider: 'xai' },

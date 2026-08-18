@@ -452,10 +452,6 @@ export class StreamSnapshotStore {
     return queue;
   }
 
-  /** Streams already warned about a pre-identity execution row (#9590 Stage
-   *  7), so repeated hydrations of the same old row stay one warning each. */
-  private readonly preIdentityWarned = new Set<StreamTabId>();
-
   /**
    * `${stream}::${accessor}` pairs already warned about a synchronous read
    * served from a record with unestablished disk provenance, so a render
@@ -1970,18 +1966,11 @@ export class StreamSnapshotStore {
           store.readMeta(),
           store.readConfig(),
         ]);
-        // Identity comes only from the stamped execution row. Pre-identity
-        // rows (registered before identity stamping) lost their reader per
-        // #9590 Stage 7: hydrate without an identity, loudly — never
-        // reconstruct one from stream-id prefixes or config.
+        // Identity comes only from the stamped execution row; a row without
+        // one hydrates without an identity — never reconstruct one from
+        // stream-id prefixes or config.
         identity = execMeta?.identity;
         userFollowUpSupport = execMeta?.userFollowUpSupport;
-        if (execMeta && !identity && !this.preIdentityWarned.has(stream)) {
-          this.preIdentityWarned.add(stream);
-          log.warn(
-            `Stream ${stream} maps to pre-identity execution row ${executionId}; hydrating without a run identity (reader retired per #9590 Stage 7)`,
-          );
-        }
         description = execMeta?.description;
         config = execConfig;
       } catch (error) {

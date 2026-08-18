@@ -37,6 +37,10 @@ function taskGroupEndStatus(
  * metadata was persisted. Human-facing `Round N` labels have not had one
  * stable indexing convention, so they remain unclassified rather than being
  * assigned a guessed index.
+ *
+ * Introduced pre-#7164; replacement (typed stage metadata) shipped
+ * 2026-07-05. Retire after 2026-10-05, pending an exported-trace permanence
+ * ruling (see #10857).
  */
 function taskGroupStageMetadata(
   name: string,
