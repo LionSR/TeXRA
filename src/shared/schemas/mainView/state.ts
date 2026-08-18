@@ -142,8 +142,6 @@ export const TeamOptionDataSchema = PickerOptionBaseSchema.extend({
   description: z.string().prefault(''),
   /** Catalog members that did not resolve; empty means fully runnable. */
   unavailableMembers: z.array(z.string()).prefault([]),
-  /** Resolved delegation-capable team lead; null when none. */
-  rootAgentName: z.string().nullish(),
   /** Marks "no runnable team lead"; `disabledReason` carries the human explanation. */
   disabled: z.boolean().optional(),
   disabledReason: z.string().nullish(),
