@@ -1,3 +1,5 @@
+import isNetworkError from 'is-network-error';
+
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export function isCliFetchStackLog(args: readonly unknown[]): boolean {
@@ -6,7 +8,7 @@ export function isCliFetchStackLog(args: readonly unknown[]): boolean {
   const cause = first.cause;
   const causeMessage = cause instanceof Error ? toErrorMessage(cause) : '';
   return (
-    /fetch failed/i.test(first.message) &&
+    isNetworkError(first) &&
     /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|getaddrinfo|remote\.texra\.ai/i.test(
       causeMessage,
     )
