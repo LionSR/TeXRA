@@ -12,11 +12,16 @@ import {
   type StreamSlice,
 } from './cliState';
 
-/** The open phase of one workflow-script stream, if it has emitted one. */
+/**
+ * The open phase of one workflow-script stream, if it has emitted one.
+ * `category` is the stream's shared-metadata agent category; callers read it
+ * (`streamMetadataFor(id)?.agentCategory`) so this selector stays pure.
+ */
 export function currentWorkflowPhaseHeading(
   slice: StreamSlice | undefined,
+  category: AgentCategory | undefined,
 ): WorkflowPhaseHeading | undefined {
-  if (slice?.category !== AgentCategory.Workflow) return undefined;
+  if (!slice || category !== AgentCategory.Workflow) return undefined;
   const currentAttemptId = currentWorkflowAttemptId(
     slice.workflowAttemptId,
     slice.entries,
@@ -38,6 +43,7 @@ export function currentWorkflowPhaseHeading(
 
 /** Nearest workflow-script ancestor's current phase, walking parent links. */
 export function ancestorWorkflowPhaseHeading(init: {
+  readonly categoryOf: (streamId: StreamTabId) => AgentCategory | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -46,7 +52,10 @@ export function ancestorWorkflowPhaseHeading(init: {
   const seen = new Set<StreamTabId>();
   while (id && !seen.has(id)) {
     seen.add(id);
-    const heading = currentWorkflowPhaseHeading(init.streams.get(id));
+    const heading = currentWorkflowPhaseHeading(
+      init.streams.get(id),
+      init.categoryOf(id),
+    );
     if (heading) return heading;
     id = init.parentStream.get(id);
   }

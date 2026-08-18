@@ -11,7 +11,11 @@
 // `CHILD_STREAMS` state machine — single-substrate plan, Wave A.)
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
-import type { SessionState } from '@controllers/session/SessionState';
+import type {
+  SessionState,
+  SessionStreamMetadata,
+  StreamExecutionState,
+} from '@controllers/session/SessionState';
 import {
   runIdentityDisplayName,
   type ActiveChildInfo,
@@ -48,6 +52,37 @@ export function unbindChildStreamState(state: SessionState): void {
 export function invalidateChildStreams(): void {
   const bound = BOUND.get();
   if (bound) BOUND.set({ state: bound.state, revision: bound.revision + 1 });
+}
+
+/**
+ * Revision counter over the bound `SessionState`. A component whose render
+ * reads the shared state through `streamMetadataFor`/`streamStateFor`/
+ * `queuedFollowUpsFor` must `useSignal(sessionStateRevision)` (point-in-time
+ * readers — command handlers, teardown paths — read the helpers plainly).
+ */
+export const sessionStateRevision: Signal.Computed<number> = computed(
+  () => BOUND.get()?.revision ?? 0,
+);
+
+/** Shared metadata record for a stream: identity, follow-up support, agent
+ *  category, config (model/instruction/cwd), description, parent edge. */
+export function streamMetadataFor(
+  streamId: StreamTabId,
+): Readonly<SessionStreamMetadata> | undefined {
+  return BOUND.get()?.state.getStreamMetadata(streamId);
+}
+
+/** Shared per-run execution counters for a stream: category, conversation
+ *  progress, stage, subagent roster. */
+export function streamStateFor(
+  streamId: StreamTabId,
+): StreamExecutionState | undefined {
+  return BOUND.get()?.state.getStreamState(streamId);
+}
+
+/** Queued follow-up messages for a stream, from the session-owned queue. */
+export function queuedFollowUpsFor(streamId: StreamTabId): readonly string[] {
+  return BOUND.get()?.state.followUps.getAll(streamId) ?? [];
 }
 
 /** Per-parent merged child roster: live rows first (emission order), then

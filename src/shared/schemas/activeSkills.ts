@@ -68,8 +68,6 @@ export const ActiveSkillSummarySchema = z.strictObject({
   source: ActiveSkillSourceScopeSchema,
 });
 
-export type ActiveSkillSummary = z.infer<typeof ActiveSkillSummarySchema>;
-
 /** Accepted runtime metadata before the transcript boundary sanitizes it. */
 export type RawAcceptedSkill = Readonly<
   z.input<typeof ActiveSkillSummarySchema>

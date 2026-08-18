@@ -25,6 +25,7 @@ import {
   isTerminalWorkflowCallProgress,
   type ErrorLogData,
   type FileListEntry,
+  type RunIdentity,
   type StreamLogEntry,
   type TaskGroup,
 } from '@shared/schemas';
@@ -51,7 +52,6 @@ import {
 import type {
   ConversationEntry,
   LoadedImage,
-  StreamSlice,
   TranscriptFoldItem,
   TranscriptFoldState,
 } from './cliState';
@@ -119,9 +119,8 @@ const LIVE_ACTIVITY_MESSAGE_TYPES = new Set<string>([
  * Keyed on the stream's parsed identity — never on the stream-id format.
  */
 export function isFullLogChildStream(
-  slice: Pick<StreamSlice, 'identity'> | undefined,
+  identity: RunIdentity | undefined,
 ): boolean {
-  const identity = slice?.identity;
   return identity !== undefined && !isPlainAgentIdentity(identity);
 }
 
@@ -556,7 +555,6 @@ export function createTranscriptFoldState(): TranscriptFoldState {
     fullLogChild: false,
     workflowOperationalOnly: false,
     projectLifecycleToTaskGroups: false,
-    activeSkills: [],
     synthetics: [],
   };
 }
@@ -573,9 +571,6 @@ export function resetTranscriptFoldState(state: TranscriptFoldState): void {
   state.workflowAttemptId = undefined;
   state.workflowAttemptBoundaryDeclared = false;
   state.workflowAttemptSeqNo = -1;
-  state.activeSkillsEntry = undefined;
-  state.activeSkillsParsedFor = undefined;
-  state.activeSkills = [];
   state.liveActivityEntry = undefined;
   state.synthetics = [];
   state.lastOutputFull = undefined;
@@ -775,21 +770,19 @@ function mergeChangedBySeqNo(
 }
 
 /**
- * A tracked singleton row was mutated away from its tracked message type:
- * re-derive both singletons from the full log (rare, producer-anomaly path;
- * keeps the ordinary fold allocation-free).
+ * The tracked live-activity row was mutated away from its tracked message
+ * type: re-derive it from the full log (rare, producer-anomaly path; keeps
+ * the ordinary fold allocation-free).
  */
-function retrackFoldSingletons(
+function retrackLiveActivityEntry(
   state: TranscriptFoldState,
   log: StreamLog,
 ): void {
-  const entries = log.getRange(0);
-  state.activeSkillsEntry = entries.findLast(
-    (entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS,
-  );
-  state.liveActivityEntry = entries.findLast((entry) =>
-    LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? ''),
-  );
+  state.liveActivityEntry = log
+    .getRange(0)
+    .findLast((entry) =>
+      LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? ''),
+    );
 }
 
 function workflowCallAttemptId(entry: StreamLogEntry): string | undefined {
@@ -1113,16 +1106,6 @@ export function applyStreamChanges(
   const changed = mergeChangedBySeqNo(dirtied, appended);
   let retrack = false;
   for (const entry of changed) {
-    if (entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS) {
-      if (
-        !state.activeSkillsEntry ||
-        entry.seqNo >= state.activeSkillsEntry.seqNo
-      ) {
-        state.activeSkillsEntry = entry;
-      }
-    } else if (state.activeSkillsEntry?.id === entry.id) {
-      retrack = true;
-    }
     if (LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? '')) {
       if (
         !state.liveActivityEntry ||
@@ -1134,7 +1117,7 @@ export function applyStreamChanges(
       retrack = true;
     }
   }
-  if (retrack) retrackFoldSingletons(state, ctx.log);
+  if (retrack) retrackLiveActivityEntry(state, ctx.log);
 
   const taskGroups = projectTaskGroupsIncrementally(state, changed);
   const compaction = projectCompactionIncrementally(
