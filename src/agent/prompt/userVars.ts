@@ -173,9 +173,6 @@ type AttachedMemoriesResult = {
   misses: AttachedMemoryMiss[];
 };
 
-const EMPTY_SKILL_CATALOG: Awaited<ReturnType<typeof loadRuntimeSkillCatalog>> =
-  { catalog: '', skills: [], issues: [] };
-
 /**
  * Build all user variables needed for prompt rendering.
  *
@@ -213,7 +210,9 @@ export async function buildUserVars(
       getConfig<unknown>(AGENT_SKILLS_CONFIG_KEY, AGENT_SKILLS_ENABLED_DEFAULT),
     )
       ? loadRuntimeSkillCatalog()
-      : EMPTY_SKILL_CATALOG,
+      : // A fresh object per call, not a shared constant: `skills` is handed
+        // to the snapshot consumer, and a shared array would accumulate.
+        Promise.resolve({ catalog: '', skills: [], issues: [] }),
   ]);
 
   for (const issue of runtimeSkills.issues) {
