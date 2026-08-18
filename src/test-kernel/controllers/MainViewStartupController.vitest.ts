@@ -34,7 +34,6 @@ const STARTUP_OPTIONS: MainViewStartupOptions = {
       source: 'built-in',
       description: 'A physics research team.',
       unavailableMembers: [],
-      rootAgentName: 'orchestrator',
     },
   ],
 };

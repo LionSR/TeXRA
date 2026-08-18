@@ -632,7 +632,6 @@ describe('desktop main-view IPC', () => {
         source: 'built-in',
         description: 'A physics research team.',
         unavailableMembers: [],
-        rootAgentName: 'orchestrator',
       },
       {
         value: 'my-team',
@@ -641,7 +640,6 @@ describe('desktop main-view IPC', () => {
         source: 'custom',
         description: '',
         unavailableMembers: ['writer'],
-        rootAgentName: 'lead',
       },
     ];
     installMainView(harness, {

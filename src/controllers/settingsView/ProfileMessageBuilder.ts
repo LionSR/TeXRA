@@ -13,19 +13,13 @@
  * signed in with fallback values rather than failing the whole refresh (the
  * resilience the desktop assembly already had).
  */
-import {
-  getAgentsBySource,
-  loadAgents,
-  toRemoteAgentProfileData,
-} from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { FREE_TIER, ULTRA_TIER, MAX_TIER } from '@auth/config';
+import { FREE_TIER } from '@auth/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   ApiAccessMode,
   ProviderKeyStatus,
-  RemoteAgent,
   UpdateProfileMessage,
 } from '@shared/schemas';
 import { getGlobalStreaming } from '@utils/config/providerConfig';
@@ -51,7 +45,6 @@ export async function buildProfileMessage(
     SupabaseClient.hasUsableRelayToken();
   const base = {
     command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
-    tierConstants: { ultra: ULTRA_TIER, max: MAX_TIER },
     providerKeyStatuses,
     globalStreamingDefault: getGlobalStreaming(),
   };
@@ -74,11 +67,9 @@ export async function buildProfileMessage(
     return {
       ...base,
       authenticated: false,
-      user: storedEmail ? { email: storedEmail, id: '' } : null,
+      user: storedEmail ? { email: storedEmail } : null,
       tier: FREE_TIER,
-      remoteAgents: [],
       apiAccessMode: 'personal',
-      accessExpiresAt: null,
       sessionProblem,
       spendingStatus: null,
       spendingStatusError: null,
@@ -96,7 +87,6 @@ export async function buildProfileMessage(
   }
 
   let apiAccessMode: ApiAccessMode = 'personal';
-  let accessExpiresAt: string | null = null;
   let spendingStatus: UpdateProfileMessage['spendingStatus'] = null;
   let spendingStatusError: UpdateProfileMessage['spendingStatusError'] = null;
   let quotaAutoSwitched = false;
@@ -117,8 +107,6 @@ export async function buildProfileMessage(
     apiAccessMode = serverSideKeyService.getUseIncludedModelAccess()
       ? 'included'
       : 'personal';
-    accessExpiresAt =
-      serverSideKeyService.getAccessExpirationDate()?.toISOString() ?? null;
     quotaAutoSwitched = serverSideKeyService.wasQuotaAutoSwitched();
     spendingStatus = serverSideKeyService.getSpendingStatus();
     spendingStatusError = serverSideKeyService.getSpendingStatusError();
@@ -126,25 +114,14 @@ export async function buildProfileMessage(
     // Server-side key / tier access is optional; personal provider keys work.
   }
 
-  let remoteAgents: RemoteAgent[] = [];
-  try {
-    await loadAgents();
-    remoteAgents = getAgentsBySource('remote').map(toRemoteAgentProfileData);
-  } catch {
-    // Keep auth/profile UI usable even if the agent registry refresh fails.
-  }
-
   return {
     ...base,
     authenticated: true,
     user: {
       email: user?.email ?? storedEmail ?? 'N/A',
-      id: user?.id ?? '',
     },
     tier,
-    remoteAgents,
     apiAccessMode,
-    accessExpiresAt,
     sessionProblem,
     spendingStatus,
     spendingStatusError,

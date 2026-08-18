@@ -65,9 +65,6 @@ function createTierService(
     isModelAvailable() {
       return false;
     },
-    getExpirationDate() {
-      return null;
-    },
   } as unknown as TierService;
 
   return {
