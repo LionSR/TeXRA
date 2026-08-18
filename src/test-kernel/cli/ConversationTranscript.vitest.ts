@@ -57,7 +57,7 @@ import {
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
-import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
+import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -69,7 +69,7 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/streams/compactionActivityProjection';
-import { buildChildStreamEntries } from '@test/support/childStreamEntries';
+import { buildChildRosters } from '@test/support/childStreamEntries';
 
 const STREAM_ID = 'cli-test-stream' as StreamTabId;
 const ROOT_STREAM = 'root-stream' as StreamTabId;
@@ -315,28 +315,41 @@ describe('CLI conversation transcript', () => {
     expect(split.pending).toEqual([]);
   });
 
+  // Status facts reach the CLI through the session-signals adapter: the
+  // status machine publishes on the session hub, and the adapter's status
+  // modality patches the slice before syncing the log (forceFinal on
+  // settlement phases).
+  function attachStatusPipeline(): () => void {
+    const session = defaultSession();
+    return attachSessionSignalsAdapter({
+      events: session.events,
+      session,
+      snapshots: session.snapshots,
+    });
+  }
+
   it.each(Object.values(RUN_OUTCOME) as RunOutcome[])(
     'freezes assistant entries on the %s outcome',
     (outcome) => {
-      defaultSession().status.clearStream(STREAM_ID);
+      // Per-outcome stream id: the shared session's log store must not know
+      // the stream, or the forced final sync folds the (empty) store over
+      // the slice-seeded fixture entries.
+      const streamId = `${STREAM_ID}-${outcome}`;
+      defaultSession().status.clearStream(streamId);
       resetCliState();
-      patchStream(STREAM_ID, (slice) => ({
+      patchStream(streamId, (slice) => ({
         ...slice,
         entries: [entry('a1', 'assistant', 'A final answer.', false)],
       }));
-      const dispose = subscribeStreamStatus();
+      const dispose = attachStatusPipeline();
 
       try {
-        defaultSession().status.transition(
-          STREAM_ID,
-          outcome,
-          'restart-repair',
-        );
+        defaultSession().status.transition(streamId, outcome, 'restart-repair');
 
         expect(
           streams
             .get()
-            .get(STREAM_ID)
+            .get(streamId)
             ?.entries.map((item) => ({
               id: item.id,
               finalized: item.finalized,
@@ -344,7 +357,7 @@ describe('CLI conversation transcript', () => {
         ).toEqual([{ id: 'a1', finalized: true }]);
       } finally {
         dispose();
-        defaultSession().status.clearStream(STREAM_ID);
+        defaultSession().status.clearStream(streamId);
       }
     },
   );
@@ -362,7 +375,7 @@ describe('CLI conversation transcript', () => {
       streamId: STREAM_ID,
       status: STREAM_PHASE.WAITING,
     });
-    const dispose = subscribeStreamStatus();
+    const dispose = attachStatusPipeline();
 
     try {
       defaultSession().status.transition(
@@ -398,8 +411,9 @@ describe('CLI conversation transcript', () => {
   // call jumps into <Static> ahead of still-streaming assistant text
   // and the scrollback order ends up reversed.
   it('defers tool finalization to the stream-level finalize step', () => {
+    const streamId = `${STREAM_ID}-defer-finalize`;
     resetCliState();
-    patchStream(STREAM_ID, (slice) => ({
+    patchStream(streamId, (slice) => ({
       ...slice,
       entries: [
         entry('a1', 'assistant', 'about to run a tool', false),
@@ -408,16 +422,16 @@ describe('CLI conversation transcript', () => {
     }));
 
     let split = splitTranscriptEntries(
-      streams.get().get(STREAM_ID)?.entries ?? [],
+      streams.get().get(streamId)?.entries ?? [],
       STREAM_PHASE.RUNNING,
     );
     expect(split.finalized).toHaveLength(0);
     expect(split.pending.map((e) => e.id)).toEqual(['a1', 't1']);
 
-    syncStreamLog(STREAM_ID, { forceFinal: true });
+    syncStreamLog(streamId, { forceFinal: true });
 
     split = splitTranscriptEntries(
-      streams.get().get(STREAM_ID)?.entries ?? [],
+      streams.get().get(streamId)?.entries ?? [],
       STREAM_PHASE.WAITING,
     );
     expect(split.finalized.map((e) => e.id)).toEqual(['a1', 't1']);
@@ -1696,9 +1710,9 @@ describe('CLI conversation transcript', () => {
         }),
       ],
     ]);
-    const childStreamEntries = buildChildStreamEntries({
+    const childStreamEntries = buildChildRosters({
       parentStreamId: ROOT_STREAM,
-      activeOnly: [
+      rows: [
         {
           executionId: 'ei_search',
           agentName: 'search',
@@ -1752,9 +1766,9 @@ describe('CLI conversation transcript', () => {
       ],
     ]);
     const workflowChildren = new Map([
-      ...buildChildStreamEntries({
+      ...buildChildRosters({
         parentStreamId: ROOT_STREAM,
-        activeOnly: [
+        rows: [
           {
             executionId: 'ei_wf',
             agentName: 'survey',
@@ -1767,9 +1781,9 @@ describe('CLI conversation transcript', () => {
           },
         ],
       }),
-      ...buildChildStreamEntries({
+      ...buildChildRosters({
         parentStreamId: WORKFLOW,
-        activeOnly: [
+        rows: [
           {
             executionId: 'ei_task',
             agentName: 'Agent runtime + its tests',
