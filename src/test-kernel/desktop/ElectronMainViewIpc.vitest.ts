@@ -20,6 +20,7 @@ import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 // Local imports - desktop test paths
+import { commandOf } from './desktopSettingsTestSupport';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.ts';
 
 const mocks = createModuleMocks();
@@ -217,10 +218,6 @@ function emptyStartupOptionsLoader(teamOptions?: unknown[]) {
 }
 
 type RendererSend = { channel: string; message: unknown };
-
-function commandOf(message: unknown): string | undefined {
-  return (message as { command?: string }).command;
-}
 
 function pushedCommands(sends: RendererSend[]): Array<string | undefined> {
   return sends
