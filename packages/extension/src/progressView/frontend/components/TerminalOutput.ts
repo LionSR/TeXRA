@@ -14,22 +14,16 @@ const MIN_SCROLLBACK = 4_000;
 const MAX_VISIBLE_ROWS = 20;
 
 /**
- * Events that signal an ancestor disclosure container revealed this terminal,
- * so it should refit to its now-visible container. Covers both the legacy
- * native `<details>` `toggle` event (still emitted by any un-migrated
- * surface) and Web Awesome's `<wa-details>`, which is not a `<details>` and
- * never fires `toggle` — it dispatches `wa-show` synchronously when it starts
- * opening and `wa-after-show` once its reveal animation finishes. Listening
- * to both wa-details events covers the immediate-open case (matching the old
- * un-animated native-toggle timing) and the post-animation case (accurate
- * final layout for the fit-addon column/row calculation).
+ * Events that signal the ancestor `<wa-details>` disclosure revealed this
+ * terminal, so it should refit to its now-visible container. `wa-show` fires
+ * synchronously when the disclosure starts opening (immediate-open case) and
+ * `wa-after-show` once its reveal animation finishes (accurate final layout
+ * for the fit-addon column/row calculation).
  */
-const TERMINAL_REFIT_EVENTS = ['toggle', 'wa-show', 'wa-after-show'] as const;
+const TERMINAL_REFIT_EVENTS = ['wa-show', 'wa-after-show'] as const;
 
-/** Ancestor selector for the ancestor disclosure container, matching both
- * the Web Awesome `<wa-details>` custom element and any un-migrated native
- * `<details>` surface. */
-const DETAILS_ANCESTOR_SELECTOR = 'wa-details, details';
+/** Ancestor selector for the `<wa-details>` disclosure container. */
+const DETAILS_ANCESTOR_SELECTOR = 'wa-details';
 
 interface TerminalTextUpdatePlan {
   reset: boolean;

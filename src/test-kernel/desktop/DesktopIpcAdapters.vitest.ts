@@ -5,7 +5,7 @@ import {
   MAIN_VIEW_COMMANDS,
   SETTINGS_VIEW_COMMANDS,
 } from '@shared/ipc';
-import { AgentCategory, SETTINGS_TAB } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
@@ -201,7 +201,7 @@ describe('desktop IPC adapters', () => {
     });
     expect(postToRenderer).toHaveBeenNthCalledWith(3, {
       command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-      tabIndex: SETTINGS_TAB.MODELS,
+      tab: 'models',
     });
     expect(postToRenderer).toHaveBeenNthCalledWith(4, {
       command: 'desktop:openWorkbench',
@@ -210,7 +210,7 @@ describe('desktop IPC adapters', () => {
     expect(postToRenderer).toHaveBeenNthCalledWith(5, {
       agentSubTab: AgentCategory.ToolUse,
       command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-      tabIndex: SETTINGS_TAB.AGENTS,
+      tab: 'agents',
     });
     expect(postToRenderer).toHaveBeenNthCalledWith(6, {
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
@@ -236,7 +236,7 @@ describe('desktop IPC adapters', () => {
     });
     expect(postToRenderer).toHaveBeenCalledWith({
       command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-      tabIndex: SETTINGS_TAB.AGENTS,
+      tab: 'agents',
     });
   });
 

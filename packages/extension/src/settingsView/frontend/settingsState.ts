@@ -70,8 +70,9 @@ import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   DEFAULT_QUOTA_AUTO_SWITCHED,
   DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
-  SETTINGS_TAB,
+  SETTINGS_TAB_PANEL_BY_NAME,
 } from '@shared/schemas';
+import type { SettingsTabPanelName } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 /** Target for the desktop-host "set provider key" modal. */
@@ -103,14 +104,11 @@ const { trackedSignal, resetAll: resetTrackedSignals } =
 // ---------------------------------------------------------------------------
 /**
  * Opening panel when the host asks for the settings view without naming a tab.
- *
- * Named, not `0`: SETTINGS_TAB_ORDER is an append-only wire format, so index 0
- * means whichever panel happened to be added first (MEMORY) rather than
- * anything intended. Account is also the first nav group, so this matches what
- * the nav already presents as the entry point.
+ * Account is the first nav group, so this matches what the nav already
+ * presents as the entry point.
  */
-export const selectedTabIndex = trackedSignal<number>(
-  () => SETTINGS_TAB.ACCOUNT,
+export const selectedPanel = trackedSignal<SettingsTabPanelName>(
+  () => SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT,
 );
 
 // ---------------------------------------------------------------------------

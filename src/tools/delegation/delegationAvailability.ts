@@ -90,7 +90,7 @@ const NO_AGENTS_LINE =
 /** How an agent's tool list is rendered inside a roster entry. */
 type AgentListToolsStyle = 'block' | 'inline' | 'none';
 
-export interface FormatAgentListOptions {
+interface FormatAgentListOptions {
   /** Where an agent's tool list goes when present. Defaults to `'block'`. */
   readonly tools?: AgentListToolsStyle;
   /** Collapse newlines inside descriptions to spaces. Defaults to `true`. */

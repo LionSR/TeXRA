@@ -43,7 +43,7 @@ import {
   formatChildRunError,
 } from './deliveryEnvelope';
 
-export type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
+type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
 
 // ============================================================================
 // Formatting helpers
@@ -421,7 +421,7 @@ function truncateDiff(diff: string, maxLines: number): string {
 }
 
 /** Info about a diff file written to the execution's run directory. */
-export interface DiffFileInfo {
+interface DiffFileInfo {
   /** The relative path within the run directory (e.g. "diffs/chapter1.tex.diff"). */
   diffRelPath: string;
   /** True when the change ratio exceeded the large-change threshold. */

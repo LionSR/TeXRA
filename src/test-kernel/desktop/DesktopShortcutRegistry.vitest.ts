@@ -19,7 +19,7 @@ interface ShortcutRegistryModule {
     actions: {
       showLauncher(): void;
       openWorkbench(kind: 'settings' | 'logs'): void;
-      showSettings(tabIndex?: number): void;
+      showSettings(tab?: string): void;
     };
     openCommands(): void;
     platform?: NodeJS.Platform;

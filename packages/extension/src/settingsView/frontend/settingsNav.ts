@@ -1,11 +1,7 @@
 /**
- * Settings top-navigation presentation layer.
- *
- * Deliberately separate from the tab wire format. `SETTINGS_TAB_ORDER` fixes
- * the indices that travel over IPC (`SET_TAB.tabIndex`) and are hand-copied
- * into the desktop e2e index tables, so nav grouping, nav order, labels, and
- * icons live here and address panels by name. Reordering or regrouping the nav
- * therefore cannot change what an existing index means.
+ * Settings top-navigation presentation layer: nav grouping, nav order, labels,
+ * and icons. Panels are addressed by name — the same panel name that travels
+ * over IPC as `SET_TAB.tab`.
  */
 
 import {

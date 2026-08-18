@@ -73,8 +73,8 @@ export function createExtensionCommandActions(
     settingsViewProvider.refreshAfterProviderKeyChange(provider);
 
   return {
-    showSettings(tabIndex, agentSubTab) {
-      return settingsViewProvider.showSettingsView(tabIndex, agentSubTab);
+    showSettings(tab, agentSubTab) {
+      return settingsViewProvider.showSettingsView(tab, agentSubTab);
     },
     async resetMainView() {
       const webviewView = await getMainWebview(RESET_CHANNEL);

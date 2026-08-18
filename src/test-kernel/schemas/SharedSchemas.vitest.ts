@@ -5,7 +5,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  SETTINGS_TAB,
   SETTINGS_TAB_GROUPS,
   SETTINGS_TAB_ORDER,
   SETTINGS_TAB_PANEL_NAMES,
@@ -177,24 +176,10 @@ describe('settings view tab definitions', () => {
     );
   });
 
-  // `SETTINGS_TAB.X` indices cross the IPC boundary as `SET_TAB.tabIndex`, so
-  // the mapping is pinned literally. A retired internal panel must disappear
-  // from this contract together with every producer and handler.
-  it('pins the settings tab wire contract (index + panel name)', () => {
-    expect(SETTINGS_TAB).toEqual({
-      MEMORY: 0,
-      MODELS: 1,
-      AGENTS: 2,
-      MULTI_AGENT: 3,
-      TOOLS: 4,
-      AI_AGENTS: 5,
-      GIT: 6,
-      LATEX: 7,
-      GOAL: 8,
-      ACCOUNT: 9,
-      SHORTCUTS: 10,
-      SUBSCRIPTIONS: 11,
-    });
+  // Panel names cross the IPC boundary as `SET_TAB.tab`, so the set is pinned
+  // literally. A retired internal panel must disappear from this contract
+  // together with every producer and handler.
+  it('pins the settings tab wire contract (panel names)', () => {
     expect(SETTINGS_TAB_PANEL_NAMES).toEqual([
       'memory',
       'models',
