@@ -78,13 +78,6 @@ interface CacheEntry {
   readonly expiresAt: number;
 }
 
-interface ResolvedRequest {
-  readonly id: number;
-  readonly key: string;
-  readonly variant: boolean | string | undefined;
-  readonly variantResolutionFailed: boolean;
-}
-
 interface SubscriptionUsageAdapter {
   readonly resolveVariant?: () => boolean | string | Promise<boolean | string>;
   readonly fetch: (
@@ -127,11 +120,6 @@ export class SubscriptionUsageService {
     string,
     Promise<SubscriptionUsageSnapshot>
   >();
-  private readonly latestRequests = new Map<
-    SubscriptionUsageProvider,
-    ResolvedRequest
-  >();
-  private nextRequestId = 0;
 
   constructor(init: SubscriptionUsageServiceInit = {}) {
     this.http = init.http ?? fetch;
@@ -201,80 +189,45 @@ export class SubscriptionUsageService {
     provider: SubscriptionUsageProvider,
     options: { readonly forceRefresh?: boolean } = {},
   ): Promise<SubscriptionUsageSnapshot> {
-    const requestId = ++this.nextRequestId;
     const adapter = this.adapters[provider];
     let variant: boolean | string | undefined;
-    let variantResolutionFailed = false;
     try {
       variant = await adapter.resolveVariant?.();
     } catch {
-      variantResolutionFailed = true;
-    }
-
-    const variantKey = variantResolutionFailed
-      ? 'variant-error'
-      : (variant ?? 'default');
-    const resolved: ResolvedRequest = {
-      id: requestId,
-      key: `${provider}:${variantKey}`,
-      variant,
-      variantResolutionFailed,
-    };
-    const latest = this.latestRequests.get(provider);
-    if (!latest || latest.id < requestId) {
-      this.latestRequests.set(provider, resolved);
-    } else if (latest.key !== resolved.key) {
-      return this.getUsageForRequest(provider, latest, false);
-    }
-    return this.getUsageForRequest(
-      provider,
-      resolved,
-      options.forceRefresh ?? false,
-    );
-  }
-
-  private async getUsageForRequest(
-    provider: SubscriptionUsageProvider,
-    resolved: ResolvedRequest,
-    forceRefresh: boolean,
-  ): Promise<SubscriptionUsageSnapshot> {
-    if (resolved.variantResolutionFailed) {
       return this.unavailable(provider, 'request_failed');
     }
+    const key = `${provider}:${variant ?? 'default'}`;
 
-    if (forceRefresh) {
-      this.cache.delete(resolved.key);
-      this.pending.delete(resolved.key);
+    if (options.forceRefresh) {
+      this.cache.delete(key);
+      this.pending.delete(key);
     } else {
-      const cached = this.cache.get(resolved.key);
+      const cached = this.cache.get(key);
       if (cached && cached.expiresAt > this.now()) return cached.snapshot;
     }
 
-    const inFlight = this.pending.get(resolved.key);
+    const inFlight = this.pending.get(key);
     if (inFlight) return inFlight;
 
-    const request = this.fetchUsage(provider, resolved.variant).then(
-      (snapshot) => {
-        if (this.pending.get(resolved.key) !== request) {
-          return this.getUsage(provider);
-        }
-        const latest = this.latestRequests.get(provider);
-        if (latest && latest.key !== resolved.key) {
-          return this.getUsageForRequest(provider, latest, false);
-        }
-        this.cache.set(resolved.key, {
+    // Return-path choice (D16, define-out-of-existence §1e): when invalidate()
+    // races an in-flight fetch, the identity check below keeps the stale result
+    // out of the cache, but the already-waiting caller still receives it — one
+    // accepted stale read on a read-only usage display.
+    const request = this.fetchUsage(provider, variant).then((snapshot) => {
+      if (this.pending.get(key) === request) {
+        this.cache.set(key, {
           snapshot,
           expiresAt: this.now() + this.cacheTtlMs,
         });
-        return snapshot;
-      },
-    );
-    this.pending.set(resolved.key, request);
+      }
+      return snapshot;
+    });
+    this.pending.set(key, request);
     try {
       return await request;
     } finally {
-      if (this.pending.get(resolved.key) === request) {
-        this.pending.delete(resolved.key);
+      if (this.pending.get(key) === request) {
+        this.pending.delete(key);
       }
     }
   }

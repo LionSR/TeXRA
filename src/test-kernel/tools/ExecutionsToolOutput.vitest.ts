@@ -16,7 +16,7 @@ import {
 import { captureOwnedExecutionLease } from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
-import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
+import { withToolEnvironment } from '@test/support/toolEnvironment';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
