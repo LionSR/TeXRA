@@ -91,7 +91,6 @@ export {
   type NumberSetting,
   type ProviderKeyStatus,
   type ProviderSetting,
-  type RemoteAgent,
   type SessionProblem,
   type UpdateProfileMessage,
 } from './profileViewMessages';
