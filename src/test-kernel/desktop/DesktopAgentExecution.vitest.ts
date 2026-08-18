@@ -272,6 +272,8 @@ type CreateBridgeOptions = {
   showInfoMessage?: (message: string) => Promise<void> | void;
   onRunCompleted?: () => void;
   openPath?: (filePath: string, line?: number) => Promise<void>;
+  /** Seeds the fake filesystem (e.g. a transcript spill artifact). */
+  files?: Record<string, string>;
   observeRendererMessage?: (message: unknown) => void;
   /** Captures `this.logger.error(...)` calls made by the bridge under test. */
   loggerErrorSpy?: ReturnType<typeof vi.fn<AgentTrace['error']>>;
@@ -346,7 +348,7 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
     import('@platform/platform'),
     import('@test/support/FakePlatform'),
   ]);
-  initPlatform(createFakePlatform({}, { agentResume }));
+  initPlatform(createFakePlatform({ files: options.files }, { agentResume }));
   mocks.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData:
       options.retrieveSessionResumeData ?? vi.fn(async () => null),
@@ -1153,6 +1155,38 @@ describe('DesktopProgressBridge', () => {
     await settleProgressEvents();
 
     expect(openPath).toHaveBeenCalledWith('/runs/exec-1/output/paper.pdf');
+  });
+
+  it('does not add a second toast when the spill artifact open fails late (#10848)', async () => {
+    // The desktop preview host surfaces its own "Failed to open file …"
+    // dialog before rethrowing, so the spill wrapper must log rather than
+    // stack a "Full output could not be opened" toast on top of it.
+    const messages: unknown[] = [];
+    const showErrorMessage = vi.fn();
+    const openPath = vi.fn(async () => {
+      throw new Error('no external viewer');
+    });
+    const spillPath = 'executions/abcdef123456/toolOutput/tool.txt';
+    const bridge = await createBridge(messages, {
+      files: { [`/workspace/.texra/storage/${spillPath}`]: 'spilled output' },
+      showErrorMessage,
+      openPath,
+    });
+
+    const handler = assertSupported(
+      bridge.progressViewInboundHandlers[
+        PROGRESS_VIEW_COMMANDS.OPEN_SPILL_ARTIFACT
+      ],
+    );
+    await handler({
+      command: PROGRESS_VIEW_COMMANDS.OPEN_SPILL_ARTIFACT,
+      spillPath,
+    });
+
+    expect(openPath).toHaveBeenCalledWith(
+      `/workspace/.texra/storage/${spillPath}`,
+    );
+    expect(showErrorMessage).not.toHaveBeenCalled();
   });
 
   it('installs host interactions on the desktop runtime host', async () => {
