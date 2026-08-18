@@ -90,5 +90,4 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
     expect(provider.isExplicitlySet('files.exclude')).toBe(false);
     expect(workspaceStore.snapshot()).toEqual({});
   });
-
 });
