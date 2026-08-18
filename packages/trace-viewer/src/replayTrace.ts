@@ -4,7 +4,6 @@ import type {
   RunIdentity,
   StreamLifecycleStatus,
   StreamTabInfo,
-  SyncStreamContentPayload,
 } from '@shared/schemas';
 import {
   AgentCategory,
@@ -16,6 +15,8 @@ import {
   streamStatusToLifecycleStatus,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { buildStreamContentRender } from '@shared/streams/streamContentSync';
+import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import type { TraceDocument } from '@transcript';
 
 type UpdateStreamsMessage = Extract<
@@ -197,7 +198,7 @@ export function replayTrace(trace: TraceDocument): void {
     streams: [streamTabInfo],
     activeStream: trace.streamId,
     streamStates: {
-      [trace.streamId]: {
+      [trace.streamId]: buildStreamMetadata({
         status: toStreamLifecycleStatus(trace),
         category: agentConfig?.agentCategory,
         conversationProgress: snapshot.conversationProgress,
@@ -206,7 +207,7 @@ export function replayTrace(trace: TraceDocument): void {
         // an archived trace has no in-flight children regardless of what a
         // stale snapshot recorded.
         subagents: [],
-      },
+      }),
     },
   };
   dispatchMessage(updateStreams);
@@ -220,44 +221,37 @@ export function replayTrace(trace: TraceDocument): void {
   };
   dispatchMessage(logDelta);
 
-  const syncSnapshot = {
-    action: 'render' as const,
-    stream: trace.streamId,
-    runUsage: snapshot.runUsage,
-  };
   // Workflow-shaped sync for workflow agents AND multi-agent-workflow
   // containers (both have round outputs); everything else renders the
-  // tool-use shape.
-  const syncPayload: SyncStreamContentPayload =
+  // tool-use shape. The payload itself is assembled by the same builder the
+  // live backend uses, fed from the archived snapshot: an archived trace has
+  // no queued follow-ups and no live controls, so those hydrate inert.
+  const category =
     agentConfig?.agentCategory === AgentCategory.Workflow ||
     identity.kind === 'multiAgentWorkflow'
-      ? {
-          ...syncSnapshot,
-          category: AgentCategory.Workflow,
-          outputs: {
-            files: snapshot.outputFilesByRound,
-            missing: snapshot.missingOutputsByRound,
-            compileFailures: snapshot.compileFailuresByRound,
-          },
-        }
-      : {
-          ...syncSnapshot,
-          category: AgentCategory.ToolUse,
-          workPlan: {
-            todos: snapshot.todos,
-            plan: snapshot.plan,
-            queuedFollowUps: [],
-          },
-          controls: {
-            bashBypass: false,
-            toolEditBypass: false,
-            superYoloBypass: false,
-            goal: { active: false },
-          },
-        };
+      ? AgentCategory.Workflow
+      : AgentCategory.ToolUse;
   const syncContent: SyncStreamContentMessage = {
     command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
-    ...syncPayload,
+    ...buildStreamContentRender(trace.streamId, category, {
+      runUsage: snapshot.runUsage,
+      outputs: {
+        files: snapshot.outputFilesByRound,
+        missing: snapshot.missingOutputsByRound,
+        compileFailures: snapshot.compileFailuresByRound,
+      },
+      workPlan: {
+        todos: snapshot.todos,
+        plan: snapshot.plan,
+        queuedFollowUps: [],
+      },
+      controls: {
+        bashBypass: false,
+        toolEditBypass: false,
+        superYoloBypass: false,
+        goal: { active: false },
+      },
+    }),
   };
   dispatchMessage(syncContent);
 }
