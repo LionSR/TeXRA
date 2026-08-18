@@ -12,7 +12,6 @@ import {
   STREAM_PHASE,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_STATUS,
-  streamStatusToLifecycleStatus,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { buildStreamContentRender } from '@shared/streams/streamContentSync';
@@ -87,9 +86,11 @@ function findRootStageId(
  * `terminalStatus` is `null` for traces that predate outcome tracking (or
  * never reached a terminal state). For those legacy traces, derive status from
  * the persisted transcript's last terminal group row before falling back to the
- * older snapshot-status escape hatch. Only when neither source records a
- * terminal status does this default to `READY`, same as an unqualified
- * successful finish.
+ * older snapshot-status escape hatch (already normalized to `StreamPhase` at
+ * trace parse — `StreamSnapshotSchema.status`'s legacy-inbound member maps the
+ * retired 7-value vocabulary, with legacy `ready` parsing to absent). Only
+ * when no source records a terminal status does this default to `READY`, same
+ * as an unqualified successful finish.
  *
  * The terminal group row's `data.status` is typed at trace import as the
  * StreamPhase-or-legacy-EndGroupStatus union, not narrowed here:
@@ -131,9 +132,7 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
     }
     if (status !== undefined) return status;
   }
-  return trace.snapshot.status
-    ? streamStatusToLifecycleStatus(trace.snapshot.status)
-    : STREAM_STATUS.READY;
+  return trace.snapshot.status ?? STREAM_STATUS.READY;
 }
 
 /** The record's display name across both arms of the config union. */

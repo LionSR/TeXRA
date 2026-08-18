@@ -244,6 +244,29 @@ const WorktreeInfoSchema = z.object({
 export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
 
 /**
+ * The identity/pointer fields every per-stream metadata surface carries —
+ * declared once so the wire tab shape ({@link StreamTabInfoSchema}) and the
+ * session-side metadata record (`SessionStreamMetadata`,
+ * `@controllers/session/SessionState`) cannot drift apart field-by-field.
+ */
+const StreamIdentityFieldsSchema = z.object({
+  /** The run's identity, verbatim from `run.start` or the durable store. */
+  identity: RunIdentitySchema.optional(),
+  /** Runtime behavior declared by the launch source, not UI visibility. */
+  userFollowUpSupport: UserFollowUpSupportSchema.optional(),
+  /** The agent's execution mode (agent runs only) — display/routing data
+   * beside the identity, sourced from the run's config. */
+  agentCategory: AgentCategorySchema.optional(),
+  isRemote: z.boolean().optional(),
+  creationTimestamp: z.number(),
+  executionId: ExecutionIdSchema.optional(),
+  parentStreamId: StreamTabIdSchema.optional(),
+  /** AI-generated summary of what this session aims to accomplish. */
+  description: z.string().optional(),
+});
+export type StreamIdentityFields = z.infer<typeof StreamIdentityFieldsSchema>;
+
+/**
  * One flat wire shape per stream tab. The parsed {@link RunIdentitySchema}
  * struct travels verbatim — renderers key on `identity.kind` instead of
  * inferring ownership from whichever optional field is present — and hosts
@@ -252,25 +275,13 @@ export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
  * driving the store by hand); absent renders as pending, never as a default
  * kind.
  */
-export const StreamTabInfoSchema = z.object({
+export const StreamTabInfoSchema = StreamIdentityFieldsSchema.extend({
   name: z.string(),
   label: z.string(),
-  identity: RunIdentitySchema.optional(),
-  /** Runtime behavior declared by the launch source, not UI visibility. */
-  userFollowUpSupport: UserFollowUpSupportSchema.optional(),
-  /** The agent's execution mode (agent runs only) — display/routing data
-   * beside the identity, sourced from the run's config. */
-  agentCategory: AgentCategorySchema.optional(),
   model: z.string().optional(),
   modelLabel: z.string().optional(),
   /** Full, untruncated command that spawned a process stream. */
   command: z.string().optional(),
-  isRemote: z.boolean().optional(),
-  creationTimestamp: z.number(),
-  executionId: ExecutionIdSchema.optional(),
-  parentStreamId: StreamTabIdSchema.optional(),
-  /** AI-generated summary of what this session aims to accomplish. */
-  description: z.string().optional(),
   /** Git worktree / PR context for streams whose agents operate in a
    * worktree other than the workspace root. Surfaced as a chip on the tab. */
   worktree: WorktreeInfoSchema.optional(),
