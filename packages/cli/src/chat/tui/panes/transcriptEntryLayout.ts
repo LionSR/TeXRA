@@ -397,7 +397,13 @@ export function fullTranscriptEntryLayout(
       toolUseDisplayLines(entry.toolUse, {
         elide: false,
         executionLabels,
-        includeCompactOutput: entry.spillPath !== undefined,
+        // Gate the "Full output:" header on actual recovery: a failed spill
+        // keeps the bounded preview plus failure notice, without the header.
+        ...(entry.spillPath === undefined
+          ? {}
+          : {
+              compactOutput: entry.spillFailed === true ? 'failed' : 'loaded',
+            }),
       }),
       layout.columns,
     ),
