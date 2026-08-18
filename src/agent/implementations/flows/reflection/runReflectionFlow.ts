@@ -23,11 +23,9 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
-  WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
 } from '@shared/constants/workflowOutput';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { LatexDiffManager } from './output/LatexDiffManager';
@@ -145,24 +143,10 @@ export async function runReflectionFlow<C = unknown>(
 
   const getOutputFileLocation = async (
     round: number,
-  ): Promise<AgentFileLocation> => {
-    const canonical = fileService.createLocation(
+  ): Promise<AgentFileLocation> =>
+    fileService.createLocation(
       workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
     ) as AgentFileLocation;
-    // Resume-from-pre-refactor compat: if a round was partially written on an
-    // older build that used `.tex` for non-scratchpad agents, keep using that
-    // file on resume so initializeOutputAndPrefill sees the existing content
-    // instead of starting a fresh round at output.xml.
-    if (!(await AbsoluteFS.exists(canonical.absolutePath))) {
-      const legacy = fileService.createLocation(
-        workflowOutputPath({ ext: WORKFLOW_DOCUMENT_OUTPUT_EXT, round }),
-      ) as AgentFileLocation;
-      if (await AbsoluteFS.exists(legacy.absolutePath)) {
-        return legacy;
-      }
-    }
-    return canonical;
-  };
 
   const workflowOutputPolicy: WorkflowOutputPolicy = {
     shouldAutoOpenPdfOrLog: () =>
