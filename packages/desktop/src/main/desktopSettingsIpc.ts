@@ -242,7 +242,9 @@ export function createDesktopSettingsIpc(
     approval: postApprovalSettings,
     'git-author': () => postGitAuthorSettings(applyCurrentGitAuthorSettings()),
     latex: () => options.toolingSettingsController.postLatexConfigValues(),
+    models: () => settingsHost.sendModelSelectionData(),
     'multi-agent': postReliabilityAndOrchestrationSettings,
+    profile: () => options.credentialSettingsController.postProfileData(),
     telemetry: postTelemetrySettings,
   };
 
@@ -366,11 +368,8 @@ export function createDesktopSettingsIpc(
       settingsHost.setMemoryPinned(message.storagePath, false),
     ...options.credentialSettingsController.profileHandlers,
     setModelEnabled: updateModelEnabled,
-    setPolishModel: (message) => settingsHost.setHelperModel(message.modelName),
     setModelReasoningLevel: (message) =>
       settingsHost.setReasoningLevel(message),
-    setPreferShortModelNames: (message) =>
-      settingsHost.setPreferShortModelNames(message.enabled),
     requestModelAccess: unsupported('Copilot models require VS Code.'),
     clearCopilotRoute: unsupported('Copilot models require VS Code.'),
     ...options.agentSettingsController.handlers,

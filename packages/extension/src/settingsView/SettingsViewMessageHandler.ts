@@ -96,11 +96,6 @@ import {
   readGitAuthorSettingsFromState,
   type GitAuthorSettings,
 } from '@utils/system/gitAuthorSettings';
-import {
-  setGlobalStreaming,
-  setProviderStreaming,
-  setProviderEndpoint,
-} from '@utils/config/providerConfig';
 import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
 import { AgentHandlers } from './handlers/agentHandlers';
@@ -279,32 +274,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         ),
       openProviderKeyUrl: (message) =>
         this.profileKeyController.openProviderKeyUrl(message.provider),
-      setProviderStreaming: async (message) => {
-        await setProviderStreaming(message.provider, message.enabled);
-        await this.withActiveWebview((webview) =>
-          this.sendProfileData(webview),
-        );
-      },
-      setProviderEndpoint: async (message) => {
-        await setProviderEndpoint(message.provider, message.endpoint);
-        await this.withActiveWebview((webview) =>
-          this.sendProfileData(webview),
-        );
-      },
-      setGlobalStreaming: async (message) => {
-        await setGlobalStreaming(message.enabled);
-        await this.withActiveWebview((webview) =>
-          this.sendProfileData(webview),
-        );
-      },
       setProviderSetting: (message) => this.handleSetProviderSetting(message),
       openExternalUrl: (message) => this.openExternalUrl(message.url),
       setModelEnabled: (message) =>
         this.setModelEnabled(message.modelName, message.enabled),
-      setPolishModel: (message) =>
-        this.settingsHost.setHelperModel(message.modelName, {
-          respond: (response) => this.postMessageToActiveWebview(response),
-        }),
       setModelReasoningLevel: (message) =>
         this.settingsHost.setReasoningLevel(
           { modelName: message.modelName, level: message.level },
@@ -312,10 +285,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
             respond: (response) => this.postMessageToActiveWebview(response),
           },
         ),
-      setPreferShortModelNames: (message) =>
-        this.settingsHost.setPreferShortModelNames(message.enabled, {
-          respond: (response) => this.postMessageToActiveWebview(response),
-        }),
       requestModelAccess: (message) =>
         this.handleRequestModelAccess(message.modelName),
       clearCopilotRoute: (message) =>
@@ -646,10 +615,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.withActiveWebview((w) =>
           this.latexHandlers.sendLatexConfigValues(w),
         ),
+      models: () =>
+        this.withActiveWebview((w) => this.sendModelSelectionData(w)),
       'multi-agent': () =>
         this.withActiveWebview((w) =>
           this.sendReliabilityAndOrchestrationSettings(w),
         ),
+      profile: () => this.withActiveWebview((w) => this.sendProfileData(w)),
       telemetry: () =>
         this.withActiveWebview((w) => this.sendTelemetrySettings(w)),
     });
@@ -748,9 +720,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     if (mainView) {
       const anyKeyExists = await SecretManager.anyApiKeyExists();
       mainView.webview.postMessage({
-        command: anyKeyExists
-          ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
-          : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+        command: MAIN_VIEW_COMMANDS.SET_BANNER,
+        banner: 'apiKey',
+        visible: !anyKeyExists,
       });
     }
     await this.refreshCredentialDependentSurfaces({

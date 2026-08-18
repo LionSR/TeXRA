@@ -48,11 +48,6 @@ import {
 } from '@shared/schemas';
 import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-import {
-  setGlobalStreaming,
-  setProviderEndpoint,
-  setProviderStreaming,
-} from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts {
@@ -101,9 +96,6 @@ type DesktopProfileHandlers = Pick<
   | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY
   | typeof SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY
   | typeof SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL
-  | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING
-  | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT
-  | typeof SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING
   | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING
   | typeof SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL
 >;
@@ -128,6 +120,8 @@ export interface DesktopCredentialSettingsController {
   readonly grokHandlers: DesktopGrokHandlers;
   readonly modelSelectionController: SettingsModelSelectionController;
   postMainModelOptionsData(): Promise<void>;
+  /** Re-posts the profile snapshot after a catalog-routed credential write. */
+  postProfileData(): Promise<void>;
   postStartupData(): Promise<void>;
   postSubscriptionUsage(forceRefresh?: boolean): Promise<void>;
   refreshAuthDependentData(): Promise<void>;
@@ -201,11 +195,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       removeProviderKey: (message) => this.removeProviderKey(message.provider),
       openProviderKeyUrl: (message) =>
         this.profileKeyController.openProviderKeyUrl(message.provider),
-      setProviderStreaming: (message) =>
-        this.setProviderStreaming(message.provider, message.enabled),
-      setProviderEndpoint: (message) =>
-        this.setProviderEndpoint(message.provider, message.endpoint),
-      setGlobalStreaming: (message) => this.setGlobalStreaming(message.enabled),
       setProviderSetting: (message) =>
         this.setProviderSetting(message.key, message.value),
       openExternalUrl: (message) =>
@@ -372,29 +361,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.options.onCredentialChanged();
   }
 
-  private async setProviderStreaming(
-    provider: string,
-    enabled: boolean,
-  ): Promise<void> {
-    if (!(await this.acceptKnownProvider(provider))) return;
-    await setProviderStreaming(provider, enabled);
-    await this.postProfileData();
-  }
-
-  private async setProviderEndpoint(
-    provider: string,
-    endpoint: string,
-  ): Promise<void> {
-    if (!(await this.acceptKnownProvider(provider))) return;
-    await setProviderEndpoint(provider, endpoint);
-    await this.postProfileData();
-  }
-
-  private async setGlobalStreaming(enabled: boolean): Promise<void> {
-    await setGlobalStreaming(enabled);
-    await this.postProfileData();
-  }
-
   private async setProviderSetting(
     key: string,
     value: boolean | number,
@@ -535,7 +501,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     }
   }
 
-  private async postProfileData(): Promise<void> {
+  async postProfileData(): Promise<void> {
     this.options.renderer.postToRenderer(
       await this.profileController.buildProfileMessage(),
     );
