@@ -136,7 +136,6 @@ export function reflectionFlowShared(
     outputLocation: null,
     conversation: [],
     runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-    roundStateSnapshots: [],
     roundOutputs: [],
     continueRounds: true,
     endTurn: false,

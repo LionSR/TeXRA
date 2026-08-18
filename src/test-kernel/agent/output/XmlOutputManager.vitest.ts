@@ -922,7 +922,6 @@ Appendix.
     await processor.processMultipleOutputs(
       createExternalLocation('/tmp/run/output.xml'),
       0,
-      createExternalLocation('/tmp/run/output.xml'),
     );
 
     const roundOutputs = state.rounds.get(0)?.outputs ?? [];
@@ -1331,7 +1330,6 @@ Appendix.
     await processor.processMultipleOutputs(
       createExternalLocation('/tmp/run/r1/output.xml'),
       1,
-      createExternalLocation('/tmp/run/r1/output.xml'),
     );
 
     const roundOutputs = state.rounds.get(1)?.outputs ?? [];

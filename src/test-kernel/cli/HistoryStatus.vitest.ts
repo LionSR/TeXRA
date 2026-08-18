@@ -166,7 +166,6 @@ describe('CLI history status formatting', () => {
         outputLocation: null,
         conversation: [],
         runStateSnapshot: {},
-        roundStateSnapshots: [],
         roundOutputs: [],
         continueRounds: false,
         endTurn: false,
