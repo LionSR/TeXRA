@@ -63,7 +63,9 @@ import {
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
+import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { platform } from '@platform/platform';
+import { quotaFallbackRouteById } from '@shared/quotaFallbackRoutes';
 import {
   isUpstreamCreditDepletedError,
   type AgentProposalPermission,
@@ -86,6 +88,7 @@ import {
   setCliCodingPlanSubscription,
   setCliCodexSubscription,
 } from './codexSubscription';
+import { setCliXaiSubscription } from './xaiSubscription';
 import {
   approveQueuedDelegatedWorkForStream,
   approvalPayloadStreamId,
@@ -136,13 +139,20 @@ function maybeAutoSwitchRetry(
 
   // Coding-plan quotas (Kimi Code, GLM Coding Plan) have a fallback route that
   // re-uses an already-stored key, so auto-switch when that key exists.
+  // OAuth subscriptions (ChatGPT, Grok) stay explicit: the user must confirm.
   // Kimi Code-exclusive models never reach this branch: the classifier above
   // gates them to 'none', keeping the modal without an API-key switch.
-  if (action.startsWith('disable-coding-plan:')) {
+  if (action.startsWith('disable-quota-route:')) {
+    const decision = cliRetryApiSwitchDecision(payload);
+    if (
+      decision.disableQuotaRoute === undefined ||
+      quotaFallbackRouteById(decision.disableQuotaRoute)?.codingPlanId ===
+        undefined
+    ) {
+      return undefined;
+    }
     if (payload.personalApiKeyAvailable !== true) return undefined;
-    // The switch decision's single owner is the classifier's sibling, so the
-    // auto-switch cannot drift from the modal.
-    return cliRetryApiSwitchDecision(payload);
+    return decision;
   }
 
   return undefined;
@@ -444,8 +454,7 @@ async function requestRetryInteraction(
     }
     if (
       decision.apiMode !== undefined ||
-      decision.disableChatGptSubscription === true ||
-      decision.disableCodingPlan !== undefined
+      decision.disableQuotaRoute !== undefined
     ) {
       await switchRetryToPersonalCredentials(decision, promptRequest, {
         prepareRetry: options?.prepareRetry,
@@ -458,7 +467,9 @@ async function requestRetryInteraction(
       // the user must not be told a switch happened that did not.
       if (
         retryDecision.source === 'automatic' &&
-        decision.disableCodingPlan !== undefined
+        decision.disableQuotaRoute !== undefined &&
+        quotaFallbackRouteById(decision.disableQuotaRoute)?.codingPlanId !==
+          undefined
       ) {
         notify('credentialSwitched');
       }
@@ -681,7 +692,15 @@ async function applyRetryCredentialCommit(
   signal.throwIfAborted();
   const previousApiMode = getCliApiMode();
   const previousOpenRouter = cliOpenRouterEnabled();
-  const previousSubscriptionPreference = isPreferCodexSubscription();
+  const oauthRoute = decision.disableQuotaRoute;
+  const disableChatGpt = oauthRoute === 'chatgpt';
+  const disableGrok = oauthRoute === 'grok';
+  const previousChatGptPreference = disableChatGpt
+    ? isPreferCodexSubscription()
+    : false;
+  const previousGrokPreference = disableGrok
+    ? isPreferXaiSubscription()
+    : false;
   let apiModeWriteStarted = false;
   let subscriptionWriteStarted = false;
   try {
@@ -691,7 +710,7 @@ async function applyRetryCredentialCommit(
       await runRetryTask(() => setCliApiMode(apiMode), signal);
       signal.throwIfAborted();
     }
-    if (decision.disableChatGptSubscription) {
+    if (disableChatGpt) {
       subscriptionWriteStarted = true;
       const update = await runRetryTask(
         () => setCliCodexSubscription(false),
@@ -700,6 +719,19 @@ async function applyRetryCredentialCommit(
       if (update.effective) {
         throw new Error(
           'ChatGPT subscription remains enabled by a more specific setting.',
+        );
+      }
+      signal.throwIfAborted();
+    }
+    if (disableGrok) {
+      subscriptionWriteStarted = true;
+      const update = await runRetryTask(
+        () => setCliXaiSubscription(false),
+        signal,
+      );
+      if (update.effective) {
+        throw new Error(
+          'Grok subscription remains enabled by a more specific setting.',
         );
       }
       signal.throwIfAborted();
@@ -718,24 +750,42 @@ async function applyRetryCredentialCommit(
     let openRouterToPreserve = previousOpenRouter;
     const rollbackFailures = await rollbackChangedSettings([
       {
-        writeStarted: subscriptionWriteStarted,
+        writeStarted: subscriptionWriteStarted && disableChatGpt,
         needsRollback: () => !isPreferCodexSubscription(),
         restore: async () => {
           const update = await setCliCodexSubscription(
-            previousSubscriptionPreference,
+            previousChatGptPreference,
           );
-          if (update.effective !== previousSubscriptionPreference) {
+          if (update.effective !== previousChatGptPreference) {
             throw new Error(
               `ChatGPT subscription preference remained ${String(update.effective)}.`,
             );
           }
         },
         restoredInMemory: () =>
-          isPreferCodexSubscription() === previousSubscriptionPreference,
+          isPreferCodexSubscription() === previousChatGptPreference,
         memoryRestoredContext:
           'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed',
         restoreFailedContext:
           'Could not restore the ChatGPT subscription preference',
+      },
+      {
+        writeStarted: subscriptionWriteStarted && disableGrok,
+        needsRollback: () => !isPreferXaiSubscription(),
+        restore: async () => {
+          const update = await setCliXaiSubscription(previousGrokPreference);
+          if (update.effective !== previousGrokPreference) {
+            throw new Error(
+              `Grok subscription preference remained ${String(update.effective)}.`,
+            );
+          }
+        },
+        restoredInMemory: () =>
+          isPreferXaiSubscription() === previousGrokPreference,
+        memoryRestoredContext:
+          'The previous Grok subscription preference appears restored in memory, but persistence could not be confirmed',
+        restoreFailedContext:
+          'Could not restore the Grok subscription preference',
       },
       ...(codingPlanRollback ? [codingPlanRollback] : []),
       {
@@ -822,7 +872,9 @@ async function switchRetryToPersonalCredentials(
   // disable, preparation, and rollback all stay inside one commit-queue slot
   // so a second coding-plan retry cannot interleave: its disable must wait
   // until this retry's rollback (if any) has finished.
-  const codingPlanId = decision.disableCodingPlan;
+  const codingPlanId = decision.disableQuotaRoute
+    ? quotaFallbackRouteById(decision.disableQuotaRoute)?.codingPlanId
+    : undefined;
   const codingPlanRuntime = codingPlanId
     ? codingPlanSubscriptionRuntimes.find(
         (runtime) => runtime.descriptor.id === codingPlanId,
