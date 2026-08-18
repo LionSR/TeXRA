@@ -55,9 +55,11 @@ import type {
 import {
   AgentCategory,
   INSTRUCTION_ACTION,
+  RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_SUBSTATE,
 } from '@shared/schemas';
+import { DisposableStore } from '@platform/disposable';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -71,7 +73,6 @@ import {
 } from './mediaVisionWarning';
 import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
-import { AgentLaunchResources } from './AgentLaunchResources';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
@@ -284,7 +285,8 @@ async function assembleAgentLaunchContext(
   input: AgentLaunchInput & { session: SessionHandle },
   executionId: ExecutionId,
   streamId: StreamTabId,
-  resources: AgentLaunchResources,
+  resources: DisposableStore,
+  onActivated: (runTrace: RunTrace) => void,
 ): Promise<AgentLaunchContext> {
   input.signal?.throwIfAborted();
   const fullConfig = input.config;
@@ -344,7 +346,7 @@ async function assembleAgentLaunchContext(
     input.modelHandlerCompatibilityKey ??
     (await inferLaunchModelHandlerCompatibilityKey(executionId, config.model));
   input.signal?.throwIfAborted();
-  const modelHandler = resources.ownModelHandler(
+  const modelHandler = resources.add(
     modelHandlerCompatibilityKey
       ? await createModelHandlerForCompatibilityKey(
           modelConfig,
@@ -372,7 +374,22 @@ async function assembleAgentLaunchContext(
     executionId,
     transcriptWriter,
   );
-  const runTrace = resources.ownRunTrace(rawRunTrace, () => {
+  // The composed trace enters the store BEFORE session attachment, so a
+  // failed attachment still disposes the raw trace through the store.
+  const attachment: { detach?: () => void } = {};
+  const runTrace = resources.add<RunTrace>({
+    trace: rawRunTrace.trace,
+    handleStatus: rawRunTrace.handleStatus,
+    flushSpills: rawRunTrace.flushSpills,
+    dispose: () => {
+      try {
+        attachment.detach?.();
+      } finally {
+        rawRunTrace.dispose();
+      }
+    },
+  });
+  {
     let traceDisposed = false;
     const removeSpillFlusher = session.useArtifactFlusher(async () => {
       await rawRunTrace.flushSpills();
@@ -385,7 +402,7 @@ async function assembleAgentLaunchContext(
       // Status is a session fact, not an AgentEvent: bridge the hub's canonical
       // status rail into the recorder's transcript-boundary port.
       detachStatus = session.events.subscribeStatus(rawRunTrace.handleStatus);
-      return () => {
+      attachment.detach = () => {
         // Keep the flusher through the execution lease's post-dispose drain.
         // Its next successful flush removes it from the session.
         traceDisposed = true;
@@ -397,7 +414,7 @@ async function assembleAgentLaunchContext(
       removeSpillFlusher();
       throw error;
     }
-  });
+  }
   const agentLogger = runTrace.trace;
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
@@ -418,7 +435,7 @@ async function assembleAgentLaunchContext(
       },
     },
   });
-  resources.markActivated(streamId, runTrace);
+  onActivated(runTrace);
 
   // Log the initial instruction as a user message so both workflow and
   // tool-use tabs display it inline with the stream log (no separate panel).
@@ -435,13 +452,12 @@ async function assembleAgentLaunchContext(
   const initialMediaMayBeInserted =
     config.mediaFiles.length > 0 && supportsMediaInMessage;
 
-  const parentStage = resources.ownParentStage(
-    beginRunStage(
-      agentLogger,
-      `Run: ${config.agent}`,
-      initialMediaMayBeInserted ? undefined : initialInstruction,
-    ),
+  const parentStage = beginRunStage(
+    agentLogger,
+    `Run: ${config.agent}`,
+    initialMediaMayBeInserted ? undefined : initialInstruction,
   );
+  resources.add(() => parentStage.end(RUN_OUTCOME.FAILED));
   const storageKey = (parentStage.id || executionId) as StorageKey;
 
   // Tell the user when attached images will be dropped because the chosen model
@@ -627,26 +643,56 @@ export async function buildAgentLaunchContext(
     acquireStreamOrThrow(reservedStreamId, streamStatus);
   }
 
-  const resources = new AgentLaunchResources();
+  // LIFO ownership of everything assembled before the runtime accepts the
+  // launch. Entries register in creation order, so a failed launch unwinds:
+  // parent stage end → activation compensation (before the trace it logs into
+  // is disposed) → run trace detach/dispose → model handler dispose.
+  const resources = new DisposableStore();
+  const launchFailure: { error?: unknown } = {};
+  let activationRegistered = false;
   try {
     const ctx = await assembleAgentLaunchContext(
       { ...input, session: launchSession },
       executionId,
       streamId,
       resources,
+      (runTrace) => {
+        activationRegistered = true;
+        resources.add(() =>
+          compensateFailedActivation({
+            config,
+            reservedStreamId,
+            activated: { streamId, runTrace },
+            streamStatus,
+            err: launchFailure.error,
+          }),
+        );
+      },
     );
-    resources.transfer();
+    // The runtime accepted the launch: the returned context and its run
+    // lifecycle now own these resources.
+    resources.move();
     return ctx;
   } catch (err) {
-    resources.fail((activated) => {
+    launchFailure.error = err;
+    try {
+      resources.dispose();
+    } catch (cleanupError) {
+      logger.warn('Failed to release launch resources after a failed launch', {
+        data: { error: cleanupError },
+      });
+    }
+    if (!activationRegistered) {
+      // Pre-activation failure: no visible tab to compensate on; release the
+      // reserved stream lock silently.
       compensateFailedActivation({
         config,
         reservedStreamId,
-        activated,
+        activated: undefined,
         streamStatus,
         err,
       });
-    });
+    }
     if (
       !input.suppressErrorNotification &&
       !(err instanceof ZodError) &&
