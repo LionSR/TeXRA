@@ -68,6 +68,10 @@ import {
   parseGlmCodingPlanLimit,
 } from './glmCodingPlanDetection';
 import {
+  describeXaiSubscriptionLimit,
+  parseXaiSubscriptionLimit,
+} from './xaiSubscriptionDetection';
+import {
   type SdkErrorEntry,
   SDK_ERRORS,
   SDK_ERRORS_BY_KIND,
@@ -76,6 +80,51 @@ import {
 
 /** Partial result before relay detection (isRelayError/rawErrorBody added later). */
 type SdkMatchResult = Omit<ProviderError, 'isRelayError' | 'rawErrorBody'>;
+
+interface QuotaLimitMatch {
+  readonly exhaustionReason: ExhaustionReason;
+  readonly message: string;
+}
+
+/**
+ * First matching quota-fallback detector. Order is the catalog's: ChatGPT,
+ * Grok, then coding plans. Reasons are mutually exclusive, so the first hit
+ * is the only hit.
+ */
+function detectQuotaLimit(
+  err: unknown,
+  rawErrorBody: unknown,
+): QuotaLimitMatch | undefined {
+  const chatgpt = parseChatGptSubscriptionLimit(rawErrorBody);
+  if (chatgpt) {
+    return {
+      exhaustionReason: 'chatgpt-subscription',
+      message: describeChatGptSubscriptionLimit(chatgpt),
+    };
+  }
+  const grok = parseXaiSubscriptionLimit(err, rawErrorBody);
+  if (grok) {
+    return {
+      exhaustionReason: 'xai-subscription',
+      message: describeXaiSubscriptionLimit(grok),
+    };
+  }
+  const kimi = parseKimiCodeSubscriptionLimit(err, rawErrorBody);
+  if (kimi) {
+    return {
+      exhaustionReason: 'kimi-code-subscription',
+      message: describeKimiCodeSubscriptionLimit(kimi),
+    };
+  }
+  const glm = parseGlmCodingPlanLimit(rawErrorBody);
+  if (glm) {
+    return {
+      exhaustionReason: 'glm-coding-plan',
+      message: describeGlmCodingPlanLimit(glm),
+    };
+  }
+  return undefined;
+}
 
 /**
  * Single source of truth for the user-facing HTTP error string and its message
@@ -256,34 +305,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // Anthropic 400 "credit balance is too low" still wants the "Use your
   // own API key" affordance so the user can switch credentials.
   const isUpstreamCreditDepleted = isUpstreamCreditDepletedBody(rawErrorBody);
-  // ChatGPT-subscription (Codex) quota exhaustion. Treated as a credential
-  // exhaustion so auto-retry is suppressed (the quota won't return mid-run) and
-  // the retry UI offers a switch to the user's own API key — but it disables
-  // the subscription preference, not relay, on accept.
-  const chatgptSubscriptionLimit = parseChatGptSubscriptionLimit(rawErrorBody);
-  const isChatGptSubscriptionLimited = chatgptSubscriptionLimit !== null;
-  const chatgptSubscriptionMessage = chatgptSubscriptionLimit
-    ? describeChatGptSubscriptionLimit(chatgptSubscriptionLimit)
-    : undefined;
-  // Kimi Code (Moonshot coding-subscription) quota exhaustion — same pattern:
-  // a credential exhaustion that disables the "Prefer Kimi Code" preference on
-  // accept so dual-backend Kimi models re-route through the Moonshot API key.
-  const kimiCodeSubscriptionLimit = parseKimiCodeSubscriptionLimit(
-    err,
-    rawErrorBody,
-  );
-  const isKimiCodeSubscriptionLimited = kimiCodeSubscriptionLimit !== null;
-  const kimiCodeSubscriptionMessage = kimiCodeSubscriptionLimit
-    ? describeKimiCodeSubscriptionLimit(kimiCodeSubscriptionLimit)
-    : undefined;
-  // GLM Coding Plan quota exhaustion — same pattern: a credential exhaustion
-  // that turns off the Coding Plan toggle on accept so GLM requests re-route
-  // through the regular pay-as-you-go endpoint.
-  const glmCodingPlanLimit = parseGlmCodingPlanLimit(rawErrorBody);
-  const isGlmCodingPlanLimited = glmCodingPlanLimit !== null;
-  const glmCodingPlanMessage = glmCodingPlanLimit
-    ? describeGlmCodingPlanLimit(glmCodingPlanLimit)
-    : undefined;
+  const quotaLimit = detectQuotaLimit(err, rawErrorBody);
   // GLM Coding Plan transient rate limit / overload (codes 1302/1305): surface
   // a clear "retry in a moment" message, but keep it retryable — it is NOT a
   // quota exhaustion, so no switch-to-regular-endpoint affordance.
@@ -293,22 +315,13 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // Prefer the actionable subscription-limit message over the raw
   // `HTTP 429 – The usage limit has been reached`.
   const subscriptionLimitMessage =
-    chatgptSubscriptionMessage ??
-    kimiCodeSubscriptionMessage ??
-    glmCodingPlanMessage ??
-    glmCodingPlanRateLimitMessage;
-  // Priority mirrors the pre-refactor OR order: ChatGPT-subscription and
-  // upstream-credit are independently detected first; relay monthly limit
-  // (by body or message) is the remaining exhaustion condition. Explicit SDK
-  // metadata precedes these legacy body heuristics.
+    quotaLimit?.message ?? glmCodingPlanRateLimitMessage;
+  // Priority: an explicit SDK stamp wins; then the first matching
+  // quota-fallback detector; then upstream-credit; then relay monthly limit.
   let exhaustionReason: ExhaustionReason | undefined = sdkExhaustionReason;
   if (exhaustionReason === undefined) {
-    if (isChatGptSubscriptionLimited) {
-      exhaustionReason = 'chatgpt-subscription';
-    } else if (isKimiCodeSubscriptionLimited) {
-      exhaustionReason = 'kimi-code-subscription';
-    } else if (isGlmCodingPlanLimited) {
-      exhaustionReason = 'glm-coding-plan';
+    if (quotaLimit !== undefined) {
+      exhaustionReason = quotaLimit.exhaustionReason;
     } else if (isUpstreamCreditDepleted) {
       exhaustionReason = 'upstream-credit';
     } else if (
