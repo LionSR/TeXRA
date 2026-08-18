@@ -132,8 +132,8 @@ export class ProgressViewProvider extends BaseWebviewProvider {
           },
           proposal: createAgentProposalTransport({
             getRenderer: () => this.backend.renderer,
-            isPending: (proposalId) =>
-              this.backend.approvalHandlers.proposal.get(proposalId) !==
+            isPending: (requestId) =>
+              this.backend.approvalHandlers.proposal.get(requestId) !==
               undefined,
           }),
         },
@@ -347,9 +347,9 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   }
 
   public getPendingAgentProposal(
-    proposalId: string,
+    requestId: string,
   ): AgentProposalPermission | undefined {
-    return this.backend.approvalHandlers.proposal.get(proposalId);
+    return this.backend.approvalHandlers.proposal.get(requestId);
   }
 
   private canSendToWebview(): boolean {

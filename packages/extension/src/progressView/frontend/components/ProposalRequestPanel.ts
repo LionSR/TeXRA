@@ -52,10 +52,10 @@ import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { getComposedPathElement } from '../utils';
 import type { PermissionState } from '../permissionState';
 
-function proposalIdOf(
+function proposalRequestIdOf(
   p: PermissionState | null | undefined,
 ): string | undefined {
-  return p?.kind === PERMISSION_KIND.PROPOSAL ? p.data.proposalId : undefined;
+  return p?.kind === PERMISSION_KIND.PROPOSAL ? p.data.requestId : undefined;
 }
 
 @customElement('proposal-request-panel')
@@ -84,7 +84,9 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     if (!changed.has('permission')) return;
     const previous = changed.get('permission') as
       PermissionState | null | undefined;
-    if (proposalIdOf(previous) !== proposalIdOf(this.permission)) {
+    if (
+      proposalRequestIdOf(previous) !== proposalRequestIdOf(this.permission)
+    ) {
       this.selectedModel = null;
       this.selectedAgent = null;
     }

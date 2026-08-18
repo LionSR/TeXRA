@@ -255,7 +255,7 @@ describe('CLI approval queue', () => {
   it('clears every pending kind for a stream via clearApprovalsWhere, leaving other streams alone', async () => {
     const planPayload = {
       kind: 'planApproval',
-      payload: { approvalId: 'approval-1', streamId: 'stream-a' },
+      payload: { requestId: 'approval-1', streamId: 'stream-a' },
     } as ApprovalPayload;
     const staleForStreamA = bashPayload('stream-a');
     const untouched = bashPayload('stream-b');

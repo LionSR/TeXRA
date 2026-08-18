@@ -577,7 +577,7 @@ describe('TUI retry approvals', () => {
   it('enables the complete delegated-task approval mode at the proposal decision site', async () => {
     const { presentationHost, interactions } = tui();
     const result = interactions.requestAgentProposal?.({
-      proposalId: 'proposal-bypass',
+      requestId: 'proposal-bypass',
       streamId: 'proposal-bypass-stream',
       agent: 'critic',
       agentSource: null,
@@ -626,7 +626,7 @@ describe('TUI retry approvals', () => {
     const { interactions } = tui();
     const streamId = 'parallel-approval-stream';
     const proposal = interactions.requestAgentProposal?.({
-      proposalId: 'proposal-current',
+      requestId: 'proposal-current',
       streamId,
       agent: 'critic',
       agentSource: null,
@@ -650,7 +650,7 @@ describe('TUI retry approvals', () => {
     void enqueueApproval({
       kind: 'planApproval',
       payload: {
-        approvalId: 'plan-excluded',
+        requestId: 'plan-excluded',
         streamId,
         goalEnabled: false,
         plan: { objective: 'Keep the approval categories distinct.' },
@@ -699,7 +699,7 @@ describe('TUI retry approvals', () => {
       },
     });
 
-    await waitForApproval('proposal', { proposalId: 'proposal-current' });
+    await waitForApproval('proposal', { requestId: 'proposal-current' });
     currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
 
     await expect(proposal).resolves.toEqual({ action: 'approve' });
@@ -722,7 +722,7 @@ describe('TUI retry approvals', () => {
     const { interactions } = tui();
     const streamId = 'proposal-one-off-stream';
     const result = interactions.requestAgentProposal?.({
-      proposalId: 'proposal-one-off',
+      requestId: 'proposal-one-off',
       streamId,
       agent: 'critic',
       agentSource: null,

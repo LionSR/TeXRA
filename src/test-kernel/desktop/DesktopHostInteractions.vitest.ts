@@ -35,7 +35,7 @@ interface DesktopHostInteractions {
     streamId?: StreamTabId;
   }): Promise<BashSettlement>;
   requestPlanApproval(request: {
-    approvalId: string;
+    requestId: string;
     streamId: StreamTabId;
     goalEnabled: boolean;
     plan: { objective: string };
@@ -148,11 +148,11 @@ describe('createDesktopHostInteractions', () => {
     const { interactions, handlers, toolEditApprovals } =
       await createInteractions();
     const current = interactions.requestAgentProposal({
-      proposalId: 'proposal-current',
+      requestId: 'proposal-current',
       streamId: 'stream-a',
     });
     const parallel = interactions.requestAgentProposal({
-      proposalId: 'proposal-parallel',
+      requestId: 'proposal-parallel',
       streamId: 'stream-a',
     });
     const bash = interactions.requestBashApproval({
@@ -353,7 +353,7 @@ describe('createDesktopHostInteractions', () => {
     const { interactions } = await createInteractions(handlers);
 
     const resultPromise = interactions.requestAgentProposal({
-      proposalId: 'proposal-a',
+      requestId: 'proposal-a',
       streamId: 'stream-a' as StreamTabId,
       agentCategory: 'toolUse',
       agent: 'demo-agent',
@@ -386,7 +386,7 @@ describe('createDesktopHostInteractions', () => {
       streamId: 'stream-a' as StreamTabId,
     });
     const planPromise = interactions.requestPlanApproval({
-      approvalId: 'plan-a',
+      requestId: 'plan-a',
       streamId: 'stream-b' as StreamTabId,
       goalEnabled: false,
       plan: { objective: 'Prove the lemma.' },

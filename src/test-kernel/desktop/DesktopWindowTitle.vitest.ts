@@ -136,7 +136,7 @@ describe('desktop process-session window title', () => {
     const handle = trackRunningAgent(session, 'execution:approval', streamId);
     try {
       const firstApproval = session.interactions.requestPlanApproval({
-        approvalId: 'approval:running',
+        requestId: 'approval:running',
         streamId,
         plan: { objective: 'Check the title.' },
         goalEnabled: false,
@@ -149,7 +149,7 @@ describe('desktop process-session window title', () => {
 
       session.executions.untrack(handle.executionId);
       const secondApproval = session.interactions.requestPlanApproval({
-        approvalId: 'approval:idle',
+        requestId: 'approval:idle',
         streamId,
         plan: { objective: 'Check the idle title.' },
         goalEnabled: false,
@@ -220,7 +220,7 @@ describe('desktop process-session window title', () => {
     const streamId = 'stream:reopen' as StreamTabId;
     try {
       void firstSession.interactions.requestPlanApproval({
-        approvalId: 'approval:reopen',
+        requestId: 'approval:reopen',
         streamId,
         plan: { objective: 'Preserve this request across window detach.' },
         goalEnabled: false,

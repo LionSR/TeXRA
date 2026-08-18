@@ -191,7 +191,7 @@ export async function requestDelegationProposal(
   }
 
   const interaction = currentSession().interactions.requestAgentProposal({
-    proposalId: generateShortId(),
+    requestId: generateShortId(),
     streamId,
     ...proposal,
   });

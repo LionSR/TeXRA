@@ -1,10 +1,10 @@
 /**
  * Regression test for a dedup bug fixed alongside the `permissionId()`
- * helper: the old `UPDATE_PERMISSION` "show" handler hardcoded `'requestId'`
- * as the id field for every permission kind except `RETRY`, so
- * `PLAN_APPROVAL` — whose id field is `approvalId` — never matched an
- * existing entry and duplicate plan-approval prompts were never
- * deduplicated on `replay()`.
+ * helper: the old `UPDATE_PERMISSION` "show" handler read the wrong id field
+ * for `PLAN_APPROVAL` (which then spelled its id `approvalId`), so a replayed
+ * plan-approval prompt never matched an existing entry and duplicates were
+ * never deduplicated on `replay()`. The id spellings have since been unified
+ * onto `requestId`; the replay-dedup behavior is what this pins.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,14 +17,14 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
-function showPlanApproval(approvalId: string) {
+function showPlanApproval(requestId: string) {
   return {
     command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
     action: 'show' as const,
     permission: {
       kind: PERMISSION_KIND.PLAN_APPROVAL,
       data: {
-        approvalId,
+        requestId,
         streamId: 'stream-1' as StreamTabId,
         plan: { objective: 'Do the thing.' },
         goalEnabled: false,
@@ -33,12 +33,12 @@ function showPlanApproval(approvalId: string) {
   };
 }
 
-describe('permission dedup by kind-specific id field', () => {
+describe('permission dedup by permission id', () => {
   beforeEach(() => {
     resetProgressState();
   });
 
-  it('does not duplicate a PLAN_APPROVAL prompt replayed with the same approvalId', () => {
+  it('does not duplicate a PLAN_APPROVAL prompt replayed with the same requestId', () => {
     const onError = vi.fn();
 
     dispatchMessage(showPlanApproval('approval-1'), onError);
@@ -52,7 +52,7 @@ describe('permission dedup by kind-specific id field', () => {
     expect(permissions$.get()).toHaveLength(1);
   });
 
-  it('still shows a second PLAN_APPROVAL prompt with a different approvalId', () => {
+  it('still shows a second PLAN_APPROVAL prompt with a different requestId', () => {
     const onError = vi.fn();
 
     dispatchMessage(showPlanApproval('approval-1'), onError);

@@ -213,7 +213,7 @@ export function formatToolUseTemplate(
     DELEGATION_TOOL_CATEGORY,
     toolName,
   );
-  const proposalId =
+  const proposalInputId =
     isProposalBearingDelegation && !isInProgress
       ? registerProposalInput(input, toolName)
       : null;
@@ -223,7 +223,7 @@ export function formatToolUseTemplate(
   // stopSummaryToggleKeydown for why the keydown path additionally needs an
   // explicit stopPropagation.
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${spillPath ? buildSpillArtifactButton(spillPath) : nothing}${proposalId ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration" @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Setup</button>` : nothing}`;
+  const extraContent = html`${timerTemplate ?? nothing}${spillPath ? buildSpillArtifactButton(spillPath) : nothing}${proposalInputId ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" data-proposal-input-id=${proposalInputId} title="Setup this proposal configuration" @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Setup</button>` : nothing}`;
 
   return buildToolUseDetails({
     message,
