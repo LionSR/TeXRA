@@ -12,7 +12,7 @@ import {
   loadProviderApiKeyStatuses,
   saveProviderApiKey,
 } from '@cli/runtime/providerApiKey';
-import { ApiProvider, type ApiKeyStatus } from '@model/apiProviders';
+import type { ApiKeyStatus, ApiProvider } from '@model/apiProviders';
 import { CLI_STATE_SETTINGS } from '@shared/schemas';
 import {
   readSetting,
