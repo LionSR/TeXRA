@@ -32,10 +32,6 @@ import type { PromptHost } from '@hosts/uiHosts';
 import { apiKeySecretName } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
-import {
-  isPreferCodexSubscription,
-  setPreferCodexSubscription,
-} from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import type {
   GettingStartedAction,
@@ -584,10 +580,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         getServerSideKeyService().getUseIncludedModelAccess(),
       setUseIncludedModelAccess: (enabled) =>
         getServerSideKeyService().setUseIncludedModelAccess(enabled),
-      getPreferChatGptSubscription: isPreferCodexSubscription,
-      setPreferChatGptSubscription: async (enabled) => {
-        await setPreferCodexSubscription(enabled);
-      },
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
         this.interactions.isRetryPending(stream, requestId),
