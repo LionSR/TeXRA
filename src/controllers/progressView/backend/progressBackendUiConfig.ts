@@ -39,12 +39,12 @@ export interface ApprovalRequestHandlerSet {
   retry: ApprovalRequestHandler<RetryPermission, 'streamId', RetryResult>;
   proposal: ApprovalRequestHandler<
     AgentProposalPermission,
-    'proposalId',
+    'requestId',
     ProposalResult
   >;
   planApproval: ApprovalRequestHandler<
     PlanApprovalPermission,
-    'approvalId',
+    'requestId',
     PlanApprovalResult
   >;
   externalInquiry: ApprovalRequestHandler<
@@ -193,9 +193,9 @@ export function buildApprovalRequestHandlerSet(
     >(renderer, canSend, PERMISSION_KIND.BASH, 'requestId'),
     planApproval: webviewPermissionHandler<
       typeof PERMISSION_KIND.PLAN_APPROVAL,
-      'approvalId',
+      'requestId',
       PlanApprovalResult
-    >(renderer, canSend, PERMISSION_KIND.PLAN_APPROVAL, 'approvalId'),
+    >(renderer, canSend, PERMISSION_KIND.PLAN_APPROVAL, 'requestId'),
     externalInquiry: new ExternalInquiryRequestHandler({
       show: (data) =>
         renderer.showPermission({
@@ -222,19 +222,19 @@ export function buildApprovalRequestHandlerSet(
     proposal: overrides.proposal
       ? new ApprovalRequestHandler<
           AgentProposalPermission,
-          'proposalId',
+          'requestId',
           ProposalResult
         >(
-          'proposalId',
+          'requestId',
           overrides.proposal.show,
           overrides.proposal.dismiss,
           canSend,
         )
       : webviewPermissionHandler<
           typeof PERMISSION_KIND.PROPOSAL,
-          'proposalId',
+          'requestId',
           ProposalResult
-        >(renderer, canSend, PERMISSION_KIND.PROPOSAL, 'proposalId'),
+        >(renderer, canSend, PERMISSION_KIND.PROPOSAL, 'requestId'),
   };
 }
 

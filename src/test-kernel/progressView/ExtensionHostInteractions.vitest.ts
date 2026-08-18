@@ -192,9 +192,9 @@ describe('createExtensionHostInteractions', () => {
       session,
     });
 
-    function requestProposal(proposalId: string, instruction: string) {
+    function requestProposal(requestId: string, instruction: string) {
       return interactions.requestAgentProposal?.({
-        proposalId,
+        requestId,
         streamId: STREAM_A,
         agent: 'assistant',
         model: 'gpt-5',
@@ -268,7 +268,7 @@ describe('createExtensionHostInteractions', () => {
     });
 
     const resultPromise = interactions.requestPlanApproval?.({
-      approvalId: 'plan-a',
+      requestId: 'plan-a',
       streamId: STREAM_A,
       goalEnabled: true,
       plan: { objective: 'Prove the compactness lemma.' },
@@ -295,7 +295,7 @@ describe('createExtensionHostInteractions', () => {
       },
     });
     expect(handlers.transport.planApproval.show).toHaveBeenCalledWith({
-      approvalId: 'plan-a',
+      requestId: 'plan-a',
       streamId: 'stream-a',
       goalEnabled: true,
       plan: { objective: 'Prove the compactness lemma.' },
@@ -327,7 +327,7 @@ describe('createExtensionHostInteractions', () => {
     });
 
     const resultPromise = interactions.requestPlanApproval?.({
-      approvalId: 'plan-show-failure',
+      requestId: 'plan-show-failure',
       streamId: STREAM_A,
       goalEnabled: false,
       plan: { objective: 'Fail before becoming pending.' },
@@ -828,7 +828,7 @@ describe('createExtensionHostInteractions', () => {
       operation: 'Model invocation',
     });
     const planPromise = interactions.requestPlanApproval?.({
-      approvalId: 'plan-a',
+      requestId: 'plan-a',
       streamId: STREAM_A,
       goalEnabled: false,
       plan: { objective: 'Survive a retry-scoped cancel.' },

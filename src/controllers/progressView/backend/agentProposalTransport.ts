@@ -29,10 +29,10 @@ const log = createLog('agentProposalTransport');
 export function createAgentProposalTransport(options: {
   /** Read lazily: hosts wire this before their backend field is assigned. */
   getRenderer(): LitSessionRenderer;
-  isPending(proposalId: string): boolean;
+  isPending(requestId: string): boolean;
 }): {
   show(proposal: AgentProposalPermission): void;
-  dismiss(proposalId: string): void;
+  dismiss(requestId: string): void;
 } {
   const { getRenderer, isPending } = options;
 
@@ -67,7 +67,7 @@ export function createAgentProposalTransport(options: {
         return undefined;
       }),
     ]);
-    if (!isPending(proposal.proposalId)) return;
+    if (!isPending(proposal.requestId)) return;
     getRenderer().showPermission({
       kind: PERMISSION_KIND.PROPOSAL,
       data: proposal,
@@ -85,8 +85,8 @@ export function createAgentProposalTransport(options: {
       });
       void sendResolvedOptions(proposal);
     },
-    dismiss(proposalId) {
-      getRenderer().resolvePermission(PERMISSION_KIND.PROPOSAL, proposalId);
+    dismiss(requestId) {
+      getRenderer().resolvePermission(PERMISSION_KIND.PROPOSAL, requestId);
     },
   };
 }

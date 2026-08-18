@@ -437,8 +437,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
       },
       agentProposal: {
-        getPendingProposal: (proposalId) =>
-          this.provider.getPendingAgentProposal(proposalId),
+        getPendingProposal: (requestId) =>
+          this.provider.getPendingAgentProposal(requestId),
         restoreRunConfig: async (config) => {
           return (
             (await this.runViewCommand<boolean>('texra.restoreState', [
@@ -447,22 +447,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           );
         },
         openFile: (file) => this.runViewCommand('texra.openFile', [file]),
-        settleProposal: (proposalId, result) => {
+        settleProposal: (requestId, result) => {
           const resolved = this.interactions.submitProposalDecision(
-            proposalId,
+            requestId,
             result,
           );
           if (!resolved) {
             this.logger.warn(
               this.channel,
-              `No pending host interaction found for proposal: ${proposalId}`,
+              `No pending host interaction found for proposal: ${requestId}`,
             );
           }
         },
-        onMissingProposal: (proposalId) => {
+        onMissingProposal: (requestId) => {
           this.logger.warn(
             this.channel,
-            `No pending agent proposal found for setup: ${proposalId}`,
+            `No pending agent proposal found for setup: ${requestId}`,
           );
         },
         onInvalidProposal: (issues) => {
@@ -473,7 +473,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         onSetupComplete: (proposal) => {
           this.logger.info(
             this.channel,
-            `Agent proposal ${proposal.proposalId} set up in main view`,
+            `Agent proposal ${proposal.requestId} set up in main view`,
             {
               data: { agent: proposal.agent },
             },
@@ -864,9 +864,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private handlePlanApprovalAction(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION>,
   ): void {
-    const { approvalId, action } = data;
+    const { requestId, action } = data;
     this.interactions.submitPlanDecision(
-      approvalId,
+      requestId,
       action === 'reject'
         ? { action: 'reject', feedback: data.feedback }
         : { action },

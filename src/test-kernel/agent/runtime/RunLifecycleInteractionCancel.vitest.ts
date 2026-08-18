@@ -54,11 +54,11 @@ function lifecycleCase(): {
 
 function requestApproval(
   session: SessionHandle,
-  approvalId: string,
+  requestId: string,
   streamId: StreamTabId,
 ) {
   return session.interactions.requestPlanApproval({
-    approvalId,
+    requestId,
     streamId,
     plan,
     goalEnabled: false,
