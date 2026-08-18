@@ -25,9 +25,9 @@ import {
   type StreamSlice,
 } from '../state/cliState';
 import {
-  childStreamEntries as childStreamEntriesSignal,
+  childRosters as childRostersSignal,
   parentStream as parentStreamSignal,
-  type ChildStreamEntries,
+  type ChildRosters,
 } from '../state/childExecutions';
 import { staticTranscriptEraseEpoch } from '../state/staticTranscriptRepaint';
 import { streamViewForId } from '../state/streamViews';
@@ -119,7 +119,7 @@ function shortenCwd(cwd: string): string {
 export function sessionHeaderIdentityLine(
   meta: SessionMeta,
   context: {
-    readonly childStreamEntries?: ChildStreamEntries;
+    readonly childStreamEntries?: ChildRosters;
     readonly parentStream?: ReadonlyMap<StreamTabId, StreamTabId>;
     readonly streamId?: StreamTabId;
     readonly streams?: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -133,7 +133,7 @@ export function sessionHeaderIdentityLine(
     const model = getRuntimeModelLabel(slice?.model || meta.model || '—');
     const view = streamViewForId({
       activeStreamId: context.streamId,
-      childStreamEntries: context.childStreamEntries ?? new Map(),
+      childRosters: context.childStreamEntries ?? new Map(),
       parentStream,
       streamId: context.streamId,
       streams: context.streams,
@@ -658,7 +658,7 @@ function ensureStaticSessionHeader({
   width,
 }: {
   readonly byteCount: number;
-  readonly childStreamEntries: ChildStreamEntries;
+  readonly childStreamEntries: ChildRosters;
   readonly executionLabels?: ExecutionLabels;
   readonly items: readonly StaticTranscriptItem[];
   readonly maxRows?: number;
@@ -758,7 +758,7 @@ function ensureStaticSessionHeader({
 interface BuildStaticTranscriptItemsOptions {
   readonly currentItems: readonly StaticTranscriptItem[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-  readonly childStreamEntries?: ChildStreamEntries;
+  readonly childStreamEntries?: ChildRosters;
   readonly executionLabels?: ExecutionLabels;
   readonly meta: SessionMeta;
   readonly maxRows?: number;
@@ -970,7 +970,7 @@ export function buildStaticTranscriptState({
   streams,
   width,
 }: {
-  readonly childStreamEntries: ChildStreamEntries;
+  readonly childStreamEntries: ChildRosters;
   readonly executionLabels?: ExecutionLabels;
   readonly maxRows?: number;
   readonly meta: SessionMeta;
@@ -1044,7 +1044,7 @@ export function advanceStaticTranscriptState(
     streams,
     width,
   }: {
-    readonly childStreamEntries: ChildStreamEntries;
+    readonly childStreamEntries: ChildRosters;
     readonly executionLabels?: ExecutionLabels;
     readonly eraseRequest?: number;
     readonly maxRows?: number;
@@ -1308,7 +1308,7 @@ export function StaticConversationTranscript({
   const streams = useSignal(streamsSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const parentStream = useSignal(parentStreamSignal);
-  const childStreamEntries = useSignal(childStreamEntriesSignal);
+  const childStreamEntries = useSignal(childRostersSignal);
   const eraseRequest = useSignal(staticTranscriptEraseEpoch);
 
   const buildFreshItems = (): readonly StaticTranscriptItem[] =>

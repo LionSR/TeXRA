@@ -35,7 +35,7 @@ import {
 } from '../state/cliState';
 import { chatTuiCanStopVisibleRun } from '../state/sessionRunState';
 import {
-  childStreamEntries as childStreamEntriesSignal,
+  childRosters as childRostersSignal,
   parentStream as parentStreamSignal,
   visibleSubagentRows,
 } from '../state/childExecutions';
@@ -76,7 +76,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const activeStreamId = useSignal(activeStreamIdSignal);
   const streams = useSignal(streamsSignal);
   const parentStream = useSignal(parentStreamSignal);
-  const childStreamEntries = useSignal(childStreamEntriesSignal);
+  const childRosters = useSignal(childRostersSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const transientNotice = useSignal(transientNoticeSignal);
   const approvals = useSignal(approvalQueueStatus);
@@ -252,16 +252,15 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     : undefined;
   const now = useLiveNowMsSince([runStartedAt]);
 
-  // Rebuilds the retained + active child rows, so keep it off the 1 Hz
+  // Reads the retained + active child roster, so keep it off the 1 Hz
   // elapsed-time re-render path.
   const displayStreamId = target.displayStreamId;
   const subagentCount = useMemo(
     () =>
       displayStreamId === undefined
         ? 0
-        : visibleSubagentRows(displayStreamId, childStreamEntries, streams)
-            .length,
-    [childStreamEntries, displayStreamId, streams],
+        : visibleSubagentRows(displayStreamId, childRosters).length,
+    [childRosters, displayStreamId],
   );
 
   const display = buildStatusBarDisplay({
@@ -296,7 +295,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
         target.displayStreamId === undefined
           ? ''
           : streamDisplayLabel({
-              childStreamEntries,
+              childRosters,
               parentStream,
               streamId: target.displayStreamId,
               streams,
