@@ -85,6 +85,7 @@ export function hydratedTranscript(
     if (entry.role === 'tool') {
       return {
         ...entry,
+        ...(spill.kind === 'failed' ? { spillFailed: true } : {}),
         toolUse: {
           ...entry.toolUse,
           outputText:

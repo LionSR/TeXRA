@@ -121,8 +121,9 @@ export interface DisplayLineOptions {
   readonly width?: number;
   /** Retained subagent identities used by executions wait/view headers. */
   readonly executionLabels?: ExecutionLabels;
-  /** Include recovered output for compact tool kinds in the full transcript. */
-  readonly includeCompactOutput?: boolean;
+  /** Compact-tool output in the full transcript: 'loaded' prepends the
+   *  "Full output:" header, 'failed' shows the failure notice without it. */
+  readonly compactOutput?: 'loaded' | 'failed';
 }
 
 /** One styled fragment of a tool row. */
@@ -363,9 +364,11 @@ function buildStyledLines(
     !patchGroups &&
     !toolUse.isError;
   const compactOutput =
-    options.includeCompactOutput && !opts.showOutput
+    options.compactOutput !== undefined && !opts.showOutput
       ? [
-          row([{ text: 'Full output:' }]),
+          ...(options.compactOutput === 'loaded'
+            ? [row([{ text: 'Full output:' }])]
+            : []),
           ...toolUse.outputText
             .split('\n')
             .map((line) => row([{ text: line }])),
@@ -444,7 +447,7 @@ export function toolUseStyledLines(
     toolUse.toolName === 'executions' && options.executionLabels
       ? executionsSubagentSummary(toolUse.input, options.executionLabels)
       : undefined;
-  const key = `${options.elide === false ? 'f' : 'e'}|${options.includeCompactOutput ? 'c' : 'n'}|${options.width ?? 'd'}|${executionSummary ?? ''}`;
+  const key = `${options.elide === false ? 'f' : 'e'}|${options.compactOutput ?? 'n'}|${options.width ?? 'd'}|${executionSummary ?? ''}`;
   let cached = styledLinesCache.get(toolUse);
   const hit = cached?.get(key);
   if (hit) return hit;
