@@ -24,6 +24,7 @@ import { createLatexSpec } from './chatExport/latexSpec';
 import { markdownSpec } from './chatExport/markdownSpec';
 
 export type { ChatExportInput } from '@agent/export/schemas';
+export { generateExportFilename } from './chatExport/filenames';
 
 export function formatChatAsMarkdown(input: ChatExportInput): string {
   return renderDocument(input, markdownSpec);
