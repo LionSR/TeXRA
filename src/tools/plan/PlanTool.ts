@@ -266,29 +266,28 @@ pause/complete only affect autonomous goals; with no goal running they return gu
     workPlanState.updatePlan(null);
 
     const classification = classifyRejection(result);
+
+    // 'cancelled' and 'policy' differ only in wording: a host cancel with an
+    // optional cause vs a policy denial with its reason.
+    const denialResult = (outcome: string, detail?: string): ToolResult => {
+      const trimmed = detail?.trim();
+      logger.info(
+        `Plan approval ${outcome}`,
+        trimmed ? { data: trimmed } : undefined,
+      );
+      return errorResult(
+        trimmed
+          ? `Plan approval was ${outcome}.\n\n${trimmed}`
+          : `Plan approval was ${outcome}.`,
+        { summary: `Plan approval ${outcome}` },
+      );
+    };
+
     switch (classification.kind) {
-      case 'cancelled': {
-        const cause = classification.cause?.trim();
-        const message = cause
-          ? `Plan approval was cancelled.\n\n${cause}`
-          : 'Plan approval was cancelled.';
-        logger.info(
-          'Plan approval cancelled',
-          cause ? { data: cause } : undefined,
-        );
-        return errorResult(message, { summary: 'Plan approval cancelled' });
-      }
-      case 'policy': {
-        const reason = classification.reason.trim();
-        const message = reason
-          ? `Plan approval was denied.\n\n${reason}`
-          : 'Plan approval was denied.';
-        logger.info(
-          'Plan approval denied',
-          reason ? { data: reason } : undefined,
-        );
-        return errorResult(message, { summary: 'Plan approval denied' });
-      }
+      case 'cancelled':
+        return denialResult('cancelled', classification.cause);
+      case 'policy':
+        return denialResult('denied', classification.reason);
       case 'feedback': {
         const feedback = classification.feedback?.trim();
         const feedbackNote = feedback

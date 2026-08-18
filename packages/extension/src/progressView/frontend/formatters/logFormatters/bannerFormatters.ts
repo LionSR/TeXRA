@@ -99,9 +99,9 @@ export function formatBannerContentTemplate(
     ? `${config.contentClass} message-${level}`
     : config.contentClass;
   const spillPath =
-    message.messageType === MESSAGE_TYPES.THINKING ||
-    message.messageType === MESSAGE_TYPES.SCRATCHPAD ||
-    message.messageType === MESSAGE_TYPES.MODEL_RESPONSE
+    messageType === MESSAGE_TYPES.THINKING ||
+    messageType === MESSAGE_TYPES.SCRATCHPAD ||
+    messageType === MESSAGE_TYPES.MODEL_RESPONSE
       ? message.data?.spillPath
       : undefined;
   // While still streaming in, skip the markdown parse on every chunk and

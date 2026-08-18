@@ -8,8 +8,8 @@ import { customElement, property } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type { PRSubscriptionEntry } from '@shared/schemas';
 import {
+  type PRSubscriptionEntry,
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
 } from '@shared/schemas';
@@ -25,8 +25,6 @@ import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
-
-// Local imports - shared schemas
 
 // Local imports - shared utils
 import { isKnownUnsupported } from '@shared/utils/dispatcher';

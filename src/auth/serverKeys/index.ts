@@ -58,9 +58,9 @@ export function getServerSideKeyService(): ServerSideKeyService {
 
   if (!state) {
     log.warn(
-      'No platform state store; included model access is off for this ' +
-        'process. Call initPlatform() before the first model call to use ' +
-        'relay access, or configure a provider API key.',
+      'No platform state store; included model access is off for this process. ' +
+        'Call initPlatform() before the first model call to use relay access, ' +
+        'or configure a provider API key.',
     );
   }
 

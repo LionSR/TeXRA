@@ -49,12 +49,13 @@ export class GitHubSubscriptionHandlers {
       placeHolder: 'ghp_…',
       ignoreFocusOut: true,
     });
-    if (!token?.trim()) return;
+    const trimmed = token?.trim();
+    if (!trimmed) return;
     await withHandlerErrorHandling(
       this.ctx,
       'Failed to save GitHub token',
       async () => {
-        await platform().secrets.set(GITHUB_TOKEN_STORAGE_KEY, token.trim());
+        await platform().secrets.set(GITHUB_TOKEN_STORAGE_KEY, trimmed);
         void vscode.window.showInformationMessage('GitHub token saved.');
         await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
       },

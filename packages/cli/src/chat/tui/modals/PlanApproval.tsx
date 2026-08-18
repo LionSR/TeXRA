@@ -93,14 +93,15 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [feedbackMode, setFeedbackMode] = useState(false);
   const [feedbackValue, setFeedbackValue] = useState('');
-  const goalEnabled = props.payload.goalEnabled;
-  const compact = isCompactPlanApprovalRows(props.availableRows, goalEnabled);
+  const { availableRows, onDecide, payload } = props;
+  const { goalEnabled, plan } = payload;
+  const compact = isCompactPlanApprovalRows(availableRows, goalEnabled);
   const contentWidth = clampModalWidth(
     compact ? columns : columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
   const compactBodyRows = compact
     ? planApprovalCompactBodyRowsBudget({
-        availableRows: props.availableRows,
+        availableRows,
         columns,
         goalEnabled,
       })
@@ -117,7 +118,7 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
   const maxBodyRows = compact
     ? Math.max(1, (compactBodyRows ?? 1) - (goalNoticeVisible ? 1 : 0))
     : scrollableModalTextRowsBudget({
-        availableRows: props.availableRows,
+        availableRows,
         columns,
         extraFixedRows:
           (goalNoticeVisible ? PLAN_APPROVAL_GOAL_NOTICE_ROWS : 0) +
@@ -155,11 +156,11 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
       feedbackPlaceholder={CONFIRM_CARD_FEEDBACK_PLACEHOLDER}
       onFeedbackModeChange={setFeedbackMode}
       onFeedbackValueChange={setFeedbackValue}
-      onDecide={props.onDecide}
+      onDecide={onDecide}
     >
-      {compact && goalNoticeVisible ? (
+      {compact && goalNoticeVisible && (
         <Text>{planApprovalGoalNoticeLine(contentWidth)}</Text>
-      ) : null}
+      )}
       <ScrollableModalText
         hiddenNoun={PLAN_APPROVAL_HIDDEN_NOUN}
         marginWhenSpacious={!compact}
@@ -167,16 +168,16 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
         scrollActive={!feedbackMode}
         scrollHint="scroll plan"
         showScrollHints={!compact}
-        text={props.payload.plan.objective}
+        text={plan.objective}
         trimWrappedLeadingWhitespace
         width={contentWidth}
       />
-      {!compact && goalNoticeVisible ? (
+      {!compact && goalNoticeVisible && (
         <Box flexDirection="column">
           <Text> </Text>
           <Text>{planApprovalGoalNoticeLine(contentWidth)}</Text>
         </Box>
-      ) : null}
+      )}
     </ConfirmCard>
   );
 }

@@ -526,6 +526,8 @@ export class ClaudeAgentTool extends defineTool({
       input.permission_mode ?? config.getClaudeAgentPermissionMode();
     const model = input.model ?? config.getClaudeAgentModel();
     const effort = input.effort ?? config.getClaudeAgentEffort();
+    const sessionId = input.session_id ?? undefined;
+    const isFork = input.fork_session === true;
 
     return dispatchAgentCliTool({
       agentName: CLAUDE_AGENT_NAME,
@@ -533,14 +535,8 @@ export class ClaudeAgentTool extends defineTool({
       store: ClaudeAgentSessions,
       // A fork always launches a distinct TeXRA child. Queueing onto the
       // source session would mutate the original instead of branching it.
-      resumeId:
-        input.fork_session === true
-          ? undefined
-          : (input.session_id ?? undefined),
-      sourceId:
-        input.fork_session === true
-          ? (input.session_id ?? undefined)
-          : undefined,
+      resumeId: isFork ? undefined : sessionId,
+      sourceId: isFork ? sessionId : undefined,
       prompt: input.prompt,
       labels: {
         notActiveLabel: 'Claude Code CLI session',

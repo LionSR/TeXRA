@@ -502,10 +502,7 @@ export async function executeAgent(
             },
             buildLifecycleOptions(options, isSubagent),
           );
-          if (
-            isWaitingFlowResult(result) &&
-            options.allowWaitingResult !== true
-          ) {
+          if (isWaitingFlowResult(result) && !options.allowWaitingResult) {
             throw new Error(
               'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
             );

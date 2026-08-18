@@ -47,7 +47,6 @@ const RangeSchema = z.preprocess(
         .nullish()
         .describe('Last line to read, inclusive and 1-indexed.'),
     })
-
     .refine((value) => value.end == null || value.end >= value.start, {
       path: ['end'],
       error: 'range.end must be greater than or equal to range.start',

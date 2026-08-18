@@ -79,10 +79,8 @@ function collectAncestorIds(
 ): Set<string> {
   const ancestors = new Set<string>();
   if (streamId == null || streamId === '') return ancestors;
-  const seen = new Set<string>();
   let current = parentByChild.get(streamId);
-  while (current !== undefined && !seen.has(current)) {
-    seen.add(current);
+  while (current !== undefined && !ancestors.has(current)) {
     ancestors.add(current);
     current = parentByChild.get(current);
   }

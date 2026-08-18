@@ -573,8 +573,23 @@ function createWindow(options: {
     signInForRemoteAgentCatalog,
     showInfoMessage,
     showWarningMessage,
-    showErrorMessage: async (message) => {
-      await showErrorMessage(message).catch(reportBackgroundError);
+    showErrorMessage: (message) =>
+      showErrorMessage(message).catch(reportBackgroundError),
+    pickTranscriptExportFormat: async () => {
+      const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
+        await import('@controllers/progressView/exportTranscript');
+      const { response } = await dialog.showMessageBox(window, {
+        type: 'question',
+        message: 'Export transcript',
+        detail: 'Choose a format',
+        buttons: [
+          ...TRANSCRIPT_EXPORT_FORMAT_CHOICES.map((choice) => choice.label),
+          'Cancel',
+        ],
+        defaultId: 0,
+        cancelId: TRANSCRIPT_EXPORT_FORMAT_CHOICES.length,
+      });
+      return TRANSCRIPT_EXPORT_FORMAT_CHOICES[response]?.format;
     },
     // Recompute the onboarding funnel after a run completes so a user's first
     // successful run leaves the setup card without waiting for a restart
@@ -589,6 +604,7 @@ function createWindow(options: {
     host: agentExecutionHost,
     session: options.processSession,
     sessionStores: options.sessionStores,
+    resourcesPath: options.resourcesPath,
   };
   let agentExecution: DesktopProgressBridge | undefined;
   let agentExecutionLoad: Promise<DesktopProgressBridge> | undefined;

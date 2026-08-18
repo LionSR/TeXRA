@@ -21,9 +21,7 @@ export async function deliverChildRunFollowUp(params: {
   const result = await submitFollowUp(params.targetStreamId, params.followUp, {
     session: params.session,
     mode: params.mode ?? 'child_delivery',
-    ...(params.expectedGenerationId !== undefined
-      ? { expectedGenerationId: params.expectedGenerationId }
-      : {}),
+    expectedGenerationId: params.expectedGenerationId,
   });
   if (result.status === 'no_session') {
     return { kind: 'no_session', streamStatus: result.streamStatus };

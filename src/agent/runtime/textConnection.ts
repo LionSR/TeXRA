@@ -27,13 +27,12 @@ const DEFAULT_RESULT: ConnectionResult = {
 const log = createLog(CHANNEL);
 
 function buildPrompt(str1: string, str2: string): string {
-  return (
-    `Given three strings from a LaTeX document:\n` +
-    `A: ${str1}${str2}\n` +
-    `B: ${str1} ${str2}\n` +
-    `C: ${str1}\n${str2}\n` +
-    `Which string is grammatically correct in English and LaTeX? Output only 'A', 'B', or 'C'.`
-  );
+  return `Given three strings from a LaTeX document:
+A: ${str1}${str2}
+B: ${str1} ${str2}
+C: ${str1}
+${str2}
+Which string is grammatically correct in English and LaTeX? Output only 'A', 'B', or 'C'.`;
 }
 
 const SYSTEM_PROMPT =

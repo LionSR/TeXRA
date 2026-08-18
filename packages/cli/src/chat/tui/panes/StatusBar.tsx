@@ -39,6 +39,11 @@ import {
   parentStream as parentStreamSignal,
   visibleSubagentRows,
 } from '../state/childExecutions';
+import { streamDisplayLabel } from '../state/streamViews';
+import {
+  ancestorWorkflowPhaseHeading,
+  focusedSessionLocationText,
+} from '../state/workflowPhase';
 import { useSignal } from '../state/useSignal';
 import {
   buildStatusBarDisplay,
@@ -285,6 +290,26 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     width: columns,
     ctrlCAction: target.ctrlCAction,
     isChildStream: target.isChildStream,
+    location: focusedSessionLocationText({
+      isChildStream: target.isChildStream,
+      label:
+        target.displayStreamId === undefined
+          ? ''
+          : streamDisplayLabel({
+              childStreamEntries,
+              parentStream,
+              streamId: target.displayStreamId,
+              streams,
+            }),
+      phaseHeading:
+        target.displayStreamId === undefined
+          ? undefined
+          : ancestorWorkflowPhaseHeading({
+              parentStream,
+              streamId: target.displayStreamId,
+              streams,
+            }),
+    }),
     foreground: {
       inputActive: props.foregroundInputActive,
       escapeAction: props.foregroundEscapeAction,

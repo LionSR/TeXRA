@@ -36,25 +36,19 @@ export class SettingsAgentVisibilityController {
     enabled: boolean;
   }): Promise<void> {
     const allAgents = this.deps.state.getAgents(input.category);
-    const sourceAgents = allAgents.filter(
-      (entry) => entry.source === input.source,
+    const targetKeys = new Set(
+      allAgents
+        .filter((entry) => entry.source === input.source)
+        .map((entry) => agentKeyOf(entry)),
     );
-    const targetKeys = new Set(sourceAgents.map((entry) => agentKeyOf(entry)));
 
     const current =
       this.deps.state.getEnabledAgentKeys(input.category) ??
       allAgents.map((entry) => agentKeyOf(entry));
 
-    let updated: string[];
-    if (input.enabled) {
-      const currentSet = new Set(current);
-      updated = [
-        ...current,
-        ...[...targetKeys].filter((key) => !currentSet.has(key)),
-      ];
-    } else {
-      updated = current.filter((key) => !targetKeys.has(key));
-    }
+    const updated = input.enabled
+      ? [...new Set([...current, ...targetKeys])]
+      : current.filter((key) => !targetKeys.has(key));
 
     if (
       updated.length === current.length &&

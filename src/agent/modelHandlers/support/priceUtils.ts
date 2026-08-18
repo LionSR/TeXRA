@@ -61,13 +61,10 @@ export function computeStandardPrice(
   // `inputTokens` is the total prompt (cached included) — the quantity xAI's
   // long-context threshold compares against. The cache rebate follows the
   // tier: providers scale the cached rate by the same discount factor.
-  const tier =
-    config.longContextTier &&
-    tokens.inputTokens >= config.longContextTier.thresholdTokens
-      ? config.longContextTier
-      : undefined;
-  const inputPrice = tier?.inputPrice ?? config.inputPrice;
-  const outputPrice = tier?.outputPrice ?? config.outputPrice;
+  const tier = config.longContextTier;
+  const useTier = tier && tokens.inputTokens >= tier.thresholdTokens;
+  const inputPrice = useTier ? tier.inputPrice : config.inputPrice;
+  const outputPrice = useTier ? tier.outputPrice : config.outputPrice;
 
   return (
     calculateTokenPrice(

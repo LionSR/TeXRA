@@ -86,12 +86,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private tokenExpiresAt: number | null = null;
 
   constructor(private readonly options: SupabaseSessionCoordinatorOptions) {
-    this.log = {
-      debug: options.log?.debug ?? NOOP_SUPABASE_SESSION_LOG.debug,
-      info: options.log?.info ?? NOOP_SUPABASE_SESSION_LOG.info,
-      warn: options.log?.warn ?? NOOP_SUPABASE_SESSION_LOG.warn,
-      error: options.log?.error ?? NOOP_SUPABASE_SESSION_LOG.error,
-    };
+    this.log = { ...NOOP_SUPABASE_SESSION_LOG, ...options.log };
   }
 
   async whenReady(): Promise<void> {

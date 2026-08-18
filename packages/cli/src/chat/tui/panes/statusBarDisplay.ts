@@ -9,14 +9,14 @@ import {
   defaultShortcutModifierLabel,
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
-import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
-import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
-import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
-import { STATUS_BAR_HORIZONTAL_PADDING } from '@cli/tui/ui/theme';
 import {
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '@cli/runtime/terminalText';
+import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
+import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
+import { STATUS_BAR_HORIZONTAL_PADDING } from '@cli/tui/ui/theme';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -150,6 +150,9 @@ export interface StatusBarDisplayInput {
   /** True when `status` belongs to a focused child/subagent stream rather
    *  than the root session — see `statusBarStreamTarget`. */
   readonly isChildStream?: boolean;
+  /** Nested-session location (`Survey (1/1) › Agent runtime`). Omitted on
+   *  the root session, where the header already names the conversation. */
+  readonly location?: string;
   /** Which surface currently owns input and global chat shortcuts: a
    *  foreground surface (approval, detail, form, slash palette, reverse
    *  search) or the persistent child list. Neither active means the normal
@@ -337,6 +340,19 @@ function formatUsage(
 
 // One status-bar slot carries whichever stage this stream has (mirrors the
 // SubagentList row's `stageLabel`).
+function locationSegment(
+  location: string | undefined,
+): StatusBarSegment | undefined {
+  if (!location) return undefined;
+  const separator = location.indexOf(' › ');
+  return {
+    text: location,
+    compactText: separator >= 0 ? location.slice(0, separator) : location,
+    color: 'dim',
+    compactPriority: STATUS_BAR_COMPACT_PRIORITY.location,
+  };
+}
+
 function stageSegment(
   stage: StreamStage | undefined,
 ): StatusBarSegment | undefined {
@@ -371,6 +387,7 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   // still be compactable — a priority-less segment breaks narrow bars (see
   // bypassBadge below).
   accessMode: 72,
+  location: 74,
   thinking: 75,
   compacting: 80,
   // Bypass badges announce active auto-approval — the one thing the bar must
@@ -670,7 +687,7 @@ function statusBarBindingsText(
     ? keyHintText({ key: 'Tab', action: SESSION_LIST.openAction })
     : undefined;
   const parentBack = parentNavigationAvailable
-    ? keyHintText({ key: 'Esc', action: 'back' })
+    ? keyHintText({ key: 'Esc', action: SESSION_LIST.parentAction })
     : undefined;
   const streamFocus = streamFocusAvailable
     ? keyHintText({
@@ -681,25 +698,18 @@ function statusBarBindingsText(
   const fullOutput = transcriptAvailable
     ? keyHintText({ key: 'Ctrl-T', action: 'transcript' })
     : undefined;
-  const agent =
-    chatInputAvailable && agentSelectionAvailable
-      ? keyHintText({ key: '/agent', action: 'agents' })
-      : undefined;
-  const status = chatInputAvailable
-    ? keyHintText({ key: '/status', action: 'details' })
+  const chatHint = (key: string, action: string): string | undefined =>
+    chatInputAvailable ? keyHintText({ key, action }) : undefined;
+  const agent = agentSelectionAvailable
+    ? chatHint('/agent', 'agents')
     : undefined;
-  const model = chatInputAvailable
-    ? keyHintText({ key: '/model', action: 'models' })
-    : undefined;
-  const api = chatInputAvailable
-    ? keyHintText({ key: '/api', action: 'api' })
-    : undefined;
-  const newline = chatInputAvailable
-    ? keyHintText({
-        key: shiftEnterNewline ? 'Shift-Enter' : 'Ctrl-J',
-        action: 'newline',
-      })
-    : undefined;
+  const status = chatHint('/status', 'details');
+  const model = chatHint('/model', 'models');
+  const api = chatHint('/api', 'api');
+  const newline = chatHint(
+    shiftEnterNewline ? 'Shift-Enter' : 'Ctrl-J',
+    'newline',
+  );
   const ctrlC = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   const setupControlsOnly =
     chatInputAvailable && agentSelectionAvailable && !childNavigationAvailable;
@@ -1103,6 +1113,7 @@ export function buildStatusBarDisplay(
       relayQuotaSegment(input.relayQuota, input.modelAccess),
       subscriptionQuotaSegment(input.subscriptionQuota),
       approvalPolicySegment(input.approvalPolicy),
+      locationSegment(input.location),
       stageSegment(input.stage),
       formatUsage(input.usage, input.model),
       queuedFollowUpsCountSegment(input.queuedFollowUpMessages),

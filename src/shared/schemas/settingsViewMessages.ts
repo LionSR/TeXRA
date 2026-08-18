@@ -3,9 +3,9 @@
  *
  * Public entry point and single home for the settings-view wire format:
  * combines the messages re-exported from MemoryView and ProfileView with the
- * settings-specific data schemas, the outbound
- * (backend → webview) message union, and the inbound (webview → backend)
- * message union plus their dispatchers.
+ * settings-specific data schemas, the outbound (backend → webview) message
+ * union, and the inbound (webview → backend) message union plus their
+ * dispatchers.
  */
 import { z } from 'zod';
 
@@ -68,7 +68,7 @@ import {
 import { commandOnly } from './messageFactories';
 import { WebviewReadyMessageSchema } from './commonViewMessages';
 
-// SETTINGS_VIEW_CMD is defined in commands.ts to avoid a circular dependency;
+// SETTINGS_VIEW_CMD is defined in ipc.ts to avoid a circular dependency;
 // re-exported here for consumers that expect it from the schema module.
 export { SETTINGS_VIEW_CMD } from '@shared/ipc';
 
@@ -605,10 +605,6 @@ const UpdateLatexSettingsStatusMessageSchema = z.object({
   settings: LatexSettingsStatusSchema,
 });
 
-const LatexFormatterSchema = z.enum(LATEX_FORMATTER_VALUES);
-
-const LatexdiffMathMarkupSchema = z.enum(LATEXDIFF_MATH_MARKUP_VALUES);
-
 /**
  * LaTeX/compile/diff configuration values, persisted in workspace storage. The
  * frontend tab edits these directly; the backend persists them via
@@ -633,9 +629,9 @@ export const LatexConfigValuesSchema = z.object({
     .min(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min)
     .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max!)
     .optional(),
-  latexdiffMathMarkup: LatexdiffMathMarkupSchema.optional(),
+  latexdiffMathMarkup: z.enum(LATEXDIFF_MATH_MARKUP_VALUES).optional(),
   latexdiffChangesOnly: z.boolean().optional(),
-  latexFormatter: LatexFormatterSchema.optional(),
+  latexFormatter: z.enum(LATEX_FORMATTER_VALUES).optional(),
   wrapCritiqueInAlign: z.boolean().optional(),
   enabledReplacements: z
     .array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES))
@@ -729,6 +725,28 @@ function enabledFlag<T extends string>(command: T) {
   return z.object({ command: z.literal(command), enabled: z.boolean() });
 }
 
+/** Inbound message addressed to a provider by name. */
+function providerCommand<T extends string>(command: T) {
+  return z.object({ command: z.literal(command), provider: z.string().min(1) });
+}
+
+/** Inbound message addressed to a model by name. */
+function modelCommand<T extends string>(command: T) {
+  return z.object({
+    command: z.literal(command),
+    modelName: z.string().min(1),
+  });
+}
+
+/** Inbound message addressed to an agent by name and source. */
+function agentCommand<T extends string>(command: T) {
+  return z.object({
+    command: z.literal(command),
+    agentName: z.string().min(1),
+    agentSource: AgentSourceSchema,
+  });
+}
+
 // Provider key inbound messages (settings-only)
 // Keep the outer optional: callers may omit apiKey so the host can prompt.
 const SubmittedApiKeySchema = z
@@ -737,33 +755,23 @@ const SubmittedApiKeySchema = z
   .optional()
   .transform((v) => v || undefined);
 
-const SetProviderKeyMessageSchema = z.object({
-  command: z.literal(CMD.SET_PROVIDER_KEY),
-  provider: z.string().min(1),
-  apiKey: SubmittedApiKeySchema,
-});
+const SetProviderKeyMessageSchema = providerCommand(
+  CMD.SET_PROVIDER_KEY,
+).extend({ apiKey: SubmittedApiKeySchema });
 
-const RemoveProviderKeyMessageSchema = z.object({
-  command: z.literal(CMD.REMOVE_PROVIDER_KEY),
-  provider: z.string().min(1),
-});
+const RemoveProviderKeyMessageSchema = providerCommand(CMD.REMOVE_PROVIDER_KEY);
 
-const OpenProviderKeyUrlMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_PROVIDER_KEY_URL),
-  provider: z.string().min(1),
-});
+const OpenProviderKeyUrlMessageSchema = providerCommand(
+  CMD.OPEN_PROVIDER_KEY_URL,
+);
 
-const SetProviderStreamingMessageSchema = z.object({
-  command: z.literal(CMD.SET_PROVIDER_STREAMING),
-  provider: z.string().min(1),
-  enabled: z.boolean(),
-});
+const SetProviderStreamingMessageSchema = providerCommand(
+  CMD.SET_PROVIDER_STREAMING,
+).extend({ enabled: z.boolean() });
 
-const SetProviderEndpointMessageSchema = z.object({
-  command: z.literal(CMD.SET_PROVIDER_ENDPOINT),
-  provider: z.string().min(1),
-  endpoint: z.string(),
-});
+const SetProviderEndpointMessageSchema = providerCommand(
+  CMD.SET_PROVIDER_ENDPOINT,
+).extend({ endpoint: z.string() });
 
 const SetGlobalStreamingMessageSchema = enabledFlag(CMD.SET_GLOBAL_STREAMING);
 
@@ -779,20 +787,15 @@ const OpenExternalUrlMessageSchema = z.object({
 });
 
 // Model selection inbound messages
-const SetModelEnabledMessageSchema = z.object({
-  command: z.literal(CMD.SET_MODEL_ENABLED),
-  modelName: z.string().min(1),
-  enabled: z.boolean(),
-});
+const SetModelEnabledMessageSchema = modelCommand(CMD.SET_MODEL_ENABLED).extend(
+  { enabled: z.boolean() },
+);
 
-const SetHelperModelMessageSchema = z.object({
-  command: z.literal(CMD.SET_HELPER_MODEL),
-  modelName: z.string().min(1),
-});
+const SetHelperModelMessageSchema = modelCommand(CMD.SET_HELPER_MODEL);
 
-const SetModelReasoningLevelMessageSchema = z.object({
-  command: z.literal(CMD.SET_MODEL_REASONING_LEVEL),
-  modelName: z.string().min(1),
+const SetModelReasoningLevelMessageSchema = modelCommand(
+  CMD.SET_MODEL_REASONING_LEVEL,
+).extend({
   /** The reasoning level to set, or undefined/null to reset to model default. */
   level: ReasoningLevelSchema.nullable(),
 });
@@ -801,30 +804,16 @@ const SetPreferShortModelNamesMessageSchema = enabledFlag(
   CMD.SET_PREFER_SHORT_MODEL_NAMES,
 );
 
-const RequestModelAccessMessageSchema = z.object({
-  command: z.literal(CMD.REQUEST_MODEL_ACCESS),
-  modelName: z.string().min(1),
-});
+const RequestModelAccessMessageSchema = modelCommand(CMD.REQUEST_MODEL_ACCESS);
 
-const ClearCopilotRouteMessageSchema = z.object({
-  command: z.literal(CMD.CLEAR_COPILOT_ROUTE),
-  modelName: z.string().min(1),
-});
+const ClearCopilotRouteMessageSchema = modelCommand(CMD.CLEAR_COPILOT_ROUTE);
 
 // Agent selection inbound messages
-const OpenAgentYamlMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_AGENT_YAML),
-  agentName: z.string().min(1),
-  agentSource: AgentSourceSchema,
-});
+const OpenAgentYamlMessageSchema = agentCommand(CMD.OPEN_AGENT_YAML);
 
-const SetAgentEnabledMessageSchema = z.object({
-  command: z.literal(CMD.SET_AGENT_ENABLED),
-  agentName: z.string().min(1),
-  agentSource: AgentSourceSchema,
-  category: AgentCategorySchema,
-  enabled: z.boolean(),
-});
+const SetAgentEnabledMessageSchema = agentCommand(CMD.SET_AGENT_ENABLED).extend(
+  { category: AgentCategorySchema, enabled: z.boolean() },
+);
 
 const SetAllAgentsEnabledMessageSchema = z.object({
   command: z.literal(CMD.SET_ALL_AGENTS_ENABLED),
@@ -844,22 +833,14 @@ const CreateAgentMessageSchema = z.object({
   mode: z.enum(['ai', 'template']).prefault('ai'),
 });
 
-const CustomizeAgentMessageSchema = z.object({
-  command: z.literal(CMD.CUSTOMIZE_AGENT),
-  agentName: z.string().min(1),
-  agentSource: AgentSourceSchema,
-});
+const CustomizeAgentMessageSchema = agentCommand(CMD.CUSTOMIZE_AGENT);
 
 const DeleteCustomAgentMessageSchema = z.object({
   command: z.literal(CMD.DELETE_CUSTOM_AGENT),
   agentName: z.string().min(1),
 });
 
-const RevealAgentFileMessageSchema = z.object({
-  command: z.literal(CMD.REVEAL_AGENT_FILE),
-  agentName: z.string().min(1),
-  agentSource: AgentSourceSchema,
-});
+const RevealAgentFileMessageSchema = agentCommand(CMD.REVEAL_AGENT_FILE);
 
 const ViewRemoteAgentPromptMessageSchema = z.object({
   command: z.literal(CMD.VIEW_REMOTE_AGENT_PROMPT),

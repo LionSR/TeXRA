@@ -32,9 +32,7 @@ export class LaTeXdiffService {
   private readonly fileProcessor: DiffFileProcessor;
   private readonly commandExecutor: DiffCommandExecutor;
 
-  private get log() {
-    return createLog(this.channel);
-  }
+  private readonly log = createLog(this.channel);
 
   constructor(private readonly channel: string) {
     this.fileProcessor = new DiffFileProcessor();

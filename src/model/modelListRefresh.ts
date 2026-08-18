@@ -72,11 +72,13 @@ function reconcileEnabledModels(
   const added = addDefaults
     ? DEFAULT_MODELS.filter((model) => !keptSet.has(model))
     : [];
-  // Preferred defaults keep their curated order in the picker. User-enabled
-  // extras stay after that block so a stale Gemini-first list cannot keep
-  // leading once Sonnet is the default.
+  // Preferred defaults keep their curated order in the picker: when defaults
+  // are added, every preferred pick is either kept or added, so the whole
+  // block lands in DEFAULT order. User-enabled extras stay after that block
+  // so a stale Gemini-first list cannot keep leading once Sonnet is the
+  // default.
   const defaultOrdered = DEFAULT_MODELS.filter(
-    (model) => keptSet.has(model) || added.includes(model),
+    (model) => addDefaults || keptSet.has(model),
   );
   const extras = kept.filter((model) => !DEFAULT_MODELS.includes(model));
 
@@ -88,34 +90,23 @@ function reconcileEnabledModels(
 }
 
 /**
- * Whether a persisted Copilot route preference can no longer resolve. Aligned
- * with `matchingBaseModel` in runtimeModelRegistry.ts, which excludes both
- * retired and deprecated configs from Copilot discovery.
- */
-function isStaleCopilotRouteModel(model: string): boolean {
-  return isRetiredModel(model) || isDeprecatedModel(model);
-}
-
-/**
  * Clear persisted Copilot route preferences whose base model is retired or
- * deprecated. Copilot discovery deliberately excludes both kinds of config
- * (`matchingBaseModel` in runtimeModelRegistry.ts), so a route preference for
- * one can never resolve to a route. Leaving it persisted would strand the
- * model behind the hard no-fallthrough error (#9635) on every launch. Unlike
- * the version-gated enabled-list deprecated sweep above, this runs
- * unconditionally: affected users may already have persisted the current
+ * deprecated — stale in the sense that Copilot discovery (`matchingBaseModel`
+ * in runtimeModelRegistry.ts) deliberately excludes both kinds of config, so
+ * the preference can never resolve to a route. Leaving it persisted would
+ * strand the model behind the hard no-fallthrough error (#9635) on every
+ * launch. Unlike the version-gated enabled-list deprecated sweep above, this
+ * runs unconditionally: affected users may already have persisted the current
  * MODEL_LIST_VERSION before this migration shipped.
  */
 function reconcileCopilotRoutePreferences(
   currentModels: readonly string[],
 ): CopilotRouteReconciliation {
-  const cleared = currentModels.filter((model) =>
-    isStaleCopilotRouteModel(model),
-  );
-  const clearedSet = new Set(cleared);
+  const isStale = (model: string) =>
+    isRetiredModel(model) || isDeprecatedModel(model);
   return {
-    models: currentModels.filter((model) => !clearedSet.has(model)),
-    cleared,
+    models: currentModels.filter((model) => !isStale(model)),
+    cleared: currentModels.filter(isStale),
   };
 }
 

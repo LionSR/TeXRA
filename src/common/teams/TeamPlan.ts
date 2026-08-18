@@ -1,10 +1,3 @@
-import type {
-  AgentDelegationScope,
-  AgentModePreset,
-  AgentSource,
-  ByCategory,
-  TeamOptionData,
-} from '@shared/schemas';
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS,
@@ -14,6 +7,11 @@ import {
   byCategory,
   parseAgentModePresets,
   STARTER_AGENT_MODE_PRESET,
+  type AgentDelegationScope,
+  type AgentModePreset,
+  type AgentSource,
+  type ByCategory,
+  type TeamOptionData,
 } from '@shared/schemas';
 import {
   BUILTIN_TEAM_ROOT_AGENT_NAMES,

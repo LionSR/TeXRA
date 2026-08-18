@@ -6,12 +6,13 @@ import {
   loadGitHubTokenStatus,
   removeGitHubToken,
   saveGitHubToken,
+  type GitHubTokenStatus,
 } from '@cli/runtime/githubToken';
 import {
   loadProviderApiKeyStatuses,
   saveProviderApiKey,
 } from '@cli/runtime/providerApiKey';
-import type { ApiProvider } from '@model/apiProviders';
+import type { ApiKeyStatus, ApiProvider } from '@model/apiProviders';
 import { CLI_STATE_SETTINGS } from '@shared/schemas';
 import {
   readSetting,
@@ -67,15 +68,81 @@ const MODEL_ROUTING_SETTING_KEYS: ReadonlySet<string> = new Set([
   GlobalStateKey.GLM_CODING_PLAN,
 ]);
 
-const INITIAL_API_KEY_STATUS_VIEW: ProviderApiKeyStatusView = Object.freeze({
+type StatusViewBase = { readonly loading: boolean; readonly error: boolean };
+
+const INITIAL_STATUS_VIEW: StatusViewBase = Object.freeze({
   loading: true,
   error: false,
 } as const);
 
-const INITIAL_GITHUB_TOKEN_STATUS_VIEW: GitHubTokenStatusView = Object.freeze({
-  loading: true,
-  error: false,
-} as const);
+function useAsyncStatusView<Status, View extends StatusViewBase>(options: {
+  readonly initial: View;
+  readonly load: () => Promise<Status>;
+  readonly buildView: (status: Status) => View;
+  readonly onErrorRef: {
+    readonly current: ((error: unknown) => void) | undefined;
+  };
+}): {
+  readonly view: View;
+  readonly refresh: () => Promise<void>;
+  readonly mark: (updater: (current: View) => Partial<View>) => void;
+} {
+  const [view, setView] = useState<View>(options.initial);
+  const mounted = useRef(false);
+  const requestSequence = useRef(0);
+
+  const mark = useCallback((updater: (current: View) => Partial<View>) => {
+    if (!mounted.current) return;
+    setView(
+      (current) =>
+        ({
+          ...current,
+          ...updater(current),
+          loading: current.loading,
+          error: false,
+        }) as View,
+    );
+  }, []);
+
+  const refresh = useCallback(async () => {
+    const request = ++requestSequence.current;
+    if (mounted.current) {
+      setView(
+        (current) => ({ ...current, loading: true, error: false }) as View,
+      );
+    }
+    try {
+      const status = await options.load();
+      if (!mounted.current || request !== requestSequence.current) return;
+      setView(options.buildView(status));
+    } catch (error: unknown) {
+      if (!mounted.current || request !== requestSequence.current) return;
+      setView(
+        (current) => ({ ...current, loading: false, error: true }) as View,
+      );
+      options.onErrorRef.current?.(error);
+    }
+  }, [options.load, options.buildView, options.onErrorRef]);
+
+  useEffect(() => {
+    mounted.current = true;
+    void refresh();
+    return () => {
+      mounted.current = false;
+      requestSequence.current += 1;
+    };
+  }, [refresh]);
+
+  return { view, refresh, mark };
+}
+
+const buildApiKeyStatusView = (
+  statuses: Record<ApiProvider, ApiKeyStatus>,
+): ProviderApiKeyStatusView => ({ statuses, loading: false, error: false });
+
+const buildGitHubTokenStatusView = (
+  status: GitHubTokenStatus,
+): GitHubTokenStatusView => ({ status, loading: false, error: false });
 
 /**
  * Construct the canonical CLI configuration interface. Both the standalone
@@ -87,9 +154,10 @@ export function createCliConfigFormProps(
 ): ConfigFormProps {
   const { stores } = props;
   const apiKeyStatusView =
-    props.apiKeyStatusView ?? INITIAL_API_KEY_STATUS_VIEW;
+    props.apiKeyStatusView ?? (INITIAL_STATUS_VIEW as ProviderApiKeyStatusView);
   const githubTokenStatusView =
-    props.githubTokenStatusView ?? INITIAL_GITHUB_TOKEN_STATUS_VIEW;
+    props.githubTokenStatusView ??
+    (INITIAL_STATUS_VIEW as GitHubTokenStatusView);
   return {
     availableRows: props.availableRows,
     entries: CLI_STATE_SETTINGS,
@@ -186,96 +254,43 @@ export function createCliConfigFormProps(
 /** Canonical CLI configuration form, shared by `texra config` and `/config`. */
 export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const [stores] = useState(() => props.stores ?? cliSettingsStores());
-  const [apiKeyStatusView, setApiKeyStatusView] =
-    useState<ProviderApiKeyStatusView>(INITIAL_API_KEY_STATUS_VIEW);
-  const [githubTokenStatusView, setGitHubTokenStatusView] =
-    useState<GitHubTokenStatusView>(INITIAL_GITHUB_TOKEN_STATUS_VIEW);
-  const mounted = useRef(false);
-  const requestSequence = useRef(0);
-  const githubTokenRequestSequence = useRef(0);
   const onError = useRef(props.onError);
   onError.current = props.onError;
 
-  const markProviderApiKeySet = useCallback((provider: ApiProvider) => {
-    if (!mounted.current) return;
-    setApiKeyStatusView((current) => ({
-      statuses: { ...current.statuses, [provider]: 'set' },
-      loading: current.loading,
-      error: false,
-    }));
-  }, []);
+  const {
+    view: apiKeyStatusView,
+    refresh: refreshApiKeyStatuses,
+    mark: markApiKey,
+  } = useAsyncStatusView({
+    initial: INITIAL_STATUS_VIEW as ProviderApiKeyStatusView,
+    load: loadProviderApiKeyStatuses,
+    buildView: buildApiKeyStatusView,
+    onErrorRef: onError,
+  });
+
+  const {
+    view: githubTokenStatusView,
+    refresh: refreshGitHubTokenStatus,
+    mark: markGitHubToken,
+  } = useAsyncStatusView({
+    initial: INITIAL_STATUS_VIEW as GitHubTokenStatusView,
+    load: loadGitHubTokenStatus,
+    buildView: buildGitHubTokenStatusView,
+    onErrorRef: onError,
+  });
+
+  const markProviderApiKeySet = useCallback(
+    (provider: ApiProvider) => {
+      markApiKey((current) => ({
+        statuses: { ...current.statuses, [provider]: 'set' },
+      }));
+    },
+    [markApiKey],
+  );
 
   const markGitHubTokenSet = useCallback(() => {
-    if (!mounted.current) return;
-    setGitHubTokenStatusView((current) => ({
-      status: 'secret',
-      loading: current.loading,
-      error: false,
-    }));
-  }, []);
-
-  const refreshApiKeyStatuses = useCallback(async () => {
-    const request = ++requestSequence.current;
-    if (mounted.current) {
-      setApiKeyStatusView((current) => ({
-        ...current,
-        loading: true,
-        error: false,
-      }));
-    }
-    try {
-      const statuses = await loadProviderApiKeyStatuses();
-      if (!mounted.current || request !== requestSequence.current) return;
-      setApiKeyStatusView({ statuses, loading: false, error: false });
-    } catch (error: unknown) {
-      if (!mounted.current || request !== requestSequence.current) return;
-      setApiKeyStatusView((current) => ({
-        ...current,
-        loading: false,
-        error: true,
-      }));
-      onError.current?.(error);
-    }
-  }, []);
-
-  const refreshGitHubTokenStatus = useCallback(async () => {
-    const request = ++githubTokenRequestSequence.current;
-    if (mounted.current) {
-      setGitHubTokenStatusView((current) => ({
-        ...current,
-        loading: true,
-        error: false,
-      }));
-    }
-    try {
-      const status = await loadGitHubTokenStatus();
-      if (!mounted.current || request !== githubTokenRequestSequence.current) {
-        return;
-      }
-      setGitHubTokenStatusView({ status, loading: false, error: false });
-    } catch (error: unknown) {
-      if (!mounted.current || request !== githubTokenRequestSequence.current) {
-        return;
-      }
-      setGitHubTokenStatusView((current) => ({
-        ...current,
-        loading: false,
-        error: true,
-      }));
-      onError.current?.(error);
-    }
-  }, []);
-
-  useEffect(() => {
-    mounted.current = true;
-    void refreshApiKeyStatuses();
-    void refreshGitHubTokenStatus();
-    return () => {
-      mounted.current = false;
-      requestSequence.current += 1;
-      githubTokenRequestSequence.current += 1;
-    };
-  }, [refreshApiKeyStatuses, refreshGitHubTokenStatus]);
+    markGitHubToken(() => ({ status: 'secret' }));
+  }, [markGitHubToken]);
 
   return (
     <ConfigForm

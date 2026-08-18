@@ -5,6 +5,11 @@
 import { Box, Text } from 'ink';
 
 import { buildHunks } from '@cli/runtime/diffHunks';
+import {
+  clipToWidth,
+  fillRows,
+  textDisplayWidth,
+} from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   hiddenRowsText,
@@ -12,11 +17,6 @@ import {
   previousRowsText,
 } from '@cli/tui/overflowText';
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import {
-  clipToWidth,
-  fillRows,
-  textDisplayWidth,
-} from '@cli/runtime/terminalText';
 import { clamp, isObject } from '@utils/core';
 
 import {

@@ -14,8 +14,6 @@ import {
   type LatexConfigField,
 } from '@shared/constants/latexConfig';
 
-// Local imports - shared schemas
-
 interface CoreConfigReader {
   get(key: string): unknown;
   isExplicitlySet(key: string): boolean;

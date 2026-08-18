@@ -254,7 +254,6 @@ export class ExecutionSubscriptionBinder {
     this.releaseHook?.();
     this.releaseHook = undefined;
     this.disposeMatching(() => true, 'binder disposal');
-    this.subscriptions.clear();
   }
 
   private ensureReleaseHook(): void {

@@ -457,15 +457,13 @@ function formatCliModelRecovery(
       return 'Choose a supported provider route or another model.';
     case 'subscription-access':
     case 'copilot-access':
+    case undefined:
       return undefined;
     case 'copilot-consent-required':
-      return 'Use this model in VS Code through GitHub Copilot, or choose another model.';
     case 'copilot-unavailable':
       return 'Use this model in VS Code through GitHub Copilot, or choose another model.';
     case 'unknown-model':
       return 'Choose a model that is available in the current registry.';
-    case undefined:
-      return undefined;
     default:
       return assertNever(availability, 'Unhandled model availability');
   }

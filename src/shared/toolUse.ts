@@ -182,8 +182,8 @@ function malformedPrimitiveReason(data: unknown): string {
   if (typeof data === 'string') {
     return `received string ${JSON.stringify(truncateSummary(data, 40))}`;
   }
-  if (typeof data === 'number') return `received number ${String(data)}`;
-  if (typeof data === 'boolean') return `received boolean ${String(data)}`;
+  if (typeof data === 'number') return `received number ${data}`;
+  if (typeof data === 'boolean') return `received boolean ${data}`;
   if (Array.isArray(data)) return `received array of length ${data.length}`;
   return `received ${typeof data}`;
 }

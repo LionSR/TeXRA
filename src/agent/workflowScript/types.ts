@@ -1,14 +1,14 @@
 import { z } from 'zod';
 
-import type {
-  ExecutionId,
-  StreamTabId,
-  WorkflowCallIdentity,
-  WorkflowControlAction,
-  WorkflowExecutionSnapshot,
-  WorkflowScriptFiles,
+import {
+  WorkflowCallIdentitySchema,
+  type ExecutionId,
+  type StreamTabId,
+  type WorkflowCallIdentity,
+  type WorkflowControlAction,
+  type WorkflowExecutionSnapshot,
+  type WorkflowScriptFiles,
 } from '@shared/schemas';
-import { WorkflowCallIdentitySchema } from '@shared/schemas';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -275,8 +275,8 @@ export interface WorkflowAgentInvocation {
  */
 export interface WorkflowAttemptFacts {
   /**
-   * The child model the runner resolved, so the engine can attach it to the
-   * matching `agent:end` event for progress UIs.
+   * The child model the runner resolved, stamped onto the call and its
+   * latest attempt in the execution snapshot for progress UIs.
    */
   readonly model?: string;
   /** The resolved agent the host selected. */

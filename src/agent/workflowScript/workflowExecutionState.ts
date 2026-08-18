@@ -468,12 +468,17 @@ function stageIdFor(index: number): string {
 function totalAttemptCost(
   attempts: WorkflowExecutionCall['attempts'],
 ): number | undefined {
-  const costs = attempts.flatMap((attempt) =>
-    attempt.costUsd === undefined ? [] : [attempt.costUsd],
+  return attempts.some((attempt) => attempt.costUsd !== undefined)
+    ? attempts.reduce((total, attempt) => total + (attempt.costUsd ?? 0), 0)
+    : undefined;
+}
+
+/** Whether a hydrated call's prior result can be replayed as-is. */
+function isReusableStatus(status: WorkflowExecutionCall['status']): boolean {
+  return (
+    status === WORKFLOW_CALL_STATUS.COMPLETED ||
+    status === WORKFLOW_CALL_STATUS.CACHED
   );
-  return costs.length === 0
-    ? undefined
-    : costs.reduce((total, costUsd) => total + costUsd, 0);
 }
 
 function closeOpenAttempts(
@@ -484,6 +489,32 @@ function closeOpenAttempts(
     attempt.completedAt === undefined
       ? { ...attempt, completedAt: recoveryAt }
       : attempt,
+  );
+}
+
+/**
+ * Live-attempt fields a recovered non-reusable call must forget, keyed to its
+ * original creation time. A reusable call spreads nothing and keeps everything
+ * it settled with.
+ */
+function resetRecoveredLiveFields(
+  prior: WorkflowExecutionCall,
+  reusable: boolean,
+  recoveryAt: string,
+  blockedReason: string | undefined,
+) {
+  return (
+    !reusable && {
+      childExecutionId: undefined,
+      childStreamId: undefined,
+      model: undefined,
+      blockedReason,
+      error: undefined,
+      timestamps: {
+        createdAt: prior.timestamps.createdAt,
+        updatedAt: recoveryAt,
+      },
+    }
   );
 }
 
@@ -500,9 +531,7 @@ function hydrate(
   snapshot.calls = snapshot.calls.map((call) => {
     const prior = priorById.get(call.id);
     if (!prior) return call;
-    const reusable =
-      prior.status === WORKFLOW_CALL_STATUS.COMPLETED ||
-      prior.status === WORKFLOW_CALL_STATUS.CACHED;
+    const reusable = isReusableStatus(prior.status);
     const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
     return {
       ...prior,
@@ -517,24 +546,17 @@ function hydrate(
       attempts,
       costUsd: totalAttemptCost(attempts),
       status: reusable ? prior.status : call.status,
-      ...(!reusable && {
-        childExecutionId: undefined,
-        childStreamId: undefined,
-        model: undefined,
-        blockedReason: call.blockedReason,
-        error: undefined,
-        timestamps: {
-          createdAt: prior.timestamps.createdAt,
-          updatedAt: recoveryAt,
-        },
-      }),
+      ...resetRecoveredLiveFields(
+        prior,
+        reusable,
+        recoveryAt,
+        call.blockedReason,
+      ),
     };
   });
   for (const prior of persisted.calls) {
     if (!freshIds.has(prior.id)) {
-      const reusable =
-        prior.status === WORKFLOW_CALL_STATUS.COMPLETED ||
-        prior.status === WORKFLOW_CALL_STATUS.CACHED;
+      const reusable = isReusableStatus(prior.status);
       const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
       snapshot.calls.push({
         ...prior,
@@ -542,17 +564,7 @@ function hydrate(
         attempts,
         costUsd: totalAttemptCost(attempts),
         status: reusable ? prior.status : WORKFLOW_CALL_STATUS.PLANNED,
-        ...(!reusable && {
-          childExecutionId: undefined,
-          childStreamId: undefined,
-          model: undefined,
-          blockedReason: undefined,
-          error: undefined,
-          timestamps: {
-            createdAt: prior.timestamps.createdAt,
-            updatedAt: recoveryAt,
-          },
-        }),
+        ...resetRecoveredLiveFields(prior, reusable, recoveryAt, undefined),
       });
     }
   }

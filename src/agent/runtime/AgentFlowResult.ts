@@ -64,12 +64,11 @@ export type AgentFlowResult = z.infer<typeof AgentFlowResultSchema>;
 // that recorded an error ends the run instead of parking it.
 const WaitingToolUseFlowResultSchema = AgentFlowMetaSchema.omit({
   error: true,
-})
-  .extend({
-    category: z.literal('toolUse'),
-    outcome: z.literal(STREAM_PHASE.WAITING),
-  })
-  .extend(ToolUseFlowResultSchema.pick({ response: true, files: true }).shape);
+}).extend({
+  category: z.literal('toolUse'),
+  outcome: z.literal(STREAM_PHASE.WAITING),
+  ...ToolUseFlowResultSchema.pick({ response: true, files: true }).shape,
+});
 
 export type WaitingToolUseFlowResult = z.infer<
   typeof WaitingToolUseFlowResultSchema

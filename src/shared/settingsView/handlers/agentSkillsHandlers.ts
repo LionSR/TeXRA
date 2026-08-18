@@ -1,10 +1,10 @@
 import type { ConfigProvider } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { UpdateAgentSkillsSettingsMessage } from '@shared/schemas';
 import {
   AGENT_SKILLS_CONFIG_KEY,
   AGENT_SKILLS_ENABLED_DEFAULT,
   AgentSkillsEnabledSchema,
+  type UpdateAgentSkillsSettingsMessage,
 } from '@shared/schemas';
 
 export function readAgentSkillsEnabled(config: ConfigProvider): boolean {

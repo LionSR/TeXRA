@@ -20,10 +20,8 @@ export function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     killAllSessionBackgroundProcesses(),
   );
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    CodexThreads.interruptAll(),
-  );
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    ClaudeAgentSessions.interruptAll(),
-  );
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => {
+    CodexThreads.interruptAll();
+    ClaudeAgentSessions.interruptAll();
+  });
 }

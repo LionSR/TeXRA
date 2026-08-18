@@ -210,7 +210,9 @@ export async function buildUserVars(
       getConfig<unknown>(AGENT_SKILLS_CONFIG_KEY, AGENT_SKILLS_ENABLED_DEFAULT),
     )
       ? loadRuntimeSkillCatalog()
-      : Promise.resolve({ catalog: '', skills: [], issues: [] }),
+      : // A fresh object per call, not a shared constant: `skills` is handed
+        // to the snapshot consumer, and a shared array would accumulate.
+        Promise.resolve({ catalog: '', skills: [], issues: [] }),
   ]);
 
   for (const issue of runtimeSkills.issues) {
@@ -467,8 +469,7 @@ async function logFileCategoriesWithExistence(
         return { category, entries: [] };
       }
 
-      // Explicit type annotation prevents type widening if WorkspaceFS.exists changes
-      const entries: Array<{ path: string; ok: boolean }> = await Promise.all(
+      const entries = await Promise.all(
         files.map(async (filePath) => {
           try {
             return { path: filePath, ok: await WorkspaceFS.exists(filePath) };
@@ -620,29 +621,32 @@ type ToolFlagVars = Pick<
   | 'ROUNDS'
 >;
 
+const TOOL_GUIDANCE = {
+  codex:
+    'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like delegate_agent. ' +
+    'When multiple codex agents must edit the same files, or to isolate experimental changes, use a git worktree (`git worktree add ../worktree-name branch-name`) and pass its path as working_directory.',
+  claude_code:
+    'Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in its own workspace with independent file editing, search, and shell access, async and multi-turn like delegate_agent. ' +
+    'codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
+} as const;
+
 export function getToolFlags(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
 ): ToolFlagVars {
+  const hasTool = (name: string) =>
+    agentSetting.tools.some((tool) => tool.name === name);
+
   const flags: ToolFlagVars = {
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
     PRINT_INPUT_PROMPT: shouldSaveModelIO(),
     AUTO_COMPILE_INPUT_PDF: agentConfig.toolConfig.autoCompileInputPdf,
-    // Kept to ~2 sentences: the codex/claude_code tool descriptions already
-    // document the async execution-ID/thread mechanics; this only adds
-    // when-to-choose guidance.
-    CODEX_GUIDANCE: agentSetting.tools.some((t) => t.name === 'codex')
-      ? 'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like delegate_agent. ' +
-        'When multiple codex agents must edit the same files, or to isolate experimental changes, use a git worktree (`git worktree add ../worktree-name branch-name`) and pass its path as working_directory.'
-      : '',
-    CLAUDE_CODE_GUIDANCE: agentSetting.tools.some(
-      (t) => t.name === 'claude_code',
-    )
-      ? 'Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in its own workspace with independent file editing, search, and shell access, async and multi-turn like delegate_agent. ' +
-        'codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.'
+    CODEX_GUIDANCE: hasTool('codex') ? TOOL_GUIDANCE.codex : '',
+    CLAUDE_CODE_GUIDANCE: hasTool('claude_code')
+      ? TOOL_GUIDANCE.claude_code
       : '',
   };
 

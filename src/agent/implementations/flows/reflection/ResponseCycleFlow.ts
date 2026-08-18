@@ -298,15 +298,23 @@ class ResponseProcessNode<C> extends BaseNode<
         });
       }
 
+      if (!processedResponse) {
+        return {
+          kind: 'success',
+          value: {
+            hasResponse: false,
+            stopReason,
+            useStreaming,
+            normalizedUsage,
+          },
+        };
+      }
+
       const common = {
         stopReason,
         useStreaming,
         normalizedUsage,
       };
-
-      if (!processedResponse) {
-        return { kind: 'success', value: { ...common, hasResponse: false } };
-      }
 
       const bestConnector =
         await this.services.runScope.session.responseTextProcessing.connectResponseText(
@@ -373,9 +381,9 @@ class ResponseProcessNode<C> extends BaseNode<
     const { outputLocation } = shared;
     const connector = result.bestConnector;
 
+    await AbsoluteFS.ensureDir(path.dirname(outputLocation.absolutePath));
     if (!shared.outputExists) {
       logger.debug(`Creating new file: ${outputLocation.absolutePath}`);
-      await AbsoluteFS.ensureDir(path.dirname(outputLocation.absolutePath));
       await AbsoluteFS.write(
         outputLocation.absolutePath,
         result.processedResponse,
@@ -385,7 +393,6 @@ class ResponseProcessNode<C> extends BaseNode<
       logger.debug(
         `Appending to existing file: ${outputLocation.absolutePath}`,
       );
-      await AbsoluteFS.ensureDir(path.dirname(outputLocation.absolutePath));
       await AbsoluteFS.appendFile(
         outputLocation.absolutePath,
         connector + result.processedResponse,
@@ -639,5 +646,5 @@ export function createResponseCycleFlow<C>(): Flow<
 
   continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ResponseCycleShared, ResponseCycleServices<C>>(prepNode);
+  return new Flow(prepNode);
 }

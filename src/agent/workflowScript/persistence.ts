@@ -4,8 +4,11 @@ import { z } from 'zod';
 
 // Local imports - storage
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
-import type { WorkflowScriptFiles } from '@shared/schemas';
-import { JsonValueSchema, WorkflowScriptFilesSchema } from '@shared/schemas';
+import {
+  JsonValueSchema,
+  type WorkflowScriptFiles,
+  WorkflowScriptFilesSchema,
+} from '@shared/schemas';
 import { KeyedMutex } from '@utils/core';
 
 // Local imports - workflow script

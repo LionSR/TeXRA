@@ -2,16 +2,14 @@ import { createLog } from '@logger/logUtils';
 import { API_PROVIDERS } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
-import type {
-  ApiAccessMode,
-  NumberSetting,
-  ProviderKeyStatus,
-  ProviderSetting,
-  SpendingStatus,
-  UpdateProfileMessage,
-} from '@shared/schemas';
 import {
+  type ApiAccessMode,
   DEFAULT_CORE_SETTINGS,
+  type NumberSetting,
+  type ProviderKeyStatus,
+  type ProviderSetting,
+  type SpendingStatus,
+  type UpdateProfileMessage,
   isSpendingQuotaExceeded,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
@@ -147,8 +145,7 @@ export class SettingsProfileController {
 
   getProviderKeyUrl(provider: string): string | undefined {
     const defaultUrl = PROVIDER_URLS[provider];
-    if (!defaultUrl) return undefined;
-    return getProviderKeyUrl(provider, defaultUrl);
+    return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
   }
 
   async setApiAccessMode(mode: ApiAccessMode): Promise<ApiAccessModeUpdate> {

@@ -77,11 +77,10 @@ export async function getSubscriptionSessionStatus(
   // Preserve the post-init contract even for an injected coordinator that
   // does not itself read platform secrets.
   void platform();
-  const log = createLog(channel);
   try {
     return await getCoordinator().getStatus();
   } catch (error) {
-    log.warn(
+    createLog(channel).warn(
       `Failed to read ${displayName} session status: ${toErrorMessage(error)}`,
     );
     return { signedIn: false };

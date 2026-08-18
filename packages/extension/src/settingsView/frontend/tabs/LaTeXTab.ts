@@ -20,8 +20,9 @@ import {
 } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type { LatexConfigValues, LatexSettingsStatus } from '@shared/schemas';
 import {
+  type LatexConfigValues,
+  type LatexSettingsStatus,
   CoreSettingsShape,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas';

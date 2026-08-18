@@ -66,11 +66,7 @@ export function stringifyConversationValue(value: unknown): string {
 // `truncateWithEllipsis`'s Unicode `…` + grapheme-aware cut — this output
 // feeds plain-text conversation views (the ExecutionsTool endpoint, the CLI
 // transcript) that must stay pure ASCII.
-function truncate(
-  str: string,
-  maxLen: number | undefined,
-  options: ConversationFormatOptions,
-): string {
+function truncate(str: string, maxLen: number | undefined): string {
   if (maxLen === undefined || str.length <= maxLen) return str;
   return `${str.slice(0, Math.max(maxLen - 3, 0))}...`;
 }
@@ -108,7 +104,6 @@ function formatToolUseMarker(
   const inputJson = truncate(
     typeof input === 'string' ? input : stringifyConversationValue(input ?? {}),
     options.toolBlockLimit,
-    options,
   );
   return `[tool_use: ${name}(${inputJson})]`;
 }
@@ -128,7 +123,7 @@ function formatToolResultMarker(
   } else {
     inner = stringifyConversationValue(content);
   }
-  return `[tool_result: ${truncate(inner, options.toolBlockLimit, options)}]`;
+  return `[tool_result: ${truncate(inner, options.toolBlockLimit)}]`;
 }
 
 /**
@@ -152,7 +147,7 @@ function formatWebSearchResultMarker(
       return url ? `${title} (${url})` : title;
     })
     .filter(Boolean);
-  return `[tool_result: ${truncate(entries.join(', '), options.toolBlockLimit, options)}]`;
+  return `[tool_result: ${truncate(entries.join(', '), options.toolBlockLimit)}]`;
 }
 
 /**
@@ -178,7 +173,7 @@ function formatWebFetchResultMarker(
     const { title = '', url = '' } = result;
     const label =
       title && url ? `${title} (${url})` : title || url || 'web_fetch_result';
-    return `[tool_result: ${truncate(label, options.toolBlockLimit, options)}]`;
+    return `[tool_result: ${truncate(label, options.toolBlockLimit)}]`;
   }
   return formatToolResultMarker(block.content, options);
 }
@@ -195,18 +190,14 @@ function formatConversationBlock(
   options: ConversationFormatOptions = {},
 ): string {
   if (typeof block === 'string') {
-    return truncate(block, options.textLimit, options);
+    return truncate(block, options.textLimit);
   }
   if (!isObject(block)) {
-    return truncate(
-      stringifyConversationValue(block),
-      options.toolBlockLimit,
-      options,
-    );
+    return truncate(stringifyConversationValue(block), options.toolBlockLimit);
   }
   switch (block.kind) {
     case 'text':
-      return truncate(asText(block.text), options.textLimit, options);
+      return truncate(asText(block.text), options.textLimit);
     case 'toolCall':
       return formatToolUseMarker(
         asText(block.name) || 'unknown',
@@ -219,7 +210,7 @@ function formatConversationBlock(
   // Google's `parts` entries have no `type` discriminator at all — a plain
   // `text` field is the only signal, so check it before the `type` switch.
   if (typeof block.text === 'string') {
-    return truncate(block.text, options.textLimit, options);
+    return truncate(block.text, options.textLimit);
   }
 
   if (
@@ -262,7 +253,7 @@ function formatConversationBlock(
   // classified (see `@agent/types/ConversationBlockTypes`) and fall through
   // to the JSON dump below.
   if (block.type === 'text') {
-    return truncate(asText(block.text), options.textLimit, options);
+    return truncate(asText(block.text), options.textLimit);
   }
 
   // Non-text tag classification is shared with `assistantBlockToNode` in
@@ -283,12 +274,11 @@ function formatConversationBlock(
     case 'thinking':
       return options.hideProviderReasoning
         ? ''
-        : truncate(
-            stringifyConversationValue(block),
-            options.toolBlockLimit,
-            options,
-          );
+        : truncate(stringifyConversationValue(block), options.toolBlockLimit);
+    // `server-tool-use` is Anthropic's server-side variant (the provider
+    // executes it, not a local tool handler) but renders identically here.
     case 'tool-use':
+    case 'server-tool-use':
       return formatToolUseMarker(
         asText(block.name) || 'unknown',
         block.input,
@@ -296,14 +286,6 @@ function formatConversationBlock(
       );
     case 'tool-result':
       return formatToolResultMarker(block.content, options);
-    // Anthropic server-side tool blocks (the provider executes these, not a
-    // local tool handler).
-    case 'server-tool-use':
-      return formatToolUseMarker(
-        asText(block.name) || 'unknown',
-        block.input,
-        options,
-      );
     case 'web-search-tool-result':
       return formatWebSearchResultMarker(block.content, options);
     case 'web-fetch-tool-result':
@@ -315,7 +297,6 @@ function formatConversationBlock(
       return truncate(
         stringifyConversationValue(block),
         options.toolBlockLimit,
-        options,
       );
     default:
       return assertNever(category, 'Unhandled provider message block category');
@@ -334,7 +315,7 @@ export function formatConversationContent(
 ): string {
   if (content == null) return '';
   if (typeof content === 'string') {
-    return truncate(content, options.textLimit, options);
+    return truncate(content, options.textLimit);
   }
   if (Array.isArray(content)) {
     return content
@@ -342,11 +323,7 @@ export function formatConversationContent(
       .join('\n')
       .trim();
   }
-  return truncate(
-    stringifyConversationValue(content),
-    options.textLimit,
-    options,
-  );
+  return truncate(stringifyConversationValue(content), options.textLimit);
 }
 
 /**
@@ -400,7 +377,6 @@ function formatTopLevelToolCall(
     return `[tool_use: ${truncate(
       stringifyConversationValue(toolCall),
       options.toolBlockLimit,
-      options,
     )}]`;
   }
   const nestedFunction = isObject(toolCall.function)

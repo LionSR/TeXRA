@@ -351,6 +351,8 @@ export class AgentExecutionHandle {
     if (this.suspension?.state !== 'parked') return undefined;
     if (!this.claimTerminalFinalize()) return undefined;
     const { teardown } = this.suspension;
+    // Call `teardown()` synchronously, not via a microtask: the doc above
+    // contracts that the whole transition happens in one step.
     const completion = (async (): Promise<void> => {
       await teardown();
     })();

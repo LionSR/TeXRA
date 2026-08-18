@@ -118,6 +118,7 @@ class AgentRunStream implements AgentRun {
   private iteratorStarted = false;
   private failure: { readonly error: unknown } | undefined;
   private readonly launchAbortController = new AbortController();
+  readonly launchSignal = this.launchAbortController.signal;
   readonly result: Promise<AgentFlowResult>;
 
   constructor(start: (stream: AgentRunStream) => Promise<AgentFlowResult>) {
@@ -130,10 +131,6 @@ class AgentRunStream implements AgentRun {
 
   attachHandle(handle: RuntimeAgentRunHandle): void {
     this.liveHandle = handle;
-  }
-
-  get launchSignal(): AbortSignal {
-    return this.launchAbortController.signal;
   }
 
   attachEvents(session: RuntimeSessionHandle): void {
@@ -232,7 +229,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
   return new AgentRunStream(async (stream) => {
     const approvalToolNames =
       input.tools
-        ?.filter((tool) => tool.requiresApproval === true)
+        ?.filter((tool) => tool.requiresApproval)
         .map((tool) => tool.definition.name) ?? [];
     if (approvalToolNames.length > 0) {
       throw new Error(

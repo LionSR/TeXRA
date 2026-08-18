@@ -50,12 +50,8 @@ export type InstanceLiveness = 'alive' | 'dead' | 'unprovable';
 
 let presenceRecord: Promise<InstanceOwnerRecord> | undefined;
 
-function isWindows(): boolean {
-  return process.platform === 'win32';
-}
-
 function socketPathFor(instanceId: string): string {
-  if (isWindows()) return `\\\\.\\pipe\\texra-${instanceId}`;
+  if (process.platform === 'win32') return `\\\\.\\pipe\\texra-${instanceId}`;
   const preferred = path.join(
     platform().storage.getGlobalStoragePath(),
     'instances',
@@ -76,7 +72,7 @@ function socketPathFor(instanceId: string): string {
 async function startPresenceServer(): Promise<InstanceOwnerRecord> {
   const instanceId = randomBytes(8).toString('hex');
   const socketPath = socketPathFor(instanceId);
-  if (!isWindows()) {
+  if (process.platform !== 'win32') {
     await mkdir(path.dirname(socketPath), { recursive: true, mode: 0o700 });
   }
   const server = net.createServer((socket) => {
@@ -94,7 +90,7 @@ async function startPresenceServer(): Promise<InstanceOwnerRecord> {
   // server stays rooted by the event loop's handle list, so nothing here needs
   // to hold a reference to it.
   server.unref();
-  if (!isWindows()) {
+  if (process.platform !== 'win32') {
     process.once('exit', () => {
       try {
         unlinkSync(socketPath);
@@ -195,7 +191,8 @@ function classifyPresence(
       }
       // A different TeXRA instance answering on this path proves the recorded
       // owner is gone: the path was released and reused.
-      return outcome.banner.startsWith(BANNER_PREFIX) ? 'dead' : 'unprovable';
+      if (outcome.banner.startsWith(BANNER_PREFIX)) return 'dead';
+      return 'unprovable';
     case 'error': {
       const { error } = outcome;
       if (!(error instanceof Error) || !('code' in error)) return 'unprovable';
@@ -297,13 +294,13 @@ async function runExitWatch(
 ): Promise<void> {
   let unprovableStreak = 0;
   while (unprovableStreak < 2) {
-    const connection = connectForBanner(owner);
-    watch.socket = connection.socket;
+    const { socket, outcome } = connectForBanner(owner);
+    watch.socket = socket;
     // Watch connections are held open; they must not keep the process alive.
-    connection.socket.unref();
-    const liveness = classifyPresence(await connection.outcome, owner);
+    socket.unref();
+    const liveness = classifyPresence(await outcome, owner);
     if (exitWatches.get(owner.socketPath) !== watch) {
-      connection.socket.destroy();
+      socket.destroy();
       return;
     }
     if (liveness === 'dead') {
@@ -313,7 +310,7 @@ async function runExitWatch(
     if (liveness === 'alive') {
       unprovableStreak = 0;
       await new Promise<void>((resolve) =>
-        connection.socket.once('close', () => resolve()),
+        socket.once('close', () => resolve()),
       );
       if (exitWatches.get(owner.socketPath) !== watch) return;
       // The held connection closed: usually the owner's death, occasionally a
@@ -321,7 +318,7 @@ async function runExitWatch(
       continue;
     }
     unprovableStreak += 1;
-    connection.socket.destroy();
+    socket.destroy();
   }
   exitWatches.delete(owner.socketPath);
   log.warn(

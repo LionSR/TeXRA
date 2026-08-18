@@ -1,8 +1,6 @@
 // Local imports - shared core schema
 import { CLI_CORE_SETTING_PATHS, CLI_STATE_SETTINGS } from '@shared/schemas';
 
-// Local imports - state-backed settings catalog (canonical key list)
-
 // Local imports - CLI extension schema
 import { CLI_SETTING_PATHS } from './cliSettings';
 

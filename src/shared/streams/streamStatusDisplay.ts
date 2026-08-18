@@ -103,7 +103,7 @@ export function formatStreamStatusLabel(
   status: StreamLifecycleStatus | undefined,
   options: FormatStreamStatusLabelOptions = {},
 ): string | undefined {
-  if (status == null) return options.missingLabel;
+  if (status === undefined) return options.missingLabel;
   const style = options.style ?? 'progressHeader';
   const key = streamStatusDisplayKey(status, options.substate);
   return STREAM_STATUS_LABELS[style][key];

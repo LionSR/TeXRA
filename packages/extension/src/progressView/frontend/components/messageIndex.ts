@@ -78,7 +78,7 @@ function insertByOrder<T>(
   entry: T,
   compare: (a: T, b: T) => number,
 ): number {
-  const last = target.length > 0 ? target.at(-1)! : undefined;
+  const last = target.at(-1);
   if (last !== undefined && compare(last, entry) <= 0) {
     target.push(entry);
     return target.length - 1;
@@ -136,6 +136,8 @@ export class MessageIndex {
    */
   apply(update: MessageIndexUpdate): boolean {
     const {
+      terminal,
+      wasTerminal,
       groups,
       previousGroups,
       groupsChanged,
@@ -147,10 +149,10 @@ export class MessageIndex {
 
     // Terminal mode renders raw text, so the derived structures are neither
     // read nor maintained while it is on.
-    if (update.terminal) return false;
+    if (terminal) return false;
 
     // Terminal mode just switched off: the caches went stale while it was on.
-    if (update.wasTerminal) {
+    if (wasTerminal) {
       this.rebuildTree(groups, messages);
       this.rebuildTimeline();
       return true;
@@ -158,9 +160,9 @@ export class MessageIndex {
 
     const previousCount = previousMessages?.length ?? 0;
     const patchedGroupMetadata =
-      groupsChanged && previousGroups
-        ? this.patchGroupMetadataIfShapeStable(previousGroups, groups)
-        : false;
+      groupsChanged &&
+      previousGroups !== undefined &&
+      this.patchGroupMetadataIfShapeStable(previousGroups, groups);
     let renderWindowsStale = false;
 
     if (groupsChanged && !patchedGroupMetadata) {
@@ -470,9 +472,9 @@ export class MessageIndex {
         ? this.groupNodeIndex.get(msg.groupId)
         : undefined;
       if (node) {
-        const bucket = messagesByGroup.get(node.group.id);
-        if (bucket) bucket.push(msg);
-        else messagesByGroup.set(node.group.id, [msg]);
+        const bucket = messagesByGroup.get(node.group.id) ?? [];
+        bucket.push(msg);
+        messagesByGroup.set(node.group.id, bucket);
       } else {
         ungrouped.push(msg);
       }

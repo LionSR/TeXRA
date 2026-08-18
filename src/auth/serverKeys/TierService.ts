@@ -43,12 +43,6 @@ interface TierServiceLogger {
   info(message: string, options?: { data?: unknown }): void;
 }
 
-const NOOP_TIER_SERVICE_LOGGER: TierServiceLogger = {
-  warn: () => undefined,
-  error: () => undefined,
-  info: () => undefined,
-};
-
 /** Cache slot key — auth and anonymous responses never share a slot. */
 type TierCacheKey = 'auth' | 'anon';
 
@@ -109,7 +103,7 @@ export class TierService {
    */
   constructor(
     private readonly baseUrl: string,
-    private readonly logger: TierServiceLogger = NOOP_TIER_SERVICE_LOGGER,
+    private readonly logger?: TierServiceLogger,
   ) {
     this.configCache = new LRUCache<
       TierCacheKey,
@@ -134,7 +128,7 @@ export class TierService {
           this.spendingStatus = result.spendingStatus;
           this.spendingStatusError = result.spendingStatusError;
           if (result.spendingStatusError) {
-            this.logger.warn('Relay spend check failed', {
+            this.logger?.warn('Relay spend check failed', {
               data: {
                 failureReason:
                   result.spendingStatusError.failureReason ?? 'unknown reason',
@@ -181,7 +175,7 @@ export class TierService {
     if (raw == null) return null;
     const parsed = schema.safeParse(raw);
     if (parsed.success) return parsed.data;
-    this.logger.error(
+    this.logger?.error(
       `Invalid ${label} payload: ${z.prettifyError(parsed.error)}`,
     );
     return null;
@@ -220,7 +214,7 @@ export class TierService {
       // A sign-out (clearCache) aborts the request; that is expected, so stay
       // quiet. Genuine network failures keep the previous error log.
       if (!signal.aborted) {
-        this.logger.error(
+        this.logger?.error(
           `Error fetching tier config: ${toErrorMessage(error)}`,
         );
       }
@@ -229,9 +223,9 @@ export class TierService {
 
     if (!response.ok) {
       if (response.status === 404) {
-        this.logger.info('Tier-config endpoint not available, using defaults');
+        this.logger?.info('Tier-config endpoint not available, using defaults');
       } else {
-        this.logger.error(`Failed to fetch tier config: ${response.status}`);
+        this.logger?.error(`Failed to fetch tier config: ${response.status}`);
       }
       throw new Error(`tier-config request failed: HTTP ${response.status}`);
     }
@@ -240,7 +234,7 @@ export class TierService {
     try {
       data = await response.json();
     } catch (error) {
-      this.logger.error(
+      this.logger?.error(
         `Failed to parse tier config JSON: ${toErrorMessage(error)}`,
       );
       throw error;
@@ -269,7 +263,7 @@ export class TierService {
 
     const parsed = TierModelConfigSchema.safeParse(data);
     if (!parsed.success) {
-      this.logger.error(
+      this.logger?.error(
         `Invalid tier config response: ${z.prettifyError(parsed.error)}`,
       );
       return { config: null, userStatus, spendingStatus, spendingStatusError };

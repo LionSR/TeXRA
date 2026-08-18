@@ -11,8 +11,7 @@ import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
 import { createLog } from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
-import type { ApiAccessMode } from '@shared/schemas';
-import { AgentCategory, byCategory } from '@shared/schemas';
+import { AgentCategory, byCategory, type ApiAccessMode } from '@shared/schemas';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -54,7 +53,6 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '../runtime/modelAccess';
-
 import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import { loadCliApiStatus } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';

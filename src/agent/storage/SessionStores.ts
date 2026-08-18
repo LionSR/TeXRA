@@ -131,16 +131,11 @@ export class SessionStores {
     stream: StreamTabId,
     expectedIncarnation: number,
   ): () => void {
-    let byIncarnation = this.streamDeletionClaims.get(stream);
-    if (!byIncarnation) {
-      byIncarnation = new Map();
-      this.streamDeletionClaims.set(stream, byIncarnation);
-    }
-    let claims = byIncarnation.get(expectedIncarnation);
-    if (!claims) {
-      claims = new Set();
-      byIncarnation.set(expectedIncarnation, claims);
-    }
+    const byIncarnation =
+      this.streamDeletionClaims.get(stream) ?? new Map<number, Set<symbol>>();
+    this.streamDeletionClaims.set(stream, byIncarnation);
+    const claims = byIncarnation.get(expectedIncarnation) ?? new Set<symbol>();
+    byIncarnation.set(expectedIncarnation, claims);
     const claim = Symbol(stream);
     claims.add(claim);
     let released = false;
@@ -163,7 +158,7 @@ export class SessionStores {
    * when its deletion settles or fails.
    */
   hasStreamDeletionClaim(stream: StreamTabId): boolean {
-    return (this.streamDeletionClaims.get(stream)?.size ?? 0) !== 0;
+    return !!this.streamDeletionClaims.get(stream)?.size;
   }
 
   deleteStream(
@@ -173,10 +168,9 @@ export class SessionStores {
       readonly expectedIncarnation?: number;
     },
   ): Promise<DeleteStreamResult> {
-    const shouldDelete = options?.shouldDelete;
     return this.trackStreamDeletion(stream, options?.expectedIncarnation, () =>
       this.enqueueDeletion(() =>
-        this.deleteStreamAndNotify(stream, shouldDelete),
+        this.deleteStreamAndNotify(stream, options?.shouldDelete),
       ),
     );
   }
@@ -202,7 +196,6 @@ export class SessionStores {
       readonly expectedIncarnation?: number;
     },
   ): Promise<DeleteStreamResult> {
-    const shouldDelete = options?.shouldDelete;
     return this.trackStreamDeletion(
       stream,
       options?.expectedIncarnation,
@@ -222,7 +215,7 @@ export class SessionStores {
           return 'failed';
         }
         return this.enqueueDeletion(() =>
-          this.deleteStreamAndNotify(stream, shouldDelete),
+          this.deleteStreamAndNotify(stream, options?.shouldDelete),
         );
       },
     );
@@ -233,11 +226,10 @@ export class SessionStores {
     expectedIncarnation: number | undefined,
     start: () => Promise<DeleteStreamResult>,
   ): Promise<DeleteStreamResult> {
-    let byGuard = this.pendingStreamDeletions.get(stream);
-    if (!byGuard) {
-      byGuard = new Map();
-      this.pendingStreamDeletions.set(stream, byGuard);
-    }
+    const byGuard =
+      this.pendingStreamDeletions.get(stream) ??
+      new Map<number | undefined, Promise<DeleteStreamResult>>();
+    this.pendingStreamDeletions.set(stream, byGuard);
     const existing = byGuard.get(expectedIncarnation);
     if (existing) return existing;
     const pending = start();
@@ -252,14 +244,14 @@ export class SessionStores {
     stream: StreamTabId,
     shouldDelete?: () => boolean,
   ): Promise<DeleteStreamResult> {
-    if (shouldDelete && !shouldDelete()) return 'superseded';
+    if (shouldDelete?.() === false) return 'superseded';
     const hadCanonicalStream = this.streamLogs.has(stream);
     const result = await this.deleteStreamOnce(stream, shouldDelete);
     if (result === 'deleted' && hadCanonicalStream) {
       // Re-check immediately before the canonical-deleted notify: a re-claim
       // landing during the goal-forget await (inside `deleteStreamOnce`) must
       // not clear the fresh incarnation's resources.
-      if (shouldDelete && !shouldDelete()) return 'superseded';
+      if (shouldDelete?.() === false) return 'superseded';
       await this.notifyDeleted(stream);
     }
     return result;
@@ -348,7 +340,7 @@ export class SessionStores {
     shouldDelete?: () => boolean,
   ): Promise<DeleteStreamResult> {
     if (!canUseStreamDataDir(stream)) return 'deleted';
-    if (shouldDelete && !shouldDelete()) return 'superseded';
+    if (shouldDelete?.() === false) return 'superseded';
 
     let executionId: ExecutionId | undefined;
     try {
@@ -361,7 +353,7 @@ export class SessionStores {
       return 'failed';
     }
 
-    if (shouldDelete && !shouldDelete()) return 'superseded';
+    if (shouldDelete?.() === false) return 'superseded';
 
     if (!executionId) {
       try {
@@ -412,12 +404,12 @@ export class SessionStores {
     cleanup: () => Promise<void>,
     shouldDelete?: () => boolean,
   ): Promise<ExecutionDeletionOutcome> {
-    if (shouldDelete && !shouldDelete()) return { kind: 'superseded' };
+    if (shouldDelete?.() === false) return { kind: 'superseded' };
     let cleanupCompleted = false;
     try {
       const result = await this.deleteExecution(executionId, {
         beforeDelete: async () => {
-          if (shouldDelete && !shouldDelete()) {
+          if (shouldDelete?.() === false) {
             throw new StreamDeletionSupersededError();
           }
           await cleanup();
@@ -698,7 +690,7 @@ export class SessionStores {
    */
   private async sweepEphemeralStreams(
     liveStreams: ReadonlySet<StreamTabId>,
-  ): Promise<StreamTabId[]> {
+  ): Promise<void> {
     const swept: StreamTabId[] = [];
     const retained: StreamTabId[] = [];
     for (const stream of liveStreams) {
@@ -733,7 +725,6 @@ export class SessionStores {
         { data: { retained } },
       );
     }
-    return swept;
   }
 
   /**
@@ -872,7 +863,7 @@ export class SessionStores {
     // await. Only an unchanged generation may cross the transcript commit
     // point below; a superseded deletion rolls its staging back and leaves
     // the fresh incarnation untouched.
-    if (shouldDelete && !shouldDelete()) {
+    if (shouldDelete?.() === false) {
       try {
         await snapshotDeletion.rollback();
       } catch (rollbackError) {
@@ -895,7 +886,7 @@ export class SessionStores {
       // a re-claim that landed during the transcript I/O above can roll the
       // snapshot staging back instead of having its buffered sidecar writes
       // discarded by `commit`.
-      if (shouldDelete && !shouldDelete()) {
+      if (shouldDelete?.() === false) {
         throw new StreamDeletionSupersededError(stream);
       }
     } catch (error) {
@@ -934,7 +925,7 @@ export class SessionStores {
     // Re-check before the awaited goal forget and before this method reports
     // the deletion committed: a re-claim landing during the snapshot commit's
     // child-detachment/flush must not forget the fresh incarnation's goal.
-    if (shouldDelete && !shouldDelete()) {
+    if (shouldDelete?.() === false) {
       throw new StreamDeletionSupersededError(stream);
     }
     if (this.goalEntries) {

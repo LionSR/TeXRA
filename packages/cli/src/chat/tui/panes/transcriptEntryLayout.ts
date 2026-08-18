@@ -1,6 +1,7 @@
 // Declarative conversation-entry geometry shared by Ink renderers, viewport
 // budgeting, static scrollback, and print-once full output.
 
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   COLOR_BORDER,
@@ -22,7 +23,6 @@ import {
   TOOL_OUTPUT_CORNER,
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
-import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { WorkflowCallProgress } from '@shared/schemas';
 import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
@@ -306,20 +306,16 @@ function entryLines(
 }
 
 /** Separator rows an entry declares below itself, without laying out its
- *  lines. Needed to collapse the next entry's top margin against it. */
-function entryMarginBottomRows(entry: ConversationEntry): number {
-  if (entry.role === 'tool') return toolUseMarginBottomRows(entry.toolUse);
-  if (entry.role === 'user' && isInquiryContinuationText(entry.text)) return 0;
-  return ROLE_GEOMETRY[entry.role].marginBottomRows;
-}
-
-/** Exposed for the static-scrollback budget walk, which needs the bottom
- *  margin of a previous entry to collapse the next entry's top margin without
- *  laying out that next entry a second time. */
+ *  lines. Needed to collapse the next entry's top margin against it. Exposed
+ *  for the static-scrollback budget walk, which needs the bottom margin of a
+ *  previous entry to collapse the next entry's top margin without laying out
+ *  that next entry a second time. */
 export function transcriptEntryMarginBottomRows(
   entry: ConversationEntry,
 ): number {
-  return entryMarginBottomRows(entry);
+  if (entry.role === 'tool') return toolUseMarginBottomRows(entry.toolUse);
+  if (entry.role === 'user' && isInquiryContinuationText(entry.text)) return 0;
+  return ROLE_GEOMETRY[entry.role].marginBottomRows;
 }
 
 export function transcriptEntryLayout(
@@ -352,8 +348,11 @@ export function transcriptEntryLayout(
   const marginTopRows =
     previousEntry === undefined
       ? declaredTopRows
-      : Math.max(0, declaredTopRows - entryMarginBottomRows(previousEntry));
-  const marginBottomRows = entryMarginBottomRows(entry);
+      : Math.max(
+          0,
+          declaredTopRows - transcriptEntryMarginBottomRows(previousEntry),
+        );
+  const marginBottomRows = transcriptEntryMarginBottomRows(entry);
   const columns = transcriptColumns(width, inset);
   return {
     columns,
@@ -391,6 +390,10 @@ export function fullTranscriptEntryLayout(
   // on-demand reader substitutes the artifact text before reaching this
   // layout. Let the owning renderer append it for read/edit-style tools whose
   // compact card intentionally omits ordinary output.
+  let compactOutput: 'loaded' | 'failed' | undefined;
+  if (entry.spillPath !== undefined) {
+    compactOutput = entry.spillFailed === true ? 'failed' : 'loaded';
+  }
   return {
     ...layout,
     lines: wrapDisplayLines(
@@ -399,11 +402,7 @@ export function fullTranscriptEntryLayout(
         executionLabels,
         // Gate the "Full output:" header on actual recovery: a failed spill
         // keeps the bounded preview plus failure notice, without the header.
-        ...(entry.spillPath === undefined
-          ? {}
-          : {
-              compactOutput: entry.spillFailed === true ? 'failed' : 'loaded',
-            }),
+        compactOutput,
       }),
       layout.columns,
     ),

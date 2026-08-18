@@ -23,9 +23,8 @@ export function readPlatformSetting<T>(key: string): T {
   if (!entry) {
     throw new Error(`No state-setting catalog entry for key: ${key}`);
   }
-  const active = platform();
   // `Platform` structurally supplies the `config`/`workspaceState`/`globalState`
   // slots `readSetting` reads from, so it passes as `SettingsStores` directly.
   // `readSetting`'s `host` defaults to `'extension'`.
-  return readSetting(entry, active) as T;
+  return readSetting(entry, platform()) as T;
 }

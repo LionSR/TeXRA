@@ -25,16 +25,27 @@ function toLogMessage(entry: StreamLogEntry): LogMessageData {
   // `entry` is already the messageType-discriminated source union. Object
   // spread cannot retain that correlation, so reassert it after projecting
   // only the shared envelope fields.
+  const {
+    id,
+    seqNo,
+    text,
+    level,
+    timestamp,
+    groupId,
+    messageType,
+    verbose,
+    data,
+  } = entry;
   return {
-    id: entry.id,
-    seqNo: entry.seqNo,
-    text: entry.text ?? '',
-    level: entry.level,
-    timestamp: entry.timestamp,
-    ...(entry.groupId ? { groupId: entry.groupId } : {}),
-    ...(entry.messageType ? { messageType: entry.messageType } : {}),
-    ...(entry.verbose !== undefined ? { verbose: entry.verbose } : {}),
-    ...(entry.data !== undefined ? { data: entry.data } : {}),
+    id,
+    seqNo,
+    text: text ?? '',
+    level,
+    timestamp,
+    ...(groupId ? { groupId } : {}),
+    ...(messageType ? { messageType } : {}),
+    ...(verbose !== undefined ? { verbose } : {}),
+    ...(data !== undefined ? { data } : {}),
   } as LogMessageData;
 }
 

@@ -3,6 +3,7 @@ import { defineCommand } from 'citty';
 import type { AgentConfigPayload } from '@agent/runtime';
 import { canLaunchTeam, teamPlanHasGaps } from '@common/teams/TeamPlan';
 import { byCategory, AgentCategory } from '@shared/schemas';
+import { filterNotNullish } from '@utils/core';
 
 import { missingToolUseAgentMessage } from '../runtime/agents';
 import {
@@ -91,7 +92,7 @@ function formatMultiAgentDisplayInstruction(
     formatAttachedFileList('Attached input files:', inputFiles),
     formatAttachedFileList('Attached read-only context files:', contextFiles),
   ]
-    .filter((part): part is string => part !== undefined)
+    .filter(filterNotNullish)
     .join('\n\n');
 }
 

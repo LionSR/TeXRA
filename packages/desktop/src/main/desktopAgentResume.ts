@@ -56,12 +56,12 @@ export class DesktopProcessResumeOwner {
   }
 }
 
-function resumeDesktopStream(
+async function resumeDesktopStream(
   streamId: StreamTabId,
   context: DesktopResumeContext,
   recovery: RecoveryContinuation,
 ): Promise<boolean> {
-  if (!context.session.transcripts.has(streamId)) return Promise.resolve(false);
+  if (!context.session.transcripts.has(streamId)) return false;
   const terminalResult = trackTerminalResultPresentation(
     context.session,
     (event) => event.streamId === streamId,

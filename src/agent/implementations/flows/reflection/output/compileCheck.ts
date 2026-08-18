@@ -71,10 +71,10 @@ export function getWorkflowAutoCompileTimeoutMs(): number {
  */
 function getCompileDisplayName(file: OutputFileInfo): string {
   const rawBase = path.basename(file.location.absolutePath);
-  const src = file.source;
-  if (!src || src === rawBase) return rawBase;
-  const srcBase = path.basename(src);
-  return srcBase && !GENERIC_OUTPUT_STEMS.has(srcBase) ? srcBase : rawBase;
+  const srcBase = file.source ? path.basename(file.source) : '';
+  return srcBase && srcBase !== rawBase && !GENERIC_OUTPUT_STEMS.has(srcBase)
+    ? srcBase
+    : rawBase;
 }
 
 /**

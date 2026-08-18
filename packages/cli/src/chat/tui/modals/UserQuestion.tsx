@@ -475,10 +475,12 @@ function SingleSelectQuestion(props: QuestionVariantProps): React.JSX.Element {
 export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<UserQuestionAnswers>({});
-  const question = props.payload.questions[index];
+  const { availableRows, onDecide, payload } = props;
+  const { questions } = payload;
+  const question = questions[index];
 
   function cancel(): void {
-    props.onDecide({
+    onDecide({
       accepted: false,
       userMessage: USER_QUESTION_SKIPPED_FEEDBACK,
     });
@@ -486,12 +488,12 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
 
   function submitAnswer(answer: string | string[] | undefined): void {
     if (!question) {
-      props.onDecide(userQuestionDecision(answers));
+      onDecide(userQuestionDecision(answers));
       return;
     }
     const nextAnswers = updateUserQuestionAnswers(answers, question, answer);
-    if (index + 1 >= props.payload.questions.length) {
-      props.onDecide(userQuestionDecision(nextAnswers));
+    if (index + 1 >= questions.length) {
+      onDecide(userQuestionDecision(nextAnswers));
       return;
     }
     setAnswers(nextAnswers);
@@ -501,8 +503,8 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
   if (!question) return <Text />;
 
   const variantProps: QuestionVariantProps = {
-    availableRows: props.availableRows,
-    payload: props.payload,
+    availableRows,
+    payload,
     question,
     index,
     onSubmit: submitAnswer,

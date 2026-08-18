@@ -1,7 +1,5 @@
-// Third-party imports
 import { z } from 'zod';
 
-// Local imports
 import type { ServerToolContentBlock } from '@agent/types/ServerTools';
 import {
   FileLocationSchema,
@@ -361,16 +359,14 @@ export class AgentWorkspaceState {
 
   /**
    * Boundary hydration: validates an untrusted persisted snapshot. Call this
-   * exactly once, where a
-   * persisted snapshot first hydrates into a session (session-init resume in
-   * `ToolUsePrepareNode`, a reflection flow's resume read in
-   * `runReflectionFlow`, or `runToolUseFlow`'s tool-use resume boundary
+   * exactly once, where a persisted snapshot first hydrates into a session
+   * (session-init resume in `ToolUsePrepareNode`, a reflection flow's resume
+   * read in `runReflectionFlow`, or `runToolUseFlow`'s tool-use resume boundary
    * normalizing the nested `stateSlices.workspaceSnapshot` it self-heals into
-   * the resumed flow record — needed because a resume whose persisted cursor
-   * is already past `ToolUsePrepareNode` never runs that node's own
-   * hydration). Everywhere else — per-round node prep re-deriving state from
-   * `toSnapshot()` output already produced this run — use
-   * `fromCanonicalSnapshot` instead.
+   * the resumed flow record — needed because a resume whose persisted cursor is
+   * already past `ToolUsePrepareNode` never runs that node's own hydration).
+   * Everywhere else — per-round node prep re-deriving state from `toSnapshot()`
+   * output already produced this run — use `fromCanonicalSnapshot` instead.
    */
   static fromSnapshot(snapshot: unknown): AgentWorkspaceState {
     const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);

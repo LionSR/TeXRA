@@ -21,10 +21,6 @@ import {
 } from './outputState';
 import type { XmlOutputManager } from './XmlOutputManager';
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
 /** Waits for run workspace preparation to complete, clearing the promise once settled. */
 async function prepareRunWorkspaceIfNeeded(
   state: OutputState,
@@ -43,10 +39,6 @@ async function prepareRunWorkspaceIfNeeded(
     state.runPreparation = null;
   }
 }
-
-// ============================================================================
-// Public API
-// ============================================================================
 
 /** Extracts files from XML output for a round. */
 export async function extractFilesFromXml(

@@ -15,7 +15,7 @@ import {
 } from '@shared/utils/dispatcher';
 
 import { SwitchViewMessageSchema } from '../commonViewMessages';
-import { commandOnly, withFilesArray } from '../messageFactories';
+import { commandOnly } from '../messageFactories';
 import {
   CurrentFileTypeSchema,
   DocumentFileTypeSchema,

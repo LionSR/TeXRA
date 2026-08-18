@@ -30,6 +30,6 @@ export function appendCompileFailureRoundContext(
   if (!compileFailureContext) return userRequest;
   const trimmedRequest = userRequest.trimEnd();
   return trimmedRequest
-    ? [trimmedRequest, compileFailureContext].join('\n\n')
+    ? `${trimmedRequest}\n\n${compileFailureContext}`
     : compileFailureContext;
 }

@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### Features
 
+- **Export a conversation from the progress toolbar** — Markdown, HTML, and
+  PDF export now lives on the run toolbar in the progress view, so you can
+  still save a transcript after the History tab was retired.
 - **Gemini 3.7 Flash is available** — the new Flash model replaces Gemini 3.6
   Flash in the default model list at half the price. Existing selections of
   older Flash models keep working while Google serves them.
@@ -112,6 +115,12 @@ All notable changes to this project will be documented in this file.
   access token used by GitHub subscriptions without leaving the CLI.
 - **`texra agents show` omits access-group tags** — remote agent details no
   longer print visibility labels.
+- **Nested sessions name the phase and the way back** — a focused subagent
+  shows its workflow phase in the header and status bar, Esc is labeled
+  `parent`, and the session list says that Esc stays in this view.
+- **A retried workflow no longer keeps the failed first attempt on screen** —
+  the live transcript drops superseded task cards and their leftover log
+  lines when a new attempt starts, matching the session list.
 
 #### Bug Fixes
 

@@ -121,8 +121,8 @@ export async function resolveAgentTools({
   const passesRuntimeGates = (name: string): boolean => {
     if (runtimeUnavailable.has(name)) return false;
     return (
-      approvalPromptsUnavailable !== true ||
-      effectiveRegistry.get(name)?.requiresApproval !== true
+      !approvalPromptsUnavailable ||
+      !effectiveRegistry.get(name)?.requiresApproval
     );
   };
 

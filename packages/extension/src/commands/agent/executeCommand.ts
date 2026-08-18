@@ -67,9 +67,7 @@ export async function runExecuteCommand(
       // In-process-only resume admission guard. It is never serialized: the
       // VS Code command action still receives a single `input` argument
       // across the registry/dispatch boundary.
-      ...(options.canAcquireResumeLease && {
-        canAcquireResumeLease: options.canAcquireResumeLease,
-      }),
+      canAcquireResumeLease: options.canAcquireResumeLease,
     });
   } catch (error) {
     if (error instanceof ZodError) {

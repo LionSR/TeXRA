@@ -152,6 +152,15 @@ function createSecondTierActions(
       submit: vi.fn(),
       cancel: vi.fn(),
     },
+    transcriptExport: {
+      pickFormat: vi.fn(),
+      openPath: vi.fn(),
+      showInfo: vi.fn(),
+      showWarning: vi.fn(),
+      showError: vi.fn(),
+      getController: vi.fn(),
+      getTraceViewerTemplate: vi.fn(() => '/tmp/trace-viewer/index.html'),
+    },
     ...overrides,
   } as unknown as ProgressViewSecondTierActions;
 }
@@ -891,11 +900,27 @@ describe('createProgressViewSecondTierHandlers', () => {
         PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST,
         PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY,
         PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        PROGRESS_VIEW_COMMANDS.EXPORT_TRANSCRIPT,
         PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE,
         PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG,
         PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
         PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER,
       ].toSorted(),
+    );
+  });
+
+  it('refuses transcript export when the stream has no execution id', async () => {
+    const actions = createSecondTierActions();
+    const handlers = createProgressViewSecondTierHandlers(actions);
+
+    await assertSupported(handlers[PROGRESS_VIEW_COMMANDS.EXPORT_TRANSCRIPT])({
+      command: PROGRESS_VIEW_COMMANDS.EXPORT_TRANSCRIPT,
+      stream: 'stream-1',
+    });
+
+    expect(actions.transcriptExport.pickFormat).not.toHaveBeenCalled();
+    expect(actions.host.showInfo).toHaveBeenCalledWith(
+      'This run has no saved transcript to export yet.',
     );
   });
 

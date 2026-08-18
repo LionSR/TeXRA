@@ -13,6 +13,7 @@ import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
 import {
   RUN_OUTCOME,
   stageTitleFor,
+  TERMINAL_WORKFLOW_CALL_STATUSES,
   WORKFLOW_CALL_STATUS,
   WORKFLOW_EXECUTION_LIFECYCLE,
   type RunOutcome,
@@ -369,9 +370,9 @@ export async function runPersistedWorkflowScriptWithProgress(
   const cardFor = (
     call: WorkflowExecutionCall,
     status: WorkflowCallProgress['status'],
-    stages: WorkflowExecutionSnapshot['stages'],
+    snapshot: WorkflowExecutionSnapshot,
   ): WorkflowCallProgress => {
-    const phase = stageTitleFor({ stages }, call);
+    const phase = stageTitleFor(snapshot, call);
     const identity = {
       id: call.id,
       label: call.label,
@@ -457,11 +458,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         // `issueCall` restores its phase, and a call absent from this script
         // would appear as current-attempt not-reached work.
         const hydratedHistory =
-          status === 'completed' ||
-          status === 'failed' ||
-          status === 'cancelled' ||
-          status === 'skipped' ||
-          status === 'cached' ||
+          TERMINAL_WORKFLOW_CALL_STATUSES.has(status) ||
           call.attempts.length > 0 ||
           call.timestamps.createdAt !== call.timestamps.updatedAt;
         if (!constructionEmissionSeen && !projected && hydratedHistory) {
@@ -498,7 +495,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         // and the stage itself opens (with its declared position) when the
         // stage loop above sees the run enter it — planned cards must not
         // open their phase early.
-        const card = cardFor(call, status, snapshot.stages);
+        const card = cardFor(call, status, snapshot);
         const previousStatus = projected?.status;
         emitCall(card);
         if (status === previousStatus) continue;
@@ -524,13 +521,13 @@ export async function runPersistedWorkflowScriptWithProgress(
           recordTerminalActivity(card as WorkflowCallTerminalProgress);
         }
       }
-      constructionEmissionSeen = true;
     } catch (error) {
-      constructionEmissionSeen = true;
       trace.warn(
         `Workflow progress projection failed for one transition: ${toErrorMessage(error)}`,
         { data: error },
       );
+    } finally {
+      constructionEmissionSeen = true;
     }
   };
 

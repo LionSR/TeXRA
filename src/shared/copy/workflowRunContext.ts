@@ -7,6 +7,7 @@ import {
   type RoundIndexed,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { filterNotNullish } from '@utils/core';
 
 /**
  * Reference to a run-storage file the way an agent prompt addresses it:
@@ -95,5 +96,5 @@ export function formatWorkflowRunContext(
     }
   }
 
-  return lines.filter((line) => line !== undefined).join('\n');
+  return lines.filter(filterNotNullish).join('\n');
 }

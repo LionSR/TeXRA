@@ -269,16 +269,19 @@ export class LatexDiffManager {
     pairs: [string, FileLocation][],
     description: string,
   ): void {
-    if (pairs.length > 0) {
-      this.logger.debug(`Matched ${description}`, {
-        data: pairs.map(
-          ([outputPath, loc]) =>
-            `${path.basename(getComparablePath(loc))} -> ${path.basename(outputPath)}`,
-        ),
-      });
-    } else if (this.baseFiles.length > 0) {
-      this.logger.debug(`No ${description.split(' to ')[0]} mappings found`);
+    if (pairs.length === 0) {
+      if (this.baseFiles.length > 0) {
+        this.logger.debug(`No ${description.split(' to ')[0]} mappings found`);
+      }
+      return;
     }
+
+    this.logger.debug(`Matched ${description}`, {
+      data: pairs.map(
+        ([outputPath, loc]) =>
+          `${path.basename(getComparablePath(loc))} -> ${path.basename(outputPath)}`,
+      ),
+    });
   }
 
   private async runSingleDiff({
@@ -422,9 +425,8 @@ export class LatexDiffManager {
       buildDir,
       `${path.basename(diffLocation.absolutePath).replace(/\.tex$/i, '')}.pdf`,
     );
-    let artifact: CompiledPdfArtifact | null = null;
     try {
-      artifact = await publishCompiledPdfArtifact({
+      const artifact = await publishCompiledPdfArtifact({
         runDirectory,
         executionId,
         round,
@@ -433,6 +435,7 @@ export class LatexDiffManager {
         compiledPdfPath,
         pdfStemSuffix,
       });
+      return { diffLocation, artifact };
     } catch (error) {
       this.logger.warn(
         `Failed to publish latexdiff PDF: ${toErrorMessage(error)}`,
@@ -444,8 +447,7 @@ export class LatexDiffManager {
           },
         },
       );
+      return { diffLocation, artifact: null };
     }
-
-    return { diffLocation, artifact };
   }
 }

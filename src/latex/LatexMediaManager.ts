@@ -95,11 +95,10 @@ export class LatexMediaManager {
       baseDir ?? (await resolveLatexDir(latexFile.absolutePath));
     const absolutePaths = new Set<string>();
     for (const relative of figures) {
-      const trimmed = relative?.trim();
-      if (!trimmed) {
-        continue;
+      const trimmed = relative.trim();
+      if (trimmed) {
+        absolutePaths.add(path.normalize(path.join(resolvedBaseDir, trimmed)));
       }
-      absolutePaths.add(path.normalize(path.join(resolvedBaseDir, trimmed)));
     }
 
     if (absolutePaths.size === 0) {

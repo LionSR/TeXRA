@@ -43,8 +43,7 @@ export const STREAM_LOGS_DIR = WORKSPACE_STORAGE_LAYOUT.streamLogs;
 export const STREAM_LOG_SUMMARIES_DIR =
   WORKSPACE_STORAGE_LAYOUT.streamLogSummaries;
 const STREAM_LOG_LOAD_CONCURRENCY = 8;
-const LOG_TAG = 'StreamLogStore';
-const log = createLog(LOG_TAG);
+const log = createLog('StreamLogStore');
 
 /**
  * A deletion guard decided the stream was re-claimed while the delete was

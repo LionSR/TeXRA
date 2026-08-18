@@ -5,12 +5,16 @@
 // preserveStatic:false) instead of replaying Ink's accumulated
 // `fullStaticOutput`.
 
-import { signal } from '@lit-labs/signals';
+import { signal, type Signal } from '@lit-labs/signals';
+
+function bumpEpoch(epoch: Signal.State<number>): void {
+  epoch.set(epoch.get() + 1);
+}
 
 export const staticTranscriptRepaintEpoch = signal(0);
 
 export function invalidateStaticTranscriptForRepaint(): void {
-  staticTranscriptRepaintEpoch.set(staticTranscriptRepaintEpoch.get() + 1);
+  bumpEpoch(staticTranscriptRepaintEpoch);
 }
 
 // A second epoch for erases that happen outside Ink (`/clear` writes
@@ -22,5 +26,5 @@ export function invalidateStaticTranscriptForRepaint(): void {
 export const staticTranscriptEraseEpoch = signal(0);
 
 export function notifyStaticTranscriptErased(): void {
-  staticTranscriptEraseEpoch.set(staticTranscriptEraseEpoch.get() + 1);
+  bumpEpoch(staticTranscriptEraseEpoch);
 }

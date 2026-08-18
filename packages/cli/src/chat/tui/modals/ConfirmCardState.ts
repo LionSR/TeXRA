@@ -119,20 +119,13 @@ function hintsFit(
   return maxColumns === undefined || hintColumns(hints) <= maxColumns;
 }
 
-function compactHintAction(action: string): string {
-  switch (action) {
-    case 'reject & note':
-      return 'reject';
-    case 'approve commands for session':
-      return 'all commands';
-    case 'approve edits for session':
-      return 'all edits';
-    case DELEGATION_APPROVAL_COPY.cliAction:
-      return DELEGATION_APPROVAL_COPY.cliCompactAction;
-    default:
-      return action;
-  }
-}
+const COMPACT_HINT_ACTIONS: Readonly<Record<string, string>> = {
+  'reject & note': 'reject',
+  'approve commands for session': 'all commands',
+  'approve edits for session': 'all edits',
+  [DELEGATION_APPROVAL_COPY.cliAction]:
+    DELEGATION_APPROVAL_COPY.cliCompactAction,
+};
 
 function isCoreApprovalHint(hint: KeyHint): boolean {
   return hint.key === 'y' || hint.key === 'n' || hint.key === 'Esc';
@@ -146,7 +139,7 @@ export function confirmCardKeyHintsForWidth(
 
   const compactHints = fullHints.map((hint) => ({
     ...hint,
-    action: compactHintAction(hint.action),
+    action: COMPACT_HINT_ACTIONS[hint.action] ?? hint.action,
   }));
   if (hintsFit(compactHints, options.maxColumns)) return compactHints;
 

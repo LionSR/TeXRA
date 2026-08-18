@@ -131,7 +131,7 @@ export type CliHistoryDeleteResult =
     };
 
 export function parseCliHistoryId(raw: string): ExecutionId | undefined {
-  return ExecutionIdSchema.optional().catch(undefined).parse(raw);
+  return ExecutionIdSchema.safeParse(raw).data;
 }
 
 export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
@@ -236,8 +236,8 @@ export type CliHistoryExportInputResult =
  * {@link ChatExportInput} the markdown export formatter consumes (the HTML
  * export path uses `assembleTrace` instead — see `commands/history.ts`).
  * Thin CLI-specific wrapper around the shared {@link loadChatExportInput}
- * loader, which also backs the extension's
- * `ChatExportController.buildExportInput` — so the CLI and extension render
+ * loader, which also backs the progress-view
+ * `ChatExportController.buildExportInput` — so the CLI and GUI render
  * the same conversation identically.
  *
  * Distinguishes "this execution id has no stored data at all" (`not_found`
@@ -333,10 +333,6 @@ export async function deleteCliHistory(options: {
   id?: ExecutionId;
   all?: boolean;
 }): Promise<CliHistoryDeleteResult> {
-  const { id } = options;
-  if (!options.all && !id) {
-    throw new Error('Expected an execution id, or --all.');
-  }
   const cleanup = resolveAdjacentStreamCleanup(liveStreamCleanup());
   if (options.all) {
     const result = await deleteAllExecutions({
@@ -351,9 +347,10 @@ export async function deleteCliHistory(options: {
       failed: result.failed,
     };
   }
-  if (!id) {
+  if (!options.id) {
     throw new Error('Expected an execution id, or --all.');
   }
+  const id = options.id;
   const result = await deleteExecution(id, {
     beforeDelete: () => cleanupExecutionAdjacentStreamState(id, cleanup),
   });

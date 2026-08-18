@@ -36,10 +36,9 @@ import {
   detectRequestId,
   detectStatusCode,
   detectStatusText,
-  errorBodyCandidates,
+  firstBodyStringField,
   getErrorClassNames,
   getHeaderValue,
-  pickStringField,
   safeGetReasonPhrase,
 } from './errorInspection';
 import {
@@ -142,9 +141,7 @@ function describeHttpError(
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
     : undefined;
-  const bodyMessage = errorBodyCandidates(rawErrorBody)
-    .map((candidate) => pickStringField(candidate, 'message'))
-    .find((candidateMessage) => candidateMessage !== undefined);
+  const bodyMessage = firstBodyStringField(rawErrorBody, 'message');
   // Some SDKs stringify the complete response body into Error.message when
   // the body has no scalar message. Keep that body on rawErrorBody for
   // diagnostics, but do not promote its serialization to user-facing text.

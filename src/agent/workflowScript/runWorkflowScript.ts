@@ -5,7 +5,6 @@ import PQueue from 'p-queue';
 import pTimeout from 'p-timeout';
 import type {
   ExecutionId,
-  StreamTabId,
   WorkflowCallIdentity,
   WorkflowControlAction,
   WorkflowExecutionSnapshot,
@@ -29,7 +28,6 @@ import {
   type WorkflowAgentCallOptions,
   type WorkflowJournalEntry,
   type WorkflowScriptControl,
-  type WorkflowScriptEvent,
   type WorkflowScriptRunOptions,
   type WorkflowScriptRunResult,
 } from './types';
@@ -352,9 +350,7 @@ export async function runWorkflowScript(
   const journalCommitFence = new JournalCommitFence();
   const snapshotWriter = new CoalescedSnapshotWriter(
     options.onSnapshot,
-    (failure) => {
-      failRun(failure);
-    },
+    failRun,
   );
   const executionState = new WorkflowExecutionState({
     phases: plannedPhases,
@@ -370,8 +366,6 @@ export async function runWorkflowScript(
   });
   await snapshotWriter.flush();
   snapshotWriter.throwIfFailed();
-
-  const emit = (event: WorkflowScriptEvent) => onEvent?.(event);
 
   const control: WorkflowScriptControl = (childExecutionId, action) => {
     const index = callIndexByChildExecution.get(childExecutionId);
@@ -432,8 +426,7 @@ export async function runWorkflowScript(
       throw contractFault(new Error(parsedOptions.error.issues[0].message));
     }
     const callOptions: WorkflowAgentCallOptions = parsedOptions.data;
-    const index = callCounter;
-    callCounter += 1;
+    const index = callCounter++;
 
     let plannedTask: WorkflowCallIdentity | undefined;
     if (hasTaskPlan) {
@@ -476,10 +469,9 @@ export async function runWorkflowScript(
     const primaryFile =
       callOptions.inputFiles?.[0] ?? callOptions.contextFiles?.[0];
     const role = callOptions.agentName ?? 'Agent';
-    // One derivation for every surface (progress events and the execution
-    // snapshot), so the label a host shows live is the label the durable
-    // record keeps: declared > explicit > file-derived > prompt excerpt >
-    // role + position.
+    // One derivation for the execution snapshot and its live projection, so
+    // the label a host shows live is the label the durable record keeps:
+    // declared > explicit > file-derived > prompt excerpt > role + position.
     const promptExcerpt = prompt
       .slice(0, LABEL_EXCERPT_LENGTH)
       .replaceAll(/\s+/g, ' ')
@@ -872,7 +864,7 @@ export async function runWorkflowScript(
           },
           syncFns: {
             log: (args) => {
-              emit({ type: 'log', message: String(args[0]) });
+              onEvent?.({ type: 'log', message: String(args[0]) });
               return undefined;
             },
             phase: (args) => {

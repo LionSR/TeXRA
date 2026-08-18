@@ -237,10 +237,7 @@ export const WorkflowExecutionSnapshotSchema = z
           message: `Duplicate workflow call id "${call.id}".`,
         });
       callIds.add(call.id);
-      if (
-        call.stageId !== undefined &&
-        !snapshot.stages.some((stage) => stage.id === call.stageId)
-      ) {
+      if (call.stageId !== undefined && !stageIds.has(call.stageId)) {
         context.addIssue({
           code: 'custom',
           path: ['calls', index, 'stageId'],

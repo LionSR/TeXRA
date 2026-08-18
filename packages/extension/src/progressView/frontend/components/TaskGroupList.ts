@@ -418,19 +418,17 @@ export class TaskGroupList extends LitElement {
 
   /**
    * `done/total` for a phase header, folded from the workflow-call cards the
-   * group already holds. A malformed row drops out (safeParse), matching how
-   * the card formatter guards itself. Nothing renders for a group with no
-   * call cards, so round and run headers are unaffected.
+   * group already holds. Nothing renders for a group with no call cards, so
+   * round and run headers are unaffected.
    */
   private renderGroupProgress(
     group: TaskGroup,
     messages: readonly LogMessageData[],
   ): TemplateResult | typeof nothing {
     if (group.kind !== 'phase') return nothing;
-    const calls = messages.flatMap((message) => {
-      if (message.messageType !== MESSAGE_TYPES.WORKFLOW_TASK) return [];
-      return [message.data];
-    });
+    const calls = messages
+      .filter((message) => message.messageType === MESSAGE_TYPES.WORKFLOW_TASK)
+      .map((message) => message.data);
     const { done, total } = workflowPhaseCallProgress(calls);
     if (total === 0) return nothing;
     return html`<span class="group-progress">${done}/${total}</span>`;

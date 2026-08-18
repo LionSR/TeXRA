@@ -188,5 +188,7 @@ export async function apiKeyExistsUncached(
   secrets: PlatformSecrets,
   provider: ApiProvider,
 ): Promise<boolean> {
-  return (await resolveApiKeyUncached(secrets, provider)).value !== undefined;
+  return isNonEmptyString(
+    (await resolveApiKeyUncached(secrets, provider)).value,
+  );
 }

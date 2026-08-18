@@ -389,10 +389,16 @@ function startCodexLoop(params: {
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
 }): void {
-  const { thread, childStream, parentStreamId, executionId, initialPrompt } =
-    params;
+  const {
+    thread,
+    childStream,
+    parentStreamId,
+    executionId,
+    initialPrompt,
+    resumeThreadId: fallbackThreadId,
+    releaseFallbackClaim,
+  } = params;
   const { childStreamId, logger } = childStream;
-  const fallbackThreadId = params.resumeThreadId;
 
   startAgentCliLoop({
     childStream,
@@ -402,7 +408,7 @@ function startCodexLoop(params: {
     stageLabel: 'Codex session',
     initialPrompt,
     store: CodexThreads,
-    releaseFallbackClaim: params.releaseFallbackClaim,
+    releaseFallbackClaim,
     runProviderTurn: (prompt, _ports, abortController) =>
       runStreamedTurn(
         thread,

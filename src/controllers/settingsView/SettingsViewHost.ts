@@ -13,6 +13,9 @@ import {
 } from './SettingsModelSelectionController';
 
 type Awaitable<T> = T | PromiseLike<T>;
+type MemoryControllerOptions = ConstructorParameters<
+  typeof SettingsMemoryController
+>[0];
 type MemoryPreviewMessage = SettingsMessageFor<
   typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW
 >;
@@ -29,9 +32,7 @@ type SetReasoningLevelInput = Omit<
 >;
 interface SettingsViewHostOptions {
   readonly state: SettingsStatePorts;
-  readonly memoryPrompt: ConstructorParameters<
-    typeof SettingsMemoryController
-  >[0]['prompt'];
+  readonly memoryPrompt: MemoryControllerOptions['prompt'];
   readonly respond?: SettingsRespond;
   readonly modelSelectionExtras?: ModelSelectionExtras;
   readonly beforeModelSelectionMessage?: () => Awaitable<void>;
