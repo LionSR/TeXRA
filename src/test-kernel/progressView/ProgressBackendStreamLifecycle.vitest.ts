@@ -638,11 +638,11 @@ describe('ProgressBackend', () => {
     const { backend, messages } = createIsolatedRecordingBackend();
     const stream = 'fresh-projected-stream' as StreamTabId;
     backend.state.streamLogs.ensureStream(stream);
-    const streamRoster = vi.spyOn(backend.projections, 'streamRoster');
+    const sendStreamMetadata = vi.spyOn(backend.renderer, 'sendStreamMetadata');
 
     await backend.syncRenderedStreams({ syncActiveStream: true });
 
-    expect(streamRoster).toHaveBeenCalledWith(stream, expect.any(Map));
+    expect(sendStreamMetadata).toHaveBeenCalledWith(stream, '', undefined);
     expect(messages).toContainEqual(
       expect.objectContaining({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
