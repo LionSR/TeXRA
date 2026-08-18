@@ -191,6 +191,33 @@ export type SettingsViewStateSettingEntry = StateSettingEntry & {
   readonly settingsViewSnapshot: SettingsViewSnapshot;
 };
 
+/**
+ * Builds one catalog row, requiring `cliConsumer` and `cliRuntimeReachability`
+ * at the call site whenever `hosts` includes `'cli'` — previously that
+ * pairing was enforced only by a runtime guardrail test
+ * (`stateSettings.vitest.ts`), so a row could omit them and fail nothing
+ * until the suite ran. `const H` infers the literal host tuple straight from
+ * the call site, no `as const` needed per row. The guardrail test still owns
+ * what a type can't check: that `cliConsumer` names a file that exists and
+ * that `cliRuntimeReachability.through` actually names it.
+ */
+function stateSetting<const H extends readonly SettingHost[]>(
+  entry: Omit<
+    StateSettingEntry,
+    'hosts' | 'cliConsumer' | 'cliRuntimeReachability'
+  > & { readonly hosts: H } & ('cli' extends H[number]
+      ? {
+          readonly cliConsumer: string;
+          readonly cliRuntimeReachability: CliRuntimeReachability;
+        }
+      : {
+          readonly cliConsumer?: undefined;
+          readonly cliRuntimeReachability?: undefined;
+        }),
+): StateSettingEntry {
+  return entry;
+}
+
 const GIT_AUTHOR_CONSUMER = 'packages/cli/src/runtime/gitAuthor.ts';
 const CODEX_CONFIG_CONSUMER = 'src/tools/codexConfig.ts';
 const CLAUDE_AGENT_CONFIG_CONSUMER = 'src/tools/claudeAgentConfig.ts';
@@ -291,7 +318,7 @@ const PROXY_CONFIG_CONSUMER =
 
 const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
   ({ endpointKey, displayName }) =>
-    ({
+    stateSetting({
       key: endpointKey,
       schema: z.string().prefault(''),
       title: `${displayName} endpoint`,
@@ -301,7 +328,7 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
       hosts: ['cli'],
       cliConsumer: PROXY_CONFIG_CONSUMER,
       cliRuntimeReachability: PROVIDER_ENDPOINT_RUNTIME_REACHABILITY,
-    }) satisfies StateSettingEntry,
+    }),
 );
 
 /**
@@ -332,7 +359,7 @@ const PROVIDER_ROUTING_SETTINGS = (
   ] as const
 ).map(
   ([key, setting, defaultValue]) =>
-    ({
+    stateSetting({
       key,
       schema: z.boolean().prefault(defaultValue),
       title: setting.label,
@@ -342,14 +369,14 @@ const PROVIDER_ROUTING_SETTINGS = (
       hosts: ['cli'],
       cliConsumer: PROXY_CONFIG_CONSUMER,
       cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
-    }) satisfies StateSettingEntry,
+    }),
 );
 
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Git commit author marking ---------------------------------------------
   // Stored in worktree-shared WorkspaceState by the extension; read from
   // `.texra/config.json` by the CLI (hence `cliStore: 'config'`).
-  {
+  stateSetting({
     key: WorkspaceStateKey.GIT_MARK_COMMITS,
     schema: z.boolean().prefault(DEFAULT_GIT_MARK_COMMITS),
     title: 'Mark agent commits',
@@ -362,8 +389,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: GIT_AUTHOR_CONSUMER,
     cliRuntimeReachability: GIT_AUTHOR_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'git-author',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.GIT_AUTHOR_NAME,
     schema: z.string().prefault(DEFAULT_GIT_AUTHOR_NAME),
     title: 'Agent commit author',
@@ -376,8 +403,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: GIT_AUTHOR_CONSUMER,
     cliRuntimeReachability: GIT_AUTHOR_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'git-author',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.GIT_AUTHOR_EMAIL,
     schema: z.string().prefault(DEFAULT_GIT_AUTHOR_EMAIL),
     title: 'Agent commit email',
@@ -390,8 +417,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: GIT_AUTHOR_CONSUMER,
     cliRuntimeReachability: GIT_AUTHOR_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'git-author',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
     schema: z.boolean().prefault(DEFAULT_GIT_WORKTREE_SUPPORT),
     title: 'Subagent worktrees',
@@ -404,10 +431,10 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: GIT_AUTHOR_CONSUMER,
     cliRuntimeReachability: GIT_WORKTREE_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'git-author',
-  },
+  }),
 
   // --- Multi-agent coordination --------------------------------------------
-  {
+  stateSetting({
     key: WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
     schema: z.boolean().prefault(true),
     title: 'Allow orchestrator cancellation',
@@ -417,8 +444,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'workspaceState',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'multi-agent',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
     schema: z.boolean().prefault(false),
     title: 'Keep subagents running',
@@ -428,13 +455,13 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'workspaceState',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'multi-agent',
-  },
+  }),
 
   // --- External coding agent controls ---------------------------------------
   // These are workspace-shared settings read by the Codex and Claude Code tool
   // integrations. The CLI reaches them through headless tool-use runs, so the
   // same catalog drives both the extension/desktop settings view and `/config`.
-  {
+  stateSetting({
     key: WorkspaceStateKey.CODEX_SANDBOX_MODE,
     schema: CodexSandboxModeSchema.prefault(CODEX_SANDBOX_MODE_DEFAULT),
     title: 'Codex sandbox mode',
@@ -446,8 +473,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliRuntimeReachability: CODEX_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Read-only', 'Workspace write', 'Full access'],
     settingsViewSnapshot: 'approval',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.CODEX_REASONING_EFFORT,
     schema: CodexReasoningEffortSchema.prefault(CODEX_REASONING_EFFORT_DEFAULT),
     title: 'Codex reasoning effort',
@@ -459,8 +486,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliRuntimeReachability: CODEX_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high'],
     settingsViewSnapshot: 'approval',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.CODEX_APPROVAL_POLICY,
     schema: CodexApprovalPolicySchema.prefault(CODEX_APPROVAL_POLICY_DEFAULT),
     title: 'Codex approval policy',
@@ -477,8 +504,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Ask on failure',
     ],
     settingsViewSnapshot: 'approval',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.CLAUDE_AGENT_MODEL,
     schema: ClaudeAgentModelSchema.prefault(CLAUDE_AGENT_DEFAULT_MODEL),
     normalizePersisted: parseClaudeAgentModel,
@@ -491,8 +518,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliRuntimeReachability: CLAUDE_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Sonnet 5', 'Fable 5', 'Opus 5', 'Haiku 4.5'],
     settingsViewSnapshot: 'approval',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
     schema: ClaudeAgentPermissionModeSchema.prefault(
       CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
@@ -511,8 +538,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Plan only (read-only)',
     ],
     settingsViewSnapshot: 'approval',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
     schema: ClaudeAgentEffortSchema.prefault(CLAUDE_AGENT_DEFAULT_EFFORT),
     title: 'Claude Code reasoning effort',
@@ -524,14 +551,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliRuntimeReachability: CLAUDE_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high', 'Maximum'],
     settingsViewSnapshot: 'approval',
-  },
+  }),
 
   // --- Workflow auto-compile -------------------------------------------------
   // The CLI runs workflow (reflection) agents via `texra workflow` / `texra
   // run`, so these take effect there as well as in the extension/desktop. The
   // exception is auto-open-pdf: it emits `requestOpenFile`, which the headless
   // CLI has no handler for, so it stays off the CLI roster.
-  {
+  stateSetting({
     key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompile),
     title: 'Auto-compile outputs',
@@ -544,8 +571,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'src/agent/implementations/flows/reflection/output/compileCheck.ts',
     cliRuntimeReachability: WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'latex',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
     schema: z
       .int()
@@ -561,8 +588,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'src/agent/implementations/flows/reflection/output/compileCheck.ts',
     cliRuntimeReachability: WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'latex',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf),
     description:
@@ -573,8 +600,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     // (headless), so toggling it would be a no-op there — vscode/desktop only.
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'latex',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
     schema: z
       .boolean()
@@ -589,12 +616,12 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
     cliRuntimeReachability: WORKFLOW_REJECT_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'latex',
-  },
+  }),
 
   // --- LaTeXdiff -------------------------------------------------------------
   // Run by the reflection flow (so the CLI executes them), but deferred from the
   // CLI roster for now per product decision — not surfaced in `/config`.
-  {
+  stateSetting({
     key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
     description:
@@ -603,8 +630,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'workspaceState',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'latex',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
     schema: z
       .int()
@@ -617,8 +644,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'workspaceState',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'latex',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
     schema: z
       .enum(LATEXDIFF_MATH_MARKUP_VALUES)
@@ -634,8 +661,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'small changes inside equations',
     ],
     settingsViewSnapshot: 'latex',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly),
     description:
@@ -644,13 +671,13 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'workspaceState',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'latex',
-  },
+  }),
 
   // --- LaTeX formatter -------------------------------------------------------
   // Invoked via LatexDiffManager during the reflection flow (which the CLI runs),
   // i.e. coupled to the latexdiff path that's deferred from the CLI roster, so
   // it stays vscode/desktop only for now.
-  {
+  stateSetting({
     key: WorkspaceStateKey.LATEX_FORMATTER,
     schema: z
       .enum(LATEX_FORMATTER_VALUES)
@@ -665,7 +692,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Do not run any formatter.',
     ],
     settingsViewSnapshot: 'latex',
-  },
+  }),
 
   // --- OpenAI WebSocket transport (experimental) -----------------------------
   // Read by `getWebSocketEnabled()` and consumed by the OpenAI Responses handler
@@ -673,7 +700,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // OpenAI endpoint — and, experimentally, lets the ChatGPT-subscription Codex
   // backend attempt WebSocket. Surfaced to the CLI so it can be toggled and
   // tested there.
-  {
+  stateSetting({
     key: GlobalStateKey.WEBSOCKET_OPENAI,
     schema: z.boolean().prefault(false),
     title: 'OpenAI WebSocket',
@@ -684,7 +711,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['cli'],
     cliConsumer: 'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
     cliRuntimeReachability: OPENAI_WEBSOCKET_RUNTIME_REACHABILITY,
-  },
+  }),
 
   // --- Provider endpoints ---------------------------------------------------
   // The extension/desktop Models tab already has per-provider endpoint inputs.
@@ -698,7 +725,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // and desktop already surface the same setting through provider settings; the
   // catalog row is CLI-only so later settings-view catalog rendering does not
   // duplicate that existing control.
-  {
+  stateSetting({
     key: GlobalStateKey.USE_OPENROUTER,
     schema: z.boolean().prefault(false),
     title: USE_OPENROUTER_PROVIDER_SETTING.label,
@@ -708,7 +735,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['cli'],
     cliConsumer: 'src/utils/config/providerConfig.ts',
     cliRuntimeReachability: OPENROUTER_ROUTING_RUNTIME_REACHABILITY,
-  },
+  }),
 
   // --- Provider routing & region toggles --------------------------------------
   // Same idiom as the OpenRouter row above: every toggle stays in
@@ -719,7 +746,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // the provider setting's `defaultValue` (absent = false) — both pinned
   // against the live getters by the guardrail suite. The Kimi Code prefer
   // switch is read by `getPreferKimiCode()` during model-handler dispatch.
-  {
+  stateSetting({
     key: GlobalStateKey.KIMI_CODE_PREFER,
     schema: z.boolean().prefault(false),
     title: KIMI_CODE_PREFER_PROVIDER_SETTING.label,
@@ -729,14 +756,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['cli'],
     cliConsumer: 'src/agent/runtime/ModelFactory.ts',
     cliRuntimeReachability: KIMI_CODE_ROUTING_RUNTIME_REACHABILITY,
-  },
+  }),
   ...PROVIDER_ROUTING_SETTINGS,
 
   // --- External tool integrations ------------------------------------------
   // This is a list-backed global-state domain. `/config` delegates editing to
   // the existing `/tools` form so the catalog owns discoverability while the
   // tool dashboard remains the single editor for per-integration toggles.
-  {
+  stateSetting({
     key: GlobalStateKey.DISABLED_TOOLS,
     schema: z.array(z.string()).prefault([]),
     title: 'Tool integrations',
@@ -748,8 +775,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: 'src/tools/toolAvailability.ts',
     cliRuntimeReachability: TOOL_AVAILABILITY_RUNTIME_REACHABILITY,
     openForm: 'tools',
-  },
-  {
+  }),
+  stateSetting({
     key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
     schema: z.boolean().prefault(DEFAULT_TOOL_PATH_PROTECTION_ENABLED),
     title: 'Restrict tool paths',
@@ -761,7 +788,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: 'src/tools/pathResolution.ts',
     cliRuntimeReachability: TOOL_PATH_PROTECTION_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'approval',
-  },
+  }),
 ] as const;
 
 /** Every canonical `texra.*` key in the catalog. */
@@ -781,7 +808,7 @@ const STATE_SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> = new Map(
 // catalog-entry level (not `as const`) so `hosts.includes('cli')` checks
 // compile against the widened `SettingHost` union.
 export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
-  {
+  stateSetting({
     key: 'texra.latex.wrapCritiqueInAlign',
     schema: CoreSettingsShape.latex.unwrap().shape.wrapCritiqueInAlign,
     title: 'Wrap criticism in align environments',
@@ -791,8 +818,8 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'config',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'latex',
-  },
-  {
+  }),
+  stateSetting({
     key: 'texra.latex.enabledReplacements',
     schema: CoreSettingsShape.latex.unwrap().shape.enabledReplacements,
     title: 'Literal replacement groups',
@@ -801,8 +828,8 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'config',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'latex',
-  },
-  {
+  }),
+  stateSetting({
     key: 'texra.latex.enabledReplacementsRegex',
     schema: CoreSettingsShape.latex.unwrap().shape.enabledReplacementsRegex,
     title: 'Pattern replacement groups',
@@ -811,8 +838,8 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'config',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'latex',
-  },
-  {
+  }),
+  stateSetting({
     key: 'texra.latex.customReplacementsRegex',
     schema: CoreSettingsShape.latex.unwrap().shape.customReplacementsRegex,
     title: 'Custom pattern replacements',
@@ -821,8 +848,8 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'config',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'latex',
-  },
-  {
+  }),
+  stateSetting({
     key: 'texra.latex.customReplacements',
     schema: CoreSettingsShape.latex.unwrap().shape.customReplacements,
     title: 'Custom literal replacements',
@@ -831,8 +858,8 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'config',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'latex',
-  },
-  {
+  }),
+  stateSetting({
     key: TOOL_EDIT_APPROVAL_CONFIG_KEY,
     schema: CoreSettingsShape.toolUse.unwrap().shape.requireEditApproval,
     title: 'Under Ask: require approval for file edits',
@@ -842,8 +869,8 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'config',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'approval',
-  },
-  {
+  }),
+  stateSetting({
     key: BASH_APPROVAL_CONFIG_KEY,
     schema: CoreSettingsShape.toolUse.unwrap().shape.requireBashApproval,
     title: 'Under Ask: require approval for shell commands',
@@ -853,8 +880,8 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'config',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'approval',
-  },
-  {
+  }),
+  stateSetting({
     key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
     title: 'Approval policy',
@@ -867,8 +894,8 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     cliRuntimeReachability: TEXRA_APPROVAL_POLICY_RUNTIME_REACHABILITY,
     enumLabels: ['Never', 'Ask', 'Auto-approve'],
     settingsViewSnapshot: 'approval',
-  },
-  {
+  }),
+  stateSetting({
     key: AGENT_SKILLS_CONFIG_KEY,
     schema: CoreSettingsShape.skills.unwrap().shape.enabled,
     title: 'Agent skills',
@@ -880,8 +907,8 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: 'src/agent/prompt/userVars.ts',
     cliRuntimeReachability: AGENT_SKILLS_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'agent-skills',
-  },
-  {
+  }),
+  stateSetting({
     key: CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
     schema: CoreSettingsShape.childRunConcurrencyBudget,
     title: 'Child-run concurrency budget',
@@ -890,8 +917,8 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'config',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'multi-agent',
-  },
-  {
+  }),
+  stateSetting({
     key: 'texra.telemetry.enabled',
     schema: CoreSettingsShape.telemetry.unwrap().shape.enabled,
     title: 'Usage telemetry',
@@ -902,7 +929,7 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     configTarget: 'global',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'telemetry',
-  },
+  }),
 ];
 
 const SETTINGS_VIEW_SETTINGS_BY_KEY: ReadonlyMap<
