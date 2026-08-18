@@ -1011,53 +1011,44 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     expect(detached).toHaveLength(1);
   });
 
-  it.each([
-    { name: 'resumed run', resume: true },
-    { name: 'fresh launch', resume: false },
-  ])(
-    'releases follow-ups while preserving the record after a persistence read failure: $name',
-    async ({ resume }) => {
-      const suffix = resume ? 'resume' : 'fresh';
-      const executionId = `abc-flow-read-failure-${suffix}` as ExecutionId;
-      const streamId =
-        `chat@gpt54#abc-flow-read-failure-${suffix}` as StreamTabId;
-      const snapshot = resume
-        ? buildToolUseResumeData(executionId, streamId)
-        : undefined;
-      const store = getExecutionStore(executionId);
-      const session = createTestSession();
-      const readFailure = new Error('flow storage unavailable');
-      const readSpy = vi
-        .spyOn(store, 'read')
-        .mockRejectedValueOnce(readFailure);
-      const deleteSpy = vi.spyOn(store, 'delete');
+  // A resumed run has no pre-flow recovery read any more: retrieval reads the
+  // record under the execution lease and hands it in, so only a fresh launch
+  // still probes for a leftover record here.
+  it('releases follow-ups while preserving the record after a persistence read failure', async () => {
+    const executionId = `abc-flow-read-failure-fresh` as ExecutionId;
+    const streamId = `chat@gpt54#abc-flow-read-failure-fresh` as StreamTabId;
+    const snapshot = undefined;
+    const store = getExecutionStore(executionId);
+    const session = createTestSession();
+    const readFailure = new Error('flow storage unavailable');
+    const readSpy = vi.spyOn(store, 'read').mockRejectedValueOnce(readFailure);
+    const deleteSpy = vi.spyOn(store, 'delete');
 
-      try {
-        await expect(
-          runPersistedFlow(executionId, streamId, snapshot, {
-            attachment: {
-              attach: (context) => {
-                context.session.appendFollowUp({
-                  text: 'queued before recovery',
-                });
-              },
+    try {
+      await expect(
+        runPersistedFlow(executionId, streamId, snapshot, {
+          attachment: {
+            attach: (context) => {
+              context.session.appendFollowUp({
+                text: 'queued before recovery',
+              });
             },
-            session,
-          }),
-        ).rejects.toMatchObject({
-          name: PersistedFlowStateError.name,
-          reason: 'read-failed',
-          cause: readFailure,
-        });
-        expect(deleteSpy).not.toHaveBeenCalled();
-        expect(session.followUps.getAll(streamId)).toEqual([]);
-      } finally {
-        readSpy.mockRestore();
-        deleteSpy.mockRestore();
-        session.followUps.terminalize(streamId);
-      }
-    },
-  );
+          },
+          session,
+        }),
+      ).rejects.toMatchObject({
+        name: PersistedFlowStateError.name,
+        reason: 'read-failed',
+        cause: readFailure,
+      });
+      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(session.followUps.getAll(streamId)).toEqual([]);
+    } finally {
+      readSpy.mockRestore();
+      deleteSpy.mockRestore();
+      session.followUps.terminalize(streamId);
+    }
+  });
 
   it('preserves the structured flow error when teardown also fails', async () => {
     const executionId = 'abc-flow-primary-and-teardown-failure' as ExecutionId;
@@ -1219,11 +1210,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         nodes: [],
       },
     },
+    // Fresh launches only: a resume handoff over a malformed record is
+    // unrepresentable now that retrieval validates the same envelope under
+    // the execution lease before any resume reaches the flow.
   ])('rejects and preserves $name', async ({ name, reason, stored }) => {
     const slug = name.replaceAll(' ', '-');
     const executionId = `abc-flow-${slug}` as ExecutionId;
     const streamId = `chat@gpt54#abc-flow-${slug}` as StreamTabId;
-    const snapshot = buildToolUseResumeData(executionId, streamId);
+    const snapshot = undefined;
     const store = getExecutionStore(executionId);
     await store.write(flowKey(executionId), stored);
     const deleteSpy = vi.spyOn(store, 'delete');
@@ -1303,49 +1297,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
   });
 
-  it('skips repair writes when cancellation arrives during the recovery read', async () => {
-    const executionId = 'abc-cancel-read' as ExecutionId;
-    const streamId = 'chat@gpt54#abc-cancel-read' as StreamTabId;
-    const snapshot = buildToolUseResumeData(executionId, streamId);
-    const store = getExecutionStore(executionId);
-    let flowContext: ToolUseSetupContext | undefined;
-    const readSpy = vi.spyOn(store, 'read').mockImplementationOnce(async () => {
-      flowContext?.interrupt();
-      return {
-        flowName: 'texra',
-        shared: {
-          messages: [],
-          shouldSkipCycle: true,
-          stateSlices: snapshot.shared.stateSlices,
-        },
-        createdAt: new Date().toISOString(),
-        cursor: { nextNodeId: 'start' },
-        nodes: [],
-      };
-    });
-    const writeSpy = vi.spyOn(store, 'write');
-    const deleteSpy = vi.spyOn(store, 'delete');
-
-    try {
-      const result = await runPersistedFlow(executionId, streamId, snapshot, {
-        attachment: {
-          attach: (context) => {
-            flowContext = context;
-          },
-        },
-      });
-
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(readSpy).toHaveBeenCalledWith(flowKey(executionId));
-      expect(writeSpy).not.toHaveBeenCalled();
-      expect(deleteSpy).not.toHaveBeenCalled();
-    } finally {
-      readSpy.mockRestore();
-      writeSpy.mockRestore();
-      deleteSpy.mockRestore();
-    }
-  });
-
   it('preserves the resumable flow after an established run is interrupted', async () => {
     const executionId = 'abc-interrupted-conversation' as ExecutionId;
     const streamId = 'chat@gpt54#abc-interrupted-conversation' as StreamTabId;
@@ -1409,8 +1360,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // Reject the flow's first node-step persist with the provider's abort:
     // the run then fails mid-flight through the public storage boundary, the
     // same way a real cancellation reaches `runToolUseFlow` out of the flow.
-    // Only step writes append to the nodes audit log, so the resume
-    // boundary's self-heal write (nodes stays empty) passes through untouched.
+    // Only step writes append to the nodes audit log, so any other write
+    // (nodes stays empty) passes through untouched.
     const realWrite = store.write.bind(store);
     let abortFired = false;
     const writeSpy = vi
@@ -1457,33 +1408,26 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
   });
 
-  it('preserves a follow-up appended during setup when cancellation arrives during the recovery read (issue #8049 P2)', async () => {
+  it('preserves a follow-up appended during setup when cancellation lands at attach (issue #8049 P2)', async () => {
     // Once setup attaches the live flow context, a new follow-up can enter its
-    // session queue before the flow is interruptible. When an external
-    // cancellation then lands while the recovery read is pending -- the same
-    // window as the sibling test above -- the run reports CANCELLED with the
-    // resume record preserved, and the queued input must survive with it:
+    // session queue before the flow is interruptible. When a cancellation
+    // lands in that startup window, the run reports CANCELLED with the resume
+    // record preserved, and the queued input must survive with it:
     // `resumeQueuedToolUseFromResumeData` never restores follow-ups on this
-    // success path, so dropping the item here would lose it for good.
+    // success path, so dropping the item here would lose it for good. (The
+    // former async window during a pre-flow recovery read no longer exists:
+    // a resumed flow does no disk read before it becomes interruptible.)
     const executionId = 'abc-cancel-followup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-followup' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
-    const store = getExecutionStore(executionId);
     const session = createTestSession();
-    let flowContext: ToolUseSetupContext | undefined;
-    const readSpy = vi.spyOn(store, 'read').mockImplementationOnce(async () => {
-      // Cancellation arrives while the recovery read is pending -- after
-      // setup already appended the live follow-up below.
-      flowContext?.interrupt();
-      return undefined;
-    });
 
     try {
       const result = await runPersistedFlow(executionId, streamId, snapshot, {
         attachment: {
           attach: (context) => {
-            flowContext = context;
             context.session.appendFollowUp({ text: 'queued during resume' });
+            context.interrupt();
           },
         },
         session,
@@ -1495,7 +1439,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         'queued during resume',
       ]);
     } finally {
-      readSpy.mockRestore();
       session.dispose();
     }
   });
@@ -1622,12 +1565,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
   });
 
-  it('skips the resume self-heal write when the persisted record is already canonical (issue #8018)', async () => {
+  it('does not write during resume startup before the first flow step (issue #8018)', async () => {
     // `resumeToolUseFromResumeData` passes the resume handoff on every
-    // native-subagent turn, so the resume-branch self-heal write must not
-    // fire when the persisted record already matches what would be
-    // written -- otherwise every turn costs a `StorageFSKVStore` disk
-    // write for a no-op overwrite of identical bytes.
+    // native-subagent turn, so resume startup must not add its own disk
+    // write ahead of the flow's step writes -- otherwise every turn costs
+    // a `StorageFSKVStore` disk write for a no-op overwrite.
     const executionId = 'abc143' as ExecutionId;
     const streamId = 'chat@gpt54#abc143' as StreamTabId;
     await writeFlowRecord(
@@ -1656,10 +1598,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       // `PersistedFlow` still legitimately persists its own node-cursor
       // progress once as the flow steps through to WAITING -- that write is
       // not under test here. What must NOT happen is a *second*, earlier
-      // write from the resume-branch self-heal repairing an already-
-      // canonical record. Every write the flow does make must already carry
-      // the final WAITING cursor, never the pre-step one the self-heal write
-      // would have produced.
+      // resume-startup write. Every write the flow does make must already
+      // carry the final WAITING cursor, never a pre-step one.
       expect(writeSpy.mock.calls.length).toBeGreaterThan(0);
       for (const [, record] of writeSpy.mock.calls) {
         expect((record as FlowRecord).cursor).toEqual({

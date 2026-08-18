@@ -30,7 +30,6 @@ interface LogsPaneModule {
   createLogsPane(options?: {
     sendCommand?: (command: string) => void;
     scheduleRefresh?: (callback: () => void, intervalMs: number) => number;
-    cancelRefresh?: (handle: number) => void;
     refreshIntervalMs?: number;
   }): LogsPaneController;
   parseDesktopLogEntries(text: string): DesktopLogEntry[];
@@ -159,7 +158,7 @@ describe('desktop logs pane', () => {
   it('runs one guarded refresh timer only while the Logs tab is active', async () => {
     const { createLogsPane } = await loadLogsPane();
     const sendCommand = vi.fn();
-    const cancelRefresh = vi.fn();
+    const cancelRefresh = vi.spyOn(window, 'clearInterval');
     let refreshTick: (() => void) | undefined;
     const controller = createLogsPane({
       sendCommand,
@@ -168,7 +167,6 @@ describe('desktop logs pane', () => {
         refreshTick = callback;
         return 17;
       },
-      cancelRefresh,
       refreshIntervalMs: 2_500,
     });
     document.body.append(controller.element);
@@ -187,6 +185,7 @@ describe('desktop logs pane', () => {
     refreshTick?.();
     expect(cancelRefresh).toHaveBeenCalledWith(17);
     expect(sendCommand).toHaveBeenCalledTimes(2);
+    cancelRefresh.mockRestore();
   });
 
   it('preserves the four existing toolbar commands', async () => {

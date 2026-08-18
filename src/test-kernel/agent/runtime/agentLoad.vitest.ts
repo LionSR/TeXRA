@@ -22,7 +22,6 @@ import {
   resolveAgentForLaunch,
   type ResolvedAgent,
 } from '@agent/index';
-import { isAgentRegistryReady } from '@agent/index/agentRegistry';
 import {
   loadAgentSettingAndPrompts,
   validateAgentYamlContent,
@@ -573,7 +572,7 @@ describe('agent registry load state', () => {
     const counter = { scans: 0 };
     await installDirectories(countingDirectories(counter));
     await refresh({ includeRemote: false });
-    assert.strictEqual(isAgentRegistryReady(), true);
+    assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
 
     const scanFailure = new Error('agent directory unavailable');
     await installDirectories({
@@ -586,9 +585,7 @@ describe('agent registry load state', () => {
 
     await assert.rejects(refresh({ includeRemote: false }), scanFailure);
 
-    // A failed rebuild leaves the previously published catalog in place, so
-    // readiness must keep describing what the cache still holds.
-    assert.strictEqual(isAgentRegistryReady(), true);
+    // A failed rebuild leaves the previously published catalog in place.
     assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
   });
 });
