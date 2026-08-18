@@ -196,16 +196,16 @@ intermediate lines permanent in a raw append-only file) cannot occur.
 
 ## 5. What this deletes (from the verified audit inventory; re-verify per PR)
 
-| Retired with the journal (by stage) | ~LOC |
-| --- | --- |
-| `StreamLogStore` write-behind tier (throttle, dirtyIds, writeQueue, generations, tombstones, flush loop) | 355 |
-| `StreamLogStore` residency tier (eviction, hydrate-merge, leases, loadFailed) | 400 |
-| Summary tier + #9947 mirror/antechamber (store + snapshot sides) | 310 |
-| Corrupt-file round-trip + legacy normalization arms | 130 |
-| `StagedDeletionCoordinator` + snapshot integration | 730 |
-| `StreamSnapshotStore` coherence protocol (seed/overlay/mutex/dirty-write/refresh/version/flush) | ~1,000 |
-| Recorder writer choreography + consumer ceremony (reservedWriter threading, ensureLoaded preloads, archive store ceremony, timestamp latch) | ~200 |
-| Pinned test suites retired with their machinery | ~2,500 |
+| Retired with the journal (by stage)                                                                                                         | ~LOC   |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `StreamLogStore` write-behind tier (throttle, dirtyIds, writeQueue, generations, tombstones, flush loop)                                    | 355    |
+| `StreamLogStore` residency tier (eviction, hydrate-merge, leases, loadFailed)                                                               | 400    |
+| Summary tier + #9947 mirror/antechamber (store + snapshot sides)                                                                            | 310    |
+| Corrupt-file round-trip + legacy normalization arms                                                                                         | 130    |
+| `StagedDeletionCoordinator` + snapshot integration                                                                                          | 730    |
+| `StreamSnapshotStore` coherence protocol (seed/overlay/mutex/dirty-write/refresh/version/flush)                                             | ~1,000 |
+| Recorder writer choreography + consumer ceremony (reservedWriter threading, ensureLoaded preloads, archive store ceremony, timestamp latch) | ~200   |
+| Pinned test suites retired with their machinery                                                                                             | ~2,500 |
 
 New code: journal writer + fold + listing (~500–700), well under the
 deletions. Tests: a few at the durable boundary (journal round-trip, fold
