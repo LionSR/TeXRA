@@ -13,11 +13,11 @@ import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   claudeAgentSessionsFor,
   codexThreadsFor,
 } from '@tools/agentCliSessionStores';
-import { createTestSession } from '@test/support/sessionTestUtils';
 import { getSetupPlatform } from '@tools/setup/platform';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';

@@ -44,6 +44,7 @@ import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProce
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
+import { DisposableStore } from '@platform/disposable';
 import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, agentKeyOf, type AgentSource } from '@shared/schemas';
@@ -157,13 +158,11 @@ let pendingWorkspaceRelaunch:
 let continueQuitAfterWindowClose: (() => void) | undefined;
 // Serializes the lifecycle promises returned by each window's diff-host
 // disposal. The disposal call itself still starts synchronously in the
-// `closed` handler; only the returned completion promise is queued, so a
-// window's `disposed` flag flips before earlier cleanup settles.
+// window-root store's disposal; only the returned completion promise is
+// queued, so a window's `disposed` flag flips before earlier cleanup settles.
+// The lifecycle shutdown drain awaits the queue's idle, so recursive temp-dir
+// removals finish before the process exits instead of racing the quit flow.
 const diffHostDisposeQueue = new PQueue({ concurrency: 1 });
-// Set by the window's closed handler and awaited by the lifecycle shutdown
-// drain registered below, so recursive temp-dir removals finish before the
-// process exits instead of racing the quit flow.
-let pendingDesktopDiffHostDispose: Promise<void> | undefined;
 
 // Playwright relaunch tests need a deterministic Electron profile so
 // app-scoped stores survive across child processes. Normal desktop launches
@@ -300,10 +299,16 @@ function createWindow(options: {
     },
   });
   mainWindow = window;
-  const disposeWindowTitle = installDesktopWindowTitle(
-    window,
-    options.processSession,
-    options.workspacePath,
+  // Window root: every resource scoped to this BrowserWindow registers here at
+  // creation, and the `closed` handler disposes the store (LIFO) instead of
+  // running a hand-ordered teardown ledger.
+  const windowResources = new DisposableStore();
+  windowResources.add(
+    installDesktopWindowTitle(
+      window,
+      options.processSession,
+      options.workspacePath,
+    ),
   );
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
@@ -463,14 +468,16 @@ function createWindow(options: {
     showErrorMessage,
     onSessionChanged: refreshDesktopAuthSurfaces,
   };
-  const desktopAuth = createDesktopSupabaseAuth({
-    router: protocolLifecycle.router,
-    coordinator: options.authCoordinator,
-    oauthClient: SupabaseClient.getClient(),
-    callbackState: options.authCallbackState,
-    host: desktopAuthHost,
-    log: console,
-  });
+  const desktopAuth = windowResources.add(
+    createDesktopSupabaseAuth({
+      router: protocolLifecycle.router,
+      coordinator: options.authCoordinator,
+      oauthClient: SupabaseClient.getClient(),
+      callbackState: options.authCallbackState,
+      host: desktopAuthHost,
+      log: console,
+    }),
+  );
   /**
    * Sole owner of the desktop sign-in provider choice. Every sign-in entry
    * point (login banner, credential settings, remote-agent catalog) routes
@@ -500,9 +507,7 @@ function createWindow(options: {
     }
   };
   initializeDesktopSetupAuth();
-  const setupSignInRegistration = registerDesktopSetupSignIn(
-    signInForRemoteAgentCatalog,
-  );
+  windowResources.add(registerDesktopSetupSignIn(signInForRemoteAgentCatalog));
   const folderPickerDefaultPath = options.workspacePath ?? app.getPath('home');
   // The renderer owns editor dirtiness. This event is the main process's only
   // reading of it: Chromium emits it after the renderer's beforeunload handler
@@ -563,6 +568,16 @@ function createWindow(options: {
       return true;
     },
   });
+  // Not fire-and-forget: every quit path reaches the before-quit handler,
+  // whose lifecycle drain awaits the dispose queue's idle before the final
+  // quit. `desktopDiffHost.dispose()` is invoked synchronously here (so
+  // `disposed` flips immediately); the queue only orders when this window's
+  // completion promise resolves, keeping a macOS dock-reopen from discarding
+  // an earlier window's still-running cleanup.
+  windowResources.add(() => {
+    const current = desktopDiffHost.dispose().catch(reportBackgroundError);
+    void diffHostDisposeQueue.add(() => current);
+  });
   const agentExecutionHost: DesktopAgentExecutionHost = {
     openPath: previewHost.openPath,
     openBuildDisplay: previewHost.openBuildDisplay,
@@ -611,6 +626,22 @@ function createWindow(options: {
   // Aborted once the window is closed: the signal is both the presentation
   // cancellation token and this window's "gone" fact.
   const presentationAbort = new AbortController();
+  windowResources.add(() => {
+    if (agentExecution) {
+      agentExecution.dispose();
+    } else {
+      void agentExecutionLoad
+        ?.then((execution) => execution.dispose())
+        .catch((error: unknown) => {
+          if (!(error instanceof Error && error.name === 'AbortError')) {
+            reportBackgroundError(error);
+          }
+        });
+    }
+  });
+  // Registered after the execution disposer so LIFO disposal aborts the
+  // presentation signal first, cancelling an in-flight lazy load.
+  windowResources.add(() => presentationAbort.abort());
   const getAgentExecution = async (): Promise<DesktopProgressBridge> => {
     if (agentExecution) return agentExecution;
     if (presentationAbort.signal.aborted) {
@@ -1047,6 +1078,9 @@ function createWindow(options: {
       onAsyncError: reportAsyncError,
     },
   );
+  // Shells keep running and web contents keep loading unless explicitly torn
+  // down — neither is reachable once the window is gone.
+  windowResources.add(() => workspaceIpc.disposeRendererResources());
   let initialRendererNavigationComplete = false;
   window.webContents.on('did-navigate', () => {
     if (!initialRendererNavigationComplete) {
@@ -1100,39 +1134,17 @@ function createWindow(options: {
     const workspaceRelaunch = pendingWorkspaceRelaunch;
     const continueQuit = continueQuitAfterWindowClose;
     continueQuitAfterWindowClose = undefined;
-    disposeWindowTitle();
-    presentationAbort.abort();
-    // Not fire-and-forget: every quit path (window-all-closed on Windows and
-    // Linux, continueQuit, the workspace relaunch's app.quit()) reaches the
-    // before-quit handler, whose lifecycle drain awaits this promise before
-    // the final quit. `desktopDiffHost.dispose()` is invoked synchronously
-    // here (so `disposed` flips immediately); the queue only orders when this
-    // window's completion promise resolves, keeping a macOS dock-reopen from
-    // discarding an earlier window's still-running cleanup.
-    const current = desktopDiffHost.dispose().catch(reportBackgroundError);
-    pendingDesktopDiffHostDispose = diffHostDisposeQueue.add(() => current);
+    try {
+      windowResources.dispose();
+    } catch (error) {
+      reportBackgroundError(error);
+    }
     if (mainWindow === window) {
       mainWindow = null;
       if (process.platform === 'darwin') {
         Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }]));
       }
     }
-    if (agentExecution) {
-      agentExecution.dispose();
-    } else {
-      void agentExecutionLoad
-        ?.then((execution) => execution.dispose())
-        .catch((error: unknown) => {
-          if (!(error instanceof Error && error.name === 'AbortError')) {
-            reportBackgroundError(error);
-          }
-        });
-    }
-    desktopAuth.dispose();
-    setupSignInRegistration.dispose();
-    // Shells keep running and web contents keep loading unless explicitly torn
-    // down — neither is reachable once the window is gone.
-    workspaceIpc.disposeRendererResources();
     if (workspaceRelaunch) {
       void (async () => {
         try {
@@ -1220,12 +1232,20 @@ if (protocolLifecycle.shouldContinue) {
         processSession.interactions,
         { replayWhenAttached: true },
       );
-      let disposeProcessStores = (): void => undefined;
-      let disposeAgentResumeHandler = (): void => undefined;
+      // Fill-later slot for the process-resume attachment made below: the
+      // BEFORE drain detaches it first (before agent shutdown), and the
+      // idempotent store makes the ON-phase repeat a no-op.
+      const agentResumeHandler = new DisposableStore();
+      // Process root: session-lifetime resources register at creation and are
+      // disposed LIFO in the ON phase (process stores → result toast →
+      // session).
+      const processResources = new DisposableStore();
+      processResources.add(() => processSession.dispose());
+      processResources.add(detachTerminalResultToast);
       let sessionStores!: SessionStores;
-      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => {
-        disposeAgentResumeHandler();
-      });
+      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+        agentResumeHandler.dispose(),
+      );
       registerAgentShutdownHandlers(lifecycle);
       lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
       // Agent shutdown runs first so its final events enter the process-owned
@@ -1234,18 +1254,15 @@ if (protocolLifecycle.shouldContinue) {
       lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
         processSession.flushArtifacts(),
       );
-      // The window's closed handler starts diff temp-dir removal before the
-      // quit lifecycle drains; awaiting it here keeps the process alive until
-      // the directories are actually gone.
-      lifecycle.onShutdown(
-        SHUTDOWN_PHASE.BEFORE,
-        () => pendingDesktopDiffHostDispose,
+      // Each window's closed handler starts diff temp-dir removal before the
+      // quit lifecycle drains; awaiting the queue's idle here keeps the
+      // process alive until the directories are actually gone.
+      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+        diffHostDisposeQueue.onIdle(),
       );
       lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
-        disposeAgentResumeHandler();
-        detachTerminalResultToast();
-        disposeProcessStores();
-        processSession.dispose();
+        agentResumeHandler.dispose();
+        processResources.dispose();
       });
 
       // Until the initial window is fully wired, any startup failure must run
@@ -1254,7 +1271,7 @@ if (protocolLifecycle.shouldContinue) {
       try {
         const processStores =
           await initializeDesktopProcessStores(processSession);
-        disposeProcessStores = () => processStores.dispose();
+        processResources.add(() => processStores.dispose());
         await processSession.waitUntilReady();
         processSession.setApprovalPolicy(
           readPersistedTexraApprovalPolicy((key, fallback) =>
@@ -1262,9 +1279,9 @@ if (protocolLifecycle.shouldContinue) {
           ),
         );
         sessionStores = processStores.stores;
-        disposeAgentResumeHandler = processResumeOwner.attach({
-          session: processSession,
-        });
+        agentResumeHandler.add(
+          processResumeOwner.attach({ session: processSession }),
+        );
         // Ask the renderer to close before draining process services. A dirty
         // editor can veto that close and remain fully operational. Once the
         // window really closes, its handler calls app.quit() again and this

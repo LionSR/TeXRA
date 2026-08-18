@@ -46,6 +46,7 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
 import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import { DisposableStore } from '@platform/disposable';
 import type {
   AgentSource,
   ExecutionId,
@@ -59,7 +60,6 @@ import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
 } from '@shared/schemas';
-import { DisposableStore } from '@platform/disposable';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
