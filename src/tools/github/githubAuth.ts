@@ -9,7 +9,7 @@
  * explicit fallback. Because every host wires `platform().secrets`, GitHub
  * tools work in the CLI and desktop too, not just the extension.
  */
-import { tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */
@@ -41,11 +41,10 @@ function getGitHubEnvToken(
 }
 
 export async function getGitHubToken(): Promise<string | undefined> {
-  const secrets = tryPlatform()?.secrets;
-  // No platform yet (e.g. module-level init before `initPlatform()` runs):
-  // there's no secrets seam to call, so read process.env directly — same
-  // documented pre-init exception as `tryPlatform()` itself.
-  if (!secrets) return getGitHubEnvToken((name) => process.env[name]);
+  // Every caller runs post-init (tool status probes, GitHub client, setup
+  // commands), so an uninitialized platform here is a programming error and
+  // must throw instead of silently degrading to a process.env read.
+  const secrets = platform().secrets;
   const stored = await secrets.get(GITHUB_TOKEN_STORAGE_KEY);
   return (
     normalizeGitHubToken(stored) ??

@@ -28,6 +28,10 @@ const PROVIDERS: ReadonlyMap<string, ProviderStateEntry> = new Map(
   PROVIDER_STATE_ENTRIES.map((provider) => [provider.id, provider]),
 );
 
+// The lowercase retry is load-bearing: the API-key spelling 'openRouter'
+// (EXTRA_API_KEY_PROVIDER_IDS, ModelHandler dispatch) and the registry id
+// 'openrouter' must resolve to the same entry until the carrier is retyped
+// (overdefensive-top10 #8's "lowercase once at registry load" is that PR).
 function entry(provider: string): ProviderStateEntry | undefined {
   return PROVIDERS.get(provider) ?? PROVIDERS.get(provider.toLowerCase());
 }
