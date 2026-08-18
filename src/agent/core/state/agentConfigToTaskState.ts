@@ -10,7 +10,8 @@ import { type TaskState } from './TaskState';
  * `TaskState` vocabulary living beside it.
  */
 export function agentConfigToTaskState(config: AgentConfig): TaskState {
-  switch (config.agentCategory) {
+  const { agentCategory } = config;
+  switch (agentCategory) {
     case AgentCategory.ToolUse:
       return {
         agentConfig: config,
@@ -26,7 +27,7 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
         },
       };
     default: {
-      const _exhaustive: never = config.agentCategory;
+      const _exhaustive: never = agentCategory;
       throw new Error(`Unknown agent category: ${String(_exhaustive)}`);
     }
   }

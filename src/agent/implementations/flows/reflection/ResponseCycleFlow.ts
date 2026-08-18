@@ -614,7 +614,10 @@ export function createResponseCycleFlow<C>(): Flow<
   ResponseCycleServices<C>
 > {
   const prepNode = new ResponsePrepNode<C>();
-  const invokeNode = new ModelInvocationNode({
+  const invokeNode = new ModelInvocationNode<
+    ResponseCycleShared,
+    ResponseCycleServices<C>
+  >({
     operationName: 'Model invocation',
     streaming: false,
     backgroundModeAware: true,

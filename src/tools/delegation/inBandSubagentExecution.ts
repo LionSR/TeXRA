@@ -516,7 +516,18 @@ async function executeInBand(
     const result = resultMeta.result;
     const childFailed =
       settledTurn.isError || result.outcome === RUN_OUTCOME.FAILED;
+    // The raw application error when the turn threw; otherwise the typed
+    // result's own structured error (the result-only contract). Read the
+    // settled turn's fields into consts: `settledTurn` stays assignable inside
+    // the onTurnSettled callback, so a closure cannot keep the narrowing.
+    const turnError = settledTurn.error;
     const turnMessage = settledTurn.message;
+    const childError = () =>
+      turnError ??
+      new Error(
+        result.error?.message ??
+          `Subagent ${executionId} ended with failed outcome.`,
+      );
 
     if (loopFailure instanceof SubagentCommitError) throw loopFailure;
     if (loopFailure !== undefined && stableCompletionCommitted) {
@@ -536,7 +547,7 @@ async function executeInBand(
       let persisted: ResultMeta | null;
       try {
         persisted = await store.readResultMeta();
-      } catch (cause) {
+      } catch {
         persisted = null;
       }
       if (!persisted) {

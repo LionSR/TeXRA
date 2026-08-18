@@ -248,8 +248,6 @@ async function buildAgentBlueprint(
   ui: AgentCreatorUI,
 ): Promise<AgentBlueprint | undefined> {
   const base = { AGENT_NAME: agentName, DESCRIPTION: description };
-  const targetDir = await ui.getCustomAgentDir();
-  const filePath = path.join(targetDir, `${agentName}.yaml`);
 
   if (category === 'toolUse') {
     const picked = await ui.pickTools(
@@ -258,10 +256,11 @@ async function buildAgentBlueprint(
       suggestToolGroups(description),
     );
     if (!picked) return undefined;
+    const targetDir = await ui.getCustomAgentDir();
     return {
       category: 'toolUse',
       agentName,
-      filePath,
+      filePath: path.join(targetDir, `${agentName}.yaml`),
       aiVars: {
         ...base,
         SELECTED_TOOLS: picked.tools.join(', '),
@@ -275,13 +274,14 @@ async function buildAgentBlueprint(
     };
   }
 
+  const targetDir = await ui.getCustomAgentDir();
   return {
     category: 'workflow',
     agentName,
-    filePath,
-    aiVars: base,
+    filePath: path.join(targetDir, `${agentName}.yaml`),
+    aiVars: { ...base },
     fallbackTemplate: config.templates.workflowSingle,
-    fallbackVars: base,
+    fallbackVars: { ...base },
   };
 }
 

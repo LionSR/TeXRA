@@ -94,9 +94,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    */
   private readonly handlerRegistry: ProgressViewInboundHandlerRegistry;
 
-  /** The one info-notification adapter the controller ports are wired to. */
-  private readonly showInfo = (message: string): Promise<void> =>
-    this.host.info(message);
+  /**
+   * The one info-notification adapter the controller ports are wired to. The
+   * host returns the chosen button, which no port consumer reads — discard it
+   * so the port stays a plain notification.
+   */
+  private readonly showInfo = async (message: string): Promise<void> => {
+    await this.host.info(message);
+  };
 
   constructor(
     private readonly provider: ProgressViewProvider,
@@ -226,8 +231,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         pickFormat: () => this.pickTranscriptExportFormat(),
         openPath: (filePath, kind) => this.openExportPath(filePath, kind),
         showInfo: this.showInfo,
-        showWarning: (message) => this.host.warning(message),
-        showError: (message) => this.host.error(message),
+        showWarning: async (message) => {
+          await this.host.warning(message);
+        },
+        showError: async (message) => {
+          await this.host.error(message);
+        },
         reportDetail: (message, data) => {
           this.logger.error(this.channel, message, { data });
         },

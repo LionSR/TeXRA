@@ -1,6 +1,5 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { Stats } from 'node:fs';
 
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
@@ -26,6 +25,7 @@ import {
   type CliConfigValues,
 } from './cliConfig';
 import { resolveCliResourcesPath } from './resourcesPath';
+import type { Stats } from 'node:fs';
 
 type CliMode = 'headless' | 'interactive';
 

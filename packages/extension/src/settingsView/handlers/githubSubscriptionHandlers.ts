@@ -49,7 +49,7 @@ export class GitHubSubscriptionHandlers {
       placeHolder: 'ghp_…',
       ignoreFocusOut: true,
     });
-    const trimmed = token.trim();
+    const trimmed = token?.trim();
     if (!trimmed) return;
     await withHandlerErrorHandling(
       this.ctx,

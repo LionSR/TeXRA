@@ -1151,6 +1151,13 @@ function renderBootstrapFallback(error: unknown): void {
   );
 }
 
+function reportRuntimeFailure(error: unknown): void {
+  const shouldReload = window.confirm(
+    `TeXRA encountered an unexpected error.\n\n${toBootstrapErrorMessage(error)}\n\nReload TeXRA now?`,
+  );
+  if (shouldReload) window.location.reload();
+}
+
 function recoverFromBootstrapFallback(): void {
   try {
     bootstrapFailed = false;
@@ -1228,10 +1235,7 @@ window.addEventListener('unhandledrejection', (event) => {
   event.preventDefault();
   console.error('TeXRA desktop renderer unhandled rejection', event.reason);
   if (bootstrapComplete) {
-    const shouldReload = window.confirm(
-      `TeXRA encountered an unexpected error.\n\n${toBootstrapErrorMessage(event.reason)}\n\nReload TeXRA now?`,
-    );
-    if (shouldReload) window.location.reload();
+    reportRuntimeFailure(event.reason);
     return;
   }
   bootstrapFailed = true;
