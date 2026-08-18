@@ -376,8 +376,14 @@ export class SessionHandle {
 
     // A parked WAITING stream is not part of the bounded startup seed, so its
     // snapshot record is deliberately absent. Resolve the authoritative
-    // one-file sidecar FK first, then the always-resident summary mirror for
-    // legacy streams without a persisted FK. A read failure must not reject a
+    // one-file sidecar FK first, then the always-resident summary mirror. The
+    // mirror arm is load-bearing, not just legacy compat: `run.start`
+    // publishes the execution id to the mirror synchronously while the async
+    // sidecar FK flush may still be in flight (or lost to a crash), so a
+    // genuinely owned stream can transiently have only the mirror FK. It also
+    // covers legacy streams that never got a persisted sidecar FK; the two
+    // roles share this one read and separate only once run identity becomes a
+    // synchronous appended fact. A read failure must not reject a
     // follow-up submission; let `submitFollowUp` surface its own routing result.
     let executionId: string | undefined;
     try {
@@ -724,8 +730,11 @@ export class SessionHandle {
       async (streamId) => {
         // The stream→execution reverse edge is the persisted sidecar FK;
         // name resemblance is never ownership. Read that authority first and
-        // fall back to the always-resident summary mirror only for legacy
-        // streams without a persisted FK. A stream with neither stays unmapped
+        // fall back to the always-resident summary mirror. The mirror arm is
+        // load-bearing beyond legacy streams without a persisted FK: `run.start`
+        // publishes to the mirror synchronously while the sidecar FK flush is
+        // async, so a crash inside that window leaves the mirror as the only
+        // record of ownership. A stream with neither stays unmapped
         // and is skipped by repair.
         try {
           const persisted =
