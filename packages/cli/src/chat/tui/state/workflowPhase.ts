@@ -31,12 +31,12 @@ export function currentWorkflowPhaseHeading(
   if (!phase) return undefined;
   return {
     phaseLabel: phase.phaseLabel,
-    ...(phase.phaseIndex !== undefined ? { phaseIndex: phase.phaseIndex } : {}),
-    ...(phase.phaseTotal !== undefined ? { phaseTotal: phase.phaseTotal } : {}),
+    phaseIndex: phase.phaseIndex,
+    phaseTotal: phase.phaseTotal,
   };
 }
 
-/** Nearest workflow-script ancestor's current phase, including `streamId`. */
+/** Nearest workflow-script ancestor's current phase, walking parent links. */
 export function ancestorWorkflowPhaseHeading(init: {
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;

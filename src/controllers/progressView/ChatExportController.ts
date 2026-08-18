@@ -17,7 +17,6 @@
  * constructor instead of the controller importing `@resources`.
  */
 
-// Local imports
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import {
   formatChatAsMarkdown,
@@ -39,10 +38,6 @@ import {
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { StorageFS } from '@utils/files/storageFS';
-
-// ============================================================
-// Result types
-// ============================================================
 
 /** Outcome of loading execution data for export. */
 export type ExportInputStatus =
@@ -72,10 +67,6 @@ type HtmlExportStatus = Exclude<AssembleTraceResult['status'], 'ok'>;
 export type HtmlExportOutcome =
   | { readonly status: 'ok'; readonly result: ChatExportResult }
   | { readonly status: HtmlExportStatus };
-
-// ============================================================
-// Controller
-// ============================================================
 
 interface ChatExportControllerDeps {
   /**
