@@ -35,7 +35,10 @@ function tokenCounts(usage: InteractionsUsage | null): GoogleTokenCounts {
 
   return {
     inputTokens,
-    outputTokens: Math.max(directOutput, derivedOutput),
+    // Not `Math.max`: `derivedOutput` is a fallback estimate, and
+    // `total_tokens` can carry tokens beyond `inputTokens + directOutput`
+    // (cached input), so preferring the larger value double-counts.
+    outputTokens: directOutput > 0 ? directOutput : derivedOutput,
     reasoningTokens,
   };
 }
