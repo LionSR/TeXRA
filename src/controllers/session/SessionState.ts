@@ -64,13 +64,6 @@ const EMPTY_STORED_STREAM_METADATA: StoredStreamMetadata = Object.freeze({});
 /** Ephemeral session state per stream (not persisted). */
 interface StreamSessionState {
   metadata: StoredStreamMetadata;
-  /**
-   * Creation time to report until the transcript has a first entry to date the
-   * tab by. Latched to that entry's timestamp once one exists, so a later
-   * eviction cannot move an established tab back to when this session first
-   * saw it.
-   */
-  provisionalCreationTimestamp: number;
 }
 
 interface CachedStreamMetadata {
@@ -207,11 +200,7 @@ export class SessionState {
   private getOrCreateSession(stream: StreamTabId): StreamSessionState {
     let state = this._sessionState.get(stream);
     if (!state) {
-      state = {
-        metadata: {},
-        provisionalCreationTimestamp:
-          this.streamLogs.getTimestampRange(stream).first ?? Date.now(),
-      };
+      state = { metadata: {} };
       this._sessionState.set(stream, state);
     }
     return state;
@@ -297,12 +286,10 @@ export class SessionState {
 
   /**
    * Read effective metadata. For a live stream this lazily creates the
-   * ephemeral record and latches its provisional creation timestamp to the
-   * transcript's first entry, so a later eviction cannot move an established
-   * tab back to when this session first saw it. A removed stream is read
-   * read-only from the durable summary mirror: the tombstone gate calls this
-   * to inspect a re-claimed identity, and minting the ephemeral record here
-   * would undo the deletion the barrier exists to protect.
+   * ephemeral record. A removed stream is read read-only from the durable
+   * summary mirror: the tombstone gate calls this to inspect a re-claimed
+   * identity, and minting the ephemeral record here would undo the deletion
+   * the barrier exists to protect.
    */
   getStreamMetadata(stream: StreamTabId): Readonly<SessionStreamMetadata> {
     const removed = this.isStreamRemoved(stream);
@@ -310,9 +297,6 @@ export class SessionState {
     const stored = session?.metadata ?? EMPTY_STORED_STREAM_METADATA;
     const summary = this.streamLogs.getSummaryMeta(stream);
     const firstTimestamp = this.streamLogs.getTimestampRange(stream).first;
-    if (session && firstTimestamp !== undefined) {
-      session.provisionalCreationTimestamp = firstTimestamp;
-    }
     const cached = this._streamMetadataCache.get(stream);
     if (
       cached?.stored === stored &&
@@ -324,14 +308,11 @@ export class SessionState {
     }
     const value: Readonly<SessionStreamMetadata> = {
       ...this.applySummaryMetadata(stored, summary),
-      // A removed, never-read stream has no durable timestamp to recover.
-      // Latch an ordering-only value without recreating its ephemeral record;
-      // removed streams are excluded from the rail and never listed again.
+      // A stream with no transcript entry yet has no durable timestamp to
+      // recover; keep the previously reported provisional value so ordering
+      // stays stable, minting one only on the very first read.
       creationTimestamp:
-        firstTimestamp ??
-        session?.provisionalCreationTimestamp ??
-        cached?.value.creationTimestamp ??
-        Date.now(),
+        firstTimestamp ?? cached?.value.creationTimestamp ?? Date.now(),
     };
     this._streamMetadataCache.set(stream, {
       stored,

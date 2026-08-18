@@ -376,15 +376,15 @@ export function findCliModelAccessEntry(
 }
 
 /**
- * Output projection for JSON/NDJSON: prefix the model record with `id` so the
- * model id is addressable under the same key (`.id`) as every other CLI
- * resource (`agents`, `multi-agent`, `history`). `value` is kept for backward
- * compatibility with existing scripts.
+ * Output projection for JSON/NDJSON: the model id is addressable under the
+ * same key (`.id`) as every other CLI resource (`agents`, `multi-agent`,
+ * `history`).
  */
 export function cliModelRecord(
   model: ModelOptionData,
-): { id: string } & ModelOptionData {
-  return { id: model.value, ...model };
+): { id: string } & Omit<ModelOptionData, 'value'> {
+  const { value, ...rest } = model;
+  return { id: value, ...rest };
 }
 
 export function listableModelAccessEntries(

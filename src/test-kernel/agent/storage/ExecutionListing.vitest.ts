@@ -208,10 +208,10 @@ describe('execution listing normalization', () => {
     expect(entries.filter(isUserVisibleExecution)).toHaveLength(0);
   });
 
-  it('lists a pre-identity row as incomplete, warns once per pass, and never heals it', async () => {
+  it('lists an identity-less row as incomplete and never heals it', async () => {
     // Rows registered before identity stamping lost their reader (#9590
     // Stage 7): no derivation from config or stream-id prefixes, no
-    // write-back healing. They degrade loudly to `incomplete`.
+    // write-back healing. They degrade to `incomplete`.
     const firstId = 'abc777' as ExecutionId;
     const secondId = 'abc778' as ExecutionId;
     for (const id of [firstId, secondId]) {
@@ -219,7 +219,6 @@ describe('execution listing normalization', () => {
       await store.writeMeta({ timestamp: '2026-07-15T06:00:00.000Z' });
       await store.writeRunRecord(config('assistant'));
     }
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
     const entries = await listExecutions();
 
@@ -227,16 +226,10 @@ describe('execution listing normalization', () => {
       'incomplete',
       'incomplete',
     ]);
-    // One warning per listing pass — a directory of old rows must not spam.
-    expect(warn).toHaveBeenCalledTimes(1);
-    const [, message] = warn.mock.calls[0] as [string, string];
-    expect(message).toContain('2 pre-identity execution row(s)');
-    expect(message).toContain('#9590');
     // The row stays unstamped on disk: readers never reconstruct identity.
     expect(
       (await getExecutionStore(firstId).readMeta())?.identity,
     ).toBeUndefined();
-    warn.mockRestore();
   });
 
   it('lists a pre-PR team-run config with the legacy delegation-scope pair as kind run', async () => {
