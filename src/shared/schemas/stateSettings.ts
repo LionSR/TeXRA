@@ -697,6 +697,11 @@ const GIT_WORKTREE_RUNTIME_REACHABILITY = {
   through:
     'packages/cli/src/runtime/initPlatform.ts -> packages/cli/src/runtime/gitAuthor.ts -> src/tools/delegation/DelegationTools.ts',
 } satisfies CliRuntimeReachability;
+const DETACH_SUBAGENTS_RUNTIME_REACHABILITY = {
+  command: 'texra chat',
+  through:
+    'packages/cli/src/commands/chat.ts -> packages/cli/src/chat/tui/runChatTui.tsx -> packages/cli/src/chat/chatSessionController.ts -> src/agent/runtime/detachSubagentsOnStop.ts',
+} satisfies CliRuntimeReachability;
 const WORKFLOW_COMPILE_RUNTIME_REACHABILITY = {
   command:
     'texra run <workflow-agent> --input paper.tex --instruction "revise the paper"',
@@ -979,8 +984,11 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Let active subagents continue when the orchestrator is stopped.',
     category: 'multi-agent',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/agent/runtime/detachSubagentsOnStop.ts'),
-    surfaces: { settingsView: 'multi-agent' },
+    honoredBy: everyHost(
+      'src/agent/runtime/detachSubagentsOnStop.ts',
+      DETACH_SUBAGENTS_RUNTIME_REACHABILITY,
+    ),
+    surfaces: { settingsView: 'multi-agent', cliConfig: true },
   }),
 
   // --- External coding agent controls ---------------------------------------
