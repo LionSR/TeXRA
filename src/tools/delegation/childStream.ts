@@ -11,6 +11,7 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import { classifyAgentError } from '@common/errors';
 import { RUN_OUTCOME, STREAM_PHASE, type AgentCategory } from '@shared/schemas';
 import type {
@@ -82,14 +83,6 @@ export interface ChildStream {
   finalize: (options?: FinalizeChildStreamOptions) => Promise<void>;
 }
 
-/** Derive the durable stream identity shared by registration and creation. */
-export function getChildStreamId(
-  executionId: ExecutionId,
-  streamPrefix: string,
-): StreamTabId {
-  return `${streamPrefix}#${executionId}` as StreamTabId;
-}
-
 /**
  * Normalize a child task's raw label to the ≤80-char display description.
  * Single owner of that cap for both the durable authority write
@@ -107,7 +100,7 @@ export function createChildStream(
   parentStreamId: StreamTabId,
   options: CreateChildStreamOptions,
 ): ChildStream {
-  const childStreamId = getChildStreamId(executionId, options.streamPrefix);
+  const childStreamId = getStreamTabId(options.streamPrefix, { executionId });
 
   // Capture the run's session at creation (inside the parent run's ALS); the
   // status-update and finalize closures below fire later, possibly outside it.
@@ -276,7 +269,7 @@ export async function createRehydratedChildStream(
   options: CreateChildStreamOptions,
 ): Promise<ChildStream> {
   const session = currentSession();
-  const childStreamId = getChildStreamId(executionId, options.streamPrefix);
+  const childStreamId = getStreamTabId(options.streamPrefix, { executionId });
   const writer = await session.transcripts.loadAndAcquireWriter(
     childStreamId,
     executionId,

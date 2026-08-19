@@ -153,7 +153,7 @@ class ToolUsePersistedFlow<C> extends PersistedFlow<
 > {
   async prepareForFollowUp(shared: ToolUseRunShared): Promise<void> {
     shared.shouldSkipCycle = true;
-    await this.resetNodeHistory(shared);
+    await this.rewindToStart(shared);
   }
 }
 

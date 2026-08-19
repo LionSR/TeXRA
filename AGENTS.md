@@ -132,9 +132,9 @@ frozen deep-import lists, not another lint rule.
 - `packages/extension/src/common/` holds extension-only helpers (state managers, webview base classes):
   - `packages/extension/src/common/state/` - State managers including `pendingStateManager`
   - `packages/extension/src/common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
-- `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: as of this writing exactly seven modules are reachable from `webview/frontend/`, `progressView/frontend/` and `settingsView/frontend/` — `@utils/core`, `@utils/core/boundedIdSet`, `@utils/core/keyedMutex`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`, `@utils/text/diff`. Those seven, and anything they import, must not reach for Node built-ins. There are 63 TypeScript modules under `src/utils/` in the current tree; the other 56 are not browser-reachable today and must not be assumed browser-safe. `scripts/check-browser-safe-utils.mjs` enforces the count and reachable set.
+- `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: as of this writing exactly six modules are reachable from `webview/frontend/`, `progressView/frontend/` and `settingsView/frontend/` — `@utils/core`, `@utils/core/boundedIdSet`, `@utils/core/keyedMutex`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`. Those six, and anything they import, must not reach for Node built-ins. There are 64 TypeScript modules under `src/utils/` in the current tree; the other 58 are not browser-reachable today and must not be assumed browser-safe. `scripts/check-browser-safe-utils.mjs` enforces the count and reachable set.
 
-  Do not read this as "everything in `utils/` is shared with the webviews" — it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the seven browser-reachable modules, check that it stays browser-safe.
+  Do not read this as "everything in `utils/` is shared with the webviews" — it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the six browser-reachable modules, check that it stays browser-safe.
   - `utils/core/` - Async, type-guard, math, comparator, URL, and path-basics primitives (`debounce`, `delay`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`, `normalizeFilePath`, `getBasename`, `getFileStem`); re-exports string primitives from `utils/text/stringUtils` for browser-safe barrel access
     - `utils/core/boundedIdSet.ts` - `createBoundedIdSet` (LRU-capped `Set<Id>` for "seen id" guards)
     - `utils/core/idHash.ts` - Node-only deterministic execution-ID derivation
@@ -495,11 +495,11 @@ Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
   - `FlowTransition.CONTINUE` - loop back to flow entry
   - `FlowTransition.FINALIZE` - exit flow after finalization
   - `FlowTransition.COMPLETE` - return control to caller
-- **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. Retries are configured through the `Node` constructor — `super(maxRetries, wait)` (see `ModelInvocationNode.ts`), not by overriding getters. Customize retry behaviour with the `shouldAutoRetry(error)`, `retryPrompt(prepRes, error)`, and `execFallback(prepRes, error)` hooks, and set `node.signal` to abort in-flight retries.
+- **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. A failing `exec()` goes to `execFallback(prepRes, error)`, which by default rethrows; override it to convert the failure into something `post()` can route on. Retries are **not** a `BaseNode` feature: the manual-retry loop and its `shouldAutoRetry(error)` / `retryPrompt(prepRes, error)` / `signal` hooks live on `ModelInvocationNode` (`src/agent/core/flows/ModelInvocationNode.ts`), the only node that invokes a model. Do not re-add retry machinery to the kernel for a node that does not call a provider.
 - **Agent owns lifecycle**: Agents handle init/finalize; flows handle only execution logic. Nodes should throw errors directly (agent.run() catches).
 
-The engine is local to this repo: `src/agent/node/index.ts` defines `BaseNode`,
-`Node`, and `Flow` — read it for the authoritative semantics. It is a trimmed
+The engine is local to this repo: `src/agent/node/index.ts` defines `BaseNode`
+and `Flow` — read it for the authoritative semantics. It is a trimmed
 descendant of upstream PocketFlow and does **not** implement the upstream
 `BatchNode`/`BatchFlow`, `ParallelBatchNode`/`ParallelBatchFlow`, or the
 `params`/`setParams` channel; do not write code against them. State slices that

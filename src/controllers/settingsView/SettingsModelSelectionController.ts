@@ -1,8 +1,8 @@
 import { ModelProvider, type ModelConfig, ReasoningEffort } from 'llm-zoo';
 
 import {
-  hasConfigurableReasoningEffort,
   LEVEL_TO_EFFORT,
+  supportsReasoningLevel,
 } from '@agent/modelHandlers/support/reasoningEffort';
 import { preferredCopilotRouteModels } from '@model/copilotRouting';
 import { resolveModelSource } from '@model/openRouterRouting';
@@ -12,9 +12,12 @@ import {
   type CopilotModelRoute,
 } from '@model/runtimeModelRegistry';
 import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
-import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { isGpt5ModelName } from '@model/modelNames';
-import { computeModelOptionsData } from '@model/computeModelOptions';
+import {
+  computeModelOptionsData,
+  getEnabledModels,
+  setModelEnabled,
+} from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -26,17 +29,12 @@ import {
   ReasoningLevelSchema,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import {
-  DEFAULT_HELPER_MODEL,
-  MODEL_SOURCE_ORDER,
-  isFastFirstResponseModel,
-} from '@shared/constants/providers';
+import { isFastFirstResponseModel } from '@shared/constants/providers';
 import { byName } from '@utils/core';
 
 export interface SettingsModelSelectionControllerDeps {
   /** Persisted picker state: enabled models, helper model, reasoning levels. */
   globalState: StateStore;
-  modelSources?: readonly string[];
   getCopilotRoutes?: () => Promise<ReadonlyMap<string, CopilotModelRoute>>;
   getPreferredCopilotRouteModels?: () => readonly string[];
   /**
@@ -72,25 +70,10 @@ const EFFORT_TO_LEVEL = new Map<ReasoningEffort, ReasoningLevel>(
 );
 
 export class SettingsModelSelectionController {
-  private readonly modelSources: Set<string>;
-
-  constructor(private readonly deps: SettingsModelSelectionControllerDeps) {
-    this.modelSources = new Set(deps.modelSources ?? MODEL_SOURCE_ORDER);
-  }
-
-  getVisibleModels(): readonly string[] {
-    // Normalize at the single read boundary: an empty persisted list (e.g. the
-    // user disabled every model) falls back to defaults so downstream consumers
-    // — including the helper-model dropdown — never see an empty model set.
-    const enabled = this.deps.globalState.get<readonly string[]>(
-      GlobalStateKey.ENABLED_MODELS,
-      DEFAULT_MODELS,
-    );
-    return enabled && enabled.length > 0 ? enabled : DEFAULT_MODELS;
-  }
+  constructor(private readonly deps: SettingsModelSelectionControllerDeps) {}
 
   async buildSelectionData(): Promise<SettingsModelSelectionData> {
-    const visibleModels = this.getVisibleModels();
+    const visibleModels = getEnabledModels(this.deps.globalState);
     const routes = await (
       this.deps.getCopilotRoutes ?? discoveredCopilotRoutes
     )();
@@ -142,25 +125,11 @@ export class SettingsModelSelectionController {
     modelName: string;
     enabled: boolean;
   }): Promise<void> {
-    const current = this.getVisibleModels();
-
-    let updated: readonly string[];
-    if (!input.enabled) {
-      updated = current.filter((modelName) => modelName !== input.modelName);
-    } else if (current.includes(input.modelName)) {
-      updated = current;
-    } else {
-      updated = [...current, input.modelName];
-    }
-
-    const wasHelper =
-      !input.enabled &&
-      this.getEffectiveHelperModel(current) === input.modelName;
-
-    await this.deps.globalState.update(GlobalStateKey.ENABLED_MODELS, updated);
-    if (wasHelper) {
-      await this.setHelperModel(DEFAULT_HELPER_MODEL);
-    }
+    await setModelEnabled({
+      model: input.modelName,
+      enabled: input.enabled,
+      state: this.deps.globalState,
+    });
   }
 
   async setHelperModel(modelName: string): Promise<void> {
@@ -194,7 +163,7 @@ export class SettingsModelSelectionController {
     copilotRoutes: ReadonlyMap<string, CopilotModelRoute>,
     preferredCopilotModels: ReadonlySet<string>,
   ): Promise<ModelSelectionItem[]> {
-    const enabledSet = new Set(this.getVisibleModels());
+    const enabledSet = new Set(getEnabledModels(this.deps.globalState));
     const reasoningOverrides = this.getReasoningLevelOverrides();
 
     // Resolve availability (personal-key, subscription) once for the
@@ -204,11 +173,7 @@ export class SettingsModelSelectionController {
     // candidates: they are transports for the canonical base models (#9635).
     const configs = new Map<string, ModelConfig>(staticModelConfigEntries());
     const candidates = [...configs.values()]
-      .filter(
-        (config) =>
-          config.provider !== ModelProvider.COPILOT &&
-          this.modelSources.has(resolveModelSource(config) ?? config.provider),
-      )
+      .filter((config) => config.provider !== ModelProvider.COPILOT)
       .map((config) => config.name);
     const resolveModelOptions =
       this.deps.resolveModelOptions ?? computeModelOptionsData;
@@ -283,12 +248,4 @@ export class SettingsModelSelectionController {
       item.reasoningLevel = parsed.data;
     }
   }
-}
-
-function supportsReasoningLevel(config: ModelConfig): boolean {
-  return (
-    hasConfigurableReasoningEffort(config.capabilities) ||
-    (config.provider === ModelProvider.DEEPSEEK &&
-      config.capabilities.supportsReasoning)
-  );
 }

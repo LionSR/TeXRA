@@ -17,6 +17,9 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
 import type { ToolRow } from '@shared/transcript';
+import { parseDelegationToolInput } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOL_CATEGORY,
@@ -36,7 +39,6 @@ import {
   stopSummaryToggleKeydown,
   SPINNER_ICON_NAME,
 } from '../htmlBuilders';
-import { registerProposalInput } from '../contentStore';
 
 import {
   buildTerminalSection,
@@ -126,17 +128,22 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
     DELEGATION_TOOL_CATEGORY,
     toolName,
   );
-  const proposalInputId =
+  const proposal =
     isProposalBearingDelegation && !model.isInProgress
-      ? registerProposalInput(input, toolName)
+      ? parseDelegationToolInput(input, toolName)
       : null;
 
   // A real <button> (not a role="button" span) so wa-details' own summary
   // click handler recognizes it as interactive and skips its toggle — see
   // stopSummaryToggleKeydown for why the keydown path additionally needs an
-  // explicit stopPropagation.
+  // explicit stopPropagation. The click binding carries the parsed proposal
+  // itself, so nothing has to survive a round trip through a DOM attribute.
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${model.spillPath ? buildSpillArtifactButton(model.spillPath) : nothing}${proposalInputId ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" data-proposal-input-id=${proposalInputId} title="Setup this proposal configuration" @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Setup</button>` : nothing}`;
+  const setupButton = proposal
+    ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" title="Setup this proposal configuration" @click=${(event: Event) => { event.preventDefault(); postMessage(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG, { proposal }); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Setup</button>`
+    : nothing;
+  // prettier-ignore
+  const extraContent = html`${timerTemplate ?? nothing}${model.spillPath ? buildSpillArtifactButton(model.spillPath) : nothing}${setupButton}`;
 
   return buildToolUseDetails({
     row,

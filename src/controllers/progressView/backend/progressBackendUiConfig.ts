@@ -23,15 +23,18 @@ import type {
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
+import { createAgentProposalTransport } from './agentProposalTransport';
 import { ApprovalRequestHandler } from './ApprovalRequestHandler';
 import { ExternalInquiryRequestHandler } from './ExternalInquiryRequestHandler';
 import type { LitSessionRenderer } from './LitSessionRenderer';
 
 /**
- * The seven pending-approval handlers a progress backend wires. Hosts build
- * each handler with their own show/dismiss transport (and `canSend` gate), then
- * hand the set to {@link createProgressBackendUiConfig}, which derives the
- * uniform UI callbacks and the pending-permissions guard from them.
+ * The seven pending-approval handlers a progress backend wires. Every one of
+ * them talks to the same {@link LitSessionRenderer}, so
+ * {@link buildApprovalRequestHandlerSet} owns the whole set and hosts supply
+ * only the renderer and the `canSend` gate. The set then goes to
+ * {@link createProgressBackendUiConfig}, which derives the uniform UI callbacks
+ * and the pending-permissions guard from it.
  */
 export interface ApprovalRequestHandlerSet {
   toolEdit: ApprovalRequestHandler<ToolEditPermission, 'requestId'>;
@@ -125,27 +128,11 @@ const APPROVAL_REQUEST_HANDLER_KEYS = Object.keys(
   APPROVAL_REQUEST_HANDLER_KEY_MAP,
 ) as Array<keyof ApprovalRequestHandlerSet>;
 
-/**
- * Host-specific show/dismiss transport for one approval kind. Every host
- * supplies retry behavior. A host may override agent proposals when it needs
- * richer presentation data than the built-in permission handler provides.
- */
-interface ApprovalHandlerTransport<T> {
-  show: (item: T) => void;
-  dismiss: (id: string) => void;
-}
-
-interface ApprovalRequestHandlerOverrides {
-  retry: ApprovalHandlerTransport<RetryPermission>;
-  proposal?: ApprovalHandlerTransport<AgentProposalPermission>;
-}
-
 export interface BuildApprovalRequestHandlerSetParams {
   renderer: LitSessionRenderer;
   /** Gate passed to every handler; an empty/false gate keeps it pending-only. */
   canSend: () => boolean;
   logger?: Pick<AgentTrace, 'debug'>;
-  overrides: ApprovalRequestHandlerOverrides;
 }
 
 type PermissionData<K extends PermissionPayload['kind']> = Extract<
@@ -178,8 +165,21 @@ function webviewPermissionHandler<
 export function buildApprovalRequestHandlerSet(
   params: BuildApprovalRequestHandlerSetParams,
 ): ApprovalRequestHandlerSet {
-  const { renderer, canSend, overrides } = params;
+  const { renderer, canSend } = params;
+  // The proposal transport asks its own handler whether a request is still
+  // pending (the RESOLVE-between-two-SHOWs guard). `proposal` is read only
+  // from inside that callback, which cannot run before the handler exists.
+  const proposalTransport = createAgentProposalTransport({
+    renderer,
+    isPending: (requestId) => proposal.get(requestId) !== undefined,
+  });
+  const proposal = new ApprovalRequestHandler<
+    AgentProposalPermission,
+    'requestId',
+    ProposalResult
+  >('requestId', proposalTransport.show, proposalTransport.dismiss, canSend);
   return {
+    proposal,
     toolEdit: webviewPermissionHandler(
       renderer,
       canSend,
@@ -213,28 +213,11 @@ export function buildApprovalRequestHandlerSet(
       'requestId',
       UserQuestionSettlement
     >(renderer, canSend, PERMISSION_KIND.USER_QUESTION, 'requestId'),
-    retry: new ApprovalRequestHandler<RetryPermission, 'streamId', RetryResult>(
+    retry: webviewPermissionHandler<
+      typeof PERMISSION_KIND.RETRY,
       'streamId',
-      overrides.retry.show,
-      overrides.retry.dismiss,
-      canSend,
-    ),
-    proposal: overrides.proposal
-      ? new ApprovalRequestHandler<
-          AgentProposalPermission,
-          'requestId',
-          ProposalResult
-        >(
-          'requestId',
-          overrides.proposal.show,
-          overrides.proposal.dismiss,
-          canSend,
-        )
-      : webviewPermissionHandler<
-          typeof PERMISSION_KIND.PROPOSAL,
-          'requestId',
-          ProposalResult
-        >(renderer, canSend, PERMISSION_KIND.PROPOSAL, 'requestId'),
+      RetryResult
+    >(renderer, canSend, PERMISSION_KIND.RETRY, 'streamId'),
   };
 }
 

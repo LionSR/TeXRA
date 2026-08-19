@@ -561,6 +561,26 @@ describe('desktop main-view IPC', () => {
     });
   });
 
+  it('echoes banner updates to the renderer exactly once', async () => {
+    const harness = await createMainViewHarness();
+    installMainView(harness);
+    const { sends, sendFromRenderer } = harness;
+    const message = {
+      command: MAIN_VIEW_COMMANDS.SET_BANNER,
+      banner: 'agentConfig',
+      visible: false,
+    };
+
+    sendFromRenderer(message);
+
+    expect(sends).toEqual([
+      {
+        channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
+        message,
+      },
+    ]);
+  });
+
   it('disposes listeners idempotently', async () => {
     let themeListener: (() => void) | undefined;
     const harness = await createMainViewHarness({

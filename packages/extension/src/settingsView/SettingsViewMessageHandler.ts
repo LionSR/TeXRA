@@ -812,7 +812,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.settingsHost.setModelEnabled(
       { modelName, enabled },
       {
-        afterUpdate: () => invalidateModelOptionsCache(),
+        // The options cache is invalidated by the writer itself.
         respond: (message) => this.postMessageToActiveWebview(message),
         afterPost: () =>
           safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),

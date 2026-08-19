@@ -17,8 +17,9 @@ import type { LitSessionRenderer } from './LitSessionRenderer';
 const log = createLog('agentProposalTransport');
 
 /**
- * Show/dismiss transport for agent proposals, shared by every host that renders
- * the proposal card with model and agent dropdowns.
+ * Show/dismiss transport for the agent-proposal card with its model and agent
+ * dropdowns. Wired once by {@link buildApprovalRequestHandlerSet}; every host
+ * renders the card the same way.
  *
  * The card is shown twice: immediately with the static visible-model list so it
  * appears without waiting on the network, then again once the full option data
@@ -27,14 +28,13 @@ const log = createLog('agentProposalTransport');
  * handler and the late SHOW would re-create an undismissable ghost card.
  */
 export function createAgentProposalTransport(options: {
-  /** Read lazily: hosts wire this before their backend field is assigned. */
-  getRenderer(): LitSessionRenderer;
+  renderer: LitSessionRenderer;
   isPending(requestId: string): boolean;
 }): {
   show(proposal: AgentProposalPermission): void;
   dismiss(requestId: string): void;
 } {
-  const { getRenderer, isPending } = options;
+  const { renderer, isPending } = options;
 
   // Model options have a visible-model fallback, so the dropdown still
   // appears if availability loading fails. Agent options have no static
@@ -68,7 +68,7 @@ export function createAgentProposalTransport(options: {
       }),
     ]);
     if (!isPending(proposal.requestId)) return;
-    getRenderer().showPermission({
+    renderer.showPermission({
       kind: PERMISSION_KIND.PROPOSAL,
       data: proposal,
       modelOptionsData,
@@ -78,7 +78,7 @@ export function createAgentProposalTransport(options: {
 
   return {
     show(proposal) {
-      getRenderer().showPermission({
+      renderer.showPermission({
         kind: PERMISSION_KIND.PROPOSAL,
         data: proposal,
         modelOptionsData: buildVisibleBasicModelOptionsData(),
@@ -86,7 +86,7 @@ export function createAgentProposalTransport(options: {
       void sendResolvedOptions(proposal);
     },
     dismiss(requestId) {
-      getRenderer().resolvePermission(PERMISSION_KIND.PROPOSAL, requestId);
+      renderer.resolvePermission(PERMISSION_KIND.PROPOSAL, requestId);
     },
   };
 }

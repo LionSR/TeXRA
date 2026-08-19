@@ -27,7 +27,6 @@ import {
 } from '@agent/core/state/executionRequests';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { createAgentProposalTransport } from '@controllers/progressView/backend/agentProposalTransport';
 import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { buildStreamInfo } from '@controllers/session/streamInfoUtils';
@@ -276,30 +275,6 @@ export class DesktopProgressBridge {
         // The desktop renderer is always attached (no sidebar/editor re-target).
         canSend: () => true,
         logger: this.logger,
-        overrides: {
-          // Route retry requests to the renderer's RetryRequestPanel: a parked
-          // request blocks the run until the user answers it, so the card has
-          // to be shown. Both are arrow functions, so `this.backend` is already
-          // assigned by the time either runs.
-          retry: {
-            show: (permission) =>
-              this.backend.renderer.showPermission({
-                kind: PERMISSION_KIND.RETRY,
-                data: permission,
-              }),
-            dismiss: (id) =>
-              this.backend.renderer.resolvePermission(
-                PERMISSION_KIND.RETRY,
-                id,
-              ),
-          },
-          proposal: createAgentProposalTransport({
-            getRenderer: () => this.backend.renderer,
-            isPending: (requestId) =>
-              this.backend.approvalHandlers.proposal.get(requestId) !==
-              undefined,
-          }),
-        },
       },
       lifecycle: {
         stopStream: (stream, options) => {

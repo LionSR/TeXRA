@@ -1,3 +1,8 @@
+import * as path from 'node:path';
+
+import pRetry from 'p-retry';
+import { z } from 'zod';
+
 import {
   isFileNotFoundError,
   isNotADirectoryError,
@@ -5,16 +10,19 @@ import {
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { GlobalStorageFS } from '@utils/files/storageFS';
+
 import {
   AgentDirectoryService,
   type AgentDirectoryIssueReporter,
 } from './AgentDirectoryService';
-import {
-  BundledAgentDirectorySync,
-  GlobalStorageAgentDirectoryStorage,
-  type AgentDirectoryBundleSource,
-  type AgentDirectoryVersionStore,
-} from './AgentDirectorySync';
+import { BUNDLED_AGENT_DIRECTORY_NAMES } from './BundledAgentDirectories';
+
+const SYNC_MARKER_FILE = '.bundled-agent-sync.json';
+const RECENT_EXTERNAL_SYNC_MS = 5 * 60 * 1000;
+const LOCK_RETRY_TIMEOUT_MS = 30_000;
+
+type Log = ReturnType<typeof createLog>;
 
 interface PlatformAgentDirectoryOptions {
   channel: string;
@@ -24,19 +32,15 @@ interface PlatformAgentDirectoryOptions {
   issueReporter?: AgentDirectoryIssueReporter;
 }
 
-export interface PlatformAgentDirectoryBootstrapOptions {
-  channel: string;
-  bundleSource: AgentDirectoryBundleSource;
-  currentVersion: string | undefined;
-  versionStore: AgentDirectoryVersionStore;
-}
-
 export function createPlatformAgentDirectories(
   options: PlatformAgentDirectoryOptions,
 ): AgentDirectoryService {
   const log = createLog(options.channel);
   return new AgentDirectoryService({
-    storage: new GlobalStorageAgentDirectoryStorage(),
+    storage: {
+      ensureDir: (relativePath) => GlobalStorageFS.ensureDir(relativePath),
+      fullPath: (relativePath) => GlobalStorageFS.fullPath(relativePath),
+    },
     customDirectoryStore: options.customDirectoryStore,
     absoluteDirectories: {
       exists: async (target) => {
@@ -66,22 +70,160 @@ export function createPlatformAgentDirectories(
   });
 }
 
-export async function bootstrapPlatformAgentDirectories(
-  options: PlatformAgentDirectoryBootstrapOptions,
+// ============================================================================
+// Bundled agent reconciliation
+// ============================================================================
+
+function isLockContentionError(error: unknown): boolean {
+  return (error as { code?: string })?.code === 'ELOCKED';
+}
+
+const AgentDirectorySyncMarkerSchema = z.object({
+  completedAt: z.number().nonnegative(),
+  ownerPid: z.int().nonnegative(),
+  version: z.string().nullish(),
+});
+
+type AgentDirectorySyncMarker = z.output<typeof AgentDirectorySyncMarkerSchema>;
+
+interface BundledAgentReconcileOptions {
+  channel: string;
+  /** Packaged resources root holding the bundled agent directories. */
+  resourcesPath: string;
+  currentVersion: string | undefined;
+  /** Global-state key under which this host records the version it synced. */
+  versionStateKey: string;
+}
+
+async function readSyncMarker(
+  log: Log,
+): Promise<AgentDirectorySyncMarker | undefined> {
+  try {
+    const raw = await GlobalStorageFS.read(SYNC_MARKER_FILE);
+    const parsed = AgentDirectorySyncMarkerSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) {
+      log.warn(
+        `Ignoring malformed bundled agent sync marker: ${z.prettifyError(parsed.error)}`,
+      );
+      return undefined;
+    }
+    return parsed.data;
+  } catch (error) {
+    if (isFileNotFoundError(error)) return undefined;
+    log.warn(`Ignoring bundled agent sync marker: ${toErrorMessage(error)}`);
+    return undefined;
+  }
+}
+
+async function writeSyncMarker(
+  currentVersion: string | undefined,
+  log: Log,
 ): Promise<void> {
-  const log = createLog(options.channel);
-  const sync = new BundledAgentDirectorySync({
-    bundleSource: options.bundleSource,
-    storage: new GlobalStorageAgentDirectoryStorage(),
-    versionStore: options.versionStore,
-    logger: {
-      info: (message, data) => log.info(message, { data }),
-      warn: (message, data) => log.warn(message, { data }),
-    },
-  });
+  try {
+    await GlobalStorageFS.ensureDir('');
+    await GlobalStorageFS.write(
+      SYNC_MARKER_FILE,
+      `${JSON.stringify({
+        completedAt: Date.now(),
+        ownerPid: process.pid,
+        version: currentVersion,
+      })}\n`,
+    );
+  } catch (error) {
+    log.warn(
+      `Failed to write bundled agent sync marker: ${toErrorMessage(error)}`,
+    );
+  }
+}
+
+/**
+ * True when another live process already reconciled this exact version
+ * moments ago, so this process can adopt its result instead of re-copying.
+ * Own-process markers never count: this process must still reconcile after
+ * an upgrade even though it wrote the previous marker.
+ */
+async function hasRecentExternalSync(
+  currentVersion: string | undefined,
+  log: Log,
+): Promise<boolean> {
+  const marker = await readSyncMarker(log);
+  if (!marker || marker.ownerPid === process.pid) return false;
+  if ((marker.version ?? undefined) !== currentVersion) return false;
+  return Date.now() - marker.completedAt < RECENT_EXTERNAL_SYNC_MS;
+}
+
+async function reconcileUnlocked(
+  options: BundledAgentReconcileOptions,
+  log: Log,
+): Promise<void> {
+  const globalState = platform().globalState;
+  if (await hasRecentExternalSync(options.currentVersion, log)) {
+    await globalState.update(options.versionStateKey, options.currentVersion);
+    return;
+  }
+
+  for (const directoryName of BUNDLED_AGENT_DIRECTORY_NAMES) {
+    await GlobalStorageFS.ensureDir(directoryName);
+    await platform().fs.copy(
+      path.join(options.resourcesPath, directoryName),
+      GlobalStorageFS.fullPath(directoryName),
+      { overwrite: true },
+    );
+  }
+
+  await globalState.update(options.versionStateKey, options.currentVersion);
+  await writeSyncMarker(options.currentVersion, log);
+}
+
+async function reconcileBundledAgentDirectories(
+  options: BundledAgentReconcileOptions,
+  log: Log,
+): Promise<void> {
+  let operationStarted = false;
 
   try {
-    await sync.reconcile(options.currentVersion);
+    await pRetry(
+      () =>
+        platform().fileLocks.runExclusive(
+          GlobalStorageFS.fullPath(SYNC_MARKER_FILE),
+          () => {
+            operationStarted = true;
+            return reconcileUnlocked(options, log);
+          },
+        ),
+      {
+        retries: 20,
+        minTimeout: 100,
+        maxTimeout: 1_000,
+        randomize: true,
+        maxRetryTime: LOCK_RETRY_TIMEOUT_MS,
+        shouldRetry: ({ error }) =>
+          !operationStarted && isLockContentionError(error),
+      },
+    );
+  } catch (error) {
+    // A live or stale owner must not make startup fail. If ownership remains
+    // unavailable, leave the shared cache untouched and try again next run.
+    if (!operationStarted && isLockContentionError(error)) {
+      log.warn(
+        'Skipping bundled agent refresh because another process still owns the sync lock',
+      );
+      return;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Copy the packaged agent directories into global storage, coordinating with
+ * any other process that shares it through an on-disk lock plus a sync marker.
+ */
+export async function bootstrapPlatformAgentDirectories(
+  options: BundledAgentReconcileOptions,
+): Promise<void> {
+  const log = createLog(options.channel);
+  try {
+    await reconcileBundledAgentDirectories(options, log);
   } catch (error) {
     // An unreadable or partially written agent directory must not abort host
     // startup — VS Code activation in particular has to survive it. Loud, not

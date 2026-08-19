@@ -219,8 +219,8 @@ export class RoundPersistedFlow<
   }
 
   /**
-   * Transition to the next round: increment counter, reset state,
-   * reset node history so the flow starts from the beginning again.
+   * Transition to the next round: increment counter, reset state, and rewind
+   * the replay cursor so the flow starts from the beginning again.
    */
   private async transitionToNextRound(shared: S): Promise<void> {
     // End previous round stage
@@ -233,8 +233,8 @@ export class RoundPersistedFlow<
     // Reset state for next round
     this.callbacks.resetForNextRound?.(shared);
 
-    // Reset node history so next stepWithResult() starts from the beginning
-    await this.resetNodeHistory(shared);
+    // Rewind the cursor so the next stepWithResult() starts from the beginning
+    await this.rewindToStart(shared);
 
     // Create new stage
     this.createStage(shared.currentRound, shared);

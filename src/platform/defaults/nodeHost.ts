@@ -16,7 +16,6 @@
  */
 
 // Local imports
-import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import {
@@ -173,15 +172,6 @@ export async function bootstrapNodeAgentDirectories(
     return;
   }
 
-  const globalState = platform().globalState;
-  await bootstrapPlatformAgentDirectories({
-    channel: options.channel,
-    bundleSource: new PathAgentDirectoryBundleSource(options.resourcesPath),
-    currentVersion: options.currentVersion,
-    versionStore: {
-      get: () => globalState.get<string>(options.versionStateKey),
-      update: (version) => globalState.update(options.versionStateKey, version),
-    },
-  });
+  await bootstrapPlatformAgentDirectories(options);
   bootstrappedAgentDirectoryResources.set(guardKey, options.resourcesPath);
 }

@@ -8,7 +8,10 @@ import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
-import { providerDisplayName } from '@shared/constants/providers';
+import {
+  DEFAULT_HELPER_MODEL,
+  providerDisplayName,
+} from '@shared/constants/providers';
 import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
@@ -30,10 +33,12 @@ import {
   resolveXaiSubscriptionCapabilities,
 } from './providerCapabilities';
 import { kimiCodeEffectiveConfig } from './kimiCodeSubscriptionRouting';
+import { resolveEffectiveHelperModel } from './helperModelSelection';
 import {
   buildBaseModelOption,
   buildBasicModelOptionsData,
   DEFAULT_MODELS,
+  isRetiredModel,
 } from './modelOptionsBasic';
 import {
   isOpenRouterRoutingUnsupported,
@@ -391,18 +396,82 @@ async function buildAvailabilityContext(
   };
 }
 
-/** Read the enabled model list from host state at the composition boundary. */
-function getVisibleModels(state: Pick<StateStore, 'get'>): readonly string[] {
-  return state.get<readonly string[]>(
+/**
+ * The models the pickers show — the single reader of
+ * `GlobalStateKey.ENABLED_MODELS` for every host.
+ *
+ * Normalizes an empty persisted list to {@link DEFAULT_MODELS}: `.get`'s
+ * fallback only fires on `undefined`, so a stored `[]` would otherwise survive
+ * all the way to an empty picker with no way back out from the UI.
+ */
+export function getEnabledModels(
+  state: Pick<StateStore, 'get'> = platform().globalState,
+): readonly string[] {
+  const enabled = state.get<readonly string[]>(
     GlobalStateKey.ENABLED_MODELS,
     DEFAULT_MODELS,
   );
+  return enabled.length > 0 ? enabled : DEFAULT_MODELS;
+}
+
+/**
+ * Enable or disable one model, and invalidate the options cache derived from
+ * the list. The only writer of `GlobalStateKey.ENABLED_MODELS` outside the
+ * startup reconciliation in `modelListRefresh.ts`.
+ *
+ * Two invariants, previously enforced only on the CLI path:
+ *  - at least one model stays enabled — an empty list leaves the user with an
+ *    empty picker and (for non-Codex users) no way to re-enable anything;
+ *  - a retired model can be removed but never enabled — removal has to stay
+ *    possible so a model retired while enabled is not stuck in the list.
+ *
+ * Throws on either violation; callers surface the message.
+ */
+export async function setModelEnabled(input: {
+  readonly model: string;
+  readonly enabled: boolean;
+  readonly state?: StateStore;
+}): Promise<readonly string[]> {
+  const state = input.state ?? platform().globalState;
+  if (input.enabled && isRetiredModel(input.model)) {
+    throw new Error(`Model "${input.model}" is retired and cannot be enabled.`);
+  }
+
+  const current = getEnabledModels(state);
+  let next: readonly string[];
+  if (input.enabled) {
+    next = current.includes(input.model) ? current : [...current, input.model];
+  } else {
+    next = current.filter((model) => model !== input.model);
+    if (next.length === 0) {
+      throw new Error(
+        'At least one model must stay enabled. Enable another model before disabling this one.',
+      );
+    }
+  }
+  await state.update(GlobalStateKey.ENABLED_MODELS, [...next]);
+
+  // If the helper model was just removed, pin the built-in default. Do not
+  // fall back to the first remaining picker model — that is a premium default,
+  // not the cheap auxiliary.
+  if (
+    !input.enabled &&
+    resolveEffectiveHelperModel(
+      state.get<string | undefined>(GlobalStateKey.HELPER_MODEL),
+      current,
+    ) === input.model
+  ) {
+    await state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL);
+  }
+
+  invalidateModelOptionsCache();
+  return next;
 }
 
 function buildDefaultModelOptionsAccess(): ModelOptionsAccess {
   const host = platform();
   return {
-    visibleModels: getVisibleModels(host.globalState),
+    visibleModels: getEnabledModels(host.globalState),
     secrets: host.secrets,
     useOpenRouter: getUseOpenRouter(),
   };
@@ -419,7 +488,7 @@ function buildDefaultModelOptionsAccess(): ModelOptionsAccess {
  * that is a pure registry fact needing no secret.
  */
 export function buildVisibleBasicModelOptionsData(
-  visibleModels: readonly string[] = getVisibleModels(platform().globalState),
+  visibleModels: readonly string[] = getEnabledModels(),
 ): ModelOptionData[] {
   return buildBasicModelOptionsData(visibleModels);
 }

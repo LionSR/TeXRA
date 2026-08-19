@@ -75,8 +75,6 @@ vi.mock('@utils/files/taskRunStorage', () => ({
 vi.mock('@tools/delegation/childStream', () => ({
   createChildStream: mocks.createChildStream,
   childStreamDescription: (raw: string) => raw,
-  getChildStreamId: (executionId: string, prefix: string) =>
-    `${prefix}#${executionId}`,
 }));
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
