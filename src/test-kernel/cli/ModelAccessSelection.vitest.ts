@@ -12,6 +12,7 @@ import {
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
+import type { UsageRoute } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
@@ -199,62 +200,36 @@ describe('CLI model access routes', () => {
     expect(parseCliModelAccessSelection(input)).toEqual(expected);
   });
 
-  it('uses observed access before prospective access preferences', () => {
+  it('uses observed access before the prospective route', () => {
     expect(
       resolveCliModelAccessRoute({
-        subscriptionActive: true,
         usageRoute: 'relay',
+        prospectiveRoute: 'chatgpt-subscription',
       }),
     ).toBe('included');
-    expect(
-      resolveCliModelAccessRoute({
-        subscriptionActive: true,
-      }),
-    ).toBe('chatgpt');
-    expect(
-      resolveCliModelAccessRoute({
-        subscriptionActive: false,
-      }),
-    ).toBe('personal');
-  });
-
-  it('never relabels recorded api-key usage from live preferences', () => {
     // A completed request's route cannot change — ordinary `api-key` usage
     // stays personal even while the Kimi Code route is currently active.
     expect(
       resolveCliModelAccessRoute({
-        subscriptionActive: false,
-        kimiCodeActive: true,
         usageRoute: 'api-key',
+        prospectiveRoute: 'kimi-code-subscription',
       }),
     ).toBe('personal');
   });
 
-  it('recognizes observed Kimi Code subscription usage', () => {
-    expect(
-      resolveCliModelAccessRoute({
-        subscriptionActive: false,
-        usageRoute: 'kimi-code-subscription',
-      }),
-    ).toBe('kimi-code');
-  });
-
-  it('describes a prospective exclusive Kimi Code route', () => {
-    expect(
-      resolveCliModelAccessRoute({
-        subscriptionActive: false,
-        kimiCodeActive: true,
-      }),
-    ).toBe('kimi-code');
-  });
-
-  it('reports an active GLM plan', () => {
-    expect(
-      resolveCliModelAccessRoute({
-        subscriptionActive: false,
-        glmCodingPlanActive: true,
-      }),
-    ).toBe('glm-code');
+  it.each<[UsageRoute | undefined, AccessRoute]>([
+    ['chatgpt-subscription', 'chatgpt'],
+    ['xai-subscription', 'grok'],
+    ['kimi-code-subscription', 'kimi-code'],
+    ['glm-coding-plan-subscription', 'glm-code'],
+    ['relay', 'included'],
+    ['api-key', 'personal'],
+    [undefined, 'personal'],
+  ])('labels %s the same observed or prospective', (route, expected) => {
+    expect(resolveCliModelAccessRoute({ usageRoute: route })).toBe(expected);
+    expect(resolveCliModelAccessRoute({ prospectiveRoute: route })).toBe(
+      expected,
+    );
   });
 
   it('formats the shared access routes for detailed and compact surfaces', () => {

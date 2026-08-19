@@ -109,47 +109,40 @@ export function parseCliModelAccessSelection(
   }
 }
 
-/** Prefer the route that produced usage; otherwise describe the next request. */
+/**
+ * Label a route for the CLI. Both inputs speak `UsageRoute`, so this is a
+ * total map with one precedence rule and no per-provider knowledge of its own:
+ * a completed request's route cannot change, so it always wins over the
+ * prospective route `activeSubscriptionUsageRoute` reports for the next one.
+ */
 export function resolveCliModelAccessRoute({
-  subscriptionActive,
-  grokSubscriptionActive,
-  kimiCodeActive,
-  glmCodingPlanActive,
   usageRoute,
+  prospectiveRoute,
 }: {
-  /** Whether the current model would route through ChatGPT/Codex. */
-  readonly subscriptionActive: boolean;
-  /** Whether the current model would route through Grok/xAI OAuth. */
-  readonly grokSubscriptionActive?: boolean;
-  readonly kimiCodeActive?: boolean;
-  readonly glmCodingPlanActive?: boolean;
+  /** Route stamped on completed usage, when the stream has any. */
   readonly usageRoute?: UsageRoute;
+  /** Route that would serve the next request (`activeSubscriptionUsageRoute`). */
+  readonly prospectiveRoute?: UsageRoute;
 }): CliModelAccessRoute {
-  if (usageRoute !== undefined) {
-    switch (usageRoute) {
-      case 'chatgpt-subscription':
-        return 'chatgpt';
-      case 'xai-subscription':
-        return 'grok';
-      case 'kimi-code-subscription':
-        return 'kimi-code';
-      case 'glm-coding-plan-subscription':
-        return 'glm-code';
-      case 'relay':
-        return 'included';
-      case 'api-key':
-        // A completed request's route cannot change, so never relabel ordinary
-        // API-key usage from live preferences.
-        return 'personal';
-      default:
-        return usageRoute satisfies never;
-    }
+  const route = usageRoute ?? prospectiveRoute;
+  switch (route) {
+    case undefined:
+      return 'personal';
+    case 'chatgpt-subscription':
+      return 'chatgpt';
+    case 'xai-subscription':
+      return 'grok';
+    case 'kimi-code-subscription':
+      return 'kimi-code';
+    case 'glm-coding-plan-subscription':
+      return 'glm-code';
+    case 'relay':
+      return 'included';
+    case 'api-key':
+      return 'personal';
+    default:
+      return route satisfies never;
   }
-  if (subscriptionActive) return 'chatgpt';
-  if (grokSubscriptionActive === true) return 'grok';
-  if (kimiCodeActive === true) return 'kimi-code';
-  if (glmCodingPlanActive === true) return 'glm-code';
-  return 'personal';
 }
 
 /** Status-bar form of the access route. Width-critical, so every arm is a

@@ -34,11 +34,7 @@ import {
   projectStreamArtifacts,
   type StreamArtifactReader,
 } from '@controllers/session/StreamArtifactProjection';
-import {
-  isCodexSubscriptionActive,
-  isKimiCodeSubscriptionActive,
-  isXaiSubscriptionActive,
-} from '@model/providerCapabilities';
+import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { formatTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
@@ -141,22 +137,15 @@ export async function showCliSessionStatus(
       ? streamMetadataFor(activeStreamId)?.config?.model
       : undefined) ??
     (meta.model || context.initialModel);
-  const [subscriptionActive, grokSubscriptionActive, kimiCodeActive] =
-    await Promise.all([
-      isCodexSubscriptionActive(model),
-      isXaiSubscriptionActive(model),
-      isKimiCodeSubscriptionActive(model),
-    ]);
+  const prospectiveRoute = await activeSubscriptionUsageRoute(model);
   appendLocalAssistantTranscript(
     formatCliSessionStatus({
       agent: meta.agent || context.initialAgent,
       model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        subscriptionActive,
-        grokSubscriptionActive,
-        kimiCodeActive,
         usageRoute: slice?.usage?.usageRoute,
+        prospectiveRoute,
       }),
       approval: formatTexraApprovalPolicy(context.getApprovalPolicy()),
       approvalBypasses: slice?.bypass,
