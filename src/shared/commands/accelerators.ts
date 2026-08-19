@@ -9,9 +9,19 @@ import type { CommandKeybinding } from './catalog';
  * (CLI palette, web) share the same normalization rules.
  */
 
+/**
+ * The three platform ids the accelerator rules distinguish. Declared here
+ * rather than reused from `NodeJS.Platform` because every consumer of these
+ * helpers also runs in a browser context — the desktop renderer and the two
+ * webview frontends — whose TypeScript projects carry no Node types. Callers
+ * on the Node side narrow `process.platform` into this union at their own
+ * boundary; browser callers derive it from `navigator`.
+ */
+export type DesktopPlatform = 'darwin' | 'win32' | 'linux';
+
 export function toElectronAccelerator(
   keybinding: CommandKeybinding,
-  platform: NodeJS.Platform = process.platform,
+  platform: DesktopPlatform,
 ): string {
   const key =
     platform === 'darwin' && keybinding.mac ? keybinding.mac : keybinding.key;
@@ -20,7 +30,7 @@ export function toElectronAccelerator(
 
 export function toPlatformAccelerator(
   accelerator: string | undefined,
-  platform: NodeJS.Platform,
+  platform: DesktopPlatform,
 ): string | undefined {
   if (!accelerator) return undefined;
   if (platform !== 'darwin') return accelerator;
@@ -28,7 +38,7 @@ export function toPlatformAccelerator(
 }
 
 /**
- * Maps a browser `navigator.platform` string to a NodeJS.Platform so
+ * Maps a browser `navigator.platform` string to a `DesktopPlatform` so
  * renderer code can share one platform rule instead of re-deriving it with
  * divergent checks. The macOS regex deliberately also matches the iOS
  * navigator.platform values (`iPhone`/`iPod`/`iPad`).
@@ -37,7 +47,7 @@ export function detectBrowserPlatform(
   platform: string = typeof navigator !== 'undefined'
     ? (navigator.platform ?? '')
     : '',
-): NodeJS.Platform {
+): DesktopPlatform {
   if (/Mac|iPhone|iPod|iPad/.test(platform)) return 'darwin';
   if (platform.toLowerCase().includes('win')) return 'win32';
   return 'linux';
@@ -45,7 +55,7 @@ export function detectBrowserPlatform(
 
 export function formatDesktopAccelerator(
   accelerator: string | undefined,
-  platform: NodeJS.Platform = process.platform,
+  platform: DesktopPlatform,
 ): string | undefined {
   if (!accelerator) return undefined;
   const isMac = platform === 'darwin';
@@ -92,7 +102,7 @@ const DISPLAY_ACCELERATOR_PARTS: Record<
 
 function toDisplayAcceleratorPart(
   part: string,
-  platform: NodeJS.Platform,
+  platform: DesktopPlatform,
 ): string {
   const trimmed = part.trim();
   const mapped = DISPLAY_ACCELERATOR_PARTS[trimmed.toLowerCase()];

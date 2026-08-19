@@ -11,22 +11,19 @@ import { repeat } from 'lit/directives/repeat.js';
 import {
   GETTING_STARTED_ACTION_PRESENTATION,
   GettingStartedActionSchema,
-  MESSAGE_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
-  WorkflowCallProgressSchema,
-  StreamPhaseSchema,
   type GettingStartedAction,
-  type LogMessageData,
   type StreamLifecycleStatus,
+  type StreamLogEntry,
   type TaskGroup,
 } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
 import {
   formatWorkflowPhaseHeading,
   workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 // Side-effect imports - register Web Awesome components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -61,14 +58,14 @@ import { formatLogEntry } from '../formatters';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 
 // Local imports - sibling helpers
-import { MessageIndex, type GroupTree } from './messageIndex';
+import { TranscriptIndex, type GroupTree } from './messageIndex';
 import { TerminalBuffer, processTerminalText } from './terminalBuffer';
 import { ProgressEvents } from '../events';
 
 const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
 const TIMELINE_ITEM_WINDOW_STEP = 120;
-const DEFAULT_GROUP_MESSAGE_WINDOW = 400;
-const GROUP_MESSAGE_WINDOW_STEP = 400;
+const DEFAULT_GROUP_ROW_WINDOW = 400;
+const GROUP_ROW_WINDOW_STEP = 400;
 
 /**
  * Maps a group's `StreamPhase`/`RunOutcome` status to a steady wa-icon name.
@@ -97,22 +94,28 @@ export class TaskGroupList extends LitElement {
   /** All task groups to render */
   @property({ attribute: false }) groups: TaskGroup[] = [];
 
-  /** All log messages to render */
-  @property({ attribute: false }) messages: LogMessageData[] = [];
+  /** All transcript rows to render */
+  @property({ attribute: false }) rows: TranscriptRow[] = [];
 
   /**
-   * Existing message indices updated by the most recent backend delta.
+   * Source log entries. Read only by the terminal render path, which shows a
+   * process stream's raw output text rather than transcript rows.
+   */
+  @property({ attribute: false }) entries: StreamLogEntry[] = [];
+
+  /**
+   * Existing row indices updated by the most recent backend delta.
    * Null means the producer did not provide delta metadata, so fall back
    * to reference scans.
    */
-  @property({ attribute: false }) updatedMessageIndices:
-    readonly number[] | null = null;
+  @property({ attribute: false }) updatedRowIndices: readonly number[] | null =
+    null;
 
-  /** Generation immediately before updatedMessageIndices was collected. */
-  @property({ attribute: false }) updatedMessageBaseGeneration = 0;
+  /** Generation immediately before updatedRowIndices was collected. */
+  @property({ attribute: false }) updatedRowBaseGeneration = 0;
 
-  /** Current generation for the messages array. */
-  @property({ attribute: false }) messageGeneration = 0;
+  /** Current generation for the rows array. */
+  @property({ attribute: false }) rowGeneration = 0;
 
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
@@ -133,22 +136,18 @@ export class TaskGroupList extends LitElement {
    */
   @property({ type: Boolean, reflect: true }) terminal = false;
 
-  /** Retained subagent identities used by executions tool cards. */
-  @property({ attribute: false })
-  subagentExecutionLabels: ExecutionLabels = new Map();
-
   /** Track previous group statuses to detect completion (not rendered — no @state needed) */
   private previousStatuses = new Map<string, string>();
 
-  private readonly index = new MessageIndex();
+  private readonly index = new TranscriptIndex();
   private readonly terminalBuffer = new TerminalBuffer();
 
   /** Number of recent top-level timeline entries currently rendered. */
   @state() private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
 
-  /** Number of recent message entries rendered for each group. Reassigned
+  /** Number of recent rows rendered for each group. Reassigned
    *  (never mutated in place) so the reactive update cycle picks up changes. */
-  @state() private groupMessageWindows = new Map<string, number>();
+  @state() private groupRowWindows = new Map<string, number>();
 
   /** Reference to the scroll container */
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
@@ -167,8 +166,8 @@ export class TaskGroupList extends LitElement {
   /** Threshold for detecting "near bottom" in scroll listener (px) */
   private static readonly STICKY_THRESHOLD = 150;
 
-  /** Message generation represented by the current cached tree/timeline. */
-  private processedMessageGeneration = 0;
+  /** Row generation represented by the current cached tree/timeline. */
+  private processedRowGeneration = 0;
 
   /** Handle native scroll events from the log container to track user intent */
   private handleScroll = (): void => {
@@ -195,27 +194,29 @@ export class TaskGroupList extends LitElement {
 
   override willUpdate(changedProperties: Map<string, unknown>): void {
     const groupsChanged = changedProperties.has('groups');
-    const messagesChanged = changedProperties.has('messages');
+    const rowsChanged = changedProperties.has('rows');
+    const entriesChanged = changedProperties.has('entries');
 
     if (groupsChanged) {
       this.checkForCompletedRuns();
     }
 
     if (this.terminal) {
-      const fullText = (): string => this.messages.map((m) => m.text).join('');
-      const prevMsgs = changedProperties.get('messages') as
-        LogMessageData[] | undefined;
-      const prevCount = prevMsgs?.length ?? 0;
+      const fullText = (): string =>
+        this.entries.map((entry) => entry.text ?? '').join('');
+      const previousEntries = changedProperties.get('entries') as
+        StreamLogEntry[] | undefined;
+      const prevCount = previousEntries?.length ?? 0;
       if (changedProperties.has('terminal')) {
         this.terminalBuffer.rebuild(fullText());
-      } else if (messagesChanged && this.messages.length > prevCount) {
+      } else if (entriesChanged && this.entries.length > prevCount) {
         this.terminalBuffer.append(
-          this.messages
+          this.entries
             .slice(prevCount)
-            .map((m) => m.text)
+            .map((entry) => entry.text ?? '')
             .join(''),
         );
-      } else if (messagesChanged) {
+      } else if (entriesChanged) {
         this.terminalBuffer.rebuild(fullText());
       }
     }
@@ -227,12 +228,12 @@ export class TaskGroupList extends LitElement {
       previousGroups: changedProperties.get('groups') as
         TaskGroup[] | undefined,
       groupsChanged,
-      messages: this.messages,
-      previousMessages: changedProperties.get('messages') as
-        LogMessageData[] | undefined,
-      messagesChanged,
-      deltaIndices: this.canUseUpdatedMessageIndices()
-        ? (this.updatedMessageIndices ?? [])
+      rows: this.rows,
+      previousRows: changedProperties.get('rows') as
+        TranscriptRow[] | undefined,
+      rowsChanged,
+      deltaIndices: this.canUseUpdatedRowIndices()
+        ? (this.updatedRowIndices ?? [])
         : null,
     });
     if (renderWindowsStale) {
@@ -241,7 +242,7 @@ export class TaskGroupList extends LitElement {
   }
 
   override updated(): void {
-    this.processedMessageGeneration = this.messageGeneration;
+    this.processedRowGeneration = this.rowGeneration;
 
     if (this.terminal) {
       if (this.terminalCommittedPre) {
@@ -253,10 +254,10 @@ export class TaskGroupList extends LitElement {
     this.terminalBuffer.resetDomState();
   }
 
-  private canUseUpdatedMessageIndices(): boolean {
+  private canUseUpdatedRowIndices(): boolean {
     return (
-      this.updatedMessageIndices !== null &&
-      this.updatedMessageBaseGeneration === this.processedMessageGeneration
+      this.updatedRowIndices !== null &&
+      this.updatedRowBaseGeneration === this.processedRowGeneration
     );
   }
 
@@ -286,14 +287,14 @@ export class TaskGroupList extends LitElement {
 
   private resetRenderWindows(): void {
     this.timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
-    this.groupMessageWindows = new Map();
+    this.groupRowWindows = new Map();
   }
 
   private renderRevealButton(options: {
     hiddenCount: number;
     step: number;
     scope: string;
-    kind: 'timeline' | 'messages';
+    kind: 'timeline' | 'rows';
     label: string;
   }): TemplateResult {
     const revealCount = Math.min(options.hiddenCount, options.step);
@@ -315,43 +316,39 @@ export class TaskGroupList extends LitElement {
     `;
   }
 
-  private renderMessageEntries(
-    messages: readonly LogMessageData[],
+  private renderRowEntries(
+    rows: readonly TranscriptRow[],
     scope: string,
   ): TemplateResult {
     const windowSize =
-      this.groupMessageWindows.get(scope) ?? DEFAULT_GROUP_MESSAGE_WINDOW;
-    const hiddenCount = Math.max(0, messages.length - windowSize);
-    const visibleMessages =
-      hiddenCount > 0 ? messages.slice(hiddenCount) : messages;
+      this.groupRowWindows.get(scope) ?? DEFAULT_GROUP_ROW_WINDOW;
+    const hiddenCount = Math.max(0, rows.length - windowSize);
+    const visibleRows = hiddenCount > 0 ? rows.slice(hiddenCount) : rows;
 
     return html`${
       hiddenCount > 0
         ? this.renderRevealButton({
             hiddenCount,
-            step: GROUP_MESSAGE_WINDOW_STEP,
+            step: GROUP_ROW_WINDOW_STEP,
             scope,
-            kind: 'messages',
+            kind: 'rows',
             label: 'message',
           })
         : nothing
     }${repeat(
-      visibleMessages,
-      (m) => m.id,
-      (m) => this.renderLogEntry(m),
+      visibleRows,
+      (row) => row.id,
+      (row) => this.renderLogEntry(row),
     )}`;
   }
 
   /**
-   * Format one log message, guarded against re-render while it and the
-   * current subagent labels stay the same.
+   * Paint one transcript row, guarded against re-render while the row stays
+   * the same object. A row is replaced (never patched) whenever its source
+   * entry changes, so reference identity is the whole freshness test.
    */
-  private renderLogEntry(message: LogMessageData) {
-    return guard([message, this.subagentExecutionLabels], () =>
-      formatLogEntry(message, {
-        executionLabels: this.subagentExecutionLabels,
-      }),
-    );
+  private renderLogEntry(row: TranscriptRow) {
+    return guard([row], () => formatLogEntry(row));
   }
 
   private handleRevealOlderRows(event: Event): void {
@@ -364,12 +361,12 @@ export class TaskGroupList extends LitElement {
 
     if (kind === 'timeline') {
       this.timelineItemWindow += TIMELINE_ITEM_WINDOW_STEP;
-    } else if (kind === 'messages') {
+    } else if (kind === 'rows') {
       const current =
-        this.groupMessageWindows.get(scope) ?? DEFAULT_GROUP_MESSAGE_WINDOW;
-      this.groupMessageWindows = new Map(this.groupMessageWindows).set(
+        this.groupRowWindows.get(scope) ?? DEFAULT_GROUP_ROW_WINDOW;
+      this.groupRowWindows = new Map(this.groupRowWindows).set(
         scope,
-        current + GROUP_MESSAGE_WINDOW_STEP,
+        current + GROUP_ROW_WINDOW_STEP,
       );
     }
   }
@@ -424,12 +421,12 @@ export class TaskGroupList extends LitElement {
    */
   private renderGroupProgress(
     group: TaskGroup,
-    messages: readonly LogMessageData[],
+    rows: readonly TranscriptRow[],
   ): TemplateResult | typeof nothing {
     if (group.kind !== 'phase') return nothing;
-    const calls = messages
-      .filter((message) => message.messageType === MESSAGE_TYPES.WORKFLOW_TASK)
-      .map((message) => message.data);
+    const calls = rows.flatMap((row) =>
+      row.kind === 'workflowTask' ? [row.call] : [],
+    );
     const { done, total } = workflowPhaseCallProgress(calls);
     if (total === 0) return nothing;
     return html`<span class="group-progress">${done}/${total}</span>`;
@@ -438,7 +435,7 @@ export class TaskGroupList extends LitElement {
   /** Render child group header inline (only called for non-root groups) */
   private renderGroupHeader(
     group: TaskGroup,
-    messages: readonly LogMessageData[],
+    rows: readonly TranscriptRow[],
   ): TemplateResult {
     const formattedStartTime = getTimeFormatter().format(
       new Date(group.startTime),
@@ -466,7 +463,7 @@ export class TaskGroupList extends LitElement {
         })}
       </span>
       <span class="group-title">${title}</span>
-      ${this.renderGroupProgress(group, messages)}
+      ${this.renderGroupProgress(group, rows)}
       <span class="group-time">
         <span class="group-start-time" data-start=${String(group.startTime)}>
           ${waIcon('clock')} ${formattedStartTime}
@@ -480,10 +477,10 @@ export class TaskGroupList extends LitElement {
     `;
   }
 
-  /** Messages of a group followed by its child groups. */
+  /** Rows of a group followed by its child groups. */
   private renderGroupBody(node: GroupTree): TemplateResult {
-    return html`${this.renderMessageEntries(
-      node.messages,
+    return html`${this.renderRowEntries(
+      node.rows,
       `group:${node.group.id}`,
     )}${repeat(
       node.children,
@@ -497,7 +494,7 @@ export class TaskGroupList extends LitElement {
     node: GroupTree,
     isRoot = false,
   ): TemplateResult | typeof nothing {
-    const { group, messages } = node;
+    const { group, rows } = node;
     const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
     const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
@@ -536,7 +533,7 @@ export class TaskGroupList extends LitElement {
             [`is-${group.status}`]: true,
           })}
         >
-          ${this.renderGroupHeader(group, messages)}
+          ${this.renderGroupHeader(group, rows)}
         </div>
         <div id=${contentId} class="log-group-content">
           ${expanded ? this.renderGroupBody(node) : nothing}
@@ -590,9 +587,13 @@ export class TaskGroupList extends LitElement {
     }
 
     // Pre-output placeholder, including terminal-mode (process-agent) streams:
-    // with no messages the terminal buffer is empty and would render a blank
+    // with no output the terminal buffer is empty and would render a blank
     // <pre>, so show the same "Run is starting" / idle text instead.
-    if (this.messages.length === 0 && this.groups.length === 0) {
+    if (
+      this.rows.length === 0 &&
+      this.entries.length === 0 &&
+      this.groups.length === 0
+    ) {
       const active =
         this.streamStatus !== STREAM_STATUS.READY &&
         isInFlightPhase(this.streamStatus ?? undefined);
@@ -611,7 +612,7 @@ export class TaskGroupList extends LitElement {
       return this.renderTerminalOutput();
     }
 
-    // Interleave ungrouped messages (user input, follow-ups, errors) with run
+    // Interleave ungrouped rows (user input, follow-ups, errors) with run
     // groups chronologically so the conversation reads top-to-bottom. Large
     // streams render a recent window first; older timeline entries remain in
     // memory and can be revealed from the top control.
@@ -635,8 +636,8 @@ export class TaskGroupList extends LitElement {
         visibleTimeline,
         (item) => item.key,
         (item) =>
-          'msg' in item
-            ? this.renderLogEntry(item.msg)
+          'row' in item
+            ? this.renderLogEntry(item.row)
             : this.renderGroupNode(item.tree, true),
       )}
     `;

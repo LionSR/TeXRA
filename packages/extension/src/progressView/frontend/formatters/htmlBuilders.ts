@@ -240,13 +240,13 @@ export function buildFileLinkSpan(
   return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(options.startLine)} role="button" tabindex="0">${content}</span>`;
 }
 
-/** Build rendered templates for file list. */
-export function buildFileListRender(files: FileListEntry[]): {
-  items: TemplateResult;
-  summary: string;
-} {
+/** Build the `<li>` rows for a file-list banner. The summary line above them
+ *  is the row's (`FileListRow.summary`), not derived here. */
+export function buildFileListRender(
+  files: readonly FileListEntry[],
+): TemplateResult {
   // prettier-ignore
-  const items = html`${files.map((file) => {
+  return html`${files.map((file) => {
     const iconName = file.ok ? 'check' : 'triangle-exclamation';
     const filePath = file.path;
     const fileName = getBasename(filePath);
@@ -258,13 +258,6 @@ export function buildFileListRender(files: FileListEntry[]): {
     // prettier-ignore
     return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, fileName)}${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}</li>`;
   })}`;
-
-  const loadedFiles = files.filter((file) => file.ok).length;
-  const failedFiles = files.length - loadedFiles;
-  const failedSuffix = failedFiles > 0 ? `, ${failedFiles} not found` : '';
-  const summary = `Files (${loadedFiles}/${files.length} loaded${failedSuffix})`;
-
-  return { items, summary };
 }
 
 /** Get appropriate wa-icon name for a tool. */

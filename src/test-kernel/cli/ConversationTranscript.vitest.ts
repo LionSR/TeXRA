@@ -75,6 +75,7 @@ import {
 } from '@shared/schemas';
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/streams/compactionActivityProjection';
 import { buildChildRosters } from '@test/support/childStreamEntries';
+import { toolConversationEntry } from '@test/support/transcriptRowFixtures';
 
 const STREAM_ID = 'cli-test-stream' as StreamTabId;
 const ROOT_STREAM = 'root-stream' as StreamTabId;
@@ -125,47 +126,26 @@ function toolEntry(
   id: string,
   status: NormalizedToolUse['status'],
   outputText = status === 'completed' ? 'ok' : '',
+  overrides: Partial<NormalizedToolUse> = {},
 ): Extract<ConversationEntry, { role: 'tool' }> {
-  return {
-    id,
-    role: 'tool',
-    text: '',
-    finalized: false,
-    toolUse: {
-      toolName: 'Bash',
-      errorText: '',
-      outputText,
-      userInstructionText: '',
-      input: { command: 'ls' },
-      isError: false,
-      isUserFeedback: false,
-      headerSummary: '',
-      status,
-    },
-  };
+  return toolConversationEntry(id, {
+    toolName: 'Bash',
+    outputText,
+    input: { command: 'ls' },
+    status,
+    ...overrides,
+  });
 }
 
 function compactExecutionsEntry(
   id: string,
   path: string,
 ): Extract<ConversationEntry, { role: 'tool' }> {
-  return {
+  return toolConversationEntry(
     id,
-    role: 'tool',
-    text: '',
-    finalized: true,
-    toolUse: {
-      toolName: 'executions',
-      errorText: '',
-      outputText: '',
-      userInstructionText: '',
-      input: { path },
-      isError: false,
-      isUserFeedback: false,
-      headerSummary: '',
-      status: TOOL_USE_STATUS.COMPLETED,
-    },
-  };
+    { toolName: 'executions', input: { path } },
+    true,
+  );
 }
 
 describe('CLI conversation transcript', () => {
@@ -459,16 +439,15 @@ describe('CLI conversation transcript', () => {
   });
 
   it('falls back when a malformed tool entry cannot be estimated', () => {
+    const base = toolEntry('tool', TOOL_USE_STATUS.IN_PROGRESS);
     const malformedTool = {
-      ...toolEntry('tool', TOOL_USE_STATUS.IN_PROGRESS).toolUse,
+      ...base.toolUse,
       toolName: {} as string,
     } as NormalizedToolUse;
     const malformedEntry: ConversationEntry = {
-      id: 'tool',
-      role: 'tool',
-      text: '',
-      finalized: false,
+      ...base,
       toolUse: malformedTool,
+      row: { ...base.row, toolUse: malformedTool },
     };
 
     expect(estimateTranscriptEntryRows(malformedEntry, 80)).toBe(1);
@@ -650,14 +629,12 @@ describe('CLI conversation transcript', () => {
   });
 
   it('budgets live rich tool rows without reflowing their display lines', () => {
-    const base = toolEntry('t1', TOOL_USE_STATUS.COMPLETED);
-    const tool: ConversationEntry = {
-      ...base,
-      toolUse: {
-        ...base.toolUse,
-        input: { command: 'x'.repeat(80) },
-      },
-    };
+    const tool: ConversationEntry = toolEntry(
+      't1',
+      TOOL_USE_STATUS.COMPLETED,
+      'ok',
+      { input: { command: 'x'.repeat(80) } },
+    );
     const liveLayout = transcriptEntryLayout(tool, {
       mode: 'live',
       width: 20,
@@ -670,25 +647,6 @@ describe('CLI conversation transcript', () => {
     expect(selectTranscriptEntriesForViewport([tool], 20, 20).usedRows).toBe(
       transcriptEntryLayoutRows(liveLayout),
     );
-  });
-
-  it('clips a standalone loaded-image event to one transcript row', () => {
-    const media: ConversationEntry = {
-      id: 'media-1',
-      role: 'media',
-      text: '',
-      finalized: true,
-      images: [
-        {
-          path: '/private/tmp/plot-with-a-long-name.png',
-          sizeBytes: 8704,
-        },
-      ],
-    };
-    const layout = transcriptEntryLayout(media, { width: 24 });
-
-    expect(layout.lines).toEqual(['› [image] /pr… (8.5 KiB)']);
-    expect(textDisplayWidth(layout.lines[0] ?? '')).toBe(24);
   });
 
   it('keeps bounded rich display rows unwrapped', () => {
@@ -2046,14 +2004,11 @@ describe('CLI conversation transcript', () => {
       ...toolEntry('bash', 'completed', 'complete bash output'),
       spillPath: 'executions/abcdef123456/toolOutput/bash.txt',
     };
-    const readBase = toolEntry('read', 'completed', 'complete read output');
     const read = {
-      ...readBase,
+      ...toolEntry('read', 'completed', 'complete read output', {
+        toolName: 'read_file',
+      }),
       spillPath: 'executions/abcdef123456/toolOutput/read.txt',
-      toolUse: {
-        ...readBase.toolUse,
-        toolName: 'read',
-      },
     };
 
     const lines = transcriptToLines(
@@ -2071,12 +2026,10 @@ describe('CLI conversation transcript', () => {
   });
 
   it('keeps a failed compact-tool spill visible in the full transcript', () => {
-    const readBase = toolEntry('read', 'completed', 'preview');
     const spillPath = 'executions/abcdef123456/toolOutput/read.txt';
     const read = {
-      ...readBase,
+      ...toolEntry('read', 'completed', 'preview', { toolName: 'read_file' }),
       spillPath,
-      toolUse: { ...readBase.toolUse, toolName: 'read' },
     };
     const notice =
       '[Full output is unavailable because this run artifact was deleted.]';
