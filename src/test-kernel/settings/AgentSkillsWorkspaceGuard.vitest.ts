@@ -131,12 +131,8 @@ describe('agent skills workspace guard', () => {
       SettingsViewMessageHandler.prototype,
     ) as SnapshotHarness;
     const webview = {};
-    const sendReliabilityAndOrchestrationSettings = vi.fn();
-    Reflect.set(
-      handler,
-      'sendReliabilityAndOrchestrationSettings',
-      sendReliabilityAndOrchestrationSettings,
-    );
+    const sendSettingsSnapshot = vi.fn();
+    Reflect.set(handler, 'sendSettingsSnapshot', sendSettingsSnapshot);
     Reflect.set(
       handler,
       'withActiveWebview',
@@ -147,8 +143,6 @@ describe('agent skills workspace guard', () => {
 
     await handler.postStateSettingSnapshot('multi-agent');
 
-    expect(sendReliabilityAndOrchestrationSettings).toHaveBeenCalledWith(
-      webview,
-    );
+    expect(sendSettingsSnapshot).toHaveBeenCalledWith(webview, 'multi-agent');
   });
 });

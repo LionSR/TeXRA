@@ -180,10 +180,7 @@ export async function resolveCliAgent(
     return lookupCliAgent(name, lookupCategory);
   }
 
-  if (
-    name.includes(':') ||
-    !(await SupabaseClient.canAccessRemoteAgentCatalog())
-  ) {
+  if (name.includes(':') || !(await SupabaseClient.isAuthenticated())) {
     return agent;
   }
 

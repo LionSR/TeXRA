@@ -74,6 +74,7 @@ function realCredentialController(): DefaultDesktopCredentialSettingsController 
     externalOpener: {
       openExternal: noOp,
       presentSubscriptionSignInUrl: () => undefined,
+      presentSubscriptionDeviceCode: () => undefined,
     },
     notifications: {
       showInfoMessage: noOp,

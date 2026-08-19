@@ -100,8 +100,8 @@ function projectCliSessionFact(
 
 /**
  * Project run facts onto the frozen NDJSON progress-event vocabulary.
- * `run.start` is intentionally unprojected: the public wire shape carries no
- * run-start record.
+ * `run.start` and `context.state` are intentionally unprojected: the public
+ * wire shape carries neither a run-start nor a context-occupancy record.
  */
 function projectCliRunFact(
   streamId: StreamTabId,
@@ -112,6 +112,10 @@ function projectCliRunFact(
       return undefined;
     case 'usage':
       return { event: 'updateStreamUsage', payload: event.payload };
+    case 'context.state':
+      // The frozen public wire carries no context-state record; occupancy is
+      // an interactive-surface gauge, not a scriptable progress event.
+      return undefined;
     case 'run.config':
       return {
         event: 'setTaskState',

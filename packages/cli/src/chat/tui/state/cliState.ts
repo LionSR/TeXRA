@@ -10,23 +10,14 @@ import {
 } from '@shared/approvalPolicy';
 import type {
   AgentDelegationScope,
-  CompileFailure,
-  ConversationProgress,
   MessageType,
   NormalizedToolUse,
-  OutputFileInfo,
-  Plan,
-  RoundIndexed,
-  RunIdentity,
   StreamLogEntry,
   StreamPhase,
-  StreamStage,
   StreamSubstate,
   StreamTabId,
   TaskGroup,
-  TodoItem,
   TokenUsageStats,
-  UserFollowUpSupport,
   WorkflowCallProgress,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';

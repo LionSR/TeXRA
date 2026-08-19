@@ -24,8 +24,7 @@ const mocks = vi.hoisted(() => ({
   setPreferXaiSubscription: vi.fn(),
   invalidateModelOptionsCache: vi.fn(),
   shouldUseSubscriptionDeviceCode: vi.fn(),
-  signInCliChatGpt: vi.fn(),
-  signInCliGrok: vi.fn(),
+  signInCliSubscription: vi.fn(),
   updateGlobalState: vi.fn(),
   hasUsableApiKey: vi.fn(),
   lookupApiKeyOrigin: vi.fn(),
@@ -104,20 +103,13 @@ vi.mock('@model/computeModelOptions', () => ({
   invalidateModelOptionsCache: mocks.invalidateModelOptionsCache,
 }));
 
-vi.mock('@cli/runtime/chatgptLogin', () => ({
-  signInCliChatGpt: mocks.signInCliChatGpt,
-}));
-
-vi.mock('@cli/runtime/grokLogin', () => ({
-  signInCliGrok: mocks.signInCliGrok,
-}));
-
 vi.mock('@cli/runtime/subscriptionLogin', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@cli/runtime/subscriptionLogin')>();
   return {
     ...actual,
     shouldUseSubscriptionDeviceCode: mocks.shouldUseSubscriptionDeviceCode,
+    signInCliSubscription: mocks.signInCliSubscription,
   };
 });
 
@@ -467,7 +459,11 @@ describe('CLI model access routes', () => {
   });
 
   it('signs in when needed and enables ChatGPT without an API key', async () => {
-    mocks.signInCliChatGpt.mockResolvedValue({ email: 'user@example.com' });
+    mocks.signInCliSubscription.mockResolvedValue({
+      signedIn: true,
+      email: 'user@example.com',
+      label: 'user@example.com',
+    });
     mocks.setPreferCodexSubscription.mockResolvedValue({
       effective: true,
       target: 'global',
@@ -481,7 +477,8 @@ describe('CLI model access routes', () => {
       { writeProgress, signal: controller.signal },
     );
 
-    expect(mocks.signInCliChatGpt).toHaveBeenCalledWith(
+    expect(mocks.signInCliSubscription).toHaveBeenCalledWith(
+      'chatgpt',
       { device: false, noBrowser: false },
       { signal: controller.signal, writeProgress },
     );
@@ -513,7 +510,7 @@ describe('CLI model access routes', () => {
       { writeProgress: vi.fn() },
     );
 
-    expect(mocks.signInCliChatGpt).not.toHaveBeenCalled();
+    expect(mocks.signInCliSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
     expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
@@ -607,7 +604,7 @@ describe('CLI model access routes', () => {
       writeProgress: vi.fn(),
     });
 
-    expect(mocks.signInCliChatGpt).not.toHaveBeenCalled();
+    expect(mocks.signInCliSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
   });
 

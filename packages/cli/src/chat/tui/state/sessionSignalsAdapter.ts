@@ -96,9 +96,11 @@ class TuiSessionRenderer implements SessionRendererPort {
         return markArtifactStreamHydrated(streamId);
       case 'parentStreamId':
       case 'queuedFollowUps':
-        // The applier already landed the edge / the session-owned queue on
-        // `SessionState`; the CLI's topology snapshot and `queuedFollowUpsFor`
-        // re-derive from there at paint.
+      case 'contextState':
+        // The applier already landed the edge / the session-owned queue /
+        // the model handler's context snapshot on `SessionState`; the CLI's
+        // topology snapshot, `queuedFollowUpsFor`, and the status bar's
+        // `streamStateFor` read re-derive from there at paint.
         return invalidateChildStreams();
       case 'goalPaused':
         return appendLocalAssistantTranscript(
