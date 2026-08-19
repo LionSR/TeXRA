@@ -99,7 +99,6 @@ const SESSION_META = {
   model: 'deepseekT',
   modelSource: 'builtin-default',
   cwd: '/tmp/project',
-  apiMode: 'personal',
   approvalPolicy: 'ask',
   canDelegate: false,
   transcriptMode: 'persistent',

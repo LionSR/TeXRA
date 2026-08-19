@@ -242,7 +242,6 @@ return { papers, question: args.question };`;
     // A shell call is described by its command (the shared row model's
     // header rule), so streamed stdout can reach neither the title nor it.
     expect(title?.textContent).toBe('bash — lake build');
-    expect(title?.textContent).not.toContain('Built Mathlib');
     expect(body?.textContent).toContain('Built Mathlib.Example.Module19');
 
     // Element-name pin (#8156): tool-use banners render through <wa-details>,

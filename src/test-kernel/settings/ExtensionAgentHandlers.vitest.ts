@@ -48,7 +48,6 @@ vi.mock('@auth/SupabaseClient', async () => ({
   )),
   SupabaseClient: {
     isAuthenticated,
-    getUserTier: () => undefined,
     getAccessToken: async () => undefined,
   },
 }));

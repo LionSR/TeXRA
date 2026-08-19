@@ -224,7 +224,6 @@ describe('CLI doctor', () => {
         '     Run `texra models list --all` to inspect access, sign in with `texra login`, or add a provider API key with `texra setup`.',
       ].join('\n'),
     );
-    expect(text).not.toContain('/api personal');
     expect(text).toContain('SKIP Config: No workspace CLI config file found.');
   });
 

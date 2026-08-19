@@ -64,7 +64,6 @@ const SESSION_META = {
   model: 'deepseekT',
   modelSource: 'builtin-default',
   cwd: '/tmp/project',
-  apiMode: 'personal',
   approvalPolicy: 'yolo',
   canDelegate: true,
   transcriptMode: 'persistent',

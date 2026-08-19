@@ -10,7 +10,6 @@ import {
 describe('agent workspace work-plan state', () => {
   it.each([
     ['a snapshot without workPlan', {}],
-    ['a retired todo/plan snapshot', { todos: [], plan: null }],
     ['a null workPlan', { workPlan: null }],
     [
       'invalid current workPlan entries',
