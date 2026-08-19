@@ -12,6 +12,7 @@ import {
   toFetchToolError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 
 const DDG_TIMEOUT_MS = 15_000; // 15 s
@@ -21,13 +22,9 @@ const WebSearchInputSchema = z.strictObject({
   query: z
     .string()
     .describe('Search query to send to the web search provider.'),
-  max_results: z
-    .number()
-    .min(1)
-    .max(5)
-    .nullish()
-    .transform((v) => v ?? 3)
-    .describe('Maximum number of search results to return, up to 5.'),
+  max_results: nullishWithDefault(z.number().min(1).max(5), 3).describe(
+    'Maximum number of search results to return, up to 5.',
+  ),
 });
 
 export type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
