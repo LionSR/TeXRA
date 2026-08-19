@@ -3,7 +3,12 @@
  * multi-modal messages before provider-specific formatting.
  */
 export interface MediaEntry {
-  /** File name for reference, typically without directory */
+  /**
+   * Name the model sees for this attachment. Follows `getPromptFileName`, the
+   * same rule as a text document's `<document name="…">`: workspace-relative
+   * for workspace files, bare basename otherwise. Provider fields that require
+   * a filename (`filename`, `title`, `displayName`) basename it themselves.
+   */
   file_name: string;
   /** Base64 encoded media content */
   data: string;
