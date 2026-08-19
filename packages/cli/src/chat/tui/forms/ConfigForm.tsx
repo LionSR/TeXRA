@@ -33,10 +33,10 @@ import {
 } from './configCategories';
 import { FormFrame } from './_shared/FormFrame';
 
-export type SettingEditKind =
+type SettingEditKind =
   'form' | 'boolean' | 'enum' | 'string' | 'number' | 'readonly';
 
-export type SettingInputResult =
+type SettingInputResult =
   | { readonly ok: true; readonly value: unknown }
   | { readonly ok: false; readonly message: string };
 

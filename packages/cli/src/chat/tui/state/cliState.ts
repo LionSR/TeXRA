@@ -507,12 +507,12 @@ export function closeInfoPane(): void {
 
 /** Passive reader target. Holding the captured stream id rather than a text
  * snapshot keeps each reader live even if transcript focus moves elsewhere. */
-export interface WorkPlanReaderRequest {
+interface WorkPlanReaderRequest {
   readonly revision: number;
   readonly streamId: StreamTabId;
 }
 
-export type ForegroundReaderTarget =
+type ForegroundReaderTarget =
   | { readonly kind: 'transcript'; readonly streamId: StreamTabId }
   | {
       readonly kind: 'workPlan';

@@ -78,7 +78,7 @@ import {
 } from '@tools/approval/bashApproval';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
-import { generateShortId } from '@utils/core';
+import { generateShortId, onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
@@ -237,25 +237,25 @@ function runRetryTask<T>(
 ): Promise<T> {
   signal.throwIfAborted();
   return new Promise<T>((resolve, reject) => {
-    const onAbort = () =>
+    const detach = onAbort(signal, () =>
       reject(
         signal.reason ??
           new DOMException('Retry preparation aborted.', 'AbortError'),
-      );
-    signal.addEventListener('abort', onAbort, { once: true });
+      ),
+    );
     try {
       start().then(
         (value) => {
-          signal.removeEventListener('abort', onAbort);
+          detach();
           resolve(value);
         },
         (error: unknown) => {
-          signal.removeEventListener('abort', onAbort);
+          detach();
           reject(error);
         },
       );
     } catch (error) {
-      signal.removeEventListener('abort', onAbort);
+      detach();
       reject(error);
     }
   });
@@ -557,42 +557,6 @@ function setTuiApprovalBypassState({
   }));
 }
 
-/** Undo one access-settings write that a failed retry had already applied.
- *
- *  Returns the contextualized failure instead of throwing, so a partially
- *  applied switch can report every setting it could not put back rather than
- *  losing all but the first. `restoredInMemory` separates "the value is back
- *  but the write may not have persisted" from "the value is still the one the
- *  user never asked for", because only the latter needs re-doing by hand.
- *
- *  Callers keep their own "did this write happen" guard rather than passing it
- *  in, so a skipped attempt costs no await — see the call site. */
-async function attemptRollback({
-  restore,
-  restoredInMemory,
-  memoryRestoredContext,
-  restoreFailedContext,
-}: {
-  /** Restore the previous value and verify it took effect. */
-  readonly restore: () => Promise<void>;
-  readonly restoredInMemory: () => boolean;
-  readonly memoryRestoredContext: string;
-  readonly restoreFailedContext: string;
-}): Promise<Error | undefined> {
-  try {
-    await restore();
-    return undefined;
-  } catch (rollbackError) {
-    const persistenceContext = restoredInMemory()
-      ? memoryRestoredContext
-      : restoreFailedContext;
-    return new Error(
-      `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
-      { cause: rollbackError },
-    );
-  }
-}
-
 /**
  * Per-setting rollback config for {@link switchRetryToPersonalCredentials}.
  * `writeStarted` / `needsRollback` gate each setting; `restore` re-applies the
@@ -616,6 +580,12 @@ interface RetrySettingRollbackConfig {
  * the previous one, is skipped WITHOUT an await: this runs while the commit
  * queue still holds its slot, and the extra turns let a newer queued switch
  * commit ahead of the restores below.
+ *
+ * Each failure is contextualized rather than thrown, so a partially applied
+ * switch can report every setting it could not put back rather than losing
+ * all but the first. `restoredInMemory` separates "the value is back but the
+ * write may not have persisted" from "the value is still the one the user
+ * never asked for", because only the latter needs re-doing by hand.
  */
 async function rollbackChangedSettings(
   configs: readonly RetrySettingRollbackConfig[],
@@ -623,13 +593,18 @@ async function rollbackChangedSettings(
   const failures: Error[] = [];
   for (const config of configs) {
     if (!config.writeStarted || !config.needsRollback()) continue;
-    const failure = await attemptRollback({
-      restore: config.restore,
-      restoredInMemory: config.restoredInMemory,
-      memoryRestoredContext: config.memoryRestoredContext,
-      restoreFailedContext: config.restoreFailedContext,
-    });
-    if (failure) failures.push(failure);
+    try {
+      await config.restore();
+    } catch (rollbackError) {
+      const persistenceContext = config.restoredInMemory()
+        ? config.memoryRestoredContext
+        : config.restoreFailedContext;
+      failures.push(
+        new Error(`${persistenceContext}: ${toErrorMessage(rollbackError)}`, {
+          cause: rollbackError,
+        }),
+      );
+    }
   }
   return failures;
 }

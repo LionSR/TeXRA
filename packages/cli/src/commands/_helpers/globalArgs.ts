@@ -232,7 +232,7 @@ export function booleanArg(args: object, name: string): boolean {
   return name.startsWith('no-') && record[name.slice(3)] === false;
 }
 
-export interface CommonAgentRunFlags {
+interface CommonAgentRunFlags {
   inputFiles: string[];
   contextFiles: string[];
   instruction: string;

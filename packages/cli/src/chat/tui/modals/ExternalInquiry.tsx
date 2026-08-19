@@ -36,7 +36,7 @@ import {
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
-export interface ExternalInquiryProps {
+interface ExternalInquiryProps {
   readonly availableRows?: number;
   readonly payload: ExternalInquiryPermission;
   readonly onDecide: (decision: ApprovalDecision) => void;

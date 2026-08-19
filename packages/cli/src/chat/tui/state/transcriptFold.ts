@@ -863,15 +863,10 @@ export function applyStreamChanges(
   if (ctx.promotedIds) {
     // Rebuild path: carry the promotion across the reset rather than
     // re-deriving it from a `streamFinal` that may since have gone false.
-    let frontier = 0;
-    while (
-      frontier < state.items.length &&
-      (state.items[frontier]!.rank === 2 ||
-        ctx.promotedIds.has(state.items[frontier]!.rendered.id))
-    ) {
-      frontier += 1;
-    }
-    state.finalizedFrontier = frontier;
+    state.finalizedFrontier = carriedPromotionFrontier(
+      state.items,
+      ctx.promotedIds,
+    );
     ctx.flags.responseRescan = true;
   }
   // Promote only after the merged order is final: "is there a later entry"

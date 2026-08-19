@@ -16,16 +16,6 @@ import {
 import { assertNever } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
-import {
-  activeStreamId as activeStreamIdSignal,
-  streams as streamsSignal,
-} from '../state/cliState';
-import {
-  readStreamArtifacts,
-  streamArtifactRevision,
-} from '../state/subscribeStreamArtifacts';
-import { useSignal } from '../state/useSignal';
-
 // Marker glyph + color per todo status; statuses absent here (e.g. PENDING)
 // fall back to the default empty box with no color.
 const TODO_STATUS_DISPLAY: Partial<
@@ -161,26 +151,20 @@ function CompactRow({ row }: { row: CompactTodosPlanRow }): React.JSX.Element {
 
 export interface TodosPlanPanelProps {
   readonly maxRows: number;
+  readonly plan: Plan | null;
+  readonly todos: readonly TodoItem[];
 }
 
-export function TodosPlanPanel(
-  props: TodosPlanPanelProps,
-): React.JSX.Element | null {
-  const activeStreamId = useSignal(activeStreamIdSignal);
-  const streams = useSignal(streamsSignal);
-  useSignal(streamArtifactRevision);
-  const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const artifacts = activeStreamId
-    ? readStreamArtifacts(activeStreamId)
-    : undefined;
-  if (!slice) return null;
-  const todos = artifacts?.todos ?? [];
-  const plan = artifacts?.plan ?? null;
+export function TodosPlanPanel({
+  maxRows,
+  plan,
+  todos,
+}: TodosPlanPanelProps): React.JSX.Element | null {
   if (todos.length === 0 && !plan) return null;
   // Like the child list above it, the panel owns one blank separator row so
   // the todo checklist never sits flush against its neighbor. If the gap and
   // one content row do not both fit, render nothing.
-  const rowBudget = Math.max(0, Math.floor(props.maxRows)) - 1;
+  const rowBudget = Math.max(0, Math.floor(maxRows)) - 1;
   if (rowBudget <= 0) return null;
 
   const { hiddenCount, rows } = compactTodosPlanRows({

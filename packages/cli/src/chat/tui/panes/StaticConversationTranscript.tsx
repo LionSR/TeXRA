@@ -339,16 +339,6 @@ function staticTranscriptItemMetrics(
   );
 }
 
-function staticTranscriptItemRowCount(
-  item: StaticTranscriptItem,
-  width?: number,
-  executionLabels?: ExecutionLabels,
-  previousItem?: StaticTranscriptItem,
-): number {
-  return staticTranscriptItemMetrics(item, width, executionLabels, previousItem)
-    .rows;
-}
-
 function staticTranscriptItemsTotals(
   items: readonly StaticTranscriptItem[],
   width?: number,
@@ -820,44 +810,30 @@ export function buildStaticTranscriptItems(
   }
 
   if (!seen.has(SESSION_HEADER_ID)) {
-    const header: StaticTranscriptItem = {
-      id: SESSION_HEADER_ID,
-      kind: 'header',
-      compact: maxRows !== undefined && maxRows < FULL_SESSION_HEADER_ROWS,
-      identityLine: sessionHeaderIdentityLine(meta, {
-        childRosters,
-        parentStream,
-        streamId: scrollbackStreamId,
-        streams,
-      }),
+    // Same insert-if-it-fits logic `advanceStaticTranscriptState` uses on
+    // ordinary ticks; the totals it needs are computed fresh here (this path
+    // has no running rowCount/byteCount to diff against), which costs the
+    // same one full-history walk the old inline reduce paid.
+    const totals = staticTranscriptItemsTotals(
+      currentItems,
+      width,
+      executionLabels,
+    );
+    const header = ensureStaticSessionHeader({
+      byteCount: totals.bytes,
+      childRosters,
+      executionLabels,
+      items: currentItems,
+      maxRows,
       meta,
-    };
-    // The row budget only applies on compact terminals (maxRows defined), and
-    // counting rows wraps every item's full text — O(history) — so it must
-    // stay behind the maxRows gate rather than run eagerly per tick.
-    const fitsBudget =
-      maxRows === undefined ||
-      currentItems.reduce(
-        (total, item, index) =>
-          total +
-          staticTranscriptItemRowCount(
-            item,
-            width,
-            executionLabels,
-            index === 0 ? header : currentItems[index - 1],
-          ),
-        staticTranscriptItemRowCount(header, width, executionLabels),
-      ) <= maxRows;
-    if (fitsBudget) {
-      nextItems = [...currentItems];
-      const firstEntryIndex = nextItems.findIndex(
-        (item) => item.kind !== 'header',
-      );
-      nextItems.splice(
-        firstEntryIndex < 0 ? nextItems.length : firstEntryIndex,
-        0,
-        header,
-      );
+      parentStream,
+      rowCount: totals.rows,
+      scrollbackStreamId,
+      streams,
+      width,
+    });
+    if (header.inserted) {
+      nextItems = [...header.items];
       seen.add(SESSION_HEADER_ID);
     }
   }
@@ -1075,42 +1051,34 @@ export function advanceStaticTranscriptState(
   const finalizedFrontier = slice?.finalizedFrontier ?? 0;
   const status = slice?.status;
 
+  // Rebuilds below share every render input; only the repaint epoch differs
+  // per call site.
+  const rebuildState = (repaintEpoch: number): StaticTranscriptState =>
+    buildStaticTranscriptState({
+      childRosters,
+      eraseRequest,
+      executionLabels,
+      maxRows,
+      meta,
+      ownerKey,
+      parentStream,
+      repaintEpoch,
+      ringBudgets,
+      scrollbackStreamId,
+      streams,
+      width,
+    });
+
   // An out-of-band terminal erase (`/clear`) forces a rebuild even when the
   // items are unchanged — the terminal no longer shows them. Running here,
   // after the reset state committed, keeps the remounted `<Static>` free of
   // stale rows.
   if (eraseRequest !== current.eraseRequest) {
-    return buildStaticTranscriptState({
-      childRosters,
-      eraseRequest,
-      executionLabels,
-      maxRows,
-      meta,
-      ownerKey,
-      parentStream,
-      repaintEpoch: current.repaintEpoch + 1,
-      ringBudgets,
-      scrollbackStreamId,
-      streams,
-      width,
-    });
+    return rebuildState(current.repaintEpoch + 1);
   }
 
   if (isHardReset) {
-    const rebuilt = buildStaticTranscriptState({
-      childRosters,
-      eraseRequest,
-      executionLabels,
-      maxRows,
-      meta,
-      ownerKey,
-      parentStream,
-      repaintEpoch: current.repaintEpoch + 1,
-      ringBudgets,
-      scrollbackStreamId,
-      streams,
-      width,
-    });
+    const rebuilt = rebuildState(current.repaintEpoch + 1);
     // A hard reset that rebuilds the current *render inputs* unchanged — the
     // normal startup path, where the initial useState build already ran with
     // no streams — must not bump the repaint epoch. The `<Static>` remount
@@ -1133,20 +1101,7 @@ export function advanceStaticTranscriptState(
   }
 
   if (current.ownerKey !== ownerKey) {
-    return buildStaticTranscriptState({
-      childRosters,
-      eraseRequest,
-      executionLabels,
-      maxRows,
-      meta,
-      ownerKey,
-      parentStream,
-      repaintEpoch: current.repaintEpoch,
-      ringBudgets,
-      scrollbackStreamId,
-      streams,
-      width,
-    });
+    return rebuildState(current.repaintEpoch);
   }
 
   if (
@@ -1195,20 +1150,7 @@ export function advanceStaticTranscriptState(
     current.scan,
   );
   if (plan.rebuild) {
-    return buildStaticTranscriptState({
-      childRosters,
-      eraseRequest,
-      executionLabels,
-      maxRows,
-      meta,
-      ownerKey,
-      parentStream,
-      repaintEpoch: current.repaintEpoch + 1,
-      ringBudgets,
-      scrollbackStreamId,
-      streams,
-      width,
-    });
+    return rebuildState(current.repaintEpoch + 1);
   }
 
   const header = ensureStaticSessionHeader({

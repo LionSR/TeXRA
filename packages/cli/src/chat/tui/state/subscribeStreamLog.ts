@@ -16,9 +16,9 @@
 // subscription, batched drain, and the imperative sync/eviction/focus surface.
 //
 // Secrets are redacted at record time by TexraTranscriptRecorder, which is
-// what every host and the HTML export share. The `redactSecrets` calls below
-// remain only to cover rows persisted before that landed; they are idempotent
-// on already-redacted text.
+// what every host and the HTML export share. The `redactSecrets` call in
+// `./transcriptFold` remains only to cover rows persisted before that
+// landed; it is idempotent on already-redacted text.
 
 import {
   AgentCategory,

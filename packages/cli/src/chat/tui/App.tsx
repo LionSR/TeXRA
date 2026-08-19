@@ -632,6 +632,22 @@ export function App(props: AppProps): React.JSX.Element {
     pendingEscapeInterrupt.current = { parentStreamId, streamId, timer };
   };
 
+  // Shared tail of both bare-Escape trigger sites below: defer through the
+  // meta-chord disambiguation window when one may be in flight, otherwise
+  // handle the escape immediately.
+  const deferOrHandleBareEscape = (streamId: StreamTabId): void => {
+    if (
+      shouldDeferEscapeInterruptForMetaChord({
+        shortcutModifierLabel: defaultShortcutModifierLabel(),
+        streamFocusAvailable: sessionViews.length > 0,
+      })
+    ) {
+      scheduleBareEscape(streamId);
+    } else {
+      handleBareEscape(streamId);
+    }
+  };
+
   // Single App-level keyboard entry point. Ink broadcasts every keystroke to all
   // mounted useInput handlers, so keeping the App's shortcuts in one always-on
   // handler (gating internally) is clearer than several hooks racing on the same
@@ -654,16 +670,7 @@ export function App(props: AppProps): React.JSX.Element {
         ) {
           return;
         }
-        if (
-          shouldDeferEscapeInterruptForMetaChord({
-            shortcutModifierLabel: defaultShortcutModifierLabel(),
-            streamFocusAvailable: sessionViews.length > 0,
-          })
-        ) {
-          scheduleBareEscape(currentStreamId);
-        } else {
-          handleBareEscape(currentStreamId);
-        }
+        deferOrHandleBareEscape(currentStreamId);
         return;
       }
       const arrowInput =
@@ -757,16 +764,7 @@ export function App(props: AppProps): React.JSX.Element {
       activeStreamId !== undefined &&
       bareEscapeActive(activeStreamId)
     ) {
-      if (
-        shouldDeferEscapeInterruptForMetaChord({
-          shortcutModifierLabel: defaultShortcutModifierLabel(),
-          streamFocusAvailable: sessionViews.length > 0,
-        })
-      ) {
-        scheduleBareEscape(activeStreamId);
-      } else {
-        handleBareEscape(activeStreamId);
-      }
+      deferOrHandleBareEscape(activeStreamId);
     }
   });
 

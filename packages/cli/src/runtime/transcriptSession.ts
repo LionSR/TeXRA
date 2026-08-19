@@ -112,9 +112,7 @@ export async function initializeInteractiveTranscriptSession(
 
   const session = initializeDefaultSession({
     transcripts,
-    responseTextProcessing: createTexraResponseTextProcessing(
-      agentResponseTextConnector,
-    ),
+    responseTextProcessing,
   });
   await session.waitUntilReady();
   return ephemeralSession(

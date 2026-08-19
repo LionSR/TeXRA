@@ -177,7 +177,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     });
     this.profileHandlers = {
       signIn: () => options.auth.signIn(),
-      signOut: () => this.signOut(),
+      signOut: () => options.auth.signOut(),
       setProviderKey: (message) =>
         message.apiKey == null
           ? this.profileKeyController.setProviderKey(message.provider)
@@ -385,10 +385,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     return this.refreshAfterSubscriptionAuthChange(() =>
       this.postGrokAuthStatus(),
     );
-  }
-
-  private async signOut(): Promise<void> {
-    await this.options.auth.signOut();
   }
 
   private async signOutSubscription(
