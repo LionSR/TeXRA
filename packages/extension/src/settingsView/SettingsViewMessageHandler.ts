@@ -16,6 +16,8 @@ import { AUTH_COMMANDS } from '@auth/constants';
 import { globalSM, workspaceSM } from '@common/state';
 import { BaseViewMessageHandler } from '@common/webview';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
+import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
+import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
   buildToolDashboardItems,
@@ -72,6 +74,7 @@ import {
   dispatchSettingsViewInbound,
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas';
+import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 
 import {
   applyStateSettingUpdate,
@@ -100,11 +103,7 @@ import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { MemoryHandlers } from './handlers/memoryHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
-import {
-  CHATGPT_SUBSCRIPTION_PROVIDER,
-  GROK_SUBSCRIPTION_PROVIDER,
-  SubscriptionHandlers,
-} from './handlers/subscriptionHandlers';
+import { SubscriptionHandlers } from './handlers/subscriptionHandlers';
 import {
   sendSubscriptionUsage,
   type SubscriptionUsageReader,
@@ -190,13 +189,23 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
     this.chatgptHandlers = new SubscriptionHandlers(
-      CHATGPT_SUBSCRIPTION_PROVIDER,
+      'chatgpt',
+      () =>
+        buildAuthStatusMessage(
+          SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+          getChatGptAuthStatus,
+        ),
       ctx,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
     );
     this.signInChatGpt = this.chatgptHandlers.handleSignIn;
     this.grokHandlers = new SubscriptionHandlers(
-      GROK_SUBSCRIPTION_PROVIDER,
+      'grok',
+      () =>
+        buildAuthStatusMessage(
+          SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
+          getGrokAuthStatus,
+        ),
       ctx,
       () => this.refreshAfterSubscriptionAuthChange(),
     );
