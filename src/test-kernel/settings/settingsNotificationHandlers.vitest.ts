@@ -11,10 +11,6 @@ import {
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
-import {
-  buildGitAuthorSettingsMessage,
-  type GitAuthorSettings,
-} from '@utils/system/gitAuthorSettings';
 
 const workflowItem: AgentSelectionItem = {
   name: 'a',
@@ -121,22 +117,6 @@ describe('settingsView notification message builders', () => {
     expect(message).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
       status,
-    });
-  });
-
-  it('buildGitAuthorSettingsMessage wraps the settings object', () => {
-    const settings: GitAuthorSettings = {
-      markCommits: true,
-      authorName: 'Ada Lovelace',
-      authorEmail: 'ada@example.com',
-      worktreeSupport: false,
-    };
-
-    const message = buildGitAuthorSettingsMessage(settings);
-
-    expect(message).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-      ...settings,
     });
   });
 
