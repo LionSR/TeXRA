@@ -16,6 +16,21 @@
 > wave-1 candidates were struck down that way and are recorded in §3/§4
 > (the wave-1 refutation lives in §3, the race refutations in §4) so
 > they are never re-flagged.
+>
+> **Reconciled against origin/main `e00b9317f7` (2026-08-19).** This doc
+> executed almost completely: **18 of the 19 deletions have landed**, mostly
+> through #10788, #10792, #10800, #10801, #10802, #10803 and #10890, with
+> #10875 / #10892 / #10896 erasing residue afterwards. D2 is the only partial
+> (the required-sync port landed and the extension hole is closed, but three
+> downstream ports still carry optional `?.()` arms — see the row). D8 landed
+> in a stronger shape than proposed: a loud constructor `RangeError` rather
+> than a silent clamp. Both §3 rows were correctly kept, and the §4
+> irreducibility register stands untouched. What remains genuinely open is
+> exactly the two structural findings the doc itself said were not quick PRs —
+> **S1** (one persisted resumability authority) and **S2** (one follow-up
+> delivery authority), where the situation has sharpened: `childRunLoop.ts:65`
+> now documents in code that duplicate delivery is impossible by construction
+> while the transport-level suppression S2 condemns still runs.
 
 The scoreboard: **~40 race mechanisms + ~30 edge handlers censused →
 19 verified deletions (D1–D19: 15 from the two invented-edge waves + 4
@@ -31,6 +46,27 @@ are the briefly-noted rows already owned by other program docs.
 
 Each row survived adversarial verification with an exhaustive producer
 census. Format: machinery → construction-level fix → what deletes.
+
+**Per-row status at `e00b9317f7` (2026-08-19).** LANDED: D1 (#10800 — the
+explicit `{kind}` union is at `runAgent.ts:76-86`; the surviving
+`shouldRegister` local is a derivation from declared intent, not the old
+inference), D3 (#10801), D4 (#10778), D5 (#10803), D6 (#10801, then moot with
+the relay removal), D7 (#10801), D8 (#10788, **as a throw** — the stronger
+option §3 offered for a sibling guard), D9 (#10801), D10 (#10801), D11
+(#10802), D12 (#10792), D13 (#10802), D14 (#10801 for the field, #10875 for
+the base interface), D15 (#10803 for the emission reorder, #10892 for the CLI
+marker-refresh apparatus — the #10693 WATCH is closed the way this doc wanted,
+by making the edge impossible), D16 (#10890, with the declared
+one-stale-read R6 line written at the commit site), D17 (#10801), D18 (#10800
+— one `beginTeardown(cause)`, the `exiting` re-entry guard gone, and the
+load-bearing rider held: terminal-mode restoration stays synchronous before
+any await), D19 (#10800 — stub handle tracked at id assignment;
+`runLifecycleStarted` and `interruptPending` absent). **D2 is PARTIAL**
+(#10739, #10800): `isCancellationRequested` is required on
+`ResumeQueuedToolUseOptions` and the extension threads it, but the optional
+arms survive at `executeAgent.ts:116`, `executeAgent.ts:530` and
+`resolveAndResumeStream.ts:141` — the ~20 LoC this row counted as deleted is
+mostly still there, and the construction guarantee only holds at the one port.
 
 ### 1a. Launch/resume intent (runtime)
 
@@ -205,6 +241,18 @@ census. Format: machinery → construction-level fix → what deletes.
   producer-less finding.)_ Flagged for the maintainer's call;
   `turnToken` attribution stays either way.
 
+**Both OPEN at `e00b9317f7` (2026-08-19).** S1's apparatus is intact
+(`SessionHandle.waitingRepairProbes`, `probeWaitingRepair`,
+`statusGenerationsAtScan`, and `StreamStatusService`'s exported generation
+surface); nothing since 2026-08-15 has touched it, which matches the doc's own
+"coordinate with the substrate program; not a quick PR". S2's
+`admittedDeliveryIds` check-and-add is unchanged, still carrying #9664's
+"not crash-safe exactly-once" comment — and the producer-less finding has since
+been asserted in code: `childRunLoop.ts:65-67` now states that duplicate
+delivery is impossible by construction and there is "nothing left to dedupe
+against". Two owners now document contradictory beliefs about the same
+mechanism, which is a stronger argument for the ruling than the doc had.
+
 ## 3. Kept with adjustment
 
 - **Approval-queue cycle guard**: edge confirmed unproducible today, but
@@ -248,6 +296,12 @@ re-stomping; the extension's _unserialized_ twin is a latent stale-push
 bug — fix by adding the desktop's serialization via `PQueue`, the one
 place machinery should be _added_).
 
+**Both rows held (2026-08-19).** The approval-queue cycle guard kept option A —
+the 6 LoC of `seen`-set insurance at `streamApprovalQueue.ts:67-72`, not
+converted to a throw; either was sanctioned. The round-update protocol was not
+touched, correctly: `reset` is still on the wire with its rationale comment,
+and `clearMissingOutputs` is still the only path that propagates it.
+
 ## 5. Execution shape
 
 1. **Mechanical batch, no ruling** (one or two PRs): D3, D4, D6, D7, D8,
@@ -266,3 +320,11 @@ place machinery should be _added_).
 
 Every PR body carries the §5b ledger discipline: the _deleted_ machinery
 is the paired deletion; no new names are introduced anywhere in this doc.
+
+**Execution status at `e00b9317f7` (2026-08-19):** steps 1–2 landed (across
+#10788, #10792, #10800, #10801, #10802, #10803, #10890); step 3 landed for D1
+and partially for D2 (see §1a); step 4 landed (#10803 + #10892, resolving the
+#10693 WATCH). Step 5's rulings: the funnel serialization was granted and
+landed (#10824 gave the extension the desktop's `PQueue`); **S2's dedup
+deletion and S1's scheduling are still the maintainer's open calls** — they are
+the whole of what this doc has left.
