@@ -1,6 +1,5 @@
-import { spawn } from 'node:child_process';
-
 import { defineCommand } from 'citty';
+import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -106,36 +105,33 @@ async function toggleTool(
 // provide. `command` always comes from the static EXTERNAL_TOOL_DEFS registry,
 // never from user or LLM input. POSIX commands run as argv; Windows uses the
 // shell so npm/gh `.cmd` shims resolve through PATHEXT.
-function shellRun(command: string): Promise<number> {
-  return new Promise((resolve) => {
-    const wireChild = (child: ReturnType<typeof spawn>) => {
-      child.on('error', () => resolve(CliExitCode.AgentError));
-      child.on('exit', (code) => resolve(code ?? CliExitCode.AgentError));
-    };
-
-    let parts: string[];
-    try {
-      const parsed = shellParse(command);
-      if (!parsed.every((arg): arg is string => typeof arg === 'string')) {
-        resolve(CliExitCode.AgentError);
-        return;
-      }
-      parts = parsed;
-    } catch {
-      resolve(CliExitCode.AgentError);
-      return;
+async function shellRun(command: string): Promise<number> {
+  // reject: false — a spawn failure and a non-zero exit both map to an exit
+  // code here, never to a throw. The parse gates both branches: on Windows the
+  // parts are discarded, but a command carrying shell operators still parses to
+  // non-strings and is refused before it reaches the shell.
+  let parts: string[];
+  try {
+    const parsed = shellParse(command);
+    if (!parsed.every((arg): arg is string => typeof arg === 'string')) {
+      return CliExitCode.AgentError;
     }
-    if (process.platform === 'win32') {
-      wireChild(spawn(command, { shell: true, stdio: 'inherit' }));
-      return;
-    }
-    const [cmd, ...args] = parts;
-    if (!cmd) {
-      resolve(CliExitCode.AgentError);
-      return;
-    }
-    wireChild(spawn(cmd, args, { stdio: 'inherit' }));
-  });
+    parts = parsed;
+  } catch {
+    return CliExitCode.AgentError;
+  }
+  if (process.platform === 'win32') {
+    const result = await execa(command, {
+      shell: true,
+      stdio: 'inherit',
+      reject: false,
+    });
+    return result.exitCode ?? CliExitCode.AgentError;
+  }
+  const [cmd, ...args] = parts;
+  if (!cmd) return CliExitCode.AgentError;
+  const result = await execa(cmd, args, { stdio: 'inherit', reject: false });
+  return result.exitCode ?? CliExitCode.AgentError;
 }
 
 function toolGuideResult(
