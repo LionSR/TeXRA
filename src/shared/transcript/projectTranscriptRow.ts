@@ -19,7 +19,6 @@ import {
 } from '@shared/schemas';
 import { normalizeToolUseForRender } from '@shared/toolUse';
 import {
-  deliveryTagOf,
   hasIncompleteEmbeddedSubagentFollowup,
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
@@ -380,13 +379,11 @@ export function projectTranscriptRow(
 
     case MESSAGE_TYPES.USER_MESSAGE: {
       const text = entryText(entry);
-      const tag = deliveryTagOf(text.full);
       return {
         ...rowBase(entry),
         kind: 'user',
         text,
         summary: transcriptText(summarizeFollowupMessage(text.full)),
-        ...(tag ? { deliveryTag: tag } : {}),
         ...(entry.data?.workflowSummary
           ? { workflowSummary: entry.data.workflowSummary }
           : {}),
@@ -426,9 +423,7 @@ export function projectTranscriptRow(
         ...rowBase(entry),
         kind: 'webSearch',
         label: `${providerLabel} Search${query ? `: "${query}"` : ''}${suffix}`,
-        ...(query !== undefined ? { query } : {}),
         results: results ?? [],
-        ...(provider !== undefined ? { provider } : {}),
         ...(status !== undefined ? { status } : {}),
         failed: status === 'failed',
         inProgress: status === 'in_progress',
@@ -450,7 +445,6 @@ export function projectTranscriptRow(
         ...(url !== undefined ? { url } : {}),
         ...(title !== undefined ? { title } : {}),
         ...(status !== undefined ? { status } : {}),
-        ...(errorCode !== undefined ? { errorCode } : {}),
         ...(errorLabel !== undefined ? { errorLabel } : {}),
         ...(content ? { content: transcriptText(content) } : {}),
         failed,
@@ -502,7 +496,6 @@ export function projectTranscriptRow(
       return {
         ...rowBase(entry),
         kind: 'statistics',
-        stats: entry.data,
         label: 'Statistics',
         items,
       };
