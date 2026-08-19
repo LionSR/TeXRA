@@ -1,11 +1,9 @@
 import type { StateStore } from '@platform/interfaces';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_MARK_COMMITS,
   DEFAULT_GIT_WORKTREE_SUPPORT,
-  type UpdateGitAuthorSettingsMessage,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { setWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
@@ -55,14 +53,4 @@ export function applyGitAuthorSettings(
   }
   setWorktreeSupportEnabled(settings.worktreeSupport);
   return settings;
-}
-
-/** Wraps git author settings into the outbound settings-view message shape. */
-export function buildGitAuthorSettingsMessage(
-  settings: GitAuthorSettings,
-): UpdateGitAuthorSettingsMessage {
-  return {
-    command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-    ...settings,
-  };
 }

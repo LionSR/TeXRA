@@ -8,7 +8,7 @@ import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { UsageRoute } from '@shared/schemas';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
+import { DEFAULT_CORE_SETTINGS, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
@@ -47,9 +47,6 @@ const DEFAULT_CONFIG: UsageLogConfig = {
   flushIntervalMs: 30000,
   enabled: true,
 };
-
-/** Config key backing the usage-logging opt-out. */
-export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
 
 /**
  * Environment variables that switch usage logging off without editing config.
