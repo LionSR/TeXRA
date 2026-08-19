@@ -116,6 +116,11 @@ type CliHistoryFile = RunGeneratedFile;
 
 export const CLI_HISTORY_RESUMABLE_STATUS = 'resumable';
 
+/** Rows the resume surfaces offer. Both the launcher's resume browser and the
+ *  `/resume` form read this, and the launcher's Resume row counts against it,
+ *  so the advertised count can never exceed the list it opens. */
+export const RESUME_LIST_LIMIT = 50;
+
 export function resumableCliHistoryEntries<
   T extends Pick<CliHistoryEntry, 'status'>,
 >(entries: readonly T[]): T[] {

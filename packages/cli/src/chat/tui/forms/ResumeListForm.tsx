@@ -6,6 +6,7 @@ import { Text } from 'ink';
 import {
   listCliHistoryEntries,
   resumableCliHistoryEntries,
+  RESUME_LIST_LIMIT,
   type CliHistoryEntry,
 } from '@cli/runtime/history';
 import { formatCliHistoryResumeSummary } from '@cli/runtime/historyLabels';
@@ -29,7 +30,10 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
       title="/resume"
       loadingLabel="Loading history..."
       load={async () =>
-        resumableCliHistoryEntries(await listCliHistoryEntries()).slice(0, 50)
+        resumableCliHistoryEntries(await listCliHistoryEntries()).slice(
+          0,
+          RESUME_LIST_LIMIT,
+        )
       }
       items={(entries) =>
         entries.map((entry) => ({
