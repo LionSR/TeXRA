@@ -8,7 +8,6 @@ import {
 import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
-  DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   toStorableSupabaseSession,
   type SupabaseSession,
   type SupabaseSessionCoordinator,
