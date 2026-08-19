@@ -22,7 +22,8 @@ vi.mock('@cli/runtime/approval/approvalSummaries', async (importOriginal) => {
   };
 });
 
-import { Node } from '@agent/node';
+import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
+import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type {
   HostInteractions,
@@ -442,7 +443,7 @@ describe('requestRetry classification (#7331)', () => {
   });
 });
 
-class RepresentativeFailingProviderNode extends Node {
+class RepresentativeFailingProviderNode extends ModelInvocationNode<BaseCycleFields> {
   providerCalls = 0;
   readonly providerError = new Error('permanent provider failure');
 
@@ -450,12 +451,31 @@ class RepresentativeFailingProviderNode extends Node {
     private readonly interactions: HostInteractions,
     private readonly streamId: StreamTabId,
   ) {
-    super(3, 0);
+    super({
+      operationName: 'Model invocation',
+      streaming: false,
+      storeResponse: () => {},
+    });
+    this.maxRetries = 3;
+    this.wait = 0;
+  }
+
+  /**
+   * Drive the retry loop directly; `_exec` would replace the scripted attempt
+   * budget with the one read from settings.
+   */
+  runRetries(): Promise<unknown> {
+    return this.execWithRetries(undefined);
   }
 
   override async exec(): Promise<never> {
     this.providerCalls += 1;
     throw this.providerError;
+  }
+
+  /** Rethrow, as the kernel's default does: this scenario asserts the failure. */
+  override async execFallback(_prepRes: unknown, error: Error): Promise<never> {
+    throw error;
   }
 
   override async retryPrompt(): Promise<boolean> {
@@ -485,8 +505,8 @@ describe('bounded yolo retry batches (#9532)', () => {
       'representative-b' as StreamTabId,
     );
 
-    await expect(first._exec(undefined)).rejects.toBe(first.providerError);
-    await expect(second._exec(undefined)).rejects.toBe(second.providerError);
+    await expect(first.runRetries()).rejects.toBe(first.providerError);
+    await expect(second.runRetries()).rejects.toBe(second.providerError);
 
     expect(first.providerCalls).toBe(3);
     expect(second.providerCalls).toBe(3);

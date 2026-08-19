@@ -1,4 +1,4 @@
-import { Node } from '@agent/node';
+import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { recordRound } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -35,7 +35,7 @@ type CycleOutcome =
   | { outcome: 'cancelled' }
   | { outcome: 'failed'; lastError: RetryErrorInfo };
 
-export class ResponseCycleNode<C = unknown> extends Node<
+export class ResponseCycleNode<C = unknown> extends BaseNode<
   ReflectionFlowShared,
   ReflectionServices<C>
 > {
