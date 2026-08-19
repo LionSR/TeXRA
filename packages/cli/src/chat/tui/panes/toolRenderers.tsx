@@ -83,8 +83,8 @@ export interface DisplayLineOptions {
   readonly width?: number;
   /** Retained subagent identities used by executions wait/view headers. */
   readonly executionLabels?: ExecutionLabels;
-  /** Suppressed-output tools in the full transcript: 'loaded' prepends the
-   *  "Full output:" header, 'failed' shows the failure notice without it. */
+  /** Full-transcript spill hydration: 'loaded' prepends the "Full output:"
+   *  header; 'failed' retains the bounded preview and failure notice. */
   readonly compactOutput?: 'loaded' | 'failed';
 }
 
@@ -337,9 +337,16 @@ function buildStyledLines(
 
   // Output text is read from the payload rather than `model.output` so the
   // on-demand spill reader's substitution (which rewrites `toolUse.outputText`)
-  // reaches the paint; the model still owns whether it is shown at all.
+  // reaches the paint; the model still owns whether it is shown at all. Name a
+  // successfully hydrated spill even when the ordinary output block is visible,
+  // so compact and non-compact tools share the same full-output affordance.
   const outputRows = model.showOutput
-    ? cornerRows(elidedLines(transcriptText(toolUse.outputText), elide))
+    ? [
+        ...(options.compactOutput === 'loaded'
+          ? [row([{ text: 'Full output:' }])]
+          : []),
+        ...cornerRows(elidedLines(transcriptText(toolUse.outputText), elide)),
+      ]
     : [];
   const exitCode = model.isError ? model.exitCode : undefined;
   const errorRows = cornerRows(toolErrorLines(model, elide), COLOR_ERROR);
