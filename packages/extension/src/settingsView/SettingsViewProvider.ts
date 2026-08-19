@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
+  getSharedLocalResourceRoots,
 } from '@common/webview';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
@@ -69,15 +70,39 @@ export class SettingsViewProvider extends BaseWebviewProvider {
     tab?: SettingsTabPanelName,
     agentSubTab?: AgentCategory,
   ): Promise<void> {
-    const isNew = this.createOrShowPanel({
-      viewType: SettingsViewProvider.viewType,
-      title: 'TeXRA Dashboard',
-      viewPath: 'settingsView',
-      iconPath: new vscode.ThemeIcon('gear'),
-    });
+    // 'viewColumn' is unique to WebviewPanel; it narrows the view union and
+    // tells an already-open dashboard panel apart from a sidebar WebviewView.
+    if (this._view && 'viewColumn' in this._view) {
+      const panel = this._view;
+      panel.reveal(vscode.ViewColumn.One);
+      await this.messageHandler.sendAllData(panel.webview);
+    } else {
+      const panel = vscode.window.createWebviewPanel(
+        SettingsViewProvider.viewType,
+        'TeXRA Dashboard',
+        vscode.ViewColumn.One,
+        {
+          enableScripts: true,
+          retainContextWhenHidden: true,
+          localResourceRoots: getSharedLocalResourceRoots(
+            this.context,
+            'settingsView',
+          ),
+        },
+      );
+      panel.iconPath = new vscode.ThemeIcon('gear');
 
-    if (!isNew && this._view) {
-      await this.messageHandler.sendAllData(this._view.webview);
+      this.cleanupView();
+      this._view = panel;
+      panel.webview.html = this.contentProvider.getHtmlContent(panel.webview);
+      this._viewDisposables.add(
+        panel.webview.onDidReceiveMessage((message) =>
+          this.messageHandler.handleMessage(message, panel),
+        ),
+      );
+      this._viewDisposables.add(
+        panel.onDidDispose(this.cleanupView.bind(this)),
+      );
     }
 
     if (tab != null && this._view) {
