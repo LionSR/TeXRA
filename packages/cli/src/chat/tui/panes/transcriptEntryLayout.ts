@@ -30,7 +30,6 @@ import {
   type TranscriptRowKind,
 } from '@shared/transcript';
 import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
-import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { transcriptRowBodyLines } from '../render/transcriptRowLines';
@@ -340,7 +339,9 @@ function entryLines(
     case 'phase':
       return [
         ...wrapWithPrefix(
-          `${STATUS_DIAMOND} ${formatWorkflowPhaseHeading(row)}`,
+          // `row.heading` is `formatWorkflowPhaseHeading` over the same three
+          // fields, computed once by `projectTranscriptRow`.
+          `${STATUS_DIAMOND} ${headline}`,
           columns,
           ROW_GEOMETRY.phase.firstPrefix,
           ROW_GEOMETRY.phase.continuationPrefix,

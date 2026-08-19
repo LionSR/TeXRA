@@ -1,7 +1,6 @@
 import {
   fileLocationAddressPath,
   roundIndexedEntries,
-  runIdentityDisplayName,
   type CompileFailure,
   type OutputFileInfo,
   type RoundIndexed,
@@ -35,9 +34,8 @@ export function formatWorkflowRunContext(
   if (!hasOutputs && !hasFailures) return '';
 
   const { stream } = input;
-  const agent = stream.identity
-    ? runIdentityDisplayName(stream.identity)
-    : stream.label;
+  // `label` already is the identity display name (`buildStreamTabInfo`).
+  const agent = stream.label;
   const model = stream.modelLabel ?? stream.model;
 
   const lines: (string | undefined)[] = [
