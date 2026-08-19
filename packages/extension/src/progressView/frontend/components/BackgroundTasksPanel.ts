@@ -526,14 +526,16 @@ function renderSectionDetails(options: {
 /**
  * Elapsed reading for one roster row, derived from the row's own timestamps —
  * the roster carries no rendered duration. A live row hands its start stamp to
- * the shared `<tool-timer>`, which owns the tick; a retained row's window is
- * closed by `finishedAt`, so its reading is fixed and needs no clock read.
+ * the shared `<tool-timer>`, which owns the tick; paused rows show no elapsed
+ * reading, matching the CLI. A retained row's window is closed by `finishedAt`,
+ * so its reading is fixed and needs no clock read.
  */
 function renderChildElapsed(
   child: ActiveChildInfo,
 ): TemplateResult | typeof nothing {
   if (child.startedAt === undefined) return nothing;
   if (child.finishedAt === undefined) {
+    if (child.status !== STREAM_PHASE.RUNNING) return nothing;
     return html`<span class="task-elapsed"
       >(<tool-timer .startTime=${child.startedAt}></tool-timer>)</span
     >`;
