@@ -150,7 +150,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.workflowFileActionsController =
       this.createWorkflowFileActionsController();
     this.agentProposalController = this.createAgentProposalController();
-    this.commandHandlers = this.createProgressViewCommandHandlers();
+    this.commandHandlers = this.createSharedCommandHandlers();
     this.apiKeyRetryController = this.createApiKeyRetryController();
     this.followUpController = this.createFollowUpController();
     this.followUpPolishController = new ProgressFollowUpPolishController();
@@ -493,7 +493,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  private createProgressViewCommandHandlers(): ReturnType<
+  private createSharedCommandHandlers(): ReturnType<
     typeof createProgressViewCommandHandlers
   > {
     return createProgressViewCommandHandlers({

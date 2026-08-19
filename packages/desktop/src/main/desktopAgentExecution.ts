@@ -407,7 +407,7 @@ export class DesktopProgressBridge {
     });
     this.workflowFileActions = this.createWorkflowFileActionsController();
     this.agentProposalController = this.createAgentProposalController();
-    this.commandHandlers = this.createProgressViewCommandHandlers();
+    this.commandHandlers = this.createSharedCommandHandlers();
     this.workflowActions = this.createWorkflowActionsController();
     this.followUpController = this.createFollowUpController();
     this.apiKeyRetryController = this.createApiKeyRetryController();
@@ -751,7 +751,7 @@ export class DesktopProgressBridge {
     });
   }
 
-  private createProgressViewCommandHandlers(): ReturnType<
+  private createSharedCommandHandlers(): ReturnType<
     typeof createProgressViewCommandHandlers
   > {
     return createProgressViewCommandHandlers({
