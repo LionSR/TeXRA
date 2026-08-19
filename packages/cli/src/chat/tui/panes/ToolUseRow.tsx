@@ -7,7 +7,7 @@ import { Box, Text } from 'ink';
 
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { clipToWidth } from '@cli/runtime/terminalText';
-import { type NormalizedToolUse } from '@shared/schemas';
+import type { ToolRow } from '@shared/transcript';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import { DiffView } from '../render/DiffView';
@@ -119,15 +119,15 @@ function toolDisplayViewport(
 export const ToolUseRow = memo(function ToolUseRow({
   maxRows,
   subagentExecutionLabels,
-  toolUse,
+  toolRow,
   width,
 }: {
   readonly maxRows?: number;
   readonly subagentExecutionLabels?: ExecutionLabels;
-  readonly toolUse: NormalizedToolUse;
+  readonly toolRow: ToolRow;
   readonly width?: number;
 }): React.JSX.Element {
-  const lines = toolUseStyledLines(toolUse, {
+  const lines = toolUseStyledLines(toolRow, {
     executionLabels: subagentExecutionLabels,
     width,
   });
@@ -136,7 +136,7 @@ export const ToolUseRow = memo(function ToolUseRow({
     <Box
       flexDirection="column"
       marginBottom={
-        maxRows === undefined ? toolUseMarginBottomRows(toolUse) : 0
+        maxRows === undefined ? toolUseMarginBottomRows(toolRow) : 0
       }
     >
       {viewport.map(({ index, line, maxRows: lineMaxRows }) =>

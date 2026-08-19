@@ -109,15 +109,15 @@ export const streamMetaHandlers = {
         create(appState.get(), (draft) => {
           const streamLogs = draft.streamLogs.get(stream);
           if (!streamLogs) return;
-          const updatedMessageIndices = settleCompactionActivityLogs(
-            streamLogs,
-            { throughSeqNo: logHead, finishedAt: lastTimestamp },
-          );
-          if (updatedMessageIndices.length === 0) return;
+          const updatedRowIndices = settleCompactionActivityLogs(streamLogs, {
+            throughSeqNo: logHead,
+            finishedAt: lastTimestamp,
+          });
+          if (updatedRowIndices.length === 0) return;
           draft.streamLogs.set(stream, {
             ...streamLogs,
-            updatedMessageIndices: [...updatedMessageIndices],
-            updatedMessageBaseGeneration: streamLogs.generation,
+            updatedRowIndices: [...updatedRowIndices],
+            updatedRowBaseGeneration: streamLogs.generation,
             generation: streamLogs.generation + 1,
           });
         }),

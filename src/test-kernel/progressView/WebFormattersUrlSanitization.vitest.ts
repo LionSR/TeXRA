@@ -4,11 +4,14 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   LOG_LEVELS,
-  LogMessageDataSchema,
-  MESSAGE_TYPES,
-  type LogMessageData,
-  type LogMessageOf,
+  STREAM_LOG_ENTRY_TYPES,
+  StreamLogEntrySchema,
 } from '@shared/schemas';
+import {
+  projectTranscriptRow,
+  type WebFetchRow,
+  type WebSearchRow,
+} from '@shared/transcript';
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 type WebFormatters =
@@ -29,10 +32,10 @@ beforeAll(async () => {
   ({ render } = await import('lit'));
 });
 
-function webSearchMessage(
-  url: string,
-): LogMessageOf<typeof MESSAGE_TYPES.WEB_SEARCH> {
-  return LogMessageDataSchema.parse({
+function webSearchRow(url: string): WebSearchRow {
+  const entry = StreamLogEntrySchema.parse({
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    seqNo: 1,
     id: 'web-search-1',
     text: '',
     level: LOG_LEVELS.INFO,
@@ -44,13 +47,14 @@ function webSearchMessage(
       status: 'completed',
       results: [{ url, title: 'Click me', domain: 'example.com' }],
     },
-  }) as LogMessageOf<typeof MESSAGE_TYPES.WEB_SEARCH>;
+  });
+  return projectTranscriptRow(entry) as WebSearchRow;
 }
 
-function webFetchMessage(
-  url: string,
-): LogMessageOf<typeof MESSAGE_TYPES.WEB_FETCH> {
-  return LogMessageDataSchema.parse({
+function webFetchRow(url: string): WebFetchRow {
+  const entry = StreamLogEntrySchema.parse({
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    seqNo: 1,
     id: 'web-fetch-1',
     text: '',
     level: LOG_LEVELS.INFO,
@@ -61,7 +65,8 @@ function webFetchMessage(
       title: 'Fetched page',
       status: 'completed',
     },
-  }) as LogMessageOf<typeof MESSAGE_TYPES.WEB_FETCH>;
+  });
+  return projectTranscriptRow(entry) as WebFetchRow;
 }
 
 function renderTemplate(template: Parameters<typeof render>[0]): HTMLElement {
@@ -81,7 +86,7 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
   describe('web_search results', () => {
     it.each(DANGEROUS_URLS)('never renders %s as a clickable href', (url) => {
       const container = renderTemplate(
-        formatWebSearchTemplate(webSearchMessage(url)),
+        formatWebSearchTemplate(webSearchRow(url)),
       );
 
       // The single result carries only a dangerous URL, so it must render
@@ -96,7 +101,7 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
       const url = 'https://example.com/article?id=42';
 
       const container = renderTemplate(
-        formatWebSearchTemplate(webSearchMessage(url)),
+        formatWebSearchTemplate(webSearchRow(url)),
       );
 
       const anchor = container.querySelector('a.web-search-link');
@@ -117,7 +122,7 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
       const url = 'mailto:someone@example.com';
 
       const container = renderTemplate(
-        formatWebSearchTemplate(webSearchMessage(url)),
+        formatWebSearchTemplate(webSearchRow(url)),
       );
 
       const anchor = container.querySelector('a.web-search-link');
@@ -128,7 +133,7 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
   describe('web_fetch payloads', () => {
     it.each(DANGEROUS_URLS)('never renders %s as a clickable href', (url) => {
       const container = renderTemplate(
-        formatWebFetchTemplate(webFetchMessage(url)),
+        formatWebFetchTemplate(webFetchRow(url)),
       );
 
       // The "URL:" section is only rendered when a safe URL survives
@@ -140,7 +145,7 @@ describe('web-search/web-fetch formatters: URL scheme sanitization', () => {
       const url = 'https://example.com/doc.pdf';
 
       const container = renderTemplate(
-        formatWebFetchTemplate(webFetchMessage(url)),
+        formatWebFetchTemplate(webFetchRow(url)),
       );
 
       const anchor = container.querySelector('a.web-search-link');

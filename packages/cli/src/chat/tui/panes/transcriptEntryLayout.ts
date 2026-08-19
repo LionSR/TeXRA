@@ -28,8 +28,8 @@ import type { CompactionActivityStatus } from '@shared/streams/compactionActivit
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
+import { transcriptRowBodyLines } from '../render/transcriptRowLines';
 import { isInquiryContinuationText } from './transcriptEntries';
-import { loadedImageDisplayLines } from './loadedImageDisplay';
 import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
 import type { ConversationEntry } from '../state/cliState';
 
@@ -64,6 +64,17 @@ const ROLE_GEOMETRY = {
     continuationPrefix: '',
     inset: 0,
     marginBottomRows: ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS,
+    marginTopRows: 0,
+  },
+  // Compact informational rows (thinking, web search/fetch, missing outputs,
+  // latexdiff, usage, context management, status). The `●` is the marker every
+  // one-line activity row leads with; detail rows paint it dim, so they stay
+  // distinct from the bold, status-colored tool header that shares the glyph.
+  detail: {
+    firstPrefix: `${STATUS_DOT} `,
+    continuationPrefix: '  ',
+    inset: 0,
+    marginBottomRows: 0,
     marginTopRows: 0,
   },
   error: {
@@ -227,6 +238,26 @@ export function liveAssistantDisplayLines({
     .slice(-Math.max(1, rows));
 }
 
+/**
+ * The body block a row paints beneath its headline: the shared row's own
+ * untruncated texts, elided to this terminal's head/tail budget. Absent on
+ * CLI-synthetic rows, which have no projection behind them. The print-once
+ * path ('scrollback-budget') takes the whole thing.
+ */
+function entryBodyLines(
+  entry: ConversationEntry,
+  mode: TranscriptEntryLayoutMode,
+  columns: number,
+): readonly string[] {
+  if (entry.row === undefined) return [];
+  const lines = transcriptRowBodyLines(entry.row, mode !== 'scrollback-budget');
+  if (lines.length === 0) return lines;
+  // The body hangs under the headline, in the role's own continuation gutter.
+  const gutter = ROLE_GEOMETRY[entry.role].continuationPrefix;
+  const width = Math.max(1, columns - textDisplayWidth(gutter));
+  return wrapDisplayLines(lines, width).map((line) => `${gutter}${line}`);
+}
+
 function entryLines(
   entry: ConversationEntry,
   mode: TranscriptEntryLayoutMode,
@@ -235,14 +266,18 @@ function entryLines(
   maxRows: number | undefined,
   executionLabels: ExecutionLabels | undefined,
 ): readonly string[] {
+  const body = entryBodyLines(entry, mode, columns);
   switch (entry.role) {
     case 'activity':
-      return wrapWithPrefix(
-        entry.text,
-        columns,
-        `${COMPACTION_ACTIVITY_STATUS_STYLE[entry.activity.status].marker} `,
-        ROLE_GEOMETRY.activity.continuationPrefix,
-      );
+      return [
+        ...wrapWithPrefix(
+          entry.text,
+          columns,
+          `${COMPACTION_ACTIVITY_STATUS_STYLE[entry.activity.status].marker} `,
+          ROLE_GEOMETRY.activity.continuationPrefix,
+        ),
+        ...body,
+      ];
     case 'assistant': {
       const renderLiveTail =
         mode === 'live' || (mode === 'bounded' && !entry.finalized);
@@ -266,7 +301,7 @@ function entryLines(
     case 'tool': {
       const useRichDisplay =
         mode === 'live' || mode === 'bounded' || mode === 'scrollback-budget';
-      const lines = toolUseDisplayLines(entry.toolUse, {
+      const lines = toolUseDisplayLines(entry.row, {
         elide: mode !== 'scrollback-budget',
         executionLabels,
         ...(useRichDisplay ? { width: columns } : {}),
@@ -275,32 +310,39 @@ function entryLines(
       // terminal row. Other modes paint the wrapped text projection directly.
       return useRichDisplay ? lines : wrapDisplayLines(lines, columns);
     }
-    case 'media':
-      return loadedImageDisplayLines(entry.images, columns);
     case 'phase':
-      return wrapWithPrefix(
-        `${STATUS_DIAMOND} ${formatWorkflowPhaseHeading(entry)}`,
-        columns,
-        ROLE_GEOMETRY.phase.firstPrefix,
-        ROLE_GEOMETRY.phase.continuationPrefix,
-      );
+      return [
+        ...wrapWithPrefix(
+          `${STATUS_DIAMOND} ${formatWorkflowPhaseHeading(entry)}`,
+          columns,
+          ROLE_GEOMETRY.phase.firstPrefix,
+          ROLE_GEOMETRY.phase.continuationPrefix,
+        ),
+        ...body,
+      ];
     case 'workflowTask':
       // The status marker belongs to the layout, not the Ink row: the print-once
       // scrollback snapshot is built from these lines.
-      return wrapWithPrefix(
-        entry.text,
-        columns,
-        `${ROLE_GEOMETRY.workflowTask.firstPrefix}${WORKFLOW_TASK_STATUS_STYLE[entry.task.status].marker} `,
-        ROLE_GEOMETRY.workflowTask.continuationPrefix,
-      );
+      return [
+        ...wrapWithPrefix(
+          entry.text,
+          columns,
+          `${ROLE_GEOMETRY.workflowTask.firstPrefix}${WORKFLOW_TASK_STATUS_STYLE[entry.task.status].marker} `,
+          ROLE_GEOMETRY.workflowTask.continuationPrefix,
+        ),
+        ...body,
+      ];
     default: {
       const geometry = ROLE_GEOMETRY[entry.role];
-      return wrapWithPrefix(
-        entry.text,
-        columns,
-        geometry.firstPrefix,
-        geometry.continuationPrefix,
-      );
+      return [
+        ...wrapWithPrefix(
+          entry.text,
+          columns,
+          geometry.firstPrefix,
+          geometry.continuationPrefix,
+        ),
+        ...body,
+      ];
     }
   }
 }
@@ -313,7 +355,7 @@ function entryLines(
 export function transcriptEntryMarginBottomRows(
   entry: ConversationEntry,
 ): number {
-  if (entry.role === 'tool') return toolUseMarginBottomRows(entry.toolUse);
+  if (entry.role === 'tool') return toolUseMarginBottomRows(entry.row);
   if (entry.role === 'user' && isInquiryContinuationText(entry.text)) return 0;
   return ROLE_GEOMETRY[entry.role].marginBottomRows;
 }
@@ -397,7 +439,7 @@ export function fullTranscriptEntryLayout(
   return {
     ...layout,
     lines: wrapDisplayLines(
-      toolUseDisplayLines(entry.toolUse, {
+      toolUseDisplayLines(entry.row, {
         elide: false,
         executionLabels,
         // Gate the "Full output:" header on actual recovery: a failed spill
