@@ -2,9 +2,11 @@
  * Canonical user-facing copy for account sign-in and sign-out surfaces.
  *
  * Account brand names and the outcome sentences that mention them live here so
- * the CLI login form, logout form, slash-command descriptions, and login
- * handlers cannot paraphrase each other. "Researcher Access" itself is owned
- * by `onboarding.ts` — this module imports it rather than restating the name.
+ * the CLI login form, logout form, slash-command descriptions, login handlers,
+ * the extension's subscription settings section, and the auth-failure hints
+ * that quote a toggle by name cannot paraphrase each other. "Researcher Access"
+ * itself is owned by `onboarding.ts` — this module imports it rather than
+ * restating the name.
  *
  * Wire identifiers (`texra`, `chatgpt`, `grok`) stay internal.
  */
@@ -20,6 +22,9 @@ export const CHATGPT_AUTH = {
   label: 'ChatGPT',
   subscriptionLabel: 'ChatGPT subscription',
   subscriptionDescription: 'Codex via ChatGPT Plus/Pro/Team',
+  signInLabel: 'Sign in with ChatGPT',
+  signOutLabel: 'Sign out of ChatGPT',
+  preferLabel: 'Prefer ChatGPT subscription',
   deviceCodeLabel: 'ChatGPT device code',
   logoutDescription: 'Sign out and disable subscription preference',
   startingDevice: 'Starting ChatGPT device-code sign-in.',
@@ -34,6 +39,10 @@ export const CHATGPT_AUTH = {
 /** Grok / xAI subscription account. */
 export const GROK_AUTH = {
   label: 'Grok',
+  subscriptionLabel: 'Grok subscription',
+  signInLabel: 'Sign in with Grok',
+  signOutLabel: 'Sign out of Grok',
+  preferLabel: 'Prefer Grok subscription',
   startingDevice: 'Starting Grok device-code sign-in.',
   startingNoBrowser: 'Starting Grok sign-in.',
   startingBrowser: 'Opening browser for Grok sign-in...',

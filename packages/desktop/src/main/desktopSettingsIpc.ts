@@ -30,6 +30,9 @@ import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
   GITHUB_TOKEN_CREATE_URL,
+  GITHUB_TOKEN_PROMPT,
+  GITHUB_TOKEN_REMOVED_MESSAGE,
+  GITHUB_TOKEN_SAVED_MESSAGE,
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
@@ -309,19 +312,18 @@ export function createDesktopSettingsIpc(
   async function setGitHubToken(): Promise<void> {
     const token = await options.ui.promptForSecret?.({
       title: 'GitHub token',
-      prompt:
-        'Paste a GitHub personal access token (repo or public_repo scope)',
+      prompt: GITHUB_TOKEN_PROMPT,
     });
     if (!token?.trim()) return;
     await platform().secrets.set(GITHUB_TOKEN_STORAGE_KEY, token.trim());
-    await options.ui.showInfoMessage('GitHub token saved.');
+    await options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE);
     await postGitHubTokenStatus();
     await refreshToolAvailability();
   }
 
   async function removeGitHubToken(): Promise<void> {
     await platform().secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
-    await options.ui.showInfoMessage('GitHub token removed.');
+    await options.ui.showInfoMessage(GITHUB_TOKEN_REMOVED_MESSAGE);
     await postGitHubTokenStatus();
     await refreshToolAvailability();
   }
