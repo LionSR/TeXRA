@@ -136,11 +136,11 @@ describe('proposal-request-panel file-name keyboard activation', () => {
 
   it('attaches selected overrides only to approval decisions', async () => {
     const permission = createPermission();
-    permission.modelOptions = [
+    permission.modelOptionsData = [
       { value: 'sonnet', label: 'Sonnet' },
       { value: 'opus', label: 'Opus' },
     ];
-    permission.agentOptions = [
+    permission.agentOptionsData = [
       { value: 'writer', label: 'Writer' },
       { value: 'reviewer', label: 'Reviewer' },
     ];
@@ -188,8 +188,8 @@ describe('proposal-request-panel file-name keyboard activation', () => {
         { id: 'merge', label: 'Merge findings', phase: 'Synthesize' },
       ],
     };
-    permission.modelOptions = [{ value: 'sonnet', label: 'Sonnet' }];
-    permission.agentOptions = [{ value: 'writer', label: 'Writer' }];
+    permission.modelOptionsData = [{ value: 'sonnet', label: 'Sonnet' }];
+    permission.agentOptionsData = [{ value: 'writer', label: 'Writer' }];
 
     const element = await mountPanel(permission);
     const summary = element.shadowRoot?.querySelector(

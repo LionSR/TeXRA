@@ -11,7 +11,6 @@ import {
   type HostApprovalBypassStateUpdate,
   type HostBashApprovalRequest,
   type HostInteractionCancelSelector,
-  type HostInteractionOptions,
   type HostInteractions,
   type HostPlanApprovalRequest,
   type HostRetryInteractionOptions,
@@ -125,7 +124,6 @@ export function createProgressHostInteractions(
       HostRetryInteractionOptions['prepareRetry']
     >;
     readonly controller: AbortController;
-    readonly cancellationScope?: object;
     settling: boolean;
     selection?: 'configured' | 'personal';
     settlement?: Promise<boolean>;
@@ -260,16 +258,7 @@ export function createProgressHostInteractions(
     }
     if (selector.kind == null || selector.kind === 'retry') {
       for (const [streamId, preparation] of retryPreparations) {
-        if (
-          matchesCancelSelector(
-            {
-              kind: 'retry',
-              streamId,
-              cancellationScope: preparation.cancellationScope,
-            },
-            selector,
-          )
-        ) {
+        if (matchesCancelSelector({ kind: 'retry', streamId }, selector)) {
           preparation.controller.abort();
         }
       }
@@ -374,34 +363,25 @@ export function createProgressHostInteractions(
 
     requestToolEditApproval(
       request: ToolEditApprovalRequest,
-      interactionOptions?: HostInteractionOptions,
     ): Promise<ToolEditApprovalResult> {
-      return options
-        .getToolEditApprovals()
-        .requestApproval(request, interactionOptions);
+      return options.getToolEditApprovals().requestApproval(request);
     },
 
     requestBashApproval(
       request: HostBashApprovalRequest,
-      interactionOptions?: HostInteractionOptions,
     ): Promise<BashSettlement> {
       revealStream(request.streamId);
       return handlers().bash.request(
         prepareBashApprovalPrompt(request, options.session),
-        {
-          cancellationScope: interactionOptions?.cancellationScope,
-          cancellationResult: (cause) => cancellationResultFor('bash', cause),
-        },
+        { cancellationResult: (cause) => cancellationResultFor('bash', cause) },
       );
     },
 
     requestPlanApproval(
       request: HostPlanApprovalRequest,
-      interactionOptions?: HostInteractionOptions,
     ): Promise<PlanApprovalResult> {
       revealStream(request.streamId);
       return handlers().planApproval.request(request, {
-        cancellationScope: interactionOptions?.cancellationScope,
         cancellationResult: (cause) =>
           cancellationResultFor('planApproval', cause),
       });
@@ -409,11 +389,9 @@ export function createProgressHostInteractions(
 
     requestAgentProposal(
       request: AgentProposalPermission,
-      interactionOptions?: HostInteractionOptions,
     ): Promise<ProposalResult> {
       revealStream(request.streamId);
       return handlers().proposal.request(request, {
-        cancellationScope: interactionOptions?.cancellationScope,
         cancellationResult: (cause) => cancellationResultFor('proposal', cause),
       });
     },
@@ -438,25 +416,21 @@ export function createProgressHostInteractions(
           requestId: request.requestId,
           prepareRetry: interactionOptions.prepareRetry,
           controller: new AbortController(),
-          cancellationScope: interactionOptions.cancellationScope,
           settling: false,
         });
       } else {
         retryPreparations.delete(request.streamId);
       }
       return handlers().retry.request(request, {
-        cancellationScope: interactionOptions?.cancellationScope,
         cancellationResult: (cause) => cancellationResultFor('retry', cause),
       });
     },
 
     askUserQuestion(
       request: Parameters<NonNullable<HostInteractions['askUserQuestion']>>[0],
-      interactionOptions?: HostInteractionOptions,
     ): Promise<UserQuestionSettlement> {
       revealStream(request.streamId || undefined);
       return handlers().userQuestion.request(request, {
-        cancellationScope: interactionOptions?.cancellationScope,
         cancellationResult: (cause) =>
           cancellationResultFor('userQuestion', cause),
       });
