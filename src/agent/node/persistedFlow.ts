@@ -231,6 +231,8 @@ export class PersistedFlow<
    * stepWithResult that immediately follows the previous step's write).
    */
   private cachedRecord: FlowRecord | null = null;
+  private initialReadAttempted = false;
+  private initialReadFailure: PersistedFlowStateError | undefined;
 
   /**
    * Whether `cachedRecord.shared` is already a validated `S`. Records this
@@ -296,9 +298,25 @@ export class PersistedFlow<
    */
   private async loadRecord(): Promise<FlowRecord | undefined> {
     if (this.cachedRecord) return this.cachedRecord;
-    const flow = await this.kv.read<FlowRecord>(flowKey(this.runId));
+    const initialRead = !this.initialReadAttempted;
+    this.initialReadAttempted = true;
+    let flow: FlowRecord | undefined;
+    try {
+      flow = await this.kv.read<FlowRecord>(flowKey(this.runId));
+    } catch (cause) {
+      const error = new PersistedFlowStateError(this.runId, 'read-failed', {
+        cause,
+      });
+      if (initialRead) this.initialReadFailure = error;
+      throw error;
+    }
     this.cachedSharedTrusted = false;
     return flow;
+  }
+
+  /** Whether `error` is this instance's failed first raw record read. */
+  isInitialReadFailure(error: unknown): boolean {
+    return error === this.initialReadFailure;
   }
 
   /** Register a write-through projection that fires after each persist. */
