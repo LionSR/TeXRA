@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { writeClipboardText } from '@cli/runtime/clipboardText';
@@ -33,6 +33,7 @@ import {
   scrollBoundedRows,
   type ScrollableDisplayLine,
 } from '../render/scrollBounds';
+import { useScrollableOffset } from '../state/useScrollableOffset';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface ExternalInquiryProps {
@@ -203,7 +204,6 @@ export function ExternalInquiry(
   const { columns } = useWindowSize();
   const [answer, setAnswer] = useState('');
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
-  const [questionOffset, setQuestionOffset] = useState(0);
   const contentWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
@@ -228,8 +228,21 @@ export function ExternalInquiry(
     maxDisplayLines: questionRows,
     totalLines: questionLines.length,
   });
-  const questionScrollable = maxQuestionOffset > 0;
   const pageRows = Math.max(1, questionRows - 2);
+  // The answer BaseTextInput below is permanently focused (no feedback-mode
+  // toggle like EditApproval/PlanApproval/BashApproval) and already consumes
+  // ↑/↓ for in-draft cursor movement and history recall, so this hook must
+  // not also bind them — only PgUp/PgDn scroll the question here.
+  const { scrollOffset: questionOffset, scrollable: questionScrollable } =
+    useScrollableOffset({
+      bindArrowKeys: false,
+      maxScrollOffset: maxQuestionOffset,
+      pageRows,
+      // requestId is a legacy alias for the thread id (constant across every
+      // follow-up turn in a thread); the question text is what actually
+      // changes between turns and is what should reset the scroll position.
+      resetKey: props.payload.question,
+    });
   const questionDisplayLines = boundedExternalInquiryQuestionLines({
     maxDisplayLines: questionRows,
     question: props.payload.question,
@@ -242,10 +255,6 @@ export function ExternalInquiry(
     questionScrollable,
   });
 
-  function scrollQuestion(next: (currentOffset: number) => number): void {
-    setQuestionOffset((current) => clamp(next(current), 0, maxQuestionOffset));
-  }
-
   async function copyQuestion(): Promise<void> {
     // One write in flight at a time: a second Ctrl-Y while a copy is pending
     // would race the first write's timeout reap, which kills all direct-child
@@ -255,10 +264,6 @@ export function ExternalInquiry(
     const result = await writeClipboardText(props.payload.question);
     setCopyStatus(result.ok ? 'copied' : 'failed');
   }
-
-  useEffect(() => {
-    setQuestionOffset((current) => clamp(current, 0, maxQuestionOffset));
-  }, [maxQuestionOffset]);
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) {
@@ -275,14 +280,6 @@ export function ExternalInquiry(
     }
     if (key.ctrl && input.toLowerCase() === 'y') {
       void copyQuestion();
-      return;
-    }
-    if (key.pageDown) {
-      scrollQuestion((current) => current + pageRows);
-      return;
-    }
-    if (key.pageUp) {
-      scrollQuestion((current) => current - pageRows);
       return;
     }
   });
