@@ -1,7 +1,7 @@
 /**
  * LogList component - declarative log rendering with per-stream DOM caching.
  *
- * Consumes streamLogContext to get groups and messages.
+ * Consumes streamLogContext to get groups and transcript rows.
  * Renders one TaskGroupList per visited stream, hiding inactive ones with
  * the hidden attribute. Tab switching toggles visibility — zero DOM
  * re-creation.
@@ -30,14 +30,14 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import '@shared/wa/spinner';
 import type {
-  LogMessageData,
   StreamLifecycleStatus,
+  StreamLogEntry,
   TaskGroup,
 } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
 import { postMessage } from '@shared/hostBridge';
 import { PersistedState } from '@shared/state/PersistedState';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { copyWithFeedback } from '@shared/utils/clipboard';
 import { logListStateKey, webviewStorage } from '../webviewStorage';
@@ -66,10 +66,11 @@ const LogListStateSchema = z.object({
 /** Cached per-stream data and DOM state */
 interface CachedStream {
   groups: TaskGroup[];
-  messages: LogMessageData[];
-  updatedMessageIndices: readonly number[];
-  updatedMessageBaseGeneration: number;
-  messageGeneration: number;
+  entries: StreamLogEntry[];
+  rows: TranscriptRow[];
+  updatedRowIndices: readonly number[];
+  updatedRowBaseGeneration: number;
+  rowGeneration: number;
   toggleStates: ToggleStateStore;
   ref: Ref<TaskGroupList>;
   status: StreamLifecycleStatus | null;
@@ -77,7 +78,6 @@ interface CachedStream {
   isToolUse: boolean;
   /** Whether to render this stream's logs in terminal style. */
   terminalMode: boolean;
-  subagentExecutionLabels: ExecutionLabels;
 }
 
 @customElement('log-list')
@@ -132,16 +132,15 @@ export class LogList extends LitElement {
     if (streamId) {
       const entry = this.getOrCreateEntry(streamId);
       entry.groups = this.streamContext.taskGroups;
-      entry.messages = this.streamContext.logs;
-      entry.updatedMessageIndices = this.streamContext.updatedMessageIndices;
-      entry.updatedMessageBaseGeneration =
-        this.streamContext.updatedMessageBaseGeneration;
-      entry.messageGeneration = this.streamContext.messageGeneration;
+      entry.entries = this.streamContext.entries;
+      entry.rows = this.streamContext.rows;
+      entry.updatedRowIndices = this.streamContext.updatedRowIndices;
+      entry.updatedRowBaseGeneration =
+        this.streamContext.updatedRowBaseGeneration;
+      entry.rowGeneration = this.streamContext.rowGeneration;
       entry.status = this.streamContext.streamStatus;
       entry.isToolUse = this.streamContext.isToolUse;
       entry.terminalMode = this.streamContext.terminalMode;
-      entry.subagentExecutionLabels =
-        this.streamContext.subagentExecutionLabels ?? new Map();
     }
   }
 
@@ -168,15 +167,15 @@ export class LogList extends LitElement {
           ${ref(data.ref)}
           ?hidden=${id !== this.activeStreamId}
           .groups=${data.groups}
-          .messages=${data.messages}
-          .updatedMessageIndices=${data.updatedMessageIndices}
-          .updatedMessageBaseGeneration=${data.updatedMessageBaseGeneration}
-          .messageGeneration=${data.messageGeneration}
+          .entries=${data.entries}
+          .rows=${data.rows}
+          .updatedRowIndices=${data.updatedRowIndices}
+          .updatedRowBaseGeneration=${data.updatedRowBaseGeneration}
+          .rowGeneration=${data.rowGeneration}
           .hasStreams=${this.streamContext.hasStreams}
           .streamStatus=${data.status}
           .isToolUse=${data.isToolUse}
           .toggleStates=${data.toggleStates}
-          .subagentExecutionLabels=${data.subagentExecutionLabels}
           ?terminal=${data.terminalMode}
         ></task-group-list>
       `,
@@ -237,16 +236,16 @@ export class LogList extends LitElement {
 
     const createdEntry: CachedStream = {
       groups: [],
-      messages: [],
-      updatedMessageIndices: [],
-      updatedMessageBaseGeneration: 0,
-      messageGeneration: 0,
+      entries: [],
+      rows: [],
+      updatedRowIndices: [],
+      updatedRowBaseGeneration: 0,
+      rowGeneration: 0,
       toggleStates,
       ref: createRef<TaskGroupList>(),
       status: null,
       isToolUse: false,
       terminalMode: false,
-      subagentExecutionLabels: new Map(),
     };
     this.streamCache.set(streamId, createdEntry);
     return createdEntry;

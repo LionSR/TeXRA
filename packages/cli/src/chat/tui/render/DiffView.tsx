@@ -4,7 +4,6 @@
 
 import { Box, Text } from 'ink';
 
-import { buildHunks } from '@cli/runtime/diffHunks';
 import {
   clipToWidth,
   fillRows,
@@ -17,7 +16,7 @@ import {
   previousRowsText,
 } from '@cli/tui/overflowText';
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import { clamp, isObject } from '@utils/core';
+import { clamp } from '@utils/core';
 
 import {
   COMPACT_SCROLLABLE_CONTENT_ROWS,
@@ -60,60 +59,6 @@ export function statsFromHunks(hunks: readonly Hunk[]): DiffStats {
     }
   }
   return { added, removed, hunks: hunks.length };
-}
-
-function stringField(
-  record: Record<string, unknown>,
-  keys: readonly string[],
-): string | undefined {
-  for (const key of keys) {
-    const value = record[key];
-    if (typeof value === 'string') return value;
-  }
-  return undefined;
-}
-
-function editCandidate(
-  input: unknown,
-  fallbackFileLabel: string,
-):
-  | {
-      readonly fileLabel: string;
-      readonly oldText: string;
-      readonly newText: string;
-    }
-  | undefined {
-  if (!isObject(input)) return undefined;
-  const oldText = stringField(input, ['old_string', 'old_str']);
-  const newText = stringField(input, ['new_string', 'new_str']);
-  if (oldText === undefined || newText === undefined) return undefined;
-  return {
-    fileLabel: stringField(input, ['path', 'file_path']) ?? fallbackFileLabel,
-    oldText,
-    newText,
-  };
-}
-
-export function editPatchGroups(
-  input: unknown,
-): readonly InlinePatchGroup[] | undefined {
-  if (!isObject(input)) return undefined;
-  const fileLabel = stringField(input, ['path', 'file_path']) ?? 'edit';
-  const edits = input.edits;
-  const candidates = Array.isArray(edits)
-    ? edits.map((edit) => editCandidate(edit, fileLabel))
-    : [editCandidate(input, fileLabel)];
-
-  const groups = candidates.flatMap((candidate) => {
-    if (candidate === undefined) return [];
-    const hunks = buildHunks(
-      candidate.fileLabel,
-      candidate.oldText,
-      candidate.newText,
-    );
-    return hunks.length > 0 ? [{ fileLabel: candidate.fileLabel, hunks }] : [];
-  });
-  return groups.length > 0 ? groups : undefined;
 }
 
 export function diffDisplayLines(hunks: readonly Hunk[]): DiffDisplayLine[] {

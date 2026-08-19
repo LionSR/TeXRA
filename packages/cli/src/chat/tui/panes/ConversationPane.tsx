@@ -93,7 +93,7 @@ function renderConversationPaneEntry({
       return (
         <ToolUseRow
           subagentExecutionLabels={subagentExecutionLabels}
-          toolUse={entry.toolUse}
+          toolRow={entry.row}
           width={width}
         />
       );

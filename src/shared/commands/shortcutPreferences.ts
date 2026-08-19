@@ -1,6 +1,8 @@
 // Third-party imports
 import { z } from 'zod';
 
+import type { DesktopPlatform } from './accelerators';
+
 /**
  * In-process contract shared by the desktop shortcut runtime and Settings.
  *
@@ -65,7 +67,7 @@ const FUNCTION_KEY_PATTERN = /^F\d{1,2}$/i;
 /** Converts a DOM keyboard chord into the canonical Electron-style form. */
 export function keyboardEventToAccelerator(
   event: KeyboardEvent,
-  platform: NodeJS.Platform,
+  platform: DesktopPlatform,
 ): string | undefined {
   if (MODIFIER_KEYS.has(event.key)) return undefined;
   const key = normalizeKeyboardKey(event.key);

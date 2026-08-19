@@ -199,7 +199,7 @@ describe('desktop command surface', () => {
     const { getDesktopCommandMenuEntries } = await loadSourceModule(
       '@desktop/shared/desktopCommandSurface',
     );
-    const ids = getDesktopCommandMenuEntries().map((entry) => entry.id);
+    const ids = getDesktopCommandMenuEntries('darwin').map((entry) => entry.id);
 
     for (const vscodeOnlyId of [
       'texra.execute',

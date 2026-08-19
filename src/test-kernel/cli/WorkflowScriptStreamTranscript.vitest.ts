@@ -260,7 +260,9 @@ describe('CLI workflow-script child-stream transcript', () => {
       {
         id: 'core-task',
         finalized: true,
-        task: { status: 'completed', model: 'deepseekT' },
+        // Model ids reach the row already projected to their runtime label
+        // (`projectWorkflowCallEntry`), so the row never resolves one itself.
+        task: { status: 'completed', model: 'DeepSeek V4 Flash (Thinking)' },
         text: 'Finished: Audit core · DeepSeek V4 Flash (Thinking)',
       },
       {

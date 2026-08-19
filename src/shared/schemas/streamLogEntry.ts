@@ -54,13 +54,6 @@ const StreamMessageDataSchemas = {
   [MESSAGE_TYPES.DEFAULT]: z.unknown().optional(),
 } satisfies Record<z.infer<typeof MessageTypeSchema>, z.ZodType>;
 
-const LogMessageDataSchemas = {
-  ...StreamMessageDataSchemas,
-  // The frontend projection synthesizes a CompactionActivityBlock from one
-  // or more source lifecycle rows before creating the display message.
-  [MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY]: z.unknown(),
-};
-
 const streamLogSharedFields = {
   seqNo: z.int().positive(),
   /**
@@ -234,74 +227,3 @@ export const StreamLogEntryBatchSchema = z
       return parsed.success ? [parsed.data] : [];
     }),
   );
-
-const logMessageSharedFields = {
-  id: z.string().min(1),
-  /**
-   * Wire append sequence of the source `StreamLogEntry`, carried through so
-   * the frontend can order live rows by `seqNo` instead of wall-clock
-   * `timestamp`. Optional for archived/compat rows predating sequence
-   * tracking; ordering falls back to `timestamp` when it is absent.
-   */
-  seqNo: z.int().positive().optional(),
-  text: z.string(),
-  level: LogLevelSchema,
-  timestamp: z.number(),
-  groupId: z.string().optional(),
-  verbose: z.boolean().optional(),
-};
-
-const logMessageBase = z.strictObject(logMessageSharedFields);
-const logMessage = <T extends string, S extends z.ZodType>(
-  messageType: T,
-  data: S,
-) => logMessageBase.extend({ messageType: z.literal(messageType), data });
-
-export const LogMessageDataSchema = z.union([
-  z.discriminatedUnion('messageType', [
-    logMessage(MESSAGE_TYPES.THINKING, LogMessageDataSchemas.thinking),
-    logMessage(MESSAGE_TYPES.SCRATCHPAD, LogMessageDataSchemas.scratchpad),
-    logMessage(MESSAGE_TYPES.FILE_LIST, LogMessageDataSchemas.fileList),
-    logMessage(
-      MESSAGE_TYPES.MISSING_OUTPUTS,
-      LogMessageDataSchemas.missingOutputs,
-    ),
-    logMessage(MESSAGE_TYPES.LATEXDIFF, LogMessageDataSchemas.latexdiff),
-    logMessage(MESSAGE_TYPES.STATISTICS, LogMessageDataSchemas.statistics),
-    logMessage(MESSAGE_TYPES.TOOL_USE, LogMessageDataSchemas.toolUse),
-    logMessage(MESSAGE_TYPES.WEB_SEARCH, LogMessageDataSchemas.webSearch),
-    logMessage(MESSAGE_TYPES.WEB_FETCH, LogMessageDataSchemas.webFetch),
-    logMessage(
-      MESSAGE_TYPES.MODEL_RESPONSE,
-      LogMessageDataSchemas.modelResponse,
-    ),
-    logMessage(MESSAGE_TYPES.USER_MESSAGE, LogMessageDataSchemas.userMessage),
-    logMessage(
-      MESSAGE_TYPES.PROGRESS_STATUS,
-      LogMessageDataSchemas.progressStatus,
-    ),
-    logMessage(
-      MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
-      LogMessageDataSchemas.contextCompactionActivity,
-    ),
-    logMessage(MESSAGE_TYPES.ERROR, LogMessageDataSchemas.error),
-    logMessage(MESSAGE_TYPES.INTERNAL, LogMessageDataSchemas.internal),
-    logMessage(
-      MESSAGE_TYPES.CONTEXT_MANAGEMENT,
-      LogMessageDataSchemas.contextManagement,
-    ),
-    logMessage(MESSAGE_TYPES.CONTEXT_STATE, LogMessageDataSchemas.contextState),
-    logMessage(MESSAGE_TYPES.ACTIVE_SKILLS, LogMessageDataSchemas.activeSkills),
-    logMessage(MESSAGE_TYPES.WORKFLOW_TASK, LogMessageDataSchemas.workflowTask),
-    logMessage(MESSAGE_TYPES.DEFAULT, LogMessageDataSchemas.default),
-  ]),
-  logMessageBase.extend({
-    messageType: z.undefined().optional(),
-    data: z.unknown().optional(),
-  }),
-]);
-
-export type LogMessageData = z.infer<typeof LogMessageDataSchema>;
-
-export type LogMessageOf<T extends NonNullable<LogMessageData['messageType']>> =
-  Extract<LogMessageData, { messageType: T }>;

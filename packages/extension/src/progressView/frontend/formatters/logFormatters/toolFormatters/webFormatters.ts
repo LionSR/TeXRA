@@ -13,23 +13,10 @@ import {
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
 import type { FormatResult } from '@progressView/frontend/formatters/baseLogFormatter';
-import { MESSAGE_TYPES, type LogMessageOf } from '@shared/schemas';
+import type { WebFetchRow, WebSearchRow } from '@shared/transcript';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { tryParseUrl } from '@utils/core';
 import { buildToolUseDetails } from './helpers';
-
-// Web search provider display names
-const PROVIDER_LABELS: Record<string, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-};
-
-// Web search status suffixes for title
-const STATUS_SUFFIXES: Record<string, string> = {
-  in_progress: ' (searching...)',
-  failed: ' (failed)',
-};
 
 // Web search status-based wa-icon names; SPINNER_ICON_NAME triggers a spinner.
 const STATUS_ICONS: Record<string, TeXRAIconName | typeof SPINNER_ICON_NAME> = {
@@ -37,25 +24,17 @@ const STATUS_ICONS: Record<string, TeXRAIconName | typeof SPINNER_ICON_NAME> = {
   in_progress: SPINNER_ICON_NAME,
 };
 
-/** Format web search results as TemplateResult. */
-export function formatWebSearchTemplate(
-  message: LogMessageOf<typeof MESSAGE_TYPES.WEB_SEARCH>,
-): FormatResult {
-  const { data } = message;
-  const { query, results, provider, status } = data;
-  const searchResults = results ?? [];
-  const resultCount = searchResults.length;
-  const statusKey = status ?? '';
+/** Line count past which fetched page text becomes a fixed-height scroll box. */
+const CONTENT_SCROLL_LINES = 20;
 
-  const providerLabel = PROVIDER_LABELS[provider ?? 'web'] ?? 'Web';
-  const statusSuffix = STATUS_SUFFIXES[statusKey] ?? '';
+/** Format web search results as TemplateResult. */
+export function formatWebSearchTemplate(row: WebSearchRow): FormatResult {
+  const searchResults = row.results;
+  const resultCount = searchResults.length;
+  const statusKey = row.status ?? '';
   const iconName = STATUS_ICONS[statusKey] ?? 'globe';
 
-  let titleText = `${providerLabel} Search`;
-  if (query) titleText += `: "${query}"`;
-  titleText += statusSuffix;
-
-  // Build content sections — query is already in the title, only show sources
+  // Build content sections — query is already in the label, only show sources
   const sections: TemplateResult[] = [];
 
   if (resultCount > 0) {
@@ -85,41 +64,18 @@ export function formatWebSearchTemplate(
       : html`<pre>Web search executed</pre>`;
 
   return buildToolUseDetails({
-    message,
+    row,
     iconName,
-    label: titleText,
-    isError: statusKey === 'failed',
+    label: row.label,
+    isError: row.failed,
     content: contentTemplate,
   });
 }
 
-// Web fetch error code display labels
-const FETCH_ERROR_LABELS: Record<string, string> = {
-  invalid_tool_input: 'Invalid URL format',
-  url_too_long: 'URL exceeds maximum length',
-  url_not_allowed: 'URL blocked by domain filter',
-  url_not_accessible: 'Failed to access URL',
-  unsupported_content_type: 'Unsupported content type',
-  too_many_requests: 'Rate limit exceeded',
-  max_uses_exceeded: 'Maximum fetch uses exceeded',
-  unavailable: 'Service unavailable',
-};
-
 /** Format web fetch results as TemplateResult. */
-export function formatWebFetchTemplate(
-  message: LogMessageOf<typeof MESSAGE_TYPES.WEB_FETCH>,
-): FormatResult {
-  const { data } = message;
-  const { url, title, status, errorCode } = data;
-  const isFailed = status === 'failed';
-
-  const iconName = isFailed ? 'circle-exclamation' : 'cloud-arrow-down';
-
-  let titleText = 'Web Fetch';
-  if (url) {
-    titleText += `: ${tryParseUrl(url)?.hostname ?? url}`;
-  }
-  if (isFailed) titleText += ' (failed)';
+export function formatWebFetchTemplate(row: WebFetchRow): FormatResult {
+  const { url, title, errorLabel, failed } = row;
+  const iconName = failed ? 'circle-exclamation' : 'cloud-arrow-down';
 
   // Build content sections
   const sections: TemplateResult[] = [];
@@ -133,9 +89,24 @@ export function formatWebFetchTemplate(
     sections.push(buildToolUseSection('Title:', wrapInPre(title)));
   }
 
-  if (isFailed && errorCode) {
-    const errorLabel = FETCH_ERROR_LABELS[errorCode] ?? errorCode;
+  if (errorLabel) {
     sections.push(buildToolUseSection('Error:', wrapInPre(errorLabel)));
+  }
+
+  // The fetched text itself. The row carries it untruncated; this surface
+  // hands a long one to the scroll box rather than the page.
+  if (row.content) {
+    sections.push(
+      buildToolUseSection(
+        'Content:',
+        wrapInPre(
+          row.content.full,
+          row.content.lineCount > CONTENT_SCROLL_LINES
+            ? 'tool-output-full'
+            : '',
+        ),
+      ),
+    );
   }
 
   const contentTemplate =
@@ -144,10 +115,10 @@ export function formatWebFetchTemplate(
       : html`<pre>Web fetch executed</pre>`;
 
   return buildToolUseDetails({
-    message,
+    row,
     iconName,
-    label: titleText,
-    isError: isFailed,
+    label: row.label,
+    isError: failed,
     content: contentTemplate,
   });
 }

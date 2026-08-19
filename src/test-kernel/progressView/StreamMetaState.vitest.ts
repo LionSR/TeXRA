@@ -158,7 +158,8 @@ function compactionStatus(
   state: ProgressState,
   streamId: StreamTabId,
 ): unknown {
-  return state.streamLogs.get(streamId)?.logs[0]?.data;
+  const row = state.streamLogs.get(streamId)?.rows[0];
+  return row?.kind === 'compactionActivity' ? row.block : undefined;
 }
 
 /** A metadata patch as the webview receives it, after the postMessage JSON round-trip. */
