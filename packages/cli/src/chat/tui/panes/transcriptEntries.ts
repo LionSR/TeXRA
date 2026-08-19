@@ -71,8 +71,11 @@ export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
     case 'phase':
     case 'workflowTask':
       return terminalVisibleTranscriptText(entry.text).trim().length > 0;
+    // An attachment load and a compact detail row are rows because the
+    // projector said so; the terminal never re-decides membership. A file list
+    // whose entries all failed to load is exactly the case a reader must see.
+    case 'detail':
     case 'media':
-      return entry.images.length > 0;
     case 'tool':
       return true;
   }

@@ -50,9 +50,15 @@ describe('deriveToolInputPreview', () => {
       expected: 'npm test',
     },
     {
-      label: 'returns an empty string for unmapped tools',
+      label: 'falls back to the generic target key for unmapped tools',
       tool: 'read_file',
       input: { path: 'paper.tex' },
+      expected: 'paper.tex',
+    },
+    {
+      label: 'returns an empty string when the input names nothing',
+      tool: 'read_file',
+      input: { recursive: true },
       expected: '',
     },
     {

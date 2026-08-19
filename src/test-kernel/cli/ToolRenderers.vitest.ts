@@ -11,28 +11,19 @@ import { toolDisplaySpanTextProps } from '@cli/chat/tui/panes/ToolUseRow';
 import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
 
 // Local imports - shared schemas
-import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
+import type { NormalizedToolUse } from '@shared/schemas';
+import type { ToolRow } from '@shared/transcript';
 
 // Local imports - test support
 import { loadInk } from '@test/support/inkTestHarness.ts';
+import { toolRowFixture } from '@test/support/transcriptRowFixtures';
 
 function toolUse(
   toolName: string,
   input: unknown,
   overrides: Partial<NormalizedToolUse> = {},
-): NormalizedToolUse {
-  return {
-    toolName,
-    errorText: '',
-    outputText: '',
-    userInstructionText: '',
-    input,
-    isError: false,
-    isUserFeedback: false,
-    headerSummary: '',
-    status: TOOL_USE_STATUS.COMPLETED,
-    ...overrides,
-  };
+): ToolRow {
+  return toolRowFixture(`tool-${toolName}`, { toolName, input, ...overrides });
 }
 
 function numberedLines(count: number): string {
@@ -43,7 +34,7 @@ function bashOutput(
   command: string,
   outputText: string,
   overrides: Partial<NormalizedToolUse> = {},
-): NormalizedToolUse {
+): ToolRow {
   return toolUse(
     'bash',
     { command },
@@ -52,7 +43,7 @@ function bashOutput(
 }
 
 async function renderBoundedTool(
-  entry: NormalizedToolUse,
+  entry: ToolRow,
   maxRows: number,
 ): Promise<string> {
   const { ink, React } = await loadInk();
@@ -63,7 +54,8 @@ async function renderBoundedTool(
     id: 'bounded-tool',
     role: 'tool',
     text: '',
-    toolUse: entry,
+    row: entry,
+    toolUse: entry.toolUse,
   };
   return ink.renderToString(
     React.createElement(BoundedTranscriptEntry, {
@@ -117,11 +109,56 @@ describe('CLI tool display lines', () => {
     );
   });
 
-  it('previews a codex call by its prompt, not raw JSON, matching the progress view', () => {
-    const entry = toolUse('codex', { prompt: 'Summarize this proof.' });
+  it('renders a codex call as typed sections, not raw JSON, matching the progress view', () => {
+    const entry = toolUse('codex', {
+      prompt: 'Summarize this proof.',
+      sandbox_mode: 'read-only',
+      thread_id: 'thread-1',
+    });
 
     expect(toolUseDisplayLines(entry)).toEqual([
       '● codex (Summarize this proof.)',
+      '⎿ Prompt: Summarize this proof.',
+      '⎿ Mode: read-only, follow-up',
+    ]);
+  });
+
+  it('paints codex patch and todo cards from the shared section vocabulary', () => {
+    expect(
+      toolUseDisplayLines(
+        toolUse('codex_patch', {
+          patchStatus: 'applied',
+          changes: [
+            { path: 'proof.tex', kind: 'update' },
+            { path: 'notes.md', kind: 'add' },
+          ],
+        }),
+      ),
+    ).toEqual([
+      '● Codex Files',
+      '⎿ Status: applied',
+      '⎿ Files:',
+      '    proof.tex (update)',
+      '    notes.md (add)',
+    ]);
+
+    expect(
+      toolUseDisplayLines(
+        toolUse('codex_todo', {
+          completedCount: 1,
+          totalCount: 2,
+          items: [
+            { text: 'Read the proof', completed: true },
+            { text: 'Check lemma 3', completed: false },
+          ],
+        }),
+      ),
+    ).toEqual([
+      '● Codex Plan',
+      '⎿ Progress: 1/2 completed',
+      '⎿ Checklist:',
+      '    ☑ Read the proof',
+      '    □ Check lemma 3',
     ]);
   });
 
@@ -156,6 +193,7 @@ describe('CLI tool display lines', () => {
 
     expect(toolUseDisplayLines(entry)).toEqual([
       '● MCP terminal/bash (false)',
+      '⎿ Arguments: command: "false"',
       '⎿ exit 7',
       '⎿ Command failed (exit 7)',
     ]);
@@ -178,7 +216,10 @@ describe('CLI tool display lines', () => {
           ['sub-2', 'leanSolver'],
         ]),
       }),
-    ).toEqual(['● executions (wait: reviewer, leanSolver)']);
+    ).toEqual([
+      '● executions (wait: reviewer, leanSolver)',
+      '⎿ Action: wait (timeout: 300s)',
+    ]);
   });
 
   it('shows the action and path for a background process, matching the progress view', () => {
@@ -262,20 +303,6 @@ describe('CLI tool display lines', () => {
     `);
   });
 
-  it('keeps long duplicate error output when printing full output', () => {
-    const message = `User rejected command: ${'diagnostic detail '.repeat(30)}`;
-    const entry = bashOutput('run-diagnostic', message, {
-      errorText: message,
-      isError: true,
-    });
-
-    const lines = toolUseDisplayLines(entry, { elide: false });
-
-    expect(lines[1]).toBe(`⎿ ${message}`);
-    expect(lines[2]).toContain('User rejected command: diagnostic detail');
-    expect(lines[2].length).toBeLessThan(lines[1].length);
-  });
-
   it('elides long bash output to a head+tail slice with a line marker', () => {
     const entry = bashOutput('seq 20', numberedLines(20));
 
@@ -336,8 +363,11 @@ describe('CLI tool display lines', () => {
 
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
-        "● MCP slack/send ({"channel":"#drafts","text":"done"})",
-        "⎿ sent",
+        "● MCP slack/send",
+        "⎿ Arguments:",
+        "  channel: "#drafts"",
+        "  text: done",
+        "⎿ Result: sent",
       ]
     `);
   });

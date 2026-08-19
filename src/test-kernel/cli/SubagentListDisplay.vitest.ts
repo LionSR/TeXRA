@@ -59,6 +59,10 @@ import {
 } from '@shared/schemas';
 import { buildChildRosters } from '@test/support/childStreamEntries';
 import {
+  fileListConversationEntry,
+  toolConversationEntry,
+} from '@test/support/transcriptRowFixtures';
+import {
   loadInk,
   renderOutputAtTerminalSize,
 } from '@test/support/inkTestHarness.ts';
@@ -545,23 +549,12 @@ describe('CLI child list display model', () => {
     const slice = workflowAgentSlice(streamId, {
       status: STREAM_PHASE.RUNNING,
       entries: [
-        {
-          id: 'live-tool',
-          role: 'tool',
-          text: '',
-          finalized: false,
-          toolUse: {
-            toolName: 'write_file',
-            errorText: '',
-            outputText: '',
-            userInstructionText: '',
-            input: { path: 'paper.tex' },
-            isError: false,
-            isUserFeedback: false,
-            headerSummary: 'Drafting paper.tex',
-            status: 'in_progress',
-          },
-        },
+        toolConversationEntry('live-tool', {
+          toolName: 'write_file',
+          input: { path: 'paper.tex' },
+          headerSummary: 'Drafting paper.tex',
+          status: 'in_progress',
+        }),
       ],
     });
     activeStreamId.set(streamId);
@@ -583,44 +576,24 @@ describe('CLI child list display model', () => {
   it.each([
     {
       activityLabel: 'live tool activity',
-      activity: {
-        id: 'live-tool',
-        role: 'tool' as const,
-        text: '',
-        finalized: false,
-        toolUse: {
-          toolName: 'write_file',
-          errorText: '',
-          outputText: '',
-          userInstructionText: '',
-          input: { path: 'paper.tex' },
-          isError: false,
-          isUserFeedback: false,
-          headerSummary: 'Drafting',
-          status: 'in_progress' as const,
-        },
-      },
+      activity: toolConversationEntry('live-tool', {
+        toolName: 'write_file',
+        input: { path: 'paper.tex' },
+        headerSummary: 'Drafting',
+        status: 'in_progress',
+      }),
       expectedActivity: 'Draf',
     },
     {
       activityLabel: 'failed tool activity',
-      activity: {
-        id: 'live-error',
-        role: 'tool' as const,
-        text: '',
-        finalized: false,
-        toolUse: {
-          toolName: 'write_file',
-          errorText: 'Failed',
-          outputText: '',
-          userInstructionText: '',
-          input: { path: 'paper.tex' },
-          isError: true,
-          isUserFeedback: false,
-          headerSummary: 'Failed',
-          status: 'failed' as const,
-        },
-      },
+      activity: toolConversationEntry('live-error', {
+        toolName: 'write_file',
+        input: { path: 'paper.tex' },
+        errorText: 'Failed',
+        isError: true,
+        headerSummary: 'Failed',
+        status: 'failed',
+      }),
       expectedActivity: 'Failed',
     },
   ])(
@@ -666,30 +639,19 @@ describe('CLI child list display model', () => {
       ...emptySlice(streamId),
       status: STREAM_PHASE.RUNNING,
       entries: [
-        {
-          id: 'blocking-tool',
-          role: 'tool',
-          text: '',
-          finalized: false,
-          toolUse: {
-            toolName: 'write_file',
-            errorText: '',
-            outputText: '',
-            userInstructionText: '',
-            input: { path: 'paper.tex' },
-            isError: false,
-            isUserFeedback: false,
-            headerSummary: 'Drafting paper.tex',
-            status: 'in_progress',
+        toolConversationEntry('blocking-tool', {
+          toolName: 'write_file',
+          input: { path: 'paper.tex' },
+          headerSummary: 'Drafting paper.tex',
+          status: 'in_progress',
+        }),
+        fileListConversationEntry('held-media', [
+          {
+            path: '/tmp/held-plot.png',
+            ok: true,
+            media: { kind: 'image', mimeType: 'image/png', sizeBytes: 8704 },
           },
-        },
-        {
-          id: 'held-media',
-          role: 'media',
-          text: '',
-          finalized: true,
-          images: [{ path: '/tmp/held-plot.png', sizeBytes: 8704 }],
-        },
+        ]),
       ],
     };
     activeStreamId.set(streamId);
@@ -700,8 +662,8 @@ describe('CLI child list display model', () => {
         React.createElement(ConversationPane, { maxRows: 4, width: 80 }),
         { columns: 80 },
       );
-      expect(output).toContain('[image]');
-      expect(output).toContain('/tmp/held-plot.png');
+      expect(output).toContain('Files (1/1 loaded)');
+      expect(output).toContain('✓ /tmp/held-plot.png [image, 8.5 KiB]');
     } finally {
       activeStreamId.set(undefined);
       streamsSignal.set(new Map());
@@ -715,23 +677,12 @@ describe('CLI child list display model', () => {
       ...emptySlice(streamId),
       status: STREAM_PHASE.RUNNING,
       entries: [
-        {
-          id: 'blocking-tool',
-          role: 'tool',
-          text: '',
-          finalized: false,
-          toolUse: {
-            toolName: 'write_file',
-            errorText: '',
-            outputText: '',
-            userInstructionText: '',
-            input: { path: 'paper.tex' },
-            isError: false,
-            isUserFeedback: false,
-            headerSummary: 'Drafting paper.tex',
-            status: 'in_progress',
-          },
-        },
+        toolConversationEntry('blocking-tool', {
+          toolName: 'write_file',
+          input: { path: 'paper.tex' },
+          headerSummary: 'Drafting paper.tex',
+          status: 'in_progress',
+        }),
         phaseEntry('held-phase', 'Verify', {
           phaseIndex: 0,
           phaseTotal: 2,
