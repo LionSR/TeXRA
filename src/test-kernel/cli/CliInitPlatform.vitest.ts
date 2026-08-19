@@ -146,12 +146,13 @@ vi.mock('@platform/defaults/lifecycleHost', () => ({
   }),
 }));
 
-vi.mock('@platform/defaults/jsonStore', () => ({
-  JsonStore: { open: vi.fn().mockResolvedValue({}) },
-}));
-
-vi.mock('@platform/defaults/jsonConfigProvider', () => ({
-  JsonConfigProvider: vi.fn(),
+// The workspace/global config store pair (and its degrade-to-internal-store
+// rule) is shared with the extension and desktop hosts; stubbed here so this
+// test exercises only the CLI-specific wiring.
+vi.mock('@platform/defaults/nodeStores', () => ({
+  openTexraConfigStores: vi
+    .fn()
+    .mockResolvedValue({ workspace: {}, global: {} }),
 }));
 
 vi.mock('@platform/defaults/nodeFilesystem', () => ({ nodeFilesystem: {} }));

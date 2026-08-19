@@ -1,9 +1,7 @@
-import { access, constants } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { app } from 'electron';
 import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import { isFileNotFoundError } from '@common/errors';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/shared/workspacePath.js';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
@@ -19,12 +17,14 @@ import {
   initNodeAgentRuntime,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
-import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
+import {
+  openNodeWorkspaceStateStore,
+  openTexraConfigStores,
+} from '@platform/defaults/nodeStores';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { ElectronSecrets } from './electronSecrets.js';
@@ -54,29 +54,6 @@ export interface ElectronPlatformInitResult {
   resourcesPath: string;
 }
 
-/**
- * Whether a write through a `JsonStore` at `filePath` could succeed:
- * `flush()` creates the containing directory on demand and then writes a
- * temp file into it, so the deepest existing ancestor of `filePath` must be
- * writable and traversable. Answers false for e.g. a read-only checkout
- * without ever creating the directory in the project tree.
- */
-async function canCreateOrWrite(filePath: string): Promise<boolean> {
-  let dir = dirname(filePath);
-  // Walk up to the deepest existing ancestor; the workspace root exists, so
-  // this terminates after a step or two.
-  for (;;) {
-    try {
-      await access(dir, constants.W_OK | constants.X_OK);
-      return true;
-    } catch (error) {
-      const parent = dirname(dir);
-      if (!isFileNotFoundError(error) || parent === dir) return false;
-      dir = parent;
-    }
-  }
-}
-
 export async function initializeElectronPlatform(
   mainDirname: string,
   agentResume: AgentResumePort,
@@ -97,33 +74,11 @@ export async function initializeElectronPlatform(
   // shows one history.
   const dataRoot = resolveDesktopDataRoot(userDataPath);
   const storage = new WorkspaceStorageProvider(dataRoot, workspacePath);
-  const workspaceStateStore = await JsonStore.open(
-    join(storage.getStoragePath(), 'state.json'),
-  );
-  const globalConfigStore = await JsonStore.open(
-    join(storage.getGlobalStoragePath(), 'config.json'),
-  );
-  // A workspace uses its `.texra/config.json`, shared with the CLI. Sessions
-  // without a workspace, and read-only projects without an existing config,
-  // use the internal workspace store so settings remain writable.
-  let workspaceConfigStore: JsonStore | undefined;
-  if (workspacePath) {
-    const projectConfigPath = workspaceTexraConfigPath(workspacePath);
-    try {
-      const projectConfigStore = await JsonStore.open(projectConfigPath);
-      const hasProjectConfig =
-        Object.keys(projectConfigStore.snapshot()).length > 0;
-      if (hasProjectConfig || (await canCreateOrWrite(projectConfigPath))) {
-        workspaceConfigStore = projectConfigStore;
-      }
-    } catch (error) {
-      console.warn(
-        `[desktop] Cannot open project .texra/config.json; using the internal workspace config store. Cause: ${toErrorMessage(error)}`,
-      );
-    }
-  }
-  workspaceConfigStore ??= await JsonStore.open(
-    join(storage.getStoragePath(), 'config.json'),
+  const workspaceStateStore = await openNodeWorkspaceStateStore(storage);
+  const configStores = await openTexraConfigStores(
+    storage,
+    workspacePath,
+    (message) => console.warn(`[desktop] ${message}`),
   );
   const secretsStore = await JsonStore.open(join(userDataPath, 'secrets.json'));
 
@@ -136,10 +91,7 @@ export async function initializeElectronPlatform(
   });
   initPlatform(
     createNodePlatform({
-      configStores: {
-        workspace: workspaceConfigStore,
-        global: globalConfigStore,
-      },
+      configStores,
       globalState: globalStateStore,
       workspaceState: workspaceStateStore,
       storage,
