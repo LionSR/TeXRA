@@ -506,7 +506,7 @@ describe('catalog-derived settings snapshots', () => {
           Object.entries(message.values).filter(([key]) => key !== omittedKey),
         );
         assert.equal(
-          dispatchSettingsViewOutbound({ ...posted, values: partialValues }, {
+          dispatchSettingsViewOutbound({ ...message, values: partialValues }, {
             [message.command]: () => {},
           } as never),
           false,
