@@ -2,10 +2,10 @@ import * as path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { listGeneratedFiles } from '@cli/runtime/history/generatedFiles';
 import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { listRunGeneratedFiles } from '@tools/executions/runGeneratedFiles';
 
 const EXECUTION_ID = 'generated-history-test' as ExecutionId;
 const STORAGE_PATH = path.join(path.sep, 'storage');
@@ -24,7 +24,7 @@ function failStatFor(targetPath: string, error: Error): void {
   });
 }
 
-describe('listGeneratedFiles', () => {
+describe('listRunGeneratedFiles', () => {
   setupPlatform({
     storagePath: STORAGE_PATH,
     files: {
@@ -43,7 +43,7 @@ describe('listGeneratedFiles', () => {
       fsError('ENOENT', 'entry disappeared after readDir'),
     );
 
-    await expect(listGeneratedFiles(EXECUTION_ID)).resolves.toEqual([
+    await expect(listRunGeneratedFiles(EXECUTION_ID)).resolves.toEqual([
       { path: 'blocked.tex', size: 7, isDirectory: false },
       { path: 'sub', size: 0, isDirectory: true },
       { path: 'sub/nested.tex', size: 6, isDirectory: false },
@@ -58,7 +58,7 @@ describe('listGeneratedFiles', () => {
       fsError('ENOTDIR', 'parent path is no longer a directory'),
     );
 
-    const files = await listGeneratedFiles(EXECUTION_ID);
+    const files = await listRunGeneratedFiles(EXECUTION_ID);
 
     expect(files.map((file) => file.path)).not.toContain('blocked.tex');
   });
@@ -67,6 +67,6 @@ describe('listGeneratedFiles', () => {
     const error = fsError('EACCES', 'generated file is unreadable');
     failStatFor(path.join(RUN_PATH, 'unreadable.tex'), error);
 
-    await expect(listGeneratedFiles(EXECUTION_ID)).rejects.toBe(error);
+    await expect(listRunGeneratedFiles(EXECUTION_ID)).rejects.toBe(error);
   });
 });

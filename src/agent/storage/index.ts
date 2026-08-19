@@ -51,6 +51,7 @@ export {
 } from './executionListing';
 export {
   RESUMABILITY_CAUSE,
+  deriveOfferableResumability,
   deriveResumability,
   type ResumabilityDecision,
 } from './resumability';
