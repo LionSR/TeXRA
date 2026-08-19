@@ -50,6 +50,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { USER_QUESTION_SKIPPED_FEEDBACK } from '@cli/runtime/userQuestionAnswer';
 import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
+import { subscriptionProvider } from '@controllers/modelAccess/subscriptionProviders';
 import { warn as logWarning } from '@logger/logUtils';
 import {
   apiKeyExistsUncached,
@@ -61,8 +62,6 @@ import {
   codingPlanSubscriptionRuntimes,
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
-import { isPreferCodexSubscription } from '@model/codex/codexPreference';
-import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { platform } from '@platform/platform';
 import {
   isCodingPlanQuotaRoute,
@@ -86,9 +85,8 @@ import { patchStream } from './cliState';
 import {
   refreshSubscriptionPreferenceViews,
   setCliCodingPlanSubscription,
-  setCliCodexSubscription,
-} from './codexSubscription';
-import { setCliXaiSubscription } from './xaiSubscription';
+  setCliSubscriptionPreference,
+} from './subscriptionPreference';
 import {
   approveQueuedDelegatedWorkForStream,
   approvalPayloadStreamId,
@@ -667,21 +665,13 @@ interface OauthCliPreference {
 function oauthCliPreference(
   id: QuotaFallbackRouteId | undefined,
 ): OauthCliPreference | undefined {
-  if (id === 'chatgpt') {
-    return {
-      label: 'ChatGPT',
-      isPrefer: isPreferCodexSubscription,
-      setPrefer: setCliCodexSubscription,
-    };
-  }
-  if (id === 'grok') {
-    return {
-      label: 'Grok',
-      isPrefer: isPreferXaiSubscription,
-      setPrefer: setCliXaiSubscription,
-    };
-  }
-  return undefined;
+  if (id !== 'chatgpt' && id !== 'grok') return undefined;
+  const provider = subscriptionProvider(id);
+  return {
+    label: provider.displayName,
+    isPrefer: provider.isPreferSubscription,
+    setPrefer: (enabled) => setCliSubscriptionPreference(id, enabled),
+  };
 }
 
 /** Commit the subscription-preference writes for a retry switch.

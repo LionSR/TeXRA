@@ -228,6 +228,10 @@ function defineSubscriptionProvider<
 /**
  * Experimental "Sign in with ChatGPT": Codex-eligible models then run on the
  * user's ChatGPT Plus/Pro/Team subscription instead of an OpenAI API key.
+ *
+ * Each binding calls through rather than capturing the imported function, so
+ * a host suite that swaps `@auth/codex` or `@model/codex/codexPreference`
+ * still intercepts the row — the catalog is built once at module load.
  */
 const CHATGPT_PROVIDER = defineSubscriptionProvider({
   id: 'chatgpt',
@@ -235,13 +239,13 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
   sessionName: 'ChatGPT',
   copyTarget: 'ChatGPT',
   modelFamily: 'Codex models',
-  coordinator: codexCoordinator,
-  getStatus: getCodexStatus,
-  loginWithDeviceCode: codexLoginWithDeviceCode,
-  loginWithLoopback: codexLoginWithLoopback,
-  accountLabel: codexAccountLabel,
-  isPrefer: isPreferCodexSubscription,
-  setPrefer: setPreferCodexSubscription,
+  coordinator: () => codexCoordinator(),
+  getStatus: () => getCodexStatus(),
+  loginWithDeviceCode: (options) => codexLoginWithDeviceCode(options),
+  loginWithLoopback: (options) => codexLoginWithLoopback(options),
+  accountLabel: (account) => codexAccountLabel(account),
+  isPrefer: () => isPreferCodexSubscription(),
+  setPrefer: (enabled) => setPreferCodexSubscription(enabled),
 });
 
 /**
@@ -254,13 +258,13 @@ const GROK_PROVIDER = defineSubscriptionProvider({
   sessionName: 'xAI',
   copyTarget: 'Grok / xAI',
   modelFamily: 'xAI models',
-  coordinator: xaiCoordinator,
-  getStatus: getXaiStatus,
-  loginWithDeviceCode: xaiLoginWithDeviceCode,
-  loginWithLoopback: xaiLoginWithLoopback,
-  accountLabel: xaiAccountLabel,
-  isPrefer: isPreferXaiSubscription,
-  setPrefer: setPreferXaiSubscription,
+  coordinator: () => xaiCoordinator(),
+  getStatus: () => getXaiStatus(),
+  loginWithDeviceCode: (options) => xaiLoginWithDeviceCode(options),
+  loginWithLoopback: (options) => xaiLoginWithLoopback(options),
+  accountLabel: (account) => xaiAccountLabel(account),
+  isPrefer: () => isPreferXaiSubscription(),
+  setPrefer: (enabled) => setPreferXaiSubscription(enabled),
 });
 
 /** Canonical catalog of OAuth subscription providers, shared by every host. */
