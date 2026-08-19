@@ -88,7 +88,7 @@ function findRootStageId(
  * the persisted transcript's last terminal group row before falling back to the
  * older snapshot-status escape hatch (already normalized to `StreamPhase` at
  * trace parse — `StreamSnapshotSchema.status`'s legacy-inbound member maps the
- * retired 7-value vocabulary, with legacy `ready` parsing to absent). Only
+ * retired 7-value vocabulary, with legacy `ready` parsing to `undefined`). Only
  * when no source records a terminal status does this default to `READY`, same
  * as an unqualified successful finish.
  *

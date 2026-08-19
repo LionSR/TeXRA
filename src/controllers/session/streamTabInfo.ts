@@ -19,7 +19,7 @@ export interface StreamTabInfoInputs {
  * both the extension's progress view and the Electron desktop main can
  * emit identical metadata to the shared <stream-tab> renderer.
  *
- * The parsed {@link RunIdentity} travels verbatim; display fields sit beside
+ * The parsed `RunIdentity` travels verbatim; display fields sit beside
  * it. A stream whose identity has not resolved yet (no `run.start` seen, no
  * durable record hydrated) renders pending — never a fabricated default kind
  * or category.

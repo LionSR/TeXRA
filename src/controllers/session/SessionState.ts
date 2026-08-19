@@ -28,7 +28,7 @@ import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
  * Config-derived display fields: undefined until the stream's `RunConfig`
  * resolves in the summary mirror, then always populated together from that
  * one `AgentConfig`. Display data only — what the run IS travels as the
- * parsed {@link RunIdentity} beside it. `instruction` carries only a process
+ * parsed `RunIdentity` beside it. `instruction` carries only a process
  * run's command line (the one config field tab rendering consumes); agent
  * runs' full instruction text stays on the sidecar/config authority.
  */
