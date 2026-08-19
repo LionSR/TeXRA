@@ -341,7 +341,7 @@ describe('executionRegistry', () => {
   it('drains a background-bash AgentExecutionHandle on shutdown without disturbing a resumable agent execution (issue #8155)', () => {
     // A background `bash` run is registered as an AgentExecutionHandle (see
     // createChildStream in tools/bash.ts) with its OS-process kill reachable
-    // only via the interrupt handler BashBackgroundSession attaches. The two
+    // only via the interrupt handler a background-process child attaches. The two
     // AgentExecutionHandles below are tracked concurrently, mirroring the real
     // interleaving at shutdown: a background bash child stream alongside an
     // ordinary resumable agent execution (e.g. a native subagent loop, whose
@@ -362,7 +362,7 @@ describe('executionRegistry', () => {
 
     try {
       // Background bash: an AgentExecutionHandle whose attached interrupt
-      // handler owns a live OS process (mirrors BashBackgroundSession).
+      // handler owns a live OS process (mirrors background bash's child run).
       const bashHandle = createHandle(
         bashExecutionId,
         bashParentStreamId,

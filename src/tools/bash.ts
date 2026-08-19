@@ -2,14 +2,8 @@
 import { z } from 'zod';
 
 // Local imports
-import { registerExecution } from '@agent/storage';
-import { persistChildRunDeliveryBestEffort } from '@agent/storage/childRunDeliveryPersistence';
-import {
-  captureOwnedExecutionLease,
-  markOwnedExecutionLeaseUndurable,
-  onOwnedExecutionLeaseLost,
-  runWithOwnedExecutionLeaseLaunchGuard,
-} from '@agent/storage/executionLease';
+import type { AgentTrace } from '@agent/trace';
+import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
 import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
@@ -18,14 +12,11 @@ import {
   getCurrentToolContexts,
   type ToolCallContext,
 } from '@agent/followUp/ToolFileInteractionContext';
-import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
-import type { RunTerminalPersistence } from '@agent/runtime/AgentRunLifecycle';
-import type { ExecutionInterruptHandler } from '@agent/runtime/ExecutionHandle';
+import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import {
   getRunContextExecutionId,
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
-import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   BASH_CHILD_STREAM_PREFIX,
   getStreamTabId,
@@ -40,6 +31,7 @@ import {
 import {
   AgentCategory,
   ToolError,
+  type ExecResult,
   type ExecutionId,
   type StreamTabId,
   type ToolResult,
@@ -67,8 +59,8 @@ import { nullishWithDefault } from './core/inputSchema';
 import {
   childStreamDescription,
   createChildStream,
-  type ChildStream,
 } from './delegation/childStream';
+import { startDetachedChildRunLoop } from './delegation/detachedChildRun';
 import { parseWorkingDirectory } from './pathResolution';
 
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
@@ -87,18 +79,6 @@ const SHELL_BACKGROUNDING_PATTERN =
 const SHELL_BACKGROUNDING_MESSAGE =
   'This command uses shell-level backgrounding (`nohup ... &`) inside a foreground bash tool call. ' +
   'Do not emulate background execution inside the shell; call the bash tool again with `run_in_background: true` and the command without `nohup` or a trailing `&`.';
-
-/**
- * A background command's durable terminal state is written by the shared
- * finalizer, from the outcome the stream phase resolved. Deriving it here from
- * the process exit alone would record ERROR for a command the user killed:
- * the kill lands CANCELLED on the phase and only then does the process exit
- * non-zero. There is no flow to resume, so the record is always dropped.
- */
-const BACKGROUND_TERMINAL_PERSISTENCE: RunTerminalPersistence = {
-  kind: 'finalize',
-  flowRecord: 'delete',
-};
 
 interface BoundedOutputCapture {
   append(chunk: string): void;
@@ -256,23 +236,123 @@ const BashInputSchema = z.strictObject({
 type BashInput = z.infer<typeof BashInputSchema>;
 
 /**
- * Interrupt handle for a background bash run. Termination is delegated to
- * `executeCommand`'s own abort-signal path (SIGTERM → SIGKILL escalation,
- * stream cleanup) rather than duplicating a kill ladder here — see
- * `executeCommand`'s `terminateSubprocess`.
+ * The child-run strategy for one background shell command: a single terminal
+ * turn that runs the process, streams its output into the child's tab, and
+ * hands the loop the formatted delivery and result manifest. Everything else a
+ * background child needs — the follow-up queue claim, the wake-aware parent
+ * delivery, report persistence, the interrupt target, and terminal
+ * finalization — is the loop's, exactly as it is for every other child type.
  */
-class BashBackgroundSession implements ExecutionInterruptHandler {
-  /** Shutdown drain reaches this handler via `interruptBackgroundProcess()`. */
-  readonly ownsBackgroundProcess = true;
-  private readonly abortController = new AbortController();
+function createBackgroundBashStrategy(params: {
+  executionId: ExecutionId;
+  command: string;
+  timeoutMs: number;
+  cwd: string | undefined;
+  logger: AgentTrace;
+}): ChildRunStrategy<ExecResult> {
+  const { executionId, command, logger } = params;
+  // Whitespace normalization is off here: a background log is delivered
+  // verbatim, and its head/tail budgets are its own (see the constants above)
+  // rather than the foreground tool-result ones.
+  const captureOptions = { normalizeWhitespace: false };
+  const stdout = createBoundedOutputCapture(
+    BACKGROUND_OUTPUT_HEAD_CHARS,
+    BACKGROUND_OUTPUT_TAIL_CHARS,
+    captureOptions,
+  );
+  const stderr = createBoundedOutputCapture(
+    BACKGROUND_OUTPUT_HEAD_CHARS,
+    BACKGROUND_OUTPUT_TAIL_CHARS,
+    captureOptions,
+  );
+  let loggedChars = 0;
+  let logCapReached = false;
+  const logChunk = (chunk: string, level: 'info' | 'warn'): void => {
+    if (logCapReached) return;
+    loggedChars += chunk.length;
+    if (loggedChars > BASH_BACKGROUND_LOG_CAP_CHARS) {
+      logCapReached = true;
+      logger.warn(
+        `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars: tail available in follow-up result]`,
+      );
+      return;
+    }
+    logger[level](chunk, {
+      data: backgroundBashOutputData(level === 'warn' ? 'stderr' : 'stdout'),
+    });
+  };
 
-  get signal(): AbortSignal {
-    return this.abortController.signal;
-  }
+  let startedAt = Date.now();
+  const delivery = (result: ExecResult, wallTimeMs: number): string =>
+    formatBashDelivery(
+      executionId,
+      command,
+      wallTimeMs,
+      result,
+      toDeliveryExcerpt(stdout),
+      toDeliveryExcerpt(stderr),
+    );
 
-  interrupt(): void {
-    this.abortController.abort();
-  }
+  return {
+    stageLabel: 'Background command',
+    // A background shell is the one child type that owns a live OS process and
+    // whose tab is ephemeral, and the one whose result survives its own kill.
+    ownsBackgroundProcess: true,
+    autoCloseChildStream: true,
+    deliverAfterInterrupt: true,
+
+    launch: (_ports, abortController) => {
+      startedAt = Date.now();
+      return executeCommand(command, {
+        ...(params.cwd !== undefined && { cwd: params.cwd }),
+        timeout: params.timeoutMs,
+        buffer: false,
+        // String form + explicit shell teardown: abort/timeout signal the
+        // whole process group so backgrounded jobs and piped children are
+        // torn down rather than left running.
+        mode: 'shell',
+        signal: abortController.signal,
+        onStdout: (chunk) => {
+          stdout.append(chunk);
+          logChunk(chunk, 'info');
+        },
+        onStderr: (chunk) => {
+          stderr.append(chunk);
+          logChunk(chunk, 'warn');
+        },
+      });
+    },
+
+    isTerminal: () => true,
+    // `executeCommand` never rejects on a non-zero exit — it resolves with the
+    // exit code, so the failure is an application-level one.
+    isTurnError: (turn) => !turn.success,
+    onTurnError: (turn, turnLogger) =>
+      turnLogger.error(
+        `Background bash failed with exit code ${turn.exitCode}.`,
+      ),
+
+    formatDelivery: (turn, wallTimeMs) => delivery(turn, wallTimeMs),
+    // A failed exit still produced real output: deliver the full excerpt, not
+    // the bare error form. `formatBashError` is only for a throw, where there
+    // is no result to report.
+    formatError: (turn, err) =>
+      turn
+        ? delivery(turn, Date.now() - startedAt)
+        : formatBashError(executionId, command, err),
+
+    buildResultMeta: (turn, _isError, wallTimeMs) =>
+      turn
+        ? {
+            producer: 'backgroundBash' as const,
+            exitCode: turn.exitCode,
+            wallTimeMs,
+            success: turn.success,
+            timedOut: turn.timedOut,
+            command,
+          }
+        : undefined,
+  };
 }
 
 export class BashTool extends defineTool({
@@ -405,8 +485,10 @@ export class BashTool extends defineTool({
     cwd?: string,
   ): Promise<ToolResult> {
     const executionId = generateExecutionId();
-
     const preview = truncateWithEllipsis(command, 60);
+    const childStreamId = getStreamTabId(BASH_CHILD_STREAM_PREFIX, {
+      executionId,
+    });
 
     const syntheticConfig = AgentConfigSchema.parse({
       agent: 'bash',
@@ -417,237 +499,58 @@ export class BashTool extends defineTool({
     // The durable record states only what a shell command has: no execution
     // mode, no model. The synthetic AgentConfig above feeds the ephemeral
     // live wire only.
-    await registerExecution(
+    const runWithOwnership = await registerOwnedExecution(
       executionId,
       { name: 'bash', instruction: command },
       'bash',
       {
-        streamId: getStreamTabId(BASH_CHILD_STREAM_PREFIX, { executionId }),
+        streamId: childStreamId,
         identity: { kind: 'process', tool: 'bash' },
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
         parentExecutionId,
         description: childStreamDescription(command),
       },
     );
-    const runWithOwnership = captureOwnedExecutionLease(executionId);
 
-    let childStream!: ChildStream;
-    await runWithOwnedExecutionLeaseLaunchGuard(executionId, () => {
-      runWithOwnership(() => {
-        childStream = createChildStream(executionId, parentStreamId, {
-          streamPrefix: BASH_CHILD_STREAM_PREFIX,
-          run: { kind: 'process', tool: 'bash' },
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-          description: command,
-          config: syntheticConfig,
-        });
-      });
-    });
-    const { childStreamId, logger } = childStream;
-    // Whitespace normalization is off here: a background log is delivered
-    // verbatim, and its head/tail budgets are its own (see the constants
-    // above) rather than the foreground tool-result ones.
-    const stdout = createBoundedOutputCapture(
-      BACKGROUND_OUTPUT_HEAD_CHARS,
-      BACKGROUND_OUTPUT_TAIL_CHARS,
-      { normalizeWhitespace: false },
-    );
-    const stderr = createBoundedOutputCapture(
-      BACKGROUND_OUTPUT_HEAD_CHARS,
-      BACKGROUND_OUTPUT_TAIL_CHARS,
-      { normalizeWhitespace: false },
-    );
-    let loggedChars = 0;
-    let logCapReached = false;
-    // Capture the run's session inside the tool's ALS; deliverAndFinalize below
-    // unregisters after the process ends, possibly outside the ALS.
-    const runSession = currentSession();
-    const parentDeliveryGenerationId =
-      runSession.followUps.currentGenerationId(parentStreamId);
-    const session = new BashBackgroundSession();
-    const stopWatchingLease = onOwnedExecutionLeaseLost(executionId, () => {
-      logger.error('Execution lease was lost; stopping background command', {
-        data: { executionId, childStreamId },
-      });
-      session.interrupt();
-    });
-    const detachInterruptHandler =
-      runSession.executions
-        .getAgentHandleByStream(childStreamId)
-        ?.attachInterruptHandler(session) ?? (() => {});
-
-    const logChunk = (chunk: string, level: 'info' | 'warn'): void => {
-      if (logCapReached) return;
-      loggedChars += chunk.length;
-      if (loggedChars > BASH_BACKGROUND_LOG_CAP_CHARS) {
-        logCapReached = true;
-        logger.warn(
-          `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars: tail available in follow-up result]`,
-        );
-        return;
-      }
-      logger[level](chunk, {
-        data: backgroundBashOutputData(level === 'warn' ? 'stderr' : 'stdout'),
-      });
-    };
-
-    const startedAt = Date.now();
-    const promise = Promise.resolve(
-      runWithOwnership(() =>
-        executeCommand(command, {
-          cwd,
-          timeout: timeoutMs,
-          buffer: false,
-          // String form + explicit shell teardown: abort/timeout signal the
-          // whole process group so backgrounded jobs and piped children are
-          // torn down rather than left running.
-          mode: 'shell',
-          signal: session.signal,
-          onStdout: (chunk) => {
-            stdout.append(chunk);
-            logChunk(chunk, 'info');
-          },
-          onStderr: (chunk) => {
-            stderr.append(chunk);
-            logChunk(chunk, 'warn');
-          },
-        }),
-      ),
-    );
-
-    const logBackgroundFailure = (action: string, err: unknown): void => {
-      logger.error(`Failed to ${action} background bash result`, {
-        data: err,
-      });
-    };
-    const logPersistFailure = (
-      kind: 'report' | 'result manifest',
-      err: unknown,
-    ): void => logBackgroundFailure(`persist ${kind}`, err);
-
-    let childFinalized = false;
-    const finalizeChild = async (
-      finalizeOptions: Parameters<typeof childStream.finalize>[0],
-    ): Promise<void> => {
-      // The child is terminal before the continuation is submitted, so a
-      // synchronously claimed parent recovery can never observe it as running.
-      detachInterruptHandler();
-      await childStream.finalize(finalizeOptions);
-      childFinalized = true;
-    };
-
-    const deliverAndFinalize = async (
-      text: string,
-      finalizeOptions: Parameters<typeof childStream.finalize>[0],
-    ): Promise<void> => {
-      await finalizeChild(finalizeOptions);
-      try {
-        const delivery = await deliverChildRunFollowUp({
-          targetStreamId: parentStreamId,
-          followUp: { text, origin: 'subagent_result' },
-          session: runSession,
-          expectedGenerationId: parentDeliveryGenerationId,
-        });
-        if (delivery.kind !== 'delivered') {
-          logger.warn(
-            'Background bash follow-up dropped: parent stream is unavailable.',
-            { data: { parentStreamId } },
-          );
-        }
-      } catch (err: unknown) {
-        logBackgroundFailure('delivery', err);
-      }
-    };
-
-    void runWithOwnership(async () => {
-      try {
-        const outcome = await promise.then(
-          (result) => ({ ok: true as const, result }),
-          (error: unknown) => ({ ok: false as const, error }),
-        );
-
-        if (outcome.ok) {
-          const { result } = outcome;
-          const wallTimeMs = Date.now() - startedAt;
-          const error = result.success
-            ? undefined
-            : new ToolError(
-                `Background bash failed with exit code ${result.exitCode}.`,
-              );
-
-          const msg = formatBashDelivery(
-            executionId,
-            command,
-            wallTimeMs,
-            result,
-            toDeliveryExcerpt(stdout),
-            toDeliveryExcerpt(stderr),
-          );
-
-          await persistChildRunDeliveryBestEffort(
-            executionId,
-            msg,
-            {
-              producer: 'backgroundBash',
-              exitCode: result.exitCode,
-              wallTimeMs,
-              success: result.success,
-              timedOut: result.timedOut,
-              command,
-            },
-            logPersistFailure,
-          );
-
-          await deliverAndFinalize(msg, {
-            wallTimeMs,
-            outcome: error ? { kind: 'failed', error } : { kind: 'completed' },
-            persistence: BACKGROUND_TERMINAL_PERSISTENCE,
-            autoClose: true,
+    await runWithOwnership(() =>
+      startDetachedChildRunLoop({
+        executionId,
+        parentStreamId,
+        childStreamId,
+        agentName: 'bash',
+        // A background shell is an external process on no model budget, like
+        // the agent-CLI children (see the child-run concurrency budget note).
+        budgeted: false,
+        buildLaunch: async () => {
+          const childStream = createChildStream(executionId, parentStreamId, {
+            streamPrefix: BASH_CHILD_STREAM_PREFIX,
+            run: { kind: 'process', tool: 'bash' },
+            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+            description: command,
+            config: syntheticConfig,
           });
-          return;
-        }
-
-        const { error } = outcome;
-        const msg = formatBashError(executionId, command, error);
-        await persistChildRunDeliveryBestEffort(
-          executionId,
-          msg,
-          undefined,
-          logPersistFailure,
-        );
-
-        await deliverAndFinalize(msg, {
-          outcome: { kind: 'failed', error },
-          persistence: BACKGROUND_TERMINAL_PERSISTENCE,
-          autoClose: true,
-        });
-      } catch (err: unknown) {
-        markOwnedExecutionLeaseUndurable(executionId);
-        logBackgroundFailure('complete', err);
-        // Nothing else finalizes a background child, so an unexpected throw
-        // before the normal finalize would leave the stream RUNNING forever
-        // and its interrupt handler attached to a dead process.
-        if (!childFinalized) {
-          try {
-            await finalizeChild({
-              outcome: { kind: 'failed', error: err },
-              persistence: BACKGROUND_TERMINAL_PERSISTENCE,
-              autoClose: true,
-            });
-          } catch (finalizeError: unknown) {
-            logBackgroundFailure('finalize after failure', finalizeError);
-          }
-        }
-      } finally {
-        try {
-          await runSession.releaseExecutionLease(executionId);
-        } catch (err: unknown) {
-          logBackgroundFailure('persist final artifacts', err);
-        } finally {
-          stopWatchingLease();
-        }
-      }
-    });
+          return {
+            childStream,
+            strategy: createBackgroundBashStrategy({
+              executionId,
+              command,
+              timeoutMs,
+              cwd,
+              logger: childStream.logger,
+            }),
+            // Nobody awaits this run: own late loop failures here as trace
+            // diagnostics, since the loop already owns its one user-facing
+            // result delivery.
+            onLoopFailed: (error: unknown): void => {
+              childStream.logger.error(
+                'Background command run loop failed after launch',
+                { data: error },
+              );
+            },
+          };
+        },
+      }),
+    );
 
     return executed(
       [
