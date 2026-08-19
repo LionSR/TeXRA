@@ -1,7 +1,3 @@
-import prettyMilliseconds from 'pretty-ms';
-
-import { capitalize } from '@utils/text/stringUtils';
-
 import {
   errorBodyCandidates,
   pickNumberField,
@@ -45,43 +41,4 @@ export function parseChatGptSubscriptionLimit(
     };
   }
   return null;
-}
-
-/**
- * Format a coarse "1d 20h" / "20h 22m" / "5m" duration from a second count.
- * Day+hour, hour+minute, or minute granularity is plenty for a reset-window
- * hint; sub-minute collapses to a friendly phrase. Pure (no clock read), so it
- * stays usable from the synchronous error formatter. Backed by `pretty-ms`
- * (top 2 units) rather than hand-rolled day/hour/minute math — minutes are
- * truncated once the duration reaches a day, matching the "day granularity
- * drops minutes" rule of the original hand-rolled formatter (pretty-ms would
- * otherwise back-fill a zero hour component with minutes, e.g. "1d 58m").
- * Shared with {@link describeGlmCodingPlanLimit}, which formats its reset
- * hint identically.
- */
-export function formatResetDuration(totalSeconds: number): string {
-  const wholeMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
-  if (wholeMinutes === 0) return 'less than a minute';
-  const flooredMinutes =
-    wholeMinutes >= 1440 ? wholeMinutes - (wholeMinutes % 60) : wholeMinutes;
-  return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
-}
-
-/**
- * Human-readable message for a subscription usage-limit error: plan name (when
- * present), how long until the quota resets (from `resets_in_seconds`, no clock
- * read needed), and the actionable next step.
- */
-export function describeChatGptSubscriptionLimit(
-  info: ChatGptSubscriptionLimit,
-): string {
-  const plan = info.planType ? ` (${capitalize(info.planType)} plan)` : '';
-  const reset =
-    info.resetsInSeconds !== undefined
-      ? ` Resets in ${formatResetDuration(info.resetsInSeconds)}.`
-      : '';
-  return (
-    `ChatGPT subscription usage limit reached${plan}.${reset}` +
-    ' Switch to your own OpenAI API key to keep working, or wait until the limit resets.'
-  );
 }

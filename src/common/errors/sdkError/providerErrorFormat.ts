@@ -1,7 +1,12 @@
 import stableStringify from 'fast-json-stable-stringify';
 import { StatusCodes } from 'http-status-codes';
+import prettyMilliseconds from 'pretty-ms';
 
 import { safeParseJson } from '@common/parsing/safeParseJson';
+import {
+  type QuotaFallbackExhaustionReason,
+  QUOTA_FALLBACK_ROUTES,
+} from '@shared/quotaFallbackRoutes';
 import {
   type ErrorContext,
   type ErrorLogData,
@@ -15,6 +20,7 @@ import {
   extractErrorMessage,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
+import { capitalize } from '@utils/text/stringUtils';
 
 import {
   causeChain,
@@ -44,24 +50,14 @@ import {
   isUpstreamCreditDepletedBody,
   safeGetReasonPhrase,
 } from './errorInspection';
+import { parseChatGptSubscriptionLimit } from './chatgptSubscriptionDetection';
+import { parseKimiCodeSubscriptionLimit } from './kimiCodeSubscriptionDetection';
 import {
-  describeChatGptSubscriptionLimit,
-  parseChatGptSubscriptionLimit,
-} from './chatgptSubscriptionDetection';
-import {
-  describeKimiCodeSubscriptionLimit,
-  parseKimiCodeSubscriptionLimit,
-} from './kimiCodeSubscriptionDetection';
-import {
-  describeGlmCodingPlanLimit,
   describeGlmCodingPlanRateLimit,
   isGlmCodingPlanRateLimit,
   parseGlmCodingPlanLimit,
 } from './glmCodingPlanDetection';
-import {
-  describeXaiSubscriptionLimit,
-  parseXaiSubscriptionLimit,
-} from './xaiSubscriptionDetection';
+import { parseXaiSubscriptionLimit } from './xaiSubscriptionDetection';
 import {
   type SdkErrorEntry,
   SDK_ERRORS,
@@ -77,41 +73,72 @@ interface QuotaLimitMatch {
   readonly message: string;
 }
 
+/** What a quota-limit body can report; only ChatGPT carries a plan name. */
+interface QuotaLimitInfo {
+  readonly planType?: string;
+  readonly resetsInSeconds?: number;
+}
+
 /**
- * First matching quota-fallback detector. Order is the catalog's: ChatGPT,
- * Grok, then coding plans. Reasons are mutually exclusive, so the first hit
- * is the only hit.
+ * Quota-limit body parsers, keyed by the catalog's exhaustion reason. Total
+ * over {@link QuotaFallbackExhaustionReason}, so a fifth `QUOTA_FALLBACK_ROUTES`
+ * entry fails to compile until its detector lands rather than shipping a
+ * switchable route with no error copy.
+ */
+const QUOTA_LIMIT_PARSERS: Record<
+  QuotaFallbackExhaustionReason,
+  (err: unknown, rawErrorBody: unknown) => QuotaLimitInfo | null
+> = {
+  'chatgpt-subscription': (_err, rawErrorBody) =>
+    parseChatGptSubscriptionLimit(rawErrorBody),
+  'xai-subscription': parseXaiSubscriptionLimit,
+  'kimi-code-subscription': parseKimiCodeSubscriptionLimit,
+  'glm-coding-plan': (_err, rawErrorBody) =>
+    parseGlmCodingPlanLimit(rawErrorBody),
+};
+
+/**
+ * Format a coarse "1d 20h" / "20h 22m" / "5m" duration from a second count.
+ * Day+hour, hour+minute, or minute granularity is plenty for a reset-window
+ * hint; sub-minute collapses to a friendly phrase. Pure (no clock read), so it
+ * stays usable from this synchronous formatter. Backed by `pretty-ms` (top 2
+ * units) rather than hand-rolled day/hour/minute math — minutes are truncated
+ * once the duration reaches a day, matching the "day granularity drops
+ * minutes" rule of the original hand-rolled formatter (pretty-ms would
+ * otherwise back-fill a zero hour component with minutes, e.g. "1d 58m").
+ */
+function formatResetDuration(totalSeconds: number): string {
+  const wholeMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
+  if (wholeMinutes === 0) return 'less than a minute';
+  const flooredMinutes =
+    wholeMinutes >= 1440 ? wholeMinutes - (wholeMinutes % 60) : wholeMinutes;
+  return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
+}
+
+/**
+ * First matching quota-fallback detector, walked in catalog order (ChatGPT,
+ * Grok, then coding plans). Reasons are mutually exclusive, so the first hit is
+ * the only hit. The sentence is built from the matched route's own noun
+ * phrases, so the retry copy can never name a different source or fallback
+ * than the preference switch the user is about to accept.
  */
 function detectQuotaLimit(
   err: unknown,
   rawErrorBody: unknown,
 ): QuotaLimitMatch | undefined {
-  const chatgpt = parseChatGptSubscriptionLimit(rawErrorBody);
-  if (chatgpt) {
+  for (const route of QUOTA_FALLBACK_ROUTES) {
+    const info = QUOTA_LIMIT_PARSERS[route.exhaustionReason](err, rawErrorBody);
+    if (!info) continue;
+    const plan = info.planType ? ` (${capitalize(info.planType)} plan)` : '';
+    const reset =
+      info.resetsInSeconds !== undefined
+        ? ` Resets in ${formatResetDuration(info.resetsInSeconds)}.`
+        : '';
     return {
-      exhaustionReason: 'chatgpt-subscription',
-      message: describeChatGptSubscriptionLimit(chatgpt),
-    };
-  }
-  const grok = parseXaiSubscriptionLimit(err, rawErrorBody);
-  if (grok) {
-    return {
-      exhaustionReason: 'xai-subscription',
-      message: describeXaiSubscriptionLimit(grok),
-    };
-  }
-  const kimi = parseKimiCodeSubscriptionLimit(err, rawErrorBody);
-  if (kimi) {
-    return {
-      exhaustionReason: 'kimi-code-subscription',
-      message: describeKimiCodeSubscriptionLimit(kimi),
-    };
-  }
-  const glm = parseGlmCodingPlanLimit(rawErrorBody);
-  if (glm) {
-    return {
-      exhaustionReason: 'glm-coding-plan',
-      message: describeGlmCodingPlanLimit(glm),
+      exhaustionReason: route.exhaustionReason,
+      message:
+        `${route.retrySourceName} usage limit reached${plan}.${reset}` +
+        ` Switch to ${route.retryFallbackName} to keep working, or wait until the limit resets.`,
     };
   }
   return undefined;

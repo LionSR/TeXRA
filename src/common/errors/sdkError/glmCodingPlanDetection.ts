@@ -1,4 +1,3 @@
-import { formatResetDuration } from './chatgptSubscriptionDetection';
 import {
   errorBodyCandidates,
   pickNumberField,
@@ -112,20 +111,5 @@ export function describeGlmCodingPlanRateLimit(): string {
   return (
     'GLM Coding Plan rate limit reached. Wait a moment and retry; the plan is ' +
     'still active.'
-  );
-}
-
-/**
- * Human-readable message for a GLM Coding Plan usage-limit error: how long
- * until the quota resets (when reported) and the actionable next step.
- */
-export function describeGlmCodingPlanLimit(info: GlmCodingPlanLimit): string {
-  const reset =
-    info.resetsInSeconds !== undefined
-      ? ` Resets in ${formatResetDuration(info.resetsInSeconds)}.`
-      : '';
-  return (
-    `GLM Coding Plan usage limit reached.${reset}` +
-    ' Switch to the regular GLM endpoint to keep working, or wait until the limit resets.'
   );
 }

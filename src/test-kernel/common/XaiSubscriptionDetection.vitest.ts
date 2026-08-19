@@ -5,10 +5,7 @@ import {
   attachSdkCredentialRoute,
   detectSdkCredentialRoute,
 } from '@common/errors/sdkError/sdkRequestEndpoint';
-import {
-  describeXaiSubscriptionLimit,
-  parseXaiSubscriptionLimit,
-} from '@common/errors/sdkError/xaiSubscriptionDetection';
+import { parseXaiSubscriptionLimit } from '@common/errors/sdkError/xaiSubscriptionDetection';
 
 const USAGE_LIMIT_BODY = {
   message: "You've reached your weekly usage limit.",
@@ -47,12 +44,6 @@ describe('parseXaiSubscriptionLimit', () => {
       }),
     ).toBeNull();
   });
-
-  it('formats a human-readable reset hint', () => {
-    expect(describeXaiSubscriptionLimit({ resetsInSeconds: 3600 })).toContain(
-      'Resets in 1h',
-    );
-  });
 });
 
 describe('formatProviderHttpError for Grok subscription limits', () => {
@@ -62,5 +53,8 @@ describe('formatProviderHttpError for Grok subscription limits', () => {
     expect(providerError.exhaustionReason).toBe('xai-subscription');
     expect(providerError.userRetryable).toBe(true);
     expect(providerError.message).toContain('Grok subscription usage limit');
+    expect(providerError.message).toContain(
+      'Resets in 1h. Switch to your own xAI API key',
+    );
   });
 });
