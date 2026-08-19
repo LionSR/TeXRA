@@ -7,6 +7,7 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import {
+  parseSourceFile,
   REPO_ROOT,
   sourceFilesUnder,
   toRepoPath as repoRelative,
@@ -277,14 +278,7 @@ function collectSubsystemEdges(): SubsystemEdge[] {
       continue;
     }
 
-    const sourceFile = ts.createSourceFile(
-      file,
-      readFileSync(file, 'utf8'),
-      ts.ScriptTarget.Latest,
-      true,
-      file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-    );
-    visitImports(sourceFile, file, from, edges);
+    visitImports(parseSourceFile(file), file, from, edges);
   }
 
   return [...edges.entries()]

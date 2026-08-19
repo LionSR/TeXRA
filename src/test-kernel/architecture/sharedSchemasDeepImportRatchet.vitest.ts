@@ -28,7 +28,12 @@ import { dirname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-import { REPO_ROOT, sourceFilesUnder, toRepoPath } from '../support/repoScan';
+import {
+  parseSourceFile,
+  REPO_ROOT,
+  sourceFilesUnder,
+  toRepoPath,
+} from '../support/repoScan';
 
 const BASELINE_FILE =
   'config/ratchets/shared-schemas-deep-import-baseline.json';
@@ -77,20 +82,9 @@ interface SchemasBaseline {
   gratuitous: DeepImports;
 }
 
-function parseSourceFile(
-  file: string,
-  text = readFileSync(file, 'utf8'),
-): ts.SourceFile {
-  // No parent pointers: nothing here walks upward, and setting them roughly
-  // doubles the parse cost across ~2k files.
-  return ts.createSourceFile(
-    file,
-    text,
-    ts.ScriptTarget.Latest,
-    false,
-    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-}
+// No parent pointers: nothing here walks upward, and setting them roughly
+// doubles the parse cost across ~2k files.
+const NO_PARENT_NODES = { setParentNodes: false } as const;
 
 function resolveRelative(
   fromFile: string,
@@ -332,7 +326,7 @@ function schemaModuleExports(
   }
   active.add(file);
   const exports: ModuleExports = new Map();
-  const sourceFile = parseSourceFile(file);
+  const sourceFile = parseSourceFile(file, NO_PARENT_NODES);
 
   for (const statement of sourceFile.statements) {
     if (!hasExportModifier(statement)) continue;
@@ -574,7 +568,7 @@ function collectCurrent(documentedFloors: DeepImports = {}): CollectedSchemas {
       const text = readFileSync(file, 'utf8');
       if (!text.includes(DEEP_IMPORT_PREFIX)) continue;
       for (const reference of deepImportReferences(
-        parseSourceFile(file, text),
+        parseSourceFile(file, { ...NO_PARENT_NODES, text }),
       )) {
         const resolvedSpaces = reference.bindings?.map((binding) =>
           reachableSpace(fullSurface, reference.specifier, binding, moduleMemo),
@@ -675,9 +669,9 @@ function contractedSurface(
 
 describe('@shared/schemas deep-import ratchet', () => {
   it('finds every TypeScript module-loading form', () => {
-    const source = parseSourceFile(
-      'probe.ts',
-      `
+    const source = parseSourceFile('probe.ts', {
+      ...NO_PARENT_NODES,
+      text: `
         import { AgentCategory } from '@shared/schemas/agent';
         export { AgentCategory } from '@shared/schemas/agent';
         import defaultAgent from '@shared/schemas/agent';
@@ -693,7 +687,7 @@ describe('@shared/schemas deep-import ratchet', () => {
         const importPath = import.meta.resolve('@shared/schemas/agent');
         type Category = import('@shared/schemas/agent').AgentCategory;
       `,
-    );
+    });
 
     const specifier = '@shared/schemas/agent';
     const named = (
