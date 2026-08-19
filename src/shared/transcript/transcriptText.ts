@@ -13,15 +13,10 @@ import yaml from 'yaml';
 
 import { collapseWhitespace, splitContentLines } from '@utils/text/stringUtils';
 
-export interface TextMetrics {
+/** One text-bearing field of a transcript row. */
+export interface TranscriptText {
   /** Lines in the untruncated text; a trailing newline is not a line. */
   readonly lineCount: number;
-  /** UTF-16 length of the untruncated text. */
-  readonly charCount: number;
-}
-
-/** One text-bearing field of a transcript row. */
-export interface TranscriptText extends TextMetrics {
   /** The complete text, exactly as the producer wrote it. */
   readonly full: string;
   /** Whitespace-collapsed single line — still untruncated. For one-line
@@ -33,7 +28,6 @@ const EMPTY_TRANSCRIPT_TEXT: TranscriptText = {
   full: '',
   oneLine: '',
   lineCount: 0,
-  charCount: 0,
 };
 
 export function transcriptText(raw: string): TranscriptText {
@@ -42,7 +36,6 @@ export function transcriptText(raw: string): TranscriptText {
     full: raw,
     oneLine: collapseWhitespace(raw),
     lineCount: splitContentLines(raw).length,
-    charCount: raw.length,
   };
 }
 
