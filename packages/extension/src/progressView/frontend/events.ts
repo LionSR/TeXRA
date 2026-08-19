@@ -5,12 +5,11 @@
 
 import type {
   GettingStartedActionDetail,
+  PermissionPayload,
   UserQuestionAnswers,
 } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
-
-import type { PermissionState } from './permissionState';
 
 // =============================================================================
 // Event Detail Types
@@ -145,7 +144,7 @@ export type ApprovalDecision<K extends ApprovalPermissionKind> = Extract<
 /** A permission and the only decisions valid for that permission kind. */
 export type PermissionActionDetail<K extends PermissionKind = PermissionKind> =
   {
-    [P in K]: Extract<PermissionState, { kind: P }> & {
+    [P in K]: Extract<PermissionPayload, { kind: P }> & {
       decision: PermissionDecision<P>;
     };
   }[K];
@@ -189,7 +188,7 @@ export const ProgressEvents = {
   compileFixerRun: () => createEvent('compile-fixer-run', undefined),
 
   permissionAction: <K extends PermissionKind>(
-    permission: Extract<PermissionState, { kind: K }>,
+    permission: Extract<PermissionPayload, { kind: K }>,
     decision: PermissionDecision<K>,
   ) => createEvent('permission-action', { ...permission, decision }),
 

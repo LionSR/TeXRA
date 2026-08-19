@@ -10,6 +10,7 @@ import { createContext } from '@lit/context';
 // Local imports - progress view
 import type {
   InquiryThreadUpdatedEvent,
+  PermissionPayload,
   PhaseStage,
   StreamLifecycleStatus,
   StreamLogEntry,
@@ -21,7 +22,6 @@ import type {
 import type { TranscriptRow } from '@shared/transcript';
 
 // Local imports - progress view components
-import type { PermissionState } from './permissionState';
 
 /** Context value for stream state, providing all data needed by stream content components. */
 export interface StreamContextValue {
@@ -98,7 +98,7 @@ export const streamLogContext = createContext<StreamLogContextValue>(
   'progress-stream-log',
 );
 
-export const permissionsContext = createContext<PermissionState[]>(
+export const permissionsContext = createContext<PermissionPayload[]>(
   'progress-permissions',
 );
 

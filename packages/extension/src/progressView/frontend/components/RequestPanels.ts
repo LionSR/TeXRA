@@ -40,7 +40,7 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared schemas
-import type { StreamTabId } from '@shared/schemas';
+import type { PermissionPayload, StreamTabId } from '@shared/schemas';
 
 // Local imports - shared utilities
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -50,7 +50,7 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { groupBy } from '@utils/core';
 import { isTextInput, selectExternalInquiryKey } from './RequestPanelsState';
-import { getPermissionKey, type PermissionState } from '../permissionState';
+import { getPermissionKey } from '../permissionState';
 import { streamDisplayLabel } from '../utils';
 
 // Local imports - progress view contexts
@@ -76,7 +76,7 @@ import './UserQuestionPanel';
 
 /** One section per permission kind: its chrome and the element rendering it. */
 interface SectionConfig {
-  readonly kind: PermissionState['kind'];
+  readonly kind: PermissionPayload['kind'];
   readonly tag: ReturnType<typeof literal>;
   readonly cssClass: string;
   readonly icon: TeXRAIconName;
@@ -144,7 +144,7 @@ const PANEL_MARKER_SELECTOR = '[data-request-panel]';
 
 function renderPanel(
   section: SectionConfig,
-  permission: PermissionState,
+  permission: PermissionPayload,
   armed: boolean,
 ): TemplateResult {
   // `armed` marks the panel the y/n accelerators will act on. Sections render
@@ -160,7 +160,7 @@ function renderPanel(
 }
 
 function externalInquiryKeys(
-  permissions: readonly PermissionState[],
+  permissions: readonly PermissionPayload[],
 ): string[] {
   return permissions
     .filter(
@@ -186,7 +186,7 @@ export class RequestPanels extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) permissions: PermissionState[] = [];
+  @property({ attribute: false }) permissions: PermissionPayload[] = [];
 
   /** Canonical selection for the external-inquiry carousel. */
   @state() private selectedExternalInquiryKey: string | null = null;
@@ -203,12 +203,12 @@ export class RequestPanels extends LitElement {
    */
   @consume({ context: permissionsContext, subscribe: true })
   @state()
-  private allPermissions: PermissionState[] = [];
+  private allPermissions: PermissionPayload[] = [];
 
   /** Memoized permission groups - recomputed in willUpdate() when permissions change. */
   private permissionsByKind: ReadonlyMap<
-    PermissionState['kind'],
-    PermissionState[]
+    PermissionPayload['kind'],
+    PermissionPayload[]
   > = new Map();
 
   /** True when pending requests belong to more than one identified run. */
@@ -221,7 +221,7 @@ export class RequestPanels extends LitElement {
     if (changedProperties.has('permissions')) {
       const previousKeys = externalInquiryKeys(
         (changedProperties.get('permissions') as
-          PermissionState[] | undefined) ?? [],
+          PermissionPayload[] | undefined) ?? [],
       );
       this.permissionsByKind = groupBy(this.permissions, (p) => p.kind);
       this.selectedExternalInquiryKey = selectExternalInquiryKey(
@@ -265,7 +265,7 @@ export class RequestPanels extends LitElement {
    * carousel does not even render, while the keypress landed on the visible
    * one.
    */
-  private get armedPermission(): PermissionState | null {
+  private get armedPermission(): PermissionPayload | null {
     const newest = this.permissions[0];
     if (!newest) return null;
     return (
@@ -293,7 +293,7 @@ export class RequestPanels extends LitElement {
     `;
   }
 
-  private permissionsFor(kind: PermissionState['kind']): PermissionState[] {
+  private permissionsFor(kind: PermissionPayload['kind']): PermissionPayload[] {
     return this.permissionsByKind.get(kind) ?? [];
   }
 
@@ -320,7 +320,7 @@ export class RequestPanels extends LitElement {
 
   private renderSection(
     config: SectionConfig,
-    permissions: PermissionState[],
+    permissions: PermissionPayload[],
   ): TemplateResult | typeof nothing {
     if (permissions.length === 0) return nothing;
 
@@ -348,7 +348,7 @@ export class RequestPanels extends LitElement {
    */
   private renderRequest(
     config: SectionConfig,
-    permission: PermissionState,
+    permission: PermissionPayload,
     armed: boolean,
   ): TemplateResult {
     const panel = renderPanel(config, permission, armed);
@@ -377,7 +377,7 @@ export class RequestPanels extends LitElement {
    */
   private renderExternalInquirySection(
     config: SectionConfig,
-    perms: PermissionState[],
+    perms: PermissionPayload[],
   ): TemplateResult | typeof nothing {
     if (perms.length === 0) return nothing;
 
@@ -433,7 +433,7 @@ export class RequestPanels extends LitElement {
     `;
   }
 
-  private get externalInquiries(): PermissionState[] {
+  private get externalInquiries(): PermissionPayload[] {
     return this.permissionsFor(PERMISSION_KIND.EXTERNAL_INQUIRY);
   }
 
@@ -529,7 +529,7 @@ export class RequestPanels extends LitElement {
    * (approval → bash → retry → proposal) and would target the wrong panel
    * when mixed kinds are pending.
    */
-  private findPanelFor(permission: PermissionState): BaseRequestPanel | null {
+  private findPanelFor(permission: PermissionPayload): BaseRequestPanel | null {
     const panels = this.renderRoot.querySelectorAll<BaseRequestPanel>(
       PANEL_MARKER_SELECTOR,
     );
