@@ -1,13 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
-import {
-  inferAndLogPersistedModelHandlerCompatibilityKey,
-  inferPersistedFlowModelHandlerCompatibilityKey,
-} from '@agent/runtime/modelHandlerCompatibilityInference';
+import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 
 const info = vi.fn<AgentTrace['info']>();
-const logger: Pick<AgentTrace, 'info'> = { info };
 
 const GOOGLE_KEYLESS_ERROR =
   'Persisted Google sessions without a model-handler identity cannot be resumed.';
@@ -43,13 +39,6 @@ describe('model handler compatibility inference', () => {
         ],
       }),
     ).toBe('ModelHandlerOpenRouterNative');
-    expect(info).not.toHaveBeenCalled();
-  });
-
-  it('does not log when inference is inconclusive', () => {
-    expect(
-      inferAndLogPersistedModelHandlerCompatibilityKey('gpt54', logger),
-    ).toBeUndefined();
     expect(info).not.toHaveBeenCalled();
   });
 });

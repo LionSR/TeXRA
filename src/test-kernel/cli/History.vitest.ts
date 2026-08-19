@@ -236,7 +236,6 @@ async function seedSidecarOnlySnapshots(
 function mockBulkDelete(deleted: string[]): void {
   mocks.deleteAllExecutions.mockResolvedValue({
     deleted,
-    notFound: [],
     active: [],
     failed: [],
   });

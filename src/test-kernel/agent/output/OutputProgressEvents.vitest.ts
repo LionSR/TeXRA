@@ -197,12 +197,8 @@ describe('output progress events', () => {
         },
         {
           summary: {
-            storageKey: 'run:output-node' as StorageKey,
-            currRound: 2,
             fileInfos: [fileInfo],
             filesToOpen: [openedLocation],
-            outputFile: outputLocation,
-            endTurn: false,
           },
           compileFailures: [],
           compiledArtifacts: [],
@@ -295,7 +291,7 @@ describe('output progress events', () => {
         endTurn: false,
       },
       {
-        summary: { ...fixture.summary, currRound: 1 },
+        summary: fixture.summary,
         compileFailures: [],
         compileResult,
         compiledArtifacts: [],
