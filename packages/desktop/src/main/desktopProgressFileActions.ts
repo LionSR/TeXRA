@@ -7,6 +7,11 @@ import { appSignals } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
+import {
+  latexdiffAllFailedMessage,
+  LATEXDIFF_GENERATE_FAILED_MESSAGE,
+  NO_LATEXDIFF_OPERATIONS_MESSAGE,
+} from '@latex/latexdiff/latexdiffCopy';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
 import { runLatexdiffForExecution } from '@latex/latexdiff/runLatexdiff';
 import type {
@@ -155,16 +160,14 @@ export class DesktopProgressFileActions {
   ): Promise<void> {
     const outcome = await this.runSharedLatexdiff(runContext);
     if (!outcome || outcome.results.length === 0) {
-      await this.ui.showInfoMessage(
-        'No LaTeX diff operations available for this run.',
-      );
+      await this.ui.showInfoMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
       return;
     }
 
     if (await this.openSharedLatexdiffResults(outcome)) return;
 
     await this.ui.showErrorMessage(
-      `All LaTeX diff operations failed (math markup: "${DEFAULT_MATH_MARKUP}").`,
+      latexdiffAllFailedMessage(DEFAULT_MATH_MARKUP),
     );
   }
 
@@ -179,7 +182,7 @@ export class DesktopProgressFileActions {
 
     if (!result.success || !result.diffPath) {
       await this.ui.showErrorMessage(
-        result.message ?? 'Failed to generate diff file.',
+        result.message ?? LATEXDIFF_GENERATE_FAILED_MESSAGE,
       );
       return;
     }

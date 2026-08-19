@@ -74,24 +74,31 @@ import {
 import type {
   ExecutionId,
   FileOpResult,
-  InstructionAction,
   MainViewExecuteMessage,
   MainViewPersistedState,
   RequestOpenFilePayload,
   SettingsTabPanelName,
   StreamTabId,
 } from '@shared/schemas';
-import { INSTRUCTION_ACTION } from '@shared/schemas';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   formatActiveStreamRetention,
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
-import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
+import { formatInstructionActionHint } from '@shared/copy/instructionActionHint';
+import {
+  ALL_STREAMS_DELETED_CAUSE,
+  RETRY_REQUEST_CLEARED_CAUSE,
+  SESSION_DISPOSED_CAUSE,
+} from '@shared/copy/interactionCancellation';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
-import { findTranscriptSpillFile } from '@transcript/spillArtifacts';
+import {
+  findTranscriptSpillFile,
+  spillArtifactOpenFailedMessage,
+  SPILL_ARTIFACT_DELETED_MESSAGE,
+} from '@transcript/spillArtifacts';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -129,20 +136,6 @@ function operationLabel(operation: WorkflowFileOperation) {
  * hosts instead of silently doing nothing.
  */
 export type DesktopStreamRevealResult = 'revealed' | 'missing';
-
-/**
- * Desktop phrasing for the {@link InstructionAction} tokens the agent core
- * emits. The extension turns each token into a command button and the CLI into
- * a stderr hint; the desktop dialog has no buttons, so it reads as a hint too.
- * The `satisfies` clause keeps the table exhaustive at compile time while the
- * lookup type stays partial, so a token from a newer producer falls back to the
- * raw token rather than printing nothing.
- */
-const INSTRUCTION_ACTION_HINT: Partial<Record<InstructionAction, string>> = {
-  [INSTRUCTION_ACTION.SET_API_KEY]: 'set your API key in Settings',
-  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'see the configuration guide',
-  [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'see the model documentation',
-} satisfies Record<InstructionAction, string>;
 
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
@@ -232,11 +225,10 @@ export class DesktopProgressBridge {
         // the info dialog. The desktop dialog carries no buttons, so the
         // action tokens the extension renders as buttons become trailing
         // hint text and `showSuppress` has no affordance to attach to.
-        const hint = instruction.actions?.length
-          ? ` (${instruction.actions
-              .map((action) => INSTRUCTION_ACTION_HINT[action] ?? action)
-              .join(', ')})`
-          : '';
+        const hint = formatInstructionActionHint(
+          instruction.actions,
+          'desktop',
+        );
         return this.settleHostDialog(
           this.options.host.showInfoMessage(`${instruction.message}${hint}`),
           'Failed to present the instruction dialog',
@@ -285,7 +277,7 @@ export class DesktopProgressBridge {
             this.session.interactions.cancel({
               streamId: stream,
               kind: 'retry',
-              cause: 'Retry request cleared.',
+              cause: RETRY_REQUEST_CLEARED_CAUSE,
             });
           }
           this.session.executions.stopAgentStream(stream, {
@@ -299,7 +291,9 @@ export class DesktopProgressBridge {
         cleanupDeletedStreams: ({ allDeleted }) => {
           if (!allDeleted) return;
           cleanupUnscopedApprovals(this.session);
-          this.session.interactions.cancel({ cause: 'All streams deleted.' });
+          this.session.interactions.cancel({
+            cause: ALL_STREAMS_DELETED_CAUSE,
+          });
           this.clearDesktopPresentationState();
           this.workflowFileActions.clearAllBackups();
         },
@@ -768,13 +762,13 @@ export class DesktopProgressBridge {
             file = await findTranscriptSpillFile(spillPath);
           } catch (error) {
             await this.options.host.showErrorMessage(
-              `Full output could not be opened: ${toErrorMessage(error)}`,
+              spillArtifactOpenFailedMessage(toErrorMessage(error)),
             );
             return;
           }
           if (!file) {
             await this.options.host.showErrorMessage(
-              'Full output is unavailable because this run artifact was deleted.',
+              SPILL_ARTIFACT_DELETED_MESSAGE,
             );
             return;
           }
