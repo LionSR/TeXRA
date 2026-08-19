@@ -352,6 +352,9 @@ describe('stream-header', () => {
     it('writes the run context and dispatches no toolbar command', async () => {
       const element = await mount({
         stream: baseStream({
+          // What buildStreamTabInfo emits for this identity — the copy path
+          // reads the label, never re-derives it from the identity.
+          label: 'stream-a',
           model: 'gemini31p',
           modelLabel: 'Gemini 3.1 Pro',
           executionId: 'a1b2c3d4',
