@@ -319,9 +319,6 @@ export async function activate(context: vscode.ExtensionContext) {
     runtimeSession.flushArtifacts(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-    appSignals.emit('extensionDeactivating', undefined),
-  );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   FileLister.initialize(context);
