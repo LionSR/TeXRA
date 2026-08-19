@@ -21,7 +21,6 @@ import {
   type SettingsStores,
 } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { setPreferKimiCode } from '@utils/config/providerConfig';
 
 import { refreshSubscriptionPreferenceViews } from '../state/codexSubscription';
 import { AgentRosterForm } from './AgentRosterForm';
@@ -56,17 +55,6 @@ export interface CreateCliConfigFormPropsInput extends CliConfigFormProps {
   readonly markGitHubTokenSet?: () => void;
   readonly refreshGitHubTokenStatus?: () => void | Promise<void>;
 }
-
-/**
- * Settings whose change alters model routing or picker availability, so the
- * cached model options must be recomputed (computeModelOptions reads both
- * toggles when resolving per-model routes).
- */
-const MODEL_ROUTING_SETTING_KEYS: ReadonlySet<string> = new Set([
-  GlobalStateKey.USE_OPENROUTER,
-  GlobalStateKey.KIMI_CODE_PREFER,
-  GlobalStateKey.GLM_CODING_PLAN,
-]);
 
 type StatusViewBase = { readonly loading: boolean; readonly error: boolean };
 
@@ -162,16 +150,14 @@ export function createCliConfigFormProps(
     availableRows: props.availableRows,
     entries: CLI_STATE_SETTINGS,
     readValue: (entry) => readSetting(entry, stores, 'cli'),
+    // The catalog row owns write consequences: `writeSetting` applies the
+    // declared mutual exclusions (Kimi Code clears OpenRouter) and
+    // `onWrite.invalidatesModelOptions` marks the rows whose change re-routes
+    // models, so this form no longer keeps its own key list.
     writeValue: async (entry, value) => {
-      if (entry.key === GlobalStateKey.KIMI_CODE_PREFER) {
-        // The runtime owner carries the OpenRouter mutual exclusion, so the
-        // form and `/api kimi-code` cannot drift.
-        await setPreferKimiCode(value === true, stores.globalState);
-      } else {
-        await writeSetting(entry, value, stores, 'cli');
-      }
+      await writeSetting(entry, value, stores, 'cli');
       if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
-      if (MODEL_ROUTING_SETTING_KEYS.has(entry.key)) {
+      if (entry.onWrite?.invalidatesModelOptions) {
         refreshSubscriptionPreferenceViews();
         if (entry.key === GlobalStateKey.USE_OPENROUTER && value === true) {
           await props.onApiModePersonal?.();
@@ -181,7 +167,7 @@ export function createCliConfigFormProps(
     resetValue: async (entry) => {
       await resetSetting(entry, stores, 'cli');
       if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
-      if (MODEL_ROUTING_SETTING_KEYS.has(entry.key)) {
+      if (entry.onWrite?.invalidatesModelOptions) {
         refreshSubscriptionPreferenceViews();
       }
     },

@@ -47,12 +47,11 @@ import {
 } from '@model/apiProviders';
 import {
   AgentCategory,
+  ALL_SETTINGS,
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_NAME,
-  SETTINGS_VIEW_CORE_SETTINGS,
-  STATE_SETTINGS,
 } from '@shared/schemas';
-import type { StateSettingEntry } from '@shared/schemas';
+import type { SurfacedSettingEntry } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   createDeferred,
@@ -125,8 +124,22 @@ afterEach(() => {
   resetCliState();
 });
 
-function entryByKey(key: string): StateSettingEntry {
-  const entry = STATE_SETTINGS.find((candidate) => candidate.key === key);
+/** A shape `/config` cannot edit inline, used by the read-only assertions. */
+const RECORD_ENTRY: SurfacedSettingEntry = {
+  key: 'texra.example.record',
+  schema: z.record(z.string(), z.string()).prefault({}),
+  description: 'A record setting with no inline editor.',
+  category: 'example',
+  slots: { cli: 'workspaceState' },
+  honoredBy: { cli: { reader: 'src/tools/toolAvailability.ts' } },
+  surfaces: { cliConfig: true },
+};
+
+function entryByKey(key: string): SurfacedSettingEntry {
+  const entry = ALL_SETTINGS.find(
+    (candidate): candidate is SurfacedSettingEntry =>
+      candidate.key === key && candidate.surfaces !== undefined,
+  );
   if (!entry) throw new Error(`missing catalog entry ${key}`);
   return entry;
 }
@@ -178,13 +191,13 @@ async function submitGitHubToken(
 }
 
 interface RenderedConfigFormProps {
-  entries?: readonly StateSettingEntry[];
-  readValue?: (entry: StateSettingEntry) => unknown;
+  entries?: readonly SurfacedSettingEntry[];
+  readValue?: (entry: SurfacedSettingEntry) => unknown;
   writeValue?: (
-    entry: StateSettingEntry,
+    entry: SurfacedSettingEntry,
     value: unknown,
   ) => void | Promise<void>;
-  resetValue?: (entry: StateSettingEntry) => void | Promise<void>;
+  resetValue?: (entry: SurfacedSettingEntry) => void | Promise<void>;
   openForm?: (formName: string) => void;
   onError?: (error: unknown) => void;
   formRenderers?: Readonly<
@@ -228,16 +241,17 @@ function openConfigFormProps(
 }
 
 describe('ConfigForm helpers', () => {
-  it('rosters exactly the CLI-consumed catalog entries', () => {
+  it('rosters exactly the catalog rows surfaced in /config', () => {
     expect([...CLI_STATE_SETTINGS].map((entry) => entry.key)).toEqual(
-      [...STATE_SETTINGS, ...SETTINGS_VIEW_CORE_SETTINGS]
-        .filter((entry) => entry.hosts.includes('cli'))
-        .map((entry) => entry.key),
+      ALL_SETTINGS.filter((entry) => entry.surfaces?.cliConfig).map(
+        (entry) => entry.key,
+      ),
     );
     expect(CLI_STATE_SETTINGS.length).toBeGreaterThan(0);
-    // Every rostered entry must be reachable from the CLI's store set.
+    // A row the CLI can edit must be one the CLI runtime actually honors.
     for (const entry of CLI_STATE_SETTINGS) {
-      expect(entry.hosts).toContain('cli');
+      expect(entry.honoredBy.cli).toBeDefined();
+      expect(entry.slots.cli).toBeDefined();
     }
   });
 
@@ -375,7 +389,7 @@ describe('ConfigForm helpers', () => {
     [WorkspaceStateKey.GIT_MARK_COMMITS, 'config'],
     [WorkspaceStateKey.LATEX_FORMATTER, 'workspaceState'],
   ])(
-    'labels the store the CLI reads from for %s (cliStore wins)',
+    'labels the store the CLI reads from for %s (its own slot wins)',
     (key, store) => {
       expect(settingStoreLabel(entryByKey(key))).toBe(store);
     },
@@ -386,16 +400,7 @@ describe('ConfigForm helpers', () => {
       settingDisplayName(entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS)),
     ).toBe('Mark agent commits');
 
-    expect(
-      settingDisplayName({
-        key: 'texra.example.record',
-        schema: z.record(z.string(), z.string()).prefault({}),
-        description: 'A record setting with no inline editor.',
-        category: 'example',
-        store: 'workspaceState',
-        hosts: ['vscode'],
-      }),
-    ).toBe('example.record');
+    expect(settingDisplayName(RECORD_ENTRY)).toBe('example.record');
   });
 
   it('builds list items showing value + store, with editable rows enabled', () => {
@@ -451,16 +456,8 @@ describe('ConfigForm helpers', () => {
   });
 
   it('marks an unsupported schema kind read-only', () => {
-    const recordEntry: StateSettingEntry = {
-      key: 'texra.example.record',
-      schema: z.record(z.string(), z.string()).prefault({}),
-      description: 'A record setting with no inline editor.',
-      category: 'example',
-      store: 'workspaceState',
-      hosts: ['vscode'],
-    };
-    expect(settingEditKind(recordEntry)).toBe('readonly');
-    const [item] = buildConfigListItems([recordEntry], () => ({}));
+    expect(settingEditKind(RECORD_ENTRY)).toBe('readonly');
+    const [item] = buildConfigListItems([RECORD_ENTRY], () => ({}));
     expect(item).toMatchObject({ disabled: true });
     expect(item?.description).toContain('read-only');
   });

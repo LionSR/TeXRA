@@ -11,9 +11,8 @@ import { KNOWN_TEXRA_KEYS } from '@cli/schemas/knownKeys';
 import * as logger from '@logger/logUtils';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import {
-  CLI_CORE_SETTING_PATHS,
+  ALL_SETTINGS,
   CORE_SETTING_PATHS,
-  EXTENSION_ONLY_CORE_SETTING_PATHS,
   AGENT_SKILLS_CONFIG_KEY,
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_EMAIL,
@@ -21,9 +20,7 @@ import {
   DEFAULT_GIT_MARK_COMMITS,
   DEFAULT_GIT_WORKTREE_SUPPORT,
   DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
-  SETTINGS_VIEW_CORE_SETTINGS,
   STATE_SETTINGS,
-  STATE_SETTING_KEYS,
   settingEnumChoices,
   settingEnumOptions,
   settingsViewSettingByKey,
@@ -37,7 +34,11 @@ import {
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
 } from '@shared/schemas';
-import type { SettingStore, StateSettingEntry } from '@shared/schemas';
+import type {
+  SettingHost,
+  SettingStore,
+  StateSettingEntry,
+} from '@shared/schemas';
 import {
   DEFAULT_HELPER_MODEL,
   PROVIDER_ENDPOINT_STATE_ENTRIES,
@@ -48,7 +49,6 @@ import {
   resetSetting,
   settingDefault,
   writeSetting,
-  type SettingsHostKind,
 } from '@shared/config/settingsAccess';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -64,11 +64,7 @@ const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'globalState',
 ]);
 
-/** Every catalog row across both tiers: state-backed plus settings-view core. */
-const ALL_CATALOG_ENTRIES: readonly StateSettingEntry[] = [
-  ...STATE_SETTINGS,
-  ...SETTINGS_VIEW_CORE_SETTINGS,
-];
+const SETTING_HOSTS: readonly SettingHost[] = ['vscode', 'cli', 'desktop'];
 
 const CLI_RUNTIME_COMMAND_PATTERN =
   /^texra\s+(?:chat|run|agents run|multi-agent run|orchestrate)\b/;
@@ -143,60 +139,62 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [GlobalStateKey.DISABLED_TOOLS]: [],
 };
 
+/** Every canonical `texra.*` key in the state-backed catalog. */
+const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
+  (entry) => entry.key,
+);
+
 describe('state settings catalog', () => {
   it('uses unique canonical keys', () => {
     assert.equal(new Set(STATE_SETTING_KEYS).size, STATE_SETTING_KEYS.length);
   });
 
-  it('every CLI-host entry names an existing consumer file', () => {
-    for (const entry of ALL_CATALOG_ENTRIES) {
-      if (!entry.hosts.includes('cli')) {
-        continue;
+  it('every honoring host names an existing reader file', () => {
+    for (const entry of ALL_SETTINGS) {
+      for (const host of SETTING_HOSTS) {
+        const honor = entry.honoredBy[host];
+        if (!honor) continue;
+        assert.ok(
+          existsSync(resolve(REPO_ROOT, honor.reader)),
+          `${entry.key} ${host} reader does not exist: ${honor.reader}`,
+        );
+        assert.ok(
+          !honor.reader.startsWith('packages/extension/') || host === 'vscode',
+          `${entry.key} ${host} reader lives inside the extension host: ${honor.reader}`,
+        );
+        assert.ok(
+          !honor.reader.startsWith('packages/cli/') || host === 'cli',
+          `${entry.key} ${host} reader lives inside the CLI host: ${honor.reader}`,
+        );
       }
-      assert.ok(
-        entry.cliConsumer,
-        `${entry.key} is surfaced to the CLI but declares no cliConsumer`,
-      );
-      assert.ok(
-        existsSync(resolve(REPO_ROOT, entry.cliConsumer as string)),
-        `${entry.key} cliConsumer does not exist: ${entry.cliConsumer}`,
-      );
     }
   });
 
-  it('every CLI-host entry documents a runtime-reachability path', () => {
-    for (const entry of ALL_CATALOG_ENTRIES) {
-      if (!entry.hosts.includes('cli')) {
-        assert.equal(
-          entry.cliRuntimeReachability,
-          undefined,
-          `${entry.key} documents CLI reachability but is not CLI-hosted`,
-        );
-        continue;
-      }
-
-      const reachability = entry.cliRuntimeReachability;
+  it('every editable CLI row documents a runtime-reachability path', () => {
+    for (const entry of ALL_SETTINGS) {
+      if (!entry.surfaces?.cliConfig) continue;
+      const honor = entry.honoredBy.cli;
+      assert.ok(
+        honor,
+        `${entry.key} is editable in /config but no CLI reader honors it`,
+      );
+      const reachability = honor.reachability;
       assert.ok(
         reachability,
-        `${entry.key} is surfaced to the CLI but declares no cliRuntimeReachability`,
+        `${entry.key} is editable in /config but declares no reachability`,
       );
       assert.match(
         reachability.command,
         CLI_RUNTIME_COMMAND_PATTERN,
         `${entry.key} reachability command is not a recognized runtime command: ${reachability.command}`,
       );
-      const cliConsumer = entry.cliConsumer;
-      assert.ok(
-        cliConsumer,
-        `${entry.key} reachability path cannot be checked without cliConsumer`,
-      );
       const throughSegments = reachability.through
         .split('->')
         .map((segment) => segment.trim())
         .filter(Boolean);
       assert.ok(
-        throughSegments.includes(cliConsumer),
-        `${entry.key} reachability path must include its cliConsumer as a path segment: ${cliConsumer}`,
+        throughSegments.includes(honor.reader),
+        `${entry.key} reachability path must include its CLI reader as a path segment: ${honor.reader}`,
       );
       for (const segment of throughSegments) {
         assert.ok(
@@ -207,28 +205,31 @@ describe('state settings catalog', () => {
     }
   });
 
-  it('uses valid, coherent storage slots', () => {
-    for (const entry of STATE_SETTINGS) {
-      assert.ok(VALID_STORES.has(entry.store), `${entry.key} invalid store`);
-      if (entry.cliStore !== undefined) {
+  it('gives every honoring host a storage slot', () => {
+    for (const entry of ALL_SETTINGS) {
+      for (const host of SETTING_HOSTS) {
+        if (!entry.honoredBy[host]) continue;
         assert.ok(
-          VALID_STORES.has(entry.cliStore),
-          `${entry.key} invalid cliStore`,
-        );
-        // A cliStore override only makes sense when the CLI consumes the entry.
-        assert.ok(
-          entry.hosts.includes('cli'),
-          `${entry.key} declares cliStore but no 'cli' host`,
-        );
-        // Global and project scope must not be mixed between the two slots.
-        const storeIsGlobal = entry.store === 'globalState';
-        const cliStoreIsGlobal = entry.cliStore === 'globalState';
-        assert.equal(
-          storeIsGlobal,
-          cliStoreIsGlobal,
-          `${entry.key} mixes global and project scope across store/cliStore`,
+          entry.slots[host],
+          `${entry.key} is honored by ${host} but has no ${host} slot`,
         );
       }
+    }
+  });
+
+  it('uses valid, coherent storage slots', () => {
+    for (const entry of ALL_SETTINGS) {
+      const slots = Object.values(entry.slots);
+      assert.ok(slots.length > 0, `${entry.key} declares no storage slot`);
+      for (const slot of slots) {
+        assert.ok(VALID_STORES.has(slot), `${entry.key} invalid slot ${slot}`);
+      }
+      // Global and project scope must not be mixed across hosts.
+      const globals = slots.filter((slot) => slot === 'globalState').length;
+      assert.ok(
+        globals === 0 || globals === slots.length,
+        `${entry.key} mixes global and project scope across hosts`,
+      );
     }
   });
 
@@ -388,8 +389,8 @@ describe('state settings catalog', () => {
     //  - provider endpoints are read by the proxy resolver used by CLI model
     //    handlers before falling back to provider defaults.
     //  - the provider routing/region toggles (Prefer Kimi Code, the China
-    //    region switches, GLM Coding Plan) are CLI-only catalog rows mirroring
-    //    the extension's PROVIDER_SETTINGS controls, read through
+    //    region switches, GLM Coding Plan) are the same catalog rows the
+    //    Models tab renders via `surfaces.models`, read through
     //    providerConfig/ProxyConfigResolver during CLI model dispatch.
     //  - the Kimi Code prefer switch is read by ModelFactory when dispatching
     //    dual-backend Kimi models in CLI runs.
@@ -399,7 +400,7 @@ describe('state settings catalog', () => {
     //    SessionHandle before bash/edit approval boundaries decide.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
-    // here, not an accident of flipping `hosts`.
+    // here, not an accident of flipping `honoredBy.cli` or `surfaces.cliConfig`.
     assert.deepEqual(
       [...CLI_STATE_SETTINGS].map((entry) => entry.key).sort(),
       [
@@ -463,76 +464,11 @@ describe('state settings catalog', () => {
   });
 });
 
-// Reader-file registry for the host-split guardrail below. The schema declares
-// only the setting-path lists; the files that read each key (and the host side
-// they sit on) are implementation knowledge, so they live here with the
-// file-existence + host-split check that consumes them.
-const CLI_CORE_SETTING_READER_FILES = {
-  'src/agent/runtime/selectAutoOpenFinalOutput.ts': [
-    'agentOutputs.autoOpenFinal',
-  ],
-  'src/agent/runtime/childRunBudget.ts': ['childRunConcurrencyBudget'],
-  'src/tools/goal/goalFeatureFlag.ts': ['goal.enabled'],
-  'src/agent/runtime/ModelFactory.ts': ['model.useOpenAIResponsesAPI'],
-  'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts': [
-    'model.useGoogleInteractionsServerState',
-  ],
-  'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts': [
-    'model.useBackgroundResponses',
-    'model.gpt5ReasoningSummary',
-  ],
-  'src/agent/modelHandlers/openai/modelHandlerOpenAI.ts': [
-    'model.openaiParallelToolCalls',
-  ],
-  'src/agent/modelHandlers/ModelHandler.ts': [
-    'model.compactionThresholdPercent',
-  ],
-  'src/agent/core/flows/ModelInvocationNode.ts': ['model.retry.maxAttempts'],
-  // Thin provider modules own the public prefer-switch surface; the shared
-  // factory in subscriptionPreference.ts is not a separate consumer key.
-  'src/model/codex/codexPreference.ts': ['chatgptCodex.preferSubscription'],
-  'src/model/xai/xaiPreference.ts': ['xaiGrok.preferSubscription'],
-  'src/utils/media/img.ts': ['maxImageDimension'],
-  'src/tools/latex/ExtractBibliographyTool.ts': ['bib.defaultPath'],
-  'src/tools/zotero/bbtClient.ts': ['bib.zoteroPort'],
-  'src/latex/formatter/latexindentpt.ts': ['latex.latexindentConfig'],
-  'src/latex/formatter/texfmt.ts': ['latex.texfmtConfig'],
-  'src/latex/texTools.ts': [
-    'latex.tikzInputDirectory',
-    'latex.includeWorkspaceInTexinputs',
-  ],
-  'src/latex/TikzPictureManager.ts': ['latex.tikzTemplate'],
-  'src/replacement/engine.ts': [
-    'latex.wrapCritiqueInAlign',
-    'latex.enabledReplacements',
-    'latex.enabledReplacementsRegex',
-    'latex.customReplacementsRegex',
-    'latex.customReplacements',
-  ],
-  'src/tools/approval/latexPreview.ts': ['latexdiff.tempFileLocation'],
-  // Only the extension's git commands read the commit count, but the setup
-  // assistant's `update_config` tool writes it from any host, so a CLI-written
-  // value must not then be reported as unknown.
-  'src/tools/setup/ConfigTools.ts': ['git.numberOfCommitsToShow'],
-  'src/tools/media/audio.ts': ['audio.soxPath'],
-  'src/logger/logUtils.ts': ['logger.debugMode'],
-  'src/telemetry/UsageLogService.ts': ['telemetry.enabled'],
-  'src/agent/debug/debugMessageSaver.ts': ['debug.saveModelIO'],
-  'src/agent/prompt/userVars.ts': ['skills.enabled'],
-  'src/tools/approval/toolEditApproval.ts': ['toolUse.requireEditApproval'],
-  'src/tools/approval/bashApproval.ts': ['toolUse.requireBashApproval'],
-} as const;
-
-const EXTENSION_ONLY_CORE_SETTING_READER_FILES = {
-  'packages/extension/src/frontend/review/agentReviewCommitWatcher.ts': [
-    'agentReview.runOnCommit',
-  ],
-} as const;
-
 describe('knownKeys derivation', () => {
   it('recognizes config-slot CLI keys, but warns on state.json keys in config.json', () => {
-    for (const entry of CLI_STATE_SETTINGS) {
-      const readFromConfig = (entry.cliStore ?? entry.store) === 'config';
+    for (const entry of ALL_SETTINGS) {
+      if (!entry.honoredBy.cli) continue;
+      const readFromConfig = entry.slots.cli === 'config';
       assert.equal(
         KNOWN_TEXRA_KEYS.has(entry.key),
         readFromConfig,
@@ -548,65 +484,27 @@ describe('knownKeys derivation', () => {
     );
   });
 
-  it('recognizes Core keys a non-VS-Code host reads', () => {
-    for (const path of CLI_CORE_SETTING_PATHS) {
-      assert.ok(
-        KNOWN_TEXRA_KEYS.has(`texra.${path}`),
-        `texra.${path} is CLI-consumed but not recognized`,
-      );
-    }
-  });
-
-  it('warns on Core keys only the VS Code extension reads', () => {
-    for (const path of EXTENSION_ONLY_CORE_SETTING_PATHS) {
-      assert.equal(
-        KNOWN_TEXRA_KEYS.has(`texra.${path}`),
-        false,
-        `texra.${path} is extension-only, so config.json entries must warn`,
-      );
-    }
-  });
-});
-
-describe('core settings host split', () => {
-  it('files every Core setting path on exactly one side', () => {
-    assert.deepEqual(
-      [...CLI_CORE_SETTING_PATHS, ...EXTENSION_ONLY_CORE_SETTING_PATHS].sort(),
-      [...CORE_SETTING_PATHS].sort(),
-      'every Core setting must be filed as CLI-consumed or extension-only',
+  it('recognizes exactly the Core paths a CLI reader honors', () => {
+    // The derived whitelist replaced two hand-kept path lists; this pins the
+    // whole Core half of it so a mis-filed `honoredBy` cannot silently widen or
+    // narrow what `.texra/config.json` accepts.
+    const honoredCorePaths = CORE_SETTING_PATHS.filter((path) =>
+      KNOWN_TEXRA_KEYS.has(`texra.${path}`),
     );
-  });
-
-  it('names an existing consumer file on the side it is filed under', () => {
-    for (const consumer of Object.keys(CLI_CORE_SETTING_READER_FILES)) {
-      assert.ok(
-        existsSync(resolve(REPO_ROOT, consumer)),
-        `CLI consumer does not exist: ${consumer}`,
-      );
-      assert.ok(
-        !consumer.startsWith('packages/extension/'),
-        `CLI consumer lives inside the extension host: ${consumer}`,
-      );
-    }
-    for (const consumer of Object.keys(
-      EXTENSION_ONLY_CORE_SETTING_READER_FILES,
-    )) {
-      assert.ok(
-        existsSync(resolve(REPO_ROOT, consumer)),
-        `extension consumer does not exist: ${consumer}`,
-      );
-      assert.ok(
-        consumer.startsWith('packages/extension/'),
-        `extension-only consumer lives outside the extension host: ${consumer}`,
-      );
-    }
+    assert.deepEqual(
+      [...honoredCorePaths].sort(),
+      CORE_SETTING_PATHS.filter(
+        (path) => path !== 'agentReview.runOnCommit',
+      ).toSorted(),
+      'only agentReview.runOnCommit is extension-only',
+    );
   });
 });
 
 describe('settingsAccess', () => {
   async function assertResetRestoresDefault(options: {
     key: string;
-    host: SettingsHostKind;
+    host: SettingHost;
     storeName: 'config' | 'workspaceState';
     expectedDefault: unknown;
   }): Promise<void> {
@@ -627,7 +525,7 @@ describe('settingsAccess', () => {
     const { stores } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
     assert.equal(
-      readSetting(entry, stores, 'extension'),
+      readSetting(entry, stores, 'vscode'),
       DEFAULT_GIT_MARK_COMMITS,
     );
   });
@@ -635,13 +533,13 @@ describe('settingsAccess', () => {
   it('routes extension writes to the canonical store', async () => {
     const { stores, config, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    await writeSetting(entry, false, stores, 'extension');
+    await writeSetting(entry, false, stores, 'vscode');
     assert.equal(isStored(workspaceState, entry.key), true);
     assert.equal(isStored(config, entry.key), false);
-    assert.equal(readSetting(entry, stores, 'extension'), false);
+    assert.equal(readSetting(entry, stores, 'vscode'), false);
   });
 
-  it('routes CLI writes to the cliStore override (config)', async () => {
+  it('routes CLI writes to the CLI slot (config)', async () => {
     const { stores, config, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
     await writeSetting(entry, false, stores, 'cli');
@@ -660,7 +558,7 @@ describe('settingsAccess', () => {
     const entry = settingsViewSettingByKey('texra.telemetry.enabled');
     assert.ok(entry);
 
-    await writeSetting(entry, false, stores, 'extension');
+    await writeSetting(entry, false, stores, 'vscode');
 
     assert.deepEqual(config.inspect(entry.key), {
       globalValue: false,
@@ -684,14 +582,14 @@ describe('settingsAccess', () => {
     const { stores } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
     await assert.rejects(() =>
-      writeSetting(entry, 'not-a-formatter', stores, 'extension'),
+      writeSetting(entry, 'not-a-formatter', stores, 'vscode'),
     );
   });
 
   it('reset deletes the key so the default reappears', async () => {
     await assertResetRestoresDefault({
       key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
-      host: 'extension',
+      host: 'vscode',
       storeName: 'workspaceState',
       expectedDefault: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
     });
@@ -713,7 +611,7 @@ describe('settingsAccess', () => {
     void workspaceState.update(entry.key, 'stale-bogus-value');
     try {
       assert.equal(
-        readSetting(entry, stores, 'extension'),
+        readSetting(entry, stores, 'vscode'),
         LATEX_CONFIG_DEFAULTS.latexFormatter,
       );
       assert.equal(warn.mock.calls.length, 1);

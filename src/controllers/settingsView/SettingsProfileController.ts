@@ -14,13 +14,13 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
 } from '@shared/schemas';
+import { modelsTabSettings, type SettingHost } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   PROVIDER_DISPLAY_NAMES,
-  PROVIDER_SETTINGS,
   PROVIDER_URLS,
-  type ProviderSettingDef,
 } from '@shared/constants/providers';
+import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 import {
   getProviderDisplayName,
   getProviderEndpoint,
@@ -65,8 +65,7 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
 export type SettingsProfileConfigValue = boolean | number;
 
 type ProviderSettingUpdateResult =
-  | { kind: 'updated'; affectsModelAvailability: boolean }
-  | { kind: 'rejected'; key: string };
+  { kind: 'updated' } | { kind: 'rejected'; key: string };
 
 type ApiAccessModeUpdate =
   | {
@@ -85,6 +84,8 @@ type ApiAccessModeUpdate =
  * lookups built on it — is host-agnostic and read straight from its modules.
  */
 interface SettingsProfileControllerDeps {
+  /** The host reading the catalog, so `slots` resolves to its own entry. */
+  readonly host: SettingHost;
   readonly globalState: StateStore;
   loadProviderKeyStatuses(): Promise<
     Record<string, ProviderKeyStatus['status']>
@@ -96,22 +97,11 @@ interface SettingsProfileControllerDeps {
 }
 
 export class SettingsProfileController {
-  private readonly providerSettingsByKey: Map<string, ProviderSettingDef>;
   private readonly reliabilitySettingsByKey = new Map(
     SETTINGS_RELIABILITY_SETTINGS.map((setting) => [setting.key, setting]),
   );
 
-  constructor(private readonly deps: SettingsProfileControllerDeps) {
-    // Keep the first def per key: some keys (e.g. useBackgroundResponses)
-    // appear under multiple providers, and the original lookup resolved to
-    // the first match.
-    this.providerSettingsByKey = new Map();
-    for (const setting of Object.values(PROVIDER_SETTINGS).flat()) {
-      if (!this.providerSettingsByKey.has(setting.key)) {
-        this.providerSettingsByKey.set(setting.key, setting);
-      }
-    }
-  }
+  constructor(private readonly deps: SettingsProfileControllerDeps) {}
 
   async buildProfileMessage(): Promise<UpdateProfileMessage> {
     return buildProfileMessage({
@@ -181,39 +171,26 @@ export class SettingsProfileController {
     return { kind: 'updated', mode, openRouterDisabled };
   }
 
+  /**
+   * Numeric reliability settings only. The per-provider toggles this used to
+   * also write now go through the generic `UPDATE_STATE_SETTING` catalog path,
+   * which validates against the row schema and applies the row's `onWrite`
+   * exclusions — the raw `globalState.update` arm that skipped both is gone.
+   */
   async setProviderSetting(input: {
     key: string;
     value: SettingsProfileConfigValue;
   }): Promise<ProviderSettingUpdateResult> {
-    const providerSetting = this.providerSettingsByKey.get(input.key);
     const reliabilitySetting = this.reliabilitySettingsByKey.get(input.key);
     if (
-      (!providerSetting && !reliabilitySetting) ||
-      (reliabilitySetting?.schema &&
+      !reliabilitySetting ||
+      (reliabilitySetting.schema &&
         !reliabilitySetting.schema.safeParse(input.value).success)
     ) {
       return { kind: 'rejected', key: input.key };
     }
-
-    if (providerSetting?.globalStateKey) {
-      await this.deps.globalState.update(
-        providerSetting.globalStateKey,
-        input.value,
-      );
-    } else {
-      await this.deps.updateConfig(input.key, input.value);
-    }
-
-    // Toggles that re-route models change which entries are available and under
-    // which provider they appear, so the picker must be recomputed: OpenRouter
-    // (global route) and Prefer Kimi Code (reroutes dual-backend Kimi K3).
-    const affectsModelAvailability =
-      providerSetting?.globalStateKey === GlobalStateKey.USE_OPENROUTER ||
-      providerSetting?.globalStateKey === GlobalStateKey.KIMI_CODE_PREFER;
-    if (affectsModelAvailability) {
-      invalidateModelOptionsCache();
-    }
-    return { kind: 'updated', affectsModelAvailability };
+    await this.deps.updateConfig(input.key, input.value);
+    return { kind: 'updated' };
   }
 
   /**
@@ -233,19 +210,24 @@ export class SettingsProfileController {
     }));
   }
 
+  /**
+   * The provider's Models-tab controls, projected from the catalog rows that
+   * declare `surfaces.models` for it. The value and its default-when-absent
+   * both come from the row, so the old per-def `defaultValue` fallback ladder
+   * has nothing left to fall back through.
+   */
   private getProviderSettings(provider: string): ProviderSetting[] {
-    const defs = PROVIDER_SETTINGS[provider];
-    if (!defs) return [];
-    return defs.map((def) => ({
-      ...def,
-      value: def.globalStateKey
-        ? (this.deps.globalState.get<boolean>(
-            def.globalStateKey,
-            def.defaultValue ?? false,
-          ) ??
-          def.defaultValue ??
-          false)
-        : this.deps.getConfig<boolean>(def.key, def.defaultValue ?? false),
-    }));
+    return modelsTabSettings(provider).map(({ entry, surface }) => {
+      const { provider: _provider, ...display } = surface;
+      const fallback = settingDefault(entry) === true;
+      return {
+        ...display,
+        key: entry.key,
+        value:
+          settingSlot(entry, this.deps.host) === 'globalState'
+            ? this.deps.globalState.get<boolean>(entry.key, fallback) === true
+            : this.deps.getConfig<boolean>(entry.key, fallback),
+      };
+    });
   }
 }

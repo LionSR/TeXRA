@@ -256,6 +256,7 @@ export function createDesktopSettingsIpc(
     value: unknown,
   ): Promise<void> {
     const result = await applyStateSettingUpdate(key, value, {
+      host: 'desktop',
       stores: { config: options.config, workspaceState, globalState },
       onApprovalPolicyChanged: (policy) =>
         options.session.setApprovalPolicy(policy),
@@ -271,9 +272,16 @@ export function createDesktopSettingsIpc(
       );
     }
     await postStateSettingSnapshot(
-      result.entry.settingsViewSnapshot,
+      result.entry.surfaces.settingsView,
       stateSettingSnapshotPosters,
     );
+    if (result.kind !== 'applied') return;
+    if (result.entry.onWrite?.invalidatesModelOptions) {
+      invalidateModelOptionsCache();
+      await options.credentialSettingsController.refreshAfterProviderSettingChange(
+        key,
+      );
+    }
   }
 
   function runAsync(work: Promise<void>): void {

@@ -386,18 +386,15 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     expect(fixture.onCredentialChanged).toHaveBeenCalledOnce();
   });
 
-  it('applies native provider settings and refreshes model availability', async () => {
+  // Provider toggles are written by the shared catalog path
+  // (`UPDATE_STATE_SETTING`); this pins the desktop refresh that path triggers.
+  it('refreshes model availability after a provider toggle', async () => {
     const fixture = await createFixture();
 
-    await assertSupported(
-      fixture.controller.profileHandlers.setProviderSetting,
-    )({
-      command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING,
-      key: GlobalStateKey.USE_OPENROUTER,
-      value: true,
-    });
+    await fixture.controller.refreshAfterProviderSettingChange(
+      GlobalStateKey.USE_OPENROUTER,
+    );
 
-    expect(fixture.globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
     expect(fixture.events).toEqual([
       `render:${SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE}`,
       `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
@@ -409,15 +406,10 @@ describe('DefaultDesktopCredentialSettingsController', () => {
   it('replaces GLM usage after the region changes', async () => {
     const fixture = await createFixture();
 
-    await assertSupported(
-      fixture.controller.profileHandlers.setProviderSetting,
-    )({
-      command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING,
-      key: GlobalStateKey.GLM_USE_CHINA,
-      value: false,
-    });
+    await fixture.controller.refreshAfterProviderSettingChange(
+      GlobalStateKey.GLM_USE_CHINA,
+    );
 
-    expect(fixture.globalState.get(GlobalStateKey.GLM_USE_CHINA)).toBe(false);
     expect(fixture.subscriptionUsage.invalidate).not.toHaveBeenCalled();
     expect(fixture.subscriptionUsage.getUsage).toHaveBeenCalledTimes(3);
     expect(fixture.posted).toContainEqual(
