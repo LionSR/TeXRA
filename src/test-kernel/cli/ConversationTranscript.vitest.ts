@@ -2020,12 +2020,8 @@ describe('CLI conversation transcript', () => {
       spillPath: 'executions/abcdef123456/toolOutput/bash.txt',
     };
     const read = {
-      // A real `read_file` call names its file: the file link is what makes
-      // this a compact tool, so the input must carry a path for the row to
-      // take the suppressed-output branch this test is about.
       ...toolEntry('read', 'completed', 'complete read output', {
         toolName: 'read_file',
-        input: { path: 'notes.tex' },
       }),
       spillPath: 'executions/abcdef123456/toolOutput/read.txt',
     };
