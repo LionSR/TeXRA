@@ -6,17 +6,11 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ALL_HOST_PRODUCTION_ROOTS,
   productionFilesUnder,
   REPO_ROOT,
   stripComments,
 } from '../support/repoScan';
-
-const SCAN_ROOTS = [
-  'packages/cli/src',
-  'packages/desktop/src',
-  'packages/extension/src',
-  'src',
-] as const;
 
 /** Runtime sites allowed to perform ordinary transcript hydration. */
 const HYDRATION_SITE_ALLOWLIST = new Set([
@@ -37,7 +31,7 @@ const PRESENTATION_LEASE_SITE_ALLOWLIST = new Set([
 
 /** Files under a scan root that match `pattern` and are not allowlisted. */
 function findOffenders(pattern: RegExp, allowlist: Set<string>): string[] {
-  return SCAN_ROOTS.flatMap(productionFilesUnder)
+  return ALL_HOST_PRODUCTION_ROOTS.flatMap(productionFilesUnder)
     .filter((file) => !allowlist.has(file))
     .filter((file) =>
       pattern.test(

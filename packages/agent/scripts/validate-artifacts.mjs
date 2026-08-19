@@ -1,6 +1,8 @@
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { isFile, walkFiles } from './fsWalk.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = path.resolve(packageRoot, '../..');
@@ -12,27 +14,7 @@ const rootTsconfig = JSON.parse(
   await readFile(path.join(repositoryRoot, 'tsconfig.json'), 'utf8'),
 );
 
-async function filesBelow(directory) {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const nested = await Promise.all(
-    entries.map((entry) => {
-      const target = path.join(directory, entry.name);
-      return entry.isDirectory() ? filesBelow(target) : [target];
-    }),
-  );
-  return nested.flat();
-}
-
-async function isFile(filePath) {
-  try {
-    return (await stat(filePath)).isFile();
-  } catch (error) {
-    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return false;
-    throw error;
-  }
-}
-
-const allFiles = await filesBelow(distRoot);
+const allFiles = await walkFiles(distRoot);
 const declarationFiles = allFiles.filter((file) => file.endsWith('.d.ts'));
 const declarationText = (
   await Promise.all(declarationFiles.map((file) => readFile(file, 'utf8')))
