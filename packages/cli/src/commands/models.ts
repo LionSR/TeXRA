@@ -1,10 +1,10 @@
 import { defineCommand } from 'citty';
 
+import { getEnabledModels } from '@model/computeModelOptions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { knownCliModelIds } from '../runtime/cliConfig';
 import {
-  getCliEnabledModels,
   listCliEnabledModelCatalog,
   setCliModelEnabled,
 } from '../runtime/enabledModels';
@@ -145,7 +145,7 @@ async function listEnabledModels(context: CliContext): Promise<number> {
     return CliExitCode.ModelOrNetworkError;
   }
   const catalog = listCliEnabledModelCatalog();
-  const enabled = getCliEnabledModels();
+  const enabled = getEnabledModels();
   emitCliResult(
     context,
     {
