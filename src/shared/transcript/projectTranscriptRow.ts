@@ -454,7 +454,6 @@ export function projectTranscriptRow(
       return {
         ...rowBase(entry),
         kind: 'fileList',
-        category: entry.text ?? '',
         files,
         counts,
         summary,
