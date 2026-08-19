@@ -5,18 +5,27 @@ import { describe, expect, it, vi } from 'vitest';
 import { GROUP_DOM_IDS } from '@progressView/frontend/constants';
 import type {
   GroupTree,
-  MessageIndex,
   TimelineEntry,
+  TranscriptIndex,
 } from '@progressView/frontend/components/messageIndex';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
-  type LogMessageData,
+  StreamLogEntrySchema,
+  type LogLevel,
   type StreamTabId,
   type TaskGroup,
   type WorkflowCallProgress,
 } from '@shared/schemas';
+import {
+  projectTranscriptRow,
+  transcriptText,
+  type LogRow,
+  type TranscriptRow,
+  type WorkflowTaskRow,
+} from '@shared/transcript';
 
 // Local file imports
 import {
@@ -32,12 +41,12 @@ vi.mock('@progressView/frontend/audioNotification', () => audio);
 
 type TaskGroupListInternals = HTMLElement & {
   groups: TaskGroup[];
-  messages: LogMessageData[];
+  rows: TranscriptRow[];
   hasStreams: boolean;
   isToolUse: boolean;
   terminal: boolean;
   updateComplete: Promise<boolean>;
-  readonly index: MessageIndex;
+  readonly index: TranscriptIndex;
   willUpdate: (changedProperties: Map<string, unknown>) => void;
 };
 
@@ -45,15 +54,16 @@ useLitComponentTestDom(
   () => import('@progressView/frontend/components/TaskGroupList'),
 );
 
-function createMessage(
+function createRow(
   id: string,
   text: string,
   timestamp: number,
   groupId?: string,
-): LogMessageData {
+): LogRow {
   return {
+    kind: 'log',
     id,
-    text,
+    text: transcriptText(text),
     timestamp,
     level: LOG_LEVELS.INFO,
     ...(groupId ? { groupId } : {}),
@@ -72,14 +82,16 @@ function runGroup(name: string, overrides: Partial<TaskGroup> = {}): TaskGroup {
   return createGroup('run', STREAM_PHASE.RUNNING, { name, ...overrides });
 }
 
-function workflowTaskMessage(
+function workflowTaskRow(
   groupId: string,
   id: string,
   timestamp: number,
   data: WorkflowCallProgress,
-  level: LogMessageData['level'] = LOG_LEVELS.INFO,
-): LogMessageData {
-  return {
+  level: LogLevel = LOG_LEVELS.INFO,
+): WorkflowTaskRow {
+  const entry = StreamLogEntrySchema.parse({
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    seqNo: timestamp,
     id,
     text: data.id,
     timestamp,
@@ -87,7 +99,8 @@ function workflowTaskMessage(
     groupId,
     messageType: MESSAGE_TYPES.WORKFLOW_TASK,
     data,
-  };
+  });
+  return projectTranscriptRow(entry) as WorkflowTaskRow;
 }
 
 function groupHeader(
@@ -108,25 +121,25 @@ function groupContent(
   );
 }
 
-function createList(messages: LogMessageData[]): TaskGroupListInternals {
+function createList(rows: TranscriptRow[]): TaskGroupListInternals {
   const element = document.createElement(
     'task-group-list',
   ) as unknown as TaskGroupListInternals;
   element.groups = [];
-  element.messages = messages;
-  element.index.rebuildTree([], messages);
+  element.rows = rows;
+  element.index.rebuildTree([], rows);
   element.index.rebuildTimeline();
   return element;
 }
 
 function renderList(
   groups: TaskGroup[],
-  messages: LogMessageData[],
+  rows: TranscriptRow[],
 ): Promise<TaskGroupListInternals> {
   return mountComponent<TaskGroupListInternals>('task-group-list', {
     hasStreams: true,
     groups,
-    messages,
+    rows,
   });
 }
 
@@ -160,42 +173,42 @@ describe('task-group-list ungrouped message indexes', () => {
 
   it('refreshes fallback timeline message refs through the ungrouped-message index', () => {
     const original = [
-      createMessage('m1', 'one', 1),
-      createMessage('m2', 'two', 2),
-      createMessage('m3', 'three', 3),
+      createRow('m1', 'one', 1),
+      createRow('m2', 'two', 2),
+      createRow('m3', 'three', 3),
     ];
     const list = createList(original);
-    const updated = { ...original[1], text: 'two updated' };
+    const updated = {
+      ...original[1],
+      text: transcriptText('two updated'),
+    };
     const next = [original[0], updated, original[2]];
 
-    list.index.updateCachedMessageRefs(next, original, [1]);
+    list.index.updateCachedRowRefs(next, original, [1]);
 
     expect(list.index.ungrouped[1]).toBe(updated);
 
     const timelineEntry = list.index.timeline.find(
-      (entry): entry is Extract<TimelineEntry, { msg: LogMessageData }> =>
-        entry.key === 'm2' && 'msg' in entry,
+      (entry): entry is Extract<TimelineEntry, { row: TranscriptRow }> =>
+        entry.key === 'm2' && 'row' in entry,
     );
-    expect(timelineEntry?.msg).toBe(original[1]);
+    expect(timelineEntry?.row).toBe(original[1]);
 
-    list.index.updateTimelineMessageRefs(next, [1]);
+    list.index.updateTimelineRowRefs(next, [1]);
 
-    expect(timelineEntry?.msg).toBe(updated);
+    expect(timelineEntry?.row).toBe(updated);
   });
 
   it('keeps one location record coherent across out-of-order insertion and update', () => {
-    const original = [
-      createMessage('m1', 'one', 1),
-      createMessage('m3', 'three', 3),
-    ];
+    const original = [createRow('m1', 'one', 1), createRow('m3', 'three', 3)];
     const list = createList(original);
-    const inserted = createMessage('m2', 'two', 2);
+    const inserted = createRow('m2', 'two', 2);
     const withInsertion = [...original, inserted];
 
-    list.index.appendNewMessages(withInsertion, original.length);
+    list.index.appendNewRows(withInsertion, original.length);
     list.index.appendToTimeline(withInsertion, original.length);
 
-    expect(list.index.ungrouped.map((message) => message.id)).toEqual([
+    expect(list.index.ungrouped.map((row) => row.id)).toEqual([
       'm1',
       'm2',
       'm3',
@@ -206,20 +219,20 @@ describe('task-group-list ungrouped message indexes', () => {
       'm3',
     ]);
 
-    const updated = { ...inserted, text: 'two updated' };
+    const updated = { ...inserted, text: transcriptText('two updated') };
     const next = [...original, updated];
-    list.index.updateCachedMessageRefs(next, withInsertion, [2]);
-    list.index.updateTimelineMessageRefs(next, [2]);
+    list.index.updateCachedRowRefs(next, withInsertion, [2]);
+    list.index.updateTimelineRowRefs(next, [2]);
 
     expect(list.index.ungrouped[1]).toBe(updated);
     expect(
-      list.index.timeline.find((entry) => entry.key === 'm2' && 'msg' in entry),
-    ).toMatchObject({ msg: updated });
+      list.index.timeline.find((entry) => entry.key === 'm2' && 'row' in entry),
+    ).toMatchObject({ row: updated });
   });
 
   it('patches stable group metadata without rebuilding the message tree', () => {
     const group = createGroup('g1', STREAM_PHASE.RUNNING);
-    const message = createMessage('m1', 'grouped', 2, group.id);
+    const message = createRow('m1', 'grouped', 2, group.id);
     const list = createList([message]);
     list.groups = [group];
     list.index.rebuildTree([group], [message]);
@@ -235,7 +248,7 @@ describe('task-group-list ungrouped message indexes', () => {
     list.index.rebuildTree = () => {
       throw new Error('unexpected full group tree rebuild');
     };
-    list.index.updateTimelineMessageRefs = () => {
+    list.index.updateTimelineRowRefs = () => {
       throw new Error('unexpected timeline message scan');
     };
 
@@ -243,7 +256,7 @@ describe('task-group-list ungrouped message indexes', () => {
 
     expect(list.index.tree[0]).toBe(originalTree);
     expect(list.index.tree[0]?.group).toBe(stoppedGroup);
-    expect(list.index.tree[0]?.messages).toEqual([message]);
+    expect(list.index.tree[0]?.rows).toEqual([message]);
     expect(list.index.timeline).toHaveLength(1);
   });
 
@@ -257,8 +270,8 @@ describe('task-group-list ungrouped message indexes', () => {
       grouped: false,
     },
     {
-      name: 'rendered message DOM inside large groups',
-      revealKind: 'messages',
+      name: 'rendered row DOM inside large groups',
+      revealKind: 'rows',
       total: 450,
       shown: 400,
       hidden: '50',
@@ -266,8 +279,8 @@ describe('task-group-list ungrouped message indexes', () => {
     },
   ])('bounds $name', async ({ revealKind, total, shown, hidden, grouped }) => {
     const group = createGroup('g1', STREAM_PHASE.RUNNING);
-    const messages = Array.from({ length: total }, (_, index) =>
-      createMessage(
+    const rows = Array.from({ length: total }, (_, index) =>
+      createRow(
         `m${index}`,
         `entry ${index}`,
         index,
@@ -275,7 +288,7 @@ describe('task-group-list ungrouped message indexes', () => {
       ),
     );
 
-    const list = await renderList(grouped ? [group] : [], messages);
+    const list = await renderList(grouped ? [group] : [], rows);
 
     expect(list.shadowRoot?.querySelectorAll('[data-log-id]')).toHaveLength(
       shown,
@@ -302,13 +315,13 @@ describe('task-group-list ungrouped message indexes', () => {
 
   it('resets expanded render windows when leaving terminal mode', async () => {
     const group = createGroup('g1', STREAM_PHASE.RUNNING);
-    const messages = Array.from({ length: 450 }, (_, index) =>
-      createMessage(`m${index}`, `group entry ${index}`, index, group.id),
+    const rows = Array.from({ length: 450 }, (_, index) =>
+      createRow(`m${index}`, `group entry ${index}`, index, group.id),
     );
-    const list = await renderList([group], messages);
+    const list = await renderList([group], rows);
 
     const revealButton = list.shadowRoot?.querySelector<HTMLButtonElement>(
-      '[data-reveal-kind="messages"]',
+      '[data-reveal-kind="rows"]',
     );
     revealButton?.click();
     await list.updateComplete;
@@ -327,18 +340,18 @@ describe('task-group-list ungrouped message indexes', () => {
   });
 
   it('leaves the derived structures alone while terminal mode is on', () => {
-    const first = createMessage('m1', 'first', 1);
-    const second = createMessage('m2', 'second', 2);
+    const first = createRow('m1', 'first', 1);
+    const second = createRow('m2', 'second', 2);
     const list = createList([first]);
 
     expect(list.index.timeline.map((entry) => entry.key)).toEqual(['m1']);
 
     list.terminal = true;
-    list.messages = [first, second];
+    list.rows = [first, second];
     list.willUpdate(
       new Map<string, unknown>([
         ['terminal', false],
-        ['messages', [first]],
+        ['rows', [first]],
       ]),
     );
 
@@ -355,22 +368,22 @@ describe('task-group-list ungrouped message indexes', () => {
 
 describe('task-group-list renumbered resync ordering', () => {
   it('reorders cached ungrouped rows when an ordinary upsert renumbers seqNos', () => {
-    const live: LogMessageData[] = [
-      { ...createMessage('m1', 'one', 100), seqNo: 1 },
-      { ...createMessage('m2', 'two', 200), seqNo: 2 },
-      { ...createMessage('m3', 'three', 300), seqNo: 3 },
+    const live: TranscriptRow[] = [
+      { ...createRow('m1', 'one', 100), seqNo: 1 },
+      { ...createRow('m2', 'two', 200), seqNo: 2 },
+      { ...createRow('m3', 'three', 300), seqNo: 3 },
     ];
     const list = createList(live);
 
     // Hydration merges disk history before live appends and renumbers seqNos,
     // then WebviewBridge replays getRange(0) as one ordinary upsert frame.
     // logSlice keeps live rows at their old flat indices while the disk rows
-    // append at the tail, so `messages` is not itself in seqNo order.
-    const disk: LogMessageData[] = [
-      { ...createMessage('d1', 'disk one', 50), seqNo: 1 },
-      { ...createMessage('d2', 'disk two', 60), seqNo: 2 },
+    // append at the tail, so `rows` is not itself in seqNo order.
+    const disk: TranscriptRow[] = [
+      { ...createRow('d1', 'disk one', 50), seqNo: 1 },
+      { ...createRow('d2', 'disk two', 60), seqNo: 2 },
     ];
-    const renumbered: LogMessageData[] = [
+    const renumbered: TranscriptRow[] = [
       { ...live[0], seqNo: 3 },
       { ...live[1], seqNo: 4 },
       { ...live[2], seqNo: 5 },
@@ -383,27 +396,27 @@ describe('task-group-list renumbered resync ordering', () => {
       groups: [],
       previousGroups: [],
       groupsChanged: false,
-      messages: renumbered,
-      previousMessages: live,
-      messagesChanged: true,
+      rows: renumbered,
+      previousRows: live,
+      rowsChanged: true,
       deltaIndices: [0, 1, 2],
     });
 
-    expect(list.index.ungrouped.map((message) => message.id)).toEqual([
+    expect(list.index.ungrouped.map((row) => row.id)).toEqual([
       'd1',
       'd2',
       'm1',
       'm2',
       'm3',
     ]);
-    expect(list.index.ungrouped.map((message) => message.seqNo)).toEqual([
+    expect(list.index.ungrouped.map((row) => row.seqNo)).toEqual([
       1, 2, 3, 4, 5,
     ]);
   });
 });
 
 describe('task-group-list orphan re-rooting', () => {
-  it('renders a group whose parent is absent as a root, with its subtree and messages', () => {
+  it('renders a group whose parent is absent as a root, with its subtree and rows', () => {
     const list = createList([]);
     // "run" points at a parent that is NOT in the set — e.g. a cross-trace
     // stage id this stream never recorded. It must still render.
@@ -415,7 +428,7 @@ describe('task-group-list orphan re-rooting', () => {
       startTime: 2,
       parentGroupId: 'run',
     });
-    const scratchpad = createMessage('m1', 'scratchpad', 3, 'init');
+    const scratchpad = createRow('m1', 'scratchpad', 3, 'init');
 
     list.index.rebuildTree([run, init], [scratchpad]);
 
@@ -425,8 +438,8 @@ describe('task-group-list orphan re-rooting', () => {
     expect(root.group.id).toBe('run');
     // Its subtree survives...
     expect(root.children.map((c) => c.group.id)).toEqual(['init']);
-    // ...and so do the messages nested under it.
-    expect(root.children[0].messages.map((m) => m.id)).toEqual(['m1']);
+    // ...and so do the rows nested under it.
+    expect(root.children[0].rows.map((m) => m.id)).toEqual(['m1']);
     // The nested message is not mis-filed as ungrouped.
     expect(list.index.ungrouped).toHaveLength(0);
   });
@@ -528,8 +541,8 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       index: 1,
       total: 3,
     });
-    const messages: LogMessageData[] = [
-      workflowTaskMessage('phase-review', 'agent-a', 3, {
+    const rows: TranscriptRow[] = [
+      workflowTaskRow('phase-review', 'agent-a', 3, {
         id: 'reviewer',
         label: 'Review manuscript',
         phase: 'Review',
@@ -539,7 +552,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
         durationMs: 12_300,
         totalCostUsd: 0.04,
       }),
-      workflowTaskMessage(
+      workflowTaskRow(
         'phase-review',
         'agent-b',
         4,
@@ -553,14 +566,14 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
         },
         LOG_LEVELS.ERROR,
       ),
-      workflowTaskMessage('phase-review', 'agent-c', 5, {
+      workflowTaskRow('phase-review', 'agent-c', 5, {
         id: 'deferred',
         label: 'Deferred check',
         phase: 'Review',
         status: 'skipped',
         reason: 'not-reached',
       }),
-      workflowTaskMessage('phase-review', 'agent-d', 6, {
+      workflowTaskRow('phase-review', 'agent-d', 6, {
         id: 'stopped',
         label: 'Stopped review',
         phase: 'Review',
@@ -572,7 +585,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       }),
     ];
 
-    const list = await renderList([run, phase], messages);
+    const list = await renderList([run, phase], rows);
 
     // Header shows the phase label plus the one-based position, matching the
     // CLI's `(index+1/total)` diamond header.
@@ -661,15 +674,15 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       index: 0,
       total: 3,
     });
-    const messages: LogMessageData[] = [
-      workflowTaskMessage('phase-map', 'task-a', 3, {
+    const rows: TranscriptRow[] = [
+      workflowTaskRow('phase-map', 'task-a', 3, {
         id: 'seams',
         label: 'Map the seams',
         phase: 'Map',
         status: 'completed',
         durationMs: 72_000,
       }),
-      workflowTaskMessage('phase-map', 'task-b', 4, {
+      workflowTaskRow('phase-map', 'task-b', 4, {
         id: 'contracts',
         label: 'Read the contracts',
         phase: 'Map',
@@ -677,7 +690,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       }),
     ];
 
-    const list = await renderList([run, phase], messages);
+    const list = await renderList([run, phase], rows);
 
     const header = groupHeader(list, 'phase-map');
     expect(header?.querySelector('.group-progress')?.textContent?.trim()).toBe(

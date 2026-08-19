@@ -28,13 +28,28 @@ function executionsInputPreview(input: Record<string, unknown>): string {
 const TOOL_PREVIEW_INPUT_KEY: Readonly<Record<string, string>> = {
   bash: 'command',
   codex: 'prompt',
+  delegate_agent: 'agent',
+  delegate_workflow: 'agent',
 };
+
+/** Input keys that name what a call is acting on, for tools with no entry of
+ *  their own. Scanned in order, so a call carrying both a command and a path
+ *  is described by the command. */
+const GENERIC_PREVIEW_INPUT_KEYS: readonly string[] = [
+  'command',
+  'code',
+  'path',
+  'file_path',
+  'query',
+  'url',
+];
 
 /** Derive a one-line preview of `input` for the named tool. The name is
  *  normalized here (`claude:Bash` -> `bash`), so hosts pass whatever name the
- *  log carries. Returns `''` when the tool isn't one of the ones with a known
- *  preview field — callers fall back to their own host-specific default (a
- *  generic key search, or nothing at all). */
+ *  log carries. Falls back to a generic scan of the keys that name a call's
+ *  target, and returns `''` only when the input names nothing — never a raw
+ *  `JSON.stringify` of the whole input, which is what the CLI used to show
+ *  for every delegation call. */
 export function deriveToolInputPreview(
   toolName: string,
   input: unknown,
@@ -50,7 +65,13 @@ export function deriveToolInputPreview(
     return typeof input.scriptPath === 'string' ? input.scriptPath : '';
   }
   const key = TOOL_PREVIEW_INPUT_KEY[name];
-  if (!key) return '';
-  const value = input[key];
-  return typeof value === 'string' ? value : '';
+  if (key) {
+    const value = input[key];
+    if (typeof value === 'string' && value) return value;
+  }
+  for (const generic of GENERIC_PREVIEW_INPUT_KEYS) {
+    const value = input[generic];
+    if (typeof value === 'string' && value) return value;
+  }
+  return '';
 }

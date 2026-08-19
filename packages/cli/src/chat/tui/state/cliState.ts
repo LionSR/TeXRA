@@ -30,6 +30,11 @@ import type {
   WorkflowCallProgress,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import type {
+  ToolRow,
+  TranscriptRow,
+  TranscriptRowOf,
+} from '@shared/transcript';
 import { latestWorkflowAttemptId } from '@shared/copy/workflowCall';
 import type {
   CompactionActivityBlock,
@@ -50,7 +55,12 @@ import { isChildStreamRemoved } from './childExecutions';
 interface ConversationEntryBase {
   /** Same id as the upstream `StreamLogEntry.id` — stable across deltas. */
   readonly id: string;
-  /** Rendered log text. Empty for tool rows. */
+  /** The shared projection this row paints from (`@shared/transcript`).
+   *  Absent only on CLI-synthetic rows, which have no source entry. */
+  readonly row?: TranscriptRow;
+  /** Headline text: the one line a row leads with. Body lines come from
+   *  `row` at paint time, where the terminal spends its own width budget.
+   *  Empty for tool rows. */
   readonly text: string;
   /** Original shared log vocabulary. Role alone intentionally groups several
    * display kinds and is not precise enough for semantic selection. */
@@ -91,20 +101,25 @@ type ConversationEntryOrigin =
       readonly syntheticAfterSettlementSeqNo: number;
     };
 
-export interface LoadedImage {
-  readonly path: string;
-  readonly sizeBytes: number;
-}
-
 /**
  * Discriminated on `role` so `toolUse` is required exactly for the rows that
  * need it, instead of an independently-optional field every consumer has to
  * null-check regardless of role.
+ *
+ * `role` is the coarse classifier the geometry, promotion and workflow
+ * filters key on; the row kind it was projected from stays on `row`, which
+ * carries the typed payload each renderer paints.
  */
 export type ConversationEntry = ConversationEntryOrigin &
   (
     | (ConversationEntryBase & {
         readonly role: 'assistant' | 'error' | 'user';
+      })
+    | (ConversationEntryBase & {
+        /** A compact informational row: thinking, web search/fetch, missing
+         *  outputs, latexdiff, statistics, context management, status. */
+        readonly role: 'detail';
+        readonly row: TranscriptRow;
       })
     | (ConversationEntryBase & {
         readonly role: 'activity';
@@ -129,10 +144,13 @@ export type ConversationEntry = ConversationEntryOrigin &
     | (ConversationEntryBase & {
         readonly role: 'tool';
         readonly toolUse: NormalizedToolUse;
+        readonly row: ToolRow;
       })
     | (ConversationEntryBase & {
+        /** An attachment load: every file the loader reported, whether it
+         *  loaded or not. */
         readonly role: 'media';
-        readonly images: readonly LoadedImage[];
+        readonly row: TranscriptRowOf<'fileList'>;
       })
   );
 
@@ -225,7 +243,6 @@ export interface TranscriptFoldState {
   /** Index of the last finalized model-response row with text, or -1. */
   latestResponsePos: number;
   /** Projection-mode bits `items` was built under; a flip forces a rebuild. */
-  fullLogChild: boolean;
   workflowOperationalOnly: boolean;
   projectLifecycleToTaskGroups: boolean;
   /** Highest-seq live-activity entry (drives the thinking indicator). */

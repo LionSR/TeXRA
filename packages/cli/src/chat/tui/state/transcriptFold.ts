@@ -13,29 +13,25 @@
  */
 
 import { safeTerminalText } from '@cli/runtime/terminalText';
-import { formatCliWorkflowCallLine } from '@cli/runtime/workflowCallText';
-import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { redactSecrets } from '@logger/redaction';
+import { projectWorkflowCallEntry } from '@model/projectWorkflowCallEntry';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  TOOL_USE_STATUS,
   isPlainAgentIdentity,
-  isTerminalWorkflowCallProgress,
-  type ErrorLogData,
-  type FileListEntry,
   type RunIdentity,
   type StreamLogEntry,
   type TaskGroup,
 } from '@shared/schemas';
 import {
-  hasIncompleteEmbeddedSubagentFollowup,
-  summarizeFollowupMessage,
-} from '@shared/subagentFollowup';
-import { normalizeToolUseForRender } from '@shared/toolUse';
+  compactionActivityRow,
+  isSettledRow,
+  projectTranscriptRow,
+  promotesOnlyOnTypedTerminalState,
+  type TranscriptRow,
+} from '@shared/transcript';
 import {
   applyCompactionActivityEntries,
-  COMPACTION_ACTIVITY_LABEL,
   createCompactionActivityProjection,
   settleCompactionActivities,
   type CompactionActivityProjection,
@@ -50,55 +46,41 @@ import {
 } from '../panes/transcriptEntries';
 import type {
   ConversationEntry,
-  LoadedImage,
   TranscriptFoldItem,
   TranscriptFoldState,
 } from './cliState';
 
-const MAX_ERROR_DETAIL_LENGTH = 240;
-
-/**
- * Project successful local context-media preparation. FILE_LIST does not
- * claim that a remote provider subsequently accepted the attachment.
- */
-function projectFileListImages(data: readonly FileListEntry[]): LoadedImage[] {
-  return data.flatMap((entry) => {
-    if (!entry.ok || entry.media?.kind !== 'image' || !entry.path.trim()) {
-      return [];
-    }
-    return [{ path: entry.path, sizeBytes: entry.media.sizeBytes }];
-  });
-}
-
-const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
-  MESSAGE_TYPES.ERROR,
-  MESSAGE_TYPES.FILE_LIST,
-  MESSAGE_TYPES.MODEL_RESPONSE,
-  MESSAGE_TYPES.TOOL_USE,
-  MESSAGE_TYPES.USER_MESSAGE,
-]);
-
-const CHILD_STREAM_LOG_MESSAGE_TYPES = new Set<string>([
-  ...TRANSCRIPT_MESSAGE_TYPES,
-  MESSAGE_TYPES.DEFAULT,
-  MESSAGE_TYPES.WORKFLOW_TASK,
-]);
-
 // Canonical dashboard rows retained when a workflow stream is compacted.
+// Compaction activity passes through like a synthetic row: a run that
+// compacted its context says so on the dashboard too.
 const WORKFLOW_DASHBOARD_ROLES = new Set<ConversationEntry['role']>([
+  'activity',
   'phase',
   'workflowTask',
 ]);
 
 // Roles a workflow-agent stream keeps when it projects an operational feed
-// instead of a model transcript.
+// instead of a model transcript. `activity` is here for the same reason it is
+// a dashboard role: a run that compacted its context says so on every surface.
 const WORKFLOW_OPERATIONAL_ROLES = new Set<ConversationEntry['role']>([
+  'activity',
   'error',
   'media',
   'phase',
   'tool',
   'workflowTask',
 ]);
+
+/** Membership is one allowlist; this is the container filter a workflow-agent
+ *  stream applies on top of it. Script log lines stay (they are the run's
+ *  narration) unless they are debug chatter. */
+function isWorkflowOperationalRow(
+  row: TranscriptRow,
+  role: ConversationEntry['role'],
+): boolean {
+  if (row.kind === 'log') return row.level !== 'debug';
+  return WORKFLOW_OPERATIONAL_ROLES.has(role);
+}
 
 // Compact inactive streams must not retain an unbounded operational transcript,
 // but the dashboard needs canonical phase/call identity while a child is open.
@@ -134,9 +116,11 @@ export function workflowOperationalLatestLine(
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const entry = items[index].rendered;
     if (entry.role === 'tool') {
+      // A status line wants the tool's own account of what it is doing, not
+      // the call's input preview — the tool name is the last resort.
       const line =
-        safeWorkflowOperationalSummary(entry.toolUse.headerSummary) ??
-        safeWorkflowOperationalSummary(entry.toolUse.toolName);
+        safeWorkflowOperationalSummary(entry.row.toolUse.headerSummary) ??
+        safeWorkflowOperationalSummary(entry.row.model.headerLabel);
       if (line) return line;
       continue;
     }
@@ -166,247 +150,176 @@ export function logEntryStreamIsRunning(entry: StreamLogEntry): boolean {
   return data.status === 'running';
 }
 
-/**
- * A phase group header — the `stage.start`/`stage.end` rows a workflow-script
- * run emits per `phase()` (recorded as GROUP_START then upserted in place to
- * GROUP_END with `data.kind === 'phase'`). Detected by `kind`, not entry
- * `type`, so the header keeps its distinct role after the phase closes.
- */
-function phaseGroupData(
-  entry: StreamLogEntry,
-): { index?: number; total?: number; attemptId?: string } | null {
-  if (
-    entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
-    entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END
-  ) {
-    return null;
-  }
-  const { kind, index, total, attemptId } = entry.data;
-  if (kind !== 'phase') return null;
-  return {
-    ...(index !== undefined ? { index } : {}),
-    ...(total !== undefined ? { total } : {}),
-    ...(attemptId !== undefined ? { attemptId } : {}),
-  };
-}
+/** The role each projected row paints under. Roles are coarser than kinds:
+ *  they carry the geometry, promotion and workflow-feed rules, while the row
+ *  beside them carries the typed payload a renderer reads. */
+const ROW_KIND_ROLE = {
+  assistant: 'assistant',
+  log: 'assistant',
+  user: 'user',
+  error: 'error',
+  tool: 'tool',
+  fileList: 'media',
+  phase: 'phase',
+  workflowTask: 'workflowTask',
+  compactionActivity: 'activity',
+  thinking: 'detail',
+  scratchpad: 'detail',
+  webSearch: 'detail',
+  webFetch: 'detail',
+  missingOutputs: 'detail',
+  latexdiff: 'detail',
+  statistics: 'detail',
+  contextManagement: 'detail',
+  progressStatus: 'detail',
+  contextState: 'detail',
+} as const satisfies Record<TranscriptRow['kind'], ConversationEntry['role']>;
 
-function logEntryRole(
-  messageType: string | undefined,
-): 'assistant' | 'error' | 'user' {
-  if (messageType === MESSAGE_TYPES.USER_MESSAGE) return 'user';
-  if (messageType === MESSAGE_TYPES.ERROR) return 'error';
-  return 'assistant';
-}
-
-function renderErrorLogEntryText(
-  text: string,
-  data: ErrorLogData | undefined,
-): string {
-  const safeSummary = redactSecrets(safeTerminalText(text));
-  if (!data) return safeSummary;
-  const detail = truncateSummary(
-    redactSecrets(safeTerminalText(data.message)),
-    MAX_ERROR_DETAIL_LENGTH,
-  );
-  return detail
-    ? `${safeSummary}\n${TOOL_OUTPUT_CORNER} ${detail}`
-    : safeSummary;
-}
+// Rows whose content is fixed the moment they appear, so they print into
+// `<Static>` scrollback without waiting for the settled-prefix advance.
+const IMMEDIATELY_FINALIZED_ROW_KINDS = new Set<TranscriptRow['kind']>([
+  'user',
+  'error',
+  'phase',
+  'fileList',
+  'missingOutputs',
+  'latexdiff',
+  'statistics',
+  'contextManagement',
+  'progressStatus',
+]);
 
 /**
- * Fields every {@link ConversationEntry} shares, regardless of role: the
- * source identity plus the two spreads (`messageType`, `settlementSeqNo`)
- * that must stay absent — not merely `undefined` — when the source entry
- * doesn't carry them, matching {@link ConversationEntry}'s optional-key shape.
+ * The headline a row leads with. Body lines are painted from the row itself
+ * (`transcriptRowBodyLines`) at the painter's own width — nothing is cut
+ * here.
  */
-function baseLogEntryFields<R extends ConversationEntry['role']>(
-  entry: StreamLogEntry,
-  role: R,
-  text: string,
-) {
-  return {
-    id: entry.id,
-    sourceSeqNo: entry.seqNo,
-    role,
-    text,
-    ...(entry.messageType ? { messageType: entry.messageType } : {}),
-    ...(entry.settlementSeqNo !== undefined
-      ? { settlementSeqNo: entry.settlementSeqNo }
-      : {}),
-  };
-}
-
-function spillPathOf(entry: StreamLogEntry): string | undefined {
-  const data = entry.data;
-  if (typeof data !== 'object' || data === null || !('spillPath' in data)) {
-    return undefined;
-  }
-  return typeof data.spillPath === 'string' ? data.spillPath : undefined;
-}
-
-/**
- * Renders a log entry from scratch. `prev` is consulted only for phase
- * count inheritance (a GROUP_END row carries no index/total of its own);
- * finalization here is source-owned only — the fold re-applies inherited
- * promotion at the row's slot, so an already-promoted row never rolls back.
- */
-function renderLogEntryFresh(
-  entry: StreamLogEntry,
-  prev: ConversationEntry | undefined,
-  projectLifecycleToTaskGroups: boolean,
-): ConversationEntry | null {
-  if (entry.messageType === MESSAGE_TYPES.FILE_LIST) {
-    const images = projectFileListImages(entry.data);
-    if (images.length === 0) return null;
-    const next: ConversationEntry = {
-      ...baseLogEntryFields(entry, 'media', ''),
-      finalized: true,
-      images,
-    };
-    return next;
-  }
-
-  if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
-    // Malformed tool payloads render as a visible failed tool row instead of
-    // being dropped. Both hosts share this fallback so a bad payload cannot
-    // silently vanish from the transcript or fall through to default text.
-    const toolUse = normalizeToolUseForRender(entry.data);
-    // Never finalize here. The settled-prefix promotion advances over a tool
-    // row only once it completes AND every entry before it has promoted, so a
-    // fast tool can't jump ahead of still-streaming assistant text in
-    // `<Static>` (which is append-only).
-    const next: ConversationEntry = {
-      ...baseLogEntryFields(entry, 'tool', ''),
-      finalized: entry.settlementSeqNo !== undefined,
-      toolUse,
-      ...(toolUse.spillPath ? { spillPath: toolUse.spillPath } : {}),
-    };
-    return next;
-  }
-
-  if (entry.messageType === MESSAGE_TYPES.WORKFLOW_TASK) {
-    const call = entry.data;
-    const next: ConversationEntry = {
-      ...baseLogEntryFields(
-        entry,
-        'workflowTask',
-        formatCliWorkflowCallLine(call),
-      ),
-      finalized: entry.settlementSeqNo !== undefined,
-      task: call,
-    };
-    return next;
-  }
-
-  // A phase header is immutable at GROUP_START and therefore printable
-  // immediately. Its source-owned settlement order keeps cold reconstruction
-  // identical to the live append-only transcript even when planned call rows
-  // were recorded earlier.
-  const phaseData = phaseGroupData(entry);
-  if (phaseData) {
-    const phaseLabel = entry.text ?? '';
-    if (phaseLabel.trim().length === 0) return null;
-    // GROUP_END (phase close) carries no index/total; keep the counts the
-    // GROUP_START row established so `(i/n)` doesn't vanish when a phase ends.
-    const prevPhase = prev?.role === 'phase' ? prev : undefined;
-    const phaseIndex = phaseData.index ?? prevPhase?.phaseIndex;
-    const phaseTotal = phaseData.total ?? prevPhase?.phaseTotal;
-    const next: ConversationEntry = {
-      ...baseLogEntryFields(entry, 'phase', phaseLabel),
-      finalized: true,
-      phaseLabel,
-      ...(phaseIndex !== undefined ? { phaseIndex } : {}),
-      ...(phaseTotal !== undefined ? { phaseTotal } : {}),
-      ...(phaseData.attemptId !== undefined
-        ? { attemptId: phaseData.attemptId }
-        : {}),
-    };
-    return next;
-  }
-
-  // Workflow run/round/session lifecycle rows are projected into `taskGroups`,
-  // whose focused renderer joins them with artifacts. Other full-log children
-  // have no such renderer, so their lifecycle headings remain transcript rows.
-  if (
-    projectLifecycleToTaskGroups &&
-    (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START ||
-      entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END)
-  ) {
-    return null;
-  }
-
-  const text = entry.text ?? '';
-  const role = logEntryRole(entry.messageType);
-  let assistantTranscript: string | undefined;
-  let renderedText: string;
-  if (role === 'assistant') {
-    assistantTranscript = trimAssistantTranscriptLead(text);
-    renderedText = normalizeKnownHtmlForCliMarkdown(assistantTranscript);
-  } else if (entry.messageType === MESSAGE_TYPES.ERROR) {
-    renderedText = renderErrorLogEntryText(text, entry.data);
-  } else {
-    renderedText = summarizeFollowupMessage(text);
-  }
-  if (
-    role === 'assistant' &&
-    entry.messageType === MESSAGE_TYPES.DEFAULT &&
-    entry.type === STREAM_LOG_ENTRY_TYPES.LOG
-  ) {
-    renderedText = redactSecrets(safeTerminalText(renderedText));
-  }
-  // Assistant text is promoted by the settled-prefix advance once the model
-  // moves on to a later entry. User/error rows can't change after they
-  // appear, so they finalize immediately.
-  const finalized = entry.settlementSeqNo !== undefined || role !== 'assistant';
-  const spillPath = spillPathOf(entry);
-  const next: ConversationEntry = {
-    ...baseLogEntryFields(entry, role, renderedText),
-    ...(spillPath ? { spillPath } : {}),
-    ...(assistantTranscript !== undefined &&
-    hasIncompleteEmbeddedSubagentFollowup(assistantTranscript)
-      ? { pendingEmbeddedSubagentFollowup: true }
-      : {}),
-    finalized,
-  };
-  if (!isRenderableTranscriptEntry(next)) return null;
-  return next;
-}
-
-// An entry is "settled" once its content can no longer change, so it is
-// safe to print once into `<Static>` scrollback:
-//   - user / error: fixed the moment they appear.
-//   - workflow call: fixed once its typed state reaches a terminal status.
-//   - assistant: frozen once the model emits a later entry (more text or a
-//     tool call). The trailing block may still be streaming.
-//   - tool: frozen once its result lands (status COMPLETED).
-function isSettledEntry(
-  entry: ConversationEntry,
-  index: number,
-  total: number,
-): boolean {
-  switch (entry.role) {
-    case 'activity':
-      return entry.activity.finalized;
-    case 'user':
-    case 'error':
-    case 'phase':
-    case 'media':
-      return true;
-    case 'tool':
-      return (
-        entry.toolUse.status === TOOL_USE_STATUS.COMPLETED ||
-        entry.toolUse.status === TOOL_USE_STATUS.FAILED
-      );
-    case 'workflowTask':
-      return isTerminalWorkflowCallProgress(entry.task);
+function rowHeadline(row: TranscriptRow): string {
+  switch (row.kind) {
     case 'assistant':
-      return !entry.pendingEmbeddedSubagentFollowup && index < total - 1;
+      return normalizeKnownHtmlForCliMarkdown(
+        trimAssistantTranscriptLead(row.text.full),
+      );
+    case 'log':
+      return redactSecrets(
+        safeTerminalText(
+          normalizeKnownHtmlForCliMarkdown(
+            trimAssistantTranscriptLead(row.text.full),
+          ),
+        ),
+      );
+    // Detail rows lead with a bare noun; their `●` marker is layout geometry
+    // (ROLE_GEOMETRY.detail), not part of the text.
+    case 'thinking':
+      return 'Thinking';
+    case 'scratchpad':
+      return 'Scratchpad';
+    case 'user':
+      return row.summary.full;
+    case 'error':
+      return redactSecrets(safeTerminalText(row.summary.full));
+    case 'tool':
+      return '';
+    case 'webSearch':
+    case 'webFetch':
+      return row.label;
+    case 'fileList':
+    case 'missingOutputs':
+      return row.summary;
+    case 'latexdiff':
+      return `Latexdiff results (${row.entries.length})`;
+    case 'statistics':
+      return 'Usage';
+    case 'contextManagement':
+    case 'compactionActivity':
+      return row.label;
+    case 'progressStatus':
+      return safeTerminalText(row.summary.full);
+    case 'workflowTask':
+      return row.line;
+    case 'phase':
+      return row.heading;
+    case 'contextState':
+      return '';
+  }
+}
+
+/**
+ * The paint row for one projected transcript row. Never finalizes a row the
+ * source has not settled: the settled-prefix promotion advances over a row
+ * only once every row before it has promoted, so a fast tool can't jump ahead
+ * of still-streaming assistant text in `<Static>` (which is append-only).
+ */
+function conversationEntryFromRow(
+  row: TranscriptRow,
+): ConversationEntry | null {
+  // Context utilization is a status-bar fact, not a transcript line; it
+  // reaches the CLI through the same projection so there is one derivation,
+  // but it has no inline row on either host.
+  if (row.kind === 'contextState') return null;
+  const base = {
+    id: row.id,
+    row,
+    text: rowHeadline(row),
+    ...(row.seqNo !== undefined ? { sourceSeqNo: row.seqNo } : {}),
+    ...(row.messageType ? { messageType: row.messageType } : {}),
+    ...(row.settlementSeqNo !== undefined
+      ? { settlementSeqNo: row.settlementSeqNo }
+      : {}),
+    ...(row.spillPath ? { spillPath: row.spillPath } : {}),
+    finalized:
+      row.settlementSeqNo !== undefined ||
+      IMMEDIATELY_FINALIZED_ROW_KINDS.has(row.kind),
+  };
+  switch (row.kind) {
+    case 'tool':
+      return { ...base, role: 'tool', row, toolUse: row.toolUse };
+    case 'fileList':
+      return { ...base, role: 'media', row };
+    case 'workflowTask':
+      return { ...base, role: 'workflowTask', task: row.call };
+    case 'compactionActivity':
+      return {
+        ...base,
+        role: 'activity',
+        activity: row.block,
+        finalized: row.block.finalized,
+      };
+    case 'phase':
+      return {
+        ...base,
+        role: 'phase',
+        phaseLabel: row.phaseLabel,
+        ...(row.phaseIndex !== undefined ? { phaseIndex: row.phaseIndex } : {}),
+        ...(row.phaseTotal !== undefined ? { phaseTotal: row.phaseTotal } : {}),
+        ...(row.attemptId !== undefined ? { attemptId: row.attemptId } : {}),
+      };
+    case 'thinking':
+    case 'scratchpad':
+    case 'webSearch':
+    case 'webFetch':
+    case 'missingOutputs':
+    case 'latexdiff':
+    case 'statistics':
+    case 'contextManagement':
+    case 'progressStatus':
+      return { ...base, role: 'detail', row };
+    case 'assistant':
+    case 'log':
+    case 'user':
+    case 'error': {
+      const entry: ConversationEntry = {
+        ...base,
+        role: ROW_KIND_ROLE[row.kind],
+      };
+      return isRenderableTranscriptEntry(entry) ? entry : null;
+    }
   }
 }
 
 // Whether an unfinalized entry blocks the contiguous settled-prefix
 // promotion at its position: it is not settled, and a final stream status
-// cannot promote it either — activity and workflow-call rows never promote
+// cannot promote it either — compaction and workflow-call rows never promote
 // on `streamFinal` alone, because bridge cleanup may still replace their
 // planned/running state after cancellation.
 function blocksSettledPrefix(
@@ -415,10 +328,12 @@ function blocksSettledPrefix(
   total: number,
   streamFinal: boolean,
 ): boolean {
-  return (
-    !isSettledEntry(entry, index, total) &&
-    (entry.role === 'activity' || entry.role === 'workflowTask' || !streamFinal)
-  );
+  const row = entry.row;
+  // CLI-synthetic rows have no source projection; they are appended already
+  // finalized and never reach this predicate unsettled.
+  if (row === undefined) return false;
+  if (isSettledRow(row, index < total - 1)) return false;
+  return promotesOnlyOnTypedTerminalState(row) || !streamFinal;
 }
 
 // Promote the contiguous leading run of settled entries to `finalized`, so
@@ -550,7 +465,6 @@ export function createTranscriptFoldState(): TranscriptFoldState {
     latestResponsePos: -1,
     workflowAttemptSeqNo: -1,
     workflowAttemptBoundaryDeclared: false,
-    fullLogChild: false,
     workflowOperationalOnly: false,
     projectLifecycleToTaskGroups: false,
     synthetics: [],
@@ -783,17 +697,6 @@ function retrackLiveActivityEntry(
     );
 }
 
-function workflowCallAttemptId(entry: StreamLogEntry): string | undefined {
-  const data = entry.data;
-  if (typeof data !== 'object' || data === null || !('attemptId' in data)) {
-    return undefined;
-  }
-  const attemptId = data.attemptId;
-  return typeof attemptId === 'string' && attemptId.length > 0
-    ? attemptId
-    : undefined;
-}
-
 /** Tagged rows from an earlier attempt, or any tagged row after a malformed
  *  current-attempt boundary. Untagged legacy rows stay. */
 function isSupersededAttemptId(
@@ -809,19 +712,19 @@ function isSupersededAttemptId(
   );
 }
 
-function isPriorWorkflowAttemptLogEntry(
+function isPriorWorkflowAttemptRow(
   state: TranscriptFoldState,
-  entry: StreamLogEntry,
+  row: TranscriptRow,
 ): boolean {
   if (!state.workflowAttemptBoundaryDeclared) return false;
-  const phase = phaseGroupData(entry);
-  if (phase) return isSupersededAttemptId(state, phase.attemptId);
-  if (entry.messageType === MESSAGE_TYPES.WORKFLOW_TASK) {
-    return isSupersededAttemptId(state, workflowCallAttemptId(entry));
+  if (row.kind === 'phase') return isSupersededAttemptId(state, row.attemptId);
+  if (row.kind === 'workflowTask') {
+    return isSupersededAttemptId(state, row.call.attemptId);
   }
   return (
-    entry.messageType === MESSAGE_TYPES.DEFAULT &&
-    entry.seqNo < state.workflowAttemptSeqNo
+    row.messageType === MESSAGE_TYPES.DEFAULT &&
+    row.seqNo !== undefined &&
+    row.seqNo < state.workflowAttemptSeqNo
   );
 }
 
@@ -886,73 +789,44 @@ function applyChangedLogEntry(
     // default-log leftovers in the streaming feed.
     evictPriorWorkflowAttemptItems(state, ctx.flags);
   }
-  const wOO = state.workflowOperationalOnly;
-  // Detached child runs surface their full log output (phase group rows and
-  // plain log lines, both `DEFAULT`) when focused, unlike the root/subagent
-  // transcript which shows only model/tool/user/error rows.
-  const transcriptCandidate = (
-    state.fullLogChild
-      ? CHILD_STREAM_LOG_MESSAGE_TYPES
-      : TRANSCRIPT_MESSAGE_TYPES
-  ).has(messageType);
-  const workflowDefaultLog =
-    wOO &&
-    entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
-    entry.level !== 'debug' &&
-    messageType === MESSAGE_TYPES.DEFAULT;
-  const workflowPhaseHeader =
-    wOO &&
-    messageType === MESSAGE_TYPES.DEFAULT &&
-    phaseGroupData(entry) !== null;
-  const workflowCall = wOO && messageType === MESSAGE_TYPES.WORKFLOW_TASK;
-
   const trackedPos = state.indexById.get(entry.id);
   const existingPos =
     trackedPos !== undefined && state.items[trackedPos].rank === 1
       ? trackedPos
       : undefined;
-
-  if (isPriorWorkflowAttemptLogEntry(state, entry)) {
+  const drop = (): void => {
     if (existingPos !== undefined)
       removeFoldItemAt(state, existingPos, ctx.flags);
-    return;
-  }
-
-  if (
-    !transcriptCandidate &&
-    !workflowDefaultLog &&
-    !workflowPhaseHeader &&
-    !workflowCall
-  ) {
-    if (existingPos !== undefined)
-      removeFoldItemAt(state, existingPos, ctx.flags);
-    return;
-  }
+  };
 
   const prev =
     existingPos !== undefined
       ? state.items[existingPos].rendered
       : ctx.inherit?.get(entry.id);
-  let rendered = renderLogEntryFresh(
-    entry,
-    prev,
-    state.projectLifecycleToTaskGroups,
-  );
+  // Workflow-call model ids reach the shared projection already resolved to
+  // their runtime display label; the projection itself never reaches into the
+  // model registry.
+  const row = projectTranscriptRow(projectWorkflowCallEntry(entry), {
+    ...(prev?.row ? { previousRow: prev.row } : {}),
+    projectLifecycleToTaskGroups: state.projectLifecycleToTaskGroups,
+  });
+  if (row === undefined || isPriorWorkflowAttemptRow(state, row)) {
+    drop();
+    return;
+  }
+  let rendered = conversationEntryFromRow(row);
   // Workflow-agent details are an operational feed, not a model transcript.
   // Detached workflow-script runs intentionally keep their full child log,
-  // including Running/Finished and error rows. A phase uses the DEFAULT
-  // message type, but remains an operational row.
+  // including Running/Finished and error rows.
   if (
     rendered !== null &&
-    wOO &&
-    !WORKFLOW_OPERATIONAL_ROLES.has(rendered.role) &&
-    !workflowDefaultLog
+    state.workflowOperationalOnly &&
+    !isWorkflowOperationalRow(row, rendered.role)
   ) {
     rendered = null;
   }
   if (rendered === null) {
-    if (existingPos !== undefined)
-      removeFoldItemAt(state, existingPos, ctx.flags);
+    drop();
     return;
   }
   // An entry the slice already promoted re-inherits the flag here, so a
@@ -978,18 +852,19 @@ function reconcileCompactionRows(
   flags: FoldChangeFlags,
 ): void {
   for (const block of projection.blocks) {
-    const id = `compaction:${block.operationId}`;
-    const pos = state.indexById.get(id);
+    const row = compactionActivityRow(block);
+    const pos = state.indexById.get(row.id);
     if (pos !== undefined && state.items[pos].block === block) continue;
-    const rendered: ConversationEntry = {
-      id,
-      sourceSeqNo: block.startPosition,
-      role: 'activity',
-      text: COMPACTION_ACTIVITY_LABEL[block.status],
-      messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
-      finalized: block.finalized,
-      activity: block,
-    };
+    const rendered = conversationEntryFromRow(row);
+    if (rendered === null) continue;
+    // Same container filter the log and synthetic paths apply, so a
+    // workflow-agent stream has one membership rule rather than three.
+    if (
+      state.workflowOperationalOnly &&
+      !isWorkflowOperationalRow(row, rendered.role)
+    ) {
+      continue;
+    }
     if (pos !== undefined) {
       state.items[pos].block = block;
       replaceFoldRendered(state, pos, rendered, flags);

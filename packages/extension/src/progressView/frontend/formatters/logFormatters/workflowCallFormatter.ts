@@ -5,16 +5,8 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { ProgressEvents } from '@progressView/frontend/events';
 
 // Local imports - shared contracts
-import {
-  MESSAGE_TYPES,
-  WORKFLOW_TASK_STATUS_LABEL,
-  type LogMessageOf,
-  type WorkflowCallProgress,
-} from '@shared/schemas';
-import {
-  formatWorkflowCallMetadataParts,
-  workflowCallDetail,
-} from '@shared/copy/workflowCall';
+import type { WorkflowCallProgress } from '@shared/schemas';
+import type { WorkflowTaskRow } from '@shared/transcript';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { assertNever } from '@utils/core';
@@ -38,9 +30,8 @@ function statusIcon(call: WorkflowCallProgress): TemplateResult {
 }
 
 function terminalMetadata(
-  call: WorkflowCallProgress,
+  parts: readonly string[],
 ): TemplateResult | typeof nothing {
-  const parts = formatWorkflowCallMetadataParts(call);
   return parts.length > 0
     ? html`<span class="workflow-task-meta">${parts.join(' · ')}</span>`
     : nothing;
@@ -48,10 +39,9 @@ function terminalMetadata(
 
 /** Render one workflow call as a status card updated in place by log id. */
 export function formatWorkflowCallTemplate(
-  message: LogMessageOf<typeof MESSAGE_TYPES.WORKFLOW_TASK>,
+  row: WorkflowTaskRow,
 ): TemplateResult {
-  const call = message.data;
-  const detail = workflowCallDetail(call);
+  const { call, detail } = row;
   const hasChildStream = call.childStreamId !== undefined;
   const openChildStream = (event: Event): void => {
     if (call.childStreamId === undefined) return;
@@ -70,8 +60,8 @@ export function formatWorkflowCallTemplate(
       class=${`workflow-task workflow-task--${call.status}${
         hasChildStream ? ' workflow-task--linked' : ''
       }`}
-      data-log-id=${message.id}
-      data-group-id=${message.groupId ?? ''}
+      data-log-id=${row.id}
+      data-group-id=${row.groupId ?? ''}
       role=${hasChildStream ? 'button' : nothing}
       tabindex=${hasChildStream ? '0' : nothing}
       @click=${hasChildStream ? openChildStream : nothing}
@@ -80,7 +70,7 @@ export function formatWorkflowCallTemplate(
       <span class="workflow-task-icon">${statusIcon(call)}</span>
       <span class="workflow-task-body">
         <span class="workflow-task-title">${call.label}</span>
-        ${terminalMetadata(call)}
+        ${terminalMetadata(row.metadataParts)}
         ${
           detail
             ? html`<span
@@ -90,9 +80,7 @@ export function formatWorkflowCallTemplate(
             : nothing
         }
       </span>
-      <span class="workflow-task-status"
-        >${WORKFLOW_TASK_STATUS_LABEL[call.status]}</span
-      >
+      <span class="workflow-task-status">${row.statusLabel}</span>
     </div>
   `;
 }
