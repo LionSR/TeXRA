@@ -541,7 +541,6 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
           <wa-button-group
             id=${ELEMENT_IDS.TOOLBAR_CONTAINER}
             label="Stream actions"
-            data-agent-mode=${agentCategory}
           >
             ${repeat(
               toolbarButtonViews,

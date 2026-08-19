@@ -407,7 +407,6 @@ export class StreamTabs extends LitElement {
   protected override willUpdate(changed: PropertyValues): void {
     if (
       !changed.has('childStreamsByParent') &&
-      !changed.has('streamStates') &&
       !changed.has('pendingApprovalStreamIds') &&
       !changed.has('activeStreamId')
     ) {
@@ -415,7 +414,6 @@ export class StreamTabs extends LitElement {
     }
 
     const projection = computeStreamTreeProjection({
-      streamStates: this.streamStates,
       childStreamsByParent: this.childStreamsByParent,
       userOverrides: this.userOverride,
       pendingApprovalStreamIds: this.pendingApprovalStreamIds,
