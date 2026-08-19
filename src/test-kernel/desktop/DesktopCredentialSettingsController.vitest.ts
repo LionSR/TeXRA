@@ -131,6 +131,7 @@ async function createFixture({
     externalOpener: {
       openExternal: async () => undefined,
       presentSubscriptionSignInUrl: () => undefined,
+      presentSubscriptionDeviceCode: () => undefined,
     },
     notifications: {
       showInfoMessage: async (message) => {

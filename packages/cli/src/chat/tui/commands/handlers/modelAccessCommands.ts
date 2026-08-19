@@ -1,5 +1,5 @@
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
-import { refreshSubscriptionPreferenceViews } from '@cli/chat/tui/state/codexSubscription';
+import { refreshSubscriptionPreferenceViews } from '@cli/chat/tui/state/subscriptionPreference';
 import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
 import {
   parseCliModelAccessSelection,

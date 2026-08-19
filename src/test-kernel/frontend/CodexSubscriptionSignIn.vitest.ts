@@ -29,13 +29,15 @@ vi.mock('vscode', () => ({
   },
 }));
 
-vi.mock('@auth/codex', () => ({
+vi.mock('@auth/codex', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@auth/codex')>()),
   codexCoordinator: vi.fn(() => ({})),
   loginWithDeviceCode: vi.fn(),
   loginWithLoopback: mocks.loginWithLoopback,
 }));
 
-vi.mock('@model/codex/codexPreference', () => ({
+vi.mock('@model/codex/codexPreference', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@model/codex/codexPreference')>()),
   setPreferCodexSubscription: mocks.setPreferCodexSubscription,
 }));
 
@@ -47,8 +49,11 @@ vi.mock('@model/computeModelOptions', () => ({
   invalidateModelOptionsCache: mocks.invalidateModelOptionsCache,
 }));
 
-const { signInWithChatGptSubscription } =
-  await import('@frontend/auth/codexSubscriptionSignIn');
+const { signInWithSubscription } =
+  await import('@frontend/auth/subscriptionSignIn');
+
+const signInWithChatGptSubscription = (channel: string) =>
+  signInWithSubscription(channel, 'chatgpt');
 
 function loopbackSession() {
   return {
@@ -79,7 +84,7 @@ function mockPreferenceEnabled(): void {
   });
 }
 
-describe('signInWithChatGptSubscription', () => {
+describe('signInWithSubscription (ChatGPT)', () => {
   beforeEach(() => {
     mocks.withProgress.mockImplementation((_options, task) => task());
   });
