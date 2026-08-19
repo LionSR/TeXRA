@@ -21,7 +21,7 @@ import {
   settingIsBoolean,
   settingIsNumber,
   settingIsString,
-  type StateSettingEntry,
+  type SurfacedSettingEntry,
 } from '@shared/schemas';
 import { stripPrefix } from '@shared/config/configKeys';
 import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
@@ -46,7 +46,7 @@ export type SettingInputResult =
  * editor, form-backed settings delegate to an existing list form; anything
  * else (e.g. a record) is read-only.
  */
-export function settingEditKind(entry: StateSettingEntry): SettingEditKind {
+export function settingEditKind(entry: SurfacedSettingEntry): SettingEditKind {
   if (entry.openForm) return 'form';
   if (settingEnumOptions(entry)) return 'enum';
   if (settingIsBoolean(entry)) return 'boolean';
@@ -77,7 +77,7 @@ export function coerceSettingInput(
 
 /** Coerce text input, then run the setting's own schema before writing. */
 export function validateSettingInput(
-  entry: StateSettingEntry,
+  entry: SurfacedSettingEntry,
   raw: string,
   isNumber: boolean,
 ): SettingInputResult {
@@ -106,18 +106,18 @@ export function formatSettingValue(value: unknown): string {
   return String(value);
 }
 
-/** The store the CLI reads/writes this setting from (cliStore override wins). */
-export function settingStoreLabel(entry: StateSettingEntry): string {
+/** The store the CLI reads/writes this setting from (`entry.slots.cli`). */
+export function settingStoreLabel(entry: SurfacedSettingEntry): string {
   return settingSlot(entry, 'cli');
 }
 
-export function settingDisplayName(entry: StateSettingEntry): string {
+export function settingDisplayName(entry: SurfacedSettingEntry): string {
   return entry.title ?? stripPrefix(entry.key);
 }
 
 export function buildConfigListItems(
-  entries: readonly StateSettingEntry[],
-  readValue: (entry: StateSettingEntry) => unknown,
+  entries: readonly SurfacedSettingEntry[],
+  readValue: (entry: SurfacedSettingEntry) => unknown,
 ): Array<SelectItem<string>> {
   return entries.map((entry) => {
     const kind = settingEditKind(entry);
@@ -137,7 +137,7 @@ export function buildConfigListItems(
 }
 
 export function buildEnumItems(
-  entry: StateSettingEntry,
+  entry: SurfacedSettingEntry,
 ): Array<SelectItem<string>> {
   const values = settingEnumOptions(entry) ?? [];
   const descriptions = entry.enumDescriptions ?? [];
@@ -149,14 +149,14 @@ export function buildEnumItems(
 }
 
 export interface ConfigFormProps {
-  readonly entries: readonly StateSettingEntry[];
-  readonly readValue: (entry: StateSettingEntry) => unknown;
+  readonly entries: readonly SurfacedSettingEntry[];
+  readonly readValue: (entry: SurfacedSettingEntry) => unknown;
   readonly writeValue: (
-    entry: StateSettingEntry,
+    entry: SurfacedSettingEntry,
     value: unknown,
   ) => void | Promise<void>;
   /** Reset a setting to its default (delete the key). */
-  readonly resetValue?: (entry: StateSettingEntry) => void | Promise<void>;
+  readonly resetValue?: (entry: SurfacedSettingEntry) => void | Promise<void>;
   readonly openForm?: (formName: string) => void;
   readonly formLinks?: readonly {
     readonly name: string;
@@ -177,12 +177,12 @@ type ConfigFormMode =
   | { readonly kind: 'list'; readonly category: string }
   | {
       readonly kind: 'enum';
-      readonly entry: StateSettingEntry;
+      readonly entry: SurfacedSettingEntry;
       readonly category: string;
     }
   | {
       readonly kind: 'text';
-      readonly entry: StateSettingEntry;
+      readonly entry: SurfacedSettingEntry;
       readonly isNumber: boolean;
       readonly category: string;
     };
@@ -193,7 +193,7 @@ const SELECT_CHROME_ROWS = 5;
 
 /** Inline text editor for a string/number setting (its own input buffer). */
 function ConfigTextEditor(props: {
-  readonly entry: StateSettingEntry;
+  readonly entry: SurfacedSettingEntry;
   readonly initialValue: string;
   readonly isNumber: boolean;
   readonly onSubmit: (raw: string) => string | undefined;
@@ -255,7 +255,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   // once the write lands, and rolls back if the write is rejected.
   const [overrides, setOverrides] = useState<Record<string, unknown>>({});
 
-  const effective = (entry: StateSettingEntry): unknown =>
+  const effective = (entry: SurfacedSettingEntry): unknown =>
     Object.hasOwn(overrides, entry.key)
       ? overrides[entry.key]
       : props.readValue(entry);
@@ -265,7 +265,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   // promise routes both a synchronous throw (e.g. a schema-rejected value) and
   // an async rejection through the single `.catch`.
   const runWrite = (
-    entry: StateSettingEntry,
+    entry: SurfacedSettingEntry,
     optimisticValue: unknown,
     action: () => void | Promise<void>,
   ): void => {
@@ -279,14 +279,14 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
       });
   };
 
-  const commit = (entry: StateSettingEntry, value: unknown): void =>
+  const commit = (entry: SurfacedSettingEntry, value: unknown): void =>
     runWrite(entry, value, () => props.writeValue(entry, value));
 
   // Clearing a text field resets the setting (deletes the key) so its default
   // reappears — otherwise a stored empty string can read back as "(empty)" while
   // a consumer that coalesces empty→default (e.g. the git-author reader) quietly
   // uses the default, leaving the panel and the effect out of sync.
-  const resetEntry = (entry: StateSettingEntry): void => {
+  const resetEntry = (entry: SurfacedSettingEntry): void => {
     if (!props.resetValue) {
       commit(entry, '');
       return;
