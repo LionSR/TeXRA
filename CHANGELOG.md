@@ -47,6 +47,11 @@ All notable changes to this project will be documented in this file.
   previously never applied, and xAI models without documented long-context
   rates now warn instead of silently billing flat. Rare request edge cases
   also no longer drop a request's body, headers, or cancellation.
+- **latexdiff no longer rewrites citations as changed prose** — `\citealp`,
+  `\citeauthor`, `\citeyear`, `\supercite`, `\smartcite`, `\nocite`, and
+  their capitalized forms are now recognized wherever citations are, so a diff
+  marks up the surrounding sentence instead of the bibliography key, and
+  citation-key extraction sees the same macros latexdiff does.
 - **A placeholder API key is rejected everywhere** — pasting a masked or
   example value such as `sk-xxxxxx` or `your-api-key` into Settings → Profile
   is now refused with an explanation, the way `texra` already refused it.
