@@ -10,7 +10,10 @@ import {
   keyboardEventToAccelerator,
 } from '@shared/commands/shortcutPreferences';
 
-import type { DesktopPlatform } from '@shared/commands/accelerators';
+import {
+  toElectronAccelerator,
+  type DesktopPlatform,
+} from '@shared/commands/accelerators';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
@@ -34,7 +37,10 @@ export function desktopCommandPaletteShortcut(
     id: DESKTOP_COMMAND_PALETTE_ID,
     label: 'Show Commands',
     category: 'TeXRA',
-    accelerator: platform === 'darwin' ? 'Command+K' : 'Control+K',
+    accelerator: toElectronAccelerator(
+      { key: 'ctrl+k', mac: 'cmd+k' },
+      platform,
+    ),
   };
 }
 

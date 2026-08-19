@@ -19,6 +19,7 @@ import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import {
   buildToolDashboardItems,
   planToolTerminalAction,
@@ -120,7 +121,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
   private readonly subscriptionUsage: SubscriptionUsageReader;
-  public readonly signInChatGpt: () => Promise<void>;
 
   constructor(context: vscode.ExtensionContext) {
     super('SettingsView');
@@ -192,7 +192,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       ctx,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
     );
-    this.signInChatGpt = this.chatgptHandlers.handleSignIn;
     this.grokHandlers = new SubscriptionHandlers(
       'grok',
       () =>
@@ -232,6 +231,17 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       void this.withActiveWebview((w) => this.sendGoalList(w));
     });
     context.subscriptions.push({ dispose: unsubscribeGoals });
+  }
+
+  /**
+   * Sign in to a subscription provider from outside the settings webview.
+   * Routes to the same handler the Settings → Subscriptions button runs, so
+   * the command palette gets the status round-trip and credential refresh
+   * tail instead of a bespoke sign-in that leaves both stale.
+   */
+  public signInSubscription(providerId: SubscriptionProviderId): Promise<void> {
+    const handlers = { chatgpt: this.chatgptHandlers, grok: this.grokHandlers };
+    return handlers[providerId].handleSignIn();
   }
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
@@ -317,7 +327,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.githubHandlers.handleUnsubscribePR(message),
       openPRSubscriptionStream: (message) =>
         this.githubHandlers.handleOpenPRSubscriptionStream(message),
-      signInChatGpt: this.signInChatGpt,
+      signInChatGpt: () => this.chatgptHandlers.handleSignIn(),
       signOutChatGpt: () => this.chatgptHandlers.handleSignOut(),
       setChatGptPreferSubscription: (message) =>
         this.chatgptHandlers.handleSetPreferSubscription(message.enabled),

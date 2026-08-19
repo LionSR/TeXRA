@@ -135,14 +135,14 @@ describe('desktop command surface', () => {
           label: 'Toggle Side Panel',
           category: 'View',
           icon: 'picture-in-picture',
-          accelerator: 'Command+Alt+B',
+          accelerator: 'Command+Option+B',
         },
         {
           id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
           label: 'Toggle Summary Bar',
           category: 'View',
           icon: 'list-ul',
-          accelerator: 'Command+Alt+S',
+          accelerator: 'Command+Option+S',
         },
       ]),
     );
@@ -172,10 +172,7 @@ describe('desktop command surface', () => {
 
   it('formats accelerators for desktop tooltip display', () => {
     expect(formatDesktopAccelerator('Command+Option+M', 'darwin')).toBe('⌘⌥M');
-    expect(formatDesktopAccelerator('CommandOrControl+O', 'darwin')).toBe('⌘O');
-    expect(formatDesktopAccelerator('CommandOrControl+O', 'linux')).toBe(
-      'Ctrl+O',
-    );
+    expect(formatDesktopAccelerator('Control+O', 'linux')).toBe('Ctrl+O');
     expect(formatDesktopAccelerator('Control+Alt+Shift+C', 'linux')).toBe(
       'Ctrl+Alt+Shift+C',
     );

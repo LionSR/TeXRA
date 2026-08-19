@@ -28,15 +28,6 @@ export function toElectronAccelerator(
   return key.split('+').map(toElectronAcceleratorPart).join('+');
 }
 
-export function toPlatformAccelerator(
-  accelerator: string | undefined,
-  platform: DesktopPlatform,
-): string | undefined {
-  if (!accelerator) return undefined;
-  if (platform !== 'darwin') return accelerator;
-  return accelerator.replaceAll('CommandOrControl', 'Command');
-}
-
 /**
  * Maps a browser `navigator.platform` string to a `DesktopPlatform` so
  * renderer code can share one platform rule instead of re-deriving it with
@@ -60,7 +51,6 @@ export function formatDesktopAccelerator(
   if (!accelerator) return undefined;
   const isMac = platform === 'darwin';
   const parts = accelerator
-    .replaceAll('CommandOrControl', isMac ? 'Command' : 'Control')
     .split('+')
     .map((part) => toDisplayAcceleratorPart(part, platform));
   return parts.join(isMac ? '' : '+');
