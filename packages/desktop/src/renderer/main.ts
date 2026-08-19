@@ -69,6 +69,7 @@ import {
 } from '@shared/wa/actionButtons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
 import {
@@ -1129,14 +1130,9 @@ function rerenderShell(): void {
   observeSurfaceResizes();
 }
 
-function toBootstrapErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return 'TeXRA could not finish starting up.';
-}
-
 function renderBootstrapFallback(error: unknown): void {
-  const message = toBootstrapErrorMessage(error);
+  const message =
+    extractErrorMessage(error) ?? 'TeXRA could not finish starting up.';
   const reload = () => window.location.reload();
   render(
     html`
@@ -1169,7 +1165,7 @@ function renderBootstrapFallback(error: unknown): void {
 
 function reportRuntimeFailure(error: unknown): void {
   const shouldReload = window.confirm(
-    `TeXRA encountered an unexpected error.\n\n${toBootstrapErrorMessage(error)}\n\nReload TeXRA now?`,
+    `TeXRA encountered an unexpected error.\n\n${extractErrorMessage(error) ?? 'TeXRA could not finish starting up.'}\n\nReload TeXRA now?`,
   );
   if (shouldReload) window.location.reload();
 }
