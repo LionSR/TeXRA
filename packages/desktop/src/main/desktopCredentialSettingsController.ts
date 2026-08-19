@@ -168,6 +168,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         await options.notifications.showErrorMessage(
           `${message}: ${toErrorMessage(error)}`,
         );
+        options.onError(error);
         await this.postProfileData();
       },
     });
