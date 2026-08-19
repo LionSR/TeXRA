@@ -135,7 +135,7 @@ describe('LatexMediaManager PDF compilation', () => {
         const outputDirectory = options.outputDirectory!;
         await mkdir(outputDirectory, { recursive: true });
         await writeFile(compiledPdfPath, 'compiled pdf');
-        return { ok: true };
+        return { ok: true, pdfPath: compiledPdfPath };
       },
     );
 
