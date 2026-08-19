@@ -134,8 +134,14 @@ function assertKnownActiveStreamId(
 // messageDispatcher.ts. This slice only owns a subset.
 export const streamLifecycleHandlers = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA]: (data) => {
-    const { streamInfo, streamState, activeStream } = data;
+    const { streamInfo: rawInfo, streamState, activeStream } = data;
     const previous = appState.get();
+    const existingInfo = previous.streamById.get(rawInfo.name);
+    const description = rawInfo.description ?? existingInfo?.description;
+    const streamInfo =
+      description !== rawInfo.description
+        ? { ...rawInfo, description }
+        : rawInfo;
     const streams = [
       ...[...previous.streamById.values()].filter(
         (stream) => stream.name !== streamInfo.name,
