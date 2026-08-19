@@ -17,7 +17,7 @@ import type { StreamTabId } from '@shared/schemas';
 
 import { SessionHostInteractions } from './HostInteractions';
 
-/** The three independently-tracked bypass kinds `SessionApprovals` owns. */
+/** The three independently-tracked bypass values `SessionApprovals` owns. */
 type BypassAncestryKind = 'toolEdit' | 'bash' | 'proposal';
 
 const ALL_BYPASS_ANCESTRY_KINDS: readonly BypassAncestryKind[] = [
@@ -220,26 +220,21 @@ export interface SessionApprovals {
    */
   setDelegatedWorkBypasses(streamId: StreamTabId, enabled: boolean): void;
   /**
-   * Record that `childStreamId` descends from `parentStreamId` for bypass
-   * resolution purposes: each bypass kind named in `kinds` will defer to the
-   * parent's bypass state whenever the child has no explicit value of its
-   * own. Ancestry is tracked separately per kind — linking `bash` does NOT
-   * also let the child inherit `toolEdit` or `proposal` bypass — so a
-   * delegation that only wants some kinds to follow the parent cannot grant
-   * unrelated approvals accidentally.
+   * Record that `childStreamId` descends from `parentStreamId`: every bypass
+   * kind defers to the parent's state whenever the child has no explicit
+   * value of its own.
    *
-   * Used for delegated subagent streams (parent = the orchestrator stream,
-   * all kinds, so complete delegated-task approval remains effective through
-   * nested orchestrators; see `configureDelegatedChildApprovals`) and, in the
-   * CLI, successive conversation rounds (parent = the previous round's root
-   * stream, all kinds — a CLI round should carry forward whichever bypasses
-   * were on) — both mint a fresh `StreamTabId` that would otherwise start
-   * every bypass kind ungated.
+   * Used for delegated subagent streams (parent = the orchestrator stream, so
+   * complete delegated-task approval remains effective through nested
+   * orchestrators; see `configureDelegatedChildApprovals`) and, in the CLI,
+   * successive conversation rounds (parent = the previous round's root
+   * stream, so a round carries forward whichever bypasses were on) — both
+   * mint a fresh `StreamTabId` that would otherwise start every bypass kind
+   * ungated.
    */
   registerStreamParent(
     childStreamId: StreamTabId,
     parentStreamId: StreamTabId,
-    kinds?: readonly BypassAncestryKind[],
   ): void;
   /**
    * Promote a stream out of its approval ancestry while preserving each
@@ -247,8 +242,8 @@ export interface SessionApprovals {
    */
   detachStreamFromParent(streamId: StreamTabId): void;
   /**
-   * Drop `streamId` from the ancestry graph (all kinds). Direct children are
-   * first promoted through {@link detachStreamFromParent}, preserving their
+   * Drop `streamId` from the ancestry graph. Direct children are first
+   * promoted through {@link detachStreamFromParent}, preserving their
    * effective values before the torn-down parent's own values are cleared.
    */
   forgetStreamAncestry(streamId: StreamTabId): void;
@@ -264,54 +259,49 @@ export function createSessionApprovals(
     'setApprovalBypassState'
   > = new SessionHostInteractions(),
 ): SessionApprovals {
-  // One ancestry graph per bypass kind — deliberately NOT shared — so that
-  // e.g. linking `bash` ancestry for a delegated subagent can never let it
-  // also inherit `toolEdit` or `proposal` bypass from the same parent.
-  const parentOf: Record<BypassAncestryKind, Map<StreamTabId, StreamTabId>> = {
-    toolEdit: new Map(),
-    bash: new Map(),
-    proposal: new Map(),
-  };
-  const resolveParentFor =
-    (kind: BypassAncestryKind) =>
-    (streamId: StreamTabId): StreamTabId | undefined =>
-      parentOf[kind].get(streamId);
-  const resolveDescendantsFor =
-    (kind: BypassAncestryKind) =>
-    (streamId: StreamTabId): readonly StreamTabId[] => {
-      const graph = parentOf[kind];
-      const descendants: StreamTabId[] = [];
-      const pending = [streamId];
-      const seen = new Set(pending);
-      for (let index = 0; index < pending.length; index += 1) {
-        const parent = pending[index];
-        for (const [child, directParent] of graph) {
-          if (directParent !== parent || seen.has(child)) continue;
-          seen.add(child);
-          descendants.push(child);
-          pending.push(child);
-        }
+  // One ancestry graph shared by every bypass kind. The sole delegation entry
+  // point (`configureDelegatedChildApprovals`) and the CLI's round linking
+  // both register all kinds at once, so a per-kind subset link is not
+  // representable — the bypass *values* stay independent per kind, only the
+  // parent edge is shared.
+  const parentOf = new Map<StreamTabId, StreamTabId>();
+  const resolveParent = (streamId: StreamTabId): StreamTabId | undefined =>
+    parentOf.get(streamId);
+  const resolveDescendants = (
+    streamId: StreamTabId,
+  ): readonly StreamTabId[] => {
+    const descendants: StreamTabId[] = [];
+    const pending = [streamId];
+    const seen = new Set(pending);
+    for (let index = 0; index < pending.length; index += 1) {
+      const parent = pending[index];
+      for (const [child, directParent] of parentOf) {
+        if (directParent !== parent || seen.has(child)) continue;
+        seen.add(child);
+        descendants.push(child);
+        pending.push(child);
       }
-      return descendants;
-    };
+    }
+    return descendants;
+  };
 
   const toolEdit = createStreamApprovalController({
     kind: 'toolEdit',
     interactions,
-    resolveParent: resolveParentFor('toolEdit'),
-    resolveDescendants: resolveDescendantsFor('toolEdit'),
+    resolveParent,
+    resolveDescendants,
   });
   const bash = createStreamApprovalController({
     kind: 'bash',
     interactions,
-    resolveParent: resolveParentFor('bash'),
-    resolveDescendants: resolveDescendantsFor('bash'),
+    resolveParent,
+    resolveDescendants,
   });
   const proposal = createStreamApprovalBypass(
     'superYolo',
     interactions,
-    resolveParentFor('proposal'),
-    resolveDescendantsFor('proposal'),
+    resolveParent,
+    resolveDescendants,
   );
   const bypassByKind: Record<BypassAncestryKind, StreamApprovalBypass> = {
     toolEdit: toolEdit.bypass,
@@ -319,21 +309,16 @@ export function createSessionApprovals(
     proposal,
   };
 
-  function detachKindFromParent(
-    kind: BypassAncestryKind,
-    streamId: StreamTabId,
-  ): void {
-    const graph = parentOf[kind];
-    if (!graph.has(streamId)) return;
-    const bypass = bypassByKind[kind];
-    const effectiveValue = bypass.isBypassed(streamId);
-    graph.delete(streamId);
-    bypass.setBypass(streamId, effectiveValue, { silent: true });
-  }
-
   function detachStreamFromParent(streamId: StreamTabId): void {
-    for (const kind of ALL_BYPASS_ANCESTRY_KINDS) {
-      detachKindFromParent(kind, streamId);
+    if (!parentOf.has(streamId)) return;
+    // Capture every kind's inherited value before the edge goes away, then
+    // pin each one as the stream's own explicit value.
+    const effectiveValues = ALL_BYPASS_ANCESTRY_KINDS.map(
+      (kind) => [kind, bypassByKind[kind].isBypassed(streamId)] as const,
+    );
+    parentOf.delete(streamId);
+    for (const [kind, effectiveValue] of effectiveValues) {
+      bypassByKind[kind].setBypass(streamId, effectiveValue, { silent: true });
     }
   }
 
@@ -350,31 +335,22 @@ export function createSessionApprovals(
       toolEdit.bypass.setBypass(streamId, enabled);
       bash.bypass.setBypass(streamId, enabled);
     },
-    registerStreamParent(
-      childStreamId,
-      parentStreamId,
-      kinds = ALL_BYPASS_ANCESTRY_KINDS,
-    ) {
-      for (const kind of kinds) {
-        parentOf[kind].set(childStreamId, parentStreamId);
-      }
+    registerStreamParent(childStreamId, parentStreamId) {
+      parentOf.set(childStreamId, parentStreamId);
     },
     detachStreamFromParent,
     forgetStreamAncestry(streamId) {
-      for (const kind of ALL_BYPASS_ANCESTRY_KINDS) {
-        const graph = parentOf[kind];
-        const directChildren = [...graph]
-          .filter(([, parent]) => parent === streamId)
-          .map(([child]) => child);
-        for (const child of directChildren) detachKindFromParent(kind, child);
-        graph.delete(streamId);
-      }
+      const directChildren = [...parentOf]
+        .filter(([, parent]) => parent === streamId)
+        .map(([child]) => child);
+      for (const child of directChildren) detachStreamFromParent(child);
+      parentOf.delete(streamId);
     },
     clearAll() {
       toolEdit.bypass.clearAll();
       bash.bypass.clearAll();
       proposal.clearAll();
-      for (const kind of ALL_BYPASS_ANCESTRY_KINDS) parentOf[kind].clear();
+      parentOf.clear();
     },
   };
 }

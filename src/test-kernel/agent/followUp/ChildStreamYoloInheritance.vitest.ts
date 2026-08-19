@@ -221,26 +221,6 @@ describe('child subagent stream approval inheritance', () => {
     expect(isApprovalBypassedForStream(child)).toBe(true);
   });
 
-  it('preserves independent ancestry when one kind loses its parent', () => {
-    const editParent = 'stream:edit-parent-cleanup' as StreamTabId;
-    const bashParent = 'stream:bash-parent-survives' as StreamTabId;
-    const child = 'stream:split-ancestry-child' as StreamTabId;
-    setToolEditApprovalSessionBypass(editParent, true, { silent: true });
-    setBashApprovalSessionBypass(bashParent, true, { silent: true });
-    currentSession().approvals.registerStreamParent(child, editParent, [
-      'toolEdit',
-    ]);
-    currentSession().approvals.registerStreamParent(child, bashParent, [
-      'bash',
-    ]);
-
-    cleanupApprovalsForStream(editParent);
-    setBashApprovalSessionBypass(bashParent, false, { silent: true });
-
-    expect(isApprovalBypassedForStream(child)).toBe(true);
-    expect(isBashApprovalBypassedForStream(child)).toBe(false);
-  });
-
   it('super-YOLO on an inheriting child pins its own edit bypass', () => {
     // `setDelegatedWorkBypasses` must write the child's own explicit
     // tool-edit entry even when `isBypassed` already reports true via
@@ -269,22 +249,5 @@ describe('child subagent stream approval inheritance', () => {
     expect(proposalApprovals().isBypassed(parent)).toBe(true);
     expect(proposalApprovals().isBypassed(child)).toBe(true);
     expect(proposalApprovals().isBypassed(grandchild)).toBe(true);
-  });
-
-  it('keeps ancestry graphs independent per bypass kind', () => {
-    // Ancestry used to be one shared graph for all three bypass kinds, so
-    // linking a child for bash inheritance silently let it inherit tool-edit
-    // YOLO too whenever the parent had it on. Each kind must resolve through
-    // its own graph: a bash-only link must not leak tool-edit bypass.
-    const { parent, child } = streamPair('split-kinds');
-    setToolEditApprovalSessionBypass(parent, true, { silent: true });
-    setBashApprovalSessionBypass(parent, true, { silent: true });
-
-    currentSession().approvals.registerStreamParent(child, parent, ['bash']);
-
-    expect(isBashApprovalBypassedForStream(child)).toBe(true);
-    // No ancestry link was registered for 'toolEdit', so the child stays
-    // gated even though the parent has tool-edit YOLO on.
-    expect(isApprovalBypassedForStream(child)).toBe(false);
   });
 });

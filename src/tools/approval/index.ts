@@ -39,10 +39,10 @@ export function proposalApprovals(
  * should do the same — and should keep following the parent when either
  * bypass is toggled *after* the child stream already started, since this
  * registers live ancestry links rather than copying the parent's values once
- * at child creation (see `registerStreamParent`). Ancestry is tracked per
- * bypass kind, so the CLI's distinct AUTO-BASH / AUTO-APPROVE grants are
- * respected: a parent with AUTO-BASH but edits still gated propagates only
- * bash, and fresh streams default to gated either way. Delegation-proposal
+ * at child creation (see `registerStreamParent`). Bypass values stay
+ * independent per kind, so the CLI's distinct AUTO-BASH / AUTO-APPROVE grants
+ * are respected: a parent with AUTO-BASH but edits still gated propagates
+ * only bash, and fresh streams default to gated either way. Delegation-proposal
  * bypass is linked as well, so complete delegated-task approval remains
  * effective when an orchestrator delegates to another orchestrator. A child
  * may still override any inherited approval explicitly.
