@@ -353,11 +353,7 @@ describe('CLI conversation transcript', () => {
   // settlement phases).
   function attachStatusPipeline(): () => void {
     const session = defaultSession();
-    return attachSessionSignalsAdapter({
-      events: session.events,
-      session,
-      snapshots: session.snapshots,
-    });
+    return attachSessionSignalsAdapter(session);
   }
 
   it.each(Object.values(RUN_OUTCOME) as RunOutcome[])(

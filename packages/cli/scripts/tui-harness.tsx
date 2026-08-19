@@ -1775,13 +1775,7 @@ async function runChildEventOrderFixture(
 // into `cliState`. Attached before any seeding so every scenario below
 // drives child state through real facts; the harness keeps no side channel
 // into the roster or topology.
-HARNESS_DISPOSERS.push(
-  attachSessionSignalsAdapter({
-    events: defaultSession().events,
-    session: defaultSession(),
-    snapshots: defaultSession().snapshots,
-  }),
-);
+HARNESS_DISPOSERS.push(attachSessionSignalsAdapter(defaultSession()));
 // Register the harness root with the substrate (a real run's attachment
 // fact does this at run start): rosters and edges are only derivable for
 // streams the session's log store knows.

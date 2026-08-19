@@ -1,7 +1,7 @@
 // Project shared session facts into the CLI TUI signal state.
 
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
-import type { SessionEventHub, SessionHandle } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
 import type {
   PresentedStreamId,
@@ -9,7 +9,6 @@ import type {
   SessionRenderSlice,
 } from '@controllers/session/SessionRendererPort';
 import { SessionState } from '@controllers/session/SessionState';
-import type { StreamArtifactReader } from '@controllers/session/StreamArtifactProjection';
 import {
   type ConversationProgress,
   type GoalStatus,
@@ -50,11 +49,7 @@ const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
 
 class TuiSessionRenderer implements SessionRendererPort {
-  constructor(
-    private readonly state: SessionState,
-    private readonly snapshots: StreamArtifactReader,
-    private readonly session: SessionHandle,
-  ) {}
+  constructor(private readonly state: SessionState) {}
 
   isAvailable(): boolean {
     return true;
@@ -206,21 +201,13 @@ class TuiSessionRenderer implements SessionRendererPort {
   ): void {}
 }
 
-export interface AttachSessionSignalsAdapterInit {
-  readonly events: SessionEventHub;
-  readonly session: SessionHandle;
-  readonly snapshots: StreamArtifactReader;
-}
-
 /** Attach the shared session view-model to CLI signals for one TUI session. */
-export function attachSessionSignalsAdapter({
-  events,
-  session,
-  snapshots,
-}: AttachSessionSignalsAdapterInit): () => void {
+export function attachSessionSignalsAdapter(
+  session: SessionHandle,
+): () => void {
   const state = new SessionState(session);
   bindChildStreamState(state);
-  const renderer = new TuiSessionRenderer(state, snapshots, session);
+  const renderer = new TuiSessionRenderer(state);
   const applier = new SessionFactApplier(state, renderer, {
     // The shared applier pushes any roster changes through the renderer. The
     // CLI is also the delete executor in-process, so refresh tombstone-derived
@@ -230,7 +217,7 @@ export function attachSessionSignalsAdapter({
       invalidateChildStreams();
     },
   });
-  const detachSessionFacts = events.subscribeSessionFacts((fact) => {
+  const detachSessionFacts = session.events.subscribeSessionFacts((fact) => {
     if (fact.type === 'status') {
       // CLI status modality runs BEFORE the shared applier sees the fact:
       // the applier requests transcript eviction for non-active phases, and
@@ -284,7 +271,7 @@ export function attachSessionSignalsAdapter({
       }
     }
   });
-  const detachRunFacts = events.subscribeRunFacts(
+  const detachRunFacts = session.events.subscribeRunFacts(
     (runFact) => {
       if (isChildStreamRemoved(runFact.streamId)) {
         return;

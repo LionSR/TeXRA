@@ -207,13 +207,7 @@ export function createChatSessionController(
   // projecting status, output, and approval-related facts after the root
   // promise settles. Installing this once also avoids duplicate projections
   // when another root starts while an earlier detached child is still alive.
-  disposables.add(
-    attachSessionSignalsAdapter({
-      events: runtimeSession.events,
-      session: runtimeSession,
-      snapshots: snapshotStore,
-    }),
-  );
+  disposables.add(attachSessionSignalsAdapter(runtimeSession));
 
   // Shared prelude of the three run-starting paths (start, resume,
   // follow-up-wake resume): resolve the model-keyed session context and
