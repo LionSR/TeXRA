@@ -400,14 +400,13 @@ function dispatchDesktopPaletteCommand(
 function toStreamPaletteEntry(stream: StreamTabInfo): CommandPaletteEntry {
   return {
     id: buildSwitchStreamCommandId(stream.name),
-    label: `Switch to ${stream.label}`,
-    // `label` is `runIdentityDisplayName(identity)` by construction
+    label: `Switch to ${stream.label || stream.name}`,
+    // `label` is normally `runIdentityDisplayName(identity)` by construction
     // (`buildStreamTabInfo`), so the subtitle reads the same cleaned name the
-    // title shows instead of re-deriving it from the raw identity fields —
+    // title shows instead of re-deriving it from the raw identity fields,
     // which printed a source-prefixed id ('custom:reviewer') beside the
-    // cleaned title. `command` exists only on process streams; the terminal
-    // 'Stream' covers an unresolved-empty label, which the schema does not
-    // forbid.
+    // cleaned title. The schema still permits an empty label, so both title and
+    // subtitle retain a fallback for that edge case.
     description:
       stream.description ||
       stream.command ||
