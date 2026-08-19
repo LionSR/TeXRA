@@ -23,6 +23,7 @@ import {
   openRegisteredCliSlashForm,
 } from '@cli/chat/tui/commands/slashForms';
 import { LOGIN_FORM_ITEMS } from '@cli/chat/tui/forms/LoginForm';
+import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   activeForm,
   formProgress,
@@ -532,7 +533,7 @@ describe('slashRegistry', () => {
         streams
           .get()
           .get(CLI_LOCAL_STREAM_ID)
-          ?.entries.map((entry) => entry.text),
+          ?.entries.map((row) => transcriptRowHeadline(row)),
       ).toEqual([instruction]);
     } finally {
       instance.unmount();

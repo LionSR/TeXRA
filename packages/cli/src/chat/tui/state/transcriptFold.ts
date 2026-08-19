@@ -1,8 +1,9 @@
 /**
  * Pure transcript-fold engine.
  *
- * Renders `StreamLogEntry`s into `ConversationEntry` rows and folds
- * `StreamLogDelta`s into the per-stream `TranscriptFoldState` items array.
+ * Projects `StreamLogEntry`s into shared `TranscriptRow`s (`@shared/transcript`)
+ * and folds `StreamLogDelta`s into the per-stream `TranscriptFoldState` items
+ * array.
  * This module carries no module-global mutable state — every mutation happens
  * on the `TranscriptFoldState` passed in, which lives on the stream's slice
  * (`cliState`) — so review is just the fold rules, and the projection caches
@@ -29,6 +30,7 @@ import {
   projectTranscriptRow,
   promotesOnlyOnTypedTerminalState,
   type TranscriptRow,
+  type TranscriptRowKind,
 } from '@shared/transcript';
 import {
   applyCompactionActivityEntries,
@@ -39,33 +41,31 @@ import {
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import type { StreamLog } from '@transcript';
 import { truncateSummary } from '@utils/text/stringUtils';
-import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 import {
+  isFinalizedTranscriptRow,
   isRenderableTranscriptEntry,
-  trimAssistantTranscriptLead,
+  isSelfSettledRow,
+  transcriptRowHeadline,
 } from '../panes/transcriptEntries';
-import type {
-  ConversationEntry,
-  TranscriptFoldItem,
-  TranscriptFoldState,
-} from './cliState';
+import type { TranscriptFoldItem, TranscriptFoldState } from './cliState';
 
 // Canonical dashboard rows retained when a workflow stream is compacted.
-// Compaction activity passes through like a synthetic row: a run that
-// compacted its context says so on the dashboard too.
-const WORKFLOW_DASHBOARD_ROLES = new Set<ConversationEntry['role']>([
-  'activity',
+// Compaction activity passes through like a local row: a run that compacted
+// its context says so on the dashboard too.
+const WORKFLOW_DASHBOARD_KINDS = new Set<TranscriptRowKind>([
+  'compactionActivity',
   'phase',
   'workflowTask',
 ]);
 
-// Roles a workflow-agent stream keeps when it projects an operational feed
-// instead of a model transcript. `activity` is here for the same reason it is
-// a dashboard role: a run that compacted its context says so on every surface.
-const WORKFLOW_OPERATIONAL_ROLES = new Set<ConversationEntry['role']>([
-  'activity',
+// Row kinds a workflow-agent stream keeps when it projects an operational feed
+// instead of a model transcript. `compactionActivity` is here for the same
+// reason it is a dashboard kind: a run that compacted its context says so on
+// every surface.
+const WORKFLOW_OPERATIONAL_KINDS = new Set<TranscriptRowKind>([
+  'compactionActivity',
   'error',
-  'media',
+  'fileList',
   'phase',
   'tool',
   'workflowTask',
@@ -74,12 +74,9 @@ const WORKFLOW_OPERATIONAL_ROLES = new Set<ConversationEntry['role']>([
 /** Membership is one allowlist; this is the container filter a workflow-agent
  *  stream applies on top of it. Script log lines stay (they are the run's
  *  narration) unless they are debug chatter. */
-function isWorkflowOperationalRow(
-  row: TranscriptRow,
-  role: ConversationEntry['role'],
-): boolean {
+function isWorkflowOperationalRow(row: TranscriptRow): boolean {
   if (row.kind === 'log') return row.level !== 'debug';
-  return WORKFLOW_OPERATIONAL_ROLES.has(role);
+  return WORKFLOW_OPERATIONAL_KINDS.has(row.kind);
 }
 
 // Compact inactive streams must not retain an unbounded operational transcript,
@@ -114,28 +111,28 @@ export function workflowOperationalLatestLine(
   items: readonly TranscriptFoldItem[],
 ): string | undefined {
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    const entry = items[index].rendered;
-    if (entry.role === 'tool') {
+    const row = items[index].rendered;
+    if (row.kind === 'tool') {
       // A status line wants the tool's own account of what it is doing, not
       // the call's input preview — the tool name is the last resort.
       const line =
-        safeWorkflowOperationalSummary(entry.row.toolUse.headerSummary) ??
-        safeWorkflowOperationalSummary(entry.row.model.headerLabel);
+        safeWorkflowOperationalSummary(row.toolUse.headerSummary) ??
+        safeWorkflowOperationalSummary(row.model.headerLabel);
       if (line) return line;
       continue;
     }
-    if (entry.role === 'phase') {
-      const line = safeWorkflowOperationalSummary(entry.phaseLabel);
+    if (row.kind === 'phase') {
+      const line = safeWorkflowOperationalSummary(row.phaseLabel);
       if (line) return line;
       continue;
     }
     if (
-      entry.role === 'error' ||
-      entry.role === 'workflowTask' ||
-      (entry.role === 'assistant' &&
-        entry.messageType === MESSAGE_TYPES.DEFAULT)
+      row.kind === 'error' ||
+      row.kind === 'workflowTask' ||
+      ((row.kind === 'assistant' || row.kind === 'log') &&
+        row.messageType === MESSAGE_TYPES.DEFAULT)
     ) {
-      const line = safeWorkflowOperationalSummary(entry.text);
+      const line = safeWorkflowOperationalSummary(transcriptRowHeadline(row));
       if (line) return line;
     }
   }
@@ -150,220 +147,70 @@ export function logEntryStreamIsRunning(entry: StreamLogEntry): boolean {
   return data.status === 'running';
 }
 
-/** The role each projected row paints under. Roles are coarser than kinds:
- *  they carry the geometry, promotion and workflow-feed rules, while the row
- *  beside them carries the typed payload a renderer reads. */
-const ROW_KIND_ROLE = {
-  assistant: 'assistant',
-  log: 'assistant',
-  user: 'user',
-  error: 'error',
-  tool: 'tool',
-  fileList: 'media',
-  phase: 'phase',
-  workflowTask: 'workflowTask',
-  compactionActivity: 'activity',
-  thinking: 'detail',
-  scratchpad: 'detail',
-  webSearch: 'detail',
-  webFetch: 'detail',
-  missingOutputs: 'detail',
-  latexdiff: 'detail',
-  statistics: 'detail',
-  contextManagement: 'detail',
-  progressStatus: 'detail',
-  contextState: 'detail',
-} as const satisfies Record<TranscriptRow['kind'], ConversationEntry['role']>;
-
-// Rows whose content is fixed the moment they appear, so they print into
-// `<Static>` scrollback without waiting for the settled-prefix advance.
-const IMMEDIATELY_FINALIZED_ROW_KINDS = new Set<TranscriptRow['kind']>([
-  'user',
-  'error',
-  'phase',
-  'fileList',
-  'missingOutputs',
-  'latexdiff',
-  'statistics',
-  'contextManagement',
-  'progressStatus',
-]);
-
 /**
- * The headline a row leads with. Body lines are painted from the row itself
- * (`transcriptRowBodyLines`) at the painter's own width — nothing is cut
- * here.
+ * The transcript row a projected row paints as, or `null` when the terminal
+ * has no line for it.
+ *
+ * Two drops: context utilization is a status-bar fact, not a transcript line
+ * (it reaches the CLI through the same projection so there is one derivation,
+ * but has no inline row on either host); and a prose row whose text is
+ * invisible in a terminal — an all-ANSI or zero-width chunk — never becomes a
+ * row at all, so nothing downstream has to reserve space for it. Typed rows
+ * keep their membership: the projector decided it, and the terminal does not
+ * re-decide.
  */
-function rowHeadline(row: TranscriptRow): string {
+function transcriptRowForPaint(row: TranscriptRow): TranscriptRow | null {
   switch (row.kind) {
-    case 'assistant':
-      return normalizeKnownHtmlForCliMarkdown(
-        trimAssistantTranscriptLead(row.text.full),
-      );
-    case 'log':
-      return redactSecrets(
-        safeTerminalText(
-          normalizeKnownHtmlForCliMarkdown(
-            trimAssistantTranscriptLead(row.text.full),
-          ),
-        ),
-      );
-    // Detail rows lead with a bare noun; their `●` marker is layout geometry
-    // (ROLE_GEOMETRY.detail), not part of the text.
-    case 'thinking':
-      return 'Thinking';
-    case 'scratchpad':
-      return 'Scratchpad';
-    case 'user':
-      return row.summary.full;
-    case 'error':
-      return redactSecrets(safeTerminalText(row.summary.full));
-    case 'tool':
-      return '';
-    case 'webSearch':
-    case 'webFetch':
-      return row.label;
-    case 'fileList':
-    case 'missingOutputs':
-      return row.summary;
-    case 'latexdiff':
-      return `Latexdiff results (${row.entries.length})`;
-    case 'statistics':
-      return 'Usage';
-    case 'contextManagement':
-    case 'compactionActivity':
-      return row.label;
-    case 'progressStatus':
-      return safeTerminalText(row.summary.full);
-    case 'workflowTask':
-      return row.line;
-    case 'phase':
-      return row.heading;
     case 'contextState':
-      return '';
-  }
-}
-
-/**
- * The paint row for one projected transcript row. Never finalizes a row the
- * source has not settled: the settled-prefix promotion advances over a row
- * only once every row before it has promoted, so a fast tool can't jump ahead
- * of still-streaming assistant text in `<Static>` (which is append-only).
- */
-function conversationEntryFromRow(
-  row: TranscriptRow,
-): ConversationEntry | null {
-  // Context utilization is a status-bar fact, not a transcript line; it
-  // reaches the CLI through the same projection so there is one derivation,
-  // but it has no inline row on either host.
-  if (row.kind === 'contextState') return null;
-  const base = {
-    id: row.id,
-    row,
-    text: rowHeadline(row),
-    ...(row.seqNo !== undefined ? { sourceSeqNo: row.seqNo } : {}),
-    ...(row.messageType ? { messageType: row.messageType } : {}),
-    ...(row.settlementSeqNo !== undefined
-      ? { settlementSeqNo: row.settlementSeqNo }
-      : {}),
-    ...(row.spillPath ? { spillPath: row.spillPath } : {}),
-    finalized:
-      row.settlementSeqNo !== undefined ||
-      IMMEDIATELY_FINALIZED_ROW_KINDS.has(row.kind),
-  };
-  switch (row.kind) {
-    case 'tool':
-      return { ...base, role: 'tool', row, toolUse: row.toolUse };
-    case 'fileList':
-      return { ...base, role: 'media', row };
-    case 'workflowTask':
-      return { ...base, role: 'workflowTask', task: row.call };
-    case 'compactionActivity':
-      return {
-        ...base,
-        role: 'activity',
-        activity: row.block,
-        finalized: row.block.finalized,
-      };
-    case 'phase':
-      return {
-        ...base,
-        role: 'phase',
-        phaseLabel: row.phaseLabel,
-        ...(row.phaseIndex !== undefined ? { phaseIndex: row.phaseIndex } : {}),
-        ...(row.phaseTotal !== undefined ? { phaseTotal: row.phaseTotal } : {}),
-        ...(row.attemptId !== undefined ? { attemptId: row.attemptId } : {}),
-      };
-    case 'thinking':
-    case 'scratchpad':
-    case 'webSearch':
-    case 'webFetch':
-    case 'missingOutputs':
-    case 'latexdiff':
-    case 'statistics':
-    case 'contextManagement':
-    case 'progressStatus':
-      return { ...base, role: 'detail', row };
+      return null;
     case 'assistant':
     case 'log':
     case 'user':
-    case 'error': {
-      const entry: ConversationEntry = {
-        ...base,
-        role: ROW_KIND_ROLE[row.kind],
-      };
-      return isRenderableTranscriptEntry(entry) ? entry : null;
-    }
+    case 'error':
+      return isRenderableTranscriptEntry(row) ? row : null;
+    default:
+      return row;
   }
 }
 
-// Whether an unfinalized entry blocks the contiguous settled-prefix
-// promotion at its position: it is not settled, and a final stream status
-// cannot promote it either — compaction and workflow-call rows never promote
-// on `streamFinal` alone, because bridge cleanup may still replace their
-// planned/running state after cancellation.
+// Whether an unpromoted row blocks the contiguous settled-prefix promotion at
+// its position: it is not settled, and a final stream status cannot promote it
+// either — compaction and workflow-call rows never promote on `streamFinal`
+// alone, because bridge cleanup may still replace their planned/running state
+// after cancellation.
 function blocksSettledPrefix(
-  entry: ConversationEntry,
+  row: TranscriptRow,
   index: number,
   total: number,
   streamFinal: boolean,
 ): boolean {
-  const row = entry.row;
-  // CLI-synthetic rows have no source projection; they are appended already
-  // finalized and never reach this predicate unsettled.
-  if (row === undefined) return false;
   if (isSettledRow(row, index < total - 1)) return false;
   return promotesOnlyOnTypedTerminalState(row) || !streamFinal;
 }
 
-// Promote the contiguous leading run of settled entries to `finalized`, so
-// completed parts of a round flow into `<Static>` scrollback as the round
-// progresses instead of piling up in the bounded live pane (where the
-// viewport would clip the round's earlier content). Only a contiguous
-// prefix is promoted: `<Static>` is append-only, so an entry must not
-// finalize while any earlier entry is still pending, or insertion order
-// would reverse.
-export function finalizeSettledPrefix(
-  entries: readonly ConversationEntry[],
+// Advance the contiguous leading run of settled rows, so completed parts of a
+// round flow into `<Static>` scrollback as the round progresses instead of
+// piling up in the bounded live pane (where the viewport would clip the
+// round's earlier content). Only a contiguous prefix is promoted: `<Static>`
+// is append-only, so a row must not finalize while any earlier row is still
+// pending, or insertion order would reverse.
+export function advanceFinalizedFrontier(
+  rows: readonly TranscriptRow[],
+  frontier: number,
   streamFinal: boolean,
-): ConversationEntry[] {
-  let result: ConversationEntry[] | undefined;
-  let sealed = false; // hit the first still-pending entry in this round
-  for (const [index, entry] of entries.entries()) {
-    if (entry.finalized) continue;
+): number {
+  let index = Math.min(frontier, rows.length);
+  while (index < rows.length) {
+    const row = rows[index]!;
     if (
-      sealed ||
-      blocksSettledPrefix(entry, index, entries.length, streamFinal)
+      !isSelfSettledRow(row) &&
+      blocksSettledPrefix(row, index, rows.length, streamFinal)
     ) {
-      sealed = true;
-      continue;
+      break;
     }
-    if (!result) result = [...entries];
-    result[index] = { ...entry, finalized: true };
+    index += 1;
   }
-  // No promotions: hand back the input as-is. The caller's `changed` check
-  // is element-wise, so the same reference is safe and skips a per-tick copy.
-  return result ?? (entries as ConversationEntry[]);
+  return index;
 }
 
 // ---------------------------------------------------------------------------
@@ -515,29 +362,40 @@ function foldInsertPosition(
   return low;
 }
 
-function isUserLineRow(entry: ConversationEntry): boolean {
-  return entry.role === 'user' && entry.text.trim().length > 0;
+function isUserLineRow(row: TranscriptRow): boolean {
+  return row.kind === 'user' && transcriptRowHeadline(row).trim().length > 0;
 }
 
-function isFinalizedResponseRow(entry: ConversationEntry): boolean {
+/** A model reply with visible text, before the promotion question is asked. */
+function isResponseRow(row: TranscriptRow): boolean {
   return (
-    entry.role === 'assistant' &&
-    entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE &&
-    entry.finalized &&
-    entry.text.trim().length > 0
+    (row.kind === 'assistant' || row.kind === 'log') &&
+    row.messageType === MESSAGE_TYPES.MODEL_RESPONSE &&
+    transcriptRowHeadline(row).trim().length > 0
   );
 }
 
-function touchesCompactOutput(entry: ConversationEntry): boolean {
-  return entry.synthetic === true || WORKFLOW_DASHBOARD_ROLES.has(entry.role);
+function isFinalizedResponseAt(
+  state: TranscriptFoldState,
+  row: TranscriptRow,
+  index: number,
+): boolean {
+  return (
+    isResponseRow(row) &&
+    isFinalizedTranscriptRow(row, index, state.finalizedFrontier)
+  );
+}
+
+function touchesCompactOutput(row: TranscriptRow): boolean {
+  return row.origin === 'local' || WORKFLOW_DASHBOARD_KINDS.has(row.kind);
 }
 
 function findLastFoldPos(
   items: readonly TranscriptFoldItem[],
-  matches: (entry: ConversationEntry) => boolean,
+  matches: (row: TranscriptRow, index: number) => boolean,
 ): number {
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    if (matches(items[index].rendered)) return index;
+    if (matches(items[index].rendered, index)) return index;
   }
   return -1;
 }
@@ -572,7 +430,10 @@ function insertFoldItem(
   if (isUserLineRow(item.rendered) && pos > state.latestUserPos) {
     state.latestUserPos = pos;
   }
-  if (isFinalizedResponseRow(item.rendered) && pos > state.latestResponsePos) {
+  if (
+    isFinalizedResponseAt(state, item.rendered, pos) &&
+    pos > state.latestResponsePos
+  ) {
     state.latestResponsePos = pos;
   }
   flags.itemsChanged = true;
@@ -582,7 +443,7 @@ function insertFoldItem(
 function replaceFoldRendered(
   state: TranscriptFoldState,
   pos: number,
-  rendered: ConversationEntry,
+  rendered: TranscriptRow,
   flags: FoldChangeFlags,
 ): void {
   const item = state.items[pos];
@@ -592,18 +453,21 @@ function replaceFoldRendered(
   if (touchesCompactOutput(previous) || touchesCompactOutput(rendered)) {
     flags.compactAffected = true;
   }
-  if (pos < state.finalizedFrontier && !rendered.finalized) {
-    state.finalizedFrontier = pos;
-  }
+  // The frontier is never retracted here: a row below it has already been
+  // printed into append-only `<Static>` scrollback and cannot be un-printed,
+  // whatever its replacement says about itself.
   if (pos === state.latestUserPos && !isUserLineRow(rendered)) {
     flags.userRescan = true;
   } else if (isUserLineRow(rendered) && pos > state.latestUserPos) {
     state.latestUserPos = pos;
   }
-  if (pos === state.latestResponsePos && !isFinalizedResponseRow(rendered)) {
+  if (
+    pos === state.latestResponsePos &&
+    !isFinalizedResponseAt(state, rendered, pos)
+  ) {
     flags.responseRescan = true;
   } else if (
-    isFinalizedResponseRow(rendered) &&
+    isFinalizedResponseAt(state, rendered, pos) &&
     pos > state.latestResponsePos
   ) {
     state.latestResponsePos = pos;
@@ -627,16 +491,39 @@ function removeFoldItemAt(
   if (touchesCompactOutput(removed.rendered)) flags.compactAffected = true;
 }
 
-/** Recompute every position-derived cursor after a bulk items rebuild. */
-function recomputeFoldCursors(state: TranscriptFoldState): void {
-  const items = state.items;
+/**
+ * The promotion cursor after the items array was rebuilt under it, given the
+ * ids the promotion had already printed. A printed row can never be
+ * un-printed, so the frontier is carried across the reshuffle rather than
+ * re-derived from a `streamFinal` that may since have gone false; a local row
+ * spliced into the printed prefix joins it (local rows settle on arrival).
+ */
+function carriedPromotionFrontier(
+  items: readonly TranscriptFoldItem[],
+  promotedIds: ReadonlySet<string>,
+): number {
   let frontier = 0;
-  while (frontier < items.length && items[frontier].rendered.finalized) {
+  while (
+    frontier < items.length &&
+    (items[frontier].rank === 2 || promotedIds.has(items[frontier].rendered.id))
+  ) {
     frontier += 1;
   }
-  state.finalizedFrontier = frontier;
+  return frontier;
+}
+
+/** Recompute every position-derived cursor after a bulk items rebuild that
+ *  only spliced local rows in or out. */
+function recomputeFoldCursors(
+  state: TranscriptFoldState,
+  promotedIds: ReadonlySet<string>,
+): void {
+  const items = state.items;
+  state.finalizedFrontier = carriedPromotionFrontier(items, promotedIds);
   state.latestUserPos = findLastFoldPos(items, isUserLineRow);
-  state.latestResponsePos = findLastFoldPos(items, isFinalizedResponseRow);
+  state.latestResponsePos = findLastFoldPos(items, (row, index) =>
+    isFinalizedResponseAt(state, row, index),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -645,8 +532,8 @@ function recomputeFoldCursors(state: TranscriptFoldState): void {
 
 export interface FoldContext {
   readonly log: StreamLog;
-  /** Current slice entries, consulted only for CLI-synthetic rows. */
-  readonly sliceEntries: readonly ConversationEntry[];
+  /** Current slice entries, consulted only for CLI-local rows. */
+  readonly sliceEntries: readonly TranscriptRow[];
   /** Settled-prefix promotion signal: real settlement OR a turn-boundary
    *  caller's `forceFinal`. Never drives compaction settlement. */
   readonly streamFinal: boolean;
@@ -655,9 +542,13 @@ export interface FoldContext {
    *  compaction is still running must not record it as interrupted — its
    *  completion event is still to come. */
   readonly streamSettled: boolean;
-  /** Resync only: previous rows by id, so an already-promoted row keeps its
-   *  `finalized` flag and a closed phase keeps its inherited counts. */
-  readonly inherit?: ReadonlyMap<string, ConversationEntry>;
+  /** Resync only: previous rows by id, so a closed phase keeps its inherited
+   *  counts across a rebuild. */
+  readonly inherit?: ReadonlyMap<string, TranscriptRow>;
+  /** Resync only: ids the promotion had already printed into `<Static>`, so
+   *  the frontier survives a rebuild instead of being re-derived from a
+   *  `streamFinal` that may since have gone false. */
+  readonly promotedIds?: ReadonlySet<string>;
   readonly flags: FoldChangeFlags;
 }
 
@@ -728,31 +619,13 @@ function isPriorWorkflowAttemptRow(
   );
 }
 
-function isPriorWorkflowAttemptItem(
-  state: TranscriptFoldState,
-  item: TranscriptFoldItem,
-): boolean {
-  const rendered = item.rendered;
-  if (rendered.role === 'workflowTask') {
-    return isSupersededAttemptId(state, rendered.task.attemptId);
-  }
-  if (rendered.role === 'phase') {
-    return isSupersededAttemptId(state, rendered.attemptId);
-  }
-  return (
-    rendered.messageType === MESSAGE_TYPES.DEFAULT &&
-    rendered.sourceSeqNo !== undefined &&
-    rendered.sourceSeqNo < state.workflowAttemptSeqNo
-  );
-}
-
 function evictPriorWorkflowAttemptItems(
   state: TranscriptFoldState,
   flags: FoldChangeFlags,
 ): void {
   if (!state.workflowAttemptBoundaryDeclared) return;
   for (let index = state.items.length - 1; index >= 0; index -= 1) {
-    if (isPriorWorkflowAttemptItem(state, state.items[index]!)) {
+    if (isPriorWorkflowAttemptRow(state, state.items[index]!.rendered)) {
       removeFoldItemAt(state, index, flags);
     }
   }
@@ -807,32 +680,23 @@ function applyChangedLogEntry(
   // their runtime display label; the projection itself never reaches into the
   // model registry.
   const row = projectTranscriptRow(projectWorkflowCallEntry(entry), {
-    ...(prev?.row ? { previousRow: prev.row } : {}),
+    ...(prev ? { previousRow: prev } : {}),
     projectLifecycleToTaskGroups: state.projectLifecycleToTaskGroups,
   });
   if (row === undefined || isPriorWorkflowAttemptRow(state, row)) {
     drop();
     return;
   }
-  let rendered = conversationEntryFromRow(row);
   // Workflow-agent details are an operational feed, not a model transcript.
   // Detached workflow-script runs intentionally keep their full child log,
   // including Running/Finished and error rows.
-  if (
-    rendered !== null &&
-    state.workflowOperationalOnly &&
-    !isWorkflowOperationalRow(row, rendered.role)
-  ) {
-    rendered = null;
-  }
+  const rendered =
+    state.workflowOperationalOnly && !isWorkflowOperationalRow(row)
+      ? null
+      : transcriptRowForPaint(row);
   if (rendered === null) {
     drop();
     return;
-  }
-  // An entry the slice already promoted re-inherits the flag here, so a
-  // re-render can never roll an already-printed `<Static>` row back.
-  if (prev?.finalized && !rendered.finalized) {
-    rendered = { ...rendered, finalized: true };
   }
   if (existingPos !== undefined) {
     replaceFoldRendered(state, existingPos, rendered, ctx.flags);
@@ -855,14 +719,11 @@ function reconcileCompactionRows(
     const row = compactionActivityRow(block);
     const pos = state.indexById.get(row.id);
     if (pos !== undefined && state.items[pos].block === block) continue;
-    const rendered = conversationEntryFromRow(row);
+    const rendered = transcriptRowForPaint(row);
     if (rendered === null) continue;
-    // Same container filter the log and synthetic paths apply, so a
+    // Same container filter the log and local paths apply, so a
     // workflow-agent stream has one membership rule rather than three.
-    if (
-      state.workflowOperationalOnly &&
-      !isWorkflowOperationalRow(row, rendered.role)
-    ) {
+    if (state.workflowOperationalOnly && !isWorkflowOperationalRow(row)) {
       continue;
     }
     if (pos !== undefined) {
@@ -879,37 +740,41 @@ function reconcileCompactionRows(
 }
 
 /**
- * Reconcile CLI-synthetic rows from the slice into the items array. Synthetic
- * rows are CLI-owned objects appended to `slice.entries` out of band, so the
- * fold detects them by object identity against the last reconciled list.
- * Changes are rare, user-paced events; the bulk rebuild keeps insertion-order
+ * Reconcile CLI-local rows from the slice into the items array. Local rows are
+ * CLI-owned objects appended to `slice.entries` out of band, so the fold
+ * detects them by object identity against the last reconciled list. Changes
+ * are rare, user-paced events; the bulk rebuild keeps insertion-order
  * tiebreaks exact and recomputes the position cursors in one pass.
  */
 function reconcileSynthetics(
   state: TranscriptFoldState,
-  sliceEntries: readonly ConversationEntry[],
+  sliceEntries: readonly TranscriptRow[],
   flags: FoldChangeFlags,
 ): void {
   const wOO = state.workflowOperationalOnly;
-  const current: ConversationEntry[] = [];
-  for (const entry of sliceEntries) {
+  const current: TranscriptRow[] = [];
+  for (const row of sliceEntries) {
     if (
-      entry.synthetic &&
-      (!wOO || WORKFLOW_OPERATIONAL_ROLES.has(entry.role))
+      row.origin === 'local' &&
+      (!wOO || WORKFLOW_OPERATIONAL_KINDS.has(row.kind))
     ) {
-      current.push(entry);
+      current.push(row);
     }
   }
   const previous = state.synthetics;
   if (
     current.length === previous.length &&
-    current.every((entry, index) => entry === previous[index])
+    current.every((row, index) => row === previous[index])
   ) {
     return;
   }
   flags.syntheticsChanged = true;
   flags.itemsChanged = true;
   flags.compactAffected = true;
+  const promotedIds = new Set<string>();
+  for (let index = 0; index < state.finalizedFrontier; index += 1) {
+    promotedIds.add(state.items[index]!.rendered.id);
+  }
   let removed = false;
   for (let index = state.items.length - 1; index >= 0; index -= 1) {
     if (state.items[index].rank === 2) {
@@ -920,12 +785,12 @@ function reconcileSynthetics(
   // Stale ids of removed rows must leave the map; positions are rebuilt by
   // the unconditional reindex after the inserts below.
   if (removed) state.indexById.clear();
-  for (const [index, entry] of current.entries()) {
+  for (const [index, row] of current.entries()) {
     const item: TranscriptFoldItem = {
-      rendered: entry,
-      // Synthetic (CLI-owned) rows are positioned by `syntheticAfterSeq`
-      // alongside the ordered log entries.
-      sortSeq: entry.syntheticAfterSeq ?? Number.POSITIVE_INFINITY,
+      rendered: row,
+      // Local rows are positioned by the log head captured when the CLI
+      // appended them, alongside the ordered log entries.
+      sortSeq: row.seqNo ?? Number.POSITIVE_INFINITY,
       tieBreak: index + 1,
       rank: 2,
     };
@@ -933,30 +798,33 @@ function reconcileSynthetics(
     state.items.splice(pos, 0, item);
   }
   reindexFoldFrom(state, 0);
-  recomputeFoldCursors(state);
+  recomputeFoldCursors(state, promotedIds);
   flags.userRescan = false;
   flags.responseRescan = false;
   state.synthetics = current;
 }
 
-// Advance the contiguous settled-prefix promotion (same rule as
-// `finalizeSettledPrefix`, folded: positions below the frontier are already
-// finalized, so each application only touches newly promotable rows).
+// Advance the contiguous settled-prefix promotion. Positions below the
+// frontier are already printed, so each application only walks the newly
+// promotable tail.
 function advanceSettledPrefix(
   state: TranscriptFoldState,
   streamFinal: boolean,
-  flags: FoldChangeFlags,
 ): void {
   const items = state.items;
   let index = state.finalizedFrontier;
   while (index < items.length) {
-    const entry = items[index].rendered;
-    if (entry.finalized) {
-      index += 1;
-      continue;
+    const row = items[index].rendered;
+    if (
+      !isSelfSettledRow(row) &&
+      blocksSettledPrefix(row, index, items.length, streamFinal)
+    ) {
+      break;
     }
-    if (blocksSettledPrefix(entry, index, items.length, streamFinal)) break;
-    replaceFoldRendered(state, index, { ...entry, finalized: true }, flags);
+    // A newly printed model reply becomes the stream's latest line.
+    if (isResponseRow(row) && index > state.latestResponsePos) {
+      state.latestResponsePos = index;
+    }
     index += 1;
   }
   state.finalizedFrontier = index;
@@ -1001,32 +869,48 @@ export function applyStreamChanges(
   for (const entry of changed) applyChangedLogEntry(state, entry, ctx);
   reconcileCompactionRows(state, compaction, ctx.flags);
   reconcileSynthetics(state, ctx.sliceEntries, ctx.flags);
+  if (ctx.promotedIds) {
+    // Rebuild path: carry the promotion across the reset rather than
+    // re-deriving it from a `streamFinal` that may since have gone false.
+    let frontier = 0;
+    while (
+      frontier < state.items.length &&
+      (state.items[frontier]!.rank === 2 ||
+        ctx.promotedIds.has(state.items[frontier]!.rendered.id))
+    ) {
+      frontier += 1;
+    }
+    state.finalizedFrontier = frontier;
+    ctx.flags.responseRescan = true;
+  }
   // Promote only after the merged order is final: "is there a later entry"
   // and `<Static>` append order are both defined on the final stream order.
-  advanceSettledPrefix(state, ctx.streamFinal, ctx.flags);
+  advanceSettledPrefix(state, ctx.streamFinal);
   if (ctx.flags.userRescan) {
     state.latestUserPos = findLastFoldPos(state.items, isUserLineRow);
     ctx.flags.userRescan = false;
   }
   if (ctx.flags.responseRescan) {
-    state.latestResponsePos = findLastFoldPos(
-      state.items,
-      isFinalizedResponseRow,
+    state.latestResponsePos = findLastFoldPos(state.items, (row, index) =>
+      isFinalizedResponseAt(state, row, index),
     );
     ctx.flags.responseRescan = false;
   }
   return { taskGroups, compaction };
 }
 
-/** The bounded dashboard + synthetic selection for an unfocused workflow stream. */
+/** The bounded dashboard + local-row selection for an unfocused workflow
+ *  stream, with the count of leading rows the promotion has already printed
+ *  (the selection preserves order, so promoted rows stay a prefix of it). */
 export function compactWorkflowEntries(
   items: readonly TranscriptFoldItem[],
-): ConversationEntry[] {
+  finalizedFrontier: number,
+): { rows: TranscriptRow[]; finalizedFrontier: number } {
   let dashboardCount = 0;
   for (const item of items) {
     if (
-      !item.rendered.synthetic &&
-      WORKFLOW_DASHBOARD_ROLES.has(item.rendered.role)
+      item.rendered.origin !== 'local' &&
+      WORKFLOW_DASHBOARD_KINDS.has(item.rendered.kind)
     ) {
       dashboardCount += 1;
     }
@@ -1035,19 +919,19 @@ export function compactWorkflowEntries(
     0,
     dashboardCount - MAX_COMPACT_WORKFLOW_DASHBOARD_ENTRIES,
   );
-  const out: ConversationEntry[] = [];
-  for (const item of items) {
-    const entry = item.rendered;
-    if (entry.synthetic) {
-      out.push(entry);
-      continue;
+  const rows: TranscriptRow[] = [];
+  let promoted = 0;
+  for (const [index, item] of items.entries()) {
+    const row = item.rendered;
+    if (row.origin !== 'local') {
+      if (!WORKFLOW_DASHBOARD_KINDS.has(row.kind)) continue;
+      if (skip > 0) {
+        skip -= 1;
+        continue;
+      }
     }
-    if (!WORKFLOW_DASHBOARD_ROLES.has(entry.role)) continue;
-    if (skip > 0) {
-      skip -= 1;
-      continue;
-    }
-    out.push(entry);
+    if (index < finalizedFrontier && promoted === rows.length) promoted += 1;
+    rows.push(row);
   }
-  return out;
+  return { rows, finalizedFrontier: promoted };
 }

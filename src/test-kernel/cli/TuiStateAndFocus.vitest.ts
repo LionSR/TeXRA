@@ -10,7 +10,6 @@ import {
   activeStreamId,
   beginWorkPlanReaderRequest,
   closeInfoPane,
-  type ConversationEntry,
   finishWorkPlanReaderRequest,
   focusStream,
   foregroundReader,
@@ -54,10 +53,8 @@ import {
   unbindChildStreamState,
   visibleSubagentRows,
 } from '@cli/chat/tui/state/childExecutions';
-import {
-  finalizeSettledPrefix,
-  syncStreamLog,
-} from '@cli/chat/tui/state/subscribeStreamLog';
+import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
+import { advanceFinalizedFrontier } from '@cli/chat/tui/state/transcriptFold';
 import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
@@ -69,7 +66,11 @@ import {
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
-import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
+import {
+  isFinalizedTranscriptRow,
+  splitTranscriptEntries,
+  transcriptRowHeadline,
+} from '@cli/chat/tui/panes/transcriptEntries';
 import { transcriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
 import { renderAnsiMarkdown } from '@cli/chat/tui/render/ansiMarkdown';
 import {
@@ -113,10 +114,13 @@ import {
   type TodoItem,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import { transcriptText } from '@shared/transcript';
+import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
-import { toolConversationEntry } from '@test/support/transcriptRowFixtures';
+import {
+  textRowFixture,
+  toolRowFixture,
+} from '@test/support/transcriptRowFixtures';
 import {
   createRunTrace,
   StreamLogStore,
@@ -152,12 +156,41 @@ function visibleRows(parent: StreamTabId): readonly ActiveChildInfo[] {
   return visibleSubagentRows(parent, childRosters.get());
 }
 
-function streamEntries(streamId: StreamTabId): readonly ConversationEntry[] {
+function streamEntries(streamId: StreamTabId): readonly TranscriptRow[] {
   return streams.get().get(streamId)?.entries ?? [];
 }
 
 function entryTexts(streamId: StreamTabId): string[] {
-  return streamEntries(streamId).map((entry) => entry.text);
+  return streamEntries(streamId).map((row) => transcriptRowHeadline(row));
+}
+
+/** Whether each projected row may be printed into append-only scrollback:
+ *  the slice's promotion frontier reached it, or the row settles on its own. */
+function entryFinalizedFlags(streamId: StreamTabId): boolean[] {
+  const slice = streams.get().get(streamId);
+  const frontier = slice?.finalizedFrontier ?? 0;
+  return streamEntries(streamId).map((row, index) =>
+    isFinalizedTranscriptRow(row, index, frontier),
+  );
+}
+
+/** Finalization of the row carrying `id` (see {@link entryFinalizedFlags}). */
+function entryFinalized(streamId: StreamTabId, id: string): boolean {
+  const index = streamEntries(streamId).findIndex((row) => row.id === id);
+  return index >= 0 && entryFinalizedFlags(streamId)[index] === true;
+}
+
+/** Split a stream's projected rows at its own promotion frontier. */
+function splitStreamEntries(
+  streamId: StreamTabId,
+  status: StreamPhase | undefined,
+) {
+  const slice = streams.get().get(streamId);
+  return splitTranscriptEntries(
+    slice?.entries ?? [],
+    slice?.finalizedFrontier ?? 0,
+    status,
+  );
 }
 
 /** Run trace bound to the default session's transcript store, which the
@@ -370,24 +403,20 @@ function logToolUse(
   trace.info(text, { messageType: MESSAGE_TYPES.TOOL_USE, data });
 }
 
-/** Synthetic local-transcript entry as written by the local echo path. */
-function localSyntheticEntry(
+/** Local-origin transcript row as written by the local echo path: immutable
+ *  from birth, anchored by the two log cursors captured at append time. */
+function localTranscriptRow(
   id: string,
-  role: 'user' | 'assistant' | 'error',
+  kind: 'user' | 'assistant' | 'error',
   text: string,
-  syntheticAfterSeq: number,
-  syntheticAfterSettlementSeqNo: number,
-) {
+  seqNo: number,
+  settlementSeqNo: number,
+): TranscriptRow {
   return {
-    id,
-    role,
-    text,
-    finalized: true,
-    synthetic: true,
-    syntheticKind: 'local',
-    syntheticAfterSeq,
-    syntheticAfterSettlementSeqNo,
-  } as const;
+    ...textRowFixture(id, kind, text, settlementSeqNo),
+    seqNo,
+    origin: 'local',
+  };
 }
 
 /** Mark a stream as a native tool-use agent that can accept child follow-ups:
@@ -427,14 +456,15 @@ function markWorkflow(streamId: StreamTabId): void {
   seedStreamMetadata(streamId, { agentCategory: AgentCategory.Workflow });
 }
 
-/** Unfinalized tool-row entry with empty render text fields. */
+/** Tool row with empty render text fields, carrying no settlement order of
+ *  its own so promotion has to come from the stream's own frontier. */
 function toolEntry(
   id: string,
   toolName: string,
   input: Record<string, unknown>,
   options: { outputText?: string; status?: 'in_progress' | 'completed' } = {},
 ) {
-  return toolConversationEntry(id, {
+  return toolRowFixture(id, {
     toolName,
     input,
     outputText: options.outputText ?? '',
@@ -1886,80 +1916,72 @@ describe('CLI TUI row allocation', () => {
   });
 });
 
-describe('finalizeSettledPrefix', () => {
+describe('advanceFinalizedFrontier', () => {
   function tool(id: string, status: 'in_progress' | 'completed') {
     return toolEntry(id, 'Bash', {}, { status });
   }
 
-  function assistant(id: string, pendingEmbeddedFollowup = false) {
+  function assistant(
+    id: string,
+    pendingEmbeddedFollowup = false,
+  ): TranscriptRow {
     return {
+      kind: 'assistant',
       id,
-      role: 'assistant',
-      text: id,
-      row: {
-        kind: 'assistant',
-        id,
-        timestamp: 0,
-        level: 'info',
-        text: transcriptText(id),
-        streaming: false,
-        ...(pendingEmbeddedFollowup ? { pendingEmbeddedFollowup } : {}),
-      },
-      finalized: false,
-    } as const;
-  }
-
-  function finalizedIds(
-    entries: readonly { id: string; finalized: boolean }[],
-  ): string[] {
-    return entries.filter((entry) => entry.finalized).map((entry) => entry.id);
+      timestamp: 0,
+      level: 'info',
+      text: transcriptText(id),
+      streaming: false,
+      ...(pendingEmbeddedFollowup ? { pendingEmbeddedFollowup } : {}),
+    };
   }
 
   it('finalizes an assistant block once the model moves on to a tool call', () => {
-    const out = finalizeSettledPrefix(
-      [assistant('a1'), tool('t1', 'completed'), assistant('a2')],
-      false,
-    );
     // a1 settled (later entry exists), t1 settled (completed), a2 is the
     // live tail and stays pending.
-    expect(finalizedIds(out)).toEqual(['a1', 't1']);
+    expect(
+      advanceFinalizedFrontier(
+        [assistant('a1'), tool('t1', 'completed'), assistant('a2')],
+        0,
+        false,
+      ),
+    ).toBe(2);
   });
 
   it('keeps the in-flight tail pending while the stream runs', () => {
-    const out = finalizeSettledPrefix([assistant('a1')], false);
-    expect(finalizedIds(out)).toEqual([]);
+    expect(advanceFinalizedFrontier([assistant('a1')], 0, false)).toBe(0);
   });
 
   it('keeps assistant entries with incomplete subagent blocks pending', () => {
-    const out = finalizeSettledPrefix(
-      [assistant('a1', true), tool('t1', 'completed'), assistant('a2')],
-      false,
-    );
-
-    expect(finalizedIds(out)).toEqual([]);
+    expect(
+      advanceFinalizedFrontier(
+        [assistant('a1', true), tool('t1', 'completed'), assistant('a2')],
+        0,
+        false,
+      ),
+    ).toBe(0);
   });
 
   it('does not promote past a still-running tool (preserves Static order)', () => {
-    const out = finalizeSettledPrefix(
-      [assistant('a1'), tool('t1', 'in_progress'), tool('t2', 'completed')],
-      false,
-    );
     // t1 is still running: t2 must wait behind it even though it completed,
     // or it would print above t1 in append-only scrollback.
-    expect(finalizedIds(out)).toEqual(['a1']);
+    expect(
+      advanceFinalizedFrontier(
+        [assistant('a1'), tool('t1', 'in_progress'), tool('t2', 'completed')],
+        0,
+        false,
+      ),
+    ).toBe(1);
   });
 
   it('finalizes every remaining entry once the stream reaches a final status', () => {
-    const out = finalizeSettledPrefix(
-      [assistant('a1'), tool('t1', 'in_progress'), assistant('a2')],
-      true,
-    );
-    expect(finalizedIds(out)).toEqual(['a1', 't1', 'a2']);
-  });
-
-  it('returns the same entries when nothing newly settles', () => {
-    const entries = [assistant('a1')];
-    expect(finalizeSettledPrefix(entries, false)).toBe(entries);
+    expect(
+      advanceFinalizedFrontier(
+        [assistant('a1'), tool('t1', 'in_progress'), assistant('a2')],
+        0,
+        true,
+      ),
+    ).toBe(3);
   });
 });
 
@@ -2043,19 +2065,16 @@ describe('CLI transcript state', () => {
     // audio the terminal cannot preview, and the plain input file — with the
     // media subset kept beside them rather than instead of them.
     expect(entries[0]).toMatchObject({
-      role: 'media',
-      finalized: true,
-      row: {
-        kind: 'fileList',
-        counts: { loaded: 5, failed: 0, total: 5 },
-        media: [
-          { path: '/private/tmp/loaded.png' },
-          { path: '/private/tmp/loaded.png' },
-          { path: '/private/tmp/paper.pdf' },
-          { path: '/private/tmp/audio.wav' },
-        ],
-      },
+      kind: 'fileList',
+      counts: { loaded: 5, failed: 0, total: 5 },
+      media: [
+        { path: '/private/tmp/loaded.png' },
+        { path: '/private/tmp/loaded.png' },
+        { path: '/private/tmp/paper.pdf' },
+        { path: '/private/tmp/audio.wav' },
+      ],
     });
+    expect(entryFinalizedFlags(root)).toEqual([true]);
     expect(transcriptEntryLayout(entries[0]).lines).toEqual([
       'Files (5/5 loaded)',
       '  ⎿ ✓ /private/tmp/loaded.png [image, 8.5 KiB]',
@@ -2104,7 +2123,9 @@ describe('CLI transcript state', () => {
         '⟳ prover · todos · 1 done, 1 active, 0 pending',
       ].join('\n'),
     ]);
-    expect(entries[0]?.text).not.toContain('<subagent-progress');
+    expect(transcriptRowHeadline(entries[0]!)).not.toContain(
+      '<subagent-progress',
+    );
   });
 
   it('normalizes common HTML before assistant text reaches the live transcript', () => {
@@ -2121,8 +2142,8 @@ describe('CLI transcript state', () => {
       '### Verification Report\n\nThe proof is **fully verified**.',
     ]);
     expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.MODEL_RESPONSE);
-    expect(entries[0]?.text).not.toContain('<h3>');
-    expect(entries[0]?.text).not.toContain('<b>');
+    expect(transcriptRowHeadline(entries[0]!)).not.toContain('<h3>');
+    expect(transcriptRowHeadline(entries[0]!)).not.toContain('<b>');
   });
 
   it('bounds long subagent result responses in the visible transcript', () => {
@@ -2147,13 +2168,14 @@ describe('CLI transcript state', () => {
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
-    expect(entries[0]?.text).toContain('✓ prover completed · 2m');
-    expect(entries[0]?.text).toContain('proof line 12');
-    expect(entries[0]?.text).not.toContain('proof line 13');
-    expect(entries[0]?.text).toContain(
+    const headline = transcriptRowHeadline(entries[0]!);
+    expect(headline).toContain('✓ prover completed · 2m');
+    expect(headline).toContain('proof line 12');
+    expect(headline).not.toContain('proof line 13');
+    expect(headline).toContain(
       '… 8 more lines; open the subagent transcript for the full response',
     );
-    expect(entries[0]?.text).not.toContain('<subagent-result');
+    expect(headline).not.toContain('<subagent-result');
   });
 
   it('mirrors error log entries into the transcript', () => {
@@ -2164,11 +2186,9 @@ describe('CLI transcript state', () => {
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      role: 'error',
-      text: 'Model request failed',
-      finalized: true,
-    });
+    expect(entries[0]).toMatchObject({ kind: 'error' });
+    expect(transcriptRowHeadline(entries[0]!)).toBe('Model request failed');
+    expect(entryFinalizedFlags(root)).toEqual([true]);
   });
 
   it('shows the canonical safe reason below a model-request failure', () => {
@@ -2184,11 +2204,11 @@ describe('CLI transcript state', () => {
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      role: 'error',
-      text: 'Model request failed (no retry available)',
-      finalized: true,
-    });
+    expect(entries[0]).toMatchObject({ kind: 'error' });
+    expect(transcriptRowHeadline(entries[0]!)).toBe(
+      'Model request failed (no retry available)',
+    );
+    expect(entryFinalizedFlags(root)).toEqual([true]);
     expect(transcriptEntryLayout(entries[0]!, { width: 200 }).lines)
       .toMatchInlineSnapshot(`
       [
@@ -2244,7 +2264,9 @@ describe('CLI transcript state', () => {
     syncStreamLog(root);
 
     const entry = streamEntries(root)[0]!;
-    expect(entry.text).toContain('Model request failed with Bearer [redacted]');
+    expect(transcriptRowHeadline(entry)).toContain(
+      'Model request failed with Bearer [redacted]',
+    );
     const body = transcriptEntryLayout(entry, { width: 400 }).lines.join('\n');
     expect(body).toContain('API_KEY=[redacted]');
     expect(body).toContain('Bearer [redacted]');
@@ -2269,8 +2291,7 @@ describe('CLI transcript state', () => {
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
-      role: 'tool',
-      text: '',
+      kind: 'tool',
       toolUse: {
         toolName: 'bash',
         errorText: 'The shell command exited with status 1.',
@@ -2278,6 +2299,8 @@ describe('CLI transcript state', () => {
         status: 'failed',
       },
     });
+    // A tool row paints as a typed widget: it leads with no headline of its own.
+    expect(transcriptRowHeadline(entries[0]!)).toBe('');
   });
 
   it('tracks hidden thinking activity without rendering thinking text', () => {
@@ -2301,7 +2324,7 @@ describe('CLI transcript state', () => {
     expect(slice?.thinkingActive).toBe(true);
     // Reasoning is a compact `Thinking` row whose headline never quotes the
     // reasoning itself; the text is body content, elided at paint.
-    expect(slice?.entries.map((entry) => entry.text)).toEqual(['Thinking']);
+    expect(entryTexts(root)).toEqual(['Thinking']);
 
     thinking.finalize();
     syncStreamLog(root);
@@ -2316,10 +2339,7 @@ describe('CLI transcript state', () => {
 
     slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(false);
-    expect(slice?.entries.map((entry) => entry.text)).toEqual([
-      'Thinking',
-      'Visible answer.',
-    ]);
+    expect(entryTexts(root)).toEqual(['Thinking', 'Visible answer.']);
   });
 
   it('projects workflow tools and errors while excluding thinking and raw model prose', () => {
@@ -2338,21 +2358,21 @@ describe('CLI transcript state', () => {
     patchStream(root, (slice) => ({
       ...slice,
       entries: [
-        localSyntheticEntry(
+        localTranscriptRow(
           'synthetic-workflow-user',
           'user',
           'synthetic workflow prompt',
           4,
           3,
         ),
-        localSyntheticEntry(
+        localTranscriptRow(
           'synthetic-workflow-assistant',
           'assistant',
           'synthetic workflow response',
           4,
           3,
         ),
-        localSyntheticEntry(
+        localTranscriptRow(
           'synthetic-workflow-error',
           'error',
           'synthetic workflow error',
@@ -2365,7 +2385,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(root);
 
     const slice = streams.get().get(root);
-    expect(slice?.entries.map(({ role }) => role)).toEqual([
+    expect(slice?.entries.map(({ kind }) => kind)).toEqual([
       'tool',
       'error',
       'error',
@@ -2399,11 +2419,10 @@ describe('CLI transcript state', () => {
     expect(slice?.latestLine).not.toContain('\u001b');
     expect(slice?.latestLine).not.toContain('\u0007');
     expect(slice?.entries).toMatchObject([
-      {
-        role: 'assistant',
-        messageType: MESSAGE_TYPES.DEFAULT,
-        text: 'Preparing proof audit API_KEY=[redacted]',
-      },
+      { kind: 'log', messageType: MESSAGE_TYPES.DEFAULT },
+    ]);
+    expect(entryTexts(child1)).toEqual([
+      'Preparing proof audit API_KEY=[redacted]',
     ]);
     expect(JSON.stringify(slice?.entries)).not.toContain(
       'raw workflow model response',
@@ -2447,15 +2466,18 @@ describe('CLI transcript state', () => {
 
     slice = streams.get().get(child1);
     expect(slice?.latestLine).toBe('Proof audit failed');
-    expect(slice?.entries.map(({ role }) => role)).toEqual([
-      'assistant',
+    expect(slice?.entries.map(({ kind }) => kind)).toEqual([
+      'log',
       'tool',
       'tool',
       'phase',
       'error',
     ]);
     expect(JSON.stringify(slice)).not.toContain('workflow prompt');
-    expect(JSON.stringify(slice)).toContain(
+    // The ordinary log line survives the later rows, and it still paints
+    // safely: terminal control sequences are stripped by the headline the
+    // painter reads, not stored pre-stripped on the row.
+    expect(entryTexts(child1)[0]).toBe(
       'Preparing proof audit API_KEY=[redacted]',
     );
     expect(JSON.stringify(slice)).not.toContain(secret);
@@ -2503,7 +2525,7 @@ describe('CLI transcript state', () => {
       entries: [
         {
           id: 'dormant-review-phase',
-          role: 'phase',
+          kind: 'phase',
           phaseLabel: 'Checking dormant lemmas',
         },
       ],
@@ -2518,7 +2540,7 @@ describe('CLI transcript state', () => {
       entries: [
         {
           id: 'dormant-review-phase',
-          role: 'phase',
+          kind: 'phase',
         },
       ],
     });
@@ -2531,7 +2553,7 @@ describe('CLI transcript state', () => {
     patchStream(child1, (slice) => ({
       ...slice,
       entries: [
-        localSyntheticEntry(
+        localTranscriptRow(
           'synthetic-compact-workflow-error',
           'error',
           'Synthetic compact workflow error',
@@ -2581,30 +2603,32 @@ describe('CLI transcript state', () => {
     syncStreamLog(child1);
 
     const entries = streamEntries(child1);
-    const dashboardEntries = entries.filter((entry) => !entry.synthetic);
+    const dashboardEntries = entries.filter(
+      (entry) => entry.origin !== 'local',
+    );
     expect(dashboardEntries).toHaveLength(2_000);
     expect(dashboardEntries[0]).toMatchObject({
-      role: 'workflowTask',
-      task: { id: 'task-3' },
+      kind: 'workflowTask',
+      call: { id: 'task-3' },
     });
     expect(dashboardEntries.at(-2)).toMatchObject({
-      role: 'workflowTask',
-      task: { id: 'task-2001' },
+      kind: 'workflowTask',
+      call: { id: 'task-2001' },
     });
     expect(dashboardEntries.at(-1)).toMatchObject({
       id: 'compact-new-phase',
-      role: 'phase',
+      kind: 'phase',
       phaseLabel: 'New phase',
     });
     expect(
-      dashboardEntries
-        .filter((entry) => entry.role === 'workflowTask')
-        .map((entry) => entry.task.id),
+      dashboardEntries.flatMap((entry) =>
+        entry.kind === 'workflowTask' ? [entry.call.id] : [],
+      ),
     ).toEqual(Array.from({ length: 1_999 }, (_, index) => `task-${index + 3}`));
     expect(entries).toContainEqual(
       expect.objectContaining({
         id: 'synthetic-compact-workflow-error',
-        synthetic: true,
+        origin: 'local',
       }),
     );
     expect(JSON.stringify(entries)).not.toContain('Compact operational');
@@ -2650,11 +2674,11 @@ describe('CLI transcript state', () => {
     expect(slice?.entries).toHaveLength(1);
     expect(slice?.entries[0]).toMatchObject({
       id: `compaction:${activity.operationId}`,
-      role: 'activity',
-      text: 'Compacting context…',
-      finalized: false,
-      activity: { status: 'running' },
+      kind: 'compactionActivity',
+      label: 'Compacting context…',
+      block: { status: 'running' },
     });
+    expect(entryFinalizedFlags(root)).toEqual([false]);
 
     activity.finish('completed');
     syncStreamLog(root);
@@ -2664,11 +2688,11 @@ describe('CLI transcript state', () => {
     expect(slice?.entries).toHaveLength(1);
     expect(slice?.entries[0]).toMatchObject({
       id: `compaction:${activity.operationId}`,
-      role: 'activity',
-      text: 'Context compacted',
-      finalized: true,
-      activity: { status: 'completed' },
+      kind: 'compactionActivity',
+      label: 'Context compacted',
+      block: { status: 'completed' },
     });
+    expect(entryFinalizedFlags(root)).toEqual([true]);
   });
 
   it('moves compaction to Static while its response text keeps streaming', () => {
@@ -2683,12 +2707,13 @@ describe('CLI transcript state', () => {
     expect(entries).toMatchObject([
       {
         id: `compaction:${activity.operationId}`,
-        role: 'activity',
-        finalized: false,
-        activity: { status: 'running' },
+        kind: 'compactionActivity',
+        block: { status: 'running' },
       },
-      { role: 'assistant', text: 'Visible answer', finalized: false },
+      { kind: 'assistant' },
     ]);
+    expect(entryTexts(root)[1]).toBe('Visible answer');
+    expect(entryFinalizedFlags(root)).toEqual([false, false]);
 
     activity.finish('completed');
     syncStreamLog(root);
@@ -2697,17 +2722,18 @@ describe('CLI transcript state', () => {
     expect(entries).toMatchObject([
       {
         id: `compaction:${activity.operationId}`,
-        role: 'activity',
-        finalized: true,
-        activity: { status: 'completed' },
+        kind: 'compactionActivity',
+        block: { status: 'completed' },
       },
-      { role: 'assistant', text: 'Visible answer', finalized: false },
+      { kind: 'assistant' },
     ]);
-    const split = splitTranscriptEntries(entries, STREAM_PHASE.RUNNING);
+    expect(entryTexts(root)[1]).toBe('Visible answer');
+    expect(entryFinalizedFlags(root)).toEqual([true, false]);
+    const split = splitStreamEntries(root, STREAM_PHASE.RUNNING);
     expect(split.finalized.map((entry) => entry.id)).toEqual([
       `compaction:${activity.operationId}`,
     ]);
-    expect(split.pending.map((entry) => entry.role)).toEqual(['assistant']);
+    expect(split.pending.map((entry) => entry.kind)).toEqual(['assistant']);
 
     output.finalize();
   });
@@ -2727,10 +2753,12 @@ describe('CLI transcript state', () => {
     expect(slice?.entries).toContainEqual(
       expect.objectContaining({
         id: `compaction:${activity.operationId}`,
-        role: 'activity',
-        finalized: false,
-        activity: expect.objectContaining({ status: 'interrupted' }),
+        kind: 'compactionActivity',
+        block: expect.objectContaining({ status: 'interrupted' }),
       }),
+    );
+    expect(entryFinalized(root, `compaction:${activity.operationId}`)).toBe(
+      false,
     );
 
     activity.finish('completed');
@@ -2740,10 +2768,12 @@ describe('CLI transcript state', () => {
     expect(slice?.entries).toContainEqual(
       expect.objectContaining({
         id: `compaction:${activity.operationId}`,
-        role: 'activity',
-        finalized: true,
-        activity: expect.objectContaining({ status: 'completed' }),
+        kind: 'compactionActivity',
+        block: expect.objectContaining({ status: 'completed' }),
       }),
+    );
+    expect(entryFinalized(root, `compaction:${activity.operationId}`)).toBe(
+      true,
     );
   });
 
@@ -2758,12 +2788,14 @@ describe('CLI transcript state', () => {
     expect(streams.get().get(root)?.entries).toContainEqual(
       expect.objectContaining({
         id: `compaction:${activity.operationId}`,
-        finalized: true,
-        activity: expect.objectContaining({
+        block: expect.objectContaining({
           status: 'interrupted',
           finalized: true,
         }),
       }),
+    );
+    expect(entryFinalized(root, `compaction:${activity.operationId}`)).toBe(
+      true,
     );
 
     activity.finish('completed');
@@ -2772,12 +2804,14 @@ describe('CLI transcript state', () => {
     expect(streams.get().get(root)?.entries).toContainEqual(
       expect.objectContaining({
         id: `compaction:${activity.operationId}`,
-        finalized: true,
-        activity: expect.objectContaining({
+        block: expect.objectContaining({
           status: 'interrupted',
           finalized: true,
         }),
       }),
+    );
+    expect(entryFinalized(root, `compaction:${activity.operationId}`)).toBe(
+      true,
     );
   });
 
@@ -2795,9 +2829,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(root);
 
     slice = streams.get().get(root);
-    expect(slice?.entries.map((entry) => entry.text)).toEqual([
-      'Visible answer.',
-    ]);
+    expect(entryTexts(root)).toEqual(['Visible answer.']);
   });
 
   it('trims leading blank assistant rows at turn start', () => {
@@ -2811,33 +2843,32 @@ describe('CLI transcript state', () => {
   });
 
   // Regression: a sync tick that fires after the turn-boundary `forceFinal`
-  // promotion must not roll the entry back to
-  // `finalized: false`. Without this guard,
-  // the de-finalized entry lands in neither bucket of
-  // `splitTranscriptEntries` once status flips to WAITING, and silently
-  // disappears from the transcript.
-  it('preserves the finalized flag through a post-finalize sync tick', () => {
+  // promotion must not pull the promotion frontier back behind an already
+  // printed row. Without this guard, the de-finalized entry lands in neither
+  // bucket of `splitTranscriptEntries` once status flips to WAITING, and
+  // silently disappears from the transcript.
+  it('preserves the promotion frontier through a post-finalize sync tick', () => {
     const logger = runTrace(root);
-    logModelResponse(logger, 'streaming assistant chunk');
+    // An open stream carries no settlement order of its own, so promotion can
+    // only come from the frontier — the flag this regression is about.
+    const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    output.append('streaming assistant chunk');
     syncStreamLog(root);
+    expect(entryFinalizedFlags(root)).toEqual([false]);
 
-    // Stream-level finalize promotes the deferred-finalization entries.
-    patchStream(root, (slice) => ({
-      ...slice,
-      entries: slice.entries.map((entry) =>
-        entry.role === 'assistant' ? { ...entry, finalized: true } : entry,
-      ),
-    }));
+    // The turn-boundary finalize promotes the deferred-finalization entries.
+    syncStreamLog(root, { forceFinal: true });
+    expect(entryFinalizedFlags(root)).toEqual([true]);
 
-    // A second sync after finalize must not regress the flag.
+    // A later ordinary sync must not regress the frontier behind them.
     syncStreamLog(root);
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      role: 'assistant',
-      finalized: true,
-    });
+    expect(entries[0]).toMatchObject({ kind: 'assistant' });
+    expect(entryFinalizedFlags(root)).toEqual([true]);
+
+    output.finalize();
   });
 
   // #7086: the transcript store — not a CLI-side synthetic fallback — is now
@@ -2845,7 +2876,7 @@ describe('CLI transcript state', () => {
   // is what `ToolUseProcessNode` calls at the turn boundary once
   // `assembly.lastResponse` is set (see TexraTranscriptRecorder.vitest.ts for
   // the recorder-level upsert-vs-append unit coverage); these tests confirm
-  // the CLI's own state ends up with exactly one entry, never a synthetic one.
+  // the CLI's own state ends up with exactly one entry, never a local one.
   it('reconciles a streamed response to the authoritative post-replacement text', () => {
     const logger = runTrace(root);
     const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -2859,11 +2890,9 @@ describe('CLI transcript state', () => {
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      role: 'assistant',
-      text: 'Done \\checkmark',
-    });
-    expect(entries[0]?.synthetic).toBeUndefined();
+    expect(entries[0]).toMatchObject({ kind: 'assistant' });
+    expect(transcriptRowHeadline(entries[0]!)).toBe('Done \\checkmark');
+    expect(entries[0]?.origin).toBeUndefined();
   });
 
   it('appends the final response when the round produced no live stream', () => {
@@ -2874,11 +2903,9 @@ describe('CLI transcript state', () => {
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      role: 'assistant',
-      text: 'The answer is 2.',
-    });
-    expect(entries[0]?.synthetic).toBeUndefined();
+    expect(entries[0]).toMatchObject({ kind: 'assistant' });
+    expect(transcriptRowHeadline(entries[0]!)).toBe('The answer is 2.');
+    expect(entries[0]?.origin).toBeUndefined();
   });
 
   it('keeps only a summary for an unfocused dormant transcript', () => {
@@ -2911,7 +2938,10 @@ describe('CLI transcript state', () => {
     syncStreamLog(child1);
 
     expect(
-      streamEntries(child1).map((entry) => [entry.role, entry.text]),
+      streamEntries(child1).map((row) => [
+        row.kind,
+        transcriptRowHeadline(row),
+      ]),
     ).toEqual([
       ['user', 'Check the second lemma.'],
       ['assistant', 'The second lemma is valid.'],
@@ -2935,14 +2965,11 @@ describe('CLI transcript state', () => {
     syncStreamLog(root);
 
     const entries = streamEntries(root);
-    expect(entries.map((entry) => entry.text)).toEqual([
-      'Let me check that.',
-      'Final answer.',
-    ]);
-    expect(entries.every((entry) => !entry.synthetic)).toBe(true);
+    expect(entryTexts(root)).toEqual(['Let me check that.', 'Final answer.']);
+    expect(entries.every((entry) => entry.origin === undefined)).toBe(true);
   });
 
-  it('projects a turn boundary from the store alone, with zero synthetic entries', () => {
+  it('projects a turn boundary from the store alone, with zero local entries', () => {
     const logger = runTrace(root);
     logUserMessage(logger, 'What is 1 + 1?');
     logModelResponse(logger, '2');
@@ -2950,9 +2977,9 @@ describe('CLI transcript state', () => {
     syncStreamLog(root, { forceFinal: true });
 
     const entries = streamEntries(root);
-    expect(entries.map((entry) => entry.text)).toEqual(['What is 1 + 1?', '2']);
-    expect(entries.map((entry) => entry.finalized)).toEqual([true, true]);
-    expect(entries.every((entry) => !entry.synthetic)).toBe(true);
+    expect(entryTexts(root)).toEqual(['What is 1 + 1?', '2']);
+    expect(entryFinalizedFlags(root)).toEqual([true, true]);
+    expect(entries.every((entry) => entry.origin === undefined)).toBe(true);
   });
 
   it('keeps repeated local slash-command responses visible', () => {
@@ -2972,10 +2999,9 @@ describe('CLI transcript state', () => {
 
     appendLocalUserTranscript('literal \\checkmark');
 
-    const entries = streamEntries(root);
-    expect(entries.map((entry) => [entry.role, entry.text])).toEqual([
-      ['user', 'literal \\checkmark'],
-    ]);
+    expect(
+      streamEntries(root).map((row) => [row.kind, transcriptRowHeadline(row)]),
+    ).toEqual([['user', 'literal \\checkmark']]);
   });
 
   it('can append local assistant output to an explicit stream', () => {
@@ -2998,7 +3024,10 @@ describe('CLI transcript state', () => {
       appendLocalErrorTranscript('Model claude-opus-4-7 not found');
 
       expect(
-        streamEntries(root).map((entry) => [entry.role, entry.text]),
+        streamEntries(root).map((row) => [
+          row.kind,
+          transcriptRowHeadline(row),
+        ]),
       ).toEqual([
         ['assistant', 'Available commands: /help'],
         ['error', 'Model claude-opus-4-7 not found'],
@@ -3058,13 +3087,11 @@ describe('CLI transcript state', () => {
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      role: 'error',
-      text: 'Model claude-opus-4-7 not found',
-      finalized: true,
-      synthetic: true,
-      syntheticKind: 'local',
-    });
+    expect(entries[0]).toMatchObject({ kind: 'error', origin: 'local' });
+    expect(transcriptRowHeadline(entries[0]!)).toBe(
+      'Model claude-opus-4-7 not found',
+    );
+    expect(entryFinalizedFlags(root)).toEqual([true]);
   });
 
   it('flushes pending model-response chunks before transcript sync', () => {
@@ -3074,10 +3101,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streamEntries(root);
-    expect(entries.map((entry) => entry.text)).toEqual([
-      'A short final answer.',
-    ]);
+    expect(entryTexts(root)).toEqual(['A short final answer.']);
   });
 
   it('finalizes a delayed first model-response sync after the stream is idle', () => {
@@ -3089,12 +3113,10 @@ describe('CLI transcript state', () => {
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      role: 'assistant',
-      text: 'A delayed final answer.',
-      finalized: true,
-    });
-    const split = splitTranscriptEntries(entries, STREAM_PHASE.WAITING);
+    expect(entries[0]).toMatchObject({ kind: 'assistant' });
+    expect(transcriptRowHeadline(entries[0]!)).toBe('A delayed final answer.');
+    expect(entryFinalizedFlags(root)).toEqual([true]);
+    const split = splitStreamEntries(root, STREAM_PHASE.WAITING);
     expect(split.finalized.map((entry) => entry.id)).toEqual([entries[0]?.id]);
     expect(split.pending).toEqual([]);
   });
@@ -3112,24 +3134,18 @@ describe('CLI transcript state', () => {
     appendLocalAssistantTranscript('Available commands: /help');
     syncStreamLog(root);
 
-    const entries = streamEntries(root);
     expect(
-      entries
-        .filter((entry) => entry.syntheticKind === 'local')
-        .map((entry) => entry.text),
+      streamEntries(root)
+        .filter((row) => row.origin === 'local')
+        .map((row) => transcriptRowHeadline(row)),
     ).toEqual(['Available commands: /help', 'Available commands: /help']);
   });
 
   it('keeps local output live behind an unfinished model response', () => {
     const { finalized, pending } = splitTranscriptEntries(
       [
-        {
-          id: 'model-response',
-          role: 'assistant',
-          text: 'partial',
-          finalized: false,
-        },
-        localSyntheticEntry(
+        textRowFixture('model-response', 'assistant', 'partial'),
+        localTranscriptRow(
           'local-help',
           'assistant',
           'Available commands: /help',
@@ -3137,6 +3153,7 @@ describe('CLI transcript state', () => {
           0,
         ),
       ],
+      0,
       STREAM_PHASE.RUNNING,
     );
 
@@ -3151,12 +3168,7 @@ describe('CLI transcript state', () => {
     const text = ['A paragraph.', '', '- abcdef ghijkl mnopqr'].join('\n');
     const width = 10;
     const renderedRows = renderAnsiMarkdown(text, { width }).split('\n').length;
-    const entry = {
-      id: 'assistant-markdown',
-      role: 'assistant',
-      text,
-      finalized: true,
-    } as const;
+    const entry = textRowFixture('assistant-markdown', 'assistant', text, 0);
 
     expect(estimateTranscriptEntryRows(entry, width)).toBe(renderedRows);
   });
@@ -3171,19 +3183,14 @@ describe('CLI transcript state', () => {
 
   it('keeps pending transcript rows within their viewport budget', () => {
     const pending = [
-      {
-        id: 'assistant',
-        role: 'assistant',
-        text: 'streaming reply',
-        finalized: false,
-      },
+      textRowFixture('assistant', 'assistant', 'streaming reply'),
       toolEntry(
         'tool',
         'Bash',
         { command: 'ls' },
         { outputText: 'one\ntwo\nthree' },
       ),
-    ] as const;
+    ];
 
     const selected = selectTranscriptEntriesForViewport(pending, 3, 80);
 
@@ -3194,13 +3201,8 @@ describe('CLI transcript state', () => {
 
   it('lets live output fill the viewport instead of reserving a history marker row', () => {
     const pending = [
-      {
-        id: 'assistant',
-        role: 'assistant',
-        text: 'streaming reply '.repeat(300),
-        finalized: false,
-      },
-    ] as const;
+      textRowFixture('assistant', 'assistant', 'streaming reply '.repeat(300)),
+    ];
 
     const selected = selectTranscriptEntriesForViewport(pending, 13, 80);
 
@@ -3269,7 +3271,7 @@ describe('CLI transcript state', () => {
       'second answer',
       'third prompt',
     ]);
-    expect(entries.every((entry) => !entry.synthetic)).toBe(true);
+    expect(entries.every((entry) => entry.origin === undefined)).toBe(true);
   });
 });
 

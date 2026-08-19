@@ -41,7 +41,10 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   type ActiveChildInfo,
   type StreamTabId,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
+import type { TranscriptRowOf } from '@shared/transcript';
+import { textRowFixture } from '@test/support/transcriptRowFixtures';
 import {
   loadInk,
   renderInteractive,
@@ -103,6 +106,25 @@ function markToolUseAgent(...streamIds: StreamTabId[]): void {
       agentCategory: AgentCategory.ToolUse,
     });
   }
+}
+
+/** A workflow-task row as the projector builds one, for the suites that seed
+ *  a dashboard directly instead of replaying a stream log. */
+function taskRow(
+  id: string,
+  call: WorkflowCallProgress,
+): TranscriptRowOf<'workflowTask'> {
+  const statusLabel = call.status === 'running' ? 'Running' : 'Planned';
+  return {
+    kind: 'workflowTask',
+    id,
+    timestamp: 0,
+    level: 'info',
+    call,
+    line: `${statusLabel}: ${call.label}`,
+    statusLabel,
+    metadataParts: [],
+  };
 }
 
 function runningChild(
@@ -281,17 +303,11 @@ describe('App foreground Escape ownership', () => {
     patchStream(ROOT, (slice) => ({
       ...slice,
       entries: [
-        {
-          id: 'task-planned-only',
-          role: 'workflowTask',
-          text: 'Planned: Draft alone',
-          finalized: false,
-          task: {
-            id: 'draft-alone',
-            label: 'Draft alone',
-            status: 'planned',
-          },
-        },
+        taskRow('task-planned-only', {
+          id: 'draft-alone',
+          label: 'Draft alone',
+          status: 'planned',
+        }),
       ],
     }));
     const { instance, stdin, stdout, onInterruptStream } =
@@ -368,7 +384,7 @@ describe('App foreground Escape ownership', () => {
         streams
           .get()
           .get(ROOT)
-          ?.entries.map((entry) => [entry.id, entry.role]),
+          ?.entries.map((entry) => [entry.id, entry.kind]),
       ).toEqual([
         ['phase-map', 'phase'],
         ['task-child', 'workflowTask'],
@@ -427,18 +443,14 @@ describe('App foreground Escape ownership', () => {
     });
     patchStream(ROOT, (slice) => ({
       ...slice,
-      entries: ['first', 'second'].map((id) => ({
-        id: `task-${id}`,
-        role: 'workflowTask' as const,
-        text: `Running: ${id}`,
-        finalized: false,
-        task: {
+      entries: ['first', 'second'].map((id) =>
+        taskRow(`task-${id}`, {
           id,
           label: id,
-          status: 'running' as const,
+          status: 'running',
           childStreamId: CHILD,
-        },
-      })),
+        }),
+      ),
     }));
     const onInterruptStream = vi.fn();
     const { instance, stdin, stdout } = await renderDebugApp(
@@ -887,12 +899,7 @@ describe('App foreground Escape ownership', () => {
       patchStream(streamId, (slice) => ({
         ...slice,
         entries: [
-          {
-            id: `layout-${streamId}`,
-            role: 'assistant' as const,
-            text: transcriptText,
-            finalized: false,
-          },
+          textRowFixture(`layout-${streamId}`, 'assistant', transcriptText),
         ],
       }));
     }
@@ -967,12 +974,7 @@ describe('App foreground Escape ownership', () => {
     patchStream(CHILD, (slice) => ({
       ...slice,
       entries: [
-        {
-          id: 'unsupported-list-layout',
-          role: 'assistant',
-          text: transcriptText,
-          finalized: false,
-        },
+        textRowFixture('unsupported-list-layout', 'assistant', transcriptText),
       ],
     }));
     const { instance, stdin, stdout } = await renderDebugApp(
@@ -1266,18 +1268,12 @@ describe('App approval surface ownership', () => {
     patchStream(ROOT, (slice) => ({
       ...slice,
       entries: [
-        {
+        taskRow('approval-task', {
           id: 'approval-task',
-          role: 'workflowTask' as const,
-          text: 'Running: Approval task',
-          finalized: false,
-          task: {
-            id: 'approval-task',
-            label: 'Approval task',
-            status: 'running' as const,
-            childStreamId: CHILD,
-          },
-        },
+          label: 'Approval task',
+          status: 'running',
+          childStreamId: CHILD,
+        }),
       ],
     }));
     focusStream(CHILD);

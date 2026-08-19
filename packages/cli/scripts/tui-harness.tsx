@@ -59,7 +59,11 @@ import {
   type StreamTabId,
   type UserQuestionPermission,
 } from '@shared/schemas';
-import { toolRowModel } from '@shared/transcript';
+import {
+  toolRowModel,
+  transcriptText,
+  type TranscriptRow,
+} from '@shared/transcript';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -102,7 +106,6 @@ import {
   setCliSessionModelOverride,
   patchStream,
   streams,
-  type ConversationEntry,
   setStreamStatusInCliState,
 } from '../src/chat/tui/state/cliState';
 import {
@@ -682,20 +685,53 @@ if (HARNESS_AUTHENTICATED === '1' || HARNESS_AUTHENTICATED === '0') {
   });
 }
 
-function makeEntries(count: number): ConversationEntry[] {
-  const entries: ConversationEntry[] = [];
+/** A settled text row the way the fold hands one to the painter. `seqNo` and
+ *  `settlementSeqNo` carry the transcript position the harness intends. */
+function harnessTextRow(
+  id: string,
+  kind: 'assistant' | 'error' | 'user',
+  text: string,
+  seqNo: number,
+  settled = true,
+): TranscriptRow {
+  const base = {
+    id,
+    timestamp: 0,
+    seqNo,
+    ...(settled ? { settlementSeqNo: seqNo } : {}),
+  } as const;
+  const body = transcriptText(text);
+  if (kind === 'error') {
+    return {
+      ...base,
+      level: 'error',
+      kind: 'error',
+      summary: body,
+      details: [],
+      detailText: transcriptText(''),
+    };
+  }
+  if (kind === 'user') {
+    return { ...base, level: 'info', kind: 'user', text: body, summary: body };
+  }
+  return {
+    ...base,
+    level: 'info',
+    kind: 'assistant',
+    text: body,
+    streaming: false,
+  };
+}
+
+function makeEntries(count: number): TranscriptRow[] {
+  const entries: TranscriptRow[] = [];
   for (let i = 1; i <= count; i += 1) {
-    const role = i % 3 === 0 ? 'assistant' : 'user';
+    const kind = i % 3 === 0 ? 'assistant' : 'user';
     const text =
-      role === 'user'
+      kind === 'user'
         ? `entry-${i} chat history line to grow the transcript pane`
         : `assistant reply ${i} - confirming receipt of entry ${i}`;
-    entries.push({
-      id: `entry-${i}`,
-      role,
-      text,
-      finalized: true,
-    });
+    entries.push(harnessTextRow(`entry-${i}`, kind, text, i));
   }
   return entries;
 }
@@ -718,67 +754,61 @@ function makeLongToolOutput(): NormalizedToolUse {
   };
 }
 
-/** Build a tool `ConversationEntry` the way the fold does: a normalized
- *  payload plus the shared model the painter reads. */
+/** Build a tool row the way the fold does: a normalized payload plus the
+ *  shared model the painter reads. */
 function harnessToolEntry(
   id: string,
   toolUse: NormalizedToolUse,
-  text = '',
-): ConversationEntry {
+  seqNo = 2,
+): TranscriptRow {
   return {
+    kind: 'tool',
     id,
-    role: 'tool',
-    text,
-    finalized: true,
+    timestamp: 0,
+    level: 'info',
+    seqNo,
+    settlementSeqNo: seqNo,
     toolUse,
-    row: {
-      kind: 'tool',
-      id,
-      timestamp: 0,
-      level: 'info',
-      toolUse,
-      model: toolRowModel(toolUse),
-    },
+    model: toolRowModel(toolUse),
   };
 }
 
-function makeLongToolOutputEntries(): ConversationEntry[] {
+function makeLongToolOutputEntries(): TranscriptRow[] {
   return [
-    {
-      id: 'long-tool-user',
-      role: 'user',
-      text: 'Enumerate Pythagorean triples and show the complete output.',
-      finalized: true,
-    },
+    harnessTextRow(
+      'long-tool-user',
+      'user',
+      'Enumerate Pythagorean triples and show the complete output.',
+      1,
+    ),
     harnessToolEntry('long-tool-output', makeLongToolOutput()),
   ];
 }
 
-function makeAssistantToolPreambleEntries(): ConversationEntry[] {
+function makeAssistantToolPreambleEntries(): TranscriptRow[] {
   return [
-    {
-      id: 'preamble-user',
-      role: 'user',
-      text: 'what is this repo about',
-      finalized: true,
-    },
-    {
-      id: 'preamble-assistant',
-      role: 'assistant',
-      text: 'I will read the README first.',
-      finalized: true,
-    },
-    harnessToolEntry('preamble-tool', {
-      toolName: 'read_file',
-      errorText: '',
-      outputText: '',
-      userInstructionText: '',
-      input: { path: 'README.md' },
-      isError: false,
-      isUserFeedback: false,
-      headerSummary: 'Read README.md',
-      status: TOOL_USE_STATUS.COMPLETED,
-    }),
+    harnessTextRow('preamble-user', 'user', 'what is this repo about', 1),
+    harnessTextRow(
+      'preamble-assistant',
+      'assistant',
+      'I will read the README first.',
+      2,
+    ),
+    harnessToolEntry(
+      'preamble-tool',
+      {
+        toolName: 'read_file',
+        errorText: '',
+        outputText: '',
+        userInstructionText: '',
+        input: { path: 'README.md' },
+        isError: false,
+        isUserFeedback: false,
+        headerSummary: 'Read README.md',
+        status: TOOL_USE_STATUS.COMPLETED,
+      },
+      3,
+    ),
   ];
 }
 
@@ -832,16 +862,16 @@ function seedLiveToolOnlyTranscript(): void {
   syncStreamLog(STREAM_ID);
 }
 
-function makeRejectedBashToolEntries(): ConversationEntry[] {
+function makeRejectedBashToolEntries(): TranscriptRow[] {
   const command = "printf 'approval-reject-live\\n'";
   const message = `User rejected command: ${command}`;
   return [
-    {
-      id: 'rejected-bash-user',
-      role: 'user',
-      text: 'Run a harmless command, but reject it at the approval prompt.',
-      finalized: true,
-    },
+    harnessTextRow(
+      'rejected-bash-user',
+      'user',
+      'Run a harmless command, but reject it at the approval prompt.',
+      1,
+    ),
     harnessToolEntry('rejected-bash-tool', {
       toolName: 'bash',
       errorText: message,
@@ -888,7 +918,7 @@ function seedSubagentFollowupTranscript(): void {
   syncStreamLog(STREAM_ID);
 }
 
-function makeChildEntries(agent: string, action: string): ConversationEntry[] {
+function makeChildEntries(agent: string, action: string): TranscriptRow[] {
   const assistantText =
     SHOW_LONG_CHILD_OUTPUT && agent === 'strategy'
       ? Array.from({ length: 18 }, (_, index) =>
@@ -898,33 +928,24 @@ function makeChildEntries(agent: string, action: string): ConversationEntry[] {
         ).join('\n')
       : `${agent} is checking the ${action} details and preparing a concise result.`;
   return [
-    {
-      id: `${agent}-user`,
-      role: 'user',
-      text: `Please handle the ${action} sub-workflow.`,
-      finalized: true,
-    },
-    {
-      id: `${agent}-assistant`,
-      role: 'assistant',
-      text: assistantText,
-      finalized: false,
-    },
+    harnessTextRow(
+      `${agent}-user`,
+      'user',
+      `Please handle the ${action} sub-workflow.`,
+      1,
+    ),
+    harnessTextRow(`${agent}-assistant`, 'assistant', assistantText, 2, false),
   ];
 }
 
 function harnessMessageEntry(
   id: string,
   text: string,
-  role: 'assistant' | 'error' | 'user' = 'assistant',
-  finalized = true,
-): ConversationEntry {
-  return {
-    id,
-    role,
-    text,
-    finalized,
-  };
+  kind: 'assistant' | 'error' | 'user' = 'assistant',
+  seqNo = 1,
+  settled = true,
+): TranscriptRow {
+  return harnessTextRow(id, kind, text, seqNo, settled);
 }
 
 function makeEditApprovalRequest() {
@@ -1194,7 +1215,7 @@ function harnessInitialStreamStatus(): StreamPhase | undefined {
   return undefined;
 }
 
-function harnessInitialEntries(): ConversationEntry[] {
+function harnessInitialEntries(): TranscriptRow[] {
   if (SHOW_WORKFLOW_TIMELINE) return [];
   if (SHOW_REJECTED_BASH_TOOL) return makeRejectedBashToolEntries();
   if (SHOW_LONG_TOOL_OUTPUT) return makeLongToolOutputEntries();
@@ -1216,9 +1237,12 @@ sessionMeta.set({
   version: '0.0.0-harness',
 });
 activeStreamIdSignal.set(STREAM_ID);
+const HARNESS_INITIAL_ENTRIES = harnessInitialEntries();
 patchStream(STREAM_ID, (slice) => ({
   ...slice,
-  entries: harnessInitialEntries(),
+  entries: HARNESS_INITIAL_ENTRIES,
+  // The harness seeds settled rows directly; the promotion cursor covers them.
+  finalizedFrontier: HARNESS_INITIAL_ENTRIES.length,
   queuedFollowUpMessages: QUEUED_FOLLOW_UPS,
 }));
 const HARNESS_INITIAL_STREAM_STATUS = harnessInitialStreamStatus();
@@ -2087,12 +2111,12 @@ function markHarnessInterrupted(): void {
     ...slice,
     entries: [
       ...slice.entries,
-      {
-        id: 'harness-interrupted',
-        role: 'assistant',
-        text: 'Harness interrupt requested.',
-        finalized: true,
-      },
+      harnessMessageEntry(
+        'harness-interrupted',
+        'Harness interrupt requested.',
+        'assistant',
+        slice.entries.length + 1,
+      ),
     ],
   }));
   setStreamStatusInCliState({
@@ -2132,12 +2156,12 @@ function markHarnessStreamInterrupted(streamId: StreamTabId): void {
     ...slice,
     entries: [
       ...slice.entries,
-      {
-        id: `harness-focused-interrupted-${streamId}`,
-        role: 'assistant',
-        text: `Harness focused interrupt requested for ${streamId}.`,
-        finalized: true,
-      },
+      harnessMessageEntry(
+        `harness-focused-interrupted-${streamId}`,
+        `Harness focused interrupt requested for ${streamId}.`,
+        'assistant',
+        slice.entries.length + 1,
+      ),
     ],
   }));
   setStreamStatusInCliState({
@@ -2182,6 +2206,7 @@ function appendHarnessTranscript(
         `harness-local-${Date.now()}-${slice.entries.length}`,
         text,
         role,
+        slice.entries.length + 1,
         options.finalized,
       ),
     ],
@@ -2260,6 +2285,8 @@ function markHarnessExecutionStopped(executionId: string): void {
       harnessMessageEntry(
         messageId,
         `Harness kill requested for ${executionId}.`,
+        'assistant',
+        slice.entries.length + 1,
       ),
     ],
   }));
@@ -2271,6 +2298,8 @@ function markHarnessExecutionStopped(executionId: string): void {
       harnessMessageEntry(
         `${messageId}-${executionRow.childStreamId}`,
         'Harness kill requested for this sub-workflow.',
+        'assistant',
+        slice.entries.length + 1,
       ),
     ],
   }));
