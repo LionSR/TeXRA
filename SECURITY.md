@@ -36,8 +36,9 @@ anonymous.
 - **Prompt injection that escalates privilege** — content in a user's documents,
   tool results, or fetched pages that makes an agent take an action the approval
   gate should have covered.
-- **The hosted account services** — authentication and the remote-agent
-  catalog.
+- **The hosted account services** — authentication, the remote-agent catalog,
+  and usage-telemetry ingestion. Model requests are not proxied by TeXRA: they
+  go from your machine straight to the provider.
 - **Webview and renderer isolation** — the VS Code webviews and the Electron
   renderer, including navigation policy and any path from rendered content to
   host APIs.
@@ -52,10 +53,11 @@ anonymous.
 - Missing hardening headers on the marketing site with no demonstrated impact.
 - Automated scanner output with no accompanying analysis.
 
-## API keys
+## Model credentials
 
 TeXRA runs agents against model providers using your own API keys or provider
-subscription credentials. Where a key lives depends on how you supplied it:
+subscription credentials. Where a credential lives depends on how you supplied
+it:
 
 - **Entered through TeXRA** (`TeXRA: Set API Key`, the desktop credential
   settings, or `texra auth`) — stored in the host's secret store: VS Code

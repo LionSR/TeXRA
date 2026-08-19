@@ -34,7 +34,7 @@ We reserve all rights not expressly granted in these Terms.
 
 ## 5. User Accounts and API Keys
 
-- **API Keys**: Certain features require you to provide your own API keys for third-party AI providers. You are solely responsible for obtaining, maintaining, and securing your API keys. API keys are stored locally using VS Code's built-in Secret Storage and are never transmitted to TeXRA servers. See Section 9 for details on how data is handled in this mode.
+- **Model Credentials**: AI features require you to supply your own credentials — either an API key for a third-party AI provider, or a subscription you hold with that provider (for example ChatGPT, Grok, Kimi Code, or a GLM Coding Plan). You are solely responsible for obtaining, maintaining, and securing them, and for complying with the terms of the provider that issued them. Credentials are stored locally in your platform's secure storage (VS Code's built-in Secret Storage, the desktop keychain, or the CLI credential store) and are never transmitted to TeXRA servers. See Section 9 for details on how data is handled.
 - **TeXRA Accounts**: A TeXRA account is optional and unlocks account-backed features such as the hosted research-agent catalog. Signing in does not route your model requests through TeXRA servers; model calls continue to use your own API keys or provider subscriptions. Account-backed features are subject to fair-use limits and may be modified or discontinued at any time.
 - **Account Integrity**: You may only create and operate one account for your own personal use. To prevent abuse of account-backed resources, sign-up may be restricted by automated checks on the email address and the underlying identity provider account. In particular, we may reject sign-ups that:
   1. use a disposable, temporary, or throwaway email provider;
@@ -55,7 +55,7 @@ You agree not to use the Service to:
 6. Circumvent any access controls, rate limits, or usage restrictions.
 7. Use the Service for automated bulk processing in a manner that abuses third-party API services.
 8. Misrepresent AI-generated content as solely human-authored in contexts where disclosure is required.
-9. Create more than one account, or use disposable, temporary, throwaway, privacy-relay, or other newly-created or pseudonymous email or identity-provider accounts in order to obtain additional free or account-backed resources, or otherwise to circumvent per-user fair-use limits ("multi-accounting"). Accounts found to engage in such conduct, together with any other accounts we reasonably believe to be operated by the same person, may be suspended or terminated without notice and without refund. Quotas and credits associated with such accounts are forfeit.
+9. Create more than one account, or use disposable, temporary, throwaway, privacy-relay, or other newly-created or pseudonymous email or identity-provider accounts in order to obtain additional free or account-backed resources, or otherwise to circumvent per-user fair-use limits ("multi-accounting"). Accounts found to engage in such conduct, together with any other accounts we reasonably believe to be operated by the same person, may be suspended or terminated without notice and without refund. Any account-backed access associated with such accounts is forfeit.
 
 ## 7. Intellectual Property
 
