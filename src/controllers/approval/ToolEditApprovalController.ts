@@ -373,21 +373,35 @@ export class ToolEditApprovalController {
   }
 
   private publishPrompt(entry: PendingToolEditApproval): void {
-    // Activate the stream that needs approval and post the prompt; each host
-    // supplies the display path its own way.
-    withEventErrorHandling(CHANNEL, 'failed to show approval prompt', () =>
-      this.options.showToolEditPermission(
-        prepareToolEditApprovalPrompt(
-          this.options.interactions,
-          this.options.session,
-          {
-            requestId: entry.requestId,
-            request: entry.request,
-            relativePath: entry.relativePath,
+    // Activate the stream that needs approval (without switching the active
+    // tab — the request surfaces as a pending badge on the stream's row,
+    // #8246) and post the prompt; each host supplies the display path its own
+    // way. Revealing the view belongs to the hosts this controller serves: the
+    // permission payload itself is host-neutral.
+    withEventErrorHandling(CHANNEL, 'failed to show approval prompt', () => {
+      const { streamId } = entry.request;
+      if (streamId) {
+        this.options.interactions.emit('requestEnsureProgressView', {});
+        this.options.session.events.emit({
+          scope: 'session',
+          event: {
+            type: 'setActiveStream',
+            payload: {
+              streamId,
+              suppressViewSwitch: true,
+              ensureVisible: true,
+            },
           },
-        ),
-      ),
-    );
+        });
+      }
+      this.options.showToolEditPermission(
+        prepareToolEditApprovalPrompt(this.options.session, {
+          requestId: entry.requestId,
+          request: entry.request,
+          relativePath: entry.relativePath,
+        }),
+      );
+    });
   }
 
   private resolvePrompt(requestId: string): void {

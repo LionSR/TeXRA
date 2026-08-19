@@ -95,7 +95,14 @@ export function readSetting(
   stores: SettingsStores,
   host: SettingHost = 'vscode',
 ): unknown {
-  const raw = stores[settingSlot(entry, host)].get<unknown>(entry.key);
+  const slot = settingSlot(entry, host);
+  // Read the scope the row is written to: `writeSetting` targets
+  // `entry.configTarget`, so a global-target row read through the merged
+  // `get()` could report a workspace value the settings view can never write.
+  const raw =
+    slot === 'config' && entry.configTarget === 'global'
+      ? stores.config.inspect<unknown>(entry.key)?.globalValue
+      : stores[slot].get<unknown>(entry.key);
   if (raw === undefined) {
     return settingDefault(entry);
   }

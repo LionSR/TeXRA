@@ -9,6 +9,19 @@ import http from 'node:http';
 
 import { AUTH_CALLBACK_TIMEOUT_MS } from '../config';
 
+/**
+ * The loopback route could never be established — the registered callback
+ * port(s) could not be bound, or the host could not reach a browser at all.
+ * Distinct from every other sign-in failure because nothing was asked of the
+ * user yet: a host with a device-code transport can retry on that instead.
+ */
+export class LoopbackTransportUnavailableError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'LoopbackTransportUnavailableError';
+  }
+}
+
 interface LoopbackAuthorizeRequest {
   url: string;
   verifier: string;
@@ -85,7 +98,7 @@ async function bindLoopbackServer(
     server.close();
   }
   const portList = ports.join(' or ');
-  throw new Error(
+  throw new LoopbackTransportUnavailableError(
     `Could not bind the ${displayName} sign-in callback on port ${portList}. ` +
       'Close whatever is using them, or use device-code sign-in instead.',
   );

@@ -37,29 +37,10 @@ interface DiffDisplayLine {
   readonly text: string;
 }
 
-interface DiffStats {
-  readonly added: number;
-  readonly removed: number;
-  readonly hunks: number;
-}
-
 const NO_NEWLINE_MARKER = '\\';
 const DEFAULT_DIFF_WIDTH = 74;
 
 type OverflowMarkerKind = 'hidden' | 'more' | 'previous';
-
-export function statsFromHunks(hunks: readonly Hunk[]): DiffStats {
-  let added = 0;
-  let removed = 0;
-  for (const hunk of hunks) {
-    for (const line of hunk.lines) {
-      const first = line.at(0);
-      if (first === '+') added += 1;
-      else if (first === '-') removed += 1;
-    }
-  }
-  return { added, removed, hunks: hunks.length };
-}
 
 export function diffDisplayLines(hunks: readonly Hunk[]): DiffDisplayLine[] {
   return hunks.flatMap((hunk) => {

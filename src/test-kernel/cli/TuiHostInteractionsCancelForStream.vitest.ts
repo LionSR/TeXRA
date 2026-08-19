@@ -49,10 +49,10 @@ function tuiInteractions(): HostInteractions {
 
 async function waitForApproval(
   kind: string,
-  payload: Record<string, unknown>,
+  data: Record<string, unknown>,
 ): Promise<void> {
   await vi.waitFor(() => {
-    expect(currentApproval.get()?.payload).toMatchObject({ kind, payload });
+    expect(currentApproval.get()?.payload).toMatchObject({ kind, data });
   });
 }
 
@@ -250,7 +250,7 @@ describe('createTuiHostInteractions', () => {
     // The plan approval is still the foreground modal and still decidable.
     expect(currentApproval.get()?.payload).toMatchObject({
       kind: 'planApproval',
-      payload: { streamId: 'stream-a' },
+      data: { streamId: 'stream-a' },
     });
     currentApproval.get()?.decide({ accepted: true });
     await expect(planResult).resolves.toEqual({ action: 'approve' });

@@ -499,7 +499,7 @@ function createWindow(options: {
     try {
       return (
         (await desktopAuth.signInAndWaitForSession(provider)) &&
-        (await SupabaseClient.canAccessRemoteAgentCatalog())
+        (await SupabaseClient.isAuthenticated())
       );
     } finally {
       teamSignInPending = false;
@@ -734,7 +734,7 @@ function createWindow(options: {
         chooseTeamAvailability(unavailableNames, presetName),
     },
     remoteCatalog: {
-      canAccess: () => SupabaseClient.canAccessRemoteAgentCatalog(),
+      canAccess: () => SupabaseClient.isAuthenticated(),
       signIn: signInForRemoteAgentCatalog,
     },
     notifications: { showInfoMessage, showErrorMessage },
@@ -780,6 +780,29 @@ function createWindow(options: {
           });
           if (result.response === 0) {
             clipboard.writeText(url);
+          }
+        },
+        presentSubscriptionDeviceCode: async (prompt, productName) => {
+          // The code is copied up front: the dialog closes on any button, so
+          // the user must not have to keep it open to read the code back.
+          clipboard.writeText(prompt.userCode);
+          const result = await dialog.showMessageBox(window, {
+            type: 'info',
+            message: `Sign in with ${productName}`,
+            detail:
+              `No browser could take the sign-in callback, so ${productName} ` +
+              'is signing in with a one-time code instead.\n\n' +
+              `1. Open ${prompt.verificationUrl}\n` +
+              `2. Enter the code: ${prompt.userCode} (copied to the clipboard)\n\n` +
+              'TeXRA is waiting for you to approve it.',
+            buttons: ['Open Verification Page', 'Close'],
+            defaultId: 0,
+            cancelId: 1,
+          });
+          if (result.response === 0) {
+            await previewHost.openExternal(
+              prompt.verificationUrlComplete ?? prompt.verificationUrl,
+            );
           }
         },
       },

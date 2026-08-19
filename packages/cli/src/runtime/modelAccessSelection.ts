@@ -1,6 +1,7 @@
-import { getCodexStatus } from '@auth/codex';
-import { getXaiStatus, xaiAccountLabel } from '@auth/xai';
-import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
+import {
+  subscriptionProvider,
+  type SubscriptionProviderId,
+} from '@controllers/modelAccess/subscriptionProviders';
 import {
   configuredApiKeyProviders,
   hasUsableApiKey,
@@ -10,25 +11,14 @@ import {
   codingPlanSubscriptionRuntimes,
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
-import type { SubscriptionPreferenceUpdate } from '@model/subscriptionPreference';
-import {
-  isPreferCodexSubscription,
-  setPreferCodexSubscription,
-} from '@model/codex/codexPreference';
-import {
-  isPreferXaiSubscription,
-  setPreferXaiSubscription,
-} from '@model/xai/xaiPreference';
 import { platform } from '@platform/platform';
 import { providerDisplayName } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import { signInCliChatGpt } from './chatgptLogin';
-import { signInCliGrok } from './grokLogin';
 import {
   shouldUseSubscriptionDeviceCode,
+  signInCliSubscription,
   type CliSubscriptionLoginOptions,
-  type CliSubscriptionLoginTransportInit,
 } from './subscriptionLogin';
 import {
   formatCliModelAccessRouteInline,
@@ -45,8 +35,8 @@ export async function readCliModelAccessStatus(): Promise<CliModelAccessStatus> 
   const secrets = platform().secrets;
   const [chatGpt, grok, configuredProviders, codingPlanEntries] =
     await Promise.all([
-      getCodexStatus(),
-      getXaiStatus(),
+      subscriptionProvider('chatgpt').getStatus(),
+      subscriptionProvider('grok').getStatus(),
       configuredApiKeyProviders(secrets),
       Promise.all(
         codingPlanSubscriptionRuntimes.map(
@@ -68,8 +58,10 @@ export async function readCliModelAccessStatus(): Promise<CliModelAccessStatus> 
     codingPlanEntries,
   ) as CliModelAccessStatus['codingPlans'];
   const preferences = {
-    chatGpt: isPreferCodexSubscription() ? 'on' : 'off',
-    grok: isPreferXaiSubscription() ? 'on' : 'off',
+    chatGpt: subscriptionProvider('chatgpt').isPreferSubscription()
+      ? 'on'
+      : 'off',
+    grok: subscriptionProvider('grok').isPreferSubscription() ? 'on' : 'off',
   } as const;
   const personalKeyProviders = configuredProviders.map((provider) =>
     providerDisplayName(provider),
@@ -86,89 +78,52 @@ export async function readCliModelAccessStatus(): Promise<CliModelAccessStatus> 
 }
 
 // ---------------------------------------------------------------------------
-// Provider adapters. The four subscription arms share two skeletons — an OAuth
-// sign-in flow (Grok/ChatGPT) and a key-credential gate (Kimi Code/GLM) — so a
-// fifth provider is one adapter plus a dispatch case, not another 30-line copy.
+// The four subscription arms share two skeletons — an OAuth sign-in flow
+// (Grok/ChatGPT, driven by the shared provider catalog) and a key-credential
+// gate (Kimi Code/GLM) — so a fifth provider is a catalog row plus a dispatch
+// case, not another 30-line copy.
 // ---------------------------------------------------------------------------
-
-interface SubscriptionAccessAdapter {
-  readonly displayName: string;
-  readonly disabledFor: string;
-  readonly getStatus: () => Promise<{
-    readonly signedIn: boolean;
-    readonly email?: string | null;
-    readonly accountId?: string | null;
-  }>;
-  readonly accountLabelOf: (
-    account:
-      | { readonly email?: string | null; readonly accountId?: string | null }
-      | null
-      | undefined,
-  ) => string;
-  readonly signIn: (
-    init: CliSubscriptionLoginTransportInit,
-    options: CliSubscriptionLoginOptions,
-  ) => Promise<{
-    readonly email?: string | null;
-    readonly accountId?: string | null;
-  }>;
-  readonly setPreference: (
-    enabled: boolean,
-  ) => Promise<SubscriptionPreferenceUpdate>;
-}
-
-const GROK_ADAPTER: SubscriptionAccessAdapter = {
-  displayName: 'Grok',
-  disabledFor: 'xAI models',
-  getStatus: getXaiStatus,
-  accountLabelOf: xaiAccountLabel,
-  signIn: signInCliGrok,
-  setPreference: setPreferXaiSubscription,
-};
-
-const CHATGPT_ADAPTER: SubscriptionAccessAdapter = {
-  displayName: 'ChatGPT',
-  disabledFor: 'Codex models',
-  getStatus: getCodexStatus,
-  accountLabelOf: codexAccountLabel,
-  signIn: signInCliChatGpt,
-  setPreference: setPreferCodexSubscription,
-};
 
 /** Toggle an OAuth-subscription preference (Grok/ChatGPT) with sign-in. */
 async function updateSubscriptionCliModelAccess(
   context: CliContext | undefined,
   selection: CliModelAccessSelection,
-  adapter: SubscriptionAccessAdapter,
+  providerId: SubscriptionProviderId,
   options: CliSubscriptionLoginOptions,
 ): Promise<CliModelAccessSelectionResult> {
+  const provider = subscriptionProvider(providerId);
+  const { displayName, modelFamily } = provider;
   if (selection.state === 'off') {
-    const update = await adapter.setPreference(false);
+    const update = await provider.setPreferSubscription(false);
     invalidateModelOptionsCache();
     return {
       message: update.effective
-        ? `${adapter.displayName} subscription preference remains enabled because a more specific setting overrides ${update.target} config.`
-        : `Prefer ${adapter.displayName} subscription disabled for ${adapter.disabledFor}.`,
+        ? `${displayName} subscription preference remains enabled because a more specific setting overrides ${update.target} config.`
+        : `Prefer ${displayName} subscription disabled for ${modelFamily}.`,
     };
   }
 
-  const status = await adapter.getStatus();
-  let accountLabel = adapter.accountLabelOf(status);
+  const status = await provider.getStatus();
+  let accountLabel = status.label;
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };
     const device =
       context != null && shouldUseSubscriptionDeviceCode(context, init);
-    const session = await adapter.signIn({ ...init, device }, options);
-    accountLabel = adapter.accountLabelOf(session);
+    const account = await signInCliSubscription(
+      providerId,
+      { ...init, device },
+      options,
+    );
+    accountLabel = account.label;
   }
 
-  const update = await adapter.setPreference(true);
+  const update = await provider.setPreferSubscription(true);
   await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
   invalidateModelOptionsCache();
   return {
     message: update.effective
-      ? `Prefer ${adapter.displayName} subscription enabled for ${adapter.disabledFor} (${accountLabel}).`
-      : `${adapter.displayName} sign-in succeeded, but a more specific setting keeps subscription access disabled.`,
+      ? `Prefer ${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`
+      : `${displayName} sign-in succeeded, but a more specific setting keeps subscription access disabled.`,
   };
 }
 
@@ -215,19 +170,11 @@ export async function updateCliModelAccess(
   if (codingPlan) {
     return updateKeyedCliModelAccess(selection, codingPlan);
   }
-  if (selection.provider === 'grok') {
+  if (selection.provider === 'grok' || selection.provider === 'chatgpt') {
     return updateSubscriptionCliModelAccess(
       context,
       selection,
-      GROK_ADAPTER,
-      options,
-    );
-  }
-  if (selection.provider === 'chatgpt') {
-    return updateSubscriptionCliModelAccess(
-      context,
-      selection,
-      CHATGPT_ADAPTER,
+      selection.provider,
       options,
     );
   }
