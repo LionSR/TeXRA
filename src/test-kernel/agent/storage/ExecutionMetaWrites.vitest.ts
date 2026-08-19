@@ -30,6 +30,33 @@ describe('execution metadata updates', () => {
     expect(meta?.outcome).toBe(RUN_OUTCOME.COMPLETED);
   });
 
+  // The host-exit drain finalizes CANCELLED for whatever a session still owns,
+  // and can reach the meta lock just after the run's own driver recorded a real
+  // outcome. Serialization alone would let it overwrite that; the backstop must
+  // yield to the driver instead.
+  it('keeps a driver-written outcome when a backstop finalizer follows it', async () => {
+    const id = 'bbb002' as ExecutionId;
+    await getExecutionStore(id).writeMeta({
+      timestamp: new Date(0).toISOString(),
+    });
+
+    await finalizeExecution({
+      executionId: id,
+      outcome: RUN_OUTCOME.COMPLETED,
+      flowRecord: 'preserve',
+    });
+    await finalizeExecution({
+      executionId: id,
+      outcome: RUN_OUTCOME.CANCELLED,
+      flowRecord: 'preserve',
+      keepExistingOutcome: true,
+    });
+
+    expect((await getExecutionStore(id).readMeta())?.outcome).toBe(
+      RUN_OUTCOME.COMPLETED,
+    );
+  });
+
   it('updates and finalizes core metadata despite malformed workflow observability', async () => {
     const id = 'bbb003' as ExecutionId;
     const store = getExecutionStore(id);

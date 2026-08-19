@@ -25,11 +25,22 @@
 > absent; `move()` landed with the one consumer that deleted a mechanism), and
 > `lifecycle.onShutdown` now runs the abort-then-advance join-with-deadline the
 > review rider specified. Steps 1, 2, 3 and 7 landed in full (#10716, #10780,
-> #10723, #10755, #10893); steps 5, 8 and 9 landed in part. **The widest-impact
-> fix did not land: §3 fix 2, quit-time lease settlement at the session root,
-> is still open** — the CLI UI remains the sole implementation and is still
-> `isResumableIdle()`-gated, so the four-host resume-block gap this doc
-> identified is live exactly as written. Also open: the extension
+> #10723, #10755, #10893); steps 5, 8 and 9 landed in part.
+>
+> **§3 fix 2 / step 4 landed 2026-08-19** as `settleLiveSessionExecutions`
+> (`SessionHandle.ts`), each host's first ON-phase handler, with the CLI UI copy
+> deleted and `SessionExitLease.vitest.ts` retired. Its **framing was corrected
+> at HEAD before landing**: #10778 already dissolved the resume-block symptom —
+> a quit host's death is proven immediately by its presence socket
+> (`ECONNREFUSED`, or `ENOENT` + `ESRCH`), `acquireExecutionLease` reclaims a
+> dead owner's record on contact, and no clock survives in `executionLease.ts`.
+> What was still broken, and is what the fix closes, is the **durable record**:
+> no host but the CLI persisted a terminal outcome at exit, so a quit-mid-run
+> execution stayed outcome-less until its own host relaunched (no other host's
+> repair ever visits it), a non-resumable one was then recorded `FAILED` by
+> `repairRestartedStreams` where a deliberate quit is `CANCELLED`, and its lease
+> file accumulated on disk — the ongoing source of #10778's lease-release leak
+> (the ~115-record backfill remains separate). Also open: the extension
 > activation-failure catch (fix 5), `resolveEmitSession`'s silent skip (fix 7),
 > the async-dispose split (step 6, all 8 sites), recording's view/window
 > re-rooting, the `childRunLoop` finally ladder, presentation-lease backstops,
@@ -181,9 +192,15 @@ closure sites — stores in new and touched code only.
 
 **Per-fix status at `e00b9317f7` (2026-08-19):** 1 **LANDED #10716/#10780**
 (`PollingSourceBase` unrefs its timer and self-registers `disposeAll`; the
-extension-only registrations deleted). 2 **OPEN** — no lease settlement is
-registered on any shutdown path; `sessionExitController.ts:183` is still the
-sole, idle-gated implementation. 3 **PARTIAL #10716** — the interim
+extension-only registrations deleted). 2 **LANDED 2026-08-19** —
+`settleLiveSessionExecutions` settles every still-owned execution
+(`CANCELLED`, flow record preserved, lease released) as each host's first
+ON-phase handler, bounded by that phase's abort signal and naming every
+execution it could not reach; the `sessionExitController.ts` copy and its
+`SessionExitLease.vitest.ts` are gone. The CLI headless handler keeps its own
+settlement because it must release the lease before it inspects it to
+advertise recovery — the drain finds nothing left to do there. 3 **PARTIAL
+#10716** — the interim
 process-shutdown backstop landed on both recording-capable hosts; the
 view/window re-rooting did not (`src/tools/media/audio.ts:26` is still a module
 singleton). 4 **LANDED #10893** (`lifecycleHost.ts:45-102`, 5 s per-phase
@@ -323,8 +340,9 @@ tree with strictly fewer teardown mechanisms than it found.
 2 **LANDED** (#10723 — `src/platform/disposable.ts`, nine production consumers;
 `RESET_HOOKS` stayed repeatable as prescribed). 3 **LANDED** (#10755 —
 `SessionHandle.teardown` is a store, `dispose()` is one line, the
-comment-enforced order and the hand-rolled aggregation are gone). 4 **OPEN**
-— the ordering constraint held it behind 3, and it never followed. 5
+comment-enforced order and the hand-rolled aggregation are gone). 4 **LANDED
+2026-08-19** — see §3 fix 2; it reuses `SessionHandle.releaseExecutionLease`,
+the session's existing exit choreography, rather than adding a second one. 5
 **PARTIAL** (#10893 — the deadline landed and the bespoke CLI grace race is
 gone; the activation catch and the dual `UsageLogService` registration are
 not). 6 **OPEN** — all 8 async dispose sites remain, and the `void`-cast

@@ -1,6 +1,7 @@
 // Local imports
 import {
   initializeBundledPrompts,
+  settleLiveSessionExecutions,
   teardownDefaultSession,
   tryDefaultSession,
 } from '@agent/runtime';
@@ -339,6 +340,13 @@ export async function initCliPlatform(
     // by whichever entry point opens transcripts.
     lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
       tryDefaultSession()?.flushArtifacts(),
+    );
+    // First ON handler, as on the other two hosts: `runExecution`'s own
+    // shutdown handler settles the headless run it owns during BEFORE, so this
+    // drain only reaches what that left — notably a TUI flow parked at its
+    // WAIT node — and still runs before `teardownDefaultSession()` disposes it.
+    lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
+      settleLiveSessionExecutions(signal),
     );
     lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => teardownDefaultSession());
 
