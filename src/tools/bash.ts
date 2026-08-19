@@ -53,6 +53,7 @@ import {
   requestBashApproval,
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
+import { withDefault } from '@tools/core/schemaDefaults';
 import { formatDuration, generateExecutionId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
@@ -245,13 +246,9 @@ const BashInputSchema = z.strictObject({
     .describe(
       'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
     ),
-  run_in_background: z
-    .boolean()
-    .nullish()
-    .transform((v) => v ?? false)
-    .describe(
-      'Run command in background. Returns immediately with execution ID and a background task tab. Result delivered as follow-up when complete.',
-    ),
+  run_in_background: withDefault(z.boolean(), false).describe(
+    'Run command in background. Returns immediately with execution ID and a background task tab. Result delivered as follow-up when complete.',
+  ),
 });
 
 type BashInput = z.infer<typeof BashInputSchema>;

@@ -12,6 +12,7 @@ import { ToolError, type ToolResult } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
+import { withDefault } from '@tools/core/schemaDefaults';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -20,13 +21,10 @@ import { rateLimitedApiCall } from './rateLimiter';
 
 const CROSSREF_SEARCH_FIELDS = {
   query: z.string().describe('Bibliographic search query for Crossref works.'),
-  rows: z
-    .int()
-    .positive()
-    .max(CROSSREF_CONSTANTS.MAX_ROWS)
-    .nullish()
-    .transform((v) => v ?? CROSSREF_CONSTANTS.DEFAULT_ROWS)
-    .describe('Maximum number of works to return.'),
+  rows: withDefault(
+    z.int().positive().max(CROSSREF_CONSTANTS.MAX_ROWS),
+    CROSSREF_CONSTANTS.DEFAULT_ROWS,
+  ).describe('Maximum number of works to return.'),
   offset: z
     .int()
     .min(0)

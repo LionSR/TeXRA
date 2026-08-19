@@ -19,6 +19,7 @@ import {
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
+import { withDefault } from '@tools/core/schemaDefaults';
 import { ensureArray } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -61,12 +62,9 @@ type LeanLoogleInput = z.infer<typeof LeanLoogleInputSchema>;
 const LoogleHitSchema = z.looseObject({
   name: z.string(),
   type: z.string(),
-  // `.prefault()` only substitutes for `undefined`, not explicit `null` — and
-  // Loogle, like the sibling `doc` field below, may send either for `module`.
-  module: z
-    .string()
-    .nullish()
-    .transform((value) => value ?? ''),
+  // Loogle, like the sibling `doc` field below, may send either undefined or
+  // explicit null for `module`; `withDefault` (unlike `.prefault()`) covers both.
+  module: withDefault(z.string(), ''),
   // Loogle may omit, null, or empty `doc`; formatHit already guards on truthiness.
   doc: z.string().nullish(),
 });

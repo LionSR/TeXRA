@@ -10,6 +10,7 @@ import { ToolError, type ToolResult } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat, currentToolRoot } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
+import { withDefault } from '@tools/core/schemaDefaults';
 import { executeCommand } from '@utils/system/execUtils';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
@@ -27,13 +28,9 @@ const GrepInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe('Glob filter for file names (e.g. "*.tex").'),
-  output_mode: z
-    .enum(OUTPUT_MODES)
-    .nullish()
-    .transform((v) => v ?? 'content')
-    .describe(
-      'Must be "content", "files_with_matches", or "count". For context lines around matches, use -C instead.',
-    ),
+  output_mode: withDefault(z.enum(OUTPUT_MODES), 'content' as const).describe(
+    'Must be "content", "files_with_matches", or "count". For context lines around matches, use -C instead.',
+  ),
   '-B': z
     .int()
     .min(0)

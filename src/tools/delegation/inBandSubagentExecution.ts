@@ -14,23 +14,22 @@
 
 // Local imports
 import { getExecutionStore, type ResultMeta } from '@agent/storage';
-import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
 import {
   ExecutionLeaseLostError,
   runWithInactiveExecutionLease,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
-import {
-  AgentConfigSchema,
-  type AgentConfigPayload,
+import type {
+  AgentConfig,
+  AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
+  type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { generateExecutionId, KeyedMutex } from '@utils/core';
@@ -55,6 +54,7 @@ import {
   createNativeSubagentStrategy,
   type ChildRunLaunchOptions,
 } from './nativeSubagentStrategy';
+import { registerAgentChildExecution } from './registerAgentChildExecution';
 
 const LOG_CHANNEL = 'inBandSubagentExecution';
 const log = createLog(LOG_CHANNEL);
@@ -373,25 +373,21 @@ async function executeInBand(
 ): Promise<CompletedInBandSubagent> {
   options.signal?.throwIfAborted();
 
-  const config = AgentConfigSchema.parse(options.configPayload);
   const startedAt = Date.now();
-  const workingDirectory = config.workingDirectory ?? undefined;
-  const childStreamId = getStreamTabId(config.agent, { executionId });
   const store = getExecutionStore(executionId);
 
+  let config: AgentConfig;
+  let childStreamId: StreamTabId;
   let runWithOwnership: OwnedExecutionLeaseScope;
   try {
-    runWithOwnership = await registerOwnedExecution(
-      executionId,
-      config,
-      options.agentName,
-      {
-        streamId: childStreamId,
-        identity: { kind: 'agent', agent: config.agent },
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    ({ config, childStreamId, runWithOwnership } =
+      await registerAgentChildExecution({
+        executionId,
+        configPayload: options.configPayload,
+        agentName: options.agentName,
         parentExecutionId: options.parentExecutionId,
-      },
-    );
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      }));
   } catch (cause) {
     if (mode === 'required-result') {
       throw new SubagentDurabilityError(
@@ -401,6 +397,7 @@ async function executeInBand(
     }
     throw cause;
   }
+  const workingDirectory = config.workingDirectory ?? undefined;
   let stableCompletionCommitted = false;
   const completed = await runWithOwnership(async () => {
     let settledTurn: SettledInBandTurn | undefined;

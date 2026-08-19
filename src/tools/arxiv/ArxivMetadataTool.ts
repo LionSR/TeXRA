@@ -14,14 +14,13 @@ import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { rateLimitedApiCall } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
+import { withDefault } from '@tools/core/schemaDefaults';
 
 const ArxivMetadataInputSchema = z.strictObject({
   id: z.string().describe('arXiv identifier or URL for the paper.'),
-  includeAbstract: z
-    .boolean()
-    .nullish()
-    .transform((v) => v ?? true)
-    .describe('Include the paper abstract in the metadata response.'),
+  includeAbstract: withDefault(z.boolean(), true).describe(
+    'Include the paper abstract in the metadata response.',
+  ),
   maxAuthors: z
     .int()
     .positive()
