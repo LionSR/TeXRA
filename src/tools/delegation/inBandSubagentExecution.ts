@@ -19,17 +19,13 @@ import {
   runWithInactiveExecutionLease,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
-import type {
-  AgentConfig,
-  AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
-  type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { generateExecutionId, KeyedMutex } from '@utils/core';
@@ -54,7 +50,10 @@ import {
   createNativeSubagentStrategy,
   type ChildRunLaunchOptions,
 } from './nativeSubagentStrategy';
-import { registerAgentChildExecution } from './registerAgentChildExecution';
+import {
+  parseAgentChildConfig,
+  registerParsedAgentChildExecution,
+} from './registerAgentChildExecution';
 
 const LOG_CHANNEL = 'inBandSubagentExecution';
 const log = createLog(LOG_CHANNEL);
@@ -373,21 +372,29 @@ async function executeInBand(
 ): Promise<CompletedInBandSubagent> {
   options.signal?.throwIfAborted();
 
+  // Parsing/deriving stays outside the durability try below: a malformed
+  // config is a caller-input error, not an infrastructure failure, so it
+  // must propagate raw rather than being wrapped into a retryable
+  // SubagentDurabilityError (which the workflow-script runner escalates to a
+  // run-fatal WorkflowRunAbortError instead of resolving this call to null).
+  const { config, childStreamId } = parseAgentChildConfig(
+    options.configPayload,
+    executionId,
+  );
   const startedAt = Date.now();
+  const workingDirectory = config.workingDirectory ?? undefined;
   const store = getExecutionStore(executionId);
 
-  let config: AgentConfig;
-  let childStreamId: StreamTabId;
   let runWithOwnership: OwnedExecutionLeaseScope;
   try {
-    ({ config, childStreamId, runWithOwnership } =
-      await registerAgentChildExecution({
-        executionId,
-        configPayload: options.configPayload,
-        agentName: options.agentName,
-        parentExecutionId: options.parentExecutionId,
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      }));
+    runWithOwnership = await registerParsedAgentChildExecution({
+      executionId,
+      config,
+      childStreamId,
+      agentName: options.agentName,
+      parentExecutionId: options.parentExecutionId,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    });
   } catch (cause) {
     if (mode === 'required-result') {
       throw new SubagentDurabilityError(
@@ -397,7 +404,6 @@ async function executeInBand(
     }
     throw cause;
   }
-  const workingDirectory = config.workingDirectory ?? undefined;
   let stableCompletionCommitted = false;
   const completed = await runWithOwnership(async () => {
     let settledTurn: SettledInBandTurn | undefined;
