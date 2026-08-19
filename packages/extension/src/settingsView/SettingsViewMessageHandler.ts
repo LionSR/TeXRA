@@ -24,7 +24,7 @@ import {
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
-import { SecretManager, type ApiProvider } from '@frontend/secretManager';
+import { SecretManager } from '@frontend/secretManager';
 import {
   getMainWebview,
   safeExecuteCommand,
@@ -164,12 +164,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.profileController.getProviderDisplayName(provider),
       getProviderKeyUrl: (provider) =>
         this.profileController.getProviderKeyUrl(provider),
-      getApiKeySecretName: (provider) =>
-        SecretManager.getApiKeySecretName(provider as ApiProvider),
-      setSecret: (key, value) => platform().secrets.set(key, value),
-      deleteSecret: (key) => platform().secrets.delete(key),
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
+      reportFailure: async (message, error) => {
+        await showLoggedErrorMessage(this.channel, message, error);
+        // On error, still refresh settings view to reflect current key state.
+        await this.withActiveWebview((w) =>
+          this.sendProfileAndModelSelectionData(w),
+        );
+      },
     });
     this.agentHandlers = new AgentHandlers(
       ctx,
@@ -251,16 +254,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       signOut: () =>
         safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
       setProviderKey: (message) =>
-        this.runProviderKeyAction(message.provider, 'set', (targetProvider) =>
-          this.profileKeyController.setProviderKey(targetProvider),
-        ),
+        this.profileKeyController.setProviderKey(message.provider),
       removeProviderKey: (message) =>
-        this.runProviderKeyAction(
-          message.provider,
-          'remove',
-          (targetProvider) =>
-            this.profileKeyController.removeProviderKey(targetProvider),
-        ),
+        this.profileKeyController.removeProviderKey(message.provider),
       openProviderKeyUrl: (message) =>
         this.profileKeyController.openProviderKeyUrl(message.provider),
       setProviderSetting: (message) => this.handleSetProviderSetting(message),
@@ -631,26 +627,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
   // Profile handler implementations
   // ============================================================
-
-  private async runProviderKeyAction(
-    provider: string,
-    verb: 'set' | 'remove',
-    actionFn: (provider: string) => Promise<void>,
-  ): Promise<void> {
-    try {
-      await actionFn(provider);
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        `Failed to ${verb} ${this.profileController.getProviderDisplayName(provider)} API key`,
-        error,
-      );
-      // On error, still refresh settings view to reflect current key state.
-      await this.withActiveWebview((w) =>
-        this.sendProfileAndModelSelectionData(w),
-      );
-    }
-  }
 
   /**
    * The shared refresh tail for a credential change (API key or subscription
