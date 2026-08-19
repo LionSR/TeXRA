@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import * as path from 'node:path';
 
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import { z } from 'zod';
@@ -6,8 +7,15 @@ import { z } from 'zod';
 import { isFileNotFoundError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { JsonStore } from '@platform/defaults/jsonStore';
-import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import {
+  DEFAULT_NODE_STORAGE_ROOT,
+  TEXRA_CONFIG_FILE_NAME,
+  workspaceTexraConfigPath,
+} from '@platform/defaults/nodeStorage';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import {
+  parseTexraApprovalPolicy,
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TexraApprovalPolicySchema,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
@@ -271,6 +279,71 @@ export async function loadWorkspaceCliConfig(
     values: parseCliConfigValues(parsed),
     warnings: collectValidationWarnings(filePath, parsed),
   };
+}
+
+/**
+ * The user-level layer of `texra.approvalPolicy`
+ * (`~/.texra/global-storage/config.json`).
+ *
+ * The extension and desktop hosts resolve this row through `platform().config`,
+ * which layers the project `.texra/config.json` over the user file. The CLI
+ * resolves its approval policy in `buildCliContext`, before `initCliPlatform`
+ * creates that provider, so it reads the user layer here rather than standing
+ * up a second config provider — otherwise a policy set once in `/config` (or
+ * by the extension) is honored by two hosts and silently ignored by the third.
+ *
+ * Only this one key is read. The other CLI config fields are either
+ * workspace-scoped or already resolve their own user layer (`chatDefaults`),
+ * and unknown keys are not reported: the file is shared by all three hosts and
+ * holds rows the CLI does not honor.
+ */
+export async function loadUserApprovalPolicy(
+  storageRoot: string = DEFAULT_NODE_STORAGE_ROOT,
+): Promise<{
+  readonly value?: TexraApprovalPolicy;
+  readonly warnings: readonly string[];
+}> {
+  const filePath = path.join(
+    resolveGlobalStoragePath(storageRoot),
+    TEXRA_CONFIG_FILE_NAME,
+  );
+  let raw: string;
+  try {
+    raw = await readFile(filePath, 'utf8');
+  } catch (error: unknown) {
+    if (isFileNotFoundError(error)) return { warnings: [] };
+    return {
+      warnings: [`Could not read ${filePath}: ${toErrorMessage(error)}`],
+    };
+  }
+
+  const parseResult = safeParseJson(raw);
+  if (parseResult.isErr()) {
+    return {
+      warnings: [
+        `Could not parse ${filePath}: ${toErrorMessage(parseResult.error)}`,
+      ],
+    };
+  }
+  const parsed = parseResult.value;
+  if (!isObject(parsed)) {
+    return { warnings: [`Ignoring ${filePath}; expected a JSON object.`] };
+  }
+
+  const stored = parsed[TEXRA_APPROVAL_POLICY_CONFIG_KEY];
+  if (stored === undefined) return { warnings: [] };
+  // Same normalization the catalog row applies for every other host, so a
+  // hand-edited " Yolo" reads the same way in all three.
+  const policy =
+    typeof stored === 'string' ? parseTexraApprovalPolicy(stored) : undefined;
+  if (!policy) {
+    return {
+      warnings: [
+        `Ignoring invalid ${filePath} key "${TEXRA_APPROVAL_POLICY_CONFIG_KEY}".`,
+      ],
+    };
+  }
+  return { value: policy, warnings: [] };
 }
 
 /**

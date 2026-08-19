@@ -14,10 +14,13 @@ import {
   resolveCliCwd,
   resolveCliCommandName,
   resolveStreamColor,
+  type BuildCliContextInit,
   type CliAmbientState,
+  type CliContext,
 } from '@cli/runtime/cliContext';
 import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const ambient = {
@@ -42,6 +45,18 @@ function ttyAmbient(overrides: Partial<CliAmbientState> = {}): CliAmbientState {
 }
 
 const tempDirs = useTempDirs();
+
+/**
+ * Every `buildCliContext` call here gets an empty user-level storage root: the
+ * developer's own `~/.texra/global-storage/config.json` must never decide an
+ * assertion. Tests that exercise the user layer pass their own `storageRoot`.
+ */
+async function cliContext(init: BuildCliContextInit): Promise<CliContext> {
+  return buildCliContext({
+    storageRoot: await makeTempDir('texra-cli-storage-', tempDirs),
+    ...init,
+  });
+}
 
 async function workspaceWithConfig(config: string): Promise<string> {
   const workspace = await makeTempDir('texra-cli-context-', tempDirs);
@@ -104,7 +119,7 @@ describe('CLI context config defaults', () => {
     );
 
     await expect(
-      buildCliContext({
+      cliContext({
         ambient,
         env: { TEXRA_OUTPUT_FORMAT: 'ndjson' },
         globalArgs: { cwd: workspace },
@@ -115,7 +130,7 @@ describe('CLI context config defaults', () => {
     });
 
     await expect(
-      buildCliContext({
+      cliContext({
         ambient,
         env: { TEXRA_OUTPUT_FORMAT: 'ndjson' },
         globalArgs: { cwd: workspace, outputFormat: 'text' },
@@ -126,7 +141,7 @@ describe('CLI context config defaults', () => {
     });
 
     await expect(
-      buildCliContext({
+      cliContext({
         ambient,
         env: {},
         globalArgs: { cwd: tmpdir() },
@@ -135,6 +150,40 @@ describe('CLI context config defaults', () => {
       outputFormat: 'text',
       approvalPolicy: 'ask',
     });
+  });
+
+  it('honors a user-level approval policy the workspace config leaves unset', async () => {
+    const storageRoot = await makeTempDir('texra-cli-user-config-', tempDirs);
+    const globalStorage = resolveGlobalStoragePath(storageRoot);
+    await mkdir(globalStorage, { recursive: true });
+    await writeFile(
+      join(globalStorage, 'config.json'),
+      JSON.stringify({ 'texra.approvalPolicy': 'yolo' }),
+    );
+
+    // The workspace file still wins when it sets the row...
+    const workspace = await workspaceWithConfig(
+      JSON.stringify({ 'texra.approvalPolicy': 'never' }),
+    );
+    await expect(
+      cliContext({
+        ambient,
+        env: {},
+        globalArgs: { cwd: workspace },
+        storageRoot,
+      }),
+    ).resolves.toMatchObject({ approvalPolicy: 'never' });
+
+    // ...and the user file decides when it does not, as it already does for
+    // the extension and desktop hosts through `platform().config`.
+    await expect(
+      cliContext({
+        ambient,
+        env: {},
+        globalArgs: { cwd: tmpdir() },
+        storageRoot,
+      }),
+    ).resolves.toMatchObject({ approvalPolicy: 'yolo' });
   });
 
   it('reports unknown and invalid workspace config fields without failing', async () => {
@@ -203,7 +252,7 @@ describe('CLI context config defaults', () => {
     );
     await symlink(workspace, link, 'dir');
 
-    const context = await buildCliContext({
+    const context = await cliContext({
       ambient,
       env: {},
       globalArgs: { cwd: link },
@@ -237,7 +286,7 @@ describe('CLI context config defaults', () => {
   });
 
   it('ignores unknown TEXRA_MODEL values before they reach runtime', async () => {
-    const context = await buildCliContext({
+    const context = await cliContext({
       ambient,
       env: { TEXRA_MODEL: 'claude-opus-4-7' },
       globalArgs: { cwd: tmpdir() },
@@ -295,7 +344,7 @@ describe('CLI --cwd validation', () => {
     const missing = join(tmpdir(), 'texra-cli-cwd-missing-' + Date.now());
 
     await expect(
-      buildCliContext({ ambient, env: {}, globalArgs: { cwd: missing } }),
+      cliContext({ ambient, env: {}, globalArgs: { cwd: missing } }),
     ).rejects.toBeInstanceOf(CliUsageError);
   });
 });
@@ -387,7 +436,7 @@ describe('CLI per-stream color resolution', () => {
 
 describe('CLI color/no-input flag wiring', () => {
   it('keeps the ambient per-stream gates by default', async () => {
-    const context = await buildCliContext({
+    const context = await cliContext({
       ambient: ttyAmbient({
         stdoutColorEnabled: true,
         stderrColorEnabled: false,
@@ -400,7 +449,7 @@ describe('CLI color/no-input flag wiring', () => {
   });
 
   it('--no-color force-disables both stream gates', async () => {
-    const context = await buildCliContext({
+    const context = await cliContext({
       ambient: ttyAmbient(),
       env: {},
       globalArgs: { cwd: tmpdir(), noColor: true },
@@ -410,7 +459,7 @@ describe('CLI color/no-input flag wiring', () => {
   });
 
   it('--no-input forces headless mode and defaults approval policy to never', async () => {
-    const context = await buildCliContext({
+    const context = await cliContext({
       // stdin is a TTY, so without --no-input this would be interactive.
       ambient: ttyAmbient(),
       env: {},
@@ -421,7 +470,7 @@ describe('CLI color/no-input flag wiring', () => {
   });
 
   it('--no-input preserves explicit approval policy', async () => {
-    const context = await buildCliContext({
+    const context = await cliContext({
       ambient: ttyAmbient(),
       env: {},
       globalArgs: { cwd: tmpdir(), noInput: true, approvalPolicy: 'yolo' },
@@ -434,7 +483,7 @@ describe('CLI color/no-input flag wiring', () => {
     const workspace = await workspaceWithConfig(
       JSON.stringify({ approvalPolicy: 'yolo' }),
     );
-    const context = await buildCliContext({
+    const context = await cliContext({
       ambient: ttyAmbient(),
       env: { TEXRA_APPROVAL_POLICY: 'yolo' },
       globalArgs: { cwd: workspace, noInput: true },
@@ -444,7 +493,7 @@ describe('CLI color/no-input flag wiring', () => {
   });
 
   it('leaves approval policy alone when --no-input is absent', async () => {
-    const context = await buildCliContext({
+    const context = await cliContext({
       ambient: ttyAmbient(),
       env: {},
       globalArgs: { cwd: tmpdir(), approvalPolicy: 'yolo' },

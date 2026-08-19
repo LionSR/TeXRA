@@ -19,6 +19,7 @@ import {
 } from '../schemas/cliSettings';
 import {
   isCliSupportedModelId,
+  loadUserApprovalPolicy,
   loadWorkspaceCliConfig,
   type CliConfigValues,
 } from './cliConfig';
@@ -292,6 +293,12 @@ export interface BuildCliContextInit {
   readonly globalArgs: CliGlobalArgs;
   readonly ambient?: CliAmbientState;
   readonly env?: Record<string, string | undefined>;
+  /**
+   * Root of the shared TeXRA storage directory. Production leaves this unset
+   * (`~/.texra`); tests point it at a scratch directory so the developer's own
+   * user-level config cannot decide an assertion.
+   */
+  readonly storageRoot?: string;
 }
 
 function envValue(
@@ -364,8 +371,16 @@ export async function buildCliContext(
   const ambient = init.ambient ?? readCliAmbientState();
   const env = init.env ?? process.env;
   const cwd = await resolveCliCwd(init.globalArgs.cwd);
-  const loadedConfig = await loadWorkspaceCliConfig(cwd);
-  const configWarnings = [...loadedConfig.warnings];
+  // Workspace file first, user file second — the same order
+  // `platform().config` gives the extension and desktop hosts.
+  const [loadedConfig, userApprovalPolicy] = await Promise.all([
+    loadWorkspaceCliConfig(cwd),
+    loadUserApprovalPolicy(init.storageRoot),
+  ]);
+  const configWarnings = [
+    ...loadedConfig.warnings,
+    ...userApprovalPolicy.warnings,
+  ];
   const envModel = pickEnvModel(env, configWarnings);
   // `--no-color` is an explicit force-disable: layer it onto the ambient
   // per-stream gates rather than recomputing them, so `NO_COLOR`/`FORCE_COLOR`/
@@ -383,6 +398,7 @@ export async function buildCliContext(
         init.globalArgs.approvalPolicy,
         envValue(env, 'TEXRA_APPROVAL_POLICY'),
         loadedConfig.values.approvalPolicy,
+        userApprovalPolicy.value,
       ];
   let approvalPolicy = approvalPolicyFallback;
   for (const candidate of approvalPolicyCandidates) {
