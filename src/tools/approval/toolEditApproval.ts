@@ -8,10 +8,7 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import type {
-  RejectionProvenance,
-  SessionHostInteractions,
-} from '@agent/runtime/HostInteractions';
+import type { RejectionProvenance } from '@agent/runtime/HostInteractions';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import {
   decideTexraApproval,
@@ -96,19 +93,17 @@ export function isApprovalBypassedForStream(
 }
 
 /**
- * Prepare a tool-edit approval prompt for the host: register the
- * stream awaiting input (without switching the active tab — the request
- * surfaces as a pending badge on the stream's row, #8246) and construct the
- * permission payload with the bypass affordance gated on the stream's current
- * bypass state.
+ * Build the tool-edit permission payload every host publishes to its approval
+ * surface, the tool-edit counterpart of `prepareBashApprovalPrompt`.
  *
- * Shared host-agnostic logic behind `ToolEditApprovalController`. Each host
- * computes `relativePath` in its own way; opening the view is owned here so a
- * prompt cannot be published to a hidden view on one host and a visible one on
- * another.
+ * Owning it here gives one bypass-affordance derivation and one line-change
+ * computation, so the TUI's inline card and the webview panel cannot report
+ * different numbers for the same edit. The host supplies the `requestId` it
+ * tracks the request under and the display path it shows; revealing the host's
+ * approval surface belongs to the caller, not to this projection — a host with
+ * no separate view has nothing to reveal.
  */
 export function prepareToolEditApprovalPrompt(
-  interactions: Pick<SessionHostInteractions, 'emit'>,
   session: SessionHandle,
   params: {
     requestId: string;
@@ -118,20 +113,6 @@ export function prepareToolEditApprovalPrompt(
 ): ToolEditPermission {
   const { requestId, request, relativePath } = params;
   const { streamId } = request;
-  if (streamId) {
-    interactions.emit('requestEnsureProgressView', {});
-    session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: {
-          streamId,
-          suppressViewSwitch: true,
-          ensureVisible: true,
-        },
-      },
-    });
-  }
   const isBypassed = streamId
     ? session.approvals.toolEdit.bypass.isBypassed(streamId)
     : false;

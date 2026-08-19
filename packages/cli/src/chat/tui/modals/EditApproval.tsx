@@ -10,7 +10,6 @@ import {
   MIN_MODAL_CONTENT_WIDTH,
 } from '@cli/tui/ui/theme';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { ConfirmCard, CONFIRM_CARD_FEEDBACK_PLACEHOLDER } from './ConfirmCard';
@@ -22,12 +21,14 @@ import {
   DiffView,
   initialDiffScrollOffset,
   maxDiffScrollOffset,
-  statsFromHunks,
   wrappedDiffDisplayLines,
 } from '../render/DiffView';
 import { COMPACT_SCROLLABLE_CONTENT_ROWS } from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
-import type { ApprovalDecision } from '../state/approvalQueue';
+import type {
+  ApprovalDecision,
+  ToolEditApprovalPayload,
+} from '../state/approvalQueue';
 
 const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
 const EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
@@ -36,7 +37,7 @@ const DEFAULT_EDIT_DIFF_ROWS = 30;
 
 export interface EditApprovalProps {
   readonly availableRows?: number;
-  readonly request: ToolEditApprovalRequest;
+  readonly payload: ToolEditApprovalPayload;
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
@@ -83,7 +84,8 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const [feedbackExitCount, setFeedbackExitCount] = useState(0);
   const feedbackModeRef = useRef(false);
   const feedbackWasCompactRef = useRef(false);
-  const title = `Apply edit to ${props.request.path}?`;
+  const { data, tui } = props.payload;
+  const title = `Apply edit to ${data.path}?`;
   const diffWidth = clampModalWidth(columns - EDIT_DIFF_PADDING);
   const maxDiffLines = editApprovalDiffRowsBudget({
     availableRows: props.availableRows,
@@ -95,19 +97,9 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
 
   // Single diff pass shared between the summary line and the inline view.
   const hunks = useMemo(
-    () =>
-      buildHunks(
-        props.request.path,
-        props.request.originalContent,
-        props.request.proposedContent,
-      ),
-    [
-      props.request.path,
-      props.request.originalContent,
-      props.request.proposedContent,
-    ],
+    () => buildHunks(data.path, tui.originalContent, tui.proposedContent),
+    [data.path, tui.originalContent, tui.proposedContent],
   );
-  const stats = useMemo(() => statsFromHunks(hunks), [hunks]);
   const diffRows = useMemo(
     () => wrappedDiffDisplayLines(hunks, diffWidth).length,
     [diffWidth, hunks],
@@ -123,9 +115,9 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       columns,
       feedbackExitCount,
       hunks,
-      request: props.request,
+      payload: props.payload,
     }),
-    [columns, feedbackExitCount, hunks, props.availableRows, props.request],
+    [columns, feedbackExitCount, hunks, props.availableRows, props.payload],
   );
   const feedbackDiffIsCompact = useCallback(
     (value: string) =>
@@ -183,9 +175,8 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       onDecide={props.onDecide}
     >
       <Text dimColor>
-        +{stats.added} / −{stats.removed} ·{' '}
-        {formatResultCount(stats.hunks, 'hunk')} · source:{' '}
-        {props.request.sourceTool}
+        +{data.addedLines} / −{data.removedLines} ·{' '}
+        {formatResultCount(hunks.length, 'hunk')} · source: {data.sourceTool}
       </Text>
       <Box marginY={compactDiffLayout ? 0 : 1} flexDirection="column">
         <DiffView
