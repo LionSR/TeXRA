@@ -879,6 +879,32 @@ describe('BashTool', () => {
     detachBackgroundRun(recorded, parentStreamId, childStreamId);
   });
 
+  it('refuses a background launch under stopAfterCycle instead of stranding its result', async () => {
+    const execute = vi.spyOn(execUtils, 'executeCommand');
+
+    const result = await withToolEnvironment(
+      {
+        run: {
+          streamId: 'bash-one-shot' as StreamTabId,
+          session: defaultSession(),
+          stopAfterCycle: true,
+        },
+        call: { tracker: new FileInteractionState() },
+      },
+      () =>
+        new BashTool().call({
+          command: 'make build',
+          run_in_background: true,
+        }),
+    );
+
+    assert.equal(result.status, 'error');
+    assert.match(result.error ?? '', /unavailable in one-shot runs/);
+    // The refusal must precede the launch: a shell started here would be
+    // killed by the SDK's teardown with its output never delivered.
+    assert.equal(execute.mock.calls.length, 0);
+  });
+
   it('accepts optional command descriptions without passing them to the shell', async () => {
     vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
       success: true,
