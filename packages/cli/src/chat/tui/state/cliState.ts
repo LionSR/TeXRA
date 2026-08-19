@@ -24,7 +24,6 @@ import type {
   CompactionActivityBlock,
   CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
-import { isActivePhase } from '@shared/streams/streamStatus';
 import { isChildStreamRemoved } from './childExecutions';
 
 // ---------------------------------------------------------------------------
@@ -190,9 +189,10 @@ export interface StreamSlice {
   readonly workflowAttemptBoundaryDeclared: boolean;
   readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
-  /** Epoch ms when this stream last entered `RUNNING`; cleared on any other
-   *  status. Drives the StatusBar's live elapsed-time segment so a long
-   *  token-less "thinking" turn still shows liveness. */
+  /** Run-window start mirrored verbatim from the `status` fact — the session
+   *  status machine stamps and clears it (`StreamPhaseState.runStartedAt`).
+   *  Drives the StatusBar's live elapsed-time segment so a long token-less
+   *  "thinking" turn still shows liveness. */
   readonly runStartedAt: number | undefined;
   /** CLI-only live status: the newest meaningful transcript line for this
    *  stream, recomputed on every log sync. Fills the stream-list summary slot
@@ -271,7 +271,7 @@ export function isCliStreamRetired(streamId: StreamTabId): boolean {
 }
 
 /** A stream slice minus the lifecycle triple. `status`, its `substate`, and
- *  the `runStartedAt` derived from them belong to
+ *  the `runStartedAt` the status machine stamps beside them belong to
  *  {@link setStreamStatusInCliState}, which is the only writer that enforces
  *  the removed/retired liveness rule. */
 type PatchableStreamSlice = Omit<
@@ -321,11 +321,8 @@ function streamSliceWithStatus(
   slice: StreamSlice,
   status: StreamPhase,
   substate: StreamSubstate | undefined,
-  nowMs: number,
+  runStartedAt: number | undefined,
 ): StreamSlice {
-  const runStartedAt = isActivePhase(status)
-    ? (slice.runStartedAt ?? nowMs)
-    : undefined;
   if (
     slice.status === status &&
     slice.substate === substate &&
@@ -348,12 +345,14 @@ function streamSliceWithStatus(
  * is ignored — removal is final for that stream identity.
  */
 export function setStreamStatusInCliState({
-  nowMs = Date.now(),
+  runStartedAt,
   status,
   substate,
   streamId,
 }: {
-  readonly nowMs?: number;
+  /** Run-window start stamped by the session status machine and carried on the
+   *  `status` fact; absent for any non-active phase. */
+  readonly runStartedAt?: number;
   readonly status: StreamPhase;
   readonly substate?: StreamSubstate;
   readonly streamId: StreamTabId;
@@ -367,7 +366,7 @@ export function setStreamStatusInCliState({
     existingSlice ?? emptySlice(streamId),
     status,
     substate,
-    nowMs,
+    runStartedAt,
   );
   if (targetSlice === existingSlice) return true;
   const out = new Map(current);

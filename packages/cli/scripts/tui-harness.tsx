@@ -1251,7 +1251,7 @@ if (HARNESS_INITIAL_STREAM_STATUS) {
     streamId: STREAM_ID,
     status: HARNESS_INITIAL_STREAM_STATUS,
     // Backdated so the status bar shows a plausible elapsed time.
-    ...(HARNESS_RUN_ACTIVE ? { nowMs: Date.now() - 42_000 } : {}),
+    ...(HARNESS_RUN_ACTIVE ? { runStartedAt: Date.now() - 42_000 } : {}),
   });
 }
 
@@ -1460,7 +1460,6 @@ function seedRunningWorkflow(): void {
       identity: { kind: 'agent', agent: 'correct' },
       agentName: 'correct',
       childStreamId: firstAgentStreamId,
-      elapsed: '18s',
       workflowPhase: 'Proofread',
     },
     {
@@ -1468,7 +1467,6 @@ function seedRunningWorkflow(): void {
       identity: { kind: 'agent', agent: 'correct' },
       agentName: 'correct',
       childStreamId: secondAgentStreamId,
-      elapsed: '17s',
       workflowPhase: 'Proofread',
     },
   ] as const satisfies readonly ActiveChildInfo[];
@@ -1520,8 +1518,8 @@ function seedRunningProcessChild(): void {
 // in `attachSessionSignalsAdapter` wiring must be able to fail these
 // scenarios, matching the "PTY ordering tests" section of
 // docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md.
-// No `startedAt` is set on the roster row, so `childElapsed` returns the
-// static `elapsed` string instead of a live-ticking duration
+// No `startedAt` is set on the roster row, so `childElapsed` reports no
+// duration at all rather than a live-ticking one
 // (packages/cli/src/chat/tui/state/childControls.ts); `setActiveStream`
 // always sets `suppressViewSwitch: true` so the harness's own active/focused
 // stream (and its live wall-clock `runStartedAt` elapsed display) stays on
@@ -1549,7 +1547,6 @@ function childEventOrderRosterRow(): ActiveChildInfo {
     identity: { kind: 'agent', agent: CHILD_EVENT_ORDER_AGENT_NAME },
     agentName: CHILD_EVENT_ORDER_AGENT_NAME,
     childStreamId: CHILD_EVENT_ORDER_STREAM_ID,
-    elapsed: '1m 4s',
   };
 }
 
@@ -1829,7 +1826,7 @@ if (SHOW_CHILDREN) {
       agentName: 'leanSolver',
       childStreamId: 'harness-child-lean-stream',
       status: STREAM_PHASE.WAITING,
-      elapsed: '2m 3s',
+      startedAt: startedAt - 123_000,
     },
     {
       executionId: 'harness-child-review',
@@ -1845,7 +1842,6 @@ if (SHOW_CHILDREN) {
           ...child,
           status: STREAM_PHASE.FAILED,
           startedAt: undefined,
-          elapsed: null,
         }
       : child,
   );
@@ -1863,7 +1859,10 @@ if (SHOW_CHILDREN) {
   setStreamStatusInCliState({
     streamId: STREAM_ID,
     status: STREAM_PHASE.RUNNING,
-    nowMs: startedAt,
+    // The status machine stamps a run window once and holds it across every
+    // later active phase, so a scenario that already seeded an initial RUNNING
+    // keeps that backdated start rather than restarting the clock here.
+    runStartedAt: streams.get().get(STREAM_ID)?.runStartedAt ?? startedAt,
   });
   for (const child of childStreams) {
     const streamId = child.childStreamId;
@@ -1886,7 +1885,7 @@ if (SHOW_CHILDREN) {
     setStreamStatusInCliState({
       streamId: streamId,
       status: child.status,
-      nowMs:
+      runStartedAt:
         child.status === STREAM_PHASE.RUNNING ? child.startedAt : undefined,
     });
   }
@@ -1910,7 +1909,7 @@ if (SHOW_CHILDREN) {
     setStreamStatusInCliState({
       streamId: 'harness-nested-local-checker-stream',
       status: STREAM_PHASE.RUNNING,
-      nowMs: nestedStartedAt,
+      runStartedAt: nestedStartedAt,
     });
   }
 }
@@ -2122,7 +2121,7 @@ function markHarnessInterrupted(): void {
   setStreamStatusInCliState({
     streamId: STREAM_ID,
     status: STREAM_PHASE.CANCELLED,
-    nowMs: undefined,
+    runStartedAt: undefined,
   });
   for (const streamId of childStreamIds) {
     defaultSession().status.transition(
@@ -2167,7 +2166,7 @@ function markHarnessStreamInterrupted(streamId: StreamTabId): void {
   setStreamStatusInCliState({
     streamId: streamId,
     status: STREAM_PHASE.CANCELLED,
-    nowMs: undefined,
+    runStartedAt: undefined,
   });
   defaultSession().status.transition(
     streamId,

@@ -896,7 +896,6 @@ describe('handleTuiSlashCommand', () => {
         agentName: 'critic',
         status: STREAM_PHASE.RUNNING,
         startedAt: 1,
-        elapsed: '1s',
         childStreamId,
       },
     ]);
@@ -948,7 +947,6 @@ describe('handleTuiSlashCommand', () => {
       agentName: `critic-${index}`,
       status,
       startedAt: index + 1,
-      elapsed: '1s',
       childStreamId,
     });
     seedChildRoster(rootStreamId, [
@@ -996,7 +994,6 @@ describe('handleTuiSlashCommand', () => {
         agentName: `critic-${index}`,
         status: index === 0 ? STREAM_PHASE.WAITING : STREAM_PHASE.COMPLETED,
         startedAt: index + 1,
-        elapsed: '1s',
         childStreamId,
       })),
     );
@@ -1029,7 +1026,6 @@ describe('handleTuiSlashCommand', () => {
         agentName: `critic-${index}`,
         status: STREAM_PHASE.RUNNING,
         startedAt: index + 1,
-        elapsed: '1s',
         childStreamId,
       })),
     );
@@ -1073,7 +1069,6 @@ describe('handleTuiSlashCommand', () => {
               ? STREAM_PHASE.RUNNING
               : STREAM_PHASE.WAITING,
           startedAt: index + 1,
-          elapsed: '1s',
           childStreamId,
         }),
       ),
@@ -1109,7 +1104,6 @@ describe('handleTuiSlashCommand', () => {
       agentName: `reviewer-${index}`,
       status: STREAM_PHASE.RUNNING,
       startedAt: index + 1,
-      elapsed: '1s',
       childStreamId,
     });
     seedChildRoster(

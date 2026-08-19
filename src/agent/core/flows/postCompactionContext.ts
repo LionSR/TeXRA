@@ -9,7 +9,9 @@ import type {
   TodoItem,
   WorkPlanSnapshot,
 } from '@shared/schemas';
+import { childElapsedMs } from '@shared/streams/childElapsed';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
+import { formatDuration } from '@utils/core';
 
 /**
  * Format active execution state as context for the agent after compaction.
@@ -50,9 +52,11 @@ export function formatPostCompactionContext(
     lines.push(`<active-subagents count="${subagents.length}">`);
     for (const sa of subagents) {
       const statusAttr = sa.status ? ` status="${escapeAttr(sa.status)}"` : '';
-      const elapsedAttr = sa.elapsed
-        ? ` elapsed="${escapeAttr(sa.elapsed)}"`
-        : '';
+      const elapsedMs = childElapsedMs(sa, Date.now());
+      const elapsedAttr =
+        elapsedMs === undefined
+          ? ''
+          : ` elapsed="${escapeAttr(formatDuration(elapsedMs))}"`;
       lines.push(
         `  <subagent id="${escapeAttr(sa.executionId)}" agent="${escapeAttr(sa.agentName)}"${statusAttr}${elapsedAttr} />`,
       );

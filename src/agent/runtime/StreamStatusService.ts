@@ -33,6 +33,13 @@ type TerminalTransitionCause = Extract<
 export interface StreamPhaseState {
   readonly phase: StreamPhase;
   readonly substate?: StreamSubstate;
+  /**
+   * Epoch ms when the stream entered its current active phase, held across
+   * substate changes and cleared the moment the phase stops being active.
+   * The one owner of "when did this run start" — hosts render elapsed time
+   * from it instead of each stamping a clock read of their own.
+   */
+  readonly runStartedAt?: number;
 }
 
 /**
@@ -43,15 +50,20 @@ export interface StreamPhaseState {
  */
 type StreamEntry =
   | { readonly kind: 'phase'; readonly state: StreamPhaseState }
-  | { readonly kind: 'reserved'; readonly rollbackTo?: StreamPhaseState };
-
-const RESERVED_STATE: StreamPhaseState = Object.freeze({
-  phase: STREAM_PHASE.RUNNING,
-  substate: STREAM_SUBSTATE.STARTING,
-});
+  | {
+      readonly kind: 'reserved';
+      readonly runStartedAt: number;
+      readonly rollbackTo?: StreamPhaseState;
+    };
 
 function effectiveState(entry: StreamEntry): StreamPhaseState {
-  return entry.kind === 'reserved' ? RESERVED_STATE : entry.state;
+  return entry.kind === 'reserved'
+    ? {
+        phase: STREAM_PHASE.RUNNING,
+        substate: STREAM_SUBSTATE.STARTING,
+        runStartedAt: entry.runStartedAt,
+      }
+    : entry.state;
 }
 
 export class StreamStatusMachine {
@@ -99,8 +111,12 @@ export class StreamStatusMachine {
     if (!canAcquireStreamReservation(previousPhase)) {
       return false;
     }
+    // A reservation is only acquirable from a non-active phase, so it always
+    // opens a fresh run window rather than extending an earlier one.
+    const runStartedAt = Date.now();
     this.streams.set(stream, {
       kind: 'reserved',
+      runStartedAt,
       ...(entry ? { rollbackTo: entry.state } : {}),
     });
     this.publishStatus(stream, STREAM_PHASE.RUNNING, {
@@ -108,6 +124,7 @@ export class StreamStatusMachine {
       cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
       ...(previousPhase ? { previousPhase } : {}),
       substate: STREAM_SUBSTATE.STARTING,
+      runStartedAt,
     });
     return true;
   }
@@ -169,11 +186,22 @@ export class StreamStatusMachine {
     ) {
       return true;
     }
+    // The run window opens on the first active phase and survives every
+    // substate change and active→active transition after it; anything that is
+    // not an active phase closes it. Stamped here because this is the only
+    // writer of the phase it derives from.
+    const previousRunStartedAt = fromReservation
+      ? entry.runStartedAt
+      : previousState?.runStartedAt;
+    const runStartedAt = isActivePhase(to)
+      ? (previousRunStartedAt ?? Date.now())
+      : undefined;
     this.streams.set(stream, {
       kind: 'phase',
       state: {
         phase: to,
         ...(options.substate ? { substate: options.substate } : {}),
+        ...(runStartedAt !== undefined ? { runStartedAt } : {}),
       },
     });
     const previousPhase = fromReservation ? STREAM_PHASE.RUNNING : from;
@@ -181,6 +209,7 @@ export class StreamStatusMachine {
       ...options,
       cause,
       ...(previousPhase ? { previousPhase } : {}),
+      ...(runStartedAt !== undefined ? { runStartedAt } : {}),
     });
     return true;
   }
@@ -286,6 +315,7 @@ export class StreamStatusMachine {
     options: StreamStatusEmitOptions & {
       cause: StreamTransitionCause;
       previousPhase?: StreamPhase;
+      runStartedAt?: number;
     },
   ): void {
     const event: StatusEvent = {
@@ -297,6 +327,9 @@ export class StreamStatusMachine {
         ? { previousPhase: options.previousPhase }
         : {}),
       ...(options.substate ? { substate: options.substate } : {}),
+      ...(options.runStartedAt !== undefined
+        ? { runStartedAt: options.runStartedAt }
+        : {}),
     };
     this.eventHub.emit({
       scope: 'session',

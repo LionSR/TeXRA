@@ -40,13 +40,18 @@ import {
   type InquiryThreadUpdatedEvent,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { childElapsedMs } from '@shared/streams/childElapsed';
 import {
   formatPhaseStageLabel,
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { formatDuration } from '@utils/core';
 import { ProgressEvents } from '../events';
+
+// Side-effect import to register <tool-timer> custom element
+import '@progressView/frontend/components/ToolTimer';
 
 // Local imports - contexts
 import {
@@ -474,11 +479,7 @@ export class BackgroundTasksPanel extends LitElement {
                 >`
             : nothing
         }
-        ${
-          child.elapsed
-            ? html`<span class="task-elapsed">(${child.elapsed})</span>`
-            : nothing
-        }
+        ${renderChildElapsed(child)}
         <wa-badge
           class="task-status"
           variant=${badge.variant}
@@ -520,6 +521,27 @@ function renderSectionDetails(options: {
       ${options.content}
     </wa-details>
   `;
+}
+
+/**
+ * Elapsed reading for one roster row, derived from the row's own timestamps —
+ * the roster carries no rendered duration. A live row hands its start stamp to
+ * the shared `<tool-timer>`, which owns the tick; a retained row's window is
+ * closed by `finishedAt`, so its reading is fixed and needs no clock read.
+ */
+function renderChildElapsed(
+  child: ActiveChildInfo,
+): TemplateResult | typeof nothing {
+  if (child.startedAt === undefined) return nothing;
+  if (child.finishedAt === undefined) {
+    return html`<span class="task-elapsed"
+      >(<tool-timer .startTime=${child.startedAt}></tool-timer>)</span
+    >`;
+  }
+  const elapsedMs = childElapsedMs(child, child.finishedAt);
+  return elapsedMs === undefined
+    ? nothing
+    : html`<span class="task-elapsed">(${formatDuration(elapsedMs)})</span>`;
 }
 
 /** Pick the appropriate wa-icon name for a background task item. */

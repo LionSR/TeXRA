@@ -353,6 +353,7 @@ export class SessionFactApplier {
               fact.phase,
               fact.previousPhase,
               fact.substate,
+              fact.runStartedAt,
             );
           case 'setParentStream':
             return this.handleSetParentStream(fact.payload);
@@ -794,6 +795,7 @@ export class SessionFactApplier {
     status: StreamPhase,
     previousPhase?: StreamPhase,
     substate?: StreamSubstate,
+    runStartedAt?: number,
   ): Promise<void> {
     // A status for a removed stream is stale: removal is final, so the
     // transition must not re-mint the transcript or execution state the
@@ -868,6 +870,7 @@ export class SessionFactApplier {
           streamId,
           status,
           substate,
+          runStartedAt,
         ),
       });
     } else {
@@ -897,12 +900,14 @@ export class SessionFactApplier {
     streamId: StreamTabId,
     status: StreamPhase,
     substate?: StreamSubstate,
+    runStartedAt?: number,
   ): Map<StreamTabId, StreamPhaseState> {
     const statesForRefresh = this.state.streamStatus.getAllStreamStates();
-    statesForRefresh.set(
-      streamId,
-      substate ? { phase: status, substate } : { phase: status },
-    );
+    statesForRefresh.set(streamId, {
+      phase: status,
+      ...(substate ? { substate } : {}),
+      ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+    });
     return statesForRefresh;
   }
 }
