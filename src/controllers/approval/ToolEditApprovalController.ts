@@ -14,7 +14,6 @@ import {
   cancellationResultFor,
   matchesCancelSelector,
   type HostInteractionCancelSelector,
-  type HostInteractionOptions,
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
@@ -115,7 +114,6 @@ export interface ToolEditApprovalControllerOptions {
 interface InitializingToolEditApproval {
   readonly phase: 'initializing';
   readonly request: ToolEditApprovalRequest;
-  readonly cancellationScope?: object;
   /** The result an approve or cancel produced while staging was still running. */
   resolution?: ToolEditApprovalResult;
 }
@@ -127,7 +125,6 @@ interface PendingToolEditApproval extends LatexPreviewEntry {
   readonly request: ToolEditApprovalRequest;
   readonly relativePath: string;
   readonly preview: ToolEditPreview;
-  readonly cancellationScope?: object;
   settle: (result: ToolEditApprovalResult) => void;
 }
 
@@ -146,7 +143,6 @@ export class ToolEditApprovalController {
 
   async requestApproval(
     request: ToolEditApprovalRequest,
-    options?: HostInteractionOptions,
   ): Promise<ToolEditApprovalResult> {
     if (this.disposed) {
       throw new Error('Tool edit approval controller is disposed.');
@@ -157,7 +153,6 @@ export class ToolEditApprovalController {
     const initialization: InitializingToolEditApproval = {
       phase: 'initializing',
       request,
-      cancellationScope: options?.cancellationScope,
     };
     this.requests.set(requestId, initialization);
 
@@ -186,7 +181,6 @@ export class ToolEditApprovalController {
       request,
       relativePath,
       preview,
-      cancellationScope: initialization.cancellationScope,
       originalUri: { fsPath: preview.originalPath },
       proposedUri: { fsPath: preview.proposedPath },
       originalContent: request.originalContent,
@@ -284,11 +278,7 @@ export class ToolEditApprovalController {
     for (const state of [...this.requests.values()]) {
       if (
         !matchesCancelSelector(
-          {
-            kind: 'toolEdit',
-            streamId: state.request.streamId ?? undefined,
-            cancellationScope: state.cancellationScope,
-          },
+          { kind: 'toolEdit', streamId: state.request.streamId ?? undefined },
           selector,
         )
       ) {

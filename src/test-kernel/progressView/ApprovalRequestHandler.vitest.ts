@@ -194,26 +194,18 @@ describe('ApprovalRequestHandler', () => {
     expect(sendShow).toHaveBeenCalledTimes(2);
   });
 
-  it('cancels only interactions matching both stream and cancellation scope', async () => {
+  it('cancels only interactions matching the stream', async () => {
     const { handler } = createHandler();
-    const targetScope = {};
-    const otherScope = {};
     const target = handler.request(request('target', 'stream-a'), {
-      cancellationScope: targetScope,
-      cancellationResult,
-    });
-    const wrongScope = handler.request(request('wrong-scope', 'stream-a'), {
-      cancellationScope: otherScope,
       cancellationResult,
     });
     const wrongStream = handler.request(request('wrong-stream', 'stream-b'), {
-      cancellationScope: targetScope,
       cancellationResult,
     });
 
     expect(
       handler.cancelWhere(
-        (item, scope) => item.streamId === 'stream-a' && scope === targetScope,
+        (item) => item.streamId === 'stream-a',
         'Scoped cleanup.',
       ),
     ).toBe(1);
@@ -221,14 +213,9 @@ describe('ApprovalRequestHandler', () => {
       action: 'cancel',
       cause: 'Scoped cleanup.',
     });
-    expect(handler.get('wrong-scope')).toBeDefined();
     expect(handler.get('wrong-stream')).toBeDefined();
 
     handler.clear();
-    await expect(wrongScope).resolves.toEqual({
-      action: 'cancel',
-      cause: undefined,
-    });
     await expect(wrongStream).resolves.toEqual({
       action: 'cancel',
       cause: undefined,

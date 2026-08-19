@@ -23,7 +23,6 @@ import {
   type UpdateStreamDescriptionPayload,
   AgentCategory,
 } from '@shared/schemas';
-import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { streamStageFromStageStart } from '@shared/streams/stage';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
@@ -771,7 +770,6 @@ export class SessionFactApplier {
           ? child
           : { ...child, status: recorded };
       });
-      const vanishedIds = diffActiveChildren(liveBefore, next);
       const finishedAt = Date.now();
       const nextIds = new Set(next.map((child) => child.executionId));
       // Previously-retained rows first (already in ascending `finishedAt`
@@ -791,21 +789,17 @@ export class SessionFactApplier {
         ),
         ...previous
           .filter(
-            (child) => vanishedIds.has(child.executionId) && retainable(child),
+            (child) =>
+              child.finishedAt === undefined &&
+              !nextIds.has(child.executionId) &&
+              retainable(child),
           )
           .map((child) => ({ ...child, finishedAt })),
       ].slice(-RETAINED_FINISHED_CHILDREN_CAP);
       return { ...prev, subagents: [...live, ...retained] };
     });
 
-    const updated = this.state.getStreamState(parentStreamId);
-    if (!updated) {
-      this.renderer.onBadgesChanged(parentStreamId, { subagents: next });
-      return;
-    }
-    this.renderer.onBadgesChanged(parentStreamId, {
-      subagents: updated.subagents,
-    });
+    this.renderer.onBadgesChanged(parentStreamId);
   }
 
   private notifyRosterParents(parents: readonly StreamTabId[]): void {
@@ -815,15 +809,13 @@ export class SessionFactApplier {
       () => {
         if (!this.renderer.isAvailable()) return;
         for (const parent of parents) {
-          const parentState = this.state.getStreamState(parent);
-          if (!parentState) continue;
+          // Read only to decide whether the parent still exists — a stream
+          // with no state has nothing for a host to re-read.
+          if (!this.state.getStreamState(parent)) continue;
           withEventErrorHandling(
             'SessionFacts',
             `failed to notify roster changes for ${parent}`,
-            () =>
-              this.renderer.onBadgesChanged(parent, {
-                subagents: parentState.subagents,
-              }),
+            () => this.renderer.onBadgesChanged(parent),
           );
         }
       },

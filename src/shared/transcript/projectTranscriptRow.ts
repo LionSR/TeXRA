@@ -503,6 +503,7 @@ export function projectTranscriptRow(
         ...rowBase(entry),
         kind: 'statistics',
         stats: entry.data,
+        label: 'Statistics',
         items,
       };
     }

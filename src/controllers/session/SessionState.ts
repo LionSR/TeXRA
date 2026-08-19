@@ -91,13 +91,6 @@ export interface StreamExecutionState {
 }
 
 /**
- * Per-stream child-activity roster, projected from
- * {@link StreamExecutionState}. Sent to the webview on tab switch and whenever
- * subagent activity changes.
- */
-export type StreamBadgeSnapshot = Pick<StreamExecutionState, 'subagents'>;
-
-/**
  * Host-neutral session state.
  *
  * Coordinates two persistence stores — `streamLogs` (transcript) and

@@ -193,6 +193,23 @@ describe('CLI tool display lines', () => {
     expect(header.spans.at(-1)).toMatchObject({ color: 'cyan' });
   });
 
+  it('lets a completed executions summary outrank its labels, matching the progress view', () => {
+    const entry = toolUse(
+      'executions',
+      { action: 'wait', path: '/executions', ids: ['sub-1'] },
+      { headerSummary: 'finished waiting' },
+    );
+
+    expect(
+      toolUseDisplayLines(entry, {
+        executionLabels: new Map([['sub-1', 'reviewer']]),
+      }),
+    ).toEqual([
+      '● executions (finished waiting)',
+      '⎿ Action: wait (timeout: 300s)',
+    ]);
+  });
+
   it('renders executions targets with retained subagent labels', () => {
     const entry = toolUse('executions', {
       action: 'wait',

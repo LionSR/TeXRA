@@ -13,8 +13,8 @@ import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
+  executionsWaitTimeoutSeconds,
 } from '@shared/toolUse';
-import { clamp } from '@utils/core';
 
 // Local file imports
 import { ViewRangeSchema } from '../formatting';
@@ -100,13 +100,7 @@ const WaitActionSchema = z.strictObject({
     .nullish()
     // Clamp in the schema so input.timeout is always a ready-to-use number:
     // an out-of-range or missing value becomes a value inside the wait window.
-    .transform((v) =>
-      clamp(
-        v ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
-        EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
-        EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
-      ),
-    )
+    .transform((v) => executionsWaitTimeoutSeconds(v))
     .describe(
       `Max seconds to wait for a status change. Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
     ),

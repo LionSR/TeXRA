@@ -27,6 +27,7 @@ import {
 // Local imports - shared utils
 import type {
   AgentProposalPermission,
+  PermissionPayload,
   WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
@@ -50,10 +51,9 @@ import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '../events';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { getComposedPathElement } from '../utils';
-import type { PermissionState } from '../permissionState';
 
 function proposalRequestIdOf(
-  p: PermissionState | null | undefined,
+  p: PermissionPayload | null | undefined,
 ): string | undefined {
   return p?.kind === PERMISSION_KIND.PROPOSAL ? p.data.requestId : undefined;
 }
@@ -83,7 +83,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     super.willUpdate(changed);
     if (!changed.has('permission')) return;
     const previous = changed.get('permission') as
-      PermissionState | null | undefined;
+      PermissionPayload | null | undefined;
     if (
       proposalRequestIdOf(previous) !== proposalRequestIdOf(this.permission)
     ) {
@@ -116,8 +116,8 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
 
   override render(): TemplateResult {
     const data = this.permission.data;
-    const modelOptions = this.permission.modelOptions ?? [];
-    const agentOptions = this.permission.agentOptions ?? [];
+    const modelOptions = this.permission.modelOptionsData ?? [];
+    const agentOptions = this.permission.agentOptionsData ?? [];
     const isWorkflow = data.agentCategory === AgentCategory.Workflow;
     const workflowScript = isWorkflow ? data.workflowScript : undefined;
     let categoryLabel = 'Tool-Use';

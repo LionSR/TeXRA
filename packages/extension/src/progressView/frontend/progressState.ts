@@ -17,6 +17,7 @@ import {
   createStreamState,
   isToolUseState,
   STREAM_STATUS,
+  type PermissionPayload,
   type ProgressViewPlacement,
   type InquiryThreadUpdatedEvent,
   type PhaseStage,
@@ -46,7 +47,7 @@ import {
   type StreamContextValue,
   type StreamLogContextValue,
 } from './streamContexts';
-import { getPermissionKey, type PermissionState } from './permissionState';
+import { getPermissionKey } from './permissionState';
 
 // ---------------------------------------------------------------------------
 // Stable empty references — avoid allocating new arrays/maps per read.
@@ -86,7 +87,7 @@ export const placement = trackedSignal<ProgressViewPlacement>(() => 'sidebar');
 export const narrowLayout = trackedSignal(() => false);
 
 /** Pending approval requests; drives permission UI and tab pulse indicator. */
-export const permissions$ = trackedSignal<PermissionState[]>(() => []);
+export const permissions$ = trackedSignal<PermissionPayload[]>(() => []);
 
 /**
  * Progress-view commands the active host's inbound registry declares
@@ -179,15 +180,16 @@ export const pendingApprovalIds$ = new Signal.Computed(() => {
  * titles but lives here because that component module registers custom
  * elements on import — a state leaf module cannot touch it.
  */
-const PERMISSION_ANNOUNCEMENT_NOUN: Record<PermissionState['kind'], string> = {
-  [PERMISSION_KIND.TOOL_EDIT]: 'file edit',
-  [PERMISSION_KIND.BASH]: 'shell command',
-  [PERMISSION_KIND.RETRY]: 'retry',
-  [PERMISSION_KIND.PROPOSAL]: 'agent proposal',
-  [PERMISSION_KIND.PLAN_APPROVAL]: 'plan approval',
-  [PERMISSION_KIND.EXTERNAL_INQUIRY]: 'external inquiry',
-  [PERMISSION_KIND.USER_QUESTION]: 'user question',
-};
+const PERMISSION_ANNOUNCEMENT_NOUN: Record<PermissionPayload['kind'], string> =
+  {
+    [PERMISSION_KIND.TOOL_EDIT]: 'file edit',
+    [PERMISSION_KIND.BASH]: 'shell command',
+    [PERMISSION_KIND.RETRY]: 'retry',
+    [PERMISSION_KIND.PROPOSAL]: 'agent proposal',
+    [PERMISSION_KIND.PLAN_APPROVAL]: 'plan approval',
+    [PERMISSION_KIND.EXTERNAL_INQUIRY]: 'external inquiry',
+    [PERMISSION_KIND.USER_QUESTION]: 'user question',
+  };
 
 /** One announcement diff pass: the text plus the memos for the next pass. */
 interface StatusAnnouncement {
@@ -215,7 +217,7 @@ interface StatusAnnouncement {
 export function diffStatusAnnouncement(
   previousKeys: ReadonlySet<string>,
   previousStatuses: ReadonlyMap<StreamTabId, StreamLifecycleStatus>,
-  permissions: readonly PermissionState[],
+  permissions: readonly PermissionPayload[],
   streamStates: ReadonlyMap<StreamTabId, StreamState>,
   streamById: ReadonlyMap<StreamTabId, StreamTabInfo>,
 ): StatusAnnouncement {

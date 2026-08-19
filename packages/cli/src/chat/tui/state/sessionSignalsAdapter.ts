@@ -146,10 +146,7 @@ class TuiSessionRenderer implements SessionRendererPort {
     invalidateChildStreams();
   }
 
-  onBadgesChanged(
-    _streamId: StreamTabId,
-    _badges: Parameters<SessionRendererPort['onBadgesChanged']>[1],
-  ): void {
+  onBadgesChanged(_streamId: StreamTabId): void {
     // The shared applier already landed this roster on `SessionState` — live
     // rows plus the finished children it retains for display (phase-merged,
     // 200-capped). The CLI reads it there; only the snapshots re-derive.

@@ -685,58 +685,6 @@ describe('createExtensionHostInteractions', () => {
     expect(handlers.transport.retry.dismiss).toHaveBeenCalledWith('stream-a');
   });
 
-  it('does not abort preparations outside the cancellation scope', async () => {
-    const { interactions } = createInteractions({
-      session: createTestSession(),
-    });
-    const scopeA = {};
-    const scopeB = {};
-    const preparationA = createDeferredPreparation();
-    const preparationB = createDeferredPreparation();
-
-    const resultA = interactions.requestRetry?.(
-      {
-        requestId: 'retry:scope-a',
-        streamId: STREAM_A,
-        operation: 'Scoped A',
-      },
-      { prepareRetry: preparationA.prepareRetry, cancellationScope: scopeA },
-    );
-    const resultB = interactions.requestRetry?.(
-      {
-        requestId: 'retry:scope-b',
-        streamId: STREAM_B,
-        operation: 'Scoped B',
-      },
-      { prepareRetry: preparationB.prepareRetry, cancellationScope: scopeB },
-    );
-    expect(
-      interactions.submitRetryDecision(STREAM_A, 'retry:scope-a', {
-        action: 'retry',
-      }),
-    ).toBe(true);
-    expect(
-      interactions.submitRetryDecision(STREAM_B, 'retry:scope-b', {
-        action: 'retry',
-      }),
-    ).toBe(true);
-    await vi.waitFor(() =>
-      expect(preparationA.prepareRetry).toHaveBeenCalledOnce(),
-    );
-    await vi.waitFor(() =>
-      expect(preparationB.prepareRetry).toHaveBeenCalledOnce(),
-    );
-
-    interactions.cancel({ cancellationScope: scopeA });
-
-    await expect(resultA).resolves.toEqual({ action: 'cancel' });
-    expect(preparationA.signal()?.aborted).toBe(true);
-    expect(preparationB.signal()?.aborted).toBe(false);
-
-    preparationB.deferred.resolve();
-    await expect(resultB).resolves.toEqual({ action: 'retry' });
-  });
-
   it('cancels pending retry requests for a removed stream', async () => {
     const presentationSink = createPresentationSink();
     const { handlers, interactions } = createInteractions({
@@ -965,9 +913,6 @@ describe('createExtensionHostInteractions', () => {
     await expect(interactions.requestToolEditApproval?.(request)).resolves.toBe(
       approvalResult,
     );
-    expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(
-      request,
-      undefined,
-    );
+    expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(request);
   });
 });
