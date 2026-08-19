@@ -50,15 +50,6 @@ export interface SettingsModelSelectionControllerDeps {
   ) => Promise<ModelOptionData[]>;
 }
 
-/**
- * The host-tunable deps: everything except the persisted-state store both
- * hosts already hold in their `SettingsStatePorts`.
- */
-export type ModelSelectionExtras = Omit<
-  SettingsModelSelectionControllerDeps,
-  'globalState'
->;
-
 interface SettingsModelSelectionData {
   models: ModelSelectionItem[];
   helperModel: string;

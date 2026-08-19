@@ -10,10 +10,7 @@ import {
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
-import {
-  SettingsModelSelectionController,
-  type ModelSelectionExtras,
-} from '@controllers/settingsView/SettingsModelSelectionController';
+import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
 import {
   computeModelOptionsData,
@@ -76,7 +73,6 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
     SubscriptionUsageService,
     'getUsage' | 'invalidate'
   >;
-  readonly modelSelectionExtras?: ModelSelectionExtras;
   readonly onCredentialChanged: () => Promise<void>;
   readonly onError: (error: unknown) => void;
 }
@@ -141,7 +137,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     this.subscriptionUsage =
       options.subscriptionUsage ?? new SubscriptionUsageService();
     this.modelSelectionController = new SettingsModelSelectionController({
-      ...options.modelSelectionExtras,
       globalState: options.globalState,
     });
     this.profileController = new SettingsProfileController({

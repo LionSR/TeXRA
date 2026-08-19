@@ -32,13 +32,6 @@ export interface AuthTokenProvider {
    */
   getStoredAccountLabel(): Promise<string | null>;
   /**
-   * Whether the stored session's access token is within the provider's refresh
-   * threshold, judged from the last session the provider read or wrote.
-   * Synchronous and in-memory, so it is safe before every model invocation;
-   * false when no session expiry has been observed.
-   */
-  isTokenExpiringSoon(): boolean;
-  /**
    * Classification of the most recent refresh failure. `invalid` means the
    * credential was authoritatively rejected; `transient` covers transport and
    * service failures for which reconnecting would be premature.

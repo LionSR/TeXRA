@@ -186,9 +186,7 @@ export async function signInCliSupabaseDeviceCode(
   options.signal?.throwIfAborted();
   // The token endpoint mints a native GoTrue session (auth-github shape), so
   // standard Supabase refresh applies — no custom refresh flag.
-  const session = toStorableSupabaseSession(exchange, {
-    defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-  });
+  const session = toStorableSupabaseSession(exchange);
   await authCoordinator.storeSession(session);
   return session;
 }

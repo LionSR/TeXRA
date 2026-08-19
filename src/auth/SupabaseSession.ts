@@ -71,14 +71,6 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private readonly sessionMutex = new Mutex();
   private readonly log: Required<SupabaseSessionLog>;
 
-  /**
-   * Expiry (ms since epoch) of the session this coordinator last read or
-   * wrote, or null when the last observation was "no session". Every storage
-   * read and write updates it, so a session loaded cold at startup answers
-   * {@link isTokenExpiringSoon} without any host seeding it.
-   */
-  private tokenExpiresAt: number | null = null;
-
   constructor(private readonly options: SupabaseSessionCoordinatorOptions) {
     this.log = { ...NOOP_SUPABASE_SESSION_LOG, ...options.log };
   }
@@ -88,17 +80,10 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   }
 
   async loadSession(): Promise<SupabaseSession | null> {
-    const versionBeforeLoad = this.sessionMutationVersion;
-    const session = parseStoredSupabaseSession(
-      await this.options.storage.get(),
-      { logSource: 'SupabaseSession', warn: this.log.warn },
-    );
-    // A mutation that committed during the read owns the newer expiry; this
-    // read observed the superseded session and must not overwrite it.
-    if (versionBeforeLoad === this.sessionMutationVersion) {
-      this.tokenExpiresAt = session?.expiresAt ?? null;
-    }
-    return session;
+    return parseStoredSupabaseSession(await this.options.storage.get(), {
+      logSource: 'SupabaseSession',
+      warn: this.log.warn,
+    });
   }
 
   async storeSession(session: SupabaseSession): Promise<void> {
@@ -109,19 +94,6 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
 
   async clearSession(): Promise<void> {
     await this.runSessionMutation(null, () => this.options.storage.delete());
-  }
-
-  /**
-   * Whether the last observed session expires within the configured refresh
-   * threshold. Synchronous in-memory check for the model-invocation path.
-   */
-  isTokenExpiringSoon(): boolean {
-    if (this.tokenExpiresAt === null) {
-      return false;
-    }
-    return (
-      this.tokenExpiresAt - Date.now() < this.options.tokenRefreshThresholdMs
-    );
   }
 
   /**
@@ -147,7 +119,6 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       await this.options.storage.delete();
       this.lastStoredSession = null;
       this.lastStoredSessionVersion = mutationVersion;
-      this.tokenExpiresAt = null;
       cleared = true;
     });
 
@@ -372,7 +343,6 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       await operation();
       this.lastStoredSession = session;
       this.lastStoredSessionVersion = mutationVersion;
-      this.tokenExpiresAt = session?.expiresAt ?? null;
     });
   }
 
