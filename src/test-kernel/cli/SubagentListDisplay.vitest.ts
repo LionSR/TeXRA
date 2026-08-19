@@ -975,11 +975,11 @@ describe('CLI child list display model', () => {
       { until: (frame) => frame.includes('5 tool calls') },
     );
 
-    expect(sessions.find(({ id }) => id === bash)?.identity).toEqual({
+    expect(sessions.find(({ id }) => id === bash)?.info?.identity).toEqual({
       kind: 'process',
       tool: 'bash',
     });
-    expect(sessions.find(({ id }) => id === agent)?.identity).toEqual({
+    expect(sessions.find(({ id }) => id === agent)?.info?.identity).toEqual({
       kind: 'agent',
       agent: 'bash',
     });

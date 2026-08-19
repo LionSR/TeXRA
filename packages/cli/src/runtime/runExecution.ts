@@ -259,9 +259,8 @@ export async function executeCliRequest(
   let failurePresented = false;
   const renderWorkflowPlainProgress =
     runContext.outputFormat === 'text' && runContext.renderRunProgress === true;
-  const detachRunProgressRenderer = presentationHost.attachRunProgressRenderer(
-    session.events,
-  );
+  const detachRunProgressRenderer =
+    presentationHost.attachRunProgressRenderer(session);
   const detachHostInteractions = session.useHostInteractions(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),

@@ -295,7 +295,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
               childRosters,
               parentStream,
               streamId: target.displayStreamId,
-              streams,
             }),
       phaseHeading:
         target.displayStreamId === undefined
