@@ -32,6 +32,8 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   DEFAULT_GLOBAL_STREAMING,
   DEFAULT_LATEX_SETTINGS_STATUS,
+  MODEL_COMPACTION_THRESHOLD_SETTING,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   SETTINGS_TAB_PANEL_BY_NAME,
   settingsViewSettingByKey,
   TELEMETRY_ENABLED_KEY,
@@ -54,7 +56,6 @@ import {
   type LatexConfigValues,
   type MemoryViewItem,
   type ModelSelectionItem,
-  type NumberSetting,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
   type SubscriptionUsageSnapshots,
@@ -209,7 +210,12 @@ export const orchestratorAgents = trackedSignal<string[]>(() => []);
 // ---------------------------------------------------------------------------
 // Multi-agent coordination state
 // ---------------------------------------------------------------------------
-export const reliabilitySettings = trackedSignal<NumberSetting[]>(() => []);
+export const compactionThresholdPercent = settingSignal<number>(
+  MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
+);
+export const modelRetryMaxAttempts = settingSignal<number>(
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+);
 export const allowOrchestratorKill = settingSignal<boolean>(
   GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
 );

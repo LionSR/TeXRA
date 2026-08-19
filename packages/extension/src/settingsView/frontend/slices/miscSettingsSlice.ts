@@ -14,7 +14,6 @@ import {
   goalItems,
   multiAgentSettingsRevision,
   orchestratorAgents,
-  reliabilitySettings,
   toolDashboardItems,
   toolDashboardLoaded,
 } from '../settingsState';
@@ -54,7 +53,6 @@ export const toolDashboardHandlers = {
 export const multiAgentHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED]: (data) => {
     applySettingsSnapshot(data.values);
-    reliabilitySettings.set(data.reliabilitySettings);
     multiAgentSettingsRevision.set(multiAgentSettingsRevision.get() + 1);
   },
 } satisfies Partial<SettingsViewOutboundHandlerRegistry>;
