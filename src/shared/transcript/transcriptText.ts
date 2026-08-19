@@ -84,7 +84,7 @@ export function elideText(
 /** Serialization format {@link stringifyPayload} chose for a value. */
 export type PayloadLanguage = 'yaml' | 'plaintext';
 
-export interface PayloadText {
+interface PayloadText {
   readonly text: TranscriptText;
   readonly language: PayloadLanguage;
 }

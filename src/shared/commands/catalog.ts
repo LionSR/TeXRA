@@ -411,7 +411,7 @@ export type CommandId = (typeof commandCatalog)[number]['id'];
  * A `contributes.commands` row in `packages/extension/package.json`. Field
  * order mirrors the manifest so the codegen script writes a stable diff.
  */
-export interface PackageCommandContribution {
+interface PackageCommandContribution {
   command: string;
   title: string;
   shortTitle?: string;

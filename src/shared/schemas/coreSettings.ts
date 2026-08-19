@@ -43,8 +43,7 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY =
 /** Canonical config key for the usage-telemetry opt-in. */
 export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
 
-export type LatexdiffTempFileLocation =
-  (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number];
+type LatexdiffTempFileLocation = (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number];
 
 /**
  * Bounds, default, and copy for `model.retry.maxAttempts`. The value is the
@@ -437,7 +436,7 @@ const CoreSettingsSchema = z
   .strictObject(CoreSettingsShape)
   .prefault(DEFAULT_CORE_SETTINGS);
 
-export type CoreSettings = z.infer<typeof CoreSettingsSchema>;
+type CoreSettings = z.infer<typeof CoreSettingsSchema>;
 
 /** True for an index-signature record, false for a fixed-key settings group. */
 type IsRecord<T> = string extends keyof T ? true : false;

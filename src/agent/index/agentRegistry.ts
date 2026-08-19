@@ -545,7 +545,7 @@ function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
 // TYPED OPTIONS BUILDER (Lit-native)
 // =============================================================================
 
-export interface AgentOptionsDataPayload {
+interface AgentOptionsDataPayload {
   workflow: AgentOptionData[];
   toolUse: AgentOptionData[];
 }

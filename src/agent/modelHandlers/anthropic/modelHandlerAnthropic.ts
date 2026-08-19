@@ -1062,11 +1062,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const userMessageContent: ContentBlockParam[] = [];
 
     if (trimmedPrefix) {
-      userMessageContent.push({
-        type: 'text',
-        text: trimmedPrefix,
-        citations: null,
-      });
+      userMessageContent.push(textBlock(trimmedPrefix));
     }
 
     // Add media if provided (images and native PDFs)
@@ -1080,11 +1076,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add user request with optional caching
     if (trimmedRequest) {
-      userMessageContent.push({
-        type: 'text',
-        text: trimmedRequest,
-        citations: null,
-      });
+      userMessageContent.push(textBlock(trimmedRequest));
     }
 
     // Note: Anthropic handles system prompts differently via createResponse()
@@ -1112,11 +1104,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Add message text with optional caching
     const trimmedMessage = userMessage.trim();
     if (trimmedMessage) {
-      roundContent.push({
-        type: 'text',
-        text: trimmedMessage,
-        citations: null,
-      });
+      roundContent.push(textBlock(trimmedMessage));
     }
 
     if (roundContent.length === 0) {
@@ -1144,7 +1132,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
     messages.push({
       role: 'user',
-      content: [{ type: 'text', text: trimmedMessage, citations: null }],
+      content: [textBlock(trimmedMessage)],
     });
 
     return messages;
@@ -1153,7 +1141,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   createAssistantMessage(text: string): MessageParam {
     return {
       role: 'assistant',
-      content: [{ type: 'text', text, citations: null }],
+      content: [textBlock(text)],
     };
   }
 
@@ -1249,11 +1237,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Check for native PDF support
       const isPdf =
         classification === 'pdf' && this.capabilities.supportsNativePdf;
-      const descriptionBlock = {
-        type: 'text',
-        text: `${isPdf ? 'Document' : 'Image'}: ${media.file_name}`,
-        citations: null,
-      } satisfies TextBlockParam;
+      const descriptionBlock = textBlock(
+        `${isPdf ? 'Document' : 'Image'}: ${media.file_name}`,
+      );
 
       if (isPdf) {
         const documentBlock = {

@@ -67,7 +67,7 @@ interface PendingDeletion {
   readonly facts: DeferredFact[];
 }
 
-export type SessionFactApplierOptions = {
+type SessionFactApplierOptions = {
   /**
    * Host durable-delete for a removed stream. The resolved outcome decides
    * the removal barrier's fate: `active`/`failed` mean the stream was

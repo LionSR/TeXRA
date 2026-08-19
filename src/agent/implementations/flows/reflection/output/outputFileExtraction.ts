@@ -9,7 +9,6 @@
  * parsing. Low-level XML text utilities live in @utils/text/xmlExtraction.
  */
 
-import type { StageHandle } from '@agent/trace';
 import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
 import {
   fileLocationDisplayPath,
@@ -183,12 +182,11 @@ export async function extractFilesFromXml(
   xmlManager: XmlOutputManager,
   outputLocation: FileLocation,
   currRound: number,
-  stage?: StageHandle,
 ): Promise<void> {
   await withOutputStage(
     deps,
     `Process files r${currRound}`,
-    stage,
+    undefined,
     async () => {
       await prepareRunWorkspaceIfNeeded(state, deps);
 

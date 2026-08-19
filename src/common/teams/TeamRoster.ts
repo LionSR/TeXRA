@@ -9,7 +9,7 @@ import {
   type ByCategory,
 } from '@shared/schemas';
 
-export interface TeamRosterState {
+interface TeamRosterState {
   getAgents(category: AgentCategory): { name: string; source: AgentSource }[];
   setEnabledAgentKeys(
     category: AgentCategory,
