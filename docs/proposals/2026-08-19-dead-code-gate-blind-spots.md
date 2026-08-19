@@ -97,34 +97,67 @@ Note for anyone applying the workaround: `--no-ignore-vcs` also un-ignores
 
 ## Proposal
 
-1. **Report production-dead exports separately from test-dead ones.** Keep
-   test-kernel as an entry point so tests are not themselves reported as dead,
-   but add a second knip pass whose entry set excludes `src/test-kernel/**`, and
-   ratchet its export findings against a new baseline. The delta between the two
-   passes _is_ the production-dead-test-alive set.
-2. **Diagnose gap 2 before fixing it.** Establish why `packages/cli` exports go
-   unreported; a config change made without knowing the cause may just move the
-   blind spot.
-3. **Fail loudly on stray `.js` siblings.** In
-   `scripts/check-dead-code-ratchet.mjs`, before reporting a `.ts` file as
-   unused, check for a `.js` sibling and fail with "stray build artifact at
-   `<path>` — delete it and re-run" instead of a phantom dead-code finding.
+### The governing constraint: one owner of "dead"
+
+The three gaps share a root cause. "Is this symbol dead?" is answered today by
+whichever mechanism happens to see it — knip's default pass for most of `src/`,
+nothing at all for `packages/cli`, and module resolution (accidentally) for
+files with a stray `.js` sibling. Three partial authorities, no single one that
+can be asked the question and trusted.
+
+So the fix must not be "add another check". A second knip pass ratcheted
+against a second baseline would answer the same question in a second place, and
+the next contributor would have to know which one is authoritative for their
+case. That is the shape this repo has repeatedly paid to remove.
+
+**`scripts/check-dead-code-ratchet.mjs` is the single authority.** knip is an
+input to it, never a peer. Everything below follows from that.
+
+1. **One script, one baseline, one vocabulary.** The script may invoke knip more
+   than once — once with test files as entry points, once without — but those
+   are two _inputs_ to one classifier, not two gates. The difference between the
+   runs is what produces the finding category, and all categories land in the
+   existing `config/ratchets/knip-baseline.json` with a `category` field
+   (`unused` vs `production-dead`) rather than in a new baseline file. A
+   contributor reads one file to learn what is grandfathered.
+
+2. **Classification belongs to the script, not to config.** The stray-`.js`
+   case is not a knip configuration problem; it is a question of what a finding
+   _means_. Before reporting a `.ts` file as unused, the script checks for a
+   `.js` sibling and, if present, fails with "stray build artifact at `<path>` —
+   delete it and re-run". Same single owner deciding, in one place, that this
+   input does not mean what it appears to mean.
+
+3. **Diagnose gap 2 before changing config.** Establish why `packages/cli`
+   exports go unreported. A config change made without knowing the cause moves
+   the blind spot rather than closing it, and leaves the authority ambiguous
+   again.
+
 4. **Narrow the global-ignore patterns** (owner's machine, not the repo): scope
    them to a scratch directory or to non-source extensions.
 
 ## What we give up
 
-Gap 1's fix widens the reported surface, which will surface a backlog on first
-run. That backlog is the point, but it means the second baseline starts large
-and shrinks — the same shape as the existing ratchets, and it must never widen.
+Widening the reported surface will surface a backlog on first run. That backlog
+is the point, but it means the baseline grows once and then only shrinks — the
+same discipline as the existing ratchets, and it must never widen.
+
+Running knip twice costs wall-clock in CI. That is the price of the single
+authority actually being able to answer the question; splitting the work across
+two gates to save time would reintroduce exactly the ambiguity this proposal
+exists to remove.
 
 ## Acceptance criteria
 
+- One command answers "is this dead?" for every corpus. A contributor never has
+  to know which gate covers their file.
 - A production-dead export whose only consumer is a `.vitest.ts` file is
-  reported by the gate. `getAgentsBySource` is the regression fixture.
+  reported, categorized `production-dead`. `getAgentsBySource` is the regression
+  fixture.
 - `getCliSessionAccessToken` is reported.
-- A stray `src/**/foo.js` beside `foo.ts` fails the gate with an explicit
+- A stray `src/**/foo.js` beside `foo.ts` fails with an explicit
   stray-artifact message naming the file, not a dead-code finding.
+- `config/ratchets/knip-baseline.json` remains the only baseline for dead code.
 
 ## Risks
 
