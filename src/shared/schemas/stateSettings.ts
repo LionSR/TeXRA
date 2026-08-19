@@ -649,6 +649,11 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
+    // Hand-edited config files carry spacing/casing variants; the row owns that
+    // normalization so every reader through `readSetting` accepts what
+    // `parseTexraApprovalPolicy` has always accepted.
+    normalizePersisted: (raw) =>
+      typeof raw === 'string' ? raw.trim().toLowerCase() : raw,
     title: 'Approval policy',
     description:
       'Deny, ask, or auto-approve Bash and tool edits for this workspace. Under Ask, the two toggles below control each kind independently.',
@@ -921,7 +926,10 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
   surfacedSetting({
     key: WorkspaceStateKey.GIT_AUTHOR_NAME,
-    schema: z.string().prefault(DEFAULT_GIT_AUTHOR_NAME),
+    // `.min(1)` so a blank value is rejected at the write boundary and a
+    // legacy blank read falls back (loudly) to the default identity, which is
+    // what `readGitAuthorSettingsFromState`'s `||` has always done for git.
+    schema: z.string().min(1).prefault(DEFAULT_GIT_AUTHOR_NAME),
     title: 'Agent commit author',
     description:
       'Author and committer name used for agent-authored commits when commit marking is enabled.',
@@ -932,7 +940,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
   surfacedSetting({
     key: WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-    schema: z.string().prefault(DEFAULT_GIT_AUTHOR_EMAIL),
+    schema: z.string().min(1).prefault(DEFAULT_GIT_AUTHOR_EMAIL),
     title: 'Agent commit email',
     description:
       'Author and committer email used for agent-authored commits when commit marking is enabled.',
@@ -1454,6 +1462,23 @@ export function settingsViewSettingByKey(
   key: string,
 ): SettingsViewStateSettingEntry | undefined {
   return SETTINGS_VIEW_SETTINGS_BY_KEY.get(key);
+}
+
+/**
+ * The rows one settings-view snapshot carries, in catalog order.
+ *
+ * This is the whole content of a catalog-derived snapshot: the outbound
+ * payload's Zod shape, the backend's read loop, and the webview's apply step
+ * each iterate this list instead of re-listing the same fields by hand. Adding
+ * `surfaces.settingsView: '<snapshot>'` to a row is therefore all it takes to
+ * put that setting on the wire.
+ */
+export function settingsViewSnapshotEntries(
+  snapshot: SettingsViewSnapshot,
+): readonly SettingsViewStateSettingEntry[] {
+  return [...SETTINGS_VIEW_SETTINGS_BY_KEY.values()].filter(
+    (entry) => entry.surfaces.settingsView === snapshot,
+  );
 }
 
 /**

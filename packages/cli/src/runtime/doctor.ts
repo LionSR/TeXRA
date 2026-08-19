@@ -11,8 +11,8 @@ import {
   probeLatexToolchain,
   type LatexToolchainProbe,
 } from '@latex/latexToolchain';
+import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import {
-  TELEMETRY_ENABLED_KEY,
   usageLoggingOptOut,
   type UsageLoggingOptOut,
 } from '@telemetry/UsageLogService';
