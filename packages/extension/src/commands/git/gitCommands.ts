@@ -24,7 +24,7 @@ import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
 import { readRecentCommitLabels } from '@utils/git/repositoryOverview';
 import { executeCommandSync } from '@utils/system/execUtils';
-import { extendEnvPath } from '@utils/system/platformPaths';
+import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { isGitRepository } from '@utils/git/isGitRepository';
 
 const CHANNEL = 'gitCommands';
@@ -232,7 +232,10 @@ function buildOverleafClonePorts(
             cwd: workspacePath,
             // Same extended PATH as the executeCommandSync preflight above, so
             // the probe can't pass while the clone misses git (bot review).
-            env: { GIT_TERMINAL_PROMPT: '0', PATH: extendEnvPath() },
+            // extendEnv: false is required — makeMachineGitEnv omits the
+            // helper-invoking keys, and execa's default merge re-adds them.
+            env: makeMachineGitEnv(),
+            extendEnv: false,
           }),
       );
     },
