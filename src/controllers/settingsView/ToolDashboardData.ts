@@ -7,9 +7,13 @@
  */
 
 // Local imports
+import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
 import { findExternalToolDef } from '@tools/externalToolDefs';
-import type { RegisteredToolName } from '@tools/registry';
+import {
+  isDefaultToolUnavailableOnHost,
+  type RegisteredToolName,
+} from '@tools/registry';
 import {
   runExternalToolChecks,
   type ExternalToolCheckResult,
@@ -56,7 +60,11 @@ export function planToolTerminalAction(input: {
 // Static tool metadata
 // ============================================================
 
-/** Tool groups that are always available (built-in, no external deps). */
+/**
+ * Built-in tool groups with no external dependencies. A group is omitted from
+ * the dashboard when every tool in it declares itself unavailable on the
+ * asking host.
+ */
 const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
   toolNames: readonly RegisteredToolName[];
 })[] = [
@@ -144,20 +152,25 @@ const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
 /**
  * Build the complete tool dashboard items list.
  *
+ * @param host - the product host asking. A built-in group whose every tool
+ *   declares itself unavailable on that host is dropped rather than shown as
+ *   "available": the tool would throw its host-exclusion reason if called.
  * @param cachedResults - when provided, skips network probes and uses
  *   these results (including their `statusDetail`). Used by the toggle
  *   handler for instant UI updates.
  */
 export async function buildToolDashboardItems(
+  host: ToolHost,
   cachedResults?: ExternalToolCheckResult[],
 ): Promise<ToolDashboardItem[]> {
-  const builtinItems: ToolDashboardItem[] = BUILTIN_TOOLS.map(
-    ({ toolNames, ...rest }) => ({
-      ...rest,
-      tools: toolNames.map((name) => ({ name })),
-      status: 'available' as const,
-    }),
-  );
+  const builtinItems: ToolDashboardItem[] = BUILTIN_TOOLS.filter(
+    ({ toolNames }) =>
+      !toolNames.every((name) => isDefaultToolUnavailableOnHost(name, host)),
+  ).map(({ toolNames, ...rest }) => ({
+    ...rest,
+    tools: toolNames.map((name) => ({ name })),
+    status: 'available' as const,
+  }));
 
   const results = cachedResults ?? (await runExternalToolChecks());
 
