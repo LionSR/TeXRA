@@ -29,12 +29,12 @@ describe('CLI ModelListForm empty state', () => {
     {
       itemCount: 0,
       selectable: false,
-      expected: 'No model choices in this API mode.',
+      expected: 'No model choices available.',
     },
     {
       itemCount: 0,
       selectable: true,
-      expected: 'No model choices in this API mode.',
+      expected: 'No model choices available.',
     },
     {
       itemCount: 2,

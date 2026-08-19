@@ -6,17 +6,7 @@ import {
 } from '@supabase/supabase-js';
 import { createLog } from '@logger/logUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  SUPABASE_GOTRUE_STORAGE_KEY,
-  UserTierSchema,
-  type UserTier,
-} from './config';
-import {
-  fetchRelayTokenStatus,
-  getCachedRelayTokenState,
-  getConfiguredRelayToken,
-  markRelayTokenRejected,
-} from './relayToken';
+import { SUPABASE_GOTRUE_STORAGE_KEY } from './config';
 import type { SessionSecretStore } from './oauth/sessionAccess';
 import type {
   AuthTokenProvider,
@@ -238,7 +228,7 @@ export class SupabaseClient {
   /**
    * Get the current GoTrue session access token.
    * Returns null if no session is authenticated or auth system is not ready.
-   * @param forceRefresh - When true, forces a token refresh (e.g., after relay 401).
+   * @param forceRefresh - When true, forces a token refresh.
    */
   static async getAccessToken(forceRefresh?: boolean): Promise<string | null> {
     if (!this.authProvider) {
@@ -252,40 +242,6 @@ export class SupabaseClient {
       log.error(`Error getting access token: ${toErrorMessage(error)}`);
       return null;
     }
-  }
-
-  /**
-   * Bearer token for TeXRA relay endpoints. A configured CI relay token
-   * deliberately overrides the interactive session only for relay-bound calls;
-   * PostgREST and Supabase Auth still require a normal GoTrue session token.
-   */
-  static async getRelayAccessToken(
-    forceRefresh?: boolean,
-  ): Promise<string | null> {
-    const relayToken = getConfiguredRelayToken();
-    if (!relayToken) {
-      return this.getAccessToken(forceRefresh);
-    }
-
-    if (forceRefresh) {
-      // forceRefresh is only set by the relay-401 recovery path, and with
-      // a CI token configured that token was the presented credential — so
-      // the 401 is authoritative evidence it was rejected. A static token
-      // cannot be refreshed; record the rejection (all credential checks
-      // then agree) and fall back to the session, which can be.
-      markRelayTokenRejected(relayToken);
-      return this.getAccessToken(forceRefresh);
-    }
-
-    if (getCachedRelayTokenState(relayToken) === 'invalid') {
-      // Skip a token the server has already rejected (status observed by
-      // an earlier async check) — a stored session may still authenticate
-      // the call. Cache-only on purpose: this sits on the model-call path
-      // and must not add a probe of its own.
-      return this.getAccessToken(forceRefresh);
-    }
-
-    return relayToken;
   }
 
   /**
@@ -323,105 +279,23 @@ export class SupabaseClient {
   }
 
   /**
-   * Get user tier from the database.
-   * Returns the actual tier value: 'free', 'Max', or 'Ultra'.
-   */
-  static async getUserTier(): Promise<UserTier> {
-    // CI relay tokens are not GoTrue sessions, so the session profile query
-    // can't run on them. The relay's tier-config endpoint resolves the token
-    // to its owning user's tier — the only profile surface a relay-scoped
-    // token has.
-    const relayToken = getConfiguredRelayToken();
-    if (relayToken) {
-      const status = await fetchRelayTokenStatus(relayToken);
-      if (status.state === 'valid') {
-        return status.tier;
-      }
-      // A rejected token behaves as if unset (a stored session may still
-      // provide the context); an unverifiable one gates conservatively.
-      if (status.state !== 'invalid') {
-        return 'free';
-      }
-    }
-
-    return this.getSessionTier();
-  }
-
-  /**
-   * User tier from the stored GoTrue session only, ignoring any
-   * configured CI relay token. Use when the operation itself runs on the
-   * session (e.g. PostgREST usage reads), so its tier describes the account
-   * whose data is being read rather than the relay credential.
-   */
-  static async getSessionTier(): Promise<UserTier> {
-    const defaultTier: UserTier = 'free';
-
-    const tokens = await this.getSessionTokens();
-    if (!tokens) return defaultTier;
-
-    try {
-      const client = this.getClient();
-      await client.auth.setSession({
-        access_token: tokens.accessToken,
-        refresh_token: tokens.refreshToken,
-      });
-
-      // Fetch the tier from profiles.
-      const { data, error } = await client
-        .from('profiles')
-        .select('tier')
-        .single();
-
-      if (error || !data) {
-        log.error(`Error fetching profile: ${error?.message || 'No data'}`);
-        return defaultTier;
-      }
-
-      // SQL NULL denotes a profile without an assigned paid tier. A present
-      // malformed string is profile corruption: let the outer error path log
-      // it before conservatively returning the default tier.
-      return UserTierSchema.parse(data.tier ?? defaultTier);
-    } catch (error) {
-      log.error(`Error getting user tier: ${toErrorMessage(error)}`);
-      return defaultTier;
-    }
-  }
-
-  /**
    * Check if user is authenticated.
    */
   static async isAuthenticated(): Promise<boolean> {
-    // A configured CI relay token counts unless the server has already
-    // rejected it (status observed by an earlier async check); a known-bad
-    // token falls through to the stored session. Cache-only on purpose so
-    // this stays cheap and offline-safe.
-    return this.hasUsableRelayToken() || (await this.getAccessToken()) !== null;
-  }
-
-  /**
-   * Whether a configured relay token remains usable according to the cached
-   * server verdict. This check never reads or refreshes the stored session.
-   */
-  static hasUsableRelayToken(): boolean {
-    const relayToken = getConfiguredRelayToken();
-    return (
-      relayToken !== undefined &&
-      getCachedRelayTokenState(relayToken) !== 'invalid'
-    );
+    return (await this.getAccessToken()) !== null;
   }
 
   /**
    * Whether PostgREST-backed remote agent definitions can be queried.
-   * CI relay tokens authenticate model relay endpoints only; this capability
-   * deliberately requires a normal GoTrue session access token.
+   * Requires a normal GoTrue session access token.
    */
   static async canAccessRemoteAgentCatalog(): Promise<boolean> {
     return (await this.getAccessToken()) !== null;
   }
 
   /**
-   * Health of the stored GoTrue session, independent of any configured relay
-   * token. This is the canonical classification for account UI and commands.
+   * Health of the stored GoTrue session. This is the canonical
+   * classification for account UI and commands.
    */
   static async getStoredSessionState(): Promise<StoredSessionState> {
     if (!this.authProvider) return 'none';

@@ -406,7 +406,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const credential = await this.resolveClientCredential(selection);
     this.logger.debug(`Using Anthropic API. Base URL: ${credential.baseUrl}`);
 
-    // For relay auth: credential is the user's JWT, SDK sends it via x-api-key header.
     return this.rememberClientCredentialRoute(
       new Anthropic({
         apiKey: credential.apiKey,
@@ -552,7 +551,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // the debug channel so the same failure does not produce a visible row.
     this.logger.debug(`Stream ${isAbort ? 'aborted' : 'failed'}`, {
       data: {
-        isUsingRelay: this.shouldUseServerSideKeys(),
         baseUrl: this.getBaseUrl() ?? 'default',
         model: this.config.fullName,
         streamDiagnostics: diagnostics,

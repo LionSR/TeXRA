@@ -60,7 +60,6 @@ export function createStubDesktopCredentialSettingsController(
     profileHandlers: {
       signIn: noOp,
       signOut: noOp,
-      setApiAccessMode: noOp,
       setProviderKey: noOp,
       removeProviderKey: noOp,
       openProviderKeyUrl: noOp,

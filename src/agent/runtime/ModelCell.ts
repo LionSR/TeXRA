@@ -28,7 +28,7 @@ export type RunModelHandler<C = unknown> = IModelHandler<
  * The provider client lives here for the same reason. {@link getClient} builds
  * it once and reuses it until the credential changes ({@link rebind}) or the
  * handler does ({@link swap}); readers await it instead of holding a copy, so a
- * relay-401 rebind is visible to the next read rather than being shadowed by a
+ * credential rebind is visible to the next read rather than being shadowed by a
  * client the refresh already retired.
  *
  * Disposal: the cell owns every handler it holds. `swap` disposes the handler
@@ -98,9 +98,8 @@ export class ModelCell<C = unknown> {
   }
 
   /**
-   * Rebuild the client for an explicit credential selection: after a relay
-   * token rotation, or a manual retry the user may have preceded with a new
-   * API key.
+   * Rebuild the client for an explicit credential selection: a manual retry
+   * the user may have preceded with a new API key.
    *
    * The replacement is published only once it exists and cancellation has not
    * won, so a failed or cancelled rebind leaves the run on the client it is

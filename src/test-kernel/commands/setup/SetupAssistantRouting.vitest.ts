@@ -113,14 +113,6 @@ vi.mock('@controllers/onboarding/setupLaunch', () => ({
   ) => resolveSetupModelMock(includeAccessListFallback),
 }));
 
-vi.mock('@auth/serverKeys', () => ({
-  getServerSideKeyService: () => ({
-    canUseServerSideKeys: () => Promise.resolve(false),
-    canUseServerSideKeysForModel: () => Promise.resolve(false),
-    canUseModelSync: () => false,
-  }),
-}));
-
 // `hasAnyUsableSetupCredential` now delegates to the shared host-neutral
 // predicate; stand it in with the same provider-key mock this suite already
 // drives, so the credential check keeps tracking `mocks.hasUsableApiKey`
@@ -215,7 +207,6 @@ await import('@utils/config/providerConfig');
 await import('@frontend/secretManager');
 await import('@agent/runtime/SessionHandle');
 await import('@controllers/onboarding/setupLaunch');
-await import('@auth/serverKeys');
 await import('@model/setupCredentialAccess');
 await import('@common/state');
 

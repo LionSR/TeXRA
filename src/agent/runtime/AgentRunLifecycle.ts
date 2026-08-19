@@ -303,9 +303,7 @@ const finalizedRunFailures = new WeakSet<Error>();
  * escaped the flow.
  *
  * `RetryErrorInfo` is a `ProviderError` minus the bulky `rawErrorBody`, so it
- * attaches as-is: the missing field stays absent and `isRelayError` stays
- * `undefined` when it was, keeping `normalizeProviderError` from reading a
- * wrong relay verdict off the retry-state shape.
+ * attaches as-is: the missing field stays absent.
  */
 function toFlowFailureError(error: RetryErrorInfo): Error {
   const failure = new Error(error.message);
@@ -596,7 +594,7 @@ export async function runFlowWithLifecycle(
 
     const message = kind === 'unexpected' ? errorMsg : sdkMsg;
     // `abort`/`disk-full` route through `formatProviderHttpError`'s
-    // `terminalError()` branch, which never populates the provider/relay/
+    // `terminalError()` branch, which never populates the provider/
     // credential fields — narrow to the fields it actually sets so
     // `ResultEvent.error`'s per-kind union stays honest (see events.ts).
     // Abort still carries the SDK message for event consumers; the toast
@@ -607,7 +605,6 @@ export async function runFlowWithLifecycle(
             kind,
             message,
             userRetryable: providerErrorInfo.userRetryable,
-            isRelayError: providerErrorInfo.isRelayError,
             streamDiagnostics: providerErrorInfo.streamDiagnostics,
             partialText: providerErrorInfo.partialText,
           }

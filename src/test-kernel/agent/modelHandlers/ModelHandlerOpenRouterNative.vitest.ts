@@ -10,11 +10,8 @@ import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import type { ResolvedClientCredential } from '@agent/types/ModelHandlerContracts';
-import * as serverKeysModule from '@auth/serverKeys';
-import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { AgentCategory } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import * as providerConfigModule from '@utils/config/providerConfig';
 
 // Type imports
 import type { ChatMessages } from '@openrouter/sdk/models';
@@ -82,56 +79,6 @@ class CompactionProbeHandler extends ModelHandlerOpenRouterNative {
     return this.maybeCompactByInputTokens(messages, 1, compact);
   }
 }
-
-function stubServerSideKeyService(): void {
-  vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
-    shouldUseServerSideKeysSync: () => true,
-    getUseIncludedModelAccess: () => true,
-    canUseServerSideKeys: async () => true,
-    getRelayBaseUrl: (provider: string) =>
-      `https://relay.example.com/functions/v1/relay/${provider}/v1`,
-  } as unknown as ReturnType<typeof serverKeysModule.getServerSideKeyService>);
-  installTexraModelAccess();
-}
-
-describe('ModelHandlerOpenRouterNative routing precedence', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it.each([
-    {
-      name: 'returns false when getUseOpenRouter=true even if server-side keys are available',
-      useOpenRouter: true,
-      openRouterOnly: false,
-      expected: false,
-    },
-    {
-      name: 'returns false for openRouterOnly=true models regardless of server-side key availability',
-      useOpenRouter: false,
-      openRouterOnly: true,
-      expected: false,
-    },
-    {
-      name: 'respects server-side key service when NOT routing through OpenRouter',
-      useOpenRouter: false,
-      openRouterOnly: false,
-      expected: true,
-    },
-  ])(
-    'shouldUseServerSideKeys $name',
-    ({ useOpenRouter, openRouterOnly, expected }) => {
-      vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(
-        useOpenRouter,
-      );
-      stubServerSideKeyService();
-
-      const handler = createHandler({ openRouterOnly });
-
-      assert.equal((handler as any).shouldUseServerSideKeys(), expected);
-    },
-  );
-});
 
 describe('ModelHandlerOpenRouterNative system prompt placement', () => {
   it.each([

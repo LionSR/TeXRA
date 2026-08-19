@@ -30,7 +30,6 @@ import {
 import { getPreferKimiCode } from '@utils/config/providerConfig';
 
 import { hasUsableApiKey } from './apiProviders';
-import { includedModelAccess } from './includedModelAccess';
 import { zeroCostAccessOverrides } from './subscriptionAccessOverrides';
 
 /**
@@ -56,25 +55,20 @@ export function kimiCodeWireModelId(config: {
  *  - not eligible → `null`
  *  - exclusive → `'kimiCode'` when a key is set, else `null` (no other backend)
  *  - dual-backend → `'kimiCode'` only when the OpenRouter toggle is off, the
- *    relay is not serving the request (included access off or unavailable),
- *    the "Prefer Kimi Code" switch is on, and a key is set; otherwise `null`
- *    (falls back to the Moonshot open platform or the relay). The relay guard
- *    keeps credential resolution coherent: a rerouted config pins the coding
- *    `baseUrl`, which outranks the relay URL in `resolveBaseUrl` and would
- *    send the relay token to the wrong host.
+ *    "Prefer Kimi Code" switch is on, and a key is set; otherwise `null`
+ *    (falls back to the Moonshot open platform).
  */
 export function resolveKimiCodeRoute(
   config: KimiSubscriptionModelFields,
   useOpenRouter: boolean,
   keySet: boolean,
   preferKimiCode: boolean,
-  includedAccess: boolean,
 ): 'kimiCode' | null {
   if (!isKimiSubscriptionEligible(config)) return null;
   if (isKimiCodeExclusiveModel(config)) {
     return keySet ? 'kimiCode' : null;
   }
-  if (useOpenRouter || includedAccess || !preferKimiCode || !keySet) {
+  if (useOpenRouter || !preferKimiCode || !keySet) {
     return null;
   }
   return 'kimiCode';
@@ -95,8 +89,6 @@ export interface KimiCodeRoutingFacts {
   readonly keySet: boolean;
   /** Whether the "Prefer Kimi Code" switch is on. */
   readonly preferKimiCode: boolean;
-  /** Whether included (relay) access is switched on and can serve the model. */
-  readonly includedAccess: boolean;
 }
 
 /**
@@ -114,15 +106,13 @@ export function isKimiCodeRoute(
       facts.useOpenRouter,
       facts.keySet,
       facts.preferKimiCode,
-      facts.includedAccess,
     ) === 'kimiCode'
   );
 }
 
 /**
- * Assemble the routing facts from the host: included access switched on and
- * able to serve the model (relay ownership gate), a stored Kimi Code key, and
- * the "Prefer Kimi Code" switch. `useOpenRouter` is passed in because the
+ * Assemble the routing facts from the host: a stored Kimi Code key and the
+ * "Prefer Kimi Code" switch. `useOpenRouter` is passed in because the
  * dispatch path derives it from the persisted compatibility key while the
  * availability/subscription paths read the live toggle — the two sites that
  * used to duplicate this assembly inline.
@@ -130,16 +120,10 @@ export function isKimiCodeRoute(
 export async function resolveKimiCodeRoutingFacts(
   useOpenRouter: boolean,
 ): Promise<KimiCodeRoutingFacts> {
-  const included = includedModelAccess();
-  // The relay only owns the model when included access can actually serve it.
-  const includedAccess = included.getUseIncludedModelAccess()
-    ? await included.canUseServerSideKeys()
-    : false;
   return {
     useOpenRouter,
     keySet: await hasUsableApiKey(platform().secrets, 'kimiCode'),
     preferKimiCode: getPreferKimiCode(),
-    includedAccess,
   };
 }
 

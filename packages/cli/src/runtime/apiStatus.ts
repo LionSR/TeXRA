@@ -4,7 +4,6 @@ import { platform } from '@platform/platform';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
 import type {
-  ApiAccessMode,
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
 } from '@shared/schemas';
@@ -12,10 +11,7 @@ import { providerDisplayName } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { formatPercent } from '@utils/text/stringUtils';
 
-import { getCliApiMode } from './apiAccessMode';
 import {
   formatCliChatGptPreference,
   formatCliGrokPreference,
@@ -26,13 +22,7 @@ import {
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import { readCliModelAccessStatus } from './modelAccessSelection';
-import { fetchRelayUsageSummary, type RelayUsageSummary } from './relayUsage';
-import {
-  getCliAuthProfile,
-  getCliSessionAccessToken,
-  resolveCliUsageTier,
-  type CliAuthProfile,
-} from './supabaseAuth';
+import { getCliAuthProfile, type CliAuthProfile } from './supabaseAuth';
 
 interface SubscriptionUsageReader {
   getUsage(
@@ -48,29 +38,17 @@ const SubscriptionUsage = new SubscriptionUsageService();
 export const AUTH_SIGNED_IN_LINE_PREFIX = 'auth: signed in';
 
 /** Separator between the segments that make up an auth status line (account,
- *  tier, usage). The launcher truncates at this to keep the status line short. */
+ *  usage). The launcher truncates at this to keep the status line short. */
 export const AUTH_STATUS_SEGMENT_SEPARATOR = ' · ';
 
-export function formatRelayUsageStatus(summary: RelayUsageSummary): string {
-  const used = formatPercent(summary.usagePercent, 1);
-  const remaining = formatPercent(Math.max(0, 100 - summary.usagePercent), 1);
-  return `included usage this month: ${used} used, ${remaining} remaining`;
-}
-
 export function formatCliAuthStatusLine(
-  profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'> & {
-    readonly tier?: string;
-  },
+  profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'>,
 ): string {
-  const account = formatAccountStatusLine(
+  return formatAccountStatusLine(
     'auth',
     profile.authenticated,
     profile.accountLabel,
   );
-  if (profile.authenticated && profile.tier) {
-    return `${account}${AUTH_STATUS_SEGMENT_SEPARATOR}tier: ${profile.tier}`;
-  }
-  return account;
 }
 
 function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
@@ -92,12 +70,9 @@ export interface CliModelAccessOverview {
 }
 
 /** Read both account sessions and the effective model-access route. */
-export async function loadCliModelAccessOverview(
-  options: { readonly apiMode?: ApiAccessMode } = {},
-): Promise<CliModelAccessOverview> {
-  const apiMode = options.apiMode ?? getCliApiMode();
+export async function loadCliModelAccessOverview(): Promise<CliModelAccessOverview> {
   const [access, profile] = await Promise.all([
-    readCliModelAccessStatus(apiMode),
+    readCliModelAccessStatus(),
     getCliAuthProfile(),
   ]);
   const lines = [
@@ -107,7 +82,7 @@ export async function loadCliModelAccessOverview(
       (plan) =>
         `${plan.displayName} preference: ${formatCliCodingPlanPreference(access, plan)}`,
     ),
-    `Otherwise: ${formatCliModelAccessRoute(access.apiFallback)}`,
+    `Otherwise: ${formatCliModelAccessRoute('personal')}`,
     formatAccountStatusLine(
       RESEARCHER_ACCESS.label,
       profile.authenticated,
@@ -133,36 +108,24 @@ export function formatPersonalApiKeysLine(
   return `${label}: ${providers}`;
 }
 
-const SIGN_IN_ACTION_HINT = `actions: choose Model access below; ${RESEARCHER_ACCESS_AUTH.actionHintLogin}`;
-
 const CLI_API_STATUS_ACTION_HINTS: Record<
-  ApiAccessMode,
-  Record<'signedIn' | 'signedOut' | 'signedOutWithPersonalKey', string>
+  'signedIn' | 'signedOut' | 'signedOutWithPersonalKey',
+  string
 > = {
-  included: {
-    signedIn:
-      'actions: choose Model access below; `texra login --select-account` changes account',
-    signedOut: SIGN_IN_ACTION_HINT,
-    signedOutWithPersonalKey: SIGN_IN_ACTION_HINT,
-  },
-  personal: {
-    signedIn: 'actions: choose Model access below; `texra logout` signs out',
-    signedOut: `actions: ${RESEARCHER_ACCESS_AUTH.actionHintLoginOrKey}`,
-    signedOutWithPersonalKey:
-      'actions: choose Model access below; provider keys are configured',
-  },
+  signedIn: 'actions: choose Model access below; `texra logout` signs out',
+  signedOut: `actions: ${RESEARCHER_ACCESS_AUTH.actionHintLoginOrKey}`,
+  signedOutWithPersonalKey:
+    'actions: choose Model access below; provider keys are configured',
 };
 
 export function formatCliApiStatusActionHint(
-  mode: ApiAccessMode,
   profile: Pick<CliAuthProfile, 'authenticated'>,
   options: { readonly hasPersonalKey?: boolean } = {},
 ): string {
-  const hints = CLI_API_STATUS_ACTION_HINTS[mode];
-  if (profile.authenticated) return hints.signedIn;
+  if (profile.authenticated) return CLI_API_STATUS_ACTION_HINTS.signedIn;
   return options.hasPersonalKey === true
-    ? hints.signedOutWithPersonalKey
-    : hints.signedOut;
+    ? CLI_API_STATUS_ACTION_HINTS.signedOutWithPersonalKey
+    : CLI_API_STATUS_ACTION_HINTS.signedOut;
 }
 
 async function personalKeyProviders(): Promise<string[]> {
@@ -170,59 +133,29 @@ async function personalKeyProviders(): Promise<string[]> {
 }
 
 interface LoadCliApiStatusOptions {
-  readonly apiMode?: ApiAccessMode;
   readonly includeActionHint?: boolean;
-}
-
-async function loadIncludedUsageLine(
-  profile: CliAuthProfile,
-): Promise<string | undefined> {
-  if (!profile.authenticated || !profile.tier) return undefined;
-  // Usage reads usage_logs via PostgREST with a session token; a relay-scoped
-  // CI token cannot read it, while a session alongside that token can.
-  const canReadUsage =
-    profile.credentialSource !== 'relayToken' ||
-    (await getCliSessionAccessToken()) !== null;
-  if (!canReadUsage) {
-    return 'included usage: run `texra login` to view usage (TEXRA_RELAY_TOKEN on its own cannot read it)';
-  }
-  try {
-    const usageTier = (await resolveCliUsageTier(profile)) ?? 'free';
-    return formatRelayUsageStatus(
-      await fetchRelayUsageSummary({ tier: usageTier }),
-    );
-  } catch (error: unknown) {
-    return `included usage: ${toErrorMessage(error)}`;
-  }
 }
 
 /** Compact status lines used by the launcher. */
 export async function loadCliApiStatus(
   options: LoadCliApiStatusOptions = {},
 ): Promise<readonly string[]> {
-  const mode = options.apiMode ?? getCliApiMode();
   const [profile, configuredPersonalKeyProviders] = await Promise.all([
     getCliAuthProfile(),
     personalKeyProviders(),
   ]);
-  let authLine = formatCliAuthStatusLine(profile);
+  const authLine = formatCliAuthStatusLine(profile);
   const hasPersonalKey = configuredPersonalKeyProviders.length > 0;
   const actionHint = options.includeActionHint
-    ? formatCliApiStatusActionHint(mode, profile, { hasPersonalKey })
+    ? formatCliApiStatusActionHint(profile, { hasPersonalKey })
     : undefined;
 
   const personalKeysLine = formatPersonalApiKeysLine(
     configuredPersonalKeyProviders,
   );
-  if (mode === 'included') {
-    const usage = await loadIncludedUsageLine(profile);
-    if (usage) {
-      authLine = `${authLine}${AUTH_STATUS_SEGMENT_SEPARATOR}${usage}`;
-    }
-  }
 
   return [
-    `api: ${formatCliModelAccessRouteInline(mode)}`,
+    `api: ${formatCliModelAccessRouteInline('personal')}`,
     ...(personalKeysLine ? [personalKeysLine] : []),
     authLine,
     ...(profile.note ? [profile.note] : []),
@@ -247,20 +180,17 @@ function formatModelPreferenceLine(
 }
 
 /** Render each detailed account/access fact on its owning route. */
-export async function loadCliDetailedAccountStatusLines(options: {
-  readonly apiMode: ApiAccessMode;
-  readonly subscriptionUsage?: SubscriptionUsageReader;
-  readonly now?: number;
-}): Promise<string[]> {
+export async function loadCliDetailedAccountStatusLines(
+  options: {
+    readonly subscriptionUsage?: SubscriptionUsageReader;
+    readonly now?: number;
+  } = {},
+): Promise<string[]> {
   const [access, profile, providers] = await Promise.all([
-    readCliModelAccessStatus(options.apiMode),
+    readCliModelAccessStatus(),
     getCliAuthProfile(),
     personalKeyProviders(),
   ]);
-  const includedUsage =
-    access.apiFallback === 'included'
-      ? await loadIncludedUsageLine(profile)
-      : undefined;
   // Detailed /api status is user-invoked, so reopening it is the manual refresh
   // path. Ordinary chat startup and the status bar never call this service.
   const usageReader = options.subscriptionUsage ?? SubscriptionUsage;
@@ -298,18 +228,6 @@ export async function loadCliDetailedAccountStatusLines(options: {
         access.grokAccountLabel,
       ),
     },
-    fallback:
-      access.apiFallback === 'included'
-        ? {
-            kind: 'included' as const,
-            account: formatAccountStatus(
-              profile.authenticated,
-              profile.accountLabel,
-            ),
-            tier: profile.authenticated ? profile.tier : undefined,
-            usage: includedUsage,
-          }
-        : { kind: 'personal' as const },
   };
   const lines: string[] = [];
   const withUsage = (
@@ -351,21 +269,7 @@ export async function loadCliDetailedAccountStatusLines(options: {
     if (line) lines.push(withUsage(line, codingPlanUsage.get(plan.id)));
   }
 
-  const fallbackLine = `Otherwise: ${formatCliModelAccessRoute(access.apiFallback)}`;
-  if (routes.fallback.kind === 'included') {
-    lines.push(
-      [
-        fallbackLine,
-        routes.fallback.account,
-        routes.fallback.tier,
-        routes.fallback.usage,
-      ]
-        .filter((part): part is string => part !== undefined)
-        .join(' · '),
-    );
-  } else {
-    lines.push(fallbackLine);
-  }
+  lines.push(`Otherwise: ${formatCliModelAccessRoute('personal')}`);
 
   const otherPersonalKeys = formatPersonalApiKeysLine(
     providers.filter(

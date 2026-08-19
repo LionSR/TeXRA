@@ -10,7 +10,6 @@ import {
 } from '@shared/approvalPolicy';
 import type {
   AgentDelegationScope,
-  ApiAccessMode,
   CompileFailure,
   ConversationProgress,
   MessageType,
@@ -258,7 +257,6 @@ export interface SessionMeta {
   readonly model: string;
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
-  readonly apiMode: ApiAccessMode;
   readonly approvalPolicy: TexraApprovalPolicy;
   readonly canDelegate: boolean;
   readonly transcriptMode: 'persistent' | 'ephemeral';
@@ -485,7 +483,6 @@ const EMPTY_SESSION_META: SessionMeta = {
   model: '',
   modelSource: 'builtin-default',
   cwd: '',
-  apiMode: 'personal',
   approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
   canDelegate: false,
   transcriptMode: 'persistent',

@@ -86,7 +86,7 @@ None of this is VS Code-only — the whole loop works from a terminal too:
 
 ## Researcher Access Program
 
-The **Researcher Access Program** provides access to specialized remote agents designed for academic research and professional writing. Program members get access to:
+The **Researcher Access Program** provides access to specialized remote agents designed for academic research and professional writing. It covers the hosted agent catalog only — remote agents run on the same credential as your built-in agents, your own provider API key or a provider subscription. Program members get access to:
 
 - **Specialized domain agents**: Agents tailored for specific research fields (mathematics, computer science, physics, etc.)
 - **Advanced reasoning capabilities**: Multi-step analysis and complex document processing
@@ -122,7 +122,7 @@ The Researcher Access Program is available to active researchers, academics, and
 We'll review your application and grant appropriate access within 1-2 business days.
 
 ::: tip Free for Researchers
-TeXRA is committed to supporting academic research. The Researcher Access Program is **free for qualifying researchers and students**. We do not charge for remote agent access.
+TeXRA is committed to supporting academic research. The Researcher Access Program is **free for qualifying researchers and students** — we do not charge for remote agent access. Model calls made by those agents are still billed to your own provider account or subscription.
 :::
 
 ## Managing Your Account

@@ -81,47 +81,21 @@ An embedder that only wants the raw loop can skip this step. An embedder that
 wants the `memory` and `plan` injections but not Lean can call
 `registerAgentFeatures()` directly.
 
-### Step 2 — choose the included-model-access policy
+### Step 2 — credential resolution
 
-There is no server-side-key bootstrap call. `getServerSideKeyService()`
-constructs the process singleton on first use
-(`src/auth/serverKeys/index.ts:33-62`), and
-`ModelHandler.resolveClientCredential` calls it whenever the credential
-selection is the default `'configured'`:
-
-```ts
-// src/agent/modelHandlers/ModelHandler.ts:506-507
-const serverSideKeyService =
-  selection === 'configured' ? getServerSideKeyService() : null;
-```
-
-The `?.` on the following lines (`:508-527`) is for the `'personal'` branch.
-Production model-client constructors call `resolveClientCredential` directly
+There is no model-access bootstrap call. Production model-client constructors
+call `ModelHandler.resolveClientCredential` directly
 (`src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts:396`;
 `src/agent/modelHandlers/openai/modelHandlerOpenAI.ts:249`;
 `src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts:546`;
 `src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts:1165`;
 `src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts:142`).
 
-The singleton reads `globalState` from the platform. With an initialized
-platform, included-model access begins from the persisted setting, defaulting
-to `true` when that setting is absent
-(`src/auth/serverKeys/ServerSideKeyService.ts:106-108`). A headless BYOK host
-should therefore call
-`await getServerSideKeyService().setUseIncludedModelAccess(false)` before its
-first model call. Otherwise, an eligible model first attempts the relay-access
-check, whose tier request is an ordinary `fetch`
-(`src/auth/serverKeys/TierService.ts:171-188`). A host that wants included
-access must instead initialize its authentication surface and set the policy
-from that state. The CLI makes this choice explicitly
-(`packages/cli/src/runtime/initPlatform.ts:359-376`).
-
-If no platform has been initialized when the singleton is first requested,
-construction still succeeds, but included-model access is forced off and a
-warning is logged. This is safe for a stateless BYOK embedder: credential
-resolution continues without a relay request. The singleton retains that
-stateless policy for the rest of the process, however, so a host that wants
-persisted or included access must complete Step 1 before the first model call.
+Credential resolution uses the caller's own provider API keys or subscription
+credentials only; there is no server-side model access to configure. A
+stateless BYOK embedder needs no auth setup at all — a host that wants
+persisted state (settings, credentials) must complete Step 1 before the first
+model call.
 
 ### Step 3 — agent directories
 
@@ -221,7 +195,6 @@ import {
   bootstrapNodeAgentDirectories,
 } from '@platform/defaults/nodeHost';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { loadAgents } from '@agent/index/agentRegistry';
 import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
 import { StreamLogStore } from '@transcript';
@@ -240,7 +213,6 @@ initPlatform(
   }),
 ); // Step 1
 initNodeAgentRuntime(lifecycle); // Optional shipped-feature parity
-await getServerSideKeyService().setUseIncludedModelAccess(false); // Step 2: BYOK
 await bootstrapNodeAgentDirectories({/* … */}); // Step 3
 
 // Use StreamLogStore.ephemeral('embedder') here for memory-only transcripts.
@@ -615,10 +587,6 @@ classification makes that distinction.
   direct Lean services. Without it those features are absent
   (`src/platform/defaults/nodeHost.ts:121-136`;
   `src/agent/features.ts:18-38`).
-- **Server-side-key service:** No bootstrap registration is required. The
-  process singleton is constructed lazily from `platform().globalState`; the
-  CLI's authentication and model-policy block then selects whether included
-  model access is enabled (§1 Step 2).
 - **`:380` — `bootstrapNodeAgentDirectories({ channel: 'cli', … })`:**
   Required only when using the packaged agent bundle; an injected port that
   names other real directories replaces it (§2).
@@ -632,17 +600,16 @@ classification makes that distinction.
 - **`:320` — `applyCliGitAuthorConfig(platform().config)`:** Attributes
   agent-authored commits to the TeXRA Git identity.
 - **`:327-330` — `UsageLogService.initialize(...)` and shutdown flush:**
-  Supabase usage logging tagged `editorType: 'cli'`, for relay pricing.
+  Supabase usage logging tagged `editorType: 'cli'`, for telemetry.
 - **`:334` — `initializeCliSupabaseAuth(log, storageRoot)`:** Supabase sign-in
   wiring for the CLI's authentication flow.
 - **`:342-348` — `setSetupPlatform({ host: 'cli', signIn })`:** Wires the
   setup-assistant onboarding surface.
-- **`:350-357` — OpenRouter/API-mode reconciliation and model-cache
-  invalidation:** Resolves `--api-mode` against the persisted OpenRouter
-  toggle.
-- **`:359-377` — authentication probe and CLI model policy:** Sets relay
-  ("included model access") policy and applies the CLI's `--helper-model`
-  flag.
+- **`:350-357` — OpenRouter reconciliation and model-cache invalidation:**
+  Resolves the persisted OpenRouter toggle.
+- **`:359-377` — authentication probe and CLI model policy:** Installs the
+  account probes (Codex/xAI eligibility) and applies the CLI's
+  `--helper-model` flag.
 
 ### Optional, graceful (2)
 
@@ -668,10 +635,7 @@ desktop also calls
 
 1. **Only part of the shipped ordering is immediately load-bearing.** Step 3
    reads `platform()`, so Step 1 must precede it; nothing checks this beyond the
-   throw in `platform()` itself. Step 2 can run without a platform, but doing so
-   permanently pins the lazy singleton to its safe stateless policy: included
-   model access remains off for that process
-   (`src/auth/serverKeys/index.ts:33-62`). Feature-parity registration stores
+   throw in `platform()` itself. Feature-parity registration stores
    predicates and a Lean adapter without evaluating host services; the
    platform is needed only when the memory predicate later runs
    (`src/agent/features.ts:18-38`;
@@ -700,9 +664,7 @@ desktop also calls
    `SessionHandle`.
 6. **Some failure modes cluster at run time, not startup.** A missing
    `loadAgents` throws at agent resolution, and a missing interactions
-   attachment hangs mid-run. Neither fails fast at bootstrap. Missing the
-   platform before credential resolution is instead a loud, safe degradation:
-   included model access is disabled and the service logs a warning.
+   attachment hangs mid-run. Neither fails fast at bootstrap.
 
 ## 7. Related documents
 

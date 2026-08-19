@@ -65,15 +65,10 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
 import { attachSdkCredentialRoute } from '@common/errors/sdkError/sdkRequestEndpoint';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import {
-  allowsModelRelay,
   resolveDirectModelApiKeyProvider,
   resolveModelSource,
   type ResolvedModelConfig,
 } from '@model/openRouterRouting';
-import {
-  includedModelAccess,
-  INCLUDED_MODEL_ACCESS_REMEDY,
-} from '@model/includedModelAccess';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
@@ -84,7 +79,6 @@ import type {
   ToolResult,
 } from '@shared/schemas';
 import { AgentCategory, MESSAGE_TYPES, OUTPUT_END_TAG } from '@shared/schemas';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
@@ -114,7 +108,6 @@ import {
   resolveBaseUrl,
   resolveProxyEndpoint,
   shouldUseOpenRouter,
-  usesServerSideKeysRoute,
   type ProxyConfig,
 } from './support/ProxyConfigResolver';
 
@@ -474,45 +467,6 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Check if server-side keys should be used for this model.
-   *
-   * Centralizes the decision to avoid duplication between getApiKey() and getBaseUrl().
-   * Both methods call this to ensure consistent routing decisions.
-   *
-   * Returns true only if ALL of the following hold:
-   * 1. Model is NOT routing through OpenRouter (neither openRouterOnly nor global toggle).
-   *    OpenRouter always requires an OpenRouter API key; the server-side relay is a
-   *    direct-provider path that must not interfere.
-   * 2. shouldUseServerSideKeysSync confirms access:
-   *    - Setting enabled
-   *    - Provider supported
-   *    - Tier-based model access (Ultra=all, Max/free=specific models)
-   *
-   * MODEL VALIDATION STRATEGY:
-   * - Client validates SHORT NAMES (this.config.name) against tier config
-   * - Server validates API NAMES (from request body) against API patterns
-   * - Both are defined in RELAY_MODELS, ensuring UI filtering matches API validation
-   *
-   * Runtime combinator over profile data, not a foldable predicate (#7101
-   * triage): no handler overrides this getter — grepped across every
-   * `ModelHandler*` subclass, none redefine it — so it stays a single base
-   * implementation whose inputs (`this.config.provider`, `this.config.name`,
-   * `this.config.openRouterOnly`, `this.config.requiresResponsesAPI`) are
-   * already plain profile reads, no handler-level or stringly model-family
-   * logic feeding it. The combinator formula itself lives in
-   * {@link usesServerSideKeysRoute} so `UsageMonitor` — which deliberately
-   * holds only a `ModelConfig`-shaped value, not a full handler instance —
-   * shares it instead of re-deriving the same `!openRouter && relaySync`
-   * check independently.
-   */
-  protected shouldUseServerSideKeys(): boolean {
-    if (this.activeAttemptCredentialRoute !== undefined) {
-      return this.activeAttemptCredentialRoute === 'relay';
-    }
-    return usesServerSideKeysRoute(this.config);
-  }
-
-  /**
    * Fetch an API key for the given provider, throwing `errorMessage` on
    * failure. This is the one producer of the missing-credential fact the run
    * lifecycle sees, so the throw carries a typed marker: `classifyAgentError`
@@ -536,60 +490,14 @@ export abstract class ModelHandler<
   /**
    * Resolve the credential and endpoint together for one client construction.
    * The returned value is immutable and no later request step needs to reread
-   * the process-wide access settings. `personal` bypasses included relay
-   * access but preserves model-owned routes such as OpenRouter-only models.
+   * the process-wide access settings. The base resolver serves direct API
+   * keys and OpenRouter; subscription-capable handlers consult `selection`
+   * in their own overrides (`personal` forces the direct key).
    */
   protected async resolveClientCredential(
-    selection: ModelCredentialSelection = 'configured',
+    _selection: ModelCredentialSelection = 'configured',
   ): Promise<ResolvedClientCredential> {
     const useOpenRouter = shouldUseOpenRouter(this.config);
-    const includedAccess =
-      selection === 'configured' ? includedModelAccess() : null;
-    const useIncludedAccess =
-      includedAccess?.getUseIncludedModelAccess() ?? false;
-    const canRouteThroughRelay =
-      useIncludedAccess && !useOpenRouter && allowsModelRelay(this.config);
-    const hasServerAccess = canRouteThroughRelay
-      ? await includedAccess?.canUseServerSideKeys()
-      : false;
-
-    if (canRouteThroughRelay && includedAccess?.wasQuotaAutoSwitched()) {
-      throw new Error(
-        `Model "${this.config.name}" is unavailable. ${INCLUDED_ACCESS.usedUp.statement} ` +
-          INCLUDED_ACCESS.usedUp.nextStep,
-      );
-    }
-
-    const useRelay =
-      canRouteThroughRelay &&
-      includedAccess?.shouldUseServerSideKeysSync(
-        this.config.provider,
-        this.config.name,
-      );
-    if (useRelay) {
-      const apiKey = await includedAccess?.getAccessToken();
-      if (!apiKey) {
-        throw new Error(
-          `Unable to authenticate with server. Sign out and sign back in, or switch to ${OWN_API_KEYS.inline}.`,
-        );
-      }
-      this.logger.debug(
-        `Using server-side API keys via relay for ${this.config.provider}`,
-      );
-      return {
-        apiKey,
-        baseUrl: resolveBaseUrl(this.buildProxyConfig(true, false)),
-        route: 'relay',
-      };
-    }
-
-    if (useIncludedAccess && hasServerAccess) {
-      throw new Error(
-        `Model "${this.config.name}" is not available with your current subscription tier. ` +
-          `Switch to ${OWN_API_KEYS.inline}, or select a model included in your tier.`,
-      );
-    }
-
     const provider = useOpenRouter
       ? 'openRouter'
       : resolveDirectModelApiKeyProvider(this.config);
@@ -598,18 +506,13 @@ export abstract class ModelHandler<
         `Model "${this.config.name}" has no direct API-key provider.`,
       );
     }
-    // Name both ways out. Included access being off is a configuration state,
-    // not an absence of one, so "missing key" alone would send a user with a
-    // subscription hunting for a key they should not need.
     const apiKey = await this.fetchApiKeyOrThrow(
       provider,
       useOpenRouter
         ? `Missing OpenRouter API key. Set an OpenRouter API key in settings.`
-        : `Missing API key for ${provider}. ${INCLUDED_MODEL_ACCESS_REMEDY}`,
+        : `Missing API key for ${provider}. Set a provider API key in settings.`,
     );
-    const endpoint = resolveProxyEndpoint(
-      this.buildProxyConfig(false, useOpenRouter),
-    );
+    const endpoint = resolveProxyEndpoint(this.buildProxyConfig(useOpenRouter));
     return {
       apiKey,
       baseUrl: endpoint.baseUrl,
@@ -620,25 +523,12 @@ export abstract class ModelHandler<
 
   /**
    * Build the {@link ProxyConfig} route for the current config plus a
-   * caller-resolved server-side-keys / OpenRouter decision. A per-model
-   * custom base URL always wins over both, matching `resolveBaseUrl`'s
-   * documented precedence — encoding that choice here (rather than at each
-   * call site) is what keeps `useServerSideKeys` and `useOpenRouter` from
-   * ever being set together on the same `ProxyConfig`.
+   * caller-resolved OpenRouter decision. A per-model custom base URL always
+   * wins, matching `resolveBaseUrl`'s documented precedence.
    */
-  private buildProxyConfig(
-    useServerSideKeys: boolean,
-    useOpenRouter: boolean,
-  ): ProxyConfig {
+  private buildProxyConfig(useOpenRouter: boolean): ProxyConfig {
     if (this.config.baseUrl) {
       return { route: 'custom', url: this.config.baseUrl, logger: this.logger };
-    }
-    if (useServerSideKeys) {
-      return {
-        route: 'serverSideKeys',
-        provider: this.config.provider,
-        logger: this.logger,
-      };
     }
     return {
       route: 'direct',
@@ -654,13 +544,11 @@ export abstract class ModelHandler<
     route: ModelCredentialRoute,
     credentialSecret: string,
   ): Candidate {
-    // Relay and subscription routes have stable route identities so ordinary
-    // token rotation does not split recovery coordination; direct credentials
+    // Subscription routes have stable route identities so ordinary token
+    // rotation does not split recovery coordination; direct credentials
     // use a non-secret fingerprint so distinct keys stay distinct routes.
     const credentialIdentity =
-      route === 'relay' ||
-      route === 'chatgpt-subscription' ||
-      route === 'xai-subscription'
+      route === 'chatgpt-subscription' || route === 'xai-subscription'
         ? route
         : createHash('sha256')
             .update(route)
@@ -733,8 +621,6 @@ export abstract class ModelHandler<
         return 'chatgpt-subscription';
       case 'xai-subscription':
         return 'xai-subscription';
-      case 'relay':
-        return 'relay';
       case 'api-key':
       case 'openrouter':
         return 'api-key';
@@ -765,9 +651,7 @@ export abstract class ModelHandler<
       activeRoute !== undefined
         ? activeRoute === 'openrouter'
         : shouldUseOpenRouter(this.config);
-    return resolveBaseUrl(
-      this.buildProxyConfig(this.shouldUseServerSideKeys(), useOpenRouter),
-    );
+    return resolveBaseUrl(this.buildProxyConfig(useOpenRouter));
   }
 
   /** Stable endpoint identity used to coordinate retries for one client. */
@@ -991,14 +875,7 @@ export abstract class ModelHandler<
     return effort;
   }
 
-  /**
-   * Returns the effective reasoning effort for the current user and model.
-   * A request served through included access gets whatever effort that relay
-   * will honor — which tiers of it may cap. Which models are capped and to what
-   * is the relay operator's pricing policy, so it lives with the installed
-   * {@link IncludedModelAccess} rather than in every provider handler; a direct
-   * API key is billed to the user and is never capped.
-   */
+  /** Returns the effective reasoning effort for the current user and model. */
   protected getEffectiveReasoningEffort(): ReasoningEffort | null {
     const { supportsReasoningEffort, reasoningEffort } = this.capabilities;
     if (!supportsReasoningEffort || !reasoningEffort) {
@@ -1008,12 +885,7 @@ export abstract class ModelHandler<
     // NONE stays a value, not a null: it is a deliberate user choice
     // ("minimize reasoning") that providers map to their minimum effort level
     // (e.g. Anthropic → 'low'), while null would fall back to default effort.
-    return this.shouldUseServerSideKeys()
-      ? includedModelAccess().capReasoningEffort(
-          this.config.name,
-          reasoningEffort,
-        )
-      : reasoningEffort;
+    return reasoningEffort;
   }
 
   /**

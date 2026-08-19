@@ -2,8 +2,8 @@
 //
 // Protocol layer only: request a device authorization from the auth-device
 // edge function, then poll its token endpoint until the user approves the
-// code from a browser on any device. Session storage and relay-cache
-// invalidation live with the other sign-in flows in `supabaseAuth.ts`.
+// code from a browser on any device. Session storage lives with the other
+// sign-in flows in `supabaseAuth.ts`.
 
 // Third-party imports
 import { z } from 'zod';

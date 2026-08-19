@@ -131,16 +131,15 @@ function checkById(
 }
 
 const accountLabelCases: Array<{
-  profile: { authenticated: boolean; accountLabel: string; tier?: string };
+  profile: { authenticated: boolean; accountLabel: string };
   expected: string;
 }> = [
   {
     profile: {
       authenticated: true,
       accountLabel: 'user@example.edu',
-      tier: 'Max',
     },
-    expected: 'Signed in as user@example.edu, Max.',
+    expected: 'Signed in as user@example.edu.',
   },
   {
     profile: { authenticated: true, accountLabel: 'team@internal' },
@@ -269,7 +268,7 @@ describe('CLI doctor', () => {
       checks: [
         {
           id: 'auth',
-          name: 'Included access',
+          name: 'TeXRA account',
           status: 'pass',
           message: 'Signed in as user@example.edu.',
         },
@@ -313,7 +312,6 @@ describe('CLI doctor', () => {
     const report = await buildReadyReport(async () => ({
       authenticated: true,
       accountLabel: 'Ada',
-      tier: 'pro',
     }));
 
     const records = doctorNdjsonRecords(report, NDJSON_TS);

@@ -30,7 +30,6 @@ import {
   type RetryResult,
   type UserQuestionSettlement,
 } from '@agent/runtime';
-import { getCliApiMode, setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   toApprovalSettlement,
   toBashApprovalSettlement,
@@ -70,12 +69,10 @@ import {
   type QuotaFallbackRouteId,
 } from '@shared/quotaFallbackRoutes';
 import {
-  isUpstreamCreditDepletedError,
   type AgentProposalPermission,
   type ExternalInquiryPermission,
   type PlanApprovalPermission,
 } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setToolEditApprovalSessionBypass } from '@tools/approval';
 import {
   prepareBashApprovalPrompt,
@@ -85,7 +82,7 @@ import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
-import { patchSessionMeta, patchStream } from './cliState';
+import { patchStream } from './cliState';
 import {
   refreshSubscriptionPreferenceViews,
   setCliCodingPlanSubscription,
@@ -110,9 +107,9 @@ import {
 // =========================================================================
 
 /**
- * When a retry is triggered by relay exhaustion or a coding-plan quota limit
- * and the stored personal/fallback key is not the broken credential, switch to
- * personal keys and retry without showing the modal. This is what lets
+ * When a retry is triggered by a coding-plan quota limit
+ * and the stored fallback key is not the broken credential, switch to
+ * the stored key and retry without showing the modal. This is what lets
  * delegated subagents recover from an exhausted Kimi Code or GLM Coding Plan
  * without a human present. ChatGPT-subscription limits always require an
  * explicit decision: changing credential ownership must not hide the quota
@@ -129,16 +126,6 @@ function maybeAutoSwitchRetry(
   payload: TuiRetryRequest,
 ): ApprovalDecision | undefined {
   const action = classifyCliRetryAction(payload);
-  const details = payload.errorDetails;
-
-  if (action === 'switch-to-personal') {
-    // Upstream credit depletion means the stored direct key IS the broken
-    // credential — the user must provide a changed key, so we cannot
-    // auto-switch to the stored value.
-    if (isUpstreamCreditDepletedError(details)) return undefined;
-    if (payload.personalApiKeyAvailable !== true) return undefined;
-    return { accepted: true, apiMode: 'personal' };
-  }
 
   // Coding-plan quotas (Kimi Code, GLM Coding Plan) have a fallback route that
   // re-uses an already-stored key, so auto-switch when that key exists.
@@ -454,10 +441,7 @@ async function requestRetryInteraction(
       }
       return { action: 'cancel' };
     }
-    if (
-      decision.apiMode !== undefined ||
-      decision.disableQuotaRoute !== undefined
-    ) {
+    if (decision.disableQuotaRoute !== undefined) {
       await switchRetryToPersonalCredentials(decision, promptRequest, {
         prepareRetry: options?.prepareRetry,
         preparationSignal: reservation.signal,
@@ -550,13 +534,6 @@ function setTuiApprovalBypassState({
     ...s,
     bypass: { ...s.bypass, [kind]: bypassActive },
   }));
-}
-
-function cliOpenRouterEnabled(): boolean {
-  return platform().globalState.get<boolean>(
-    GlobalStateKey.USE_OPENROUTER,
-    false,
-  );
 }
 
 /** Undo one access-settings write that a failed retry had already applied.
@@ -707,7 +684,7 @@ function oauthCliPreference(
   return undefined;
 }
 
-/** Commit the access-mode and subscription writes for a retry switch.
+/** Commit the subscription-preference writes for a retry switch.
  *
  *  Runs while the commit queue already holds its slot. On failure it rolls
  *  back everything it wrote (plus the already-disabled coding plan, when one
@@ -719,19 +696,10 @@ async function applyRetryCredentialCommit(
   codingPlanRollback?: RetrySettingRollbackConfig,
 ): Promise<void> {
   signal.throwIfAborted();
-  const previousApiMode = getCliApiMode();
-  const previousOpenRouter = cliOpenRouterEnabled();
   const oauth = oauthCliPreference(decision.disableQuotaRoute);
   const previousOauthPreference = oauth?.isPrefer() ?? false;
-  let apiModeWriteStarted = false;
   let subscriptionWriteStarted = false;
   try {
-    if (decision.apiMode) {
-      const apiMode = decision.apiMode;
-      apiModeWriteStarted = true;
-      await runRetryTask(() => setCliApiMode(apiMode), signal);
-      signal.throwIfAborted();
-    }
     if (oauth) {
       subscriptionWriteStarted = true;
       const update = await runRetryTask(() => oauth.setPrefer(false), signal);
@@ -742,18 +710,13 @@ async function applyRetryCredentialCommit(
       }
       signal.throwIfAborted();
     }
-    if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
     return;
   } catch (error) {
     // Each config is evaluated after the previous restore resolved, so a
     // rollback sees the state its predecessor left behind. Skipped attempts
     // must not await: this runs while the commit queue still holds its slot,
     // and the extra turns let a newer queued switch commit ahead of the
-    // restores below. OpenRouter is restored after the mode, because
-    // restoring included access clears the OpenRouter toggle: a switch the
-    // user never got would otherwise leave their routing preference silently
-    // off.
-    let openRouterToPreserve = previousOpenRouter;
+    // restores below.
     const rollbackFailures = await rollbackChangedSettings([
       ...(oauth === undefined
         ? []
@@ -776,41 +739,6 @@ async function applyRetryCredentialCommit(
             },
           ]),
       ...(codingPlanRollback ? [codingPlanRollback] : []),
-      {
-        writeStarted: apiModeWriteStarted,
-        needsRollback: () => getCliApiMode() === decision.apiMode,
-        restore: async () => {
-          // A newer OpenRouter choice may have landed after this retry
-          // changed modes. Restoring included mode clears that choice, so
-          // carry its current value into the final route restore.
-          openRouterToPreserve = cliOpenRouterEnabled();
-          await setCliApiMode(previousApiMode);
-          if (getCliApiMode() !== previousApiMode) {
-            throw new Error(`API mode remained ${getCliApiMode()}.`);
-          }
-        },
-        restoredInMemory: () => getCliApiMode() === previousApiMode,
-        memoryRestoredContext:
-          'The previous API mode appears restored in memory, but persistence could not be confirmed',
-        restoreFailedContext: 'Could not restore API mode',
-      },
-      {
-        writeStarted: apiModeWriteStarted,
-        needsRollback: () => openRouterToPreserve && !cliOpenRouterEnabled(),
-        restore: async () => {
-          await platform().globalState.update(
-            GlobalStateKey.USE_OPENROUTER,
-            true,
-          );
-          if (!cliOpenRouterEnabled()) {
-            throw new Error('OpenRouter routing remained disabled.');
-          }
-        },
-        restoredInMemory: () => cliOpenRouterEnabled(),
-        memoryRestoredContext:
-          'The previous OpenRouter routing preference appears restored in memory, but persistence could not be confirmed',
-        restoreFailedContext: 'Could not restore OpenRouter routing',
-      },
     ]);
     throwWithRollbackFailures(error, rollbackFailures);
   }

@@ -59,7 +59,6 @@ import {
   agentSubTab,
   agentSkillsEnabled,
   allowOrchestratorKill,
-  apiAccessMode,
   authenticated,
   approvalPolicy,
   bashApprovalEnabled,
@@ -103,15 +102,11 @@ import {
   prSubscriptions,
   providerKeyModal,
   providerKeyStatuses,
-  quotaAutoSwitched,
   reliabilitySettings,
   resetSettingsState,
   selectedPanel,
   sessionProblem,
-  spendingStatus,
-  spendingStatusError,
   subscriptionUsage,
-  tier,
   telemetryEnabled,
   toolDashboardItems,
   toolDashboardLoaded,
@@ -364,11 +359,7 @@ export class SettingsApp extends SettingsAppBase {
           <account-tab
             .authenticated=${authenticated.get()}
             .userEmail=${userEmail.get()}
-            .tier=${tier.get()}
             .sessionProblem=${sessionProblem.get()}
-            .spendingStatus=${spendingStatus.get()}
-            .spendingStatusError=${spendingStatusError.get()}
-            .quotaAutoSwitched=${quotaAutoSwitched.get()}
             .telemetryEnabled=${telemetryEnabled.get()}
             @manage-provider-keys=${this.handleManageProviderKeys}
           ></account-tab>
@@ -385,9 +376,6 @@ export class SettingsApp extends SettingsAppBase {
       case 'models':
         return html`
           <models-tab
-            .authenticated=${authenticated.get()}
-            .apiAccessMode=${apiAccessMode.get()}
-            .spendingStatus=${spendingStatus.get()}
             .providerKeyStatuses=${providerKeyStatuses.get()}
             .globalStreamingDefault=${globalStreamingDefault.get()}
             .modelSelectionItems=${modelSelectionItems.get()}

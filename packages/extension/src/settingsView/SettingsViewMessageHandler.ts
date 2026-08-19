@@ -12,7 +12,6 @@ import * as vscode from 'vscode';
 
 // Shared schemas and dispatchers
 import { defaultSession } from '@agent/runtime';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { globalSM, workspaceSM } from '@common/state';
 import { BaseViewMessageHandler } from '@common/webview';
@@ -73,7 +72,6 @@ import {
   dispatchSettingsViewInbound,
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 
 import {
   applyStateSettingUpdate,
@@ -148,11 +146,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.settingsHost = new SettingsViewHost({
       state: { workspaceState: workspaceSM, globalState: globalSM },
       memoryPrompt: new VscodePromptHost(),
-      modelSelectionExtras: {
-        useIncludedAccess: () =>
-          getServerSideKeyService().getUseIncludedModelAccess(),
-        getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
-      },
     });
     this.profileController = new SettingsProfileController({
       globalState: globalSM,
@@ -161,10 +154,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       getConfig,
       updateConfig: (key, value) =>
         updateConfig(key, value, { target: 'global', prefix: false }),
-      setUseIncludedModelAccess: (enabled) =>
-        getServerSideKeyService().setUseIncludedModelAccess(enabled),
-      refreshSpendingStatus: () =>
-        getServerSideKeyService().refreshSpendingStatus(),
     });
     this.subscriptionUsage = new SubscriptionUsageService();
     this.profileKeyController = new SettingsProfileKeyController({
@@ -260,7 +249,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
       signOut: () =>
         safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
-      setApiAccessMode: (message) => this.handleSetApiAccessMode(message),
       setProviderKey: (message) =>
         this.runProviderKeyAction(message.provider, 'set', (targetProvider) =>
           this.profileKeyController.setProviderKey(targetProvider),
@@ -436,7 +424,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       commands: unsupportedCommands(this.handlerRegistry),
     });
 
-    // Auth/session changes affect included access and must not reuse a
+    // Auth/session changes affect model availability and must not reuse a
     // pre-login/pre-logout availability snapshot.
     invalidateModelOptionsCache();
     await this.sendProfileAndModelSelectionData(webview);
@@ -630,31 +618,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
   // Profile handler implementations
   // ============================================================
-
-  private async handleSetApiAccessMode(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_API_ACCESS_MODE>,
-  ): Promise<void> {
-    const update = await this.profileController.setApiAccessMode(data.mode);
-    if (update.kind === 'rejected') {
-      await this.withActiveWebview((w) => this.sendProfileData(w));
-      void showLoggedInfoMessage(
-        this.channel,
-        'Included access is unavailable because this month’s quota is exhausted.',
-      );
-      return;
-    }
-    await this.withActiveWebview((w) =>
-      this.sendProfileAndModelSelectionData(w),
-    );
-    const modeLabel =
-      update.mode === 'included' ? INCLUDED_ACCESS.inline : OWN_API_KEYS.inline;
-    const suffix = update.openRouterDisabled
-      ? ' OpenRouter has been turned off, because OpenRouter models always use your own OpenRouter key.'
-      : '';
-    void vscode.window.showInformationMessage(
-      `Now using ${modeLabel}.${suffix}`,
-    );
-  }
 
   private async runProviderKeyAction(
     provider: string,

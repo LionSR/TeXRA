@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   ONBOARDING_CHOICE_CHATGPT,
-  ONBOARDING_CHOICE_SIGN_IN,
   ONBOARDING_NARRATIVE,
 } from '@shared/copy/onboarding';
 
@@ -115,7 +114,7 @@ function renderWelcomeHtml(): string {
   <p>${ONBOARDING_NARRATIVE}</p>
   <ol>
     <li>Open a single-folder workspace containing your LaTeX project, or start with the sample project.</li>
-    <li>The main view will show the credential picker: ${ONBOARDING_CHOICE_CHATGPT.label}, ${ONBOARDING_CHOICE_SIGN_IN.label}, or a provider API key.</li>
+    <li>The main view will show the credential picker: ${ONBOARDING_CHOICE_CHATGPT.label} or a provider API key.</li>
     <li>Run setup once to check LaTeX, apply the right team, and launch the first review.</li>
   </ol>
   <div class="actions">

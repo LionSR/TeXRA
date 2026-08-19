@@ -32,7 +32,7 @@ import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProj
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
-import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
+import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
 import {
@@ -261,9 +261,9 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     },
   });
-  // TeXRA's account plane (subscription relay + ChatGPT sign-in). Without this
-  // the model layer is bring-your-own-key. See installTexraModelAccess.
-  installTexraModelAccess();
+  // TeXRA's account probes (Codex/xAI subscription eligibility). Without this
+  // the model layer is bring-your-own-key. See installTexraAccountProbes.
+  installTexraAccountProbes();
   const invalidateLanguageModels = () => {
     invalidateRuntimeModelRegistry();
     invalidateModelOptionsCache();
@@ -641,15 +641,10 @@ export async function activate(context: vscode.ExtensionContext) {
       log.error(`API key status refresh failed: ${toErrorMessage(err)}`),
     );
   void safeRefreshApiKeyStatus();
-  // Without these listeners the pill stayed on "Get Started" forever after
-  // a Researcher Access sign-in or after the first API key was stored.
+  // Without this listener the pill stayed on "Get Started" forever after
+  // a sign-in or after the first API key was stored.
   onTexraAuthSessionsChanged(context, () => {
     void safeRefreshApiKeyStatus();
-  });
-  context.subscriptions.push({
-    dispose: appSignals.on('includedModelAccessChanged', () => {
-      void safeRefreshApiKeyStatus();
-    }),
   });
 
   const statusBarSession = defaultSession();

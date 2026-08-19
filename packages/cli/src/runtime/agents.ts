@@ -161,7 +161,7 @@ export function assertCliAgentLaunch(
  *
  * CLI commands start with a local-only load so signed-out users avoid remote
  * auth/network work. Missing agents still get a remote-inclusive fallback, and
- * authenticated relay sessions reload bare names so the registry's normal
+ * signed-in sessions reload bare names so the registry's normal
  * source priority can prefer remote definitions.
  *
  * A launch category resolves through the launch resolver, so validation lands
