@@ -497,7 +497,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     );
     expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
       'subscriptionProviders',
-      'ChatGPT browser sign-in is unavailable, falling back to a one-time device code: Could not open a browser for ChatGPT sign-in.',
+      'ChatGPT browser sign-in is unavailable, falling back to a one-time device code: Could not open a browser for ChatGPT sign-in. Cause: no browser handler',
       { data: expect.any(LoopbackTransportUnavailableError) },
     );
     const loggedError = warnSpy.mock.calls[0]?.[2]?.data;
