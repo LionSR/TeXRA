@@ -184,7 +184,7 @@ describe('LaTeXdiffService shadow output', () => {
         expect.objectContaining({
           success: true,
           description: 'paper.tex (r1→r2)',
-          diffFileName: 'paper_diffr2r1.tex',
+          diffPath: path.join(firstDir, 'paper_diffr2r1.tex'),
         }),
       ]),
     );

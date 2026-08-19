@@ -39,8 +39,8 @@ export type RunLatexdiffCommandConfig = Pick<
 export interface DiffRunResult {
   success: boolean;
   message?: string;
-  basePath?: string;
-  diffFileName?: string;
+  /** Absolute path of the generated diff, as reported by the diff service. */
+  diffPath?: string;
   description?: string;
 }
 
