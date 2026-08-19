@@ -17,15 +17,16 @@ Three independent gaps explain it. Each is verified, not inferred.
 ### 1. A test is a consumer
 
 `knip.json` declares the root workspace's entry points as
-`src/test-kernel/**/*.vitest.ts`. Knip therefore counts an export consumed only
-by a test as _used_. Production-dead-but-test-alive is structurally invisible
-to the gate.
+`src/test-kernel/**/*.vitest.ts` and `scripts/**/*.mjs`. Knip therefore counts an
+export consumed only by a test as _used_. Production-dead-but-test-alive is
+structurally invisible to the gate.
 
-Specimen: `getAgentsBySource` (`src/agent/index/agentRegistry.ts:311`). Its sole
+Specimen: `getAgentsBySource` (`src/agent/index/agentRegistry.ts:312`). Its sole
 production consumer was deleted in-window by `12f9b30f96`, which also removed it
 from the `src/agent/index/index.ts` barrel — and left the function standing. It
-has 0 production consumers, 7 assertion sites in
-`src/test-kernel/agent/AgentRegistry.vitest.ts`, and the ratchet is green.
+has 0 production consumers and 7 references in
+`src/test-kernel/agent/AgentRegistry.vitest.ts`: the import and 6 assertion sites.
+The ratchet is green.
 
 This is the highest-volume gap: most of the survey's findings are this species.
 
@@ -37,10 +38,11 @@ occurrence repo-wide — its own declaration. Zero consumers in production, test
 scripts, or docs. Its last caller (`loadIncludedUsageLine`) was deleted in-window
 by `368ee4f601`. The full-repo knip run does not flag it.
 
-The mechanism is undetermined. The workspace's `scripts/**/*.{ts,tsx,mjs}` entry
-glob pulls in `packages/cli/scripts/tui-harness.tsx`, which imports a great deal
-of CLI internals — but not this symbol, so the harness does not explain it.
-Diagnosing this should precede fixing it.
+The mechanism is undetermined. The `packages/cli` workspace's entry points are
+`src/bin/texra.ts` and `scripts/**/*.{ts,tsx,mjs}`. The latter pulls in
+`packages/cli/scripts/tui-harness.tsx`, which imports a great deal of CLI
+internals — but not this symbol, so the harness does not explain it. Diagnosing
+this should precede fixing it.
 
 ### 3. A stray `.js` sibling shadows its `.ts` and inverts the report
 
@@ -75,7 +77,7 @@ Not a gate defect, but it invalidates the manual greps the gate is supposed to
 backstop. `~/.gitignore_global` carries AI-scratch patterns — `*gpt*.*`,
 `*sonnet*.*`, `*_opus*.*`, `*gemini*.*`, `*o1*.*`, `*o3*.*`, `*o4*.*`.
 Ripgrep applies ignore rules regardless of tracked status, so a recursive search
-silently skips nine tracked files, six of them real source:
+silently skips nine tracked files, five of them real source:
 
 ```
 packages/cli/src/commands/chatgptAuth.ts
@@ -83,7 +85,6 @@ src/common/errors/sdkError/chatgptSubscriptionDetection.ts
 src/controllers/modelAccess/chatGptAuthStatus.ts
 src/test-kernel/cli/ChatgptLoginBrowser.vitest.ts
 src/test-kernel/common/ChatGptSubscriptionDetection.vitest.ts
-docs/proposals/2026-06-21-chatgpt-subscription-codex-auth.md
 ```
 
 Verified: `rg --files packages/cli/src/commands | grep -c gpt` → 0; the same
