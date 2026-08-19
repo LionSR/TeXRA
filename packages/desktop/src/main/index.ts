@@ -754,7 +754,7 @@ function createWindow(options: {
       prompt: {
         input: (input) =>
           promptController.request({
-            title: input.title ?? input.prompt ?? 'Set API key',
+            title: input.prompt ?? 'Set API key',
             prompt: input.prompt ?? 'Enter API key',
             password: input.password,
           }),

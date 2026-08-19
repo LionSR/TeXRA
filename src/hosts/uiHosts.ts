@@ -48,15 +48,9 @@ export interface PromptConfirmOptions {
 }
 
 export interface PromptInputOptions {
-  title?: string;
   prompt?: string;
   placeHolder?: string;
-  value?: string;
   password?: boolean;
-  ignoreFocusOut?: boolean;
-  validateInput?: (
-    value: string,
-  ) => string | undefined | null | Promise<string | undefined | null>;
 }
 
 export interface PromptHost {

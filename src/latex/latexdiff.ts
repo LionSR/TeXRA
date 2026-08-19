@@ -22,12 +22,9 @@ export interface LaTeXdiffResult {
    * Absolute path of the generated diff `.tex`. The service picks the output
    * directory (an `outputDirectory` option, the input's folder, or the git
    * root for `runDiffVc`), so only it can name the file — consumers must not
-   * re-join {@link LaTeXdiffResult.diffFileName} against a directory of their
-   * own guessing.
+   * re-join a bare filename against a directory of their own guessing.
    */
   diffPath?: string;
-  /** Bare filename of the generated diff, for display and relative paths. */
-  diffFileName?: string;
   message?: string;
 }
 
@@ -151,7 +148,6 @@ export class LaTeXdiffService {
       return {
         success: true,
         diffPath: outputLocation.absolutePath,
-        diffFileName,
         message: `LaTeXdiff completed successfully: ${diffFileName}`,
       };
     } catch (err) {
@@ -204,7 +200,6 @@ export class LaTeXdiffService {
       return {
         success: true,
         diffPath: outputPath,
-        diffFileName,
         message: `LaTeXdiff VC completed successfully: ${diffFileName}`,
       };
     } catch (err) {

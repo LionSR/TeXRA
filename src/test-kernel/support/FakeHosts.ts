@@ -100,13 +100,7 @@ export class FakePromptHost implements PromptHost {
 
   async input(options: PromptInputOptions): Promise<string | undefined> {
     this.inputs.push({ options });
-    const response = this.inputResponses.shift();
-    if (response == null) {
-      return response;
-    }
-
-    const validationMessage = await options.validateInput?.(response);
-    return validationMessage == null ? response : undefined;
+    return this.inputResponses.shift();
   }
 
   private recordMessage<T extends string>(
