@@ -76,7 +76,6 @@ export function publishAgentCliStreamUsage(
     {
       streamId: childStreamId,
       storageKey: executionId as StorageKey,
-      executionId,
       usage,
     },
     { recordTranscript: false },
