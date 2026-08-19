@@ -43,6 +43,7 @@ import { scrollToBottom, vsCodeScrollExtent } from '@shared/utils/dom';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
+import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { formatDuration } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -77,15 +78,15 @@ const GROUP_MESSAGE_WINDOW_STEP = 400;
 function getStatusIcon(status: string): TeXRAIconName {
   switch (status) {
     case STREAM_PHASE.FAILED:
-      return 'circle-exclamation';
+      return terminalStatusIcon('failed');
     case STREAM_PHASE.COMPLETED:
-      return 'check';
+      return terminalStatusIcon('completed');
     case STREAM_PHASE.CANCELLED:
-      return 'circle-stop';
+      return terminalStatusIcon('cancelled');
     // Running and every unrecognized status share the plain steady-state
     // circle (running is the default look for a live group).
     default:
-      return 'circle';
+      return terminalStatusIcon('running');
   }
 }
 
