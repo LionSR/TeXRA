@@ -1,6 +1,5 @@
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 
-import { formatResetDuration } from './chatgptSubscriptionDetection';
 import {
   firstBodyNumberField,
   firstBodyStringField,
@@ -62,23 +61,4 @@ export function parseKimiCodeSubscriptionLimit(
   return {
     resetsInSeconds: firstBodyNumberField(rawErrorBody, 'resets_in_seconds'),
   };
-}
-
-/**
- * Human-readable message for a Kimi Code usage-limit error: how long until the
- * quota resets (when reported) and the actionable next step.
- */
-export function describeKimiCodeSubscriptionLimit(
-  info: KimiCodeSubscriptionLimit,
-): string {
-  // Shared with the ChatGPT and GLM detectors so all three providers render the
-  // same reset-window format for the same `resets_in_seconds` field.
-  const reset =
-    info.resetsInSeconds !== undefined
-      ? ` Resets in ${formatResetDuration(info.resetsInSeconds)}.`
-      : '';
-  return (
-    `Kimi Code subscription usage limit reached.${reset}` +
-    ' Switch to your own Moonshot API key to keep working, or wait until the limit resets.'
-  );
 }

@@ -1,4 +1,3 @@
-import { formatResetDuration } from './chatgptSubscriptionDetection';
 import {
   firstBodyNumberField,
   firstBodyStringField,
@@ -44,18 +43,4 @@ export function parseXaiSubscriptionLimit(
   return {
     resetsInSeconds: firstBodyNumberField(rawErrorBody, 'resets_in_seconds'),
   };
-}
-
-/** Human-readable message for a Grok-subscription usage-limit error. */
-export function describeXaiSubscriptionLimit(
-  info: XaiSubscriptionLimit,
-): string {
-  const reset =
-    info.resetsInSeconds !== undefined
-      ? ` Resets in ${formatResetDuration(info.resetsInSeconds)}.`
-      : '';
-  return (
-    `Grok subscription usage limit reached.${reset}` +
-    ' Switch to your own xAI API key to keep working, or wait until the limit resets.'
-  );
 }
