@@ -109,6 +109,8 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
   @property({ attribute: false }) initialSubTab?: AgentCategory;
   @property({ attribute: false }) compactionThresholdPercent =
     MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue;
+  /** Parent-owned acknowledgement generation; changes force a re-render even when all field values are unchanged. */
+  @property({ attribute: false }) ackGeneration = 0;
   @property({ attribute: false }) modelRetryMaxAttempts =
     MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue;
 
@@ -216,7 +218,10 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
 
   override render(): TemplateResult {
     return html`
-      <div class="agents-container tab-content-container">
+      <div
+        class="agents-container tab-content-container"
+        data-ack-generation=${this.ackGeneration}
+      >
         ${renderSettingsSectionHeading({
           title: 'Agent library',
           description:

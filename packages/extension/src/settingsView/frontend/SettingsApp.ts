@@ -386,8 +386,13 @@ export class SettingsApp extends SettingsAppBase {
           ></models-tab>
         `;
       case 'agents':
+        // Touch the acknowledgement generation for the same reason the
+        // multi-agent branch does: the reliability rows below ride the
+        // multi-agent snapshot, so a same-value rebroadcast must still
+        // re-render and let live() restore the committed number-row value.
         return html`
           <agents-tab
+            .ackGeneration=${multiAgentSettingsRevision.get()}
             .agents=${agentSelectionItems.get()}
             .customAgentDir=${customAgentDir.get()}
             .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
