@@ -811,9 +811,10 @@ export function buildStaticTranscriptItems(
 
   if (!seen.has(SESSION_HEADER_ID)) {
     // Same insert-if-it-fits logic `advanceStaticTranscriptState` uses on
-    // ordinary ticks; the totals it needs are computed fresh here (this path
-    // has no running rowCount/byteCount to diff against), which costs the
-    // same one full-history walk the old inline reduce paid.
+    // ordinary ticks. This path has no running rowCount/byteCount to diff
+    // against, so the totals are computed fresh with one full walk of
+    // `currentItems` — the whole history on a cold start, the newly appended
+    // tail once a previous render has already emitted rows.
     const totals = staticTranscriptItemsTotals(
       currentItems,
       width,
