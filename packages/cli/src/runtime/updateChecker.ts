@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+import { execa } from 'execa';
 import { z } from 'zod';
 
 import { parseJsonWith } from '@common/parsing/safeParseJson';
@@ -233,16 +233,18 @@ export async function fetchLatestHomebrewFormulaVersion(options?: {
   };
 }
 
-function runCliUpdate(method: InstallMethod): Promise<boolean> {
+async function runCliUpdate(method: InstallMethod): Promise<boolean> {
   const { command, args } = buildUpdateCommand(method);
-  return new Promise<boolean>((resolve) => {
-    // Needs true stdio:'inherit' — the package manager may print an
-    // interactive prompt or password request, which executeCommand's
-    // buffered/streamed output cannot forward.
-    const child = spawn(command, args, { stdio: 'inherit', shell: true });
-    child.on('error', () => resolve(false));
-    child.on('close', (code) => resolve(code === 0));
+  // Needs true stdio:'inherit' — the package manager may print an
+  // interactive prompt or password request, which executeCommand's
+  // buffered/streamed output cannot forward. `shell: true` with an args array
+  // concatenates unquoted, which the brew case relies on for its `&&` chain.
+  const result = await execa(command, args, {
+    stdio: 'inherit',
+    shell: true,
+    reject: false,
   });
+  return !result.failed;
 }
 
 export interface CheckCliUpdateAvailableOptions {
