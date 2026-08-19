@@ -376,7 +376,7 @@ describe('stream-header', () => {
           'Execution: a1b2c3d4',
           '',
           'Outputs:',
-          '- r2: /executions/a1b2c3d4/files/answer.tex (source: main.tex)',
+          '- r3: /executions/a1b2c3d4/files/answer.tex (source: main.tex)',
         ].join('\n'),
       );
       expect(commands).toHaveLength(0);

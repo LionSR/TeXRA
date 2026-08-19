@@ -24,6 +24,8 @@ import {
 import {
   STREAM_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
+  outputDiffCounts,
+  outputDisplayName,
   roundIndexedEntries,
   type CompileFailure,
   type OutputFileInfo,
@@ -180,19 +182,13 @@ function workflowRunDetailGroups(
         role: 'outputHeading',
       });
       for (const [index, file] of outputs.entries()) {
-        const path =
-          file.location.kind === 'external'
-            ? file.location.absolutePath
-            : file.location.relativePath;
-        const diff =
-          file.diff === null
-            ? ''
-            : ` (+${file.diff.added ?? 0} -${file.diff.removed ?? 0})`;
+        const counts = outputDiffCounts(file.diff);
+        const diff = counts ? ` (+${counts.added} -${counts.removed})` : '';
         lines.push({
           key: `output:${round}:${file.location.absolutePath}:${index}`,
           // Neutral bullet, not `›` — POINTER means "focused row / your
           // input" everywhere else, and these are static file rows.
-          text: `    • ${safeTerminalText(path)}${diff}`,
+          text: `    • ${safeTerminalText(outputDisplayName(file))}${diff}`,
           tone: 'neutral',
           role: 'output',
         });

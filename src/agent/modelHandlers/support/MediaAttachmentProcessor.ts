@@ -8,12 +8,15 @@ import pMap from 'p-map';
 import { logFilesLoaded, type AgentTrace } from '@agent/trace';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import type { FileLocation, LoadedMediaMetadata } from '@shared/schemas';
+import {
+  fileLocationDisplayPath,
+  type FileLocation,
+  type LoadedMediaMetadata,
+} from '@shared/schemas';
 
 // Local imports - utils
 import { ensureArray } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { getComparablePath } from '@utils/files/fileLocation';
 import { getMimeType } from '@utils/files/mimeUtils';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import {
@@ -179,7 +182,7 @@ export class MediaAttachmentProcessor {
 
     for (const loadResult of loadResults) {
       if (!loadResult.ok) {
-        const displayPath = getComparablePath(loadResult.location);
+        const displayPath = fileLocationDisplayPath(loadResult.location);
         this.logger.error(
           `Failed to load media entry for ${displayPath}: ${getSdkErrorMessage(loadResult.reason)}`,
           {
@@ -217,7 +220,7 @@ export class MediaAttachmentProcessor {
     const absolutePath = location.absolutePath;
     // Workspace/run-storage paths remain concise and relative; external media
     // keeps its absolute path so a terminal row identifies the actual file.
-    const displayPath = getComparablePath(location);
+    const displayPath = fileLocationDisplayPath(location);
     const fileExistsResult = await AbsoluteFS.exists(absolutePath);
 
     if (!fileExistsResult) {

@@ -7,9 +7,8 @@
 
 import * as path from 'node:path';
 
-import type { FileLocation } from '@shared/schemas';
+import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
-import { getComparablePath } from '@utils/files/fileLocation';
 import { createFileMapping } from './fileMapping';
 
 import type { OutputState } from './outputState';
@@ -45,13 +44,13 @@ function invertMapping(
 ): Map<string, FileLocation> {
   const result = new Map<string, FileLocation>();
   const sourceByPath = new Map(
-    sourceLocations.map((f) => [getComparablePath(f), f]),
+    sourceLocations.map((f) => [fileLocationDisplayPath(f), f]),
   );
 
   for (const [sourcePath, targetLoc] of forwardMapping) {
     const sourceLoc = sourceByPath.get(sourcePath);
     if (sourceLoc) {
-      result.set(getComparablePath(targetLoc), sourceLoc);
+      result.set(fileLocationDisplayPath(targetLoc), sourceLoc);
     }
   }
 
@@ -99,7 +98,7 @@ export function traceFileLineage(
 
   const baseEntries: BaseEntry[] = baseFiles.map((loc) => ({
     loc,
-    ...computePathKeys(getComparablePath(loc)),
+    ...computePathKeys(fileLocationDisplayPath(loc)),
   }));
   const currentLocations = currentOutputs.map((entry) => entry.location);
 
@@ -122,7 +121,7 @@ export function traceFileLineage(
 
   const mapping = new Map<string, RoundFileEntry>();
   for (const entry of currentOutputs) {
-    const key = getComparablePath(entry.location);
+    const key = fileLocationDisplayPath(entry.location);
     const origin = findMatchingBaseFile(baseEntries, entry.source);
     mapping.set(key, {
       base: origin ?? baseToOutput.get(key),

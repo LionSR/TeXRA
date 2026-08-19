@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import { DiffStatsSchema, LineCountSchema } from './lineChanges';
+import { getBasename } from '@utils/core';
+import {
+  DiffStatsSchema,
+  LineCountSchema,
+  type DiffStats,
+} from './lineChanges';
 import { ExecutionIdSchema } from './identifiers';
 import { RoundNumberSchema } from './roundIndexed';
 
@@ -42,6 +47,75 @@ export type RunStorageFileLocation = z.infer<
 export type ExternalFileLocation = z.infer<typeof ExternalFileLocationSchema>;
 export type FileLocation = z.infer<typeof FileLocationSchema>;
 export type AgentFileLocation = z.infer<typeof AgentFileLocationSchema>;
+
+// ============================================================================
+// How a file location reads to a human
+// ============================================================================
+//
+// One vocabulary for turning a `FileLocation` into text, shared by the agent
+// core, both webview hosts and the CLI TUI. It lives beside the schema rather
+// than in `@utils/files` because the webviews cannot reach a module that
+// imports `node:path`, and a browser-unreachable definition is exactly how
+// this rule came to be re-derived in every renderer.
+
+/**
+ * How a location reads as a path: workspace and run-storage files by their
+ * relative path — that is how the user and the agent's file tools refer to
+ * them — and external files by their absolute path, the only path they have.
+ *
+ * This doubles as a location's comparable identity: two locations naming the
+ * same file agree here, so output-to-base maps key on it.
+ */
+export function fileLocationDisplayPath(location: FileLocation): string {
+  return location.kind === 'external'
+    ? location.absolutePath
+    : location.relativePath;
+}
+
+/**
+ * Like {@link fileLocationDisplayPath} but collapses an external location to
+ * its basename, so a long absolute path (e.g. a run-storage file resolved as
+ * external because it sits outside the workspace root) cannot dominate a UI
+ * row or a prompt line. The full path stays on `absolutePath`.
+ */
+export function fileLocationShortDisplayPath(location: FileLocation): string {
+  return location.kind === 'external'
+    ? getBasename(location.absolutePath)
+    : location.relativePath;
+}
+
+/**
+ * Reference to a run-storage file the way an agent prompt addresses it:
+ * `/executions/<executionId>/files/<relativePath>`. The one definition of that
+ * convention.
+ */
+export function runStorageFilePath(
+  executionId: string,
+  relativePath: string,
+): string {
+  return `/executions/${executionId}/files/${relativePath}`;
+}
+
+/**
+ * How a location is addressed in text that leaves the UI — copied run context,
+ * follow-up prompts, subagent results. A run-storage location carries the
+ * execution that owns it, so its `/executions/...` route resolves without the
+ * caller supplying one; every other kind reads as its display path.
+ */
+export function fileLocationAddressPath(location: FileLocation): string {
+  return location.kind === 'runStorage'
+    ? runStorageFilePath(location.executionId, location.relativePath)
+    : fileLocationDisplayPath(location);
+}
+
+// Generic raw-wrapper stems are run-storage internals, not the meaningful
+// document name, so they must never surface as an artifact's name.
+const GENERIC_OUTPUT_STEMS = new Set(['output', 'output.xml', 'output.tex']);
+
+/** Whether a document name is a generic raw-wrapper stem rather than a name. */
+export function isGenericOutputStem(name: string): boolean {
+  return GENERIC_OUTPUT_STEMS.has(name);
+}
 
 /** Run identity used when accepting an edited file as a postfixed copy. */
 export const AcceptCopyMetaSchema = z.strictObject({
@@ -111,6 +185,43 @@ export type OutputFileSummary = z.infer<typeof OutputFileSummarySchema>;
 export type CompileFailure = z.infer<typeof CompileFailureSchema>;
 
 /**
+ * The name an output artifact reads by. The workspace document it descends
+ * from wins, because that is the file the user recognizes; failing that the
+ * document name the model emitted, unless it is a generic raw-wrapper stem;
+ * and only then the artifact's own path, which carries run-storage internals
+ * such as the `r<round>/` prefix.
+ */
+export function outputDisplayName(file: OutputFileInfo): string {
+  const original = file.lineage?.original;
+  if (original) return fileLocationShortDisplayPath(original);
+
+  const { source } = file;
+  if (source && !isGenericOutputStem(source)) {
+    // Treat a trailing all-alpha suffix as a real extension (.tex, .txt,
+    // .bib…). Suffixes containing digits (.v2, .r3) are version qualifiers,
+    // not extensions, so `.tex` is appended in those cases.
+    return /\.[a-zA-Z]+$/.test(source) ? source : `${source}.tex`;
+  }
+  return fileLocationShortDisplayPath(file.location);
+}
+
+/**
+ * The +/- counts an artifact's diff chip shows, or `null` when there is no
+ * chip to show. `DiffStats` is partial because a brand-new file is recorded as
+ * `{ added }` with nothing removed, so a present-but-absent side reads as
+ * zero — but stats with neither side are a *failed* diff computation, and
+ * rendering those as `+0 -0` would state a change count nobody measured.
+ */
+export function outputDiffCounts(
+  diff: DiffStats | null | undefined,
+): { added: number; removed: number } | null {
+  if (!diff || (diff.added === undefined && diff.removed === undefined)) {
+    return null;
+  }
+  return { added: diff.added ?? 0, removed: diff.removed ?? 0 };
+}
+
+/**
  * The output a finished run treats as final: the last output of the highest
  * round. The CLI's prior pickers both kept the later element on a round tie,
  * and callers' output order is not guaranteed to lead with the primary
@@ -160,16 +271,10 @@ export const RoundOutputSchema = z.strictObject({
 });
 export type RoundOutput = z.infer<typeof RoundOutputSchema>;
 
-function displayPath(location: FileLocation): string {
-  return location.kind === 'external'
-    ? location.absolutePath
-    : location.relativePath;
-}
-
 export const OutputFileSummaryFromInfoSchema = OutputFileInfoSchema.transform(
   (output) => ({
     round: output.round,
-    relativePath: displayPath(output.location),
+    relativePath: fileLocationDisplayPath(output.location),
     absolutePath: output.location.absolutePath,
     location: output.location.kind,
     originalPath: getEffectiveDiffBase(output.lineage)?.absolutePath ?? null,
@@ -182,7 +287,7 @@ export const CompileFailureSummaryFromFailureSchema =
   CompileFailureSchema.transform((failure) => ({
     round: failure.round,
     displayName: failure.displayName,
-    outputPath: displayPath(failure.output),
+    outputPath: fileLocationDisplayPath(failure.output),
     logPath: failure.logRelativePath,
     logAbsolutePath: failure.log.absolutePath,
   })).pipe(CompileFailureSummarySchema);

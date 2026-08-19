@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 
 import {
+  fileLocationDisplayPath,
   type ExecutionId,
   type ExternalFileLocation,
   type FileLocation,
@@ -44,21 +45,11 @@ export function createExternalLocation(
 }
 
 /**
- * Get a comparable path for file matching and mapping.
- * Returns relativePath for workspace/runStorage files, absolutePath for external files.
- */
-export function getComparablePath(location: FileLocation): string {
-  return location.kind === 'external'
-    ? location.absolutePath
-    : location.relativePath;
-}
-
-/**
  * Get directory path from a FileLocation.
  * Returns relativePath's directory for workspace/runStorage, absolutePath's for external.
  */
 export function getFileDirectory(location: FileLocation): string {
-  return path.dirname(getComparablePath(location));
+  return path.dirname(fileLocationDisplayPath(location));
 }
 
 /**
@@ -85,19 +76,4 @@ export function pathToLocation(target: string): FileLocation {
   }
 
   return createWorkspaceLocation(resolved.absolutePath, resolved.relativePath);
-}
-
-/**
- * Get a short display-friendly path for a file location.
- * For workspace files, returns the relative path (e.g., "logos/mpq-logo.pdf").
- * For external files, returns just the basename (not the full absolute path).
- *
- * This provides a concise human-readable path suitable for showing to users or models,
- * while absolutePath should be used for actual file operations.
- */
-export function getShortDisplayPath(location: FileLocation): string {
-  if (location.kind === 'workspace' || location.kind === 'runStorage') {
-    return location.relativePath;
-  }
-  return path.basename(location.absolutePath);
 }

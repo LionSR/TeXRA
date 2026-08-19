@@ -16,6 +16,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { RunScope } from '@agent/runtime/RunScope';
 import {
+  fileLocationDisplayPath,
   type CompileFailure,
   type FileLocation,
   type OutputFileInfo,
@@ -23,7 +24,7 @@ import {
   type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
-import { getComparablePath, pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 export interface OutputState {
@@ -157,7 +158,7 @@ function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
   for (const value of allPaths) {
     if (!value) continue;
     const location = pathToLocation(value);
-    extras.set(getComparablePath(location), location);
+    extras.set(fileLocationDisplayPath(location), location);
   }
 
   return [...extras.values()];

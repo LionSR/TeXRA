@@ -272,9 +272,9 @@ describe('runCompileCheck', () => {
     const executionId = 'compile-outer-backstop';
     await seedCompilableMainTex(executionId);
 
-    const filesModule = await import('@utils/files/fileLocation');
+    const schemasModule = await import('@shared/schemas');
     const comparablePathSpy = vi
-      .spyOn(filesModule, 'getComparablePath')
+      .spyOn(schemasModule, 'fileLocationDisplayPath')
       .mockImplementationOnce(() => {
         throw new Error('simulated bookkeeping bug');
       });
@@ -291,7 +291,7 @@ describe('runCompileCheck', () => {
       expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
       expect(result.compileResult?.status).toBe('failed');
       expect(result.failures).toHaveLength(1);
-      // The second (uninstrumented) call to getComparablePath, made from the
+      // The second (uninstrumented) call to fileLocationDisplayPath, made from the
       // backstop itself, resolves normally -- so the failure gets a real,
       // resolvable path instead of a broken placeholder string.
       expect(result.failures[0].logRelativePath).toBe(relativePath);
