@@ -4,7 +4,11 @@ import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { redactSecrets } from '@logger/redaction';
 import { type StreamPhase } from '@shared/schemas';
-import type { TranscriptRow, TranscriptRowKind } from '@shared/transcript';
+import {
+  isSelfSettledRow,
+  type TranscriptRow,
+  type TranscriptRowKind,
+} from '@shared/transcript';
 import { isActivePhase } from '@shared/streams/streamStatus';
 
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
@@ -131,8 +135,6 @@ function deriveTranscriptRowHeadline(row: TranscriptRow): string {
       return row.line;
     case 'phase':
       return row.heading;
-    case 'contextState':
-      return '';
   }
 }
 
@@ -153,7 +155,6 @@ const ROW_KIND_IS_WIDGET = {
   user: false,
   workflowTask: false,
   contextManagement: true,
-  contextState: true,
   fileList: true,
   latexdiff: true,
   missingOutputs: true,
@@ -174,39 +175,11 @@ export function isRenderableTranscriptEntry(row: TranscriptRow): boolean {
 }
 
 /**
- * Rows whose content is fixed the moment they appear, independent of anything
- * around them — a durable settlement order assigned by the recorder, a host's
- * own local row, a compaction block that reached a terminal state, or a kind
- * that is complete on arrival.
- *
- * This is one half of "finalized"; the other half is the append-only promotion
- * cursor (`StreamSlice.finalizedFrontier`), which is the fold's alone.
- */
-const IMMEDIATELY_SETTLED_ROW_KINDS = new Set<TranscriptRowKind>([
-  'user',
-  'error',
-  'phase',
-  'fileList',
-  'missingOutputs',
-  'latexdiff',
-  'statistics',
-  'contextManagement',
-  'progressStatus',
-]);
-
-export function isSelfSettledRow(row: TranscriptRow): boolean {
-  if (row.kind === 'compactionActivity') return row.block.finalized;
-  return (
-    row.settlementSeqNo !== undefined ||
-    row.origin === 'local' ||
-    IMMEDIATELY_SETTLED_ROW_KINDS.has(row.kind)
-  );
-}
-
-/**
  * Whether the row at `index` may be printed into append-only scrollback: the
  * settled-prefix promotion has already reached it, or the row settles on its
- * own regardless of what precedes it.
+ * own regardless of what precedes it (`isSelfSettledRow`, the projector's
+ * half of "finalized"; this is the fold's half, the append-only promotion
+ * cursor `StreamSlice.finalizedFrontier`).
  */
 export function isFinalizedTranscriptRow(
   row: TranscriptRow,

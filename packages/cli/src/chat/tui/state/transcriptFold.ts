@@ -44,7 +44,6 @@ import { truncateSummary } from '@utils/text/stringUtils';
 import {
   isFinalizedTranscriptRow,
   isRenderableTranscriptEntry,
-  isSelfSettledRow,
   transcriptRowHeadline,
 } from '../panes/transcriptEntries';
 import type { TranscriptFoldItem, TranscriptFoldState } from './cliState';
@@ -151,18 +150,13 @@ export function logEntryStreamIsRunning(entry: StreamLogEntry): boolean {
  * The transcript row a projected row paints as, or `null` when the terminal
  * has no line for it.
  *
- * Two drops: context utilization is a status-bar fact, not a transcript line
- * (it reaches the CLI through the same projection so there is one derivation,
- * but has no inline row on either host); and a prose row whose text is
- * invisible in a terminal — an all-ANSI or zero-width chunk — never becomes a
- * row at all, so nothing downstream has to reserve space for it. Typed rows
- * keep their membership: the projector decided it, and the terminal does not
- * re-decide.
+ * One drop: a prose row whose text is invisible in a terminal — an all-ANSI or
+ * zero-width chunk — never becomes a row at all, so nothing downstream has to
+ * reserve space for it. Typed rows keep their membership: the projector
+ * decided it, and the terminal does not re-decide.
  */
 function transcriptRowForPaint(row: TranscriptRow): TranscriptRow | null {
   switch (row.kind) {
-    case 'contextState':
-      return null;
     case 'assistant':
     case 'log':
     case 'user':
@@ -201,11 +195,7 @@ export function advanceFinalizedFrontier(
 ): number {
   let index = Math.min(frontier, rows.length);
   while (index < rows.length) {
-    const row = rows[index]!;
-    if (
-      !isSelfSettledRow(row) &&
-      blocksSettledPrefix(row, index, rows.length, streamFinal)
-    ) {
+    if (blocksSettledPrefix(rows[index]!, index, rows.length, streamFinal)) {
       break;
     }
     index += 1;
@@ -815,12 +805,7 @@ function advanceSettledPrefix(
   let index = state.finalizedFrontier;
   while (index < items.length) {
     const row = items[index].rendered;
-    if (
-      !isSelfSettledRow(row) &&
-      blocksSettledPrefix(row, index, items.length, streamFinal)
-    ) {
-      break;
-    }
+    if (blocksSettledPrefix(row, index, items.length, streamFinal)) break;
     // A newly printed model reply becomes the stream's latest line.
     if (isResponseRow(row) && index > state.latestResponsePos) {
       state.latestResponsePos = index;
