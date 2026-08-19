@@ -691,10 +691,10 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    const segment = display.left.find((item) => item.text === 'Reduce 2/3');
+    const segment = display.left.find((item) => item.text === 'Reduce (2/3)');
     expect(segment).toBeDefined();
     // Narrow terminals degrade to the bare current phase, not to nothing.
-    expect(segment?.compactText).toBe('Reduce 2');
+    expect(segment?.compactText).toBe('Reduce (2)');
   });
 
   it('prefixes the running label with the current spin frame', () => {

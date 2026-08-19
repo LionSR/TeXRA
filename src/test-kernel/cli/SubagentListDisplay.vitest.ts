@@ -1069,12 +1069,12 @@ describe('CLI child list display model', () => {
       // One line per row at every width — the phase takes the round's slot
       // rather than adding one.
       expect(
-        output.split('\n').filter((line) => line.includes('Reduce 2/3')),
+        output.split('\n').filter((line) => line.includes('Reduce (2/3)')),
       ).toHaveLength(1);
-      expect(output).toContain('workflow-script running · Reduce 2/3');
+      expect(output).toContain('workflow-script running · Reduce (2/3)');
       expect(output).toContain('reflect running · r2/3');
-      expect(output).not.toContain('Reduce 2/3 · r2/3');
-      expect(output).not.toContain('r2/3 · Reduce 2/3');
+      expect(output).not.toContain('Reduce (2/3) · r2/3');
+      expect(output).not.toContain('r2/3 · Reduce (2/3)');
     },
   );
 
