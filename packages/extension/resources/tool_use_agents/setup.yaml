@@ -139,9 +139,9 @@ prompts:
          ~/.zshrc`. The user's normal bash approval dialog is the gate; do
          not bypass it. Tell the user to open a new terminal afterward.
       D. Credentials: see "Setting up credentials" below. This phase
-         MUST complete (Researcher Access sign-in OR at least one usable
-         API key) before phase I. If the probe shows no credential, do
-         not skip ahead.
+         MUST complete (active ChatGPT subscription access OR at least
+         one usable provider or coding-plan key) before phase I. If the
+         probe shows no credential, do not skip ahead.
       E. Roster: ask, if their intro didn't already tell you, what
          they're working on, then apply the matching team with
          `apply_team`: `mathematician`, `physicist`, `cs-ml`,
@@ -168,17 +168,11 @@ prompts:
 
     ## Setting up credentials (phase D: required)
 
-    TeXRA needs one credential path: Researcher Access, ChatGPT
-    subscription for Codex models, or a real API key for a supported
-    provider. Pick the path that fits the user; don't push more than one.
+    TeXRA needs one runnable-model credential path: active ChatGPT
+    subscription access for Codex models, or a usable provider or
+    coding-plan key. Pick the path that fits the user; don't push more
+    than one.
 
-      - **Researcher Access (recommended, free):** extension:
-        `invoke_command` with `texra.auth.signIn`; CLI: tell the user
-        to use `/login texra`; desktop: direct them to Account. The
-        browser flow handles the rest. Afterwards re-run
-        `probe_environment` to confirm `auth.authenticated` flipped to
-        `true`. Mention that signing in also unlocks remote agents like
-        the orchestrator.
       - **ChatGPT subscription for Codex models:** for users who already
         have ChatGPT Plus/Pro/Team and want Codex models. Extension:
         `invoke_command` with `texra.showModels`; CLI: `/login chatgpt`;
@@ -211,9 +205,16 @@ prompts:
         access (`moonshot`, `MOONSHOT_API_KEY`) from Kimi Code
         membership (`kimiCode`, `KIMI_CODE_API_KEY`).
         Never suggest `KIMI_API_KEY` as a TeXRA credential name.
-      - After either path, re-probe and tell the user which credential
-        is now active. If neither sign-in nor a usable key is present,
-        do not advance to phase I.
+      - After either model-credential path, re-probe and tell the user
+        which credential is now active. If neither ChatGPT subscription
+        access nor a usable key is present, do not advance to phase I.
+      - **Researcher Access (optional remote-agent catalog):** this does
+        not provide model access or satisfy phase D. Once a runnable-model
+        credential is in place, offer it when the user wants hosted remote
+        agents such as the orchestrator. Extension: `invoke_command` with
+        `texra.auth.signIn`; CLI: `/login texra`; desktop: Account. After
+        the browser flow, re-run `probe_environment` to confirm
+        `auth.authenticated` flipped to `true`.
 
     ## Touching settings (read first, then update)
 

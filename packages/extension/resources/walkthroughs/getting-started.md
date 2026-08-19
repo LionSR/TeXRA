@@ -8,9 +8,11 @@ The shortest path is: choose a credential, run setup once, then let the orchestr
 
 A credential is the one step no agent can do for you. Three ways in:
 
-- **Use ChatGPT subscription** -- ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.
-- **Sign in with Researcher Access** -- Free for academics; no API key needed. Signing in also unlocks remote agents, including the orchestrator.
-- **Use your own provider API key** -- Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions (Claude Pro, ChatGPT for non-Codex models, etc.) do not include API access; you need a key from the provider's developer platform.
+- **Sign in with ChatGPT** -- ChatGPT Plus/Pro/Team routes Codex models through your ChatGPT plan.
+- **Add a coding-plan key** -- Kimi Code and GLM Coding Plan use membership or subscription API keys from their provider consoles.
+- **Use your own provider API key** -- Anthropic, OpenAI, Google, and more. Other chat subscriptions, including Claude Pro, do not include API access; you need a key from the provider's developer platform.
+
+Signing in with GitHub or Google (free for academics through the Researcher Access Program) unlocks the hosted remote-agent catalog, including the orchestrator. It is not a credential on its own -- remote agents run on the same credential as your built-in agents.
 
 You can also pick **Skip for now** and come back later, but nothing below runs without a credential.
 
@@ -30,7 +32,7 @@ It asks before every command and explains what it's about to do. You stay in con
 
 ## 3. Meet the orchestrator
 
-After setup, the **orchestrator** is the habit. You don't pick from 23 agents -- give it your paper, it figures out what needs work, and hands each task to the right agent. You just approve the proposals as they come in. On your own API key, start with **assistant** instead; the orchestrator is served through Researcher Access.
+After setup, the **orchestrator** is the habit. You don't pick from 23 agents -- give it your paper, it figures out what needs work, and hands each task to the right agent. You just approve the proposals as they come in. The orchestrator is a hosted remote agent -- sign in to unlock it; it then runs on your own credential, same as any built-in agent. Not signed in? Start with **assistant** instead.
 
 You can still run any single agent yourself when you want one specific thing -- fix grammar, draw a diagram, get a review.
 

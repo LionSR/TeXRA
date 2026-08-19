@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### Breaking Changes
+
+- **TeXRA-hosted "included" model access has been retired** — model calls now
+  run on your own provider API key, a ChatGPT or Grok sign-in subscription, or
+  the API key for a Kimi Code or GLM Coding Plan subscription. Signing in with
+  GitHub or Google still unlocks the hosted remote-agent catalog, including the
+  orchestrator, and remains free for academics through the Researcher Access
+  Program — but the agents it unlocks run on your configured model credential,
+  so sign-in alone is no longer enough to start a run. Onboarding and setup
+  guidance now reflect that distinction.
+
 #### Features
 
 - **Export a conversation from the progress toolbar** — Markdown, HTML, and

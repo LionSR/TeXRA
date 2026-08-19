@@ -232,10 +232,10 @@ export async function proposeAndExecute(
 
   // Every non-approve action returned above, so this is the approved path.
   // Route an approved model override through the same availability gate the
-  // initial delegation uses (selectAvailableDelegationModel), so a model that
-  // is unavailable in the active API mode fails synchronously here instead of
-  // launching and then failing asynchronously. Re-selecting the proposed model
-  // needs no re-check — it was already resolved when the proposal was built.
+  // initial delegation uses (selectAvailableDelegationModel), so an unavailable
+  // model fails synchronously here instead of launching and then failing
+  // asynchronously. Re-selecting the proposed model needs no re-check — it was
+  // already resolved when the proposal was built.
   let modelOverride: string | undefined;
   if (result.model && result.model !== proposal.model) {
     try {
