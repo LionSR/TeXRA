@@ -1,5 +1,6 @@
 import type { DeleteStreamResult } from '@agent/storage';
 import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
+import { roundedUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import type { SessionRendererPort } from '@controllers/session/SessionRendererPort';
@@ -170,6 +171,24 @@ export class SessionFactApplier {
       // accumulate per-key; hosts read cumulative totals from the store.
       const { streamId, storageKey, usage } = event.payload;
       this.renderer.onRunUsageChanged(streamId, storageKey, usage);
+    },
+    'context.state': (streamId, event) => {
+      // The handler that produced the response is the only authority on the
+      // window it actually used (subscription caps and compaction both move
+      // it), so the substrate stores its number verbatim and every host reads
+      // this one record instead of re-deriving from a model registry.
+      this.state.updateStreamState(streamId, (prev) => ({
+        ...prev,
+        contextState: {
+          inputTokens: event.inputTokens,
+          contextWindow: event.contextWindow,
+          utilizationPercent: roundedUtilizationPercent(
+            event.inputTokens,
+            event.contextWindow,
+          ),
+        },
+      }));
+      this.renderer.invalidate(streamId, 'contextState');
     },
     'run.start': (_streamId, event) => this.handleRunConfig(event.streamId),
     'run.config': (_streamId, event) => this.handleRunConfig(event.streamId),

@@ -9,29 +9,25 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import {
-  agentSkillsEnabled,
-  allowOrchestratorKill,
-  childRunConcurrencyBudget,
+  applySettingsSnapshot,
   customPresets,
-  detachSubagentsOnStop,
   goalItems,
   multiAgentSettingsRevision,
   orchestratorAgents,
   reliabilitySettings,
-  telemetryEnabled,
   toolDashboardItems,
   toolDashboardLoaded,
 } from '../settingsState';
 
 export const agentSkillsSettingsHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS]: (data) => {
-    agentSkillsEnabled.set(data.enabled);
+    applySettingsSnapshot(data.values);
   },
 } satisfies Partial<SettingsViewOutboundHandlerRegistry>;
 
 export const telemetrySettingsHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_TELEMETRY_SETTINGS]: (data) => {
-    telemetryEnabled.set(data.enabled);
+    applySettingsSnapshot(data.values);
   },
 } satisfies Partial<SettingsViewOutboundHandlerRegistry>;
 
@@ -57,10 +53,8 @@ export const toolDashboardHandlers = {
 
 export const multiAgentHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED]: (data) => {
+    applySettingsSnapshot(data.values);
     reliabilitySettings.set(data.reliabilitySettings);
-    allowOrchestratorKill.set(data.allowOrchestratorKill);
-    detachSubagentsOnStop.set(data.detachSubagentsOnStop);
-    childRunConcurrencyBudget.set(data.childRunConcurrencyBudget);
     multiAgentSettingsRevision.set(multiAgentSettingsRevision.get() + 1);
   },
 } satisfies Partial<SettingsViewOutboundHandlerRegistry>;

@@ -859,8 +859,6 @@ export class DesktopProgressBridge {
         showInfo: (message) => this.options.host.showInfoMessage(message),
       },
       session: this.session,
-      getRunConfig: (stream) =>
-        this.state.snapshots.getRunMetadata(stream).config,
       restoreRunConfig: async (config) => {
         const restored = this.restoreRunConfig(config);
         if (!restored) {

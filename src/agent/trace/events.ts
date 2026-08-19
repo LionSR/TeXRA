@@ -405,6 +405,7 @@ export const RUN_FACT_EVENT_TYPES = Object.freeze([
   'run.start',
   'run.config',
   'usage',
+  'context.state',
   'stage.start',
   'child.activity',
 ] as const satisfies readonly AgentEvent['type'][]);

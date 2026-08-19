@@ -85,7 +85,7 @@ function bashApproval(streamId?: StreamTabId): PendingApproval {
   return {
     payload: {
       kind: 'bash',
-      payload: {
+      data: {
         requestId: 'bash-1',
         command: 'echo ok',
         allowBypass: true,
