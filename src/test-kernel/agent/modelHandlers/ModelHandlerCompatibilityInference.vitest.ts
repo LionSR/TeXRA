@@ -1,18 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import type { AgentTrace } from '@agent/trace';
 import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
-
-const info = vi.fn<AgentTrace['info']>();
 
 const GOOGLE_KEYLESS_ERROR =
   'Persisted Google sessions without a model-handler identity cannot be resumed.';
 
 describe('model handler compatibility inference', () => {
-  beforeEach(() => {
-    info.mockClear();
-  });
-
   it('rejects keyless Google transcripts without inspecting their format', () => {
     expect(() =>
       inferPersistedFlowModelHandlerCompatibilityKey('gemini35f', {
@@ -24,7 +17,6 @@ describe('model handler compatibility inference', () => {
         ],
       }),
     ).toThrow(GOOGLE_KEYLESS_ERROR);
-    expect(info).not.toHaveBeenCalled();
   });
 
   it('honors an explicitly persisted flow compatibility key', () => {
@@ -39,6 +31,5 @@ describe('model handler compatibility inference', () => {
         ],
       }),
     ).toBe('ModelHandlerOpenRouterNative');
-    expect(info).not.toHaveBeenCalled();
   });
 });

@@ -529,9 +529,9 @@ export function toOpenAIResponseTools(
  * Options for Anthropic tool conversion.
  */
 interface AnthropicToolOptions {
-  /** Whether the model supports native web search. Defaults to false. */
+  /** Whether the model supports native web search and fetch. Defaults to
+   *  false; Anthropic ships the two on the same model set. */
   supportsNativeWebSearch?: boolean;
-  /** Whether the model supports native web fetch. Defaults to false. */
 }
 
 /**

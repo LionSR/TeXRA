@@ -345,7 +345,7 @@ export interface DeleteAllExecutionsOptions {
 }
 
 /**
- * Delete every unleased execution and report deleted, raced-away, and active
+ * Delete every unleased execution and report deleted, active, and failed
  * execution IDs separately.
  */
 export async function deleteAllExecutions(
