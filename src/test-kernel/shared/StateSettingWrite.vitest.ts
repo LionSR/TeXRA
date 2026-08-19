@@ -17,7 +17,7 @@ describe('resolveStateSettingWrite', () => {
       kind: 'write',
       entry: {
         key: WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-        settingsViewSnapshot: 'multi-agent',
+        surfaces: { settingsView: 'multi-agent' },
       },
       value: true,
     });
@@ -27,8 +27,8 @@ describe('resolveStateSettingWrite', () => {
       kind: 'write',
       entry: {
         key: BASH_APPROVAL_CONFIG_KEY,
-        store: 'config',
-        settingsViewSnapshot: 'approval',
+        slots: { vscode: 'config', cli: 'config', desktop: 'config' },
+        surfaces: { settingsView: 'approval' },
       },
       value: false,
     });
@@ -41,7 +41,7 @@ describe('resolveStateSettingWrite', () => {
       kind: 'reset',
       entry: {
         key: WorkspaceStateKey.LATEX_FORMATTER,
-        settingsViewSnapshot: 'latex',
+        surfaces: { settingsView: 'latex' },
       },
     });
     expect(
@@ -60,7 +60,7 @@ describe('resolveStateSettingWrite', () => {
       kind: 'rejected',
       entry: {
         key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-        settingsViewSnapshot: 'latex',
+        surfaces: { settingsView: 'latex', cliConfig: true },
       },
       error: expect.any(Error),
     });

@@ -15,6 +15,7 @@ import {
 } from '@shared/approvalPolicy';
 import {
   settingsViewSettingByKey,
+  type SettingHost,
   type SettingsViewSnapshot,
   type SettingsViewStateSettingEntry,
 } from '@shared/schemas';
@@ -86,6 +87,11 @@ export type StateSettingUpdateResult =
 export interface StateSettingUpdatePorts {
   readonly stores: SettingsStores;
   /**
+   * The calling host, so slot resolution uses that host's own row entry
+   * instead of assuming the extension's.
+   */
+  readonly host: SettingHost;
+  /**
    * Extension-only guard: a workspace-target config write needs an open
    * workspace folder. Hosts without that constraint (desktop, CLI) omit this.
    */
@@ -113,7 +119,7 @@ export async function applyStateSettingUpdate(
     return { kind: 'rejected', entry: write.entry, error: write.error };
   }
   if (
-    write.entry.store === 'config' &&
+    write.entry.slots[ports.host] === 'config' &&
     write.entry.configTarget !== 'global' &&
     ports.requiresOpenWorkspace?.(write.entry)
   ) {
@@ -121,8 +127,8 @@ export async function applyStateSettingUpdate(
   }
   try {
     await (write.kind === 'reset'
-      ? resetSetting(write.entry, ports.stores)
-      : writeSetting(write.entry, write.value, ports.stores));
+      ? resetSetting(write.entry, ports.stores, ports.host)
+      : writeSetting(write.entry, write.value, ports.stores, ports.host));
     if (write.entry.key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
       ports.onApprovalPolicyChanged?.(
         write.kind === 'reset'

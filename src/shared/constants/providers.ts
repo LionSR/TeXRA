@@ -257,168 +257,20 @@ export const DEFAULT_HELPER_MODEL = 'deepseek';
 export const DEFAULT_AGENT_MODEL = 'sonnet5T';
 
 /**
- * Zod schema for a boolean setting surfaced per provider (without runtime value).
- * This is the single source of truth — ProviderSettingSchema in
- * profileViewMessages.ts extends this with a `value` field for runtime state.
+ * Zod schema for one provider control rendered in the Models tab (without its
+ * runtime value). The rows themselves are catalog rows — `stateSettings.ts`
+ * `surfaces.models` — so this is purely the wire shape the backend projects
+ * onto; `ProviderSettingSchema` in profileViewMessages.ts extends it with the
+ * current `value`.
  */
 export const ProviderSettingDefSchema = z.object({
   key: z.string(),
   label: z.string(),
   description: z.string(),
-  defaultValue: z.boolean().optional(),
   warning: z.string().optional(),
   warningUrl: z.string().optional(),
   warningUrlLabel: z.string().optional(),
-  /**
-   * When set, the setting is backed by shared state rather than configuration.
-   */
-  globalStateKey: z.string().optional(),
 });
-
-export type ProviderSettingDef = z.infer<typeof ProviderSettingDefSchema>;
-
-export const USE_OPENROUTER_PROVIDER_SETTING = {
-  key: GlobalStateKey.USE_OPENROUTER,
-  label: 'Use OpenRouter for all models',
-  description:
-    'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
-  globalStateKey: GlobalStateKey.USE_OPENROUTER,
-} satisfies ProviderSettingDef;
-
-// Named exports for the global-state-backed provider toggles below, so the CLI
-// state-setting catalog (`stateSettings.ts`) can reuse their label/description
-// by reference instead of copying strings that would drift. Anything without a
-// named export here is a config-backed setting.
-export const DASHSCOPE_USE_CHINA_PROVIDER_SETTING = {
-  key: GlobalStateKey.DASHSCOPE_USE_CHINA,
-  label: 'Qwen China region (Bailian)',
-  description:
-    'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
-  globalStateKey: GlobalStateKey.DASHSCOPE_USE_CHINA,
-} satisfies ProviderSettingDef;
-
-export const MINIMAX_USE_CHINA_PROVIDER_SETTING = {
-  key: GlobalStateKey.MINIMAX_USE_CHINA,
-  label: 'MiniMax China region',
-  description:
-    'Use the China region endpoint (api.minimaxi.com) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
-  warning:
-    'International keys do not work with the China endpoint, and vice versa. Coding Plan keys are also region-specific.',
-  warningUrl: 'https://platform.minimax.io/',
-  warningUrlLabel: 'Get API key',
-  globalStateKey: GlobalStateKey.MINIMAX_USE_CHINA,
-} satisfies ProviderSettingDef;
-
-export const MOONSHOT_USE_CHINA_PROVIDER_SETTING = {
-  key: GlobalStateKey.MOONSHOT_USE_CHINA,
-  label: 'Kimi/Moonshot China region',
-  description:
-    'Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai.',
-  defaultValue: true,
-  warning:
-    'A platform.moonshot.cn key does not work with the international endpoint, and vice versa.',
-  warningUrl: 'https://platform.moonshot.ai/console',
-  warningUrlLabel: 'International console',
-  globalStateKey: GlobalStateKey.MOONSHOT_USE_CHINA,
-} satisfies ProviderSettingDef;
-
-export const GLM_USE_CHINA_PROVIDER_SETTING = {
-  key: GlobalStateKey.GLM_USE_CHINA,
-  label: 'GLM China region',
-  description:
-    'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint.',
-  defaultValue: true,
-  warningUrl: 'https://open.bigmodel.cn/',
-  warningUrlLabel: 'BigModel console',
-  globalStateKey: GlobalStateKey.GLM_USE_CHINA,
-} satisfies ProviderSettingDef;
-
-export const GLM_CODING_PLAN_PROVIDER_SETTING = {
-  key: GlobalStateKey.GLM_CODING_PLAN,
-  label: 'GLM Coding Plan',
-  description:
-    'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
-  warningUrl: 'https://z.ai/subscribe',
-  warningUrlLabel: 'Subscribe',
-  globalStateKey: GlobalStateKey.GLM_CODING_PLAN,
-} satisfies ProviderSettingDef;
-
-export const KIMI_CODE_PREFER_PROVIDER_SETTING = {
-  key: GlobalStateKey.KIMI_CODE_PREFER,
-  label: 'Prefer Kimi Code',
-  description:
-    'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
-  defaultValue: false,
-  globalStateKey: GlobalStateKey.KIMI_CODE_PREFER,
-} satisfies ProviderSettingDef;
-
-/** Settings surfaced per canonical provider id in the Models tab. */
-export const PROVIDER_SETTINGS: Record<string, ProviderSettingDef[]> = {
-  openai: [
-    {
-      key: 'texra.model.gpt5ReasoningSummary',
-      label: 'GPT-5 reasoning summary',
-      description:
-        'Request reasoning summaries from GPT-5 models. Only available on OpenAI API Tier 3+.',
-      warning:
-        'New accounts with $20 credit are typically Tier 1 and will hit rate limits.',
-      warningUrl:
-        'https://platform.openai.com/settings/organization/billing/overview',
-      warningUrlLabel: 'Check your tier',
-    },
-    {
-      key: 'texra.model.useOpenAIResponsesAPI',
-      label: 'Use the Responses API',
-      description:
-        'Use the OpenAI Responses API instead of Chat Completions when available.',
-      defaultValue: true,
-    },
-    {
-      key: 'texra.model.useBackgroundResponses',
-      label: 'Background responses',
-      description:
-        'Handle long-running generations (>10 min) via polling to prevent timeouts. Adds polling overhead.',
-      defaultValue: true,
-    },
-    {
-      key: 'texra.model.openaiParallelToolCalls',
-      label: 'Parallel tool calls',
-      description:
-        'Allow the model to call multiple tools in parallel. On by default; disable for models that require sequential execution.',
-      defaultValue: true,
-    },
-    {
-      key: GlobalStateKey.WEBSOCKET_OPENAI,
-      label: 'WebSocket transport',
-      description:
-        'Use a persistent WebSocket connection for lower-latency tool-use loops. Requires direct OpenAI API (not compatible with custom endpoints).',
-      globalStateKey: GlobalStateKey.WEBSOCKET_OPENAI,
-    },
-  ],
-  anthropic: [],
-  google: [
-    {
-      key: 'texra.model.useGoogleInteractionsServerState',
-      label: 'Server-side conversation state',
-      description:
-        "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
-      defaultValue: true,
-    },
-    {
-      key: 'texra.model.useBackgroundResponses',
-      label: 'Background responses',
-      description:
-        'Run long-running workflow generations as background Interactions (submit + poll) to avoid timeouts. Requires server-side conversation state; models that do not support it fall back automatically.',
-      defaultValue: true,
-    },
-  ],
-  dashscope: [DASHSCOPE_USE_CHINA_PROVIDER_SETTING],
-  minimax: [MINIMAX_USE_CHINA_PROVIDER_SETTING],
-  moonshot: [MOONSHOT_USE_CHINA_PROVIDER_SETTING],
-  glm: [GLM_USE_CHINA_PROVIDER_SETTING, GLM_CODING_PLAN_PROVIDER_SETTING],
-  kimiCode: [KIMI_CODE_PREFER_PROVIDER_SETTING],
-  openRouter: [USE_OPENROUTER_PROVIDER_SETTING],
-};
 
 // ============================================================================
 // Direct API-key providers

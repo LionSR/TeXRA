@@ -180,13 +180,8 @@ export class ProviderKeyList extends LitElement {
       <div class="provider-setting provider-setting--block">
         <wa-switch
           ?checked=${setting.value}
-          @change=${(e: Event) => {
-            const checked = (e.target as WaSwitch).checked;
-            postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING, {
-              key: setting.key,
-              value: checked,
-            });
-          }}
+          @change=${(e: Event) =>
+            postStateSetting(setting.key, (e.target as WaSwitch).checked)}
         >
           ${setting.label}
         </wa-switch>
