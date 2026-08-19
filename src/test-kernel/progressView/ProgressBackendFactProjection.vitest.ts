@@ -184,7 +184,7 @@ describe('ProgressBackend', () => {
     );
   });
 
-  it('projects a workflow-script phase onto a non-active run stream', async () => {
+  it('projects a workflow-script phase but gates its rounds when non-active', async () => {
     const target = createListeningBackend();
     const { backend, messages } = target;
     const run = 'workflow-run' as StreamTabId;
@@ -226,6 +226,27 @@ describe('ProgressBackend', () => {
     expect(metadataPatchFor(messages, run).streamState).toMatchObject({
       stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
     });
+
+    messages.length = 0;
+    emitRunEvent(target, run, {
+      type: 'stage.start',
+      id: 'round-2',
+      label: 'round 2',
+      kind: 'round',
+      index: 1,
+      total: 3,
+    });
+
+    await vi.waitFor(() =>
+      expect(backend.state.getStreamState(run)).toMatchObject({
+        stage: { kind: 'round', index: 1, total: 3 },
+      }),
+    );
+    expect(messages).not.toContainEqual(
+      expect.objectContaining({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+      }),
+    );
   });
 
   it('patches one stream for subagent registration and run-start metadata', async () => {

@@ -26,6 +26,7 @@ import type {
   StreamContentRenderPayload,
   StreamMetadata,
   StreamPhase,
+  StreamStage,
   StreamSubstate,
   StreamTabId,
   StreamTabInfo,
@@ -199,8 +200,12 @@ export class LitSessionRenderer implements SessionRendererPort {
     if (!this.progressDebounce.pending) this.progressDebounce.schedule();
   }
 
-  onStageChanged(streamId: StreamTabId): void {
-    this.updateStreamMetadata(streamId);
+  onStageChanged(streamId: StreamTabId, stage: StreamStage): void {
+    if (stage.kind === 'phase') {
+      this.updateStreamMetadata(streamId);
+      return;
+    }
+    this.sendIfActive(streamId, () => this.updateStreamMetadata(streamId));
   }
 
   onBadgesChanged(streamId: StreamTabId): void {
