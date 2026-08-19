@@ -53,7 +53,7 @@ afterEach(() => {
 function queueTitleApproval(streamId: string): void {
   void enqueueApproval({
     kind: 'bash',
-    payload: {
+    data: {
       requestId: `title-${streamId}`,
       allowBypass: true,
       streamId,
