@@ -81,8 +81,9 @@ export function formatBannerContentTemplate(
   if (!trimmedContent) return null;
 
   const config = BANNER_CONFIG[kind];
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
-    formatDisplayTimestamp(new Date(timestamp));
+  const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
+    new Date(timestamp),
+  );
   // Auto-expand while streaming in, so the block is visibly "live" instead
   // of hiding the growing text behind a closed summary row; collapses back
   // once finalized (mirrors the "thought for Xs, tap to expand" pattern
@@ -104,7 +105,7 @@ export function formatBannerContentTemplate(
     : html`<div class="banner-content markdown-content log-entry-content ${contentClass}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
 
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
+  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${buildDetailsSummary({
     iconName: config.iconName,
     label: config.labelText,
     timestamp: config.showTimestamp && verbose

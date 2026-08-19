@@ -32,7 +32,6 @@ export function getTimeFormatter(): Intl.DateTimeFormat {
 
 /** Format a timestamp for display. */
 export function formatDisplayTimestamp(date: Date): {
-  fullTimestamp: string;
   timeDisplay: string;
   tooltipTimestamp: string;
 } {
@@ -41,7 +40,6 @@ export function formatDisplayTimestamp(date: Date): {
     DATETIME_FORMAT_OPTIONS,
   );
   return {
-    fullTimestamp: date.toISOString(),
     timeDisplay: getTimeFormatter().format(date),
     tooltipTimestamp: DATE_TIME_FORMATTER.format(date),
   };
