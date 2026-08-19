@@ -1,8 +1,9 @@
 // Standard library imports
+import { existsSync } from 'node:fs';
+import { cp } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import fsExtra from 'fs-extra';
 import * as vscode from 'vscode';
 
 // Local imports - fs
@@ -35,15 +36,14 @@ export async function createSampleProjectWithoutWorkspace(
     }
 
     const dest = path.join(parentPath, 'texra-sample');
-    if (await fsExtra.pathExists(dest)) {
+    if (existsSync(dest)) {
       void vscode.window.showInformationMessage(
         'A texra-sample folder already exists there — opening it.',
       );
     } else {
-      await fsExtra.copy(
-        path.join(extensionPath, 'resources', 'examples'),
-        dest,
-      );
+      await cp(path.join(extensionPath, 'resources', 'examples'), dest, {
+        recursive: true,
+      });
     }
     await vscode.commands.executeCommand(
       'vscode.openFolder',
@@ -82,9 +82,7 @@ export async function createSampleProject(
     const sourcePath = path.join(extensionPath, 'resources', 'examples');
 
     await WorkspaceFS.ensureDir(destFolder);
-    await fsExtra.copy(sourcePath, WorkspaceFS.fullPath(destFolder), {
-      overwrite: true,
-    });
+    await WorkspaceFS.copy(sourcePath, destFolder, { overwrite: true });
 
     void vscode.window.showInformationMessage('Created TeXRA sample project.');
 
