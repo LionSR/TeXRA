@@ -22,7 +22,6 @@ import {
   type ContextManagementData,
   type DiffResultDisplay,
   type ErrorLogData,
-  type ExtendedTokenUsageStats,
   type FileListEntry,
   type LoadedMediaMetadata,
   type LogLevel,
@@ -32,7 +31,6 @@ import {
   type WorkflowCallProgress,
   type WorkflowScriptDeliverySummary,
 } from '@shared/schemas';
-import type { DeliveryTagName } from '@shared/deliveryTags';
 import {
   COMPACTION_ACTIVITY_LABEL,
   type CompactionActivityBlock,
@@ -102,7 +100,6 @@ export interface UserRow extends TranscriptRowBase {
   /** Collapsed presentation of a subagent/workflow delivery. Derived, never a
    *  truncation of `text`: hosts choose which of the two to paint. */
   readonly summary: TranscriptText;
-  readonly deliveryTag?: DeliveryTagName;
   readonly workflowSummary?: WorkflowScriptDeliverySummary;
   /** Media sent to the model with this message but never stored on the row. */
   readonly attachments?: readonly MediaAttachmentKind[];
@@ -147,9 +144,7 @@ export interface WebSearchRow extends TranscriptRowBase {
   readonly kind: 'webSearch';
   /** `Anthropic Search: "quantum error correction" (searching...)` */
   readonly label: string;
-  readonly query?: string;
   readonly results: readonly WebSearchResultRef[];
-  readonly provider?: string;
   readonly status?: string;
   readonly failed: boolean;
   readonly inProgress: boolean;
@@ -162,8 +157,7 @@ export interface WebFetchRow extends TranscriptRowBase {
   readonly url?: string;
   readonly title?: string;
   readonly status?: string;
-  readonly errorCode?: string;
-  /** Human-readable form of `errorCode`. */
+  /** Human-readable form of the wire payload's `errorCode`. */
   readonly errorLabel?: string;
   readonly content?: TranscriptText;
   readonly failed: boolean;
@@ -217,9 +211,6 @@ export interface StatItem {
 
 export interface StatisticsRow extends TranscriptRowBase {
   readonly kind: 'statistics';
-  /** Partial by contract: a run reports only the counters its provider
-   *  returned. */
-  readonly stats: Partial<ExtendedTokenUsageStats>;
   /** `Statistics` — the panel heading, owned here so both hosts say the same
    *  word. Mirrors {@link ContextManagementRow.label}. */
   readonly label: string;
