@@ -8,6 +8,8 @@
  * import for dispatch and palette rendering.
  */
 
+import type { DesktopPlatform } from '@shared/commands/accelerators';
+
 import {
   DESKTOP_FILE_COMMANDS,
   DESKTOP_HELP_COMMANDS,
@@ -18,6 +20,15 @@ import {
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface.js';
 import type { MenuItemConstructorOptions } from 'electron';
+
+/** The one place Electron's wider platform id is narrowed into the union the
+ *  command surface speaks; the renderer derives the same value from
+ *  `navigator`. */
+const HOST_PLATFORM: DesktopPlatform = ((): DesktopPlatform => {
+  if (process.platform === 'darwin') return 'darwin';
+  if (process.platform === 'win32') return 'win32';
+  return 'linux';
+})();
 
 /** Menu template shape produced before Electron materializes native menus. */
 export interface DesktopMenuTemplateItem extends Omit<
@@ -30,7 +41,7 @@ export interface DesktopMenuTemplateItem extends Omit<
 
 export function buildDesktopMenuTemplate(
   actions: DesktopCommandActions,
-  platform: NodeJS.Platform = process.platform,
+  platform: DesktopPlatform = HOST_PLATFORM,
 ): DesktopMenuTemplateItem[] {
   const entriesById = new Map(
     getDesktopCommandMenuEntries(platform).map((entry) => [entry.id, entry]),

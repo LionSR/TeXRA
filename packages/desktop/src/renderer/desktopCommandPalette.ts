@@ -8,7 +8,10 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
-import { formatDesktopAccelerator } from '@shared/commands/accelerators';
+import {
+  formatDesktopAccelerator,
+  type DesktopPlatform,
+} from '@shared/commands/accelerators';
 import type { DesktopShortcutEntry } from '@shared/commands/shortcutPreferences';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -52,7 +55,7 @@ export interface DesktopCommandPaletteOptions {
   actions: DesktopCommandActions;
   getStreams?: () => readonly StreamTabInfo[];
   getShortcuts?: () => readonly DesktopShortcutEntry[];
-  platform?: NodeJS.Platform;
+  platform?: DesktopPlatform;
   // Returning false suppresses ALL palette opens — both the global
   // Cmd/Ctrl+K shortcut and any direct `controller.open()` call (e.g. while
   // a first-run walkthrough is visible).
@@ -427,7 +430,7 @@ function parseSwitchStreamCommandId(id: string): StreamTabId | undefined {
 function toPaletteEntry(
   entry: DesktopCommandMenuEntry,
   shortcut: DesktopShortcutEntry | undefined,
-  platform: NodeJS.Platform,
+  platform: DesktopPlatform,
 ): CommandPaletteEntry {
   return {
     id: entry.id,

@@ -113,8 +113,10 @@ import {
   type TodoItem,
   type UserFollowUpSupport,
 } from '@shared/schemas';
+import { transcriptText } from '@shared/transcript';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
+import { toolConversationEntry } from '@test/support/transcriptRowFixtures';
 import {
   createRunTrace,
   StreamLogStore,
@@ -432,23 +434,12 @@ function toolEntry(
   input: Record<string, unknown>,
   options: { outputText?: string; status?: 'in_progress' | 'completed' } = {},
 ) {
-  return {
-    id,
-    role: 'tool',
-    text: '',
-    finalized: false,
-    toolUse: {
-      toolName,
-      errorText: '',
-      outputText: options.outputText ?? '',
-      userInstructionText: '',
-      input,
-      isError: false,
-      isUserFeedback: false,
-      headerSummary: '',
-      status: options.status ?? 'completed',
-    },
-  } as const;
+  return toolConversationEntry(id, {
+    toolName,
+    input,
+    outputText: options.outputText ?? '',
+    status: options.status ?? 'completed',
+  });
 }
 
 /** Run `body` with a TUI run-fact subscription attached to a fresh hub. */
@@ -1900,14 +1891,20 @@ describe('finalizeSettledPrefix', () => {
     return toolEntry(id, 'Bash', {}, { status });
   }
 
-  function assistant(id: string, pendingEmbeddedSubagentFollowup = false) {
+  function assistant(id: string, pendingEmbeddedFollowup = false) {
     return {
       id,
       role: 'assistant',
       text: id,
-      ...(pendingEmbeddedSubagentFollowup
-        ? { pendingEmbeddedSubagentFollowup }
-        : {}),
+      row: {
+        kind: 'assistant',
+        id,
+        timestamp: 0,
+        level: 'info',
+        text: transcriptText(id),
+        streaming: false,
+        ...(pendingEmbeddedFollowup ? { pendingEmbeddedFollowup } : {}),
+      },
       finalized: false,
     } as const;
   }
@@ -2042,19 +2039,30 @@ describe('CLI transcript state', () => {
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
+    // Every reported attachment stays on the row — the loaded media, the
+    // audio the terminal cannot preview, and the plain input file — with the
+    // media subset kept beside them rather than instead of them.
     expect(entries[0]).toMatchObject({
       role: 'media',
       finalized: true,
-      images: [
-        { path: '/private/tmp/loaded.png', sizeBytes: 8704 },
-        { path: '/private/tmp/loaded.png', sizeBytes: 8704 },
-        { path: '/private/tmp/paper.pdf', sizeBytes: 8192 },
-      ],
+      row: {
+        kind: 'fileList',
+        counts: { loaded: 5, failed: 0, total: 5 },
+        media: [
+          { path: '/private/tmp/loaded.png' },
+          { path: '/private/tmp/loaded.png' },
+          { path: '/private/tmp/paper.pdf' },
+          { path: '/private/tmp/audio.wav' },
+        ],
+      },
     });
     expect(transcriptEntryLayout(entries[0]).lines).toEqual([
-      '› [image] /private/tmp/loaded.png (8.5 KiB)',
-      '› [image] /private/tmp/loaded.png (8.5 KiB)',
-      '› [image] /private/tmp/paper.pdf (8 KiB)',
+      'Files (5/5 loaded)',
+      '  ⎿ ✓ /private/tmp/loaded.png [image, 8.5 KiB]',
+      '    ✓ /private/tmp/loaded.png [image, 8.5 KiB]',
+      '    ✓ /private/tmp/paper.pdf [image, 8 KiB]',
+      '    ✓ /private/tmp/audio.wav [audio, 4 KiB]',
+      '    ✓ paper.tex',
     ]);
   });
 
@@ -2178,17 +2186,21 @@ describe('CLI transcript state', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'error',
-      text: [
-        'Model request failed (no retry available)',
-        '⎿ HTTP 400 Bad Request – status code without a body',
-      ].join('\n'),
+      text: 'Model request failed (no retry available)',
       finalized: true,
     });
-    expect(entries[0]?.text).not.toContain('secret-must-not-render');
-    expect(transcriptEntryLayout(entries[0]!, { width: 80 }).lines).toEqual([
-      '! Model request failed (no retry available)',
-      '  ⎿ HTTP 400 Bad Request – status code without a body',
-    ]);
+    expect(transcriptEntryLayout(entries[0]!, { width: 200 }).lines)
+      .toMatchInlineSnapshot(`
+      [
+        "! Model request failed (no retry available)",
+        "  ⎿ message: HTTP 400 Bad Request – status code without a body",
+        "    provider: openai",
+        "    userRetryable: false",
+        "    rawErrorBody: {",
+        "      "apiKey": "[redacted]"",
+        "    }",
+      ]
+    `);
   });
 
   it('removes terminal control sequences from model-error reasons', () => {
@@ -2200,11 +2212,20 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const text = streamEntries(root)[0]?.text ?? '';
-    expect(text).toBe('Model request failed\n⎿ Provider failed retry later');
-    expect(text).not.toContain('\u001b');
-    expect(text).not.toContain('\u0007');
-    expect(text).not.toContain('\u0085');
+    const lines = transcriptEntryLayout(streamEntries(root)[0]!, {
+      width: 200,
+    }).lines;
+    expect(lines).toEqual([
+      '! Model request failed',
+      '  ⎿ message: Provider failed ',
+      '     retry later',
+      '    userRetryable: false',
+    ]);
+    for (const line of lines) {
+      expect(line).not.toContain('\u001b');
+      expect(line).not.toContain('\u0007');
+      expect(line).not.toContain('\u0085');
+    }
   });
 
   it('redacts credentials embedded in the canonical provider message', () => {
@@ -2222,27 +2243,12 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const text = streamEntries(root)[0]?.text ?? '';
-    expect(text).toContain('Model request failed with Bearer [redacted]');
-    expect(text).toContain('API_KEY=[redacted]');
-    expect(text).toContain('Bearer [redacted]');
-    expect(text).not.toContain(secret);
-  });
-
-  it('collapses and bounds long multiline model-error reasons', () => {
-    const logger = runTrace(root);
-    logModelError(logger, 'Model request failed', {
-      message: `First line\n  second line\t${'x'.repeat(300)}`,
-      userRetryable: false,
-    });
-
-    syncStreamLog(root);
-
-    const entries = streamEntries(root);
-    const lines = entries[0]?.text.split('\n') ?? [];
-    expect(lines).toHaveLength(2);
-    expect(lines[1]).toMatch(/^⎿ First line second line x+…$/);
-    expect([...lines[1]!.slice('⎿ '.length)]).toHaveLength(240);
+    const entry = streamEntries(root)[0]!;
+    expect(entry.text).toContain('Model request failed with Bearer [redacted]');
+    const body = transcriptEntryLayout(entry, { width: 400 }).lines.join('\n');
+    expect(body).toContain('API_KEY=[redacted]');
+    expect(body).toContain('Bearer [redacted]');
+    expect(body).not.toContain(secret);
   });
 
   it('keeps actual tool failures on the tool-row renderer', () => {
@@ -2284,6 +2290,7 @@ describe('CLI transcript state', () => {
 
     let slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(true);
+    // An opened stream with no delta says nothing yet, so it has no row.
     expect(slice?.entries).toEqual([]);
 
     thinking.append('private reasoning summary');
@@ -2292,14 +2299,15 @@ describe('CLI transcript state', () => {
 
     slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(true);
-    expect(slice?.entries).toEqual([]);
+    // Reasoning is a compact `Thinking` row whose headline never quotes the
+    // reasoning itself; the text is body content, elided at paint.
+    expect(slice?.entries.map((entry) => entry.text)).toEqual(['Thinking']);
 
     thinking.finalize();
     syncStreamLog(root);
 
     slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(false);
-    expect(slice?.entries).toEqual([]);
 
     const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     output.append('Visible answer.');
@@ -2309,6 +2317,7 @@ describe('CLI transcript state', () => {
     slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(false);
     expect(slice?.entries.map((entry) => entry.text)).toEqual([
+      'Thinking',
       'Visible answer.',
     ]);
   });

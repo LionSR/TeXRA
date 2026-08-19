@@ -8,6 +8,7 @@ import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   toElectronAccelerator,
   toPlatformAccelerator,
+  type DesktopPlatform,
 } from '@shared/commands/accelerators';
 import {
   commandCatalogById,
@@ -260,7 +261,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
 ]);
 
 export function getDesktopCommandMenuEntries(
-  platform: NodeJS.Platform = process.platform,
+  platform: DesktopPlatform,
 ): DesktopCommandMenuEntry[] {
   return DESKTOP_COMMAND_IDS.map((id) => {
     if (isDesktopLocalCommandId(id)) {

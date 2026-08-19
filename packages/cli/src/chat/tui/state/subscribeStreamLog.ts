@@ -274,14 +274,19 @@ export function syncStreamLog(
     const workflowStream = metadata?.agentCategory === AgentCategory.Workflow;
     const fullLogChild = isFullLogChildStream(metadata?.identity);
     const workflowOperationalOnly = workflowStream && !fullLogChild;
+    // Run/round/session headings go to the task-group surface wherever this
+    // host paints one. The single exception is a full-log child that is not a
+    // workflow run — a detached process or an external-CLI session, which has
+    // no task-group renderer and whose verbatim log is the point of opening
+    // it, so its headings stay transcript rows.
+    const lifecycleToTaskGroups = workflowStream || !fullLogChild;
     const streamSettled = isTranscriptSettlementPhase(lifecycle.status);
     const streamFinal = options.forceFinal === true || streamSettled;
     const state = slice.transcriptFold ?? createTranscriptFoldState();
     const flags = newFoldChangeFlags();
     const modeCurrent =
-      state.fullLogChild === fullLogChild &&
       state.workflowOperationalOnly === workflowOperationalOnly &&
-      state.projectLifecycleToTaskGroups === workflowStream;
+      state.projectLifecycleToTaskGroups === lifecycleToTaskGroups;
     // Fold continuity: same log instance, and either the buffered burst picks
     // up exactly where the state left off and reaches the log's emission
     // head, or (no buffer) the state already sits at the head. Anything else
@@ -355,9 +360,8 @@ export function syncStreamLog(
         if (!row.synthetic) inherit.set(row.id, row);
       }
       resetTranscriptFoldState(state);
-      state.fullLogChild = fullLogChild;
       state.workflowOperationalOnly = workflowOperationalOnly;
-      state.projectLifecycleToTaskGroups = workflowStream;
+      state.projectLifecycleToTaskGroups = lifecycleToTaskGroups;
       state.logInstanceId = log.instanceId;
       state.emissionSeq = log.emissionHead;
       state.hydrated = true;

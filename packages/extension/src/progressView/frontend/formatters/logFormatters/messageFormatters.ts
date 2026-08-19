@@ -1,6 +1,7 @@
 /**
- * Message-style formatters for user messages, errors, and progress status.
- * These formatters use logMessage.text and logMessage.data directly.
+ * Message-style formatters for user messages, errors, progress status, and
+ * plain log lines. Every one of them paints a `TranscriptRow` — the error
+ * detail set and the status summary are the row's, not this layer's.
  *
  * Uses Lit templates for declarative DOM construction.
  *
@@ -22,17 +23,17 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared schemas and utilities
-import {
-  MESSAGE_TYPES,
-  type ErrorLogData,
-  type LogLevel,
-  type LogMessageData,
-  type LogMessageOf,
-} from '@shared/schemas';
+import type { LogLevel } from '@shared/schemas';
+import type {
+  ErrorRow,
+  LogRow,
+  PhaseRow,
+  ProgressStatusRow,
+  UserRow,
+} from '@shared/transcript';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
-import { stringifyWithLanguage } from '../parseUtils';
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { ICON_BY_LEVEL } from '../constants';
 import { buildCopyButton } from '../htmlBuilders';
@@ -47,25 +48,22 @@ function buildLevelIcon(level: LogLevel): TemplateResult {
 }
 
 /** Format user message entry as TemplateResult. */
-export function formatUserMessageTemplate(
-  message: LogMessageOf<typeof MESSAGE_TYPES.USER_MESSAGE>,
-): FormatResult {
-  const { id, text, timestamp, data } = message;
-  const workflowSummary = data?.workflowSummary ?? null;
+export function formatUserMessageTemplate(row: UserRow): FormatResult {
+  const { id, timestamp, workflowSummary } = row;
   // prettier-ignore
-  return html`<user-message .text=${text ?? ''} .logId=${id} .timestamp=${timestamp} .workflowSummary=${workflowSummary}></user-message>`;
+  return html`<user-message .text=${row.text.full} .logId=${id} .timestamp=${timestamp} .workflowSummary=${workflowSummary ?? null}></user-message>`;
 }
 
 /** Format progress status entry as TemplateResult. */
 export function formatProgressStatusTemplate(
-  message: LogMessageOf<typeof MESSAGE_TYPES.PROGRESS_STATUS>,
+  row: ProgressStatusRow,
 ): FormatResult {
-  const { level = 'info', id, groupId, timestamp, text, data } = message;
+  const { level, id, groupId, timestamp } = row;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } =
     formatDisplayTimestamp(new Date(timestamp));
 
-  const summaryText = (text ?? '').trim() || 'Status update';
-  const detailText = stringifyWithLanguage(data).text;
+  const summaryText = row.summary.full;
+  const detailText = row.detail?.full ?? '';
   const levelIcon = buildLevelIcon(level);
 
   // prettier-ignore
@@ -79,54 +77,18 @@ export function formatProgressStatusTemplate(
       )}</div>`;
 }
 
-// Error detail fields to render in the flat banner, in display order.
-// `satisfies` ties each name to ErrorLogData's keys so adding/renaming/removing
-// a schema field becomes a type error here — no silent drift.
-// Fields omitted on purpose: streamDiagnostics and partialText render
-// separately in RetryRequestPanel; cause is not shown in the flat list.
-const ERROR_DETAIL_FIELDS = [
-  'message',
-  'operation',
-  'model',
-  'provider',
-  'statusCode',
-  'statusText',
-  'userRetryable',
-  'requestId',
-  'rawMessage',
-  'rawErrorBody',
-] as const satisfies ReadonlyArray<keyof ErrorLogData>;
-
-/** Format error message as TemplateResult. */
-export function formatErrorTemplate(
-  message: LogMessageOf<typeof MESSAGE_TYPES.ERROR>,
-): FormatResult {
-  const { id, groupId, timestamp, text, data } = message;
+/**
+ * Format error message as TemplateResult. The detail field set and its display
+ * order are the row's — see `ERROR_DETAIL_FIELDS` in `@shared/transcript`.
+ */
+export function formatErrorTemplate(row: ErrorRow): FormatResult {
+  const { id, groupId, timestamp } = row;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } =
     formatDisplayTimestamp(new Date(timestamp));
 
-  const errorData: Partial<ErrorLogData> = data ?? {};
-
-  // Build summary text (used for display and duplicate detection)
-  const originalSummaryText = (text ?? '').trim() || 'Error occurred';
-  const summaryText = originalSummaryText;
-
-  // Build error details from parsed data, skipping null/undefined values and a
-  // message that merely duplicates the original summary.
-  const detailLines = ERROR_DETAIL_FIELDS.flatMap((key) => {
-    const value = errorData[key];
-    if (value == null) return [];
-    if (key === 'message' && value === originalSummaryText) return [];
-    // Format objects (like rawErrorBody) as indented JSON
-    const displayValue =
-      typeof value === 'object'
-        ? JSON.stringify(value, null, 2)
-        : String(value);
-    return [`${key}: ${displayValue}`];
-  });
-
-  const detailText = detailLines.join('\n');
-  const hasDetails = Boolean(detailText);
+  const summaryText = row.summary.full.trim() || 'Error occurred';
+  const detailText = row.detailText.full;
+  const hasDetails = row.details.length > 0;
   const rawContent = detailText || summaryText;
 
   // Build modular template parts to avoid overly long single-line templates
@@ -157,11 +119,16 @@ export function formatErrorTemplate(
   })} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${summaryTemplate}${contentTemplate}</wa-details>`;
 }
 
-/** Format default log message as TemplateResult. */
+/**
+ * Format a plain log line as TemplateResult. Phase headings share the shape:
+ * on this host they only reach the transcript when a stream keeps its
+ * lifecycle inline rather than in the task-group surface.
+ */
 export function formatDefaultLogMessageTemplate(
-  logMessage: LogMessageData,
+  row: LogRow | PhaseRow,
 ): FormatResult {
-  const { id, text, level, timestamp, groupId, verbose } = logMessage;
+  const { id, level, timestamp, groupId, verbose } = row;
+  const text = row.kind === 'phase' ? row.heading : row.text.full;
   const levelIcon = buildLevelIcon(level);
   const { fullTimestamp, timeDisplay, tooltipTimestamp } =
     formatDisplayTimestamp(new Date(timestamp));

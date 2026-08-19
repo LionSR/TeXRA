@@ -59,6 +59,7 @@ import {
   type StreamTabId,
   type UserQuestionPermission,
 } from '@shared/schemas';
+import { toolRowModel } from '@shared/transcript';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -716,6 +717,30 @@ function makeLongToolOutput(): NormalizedToolUse {
   };
 }
 
+/** Build a tool `ConversationEntry` the way the fold does: a normalized
+ *  payload plus the shared model the painter reads. */
+function harnessToolEntry(
+  id: string,
+  toolUse: NormalizedToolUse,
+  text = '',
+): ConversationEntry {
+  return {
+    id,
+    role: 'tool',
+    text,
+    finalized: true,
+    toolUse,
+    row: {
+      kind: 'tool',
+      id,
+      timestamp: 0,
+      level: 'info',
+      toolUse,
+      model: toolRowModel(toolUse),
+    },
+  };
+}
+
 function makeLongToolOutputEntries(): ConversationEntry[] {
   return [
     {
@@ -724,13 +749,7 @@ function makeLongToolOutputEntries(): ConversationEntry[] {
       text: 'Enumerate Pythagorean triples and show the complete output.',
       finalized: true,
     },
-    {
-      id: 'long-tool-output',
-      role: 'tool',
-      text: '',
-      finalized: true,
-      toolUse: makeLongToolOutput(),
-    },
+    harnessToolEntry('long-tool-output', makeLongToolOutput()),
   ];
 }
 
@@ -748,23 +767,17 @@ function makeAssistantToolPreambleEntries(): ConversationEntry[] {
       text: 'I will read the README first.',
       finalized: true,
     },
-    {
-      id: 'preamble-tool',
-      role: 'tool',
-      text: '',
-      finalized: true,
-      toolUse: {
-        toolName: 'read_file',
-        errorText: '',
-        outputText: '',
-        userInstructionText: '',
-        input: { path: 'README.md' },
-        isError: false,
-        isUserFeedback: false,
-        headerSummary: 'Read README.md',
-        status: TOOL_USE_STATUS.COMPLETED,
-      },
-    },
+    harnessToolEntry('preamble-tool', {
+      toolName: 'read_file',
+      errorText: '',
+      outputText: '',
+      userInstructionText: '',
+      input: { path: 'README.md' },
+      isError: false,
+      isUserFeedback: false,
+      headerSummary: 'Read README.md',
+      status: TOOL_USE_STATUS.COMPLETED,
+    }),
   ];
 }
 
@@ -828,23 +841,17 @@ function makeRejectedBashToolEntries(): ConversationEntry[] {
       text: 'Run a harmless command, but reject it at the approval prompt.',
       finalized: true,
     },
-    {
-      id: 'rejected-bash-tool',
-      role: 'tool',
-      text: '',
-      finalized: true,
-      toolUse: {
-        toolName: 'bash',
-        errorText: message,
-        outputText: message,
-        userInstructionText: '',
-        input: { command },
-        isError: true,
-        isUserFeedback: false,
-        headerSummary: command,
-        status: TOOL_USE_STATUS.COMPLETED,
-      },
-    },
+    harnessToolEntry('rejected-bash-tool', {
+      toolName: 'bash',
+      errorText: message,
+      outputText: message,
+      userInstructionText: '',
+      input: { command },
+      isError: true,
+      isUserFeedback: false,
+      headerSummary: command,
+      status: TOOL_USE_STATUS.COMPLETED,
+    }),
   ];
 }
 
