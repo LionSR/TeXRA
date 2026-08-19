@@ -6,17 +6,12 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ALL_HOST_PRODUCTION_ROOTS,
+  expectRealCoverage,
   productionFilesUnder,
   REPO_ROOT,
   stripComments,
 } from '../support/repoScan';
-
-const SCAN_ROOTS = [
-  'packages/cli/src',
-  'packages/desktop/src',
-  'packages/extension/src',
-  'src',
-] as const;
 
 /** Only the shared module may define the three-value TeXRA policy vocabulary. */
 const VOCABULARY_OWNER = 'src/shared/approvalPolicy.ts';
@@ -67,7 +62,7 @@ function offendersMatching(
   pattern: RegExp,
   allowlist: ReadonlySet<string>,
 ): string[] {
-  return SCAN_ROOTS.flatMap(productionFilesUnder)
+  return ALL_HOST_PRODUCTION_ROOTS.flatMap(productionFilesUnder)
     .filter((file) => !allowlist.has(file))
     .filter((file) => pattern.test(readProductionSource(file)))
     .toSorted();
@@ -106,10 +101,6 @@ describe('approval policy authority ratchet', () => {
   });
 
   it('actually scans the production source roots', () => {
-    const scanned = SCAN_ROOTS.reduce(
-      (total, root) => total + productionFilesUnder(root).length,
-      0,
-    );
-    expect(scanned).toBeGreaterThan(100);
+    expectRealCoverage(ALL_HOST_PRODUCTION_ROOTS);
   });
 });

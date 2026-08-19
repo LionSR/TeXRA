@@ -22,7 +22,7 @@ import {
 } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import { refreshSubscriptionPreferenceViews } from '../state/codexSubscription';
+import { refreshSubscriptionPreferenceViews } from '../state/subscriptionPreference';
 import { AgentRosterForm } from './AgentRosterForm';
 import { ConfigForm, type ConfigFormProps } from './ConfigForm';
 import {

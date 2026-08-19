@@ -84,7 +84,6 @@ vi.mock('@frontend/secretManager', () => ({
   SecretManager: {
     hasUsableApiKey: mocks.hasUsableApiKey,
     API_PROVIDERS: MOCK_API_PROVIDERS,
-    getApiKeySecretName: (provider: string) => `apiKey.${provider}`,
   },
 }));
 

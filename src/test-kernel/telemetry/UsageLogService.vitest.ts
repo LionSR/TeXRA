@@ -11,9 +11,8 @@ import {
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import {
-  TELEMETRY_ENABLED_KEY,
   USAGE_LOG_FLUSH_OUTCOME,
   UsageLogService,
 } from '@telemetry/UsageLogService';

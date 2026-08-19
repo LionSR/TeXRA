@@ -59,7 +59,7 @@ import {
 } from '@shared/schemas';
 import type { TranscriptRowOf } from '@shared/transcript';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
-import { buildChildRosters } from '@test/support/childStreamEntries';
+import { buildChildRosters } from '@test/support/childRosters';
 import {
   fileListRowFixture,
   toolRowFixture,

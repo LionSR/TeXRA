@@ -50,11 +50,11 @@ function statusInput(
     bypass: NO_BYPASS,
     queuedFollowUpMessages: [],
     usage: undefined,
+    contextState: undefined,
     stage: undefined,
     subagents: 0,
     runningSessions: 0,
     approvalDepth: 0,
-    model: 'deepseekT',
     modelAccess: 'personal',
     ...rest,
     foreground: { ...foreground },
@@ -477,7 +477,6 @@ describe('CLI StatusBar display model', () => {
   it('advertises root agent selection while setup can still change it', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        model: 'gpt54',
         width: 80,
         shortcuts: { agentSelectionAvailable: true },
       }),
@@ -491,7 +490,6 @@ describe('CLI StatusBar display model', () => {
   it('does not let setup bindings hide full output when it fits', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        model: 'gpt54',
         width: 100,
         shortcuts: { agentSelectionAvailable: true, transcriptAvailable: true },
       }),
@@ -534,7 +532,6 @@ describe('CLI StatusBar display model', () => {
   it('keeps root agent selection visible when setup bindings get narrow', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        model: 'gpt54',
         width: 50,
         shortcuts: { agentSelectionAvailable: true },
       }),
@@ -641,7 +638,11 @@ describe('CLI StatusBar display model', () => {
           'Keep the proof under one page.',
           'Also mention the finite monoid argument.',
         ],
-        usage: { inputTokens: 80_000, outputTokens: 25_000, cost: 0 },
+        contextState: {
+          inputTokens: 80_000,
+          contextWindow: 1_000_000,
+          utilizationPercent: 8,
+        },
         stage: { kind: 'round', index: 1 },
         subagents: 2,
         approvalDepth: 3,
@@ -712,51 +713,29 @@ describe('CLI StatusBar display model', () => {
     expect(leftTexts(display).some((text) => text.includes('/'))).toBe(false);
   });
 
-  it.each(['relay', 'api-key'] as const)(
-    'shows the raw registry context window for %s usage',
-    (usageRoute) => {
-      const display = buildStatusBarDisplay(
-        statusInput({
-          status: STREAM_PHASE.RUNNING,
-          model: 'gpt56',
-          usage: heavyUsage(usageRoute),
-        }),
-      );
-      expect(leftTexts(display)).toContain('187k/1.1M (18%)');
-    },
-  );
-
-  it('caps the context window to the subscription budget for chatgpt-subscription usage', () => {
+  it('reports the window the model handler served, not a registry lookup', () => {
+    // gpt-5.6's raw registry window is 1.05M, but a Codex-subscription turn
+    // runs under a 400k budget — and a compacted turn under something else
+    // again. The handler stamps what it used; the bar renders that verbatim.
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        model: 'gpt56',
         usage: heavyUsage('chatgpt-subscription'),
-      }),
-    );
-
-    // gpt-5.6's Codex subscription budget caps to 400k (272k input plus its
-    // 128k output allowance), not the raw 1.05M API window.
-    expect(leftTexts(display)).toContain('187k/400k (47%)');
-  });
-
-  it('uses the default 400k subscription budget for earlier Codex models', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        status: STREAM_PHASE.RUNNING,
-        model: 'gpt55',
-        usage: heavyUsage('chatgpt-subscription'),
+        contextState: {
+          inputTokens: 187_000,
+          contextWindow: 400_000,
+          utilizationPercent: 46.8,
+        },
       }),
     );
 
     expect(leftTexts(display)).toContain('187k/400k (47%)');
   });
 
-  it('does not substitute a raw context window for unknown subscription models', () => {
+  it('shows a bare token count until the handler reports a window', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        model: 'unknown-subscription-model',
         usage: heavyUsage('chatgpt-subscription'),
       }),
     );
@@ -1623,7 +1602,11 @@ describe('CLI StatusBar display model', () => {
   it('compacts token usage to a percentage before dropping it on narrow widths', () => {
     const input = statusInput({
       status: STREAM_PHASE.RUNNING,
-      usage: { inputTokens: 80_000, outputTokens: 25_000, cost: 0 },
+      contextState: {
+        inputTokens: 80_000,
+        contextWindow: 1_000_000,
+        utilizationPercent: 8,
+      },
     });
 
     // Wide: the full usage segment fits.

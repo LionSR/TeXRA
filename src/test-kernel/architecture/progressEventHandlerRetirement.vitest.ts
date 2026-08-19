@@ -6,6 +6,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ALL_HOST_PRODUCTION_ROOTS,
+  expectRealCoverage,
   productionFilesUnder,
   REPO_ROOT,
   stripComments,
@@ -20,13 +22,6 @@ const RETIRED_DESKTOP_PROGRESS_BRIDGE_TERMS = [
   'DesktopProgressEventBridge',
   'desktopProgressEventBridge',
   'progress-event bridge',
-] as const;
-
-const SCAN_ROOTS = [
-  'packages/cli/src',
-  'packages/desktop/src',
-  'packages/extension/src',
-  'src',
 ] as const;
 
 function mentionsRetiredSymbol(file: string): boolean {
@@ -50,7 +45,7 @@ describe('ProgressEventHandler retirement boundary', () => {
   );
 
   it('removes the ProgressEventHandler class name from production sources', () => {
-    const offenders = SCAN_ROOTS.flatMap(productionFilesUnder)
+    const offenders = ALL_HOST_PRODUCTION_ROOTS.flatMap(productionFilesUnder)
       .filter(mentionsRetiredSymbol)
       .toSorted();
 
@@ -66,10 +61,6 @@ describe('ProgressEventHandler retirement boundary', () => {
   });
 
   it('actually scans the production source roots', () => {
-    const scanned = SCAN_ROOTS.reduce(
-      (total, root) => total + productionFilesUnder(root).length,
-      0,
-    );
-    expect(scanned).toBeGreaterThan(100);
+    expectRealCoverage(ALL_HOST_PRODUCTION_ROOTS);
   });
 });

@@ -597,7 +597,7 @@ describe('CLI workflow-script child-stream transcript', () => {
 
     const buildState = (repaintEpoch = 0) =>
       buildStaticTranscriptState({
-        childStreamEntries: new Map(),
+        childRosters: new Map(),
         maxRows: undefined,
         meta: SESSION_META,
         ownerKey: 'root',
@@ -611,7 +611,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       current: ReturnType<typeof buildStaticTranscriptState>,
     ): ReturnType<typeof buildStaticTranscriptState> =>
       advanceStaticTranscriptState(current, {
-        childStreamEntries: new Map(),
+        childRosters: new Map(),
         maxRows: undefined,
         meta: SESSION_META,
         ownerKey: 'root',
@@ -1056,7 +1056,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     ).toEqual([]);
 
     const staticItems = appendItems([], {
-      childStreamEntries: new Map([
+      childRosters: new Map([
         [
           PARENT_STREAM_ID,
           [

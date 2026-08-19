@@ -14,8 +14,6 @@ import { Box, Text, useApp } from 'ink';
 import { useState } from 'react';
 
 import { listExecutions } from '@agent/storage';
-import type { CodexSession } from '@auth/codex';
-import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
@@ -24,11 +22,14 @@ import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { CROSS } from '@cli/tui/ui/glyphs';
+import {
+  subscriptionProvider,
+  type SubscriptionAccount,
+} from '@controllers/modelAccess/subscriptionProviders';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { warn as logWarning } from '@logger/logUtils';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import {
   backfillFirstRunDone,
@@ -47,7 +48,7 @@ import {
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
-import { signInCliChatGpt } from '../runtime/chatgptLogin';
+import { signInCliSubscription } from '../runtime/subscriptionLogin';
 import { hasCliRunCredential } from '../runtime/credentialStatus';
 import { saveProviderApiKey } from '../runtime/providerApiKey';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
@@ -296,8 +297,8 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
   }
 
   if (screen === 'chatgpt-progress') {
-    const onSuccess = (session: CodexSession): void => {
-      const label = codexAccountLabel(session);
+    const onSuccess = (account: SubscriptionAccount): void => {
+      const label = account.label;
       finish({
         configured: true,
         declined: false,
@@ -496,7 +497,7 @@ function ProgressFrame(props: {
 }
 
 interface ChatGptProgressCallbacks {
-  readonly onSuccess: (session: CodexSession) => void;
+  readonly onSuccess: (account: SubscriptionAccount) => void;
   readonly onError: (message: string) => void;
 }
 
@@ -514,7 +515,8 @@ function ChatGptProgressStep(
 
   useCancellableEffect(async (isCancelled) => {
     try {
-      const session = await signInCliChatGpt(
+      const account = await signInCliSubscription(
+        'chatgpt',
         { device, noBrowser: false },
         {
           writeProgress: (next) => {
@@ -522,7 +524,8 @@ function ChatGptProgressStep(
           },
         },
       );
-      const update = await setPreferCodexSubscription(true);
+      const update =
+        await subscriptionProvider('chatgpt').setPreferSubscription(true);
       if (!update.effective) {
         if (!isCancelled()) {
           props.onError(
@@ -532,7 +535,7 @@ function ChatGptProgressStep(
         return;
       }
       invalidateModelOptionsCache();
-      if (!isCancelled()) props.onSuccess(session);
+      if (!isCancelled()) props.onSuccess(account);
     } catch (loginError: unknown) {
       if (!isCancelled()) props.onError(toErrorMessage(loginError));
     }

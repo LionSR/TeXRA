@@ -5,15 +5,10 @@
  * Grok, xAI models route through the OAuth access token instead of the user's
  * API key.
  */
-import {
-  createSubscriptionPreference,
-  type SubscriptionPreferenceUpdate,
-} from '../subscriptionPreference';
+import { createSubscriptionPreference } from '../subscriptionPreference';
 
 /** Config key for the "prefer my Grok subscription" switch (off by default). */
 const XAI_PREFER_SUBSCRIPTION_KEY = 'texra.xaiGrok.preferSubscription';
-
-export type XaiSubscriptionPreferenceUpdate = SubscriptionPreferenceUpdate;
 
 const preference = createSubscriptionPreference(XAI_PREFER_SUBSCRIPTION_KEY);
 

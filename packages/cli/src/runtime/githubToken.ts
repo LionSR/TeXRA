@@ -3,7 +3,7 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
-import { looksLikeCredentialPlaceholder } from './credentialInput';
+import { looksLikeCredentialPlaceholder } from '@utils/text/credentialPlaceholder';
 
 export type GitHubTokenStatus = 'secret' | 'env' | 'none';
 

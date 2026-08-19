@@ -1,23 +1,12 @@
-import { xaiAccountLabel } from '@auth/xai';
-import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import {
   refreshSubscriptionPreferenceViews,
-  setCliCodexSubscription,
-} from '@cli/chat/tui/state/codexSubscription';
-import { setCliXaiSubscription } from '@cli/chat/tui/state/xaiSubscription';
-import {
-  chatGptSignOutPreferenceMessage,
-  signInCliChatGpt,
-  signOutCliChatGpt,
-} from '@cli/runtime/chatgptLogin';
-import {
-  grokSignOutPreferenceMessage,
-  signInCliGrok,
-  signOutCliGrok,
-} from '@cli/runtime/grokLogin';
+  setCliSubscriptionPreference,
+} from '@cli/chat/tui/state/subscriptionPreference';
 import {
   shouldUseSubscriptionDeviceCode,
-  type CliSubscriptionLoginOptions,
+  signInCliSubscription,
+  signOutCliSubscription,
+  subscriptionSignOutPreferenceMessage,
   type CliSubscriptionLoginTransportInit,
 } from '@cli/runtime/subscriptionLogin';
 import { loadCliModelAccessOverview } from '@cli/runtime/apiStatus';
@@ -38,7 +27,7 @@ import {
   signOutCliSupabase,
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
-import type { SubscriptionPreferenceUpdate } from '@model/subscriptionPreference';
+import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import {
   CHATGPT_AUTH,
   GROK_AUTH,
@@ -87,70 +76,34 @@ interface SubscriptionAuthCopy {
   ) => string;
 }
 
+const SUBSCRIPTION_AUTH_COPY: Record<
+  SubscriptionProviderId,
+  SubscriptionAuthCopy
+> = { chatgpt: CHATGPT_AUTH, grok: GROK_AUTH };
+
 /**
- * Shared subscription sign-in flow, mirroring `signOutSubscription` below:
- * sign in with a copyable progress writer, flip the subscription preference,
- * then report the outcome. Only the provider-specific pieces vary (the sign-in
- * fn, the preference setter, the account-label fn, and the auth copy), so a
- * future post-login step has one place to live instead of two.
+ * Subscription sign-in from the chat TUI, mirroring `signOutSubscription`
+ * below: sign in with a copyable progress writer, flip the subscription
+ * preference, then report the outcome in this surface's copy.
  */
-async function signInSubscription<TSession>(params: {
-  init: CliSubscriptionLoginTransportInit;
-  output: SlashCommandOutput;
-  signal: AbortSignal;
-  signIn: (
-    init: CliSubscriptionLoginTransportInit,
-    options: CliSubscriptionLoginOptions,
-  ) => Promise<TSession>;
-  setEnabled: () => Promise<SubscriptionPreferenceUpdate>;
-  accountLabel: (session: TSession) => string;
-  auth: SubscriptionAuthCopy;
-}): Promise<void> {
-  const { init, output, signal, signIn, setEnabled, accountLabel, auth } =
-    params;
-  const session = await signIn(init, {
+async function loginToSubscription(
+  providerId: SubscriptionProviderId,
+  args: CliSubscriptionLoginTransportInit,
+  output: SlashCommandOutput,
+  signal: AbortSignal,
+): Promise<void> {
+  const account = await signInCliSubscription(providerId, args, {
     writeProgress: (message) =>
       output.writeProgress(message, { copyable: true }),
     signal,
   });
-  const update = await setEnabled();
+  const update = await setCliSubscriptionPreference(providerId, true);
+  const auth = SUBSCRIPTION_AUTH_COPY[providerId];
   output.appendOutcome(
     update.effective
-      ? auth.signedInEnabled(accountLabel(session))
-      : auth.signedInOverrideDisabled(accountLabel(session), update.target),
+      ? auth.signedInEnabled(account.label)
+      : auth.signedInOverrideDisabled(account.label, update.target),
   );
-}
-
-async function loginToChatGptSubscription(
-  args: Extract<CliLoginSlashArgs, { target: 'chatgpt' }>,
-  output: SlashCommandOutput,
-  signal: AbortSignal,
-): Promise<void> {
-  await signInSubscription({
-    init: args,
-    output,
-    signal,
-    signIn: signInCliChatGpt,
-    setEnabled: () => setCliCodexSubscription(true),
-    accountLabel: codexAccountLabel,
-    auth: CHATGPT_AUTH,
-  });
-}
-
-async function loginToGrokSubscription(
-  args: Extract<CliLoginSlashArgs, { target: 'grok' }>,
-  output: SlashCommandOutput,
-  signal: AbortSignal,
-): Promise<void> {
-  await signInSubscription({
-    init: args,
-    output,
-    signal,
-    signIn: signInCliGrok,
-    setEnabled: () => setCliXaiSubscription(true),
-    accountLabel: xaiAccountLabel,
-    auth: GROK_AUTH,
-  });
 }
 
 async function loginToTexraAccount(
@@ -216,12 +169,8 @@ export function loginFromChat(
     }
     output.writeProgress(loginStartMessage(loginArgs));
 
-    if (loginArgs.target === 'chatgpt') {
-      await loginToChatGptSubscription(loginArgs, output, signal);
-      return;
-    }
-    if (loginArgs.target === 'grok') {
-      await loginToGrokSubscription(loginArgs, output, signal);
+    if (loginArgs.target === 'chatgpt' || loginArgs.target === 'grok') {
+      await loginToSubscription(loginArgs.target, loginArgs, output, signal);
       return;
     }
     await loginToTexraAccount(loginArgs, output, signal);
@@ -251,35 +200,26 @@ export async function logoutFromChat(
     }
   }
 
-  async function signOutSubscription<T>(
+  async function signOutSubscription(
+    providerId: SubscriptionProviderId,
     label: string,
-    signOut: () => Promise<T>,
-    preferenceMessage: (update: T) => string,
   ): Promise<void> {
     try {
-      const update = await signOut();
+      const update = await signOutCliSubscription(providerId);
       refreshSubscriptionPreferenceViews();
       lines.push(`Signed out of ${label}.`);
-      lines.push(preferenceMessage(update));
+      lines.push(subscriptionSignOutPreferenceMessage(providerId, update));
     } catch (error: unknown) {
       lines.push(`${label} sign-out failed: ${toErrorMessage(error)}`);
     }
   }
 
   if (target === 'chatgpt' || target === 'all') {
-    await signOutSubscription(
-      CHATGPT_AUTH.label,
-      signOutCliChatGpt,
-      chatGptSignOutPreferenceMessage,
-    );
+    await signOutSubscription('chatgpt', CHATGPT_AUTH.label);
   }
 
   if (target === 'grok' || target === 'all') {
-    await signOutSubscription(
-      GROK_AUTH.label,
-      signOutCliGrok,
-      grokSignOutPreferenceMessage,
-    );
+    await signOutSubscription('grok', GROK_AUTH.label);
   }
 
   try {

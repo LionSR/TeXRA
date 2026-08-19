@@ -24,6 +24,9 @@ import {
   settingEnumChoices,
   settingEnumOptions,
   settingsViewSettingByKey,
+  settingsViewSnapshotEntries,
+  SETTINGS_SNAPSHOT_COMMANDS,
+  dispatchSettingsViewOutbound,
   stateSettingByKey,
   REASONING_LEVEL_OPTIONS,
   CLAUDE_AGENT_DEFAULT_EFFORT,
@@ -34,10 +37,12 @@ import {
   CODEX_SANDBOX_MODE_DEFAULT,
 } from '@shared/schemas';
 import type {
+  DerivedSettingsSnapshot,
   SettingHost,
   SettingStore,
   StateSettingEntry,
 } from '@shared/schemas';
+import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import {
   DEFAULT_HELPER_MODEL,
   PROVIDER_ENDPOINT_STATE_ENTRIES,
@@ -456,6 +461,45 @@ describe('state settings catalog', () => {
         settingDefault(entry),
         EXPECTED_DEFAULTS[entry.key],
         entry.key,
+      );
+    }
+  });
+});
+
+describe('catalog-derived settings snapshots', () => {
+  // The durable boundary this PR creates: a snapshot's outbound payload, its
+  // backend read, and the row list are the same thing. Adding a row to a
+  // snapshot must reach the wire without another edit, and the arm's
+  // `strictObject` must accept exactly what the builder produces.
+  it("puts exactly the snapshot's catalog rows on the wire", () => {
+    const { stores } = makeFakeSettingsStores();
+
+    for (const snapshot of Object.keys(
+      SETTINGS_SNAPSHOT_COMMANDS,
+    ) as DerivedSettingsSnapshot[]) {
+      const message = buildSettingsSnapshotMessage(snapshot, stores, 'vscode');
+      assert.ok(
+        Object.keys(message.values).length > 0,
+        `${snapshot} carries no rows`,
+      );
+      assert.deepEqual(
+        Object.keys(message.values).sort(),
+        settingsViewSnapshotEntries(snapshot)
+          .map((entry) => entry.key)
+          .sort(),
+        `${snapshot} payload keys`,
+      );
+      // The multi-agent arm alone carries a non-catalog field.
+      const posted =
+        snapshot === 'multi-agent'
+          ? { ...message, reliabilitySettings: [] }
+          : message;
+      assert.equal(
+        dispatchSettingsViewOutbound(posted, {
+          [message.command]: () => {},
+        } as never),
+        true,
+        `${snapshot} arm rejected its own builder output`,
       );
     }
   });

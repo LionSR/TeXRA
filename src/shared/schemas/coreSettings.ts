@@ -40,6 +40,9 @@ export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
 export const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY =
   'texra.childRunConcurrencyBudget';
 
+/** Canonical config key for the usage-telemetry opt-in. */
+export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
+
 export type LatexdiffTempFileLocation =
   (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number];
 

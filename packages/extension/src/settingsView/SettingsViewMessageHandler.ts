@@ -16,6 +16,8 @@ import { AUTH_COMMANDS } from '@auth/constants';
 import { globalSM, workspaceSM } from '@common/state';
 import { BaseViewMessageHandler } from '@common/webview';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
+import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
+import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
   buildToolDashboardItems,
@@ -24,7 +26,7 @@ import {
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
-import { SecretManager, type ApiProvider } from '@frontend/secretManager';
+import { SecretManager } from '@frontend/secretManager';
 import {
   getMainWebview,
   safeExecuteCommand,
@@ -63,6 +65,7 @@ import {
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
 import type {
+  DerivedSettingsSnapshot,
   SettingsMessageFor,
   SettingsViewInboundHandlerRegistry,
   SettingsViewSnapshot,
@@ -72,6 +75,7 @@ import {
   dispatchSettingsViewInbound,
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas';
+import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 
 import {
   applyStateSettingUpdate,
@@ -79,32 +83,21 @@ import {
 } from '@shared/settingsView/handlers/stateSettingWrite';
 
 import { unsupportedCommands } from '@shared/utils/dispatcher';
-import { buildApprovalSettingsMessage } from '@shared/settingsView/handlers/approvalHandlers';
-import { buildAgentSkillsSettingsMessage } from '@shared/settingsView/handlers/agentSkillsHandlers';
-import { buildTelemetrySettingsMessage } from '@shared/settingsView/handlers/telemetrySettingsHandlers';
-import { buildReliabilityAndOrchestrationMessage } from '@shared/settingsView/handlers/superYoloHandlers';
+import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   getLastCheckResults,
   refreshToolAvailability,
 } from '@tools/toolAvailability';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import {
-  buildGitAuthorSettingsMessage,
-  readGitAuthorSettingsFromState,
-  type GitAuthorSettings,
-} from '@utils/system/gitAuthorSettings';
 import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { MemoryHandlers } from './handlers/memoryHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
-import {
-  CHATGPT_SUBSCRIPTION_PROVIDER,
-  GROK_SUBSCRIPTION_PROVIDER,
-  SubscriptionHandlers,
-} from './handlers/subscriptionHandlers';
+import { SubscriptionHandlers } from './handlers/subscriptionHandlers';
 import {
   sendSubscriptionUsage,
   type SubscriptionUsageReader,
@@ -164,12 +157,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.profileController.getProviderDisplayName(provider),
       getProviderKeyUrl: (provider) =>
         this.profileController.getProviderKeyUrl(provider),
-      getApiKeySecretName: (provider) =>
-        SecretManager.getApiKeySecretName(provider as ApiProvider),
-      setSecret: (key, value) => platform().secrets.set(key, value),
-      deleteSecret: (key) => platform().secrets.delete(key),
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
+      reportFailure: async (message, error) => {
+        await showLoggedErrorMessage(this.channel, message, error);
+        // On error, still refresh settings view to reflect current key state.
+        await this.withActiveWebview((w) =>
+          this.sendProfileAndModelSelectionData(w),
+        );
+      },
     });
     this.agentHandlers = new AgentHandlers(
       ctx,
@@ -187,13 +183,23 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
     this.chatgptHandlers = new SubscriptionHandlers(
-      CHATGPT_SUBSCRIPTION_PROVIDER,
+      'chatgpt',
+      () =>
+        buildAuthStatusMessage(
+          SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+          getChatGptAuthStatus,
+        ),
       ctx,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
     );
     this.signInChatGpt = this.chatgptHandlers.handleSignIn;
     this.grokHandlers = new SubscriptionHandlers(
-      GROK_SUBSCRIPTION_PROVIDER,
+      'grok',
+      () =>
+        buildAuthStatusMessage(
+          SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
+          getGrokAuthStatus,
+        ),
       ctx,
       () => this.refreshAfterSubscriptionAuthChange(),
     );
@@ -251,16 +257,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       signOut: () =>
         safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
       setProviderKey: (message) =>
-        this.runProviderKeyAction(message.provider, 'set', (targetProvider) =>
-          this.profileKeyController.setProviderKey(targetProvider),
-        ),
+        this.profileKeyController.setProviderKey(message.provider),
       removeProviderKey: (message) =>
-        this.runProviderKeyAction(
-          message.provider,
-          'remove',
-          (targetProvider) =>
-            this.profileKeyController.removeProviderKey(targetProvider),
-        ),
+        this.profileKeyController.removeProviderKey(message.provider),
       openProviderKeyUrl: (message) =>
         this.profileKeyController.openProviderKeyUrl(message.provider),
       setProviderSetting: (message) => this.handleSetProviderSetting(message),
@@ -435,16 +434,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.memoryHandlers.sendMemoryEnabled(webview),
       this.agentHandlers.sendAgentSelectionData(webview),
       this.agentHandlers.sendCustomAgentDir(webview),
-      this.sendReliabilityAndOrchestrationSettings(webview),
+      this.sendSettingsSnapshot(webview, 'multi-agent'),
       this.agentHandlers.sendAgentModePresets(webview),
-      this.sendGitAuthorSettings(webview),
+      this.sendSettingsSnapshot(webview, 'git-author'),
       this.githubHandlers.sendGitHubTokenStatus(webview),
       this.chatgptHandlers.sendAuthStatus(webview),
       this.grokHandlers.sendAuthStatus(webview),
       this.githubHandlers.sendPRSubscriptions(webview),
-      this.sendApprovalSettings(webview),
-      this.sendAgentSkillsSettings(webview),
-      this.sendTelemetrySettings(webview),
+      this.sendSettingsSnapshot(webview, 'approval'),
+      this.sendSettingsSnapshot(webview, 'agent-skills'),
+      this.sendSettingsSnapshot(webview, 'telemetry'),
       this.latexHandlers.sendLatexSettingsStatus(webview),
       this.latexHandlers.sendLatexConfigValues(webview),
       this.sendInlineCriticismEnabled(webview),
@@ -488,62 +487,48 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   // ============================================================
-  // Multi-agent coordination handler implementations
+  // Catalog-derived settings snapshots
   // ============================================================
 
-  private async sendReliabilityAndOrchestrationSettings(
+  private settingsStores(): SettingsStores {
+    return {
+      config: platform().config,
+      workspaceState: workspaceSM,
+      globalState: globalSM,
+    };
+  }
+
+  /**
+   * Post one catalog-derived snapshot. Every field comes from the settings
+   * catalog, so the only per-snapshot code left is the multi-agent arm's
+   * host-specific reliability tuning, which has no catalog row.
+   */
+  private async sendSettingsSnapshot(
     webview: vscode.Webview,
+    snapshot: DerivedSettingsSnapshot,
   ): Promise<void> {
+    const message = buildSettingsSnapshotMessage(
+      snapshot,
+      this.settingsStores(),
+      'vscode',
+    );
     await webview.postMessage(
-      buildReliabilityAndOrchestrationMessage({
-        workspaceState: workspaceSM,
-        globalState: globalSM,
-        config: platform().config,
-        getReliabilitySettings: () =>
-          this.profileController.getReliabilitySettings(),
-      }),
+      snapshot === 'multi-agent'
+        ? {
+            ...message,
+            reliabilitySettings:
+              this.profileController.getReliabilitySettings(),
+          }
+        : message,
     );
   }
 
-  // ============================================================
-  // Git author settings handler implementations
-  // ============================================================
-
-  private async sendGitAuthorSettings(
-    webview: vscode.Webview,
-    settings?: GitAuthorSettings,
+  private rebroadcastSnapshot(
+    snapshot: DerivedSettingsSnapshot,
   ): Promise<void> {
-    await webview.postMessage(
-      buildGitAuthorSettingsMessage(
-        settings ?? readGitAuthorSettingsFromState(workspaceSM),
-      ),
+    return this.withActiveWebview((w) =>
+      this.sendSettingsSnapshot(w, snapshot),
     );
-  }
-
-  // ============================================================
-  // Approval settings handler implementations
-  // ============================================================
-
-  private async sendApprovalSettings(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(
-      buildApprovalSettingsMessage({
-        workspaceState: workspaceSM,
-        globalState: globalSM,
-        config: platform().config,
-      }),
-    );
-  }
-
-  private async sendAgentSkillsSettings(
-    webview: vscode.Webview,
-  ): Promise<void> {
-    await webview.postMessage(
-      buildAgentSkillsSettingsMessage(platform().config),
-    );
-  }
-
-  private async sendTelemetrySettings(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(buildTelemetrySettingsMessage(platform().config));
   }
 
   /**
@@ -552,11 +537,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
     const result = await applyStateSettingUpdate(key, value, {
       host: 'vscode',
-      stores: {
-        config: platform().config,
-        workspaceState: workspaceSM,
-        globalState: globalSM,
-      },
+      stores: this.settingsStores(),
       // The shared function already gates this hook on
       // `configTarget !== 'global'`; this checks only the workspace half.
       requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
@@ -602,15 +583,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     snapshot: SettingsViewSnapshot,
   ): Promise<void> {
     await dispatchStateSettingSnapshot(snapshot, {
-      'agent-skills': () =>
-        this.withActiveWebview((w) => this.sendAgentSkillsSettings(w)),
-      approval: () =>
-        this.withActiveWebview((w) => this.sendApprovalSettings(w)),
+      'agent-skills': () => this.rebroadcastSnapshot('agent-skills'),
+      approval: () => this.rebroadcastSnapshot('approval'),
       'git-author': () => {
-        const settings = applyGitAuthorConfig();
-        return this.withActiveWebview((w) =>
-          this.sendGitAuthorSettings(w, settings),
-        );
+        // Git identity is also process env, so the write must reach `git`
+        // before the webview is told the new value stuck.
+        applyGitAuthorConfig();
+        return this.rebroadcastSnapshot('git-author');
       },
       latex: () =>
         this.withActiveWebview((w) =>
@@ -618,39 +597,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         ),
       models: () =>
         this.withActiveWebview((w) => this.sendModelSelectionData(w)),
-      'multi-agent': () =>
-        this.withActiveWebview((w) =>
-          this.sendReliabilityAndOrchestrationSettings(w),
-        ),
+      'multi-agent': () => this.rebroadcastSnapshot('multi-agent'),
       profile: () => this.withActiveWebview((w) => this.sendProfileData(w)),
-      telemetry: () =>
-        this.withActiveWebview((w) => this.sendTelemetrySettings(w)),
+      telemetry: () => this.rebroadcastSnapshot('telemetry'),
     });
   }
 
   // ============================================================
   // Profile handler implementations
   // ============================================================
-
-  private async runProviderKeyAction(
-    provider: string,
-    verb: 'set' | 'remove',
-    actionFn: (provider: string) => Promise<void>,
-  ): Promise<void> {
-    try {
-      await actionFn(provider);
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        `Failed to ${verb} ${this.profileController.getProviderDisplayName(provider)} API key`,
-        error,
-      );
-      // On error, still refresh settings view to reflect current key state.
-      await this.withActiveWebview((w) =>
-        this.sendProfileAndModelSelectionData(w),
-      );
-    }
-  }
 
   /**
    * The shared refresh tail for a credential change (API key or subscription
@@ -805,7 +760,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendProfileData(w),
-        this.sendReliabilityAndOrchestrationSettings(w),
+        this.sendSettingsSnapshot(w, 'multi-agent'),
       ]);
     });
   }
