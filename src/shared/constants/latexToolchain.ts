@@ -34,6 +34,20 @@ export const CORE_LATEX_TOOLS = Object.freeze([
 
 export const IMAGE_TOOLS = Object.freeze(['gm', 'magick'] as const);
 
+/**
+ * The LaTeX-to-PDF compilers TeXRA can actually drive: `compileLatex2Pdf` runs
+ * `latexmk` and falls back to `pdflatex`. Nothing here can invoke `xelatex` or
+ * `lualatex` and no setting selects a compiler, so they must not count as "a
+ * compiler is available". Single source for that answer — the doctor probe,
+ * the compile-check guard, the compile option enum, and the settings view's
+ * TeX-distribution row — so none of them can disagree with the advice text.
+ * Lives beside {@link CORE_LATEX_TOOLS} for the same LAY-1 cycle reason.
+ */
+export const SUPPORTED_LATEX_COMPILERS = Object.freeze([
+  'latexmk',
+  'pdflatex',
+] as const);
+
 /** Supported OS platform keys for install guides. */
 export type OSPlatform = 'darwin' | 'win32' | 'linux';
 

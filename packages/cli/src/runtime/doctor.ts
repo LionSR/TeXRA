@@ -261,7 +261,7 @@ async function checkLatex(
           'latex.compiler',
           'LaTeX compiler',
           'No supported LaTeX compiler was found on PATH.',
-          'Install latexmk, pdflatex, xelatex, or lualatex.',
+          'Install latexmk or pdflatex.',
         ),
       );
     }

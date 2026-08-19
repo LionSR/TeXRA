@@ -1,4 +1,7 @@
-import { CORE_LATEX_TOOLS } from '@shared/constants/latexToolchain';
+import {
+  CORE_LATEX_TOOLS,
+  SUPPORTED_LATEX_COMPILERS,
+} from '@shared/constants/latexToolchain';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
 // Kept in sync with @shared/constants/latex's CORE_LATEX_TOOLS SSOT: if one
@@ -28,8 +31,6 @@ interface LatexToolStatus {
 export interface LatexToolchainProbe {
   readonly tools: readonly LatexToolStatus[];
   readonly hasCompiler: boolean;
-  readonly hasBibliographyTool: boolean;
-  readonly hasLatexmk: boolean;
 }
 
 const TOOL_PURPOSES: Record<LatexToolName, string> = {
@@ -43,13 +44,20 @@ const TOOL_PURPOSES: Record<LatexToolName, string> = {
   latexindent: 'LaTeX formatting',
 };
 
-const COMPILER_TOOLS: readonly LatexToolName[] = [
-  'latexmk',
-  'pdflatex',
-  'xelatex',
-  'lualatex',
-];
-
+/**
+ * Tools whose absence `texra doctor` reports as a failing row (and therefore a
+ * nonzero exit), not a warning.
+ *
+ * Known residual, stated rather than hidden: `latexmk` is required here even
+ * though {@link SUPPORTED_LATEX_COMPILERS} accepts a pdflatex-only machine and
+ * `compileLatex2Pdf` falls back to a single pdflatex pass on it (degraded —
+ * bibliography, cross-references, and index may be incomplete). So a
+ * pdflatex-only install passes the `latex.compiler` check and still exits
+ * nonzero on the `latex.latexmk` row. That predates this list becoming the
+ * single compiler definition and is deliberately left alone: demoting latexmk
+ * to a warning changes `doctorExitCode` for a real machine configuration,
+ * which is a product decision, not a consolidation.
+ */
 const REQUIRED_TOOLS = new Set<LatexToolName>(['latexmk']);
 
 /** Probe the LaTeX tools used by both the extension and CLI surfaces. */
@@ -68,15 +76,13 @@ export async function probeLatexToolchain(): Promise<LatexToolchainProbe> {
   );
   return {
     tools,
-    hasCompiler: COMPILER_TOOLS.some((name) => installed.has(name)),
-    hasBibliographyTool: installed.has('bibtex') || installed.has('biber'),
-    hasLatexmk: installed.has('latexmk'),
+    hasCompiler: SUPPORTED_LATEX_COMPILERS.some((name) => installed.has(name)),
   };
 }
 
-/** Returns true when a supported LaTeX-to-PDF compiler is available. */
+/** Returns true when a compiler {@link compileLatex2Pdf} can drive is on PATH. */
 export async function hasLatexCompiler(): Promise<boolean> {
-  for (const tool of COMPILER_TOOLS) {
+  for (const tool of SUPPORTED_LATEX_COMPILERS) {
     if (await checkToolInstalled(tool, false)) return true;
   }
   return false;
