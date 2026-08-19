@@ -10,8 +10,8 @@
 // Deliberately prop-poor: `title` is the command being demonstrated (the house
 // convention for .mk-term-title) and `ariaLabel` defaults to it. No density or
 // variant props — prompt lines, tool rows, tables, and diff hunks belong to
-// the consumer. Frameless comparisons (CliAuthModesHero, ConfigPrecedenceStack)
-// should NOT be forced through this primitive.
+// the consumer. Frameless comparisons (ConfigPrecedenceStack) should NOT be
+// forced through this primitive.
 defineProps({
   title: { type: String, required: true },
   ariaLabel: { type: String, default: '' },

@@ -12,7 +12,6 @@ import {
   type OAuthProvider,
 } from '@auth/config';
 import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   SupabaseSessionCoordinator,
   type SupabaseSession,
@@ -81,7 +80,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    */
   private async storeSession(session: SupabaseSession): Promise<void> {
     await this.sessionCoordinator.storeSession(session);
-    getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
     invalidateModelOptionsCache();
     this._onDidChangeSessions.fire({
       added: [this.toVSCodeSession(session)],
@@ -380,7 +378,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   private async afterLocalSessionCleared(sessionId: string): Promise<void> {
-    getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
     invalidateModelOptionsCache();
     await refreshRemoteAgentCatalogAfterSignOut(
       invalidateRemoteAgentsAfterSignOut,

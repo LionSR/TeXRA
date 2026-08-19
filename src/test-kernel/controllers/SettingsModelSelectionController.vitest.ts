@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { MAX_TIER } from '@auth/config';
 import {
   SettingsModelSelectionController,
   type SettingsModelSelectionControllerDeps,
@@ -64,21 +63,6 @@ function sonnet46CopilotRoutes(
 }
 
 describe('SettingsModelSelectionController', () => {
-  it('uses canonical tier constants for included-access reasoning caps', async () => {
-    const controller = createController({
-      useIncludedAccess: () => true,
-      getUserTier: () => MAX_TIER,
-    });
-
-    const { models } = await controller.buildSelectionData();
-    const gpt55 = models.find((model) => model.name === 'gpt55');
-
-    expect(gpt55).toMatchObject({
-      supportsReasoningLevel: true,
-      includedAccessReasoningCap: 'high',
-    });
-  });
-
   it('does not expose a reasoning selector for Kimi K3 fixed max effort', async () => {
     const controller = createController({
       globalState: new FakeStateStore({

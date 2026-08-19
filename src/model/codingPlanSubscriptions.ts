@@ -1,7 +1,6 @@
 import { ModelProvider } from 'llm-zoo';
 
 import { hasUsableApiKey } from '@model/apiProviders';
-import { includedModelAccess } from '@model/includedModelAccess';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { isKimiCodeSubscriptionActive } from '@model/providerCapabilities';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -36,13 +35,6 @@ async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
     shouldRouteModelThroughOpenRouter(config, getUseOpenRouter()) ||
     config.baseUrl != null ||
     getProviderEndpoint('glm') !== ''
-  ) {
-    return false;
-  }
-  const includedAccess = includedModelAccess();
-  if (
-    includedAccess.getUseIncludedModelAccess() &&
-    (await includedAccess.canUseServerSideKeys())
   ) {
     return false;
   }

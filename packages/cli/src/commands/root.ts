@@ -47,7 +47,6 @@ import { memoryCommand } from './memory';
 import { modelsCommand } from './models';
 import { multiAgentCommand } from './multiAgent';
 import { orchestrationCommand } from './orchestrate';
-import { setupTokenCommand } from './relayTokens';
 import { resumeCommand } from './resume';
 import { setupCommand } from './setup';
 import { skillsCommand } from './skills';
@@ -99,7 +98,6 @@ export const rootCommand = withUsageSections(
       login: loginCommand,
       logout: logoutCommand,
       auth: authCommand,
-      'setup-token': setupTokenCommand,
       doctor: doctorCommand,
       completion: completionCommand,
       version: versionCommand,

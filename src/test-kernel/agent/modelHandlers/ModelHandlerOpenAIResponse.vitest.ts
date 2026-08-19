@@ -1372,17 +1372,17 @@ describe('ModelHandlerOpenAIResponse.extractResponse', () => {
       name: 'preserves top-level output_text when output has no message text',
       response: {
         id: 'resp-top-level-text',
-        output_text: 'relay text',
+        output_text: 'proxy text',
         output: [{ type: 'reasoning', id: 'rs_1', summary: [] }],
       },
       endTag: '',
-      expected: 'relay text',
+      expected: 'proxy text',
     },
     {
       name: 'uses top-level output_text when output is absent',
-      response: { id: 'resp-output-missing', output_text: 'relay text' },
+      response: { id: 'resp-output-missing', output_text: 'proxy text' },
       endTag: '',
-      expected: 'relay text',
+      expected: 'proxy text',
     },
     {
       name: 'fills blank output_text from output message parts',

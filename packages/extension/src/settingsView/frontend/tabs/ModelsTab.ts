@@ -1,21 +1,15 @@
-/** API access, provider keys, and model selection for the settings view. */
+/** Provider keys and model selection for the settings view. */
 
-import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared schemas
-import {
-  type ModelSelectionItem,
-  type ProviderKeyStatus,
-  type SpendingStatus,
-  isSpendingQuotaExceeded,
-} from '@shared/schemas';
+import type { ModelSelectionItem, ProviderKeyStatus } from '@shared/schemas';
 
 // Local imports - settings view components (side-effect: register)
-import '../components/profile/ApiAccessSection';
 import '../components/profile/ProviderKeyList';
 import '../components/profile/ModelSelectionList';
 
@@ -33,10 +27,6 @@ export class ModelsTab extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) authenticated = false;
-  @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
-    'personal';
-  @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
@@ -45,23 +35,10 @@ export class ModelsTab extends LitElement {
   @property({ type: Boolean }) preferShortModelNames = false;
 
   override render(): TemplateResult {
-    const apiAccessSection = this.authenticated
-      ? html`<api-access-section
-          .mode=${this.apiAccessMode}
-          .includedAccessExhausted=${
-            this.spendingStatus
-              ? isSpendingQuotaExceeded(this.spendingStatus)
-              : false
-          }
-        ></api-access-section>`
-      : nothing;
-
     return html`
       <div class="models-container tab-content-container">
-        ${apiAccessSection}
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
-          .apiAccessMode=${this.apiAccessMode}
           .globalStreamingDefault=${this.globalStreamingDefault}
         ></provider-key-list>
         <model-selection-list

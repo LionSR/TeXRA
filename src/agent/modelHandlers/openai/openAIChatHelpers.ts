@@ -46,12 +46,9 @@ export function logOpenAICompatibleClientConfig(
   config: ResolvedModelConfig,
   baseURL: string,
   route: ModelCredentialRoute | undefined,
-  useServerSideKeys: boolean,
 ): void {
   let credential: string;
-  if (route === 'relay' || (route === undefined && useServerSideKeys)) {
-    credential = 'TeXRA relay access token';
-  } else if (route === 'chatgpt-subscription') {
+  if (route === 'chatgpt-subscription') {
     credential = 'ChatGPT subscription';
   } else if (route === 'xai-subscription') {
     credential = 'Grok subscription';

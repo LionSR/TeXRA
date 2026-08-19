@@ -29,12 +29,10 @@ export interface ProgressApiKeyRetryRequest {
    * retry panel opened. */
   kimiCodeRoutedOnFailure?: boolean;
   chatGptSubscriptionEligible?: boolean;
-  viaRelay?: boolean;
 }
 
 interface ProgressApiKeyPreparationResult {
   proceeded: boolean;
-  disabledIncludedModelAccess: boolean;
   /** Exhaustion reasons whose quota-fallback toggle was turned off. */
   disabledQuotaRoutes: readonly ExhaustionReason[];
 }
@@ -44,7 +42,6 @@ export interface ProgressApiKeyRetryResult extends ProgressApiKeyPreparationResu
 }
 
 interface ProgressApiRoutingSnapshot {
-  readonly useIncludedModelAccess: boolean;
   readonly quotaRoutes: ReadonlyMap<ExhaustionReason, boolean>;
 }
 
@@ -52,7 +49,6 @@ function noRetryResult(): ProgressApiKeyRetryResult {
   return {
     proceeded: false,
     retried: false,
-    disabledIncludedModelAccess: false,
     disabledQuotaRoutes: [],
   };
 }
@@ -62,8 +58,6 @@ export interface ProgressApiKeyRetryControllerDeps {
   readKey(provider: ApiProvider): Promise<string | undefined>;
   hasUsableKey(provider: ApiProvider): Promise<boolean>;
   promptForApiKey(provider?: ApiProvider): Promise<void>;
-  getUseIncludedModelAccess(): boolean;
-  setUseIncludedModelAccess(enabled: boolean): Promise<void>;
   /** Quota-fallback routes (ChatGPT, Grok, GLM, Kimi). Defaults to the
    *  shared runtime catalog. Tests inject a local table. */
   quotaFallbackRuntimes?: readonly QuotaFallbackRuntime[];
@@ -76,7 +70,8 @@ export interface ProgressApiKeyRetryControllerDeps {
 }
 
 /**
- * Owns the policy for switching from relay access to user-provided keys.
+ * Owns the policy for switching from a quota-exhausted subscription route to
+ * user-provided keys.
  *
  * The progress view host still owns prompts and messages; this controller keeps
  * the credential/retry rules testable without depending on VS Code APIs.
@@ -198,17 +193,15 @@ export class ProgressApiKeyRetryController {
     // The gate depends on which credential failed:
     // - Upstream credit depletion means the stored direct key is the broken
     //   credential, so the user must provide a changed usable key.
-    // - Relay monthly limits do not imply a broken direct key, so any usable
-    //   direct key is enough consent to retry outside the relay.
-    // Do not use "any API key exists" here; that also treats relay access as a
-    // credential, which would allow retrying without a usable direct key.
+    // - Subscription quota limits do not imply a broken direct key, so any
+    //   usable direct key is enough consent to retry on it.
     if (requireChange) {
       const before = await this.readKeys(providersToCheck);
       await this.deps.promptForApiKey(provider);
       return this.hasChangedUsableKey(providersToCheck, before);
     }
 
-    // Relay/subscription exhaustion does not break the stored direct key, so
+    // Subscription exhaustion does not break the stored direct key, so
     // if a usable one already exists, switch to it and retry without
     // re-prompting, since the user has already provided a key. Only prompt when
     // none exists yet, and only re-check the keys after that prompt (so the
@@ -228,18 +221,6 @@ export class ProgressApiKeyRetryController {
         candidate.descriptor.exhaustionReason === request.exhaustionReason,
     );
     return route?.descriptor.fallbackApiProvider ?? request.provider;
-  }
-
-  private shouldDisableIncludedModelAccess(
-    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
-  ): boolean {
-    if (request.viaRelay === true) return true;
-    if (request.exhaustionReason === 'copilot-subscription') return true;
-    return this.fallbackRuntimes.some(
-      (runtime) =>
-        this.shouldDisableRuntime(runtime, request) &&
-        runtime.descriptor.disableIncludedAccess,
-    );
   }
 
   /** Whether this route should turn off for `request`. Catalog match plus
@@ -272,8 +253,8 @@ export class ProgressApiKeyRetryController {
     // same key, so a later OpenRouter preference change cannot make the
     // rebuild take a non-coding route. The request's
     // `kimiCodeRoutedOnFailure` flag is captured from that failed handler,
-    // so unrelated `kimi3` failures through OpenRouter, Moonshot, or the
-    // relay leave the preference untouched.
+    // so unrelated `kimi3` failures through OpenRouter or Moonshot leave
+    // the preference untouched.
     return (
       runtime.descriptor.exhaustionReason === 'kimi-code-subscription' &&
       request.exhaustionReason === 'upstream-credit' &&
@@ -290,20 +271,8 @@ export class ProgressApiKeyRetryController {
     // is awaited: a setter can mutate in memory and then reject on
     // persistence, so a throw midway must roll back every switch that may
     // have landed instead of stranding global toggles the retry never uses.
-    let disabledIncludedModelAccess = false;
     const disabledQuotaRoutes: ExhaustionReason[] = [];
     try {
-      // Disable relay (included access) so the retry uses the user's own key,
-      // not the relay JWT, whenever the switch promises "your own API key".
-      // Both relay and subscription exhaustion fall through to a direct handler,
-      // which otherwise may still prefer included access over the stored key.
-      // A direct-key failure leaves relay untouched for other providers.
-      if (this.shouldDisableIncludedModelAccess(request)) {
-        disabledIncludedModelAccess = true;
-        await this.deps.setUseIncludedModelAccess(false);
-        this.deps.invalidateModelOptionsCache();
-      }
-
       // One chain: turn off every matching quota-fallback preference so the
       // retry rebuilds onto the fallback credential. Remark: prefer-off
       // sticks after the quota resets — users may forget to re-enable it.
@@ -320,13 +289,11 @@ export class ProgressApiKeyRetryController {
 
       return {
         proceeded: true,
-        disabledIncludedModelAccess,
         disabledQuotaRoutes,
       };
     } catch (error) {
       await this.restoreAfterError(before, {
         proceeded: true,
-        disabledIncludedModelAccess,
         disabledQuotaRoutes,
       });
       throw error;
@@ -349,7 +316,6 @@ export class ProgressApiKeyRetryController {
 
   private routingSnapshot(): ProgressApiRoutingSnapshot {
     return {
-      useIncludedModelAccess: this.deps.getUseIncludedModelAccess(),
       quotaRoutes: new Map(
         this.fallbackRuntimes.map((runtime) => [
           runtime.descriptor.exhaustionReason,
@@ -376,11 +342,6 @@ export class ProgressApiKeyRetryController {
         restores.push(() =>
           runtime.restoreEnabled(before.quotaRoutes.get(reason) ?? false),
         );
-    }
-    if (prepared.disabledIncludedModelAccess) {
-      restores.push(() =>
-        this.deps.setUseIncludedModelAccess(before.useIncludedModelAccess),
-      );
     }
     let firstFailure: unknown;
     for (const restore of restores) {

@@ -72,27 +72,22 @@ function isTelemetryDisabledByEnv(): boolean {
 /**
  * Routes whose records meter what the user consumed against their plan.
  *
- * The relay reads a database aggregate populated by `log-usage` to enforce the
- * monthly spend cap, and the subscription routes are accounted the same way. A
- * record on one of these routes is therefore not telemetry — dropping it lets
- * hosted calls continue against a stale total, past the cap. They are sent
- * regardless of {@link TELEMETRY_ENABLED_KEY}; the opt-out governs the
- * `api-key` (bring-your-own-key) rounds, which cost TeXRA nothing and exist
- * only as analytics.
+ * Subscription routes are accounted against a database aggregate populated by
+ * `log-usage`. A record on one of these routes is therefore not telemetry —
+ * dropping it lets hosted calls continue against a stale total, past the cap.
+ * They are sent regardless of {@link TELEMETRY_ENABLED_KEY}; the opt-out
+ * governs the `api-key` (bring-your-own-key) rounds, which cost TeXRA nothing
+ * and exist only as analytics.
  */
 const PLAN_ACCOUNTING_ROUTES = new Set<UsageRoute>([
-  'relay',
   'chatgpt-subscription',
   'xai-subscription',
   ...CODING_PLAN_SUBSCRIPTIONS.map((plan) => plan.usageRoute),
 ]);
 
-function isPlanAccounting(
-  entry: Pick<UsageLogEntry, 'usedRelay' | 'usageRoute'>,
-): boolean {
+function isPlanAccounting(entry: Pick<UsageLogEntry, 'usageRoute'>): boolean {
   return (
-    entry.usedRelay === true ||
-    (entry.usageRoute != null && PLAN_ACCOUNTING_ROUTES.has(entry.usageRoute))
+    entry.usageRoute != null && PLAN_ACCOUNTING_ROUTES.has(entry.usageRoute)
   );
 }
 
@@ -245,7 +240,7 @@ class UsageLogServiceImpl {
   private async flushQueuedBatch(): Promise<UsageLogFlushOutcome> {
     let batch: UsageLogBatch | null = null;
     try {
-      const token = await SupabaseClient.getRelayAccessToken();
+      const token = await SupabaseClient.getAccessToken();
       if (!token) {
         log.debug('Skipping flush - user not authenticated');
         return USAGE_LOG_FLUSH_OUTCOME.PENDING;

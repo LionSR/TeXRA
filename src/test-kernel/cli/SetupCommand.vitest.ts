@@ -7,14 +7,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // the decision flow in `runSetup` is real.
 
 const mocks = vi.hoisted(() => ({
-  hasCliCredentialForApiMode: vi.fn(),
+  hasCliRunCredential: vi.fn(),
   runCliOnboarding: vi.fn(),
   runChat: vi.fn(),
   initInteractiveCliPlatform: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/credentialStatus', () => ({
-  hasCliCredentialForApiMode: mocks.hasCliCredentialForApiMode,
+  hasCliRunCredential: mocks.hasCliRunCredential,
 }));
 
 vi.mock('@cli/onboarding/runOnboarding', () => ({
@@ -44,7 +44,7 @@ const INTERACTIVE_CONTEXT = createTestCliContext({
 
 describe('texra setup combined flow', () => {
   beforeEach(() => {
-    mocks.hasCliCredentialForApiMode.mockReset().mockResolvedValue(false);
+    mocks.hasCliRunCredential.mockReset().mockResolvedValue(false);
     mocks.runCliOnboarding
       .mockReset()
       .mockResolvedValue({ configured: false, declined: true });
@@ -109,7 +109,7 @@ describe('texra setup combined flow', () => {
   });
 
   it('skips the picker for already-credentialed users — straight to the agent', async () => {
-    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
+    mocks.hasCliRunCredential.mockResolvedValue(true);
 
     const exit = await runSetup(INTERACTIVE_CONTEXT);
 
@@ -121,7 +121,7 @@ describe('texra setup combined flow', () => {
   });
 
   it('propagates the chat session exit code', async () => {
-    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
+    mocks.hasCliRunCredential.mockResolvedValue(true);
     mocks.runChat.mockResolvedValue({ exitCode: CliExitCode.AgentError });
 
     await expect(runSetup(INTERACTIVE_CONTEXT)).resolves.toBe(

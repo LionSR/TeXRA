@@ -35,8 +35,7 @@ interface OpenRouterRoutingConfig {
  * {@link KimiSubscriptionModelFields}): a model whose `kimiSubscription` flag
  * pairs with a pinned Kimi Code `baseUrl` is served ONLY by that managed
  * endpoint (see {@link isKimiCodeExclusiveModel}), so its credential and
- * endpoint stay paired and it always bypasses OpenRouter and the
- * included-access relay.
+ * endpoint stay paired and it always bypasses OpenRouter.
  */
 export type ModelRoutingConfig = OpenRouterRoutingConfig &
   KimiSubscriptionModelFields;
@@ -89,13 +88,6 @@ export function resolveModelSource(
   config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
 ): string | undefined {
   return isKimiCodeExclusiveModel(config) ? 'kimiCode' : config.provider;
-}
-
-/** Whether a model may be sent through TeXRA's included-access relay. */
-export function allowsModelRelay(
-  config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
-): boolean {
-  return !isKimiCodeExclusiveModel(config);
 }
 
 /** Return whether this model request should be routed through OpenRouter. */

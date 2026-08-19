@@ -1,5 +1,4 @@
 import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
-import { includedModelAccess } from '@model/includedModelAccess';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -17,13 +16,10 @@ export async function hasAnyUsableProviderApiKey(
 }
 
 /**
- * Whether the setup model can run through ChatGPT, a provider key, or included
- * TeXRA access. Local credentials deliberately precede the server check: that
- * check is a network request and may update relay-quota routing state.
+ * Whether the setup model can run through ChatGPT or a provider key.
  *
  * Desktop and extension use this complete policy. The CLI composes
- * {@link hasAnyUsableProviderApiKey} separately because its selected model
- * access mode determines whether a provider key or included sign-in applies.
+ * {@link hasAnyUsableProviderApiKey} separately.
  */
 export async function hasUsableSetupCredential(
   secrets: PlatformSecrets,
@@ -31,6 +27,5 @@ export async function hasUsableSetupCredential(
   if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
     return true;
   }
-  if (await hasAnyUsableProviderApiKey(secrets)) return true;
-  return includedModelAccess().canUseServerSideKeys();
+  return hasAnyUsableProviderApiKey(secrets);
 }

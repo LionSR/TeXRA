@@ -182,7 +182,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
 <section class="bottom-cta">
   <h2>Start in under two minutes</h2>
-  <p>Install from the VS Code Marketplace, sign in for free researcher access or add your own API key, and run your first agent.</p>
+  <p>Install from the VS Code Marketplace, add your own API key or connect a provider subscription, and run your first agent.</p>
   <div class="cta-buttons">
     <a href="/guide/quick-start" class="cta-button cta-primary">Quick Start Guide</a>
     <a href="/guide/built-in-agents" class="cta-button cta-secondary">Browse All Agents</a>
@@ -196,7 +196,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>What models does it support?</summary>
-    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, and more via OpenRouter. Bring your own API key, or sign in for free researcher access — each agent on a team can run a different model.</p>
+    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, and more via OpenRouter. Bring your own API key, or use a provider subscription you already pay for (ChatGPT, Grok, Kimi Code, GLM Coding Plan) — each agent on a team can run a different model.</p>
   </details>
 
   <details>
@@ -216,7 +216,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>Is my data private?</summary>
-    <p>With your own keys, API calls go directly from your machine to the model provider. Researcher Access Program traffic is relayed through TeXRA's hosted orchestrator.</p>
+    <p>Yes — model calls go directly from your machine to the provider, whether you use your own API key or a provider subscription. TeXRA does not sit between you and the model.</p>
   </details>
 
   <details>

@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { type OAuthProvider } from '@auth/config';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
-import { relayTokenSignOutNotice } from '@auth/relayToken';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewStartupController';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import { confirmModal } from '@frontend/ui/dialogs';
@@ -34,18 +33,11 @@ const SIGN_IN_OPTIONS: readonly SignInOption[] = [
   },
 ];
 
-// "<prefix> <email>" info toast; the tier suffix is only fetched and
-// appended when `includeTier` is set.
-async function showSignedInMessage(
-  prefix: string,
-  includeTier: boolean,
-): Promise<void> {
+// "<prefix> <email>" info toast.
+async function showSignedInMessage(prefix: string): Promise<void> {
   const user = await SupabaseClient.getUser();
   const email = user?.email || 'unknown user';
-  const tierSuffix = includeTier
-    ? ` (${await SupabaseClient.getUserTier()} tier)`
-    : '';
-  void vscode.window.showInformationMessage(`${prefix} ${email}${tierSuffix}`);
+  void vscode.window.showInformationMessage(`${prefix} ${email}`);
 }
 
 /**
@@ -100,7 +92,7 @@ export async function signIn(): Promise<boolean> {
         { silent: true },
       );
       if (existing) {
-        await showSignedInMessage('Already signed in as', false);
+        await showSignedInMessage('Already signed in as');
         return true;
       }
       void showAuthServiceUnavailable();
@@ -122,7 +114,7 @@ export async function signIn(): Promise<boolean> {
     );
 
     if (session) {
-      await showSignedInMessage('Signed in as', true);
+      await showSignedInMessage('Signed in as');
       return true;
     }
     return false;
@@ -136,12 +128,7 @@ export async function signOut(): Promise<void> {
   try {
     const storedSessionState = await SupabaseClient.getStoredSessionState();
     if (storedSessionState === 'none') {
-      // A configured relay token authenticates without a stored session, so
-      // "Not signed in" alone would contradict the access the user still has.
-      const notice = relayTokenSignOutNotice();
-      void vscode.window.showInformationMessage(
-        notice ? `Not signed in. ${notice}` : 'Not signed in',
-      );
+      void vscode.window.showInformationMessage('Not signed in');
       return;
     }
 
@@ -155,10 +142,7 @@ export async function signOut(): Promise<void> {
     if (authProvider) {
       const removed = await authProvider.removeStoredSession();
       const outcome = removed ? 'Signed out' : 'You were already signed out';
-      const relayNotice = relayTokenSignOutNotice();
-      void vscode.window.showInformationMessage(
-        relayNotice ? `${outcome}. ${relayNotice}` : outcome,
-      );
+      void vscode.window.showInformationMessage(outcome);
     } else {
       void showLoggedMessage(
         CHANNEL,
