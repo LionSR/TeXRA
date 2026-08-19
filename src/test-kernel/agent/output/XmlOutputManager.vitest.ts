@@ -1198,6 +1198,28 @@ Appendix.
     await expectWritten('paper.tex', 'Revised paper body.\n');
   });
 
+  it('ignores scratchpad fenced blocks when recovering a single-input edit', async () => {
+    const outputs = await writeAndSplitDocuments(
+      [
+        '<scratchpad>',
+        'Draft attempt before I settled on the real revision:',
+        '```latex',
+        '\\section{Scratch}',
+        'Rejected draft.',
+        '```',
+        '</scratchpad>',
+        '```latex',
+        '\\section{Final}',
+        'Accepted revision.',
+        '```',
+      ],
+      ['paper.tex'],
+    );
+
+    expectSources(outputs, ['paper.tex']);
+    await expectWritten('paper.tex', '\\section{Final}\nAccepted revision.\n');
+  });
+
   it('leaves an unlabeled block unmatched when identical base files make the match ambiguous', async () => {
     const stub = '\\section{Stub}\nShared template content.\n';
     await AbsoluteFS.write('/tmp/run/a.tex', stub);
