@@ -50,8 +50,6 @@ export interface CliAuthProfile {
   sessionState?: StoredSessionState;
   accountLabel?: string;
   expiresAt?: string;
-  /** Extra status context. */
-  note?: string;
 }
 
 export interface CliLoginOptions {
@@ -200,11 +198,6 @@ export async function signOutCliSupabase(): Promise<void> {
     invalidateRemoteAgentsAfterSignOut,
     (message) => activeAuthLog?.warn('cli-auth', message),
   );
-}
-
-/** Fresh access token for the stored CLI session. */
-export async function getCliSessionAccessToken(): Promise<string | null> {
-  return initializeCliSupabaseAuth().ensureFreshToken();
 }
 
 export async function getCliAuthProfile(): Promise<CliAuthProfile> {

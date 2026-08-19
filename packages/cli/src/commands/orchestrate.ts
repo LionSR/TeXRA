@@ -183,16 +183,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
       grokSignedIn: modelAccess.grokSignedIn,
       grokAccountLabel: modelAccess.grokAccountLabel,
     };
-    const launcherModelAccess = {
-      ...modelAccess,
-      texraSignedIn: authProfile.authenticated,
-    };
     const items = buildCliOrchestrationItems({
       presetPlans: presetPlanSet.plans,
       history,
       toolUseAgents,
       includeMultiAgentLoginHint: !presetPlanSet.remoteCatalogRefreshAttempted,
-      modelAccess: launcherModelAccess,
+      modelAccess,
       account: accountStatus,
       presetLaunchBlockReason,
     });
@@ -219,7 +215,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         launchBlockReason: presetLaunchBlockReason,
       }),
       accountItems: buildCliAccountItems(accountStatus),
-      modelAccess: launcherModelAccess,
+      modelAccess: modelAccess,
       version: context.version,
       statusLines,
       allowDefaultModelLaunch,

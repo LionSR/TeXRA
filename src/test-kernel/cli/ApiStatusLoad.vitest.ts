@@ -138,16 +138,9 @@ describe('loadCliApiStatus', () => {
       lines: ['api: your own API keys', 'auth: signed out'],
     },
     {
-      name: 'with a profile note',
-      profile: {
-        authenticated: false,
-        note: 'Account metadata may be stale.',
-      },
-      lines: [
-        'api: your own API keys',
-        'auth: signed out',
-        'Account metadata may be stale.',
-      ],
+      name: 'with no profile note',
+      profile: { authenticated: false },
+      lines: ['api: your own API keys', 'auth: signed out'],
     },
   ])(
     'preserves signed-out launcher details $name',
@@ -162,7 +155,6 @@ describe('loadCliApiStatus', () => {
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
       accountLabel: 'researcher@example.com',
-      note: 'Account metadata may be stale.',
     });
     setPersonalKeys('deepseek');
 
@@ -170,7 +162,6 @@ describe('loadCliApiStatus', () => {
       'api: your own API keys',
       'your own API keys: DeepSeek',
       'auth: signed in as researcher@example.com',
-      'Account metadata may be stale.',
     ]);
   });
 
@@ -450,18 +441,6 @@ describe('loadCliApiStatus', () => {
     expect(lines).toEqual(['Otherwise: Your own API keys']);
   });
 
-  it('preserves a profile note exactly once', async () => {
-    const profileNote = 'Account metadata may be stale.';
-    mocks.getCliAuthProfile.mockResolvedValue({
-      authenticated: false,
-      note: profileNote,
-    });
-
-    const lines = await accountStatusLines();
-
-    expect(lines.filter((line) => line === profileNote)).toHaveLength(1);
-  });
-
   it('reports the legacy model-access overview without reading key storage', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
       preferences: {
@@ -489,7 +468,6 @@ describe('loadCliApiStatus', () => {
         chatGptSignedIn: true,
         grokSignedIn: false,
         chatGptAccountLabel: 'chatgpt@example.com',
-        texraSignedIn: true,
       },
       lines: [
         'ChatGPT preference: On · chatgpt@example.com',

@@ -89,9 +89,8 @@ export async function loadCliModelAccessOverview(): Promise<CliModelAccessOvervi
       profile.accountLabel,
     ),
   ];
-  if (profile.note) lines.push(profile.note);
   return {
-    access: { ...access, texraSignedIn: profile.authenticated },
+    access,
     lines,
   };
 }
@@ -158,7 +157,6 @@ export async function loadCliApiStatus(
     `api: ${formatCliModelAccessRouteInline('personal')}`,
     ...(personalKeysLine ? [personalKeysLine] : []),
     authLine,
-    ...(profile.note ? [profile.note] : []),
     ...(actionHint ? [actionHint] : []),
   ];
 }
@@ -281,6 +279,5 @@ export async function loadCliDetailedAccountStatusLines(
     'Other API keys',
   );
   if (otherPersonalKeys) lines.push(otherPersonalKeys);
-  if (profile.note) lines.push(profile.note);
   return lines;
 }

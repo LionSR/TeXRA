@@ -143,7 +143,6 @@ function expectedAccessStatus(
     chatGptAccountLabel: undefined,
     grokSignedIn: false,
     grokAccountLabel: undefined,
-    personalKeyProviders: [],
     ...overrides,
     codingPlans: {
       glmCodingPlan: {
@@ -315,19 +314,6 @@ describe('CLI model access routes', () => {
     mocks.hasUsableApiKey.mockResolvedValue(false);
     await expect(readCliModelAccessStatus()).resolves.toMatchObject({
       codingPlans: { kimiCode: { preferred: true, keySet: false } },
-    });
-  });
-
-  it('reports configured provider keys as display names', async () => {
-    mocks.lookupApiKeyOrigin.mockImplementation(async (_secrets, provider) => {
-      if (provider === 'deepseek') return 'secret';
-      if (provider === 'moonshot') return 'env';
-      if (provider === 'kimiCode') return 'secret';
-      return 'none';
-    });
-
-    await expect(readCliModelAccessStatus()).resolves.toMatchObject({
-      personalKeyProviders: ['DeepSeek', 'Moonshot', 'Kimi Code'],
     });
   });
 

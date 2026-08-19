@@ -285,10 +285,7 @@ const authStatusCommand = defineCliCommand({
     emitCliResult(context, {
       json: profile,
       ndjson: { kind: 'auth-status', ...profile },
-      text: [
-        formatAuthStatusLine(profile),
-        ...(profile.note ? [profile.note] : []),
-      ].join('\n'),
+      text: [formatAuthStatusLine(profile)].join('\n'),
     });
     return CliExitCode.Success;
   },
