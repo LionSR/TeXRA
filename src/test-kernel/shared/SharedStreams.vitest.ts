@@ -163,13 +163,13 @@ describe('formatRoundStageLabel', () => {
 describe('formatPhaseStageLabel', () => {
   it('renders the one-based phase over the declared total', () => {
     expect(formatPhaseStageLabel({ label: 'Reduce', index: 1, total: 3 })).toBe(
-      'Reduce 2/3',
+      'Reduce (2/3)',
     );
   });
 
   it('renders the bare position when no total was declared', () => {
     expect(formatPhaseStageLabel({ label: 'Reduce', index: 1 })).toBe(
-      'Reduce 2',
+      'Reduce (2)',
     );
   });
 
@@ -192,7 +192,7 @@ describe('formatStageLabel', () => {
   it('labels a phase stage through the phase formatter', () => {
     expect(
       formatStageLabel({ kind: 'phase', label: 'Reduce', index: 1, total: 3 }),
-    ).toBe('Reduce 2/3');
+    ).toBe('Reduce (2/3)');
   });
 
   it('passes undefined through for a stream with no stage open', () => {

@@ -109,20 +109,22 @@ export interface WorkflowPhaseHeading {
 }
 
 /**
- * Canonical heading copy for one workflow phase (`Reduce (2/3)`), shared by
- * every surface that names a phase: the transcript's `◆` divider, the live
- * run-status band, and the focused run's child-list group headers. The leading
- * glyph is left to the caller — the band deliberately carries none. The index
- * is 0-based on the wire and 1-based in the copy.
+ * Canonical heading copy for one workflow phase, shared by every surface that
+ * names a phase: the transcript's `◆` divider, the live run-status band, the
+ * status bar's stage slot, and the focused run's child-list group headers. The
+ * leading glyph is left to the caller — the band deliberately carries none.
+ * The index is 0-based on the wire and 1-based in the copy.
+ *
+ * `Reduce (2/3)` with a position and a planned total, `Reduce (2)` with only a
+ * position — a phase appended after the declared list keeps its position rather
+ * than losing it — and the bare label for a dynamically opened phase.
  */
 export function formatWorkflowPhaseHeading(
   phase: WorkflowPhaseHeading,
 ): string {
-  const counts =
-    phase.phaseIndex !== undefined && phase.phaseTotal !== undefined
-      ? ` (${phase.phaseIndex + 1}/${phase.phaseTotal})`
-      : '';
-  return `${phase.phaseLabel}${counts}`;
+  if (phase.phaseIndex === undefined) return phase.phaseLabel;
+  const total = phase.phaseTotal !== undefined ? `/${phase.phaseTotal}` : '';
+  return `${phase.phaseLabel} (${phase.phaseIndex + 1}${total})`;
 }
 
 /**
