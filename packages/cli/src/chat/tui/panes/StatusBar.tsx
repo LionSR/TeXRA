@@ -180,8 +180,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionUsageProvider = subscriptionUsageProviderForStatus({
     usageRoute: statusSlice?.usage?.usageRoute,
     modelAccess,
-    prospectiveCodingPlan: codingPlanForUsageRoute(prospectiveRoute)
-      ?.usageProvider,
+    prospectiveCodingPlan:
+      codingPlanForUsageRoute(prospectiveRoute)?.usageProvider,
   });
   const [subscriptionQuotaRead, setSubscriptionQuotaRead] = useState<{
     readonly provider: SubscriptionUsageProvider;
