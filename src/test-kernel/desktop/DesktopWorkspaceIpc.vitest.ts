@@ -1,13 +1,11 @@
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,6 +19,7 @@ import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
 import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
 import { appSignals } from '@eventBus/AppSignals';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { createFakePlatform } from '@test/support/FakePlatform';
 
 let fixtureRoot = '';
@@ -74,8 +73,10 @@ function createIpc(
 const liveWorkspaceIpcs: ReturnType<typeof createDesktopWorkspaceIpc>[] = [];
 
 describe('desktop workspace IPC', () => {
+  const tempDirs = useTempDirs();
+
   beforeEach(async () => {
-    fixtureRoot = mkdtempSync(join(tmpdir(), 'texra-workspace-ipc-'));
+    fixtureRoot = await makeTempDir('texra-workspace-ipc-', tempDirs);
     workspacePath = join(fixtureRoot, 'workspace');
     externalPath = join(fixtureRoot, 'external.txt');
     missingExternalPath = join(fixtureRoot, 'missing-external.txt');
@@ -111,7 +112,6 @@ describe('desktop workspace IPC', () => {
 
   afterEach(() => {
     for (const ipc of liveWorkspaceIpcs.splice(0)) ipc.dispose();
-    rmSync(fixtureRoot, { recursive: true, force: true });
   });
 
   // The file tree caches its listing and there is no filesystem watcher, so a

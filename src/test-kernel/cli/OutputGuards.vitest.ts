@@ -2,7 +2,7 @@ import { mkdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { CliUsageError } from '@cli/runtime/cliContext';
 import {
@@ -11,13 +11,9 @@ import {
   probeOutputPathForTests,
 } from '@cli/runtime/workflowOutput';
 import { errnoError } from '@test/support/fsTestUtils';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await cleanupTempDirs(tempDirs);
-});
+const tempDirs = useTempDirs();
 
 // Every probe case below starts from a stat that reports the target missing.
 function probeDeps(

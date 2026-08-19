@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - test support
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
   configureElectronTestStub,
   resetElectronTestStub,
@@ -32,12 +32,11 @@ async function loadDesktopAppLogModule(): Promise<DesktopAppLogModule> {
 }
 
 describe('desktop app log', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
 
   afterEach(async () => {
     resetElectronTestStub();
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   /** Writes a fresh desktop log and points the Electron stub at its dir. */

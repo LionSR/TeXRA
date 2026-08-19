@@ -9,7 +9,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports - test support
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { loadSourceModule } from './loadSourceModule.ts';
 
 // `rm` keeps its real implementation by default; tests arm one-shot failures
@@ -84,13 +84,12 @@ function expectOpenedPatchFile(openedPaths: readonly string[]): void {
   expect(path.extname(openedPaths[0])).toBe('.diff');
 }
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 const hosts: DiffHost[] = [];
 
 afterEach(async () => {
   await Promise.all(hosts.map((host) => host.dispose()));
   hosts.length = 0;
-  await cleanupTempDirs(tempDirs);
 });
 
 type OpenDiffArgs = Parameters<DiffHost['openDiff']>;

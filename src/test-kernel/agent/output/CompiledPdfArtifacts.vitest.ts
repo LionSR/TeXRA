@@ -1,6 +1,5 @@
 // Node imports
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import * as os from 'node:os';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -10,6 +9,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { publishCompiledPdfArtifact } from '@agent/implementations/flows/reflection/output/compiledPdfArtifacts';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  makeTempDir as makeSharedTempDir,
+  useTempDirs,
+} from '@test/support/tempDirPlatform';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -47,23 +50,16 @@ function runStorageSource(
 }
 
 describe('compiled PDF artifacts', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
 
   setupPlatform({}, { fs: nodeFilesystem });
 
-  async function makeTempDir(): Promise<string> {
-    const dir = await mkdtemp(path.join(os.tmpdir(), 'texra-pdf-artifact-'));
-    tempDirs.push(dir);
-    return dir;
+  function makeTempDir(): Promise<string> {
+    return makeSharedTempDir('texra-pdf-artifact-', tempDirs);
   }
 
-  afterEach(async () => {
+  afterEach(() => {
     vi.restoreAllMocks();
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((dir) => rm(dir, { recursive: true, force: true })),
-    );
   });
 
   it('treats a missing compiled PDF as no artifact', async () => {

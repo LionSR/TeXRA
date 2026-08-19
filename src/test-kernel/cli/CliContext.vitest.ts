@@ -2,7 +2,7 @@ import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   buildCliContext,
@@ -18,7 +18,7 @@ import {
 } from '@cli/runtime/cliContext';
 import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const ambient = {
   isCi: true,
@@ -41,11 +41,7 @@ function ttyAmbient(overrides: Partial<CliAmbientState> = {}): CliAmbientState {
   };
 }
 
-const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await cleanupTempDirs(tempDirs);
-});
+const tempDirs = useTempDirs();
 
 async function workspaceWithConfig(config: string): Promise<string> {
   const workspace = await makeTempDir('texra-cli-context-', tempDirs);
