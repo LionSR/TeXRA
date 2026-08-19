@@ -35,14 +35,13 @@ import { buildStreamInfo } from '@controllers/session/streamInfoUtils';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
+import { ProgressFollowUpController } from '@controllers/progressView/ProgressFollowUpController';
+import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
 import {
-  ProgressFollowUpController,
-  type ProgressFollowUpPlan,
-} from '@controllers/progressView/ProgressFollowUpController';
-import {
-  ProgressFollowUpPolishController,
-  type ProgressFollowUpPolishResult,
-} from '@controllers/progressView/ProgressFollowUpPolishController';
+  applyFollowUpPlan,
+  applyFollowUpPolishResult,
+  type FollowUpApplyPorts,
+} from '@controllers/progressView/followUpApply';
 import {
   ProgressWorkflowActionsController,
   type WorkflowDiffRequest,
@@ -557,47 +556,25 @@ export class DesktopProgressBridge {
     await this.options.host.showErrorMessage(message);
   }
 
-  /** Desktop counterpart of the extension's `applyFollowUpPolishResult`. */
-  private async applyFollowUpPolishResult(
-    result: ProgressFollowUpPolishResult,
-  ): Promise<void> {
-    if (result.kind === 'skipped') return;
-    this.postToRenderer(result.update);
-    switch (result.kind) {
-      case 'updated':
-        return;
-      case 'failed':
-        await this.options.host.showErrorMessage(result.userMessage);
-        return;
-      case 'exception':
-        this.logger.error(result.logMessage, {
-          data: result.logData ? toLogData(result.logData) : undefined,
-        });
-        await this.options.host.showErrorMessage(result.userMessage);
-    }
-  }
-
-  /**
-   * Carry out a plan from `ProgressFollowUpController`, the desktop counterpart
-   * of the extension's `applyFollowUpPlan`. As documented on the plan type, the
-   * only `execute` producer is the compile fixer, so those runs opt into the
-   * configured helper model.
-   */
-  private async applyFollowUpPlan(plan: ProgressFollowUpPlan): Promise<void> {
-    switch (plan.kind) {
-      case 'warning':
-        await this.options.host.showWarningMessage(plan.message);
-        return;
-      case 'info':
-        await this.options.host.showInfoMessage(plan.message);
-        return;
-      case 'execute': {
-        await this.runValidatedExecutionRequest(plan.request, {
-          preferHelperModel: true,
-        });
-      }
-    }
-  }
+  /** This host's bindings for the shared follow-up plan/polish interpreters. */
+  private readonly followUpPorts: FollowUpApplyPorts = {
+    showInfo: (message) => this.options.host.showInfoMessage(message),
+    showWarning: (message) => this.options.host.showWarningMessage(message),
+    showError: (message) => this.options.host.showErrorMessage(message),
+    logError: (message, error) => {
+      this.logger.error(message, {
+        data: error ? toLogData(error) : undefined,
+      });
+    },
+    post: (message) => {
+      this.postToRenderer(message);
+    },
+    runCompileFixer: async (request) => {
+      await this.runValidatedExecutionRequest(request, {
+        preferHelperModel: true,
+      });
+    },
+  };
 
   /** Stream-toolbar diff: delegate to the shared round-aware latexdiff core. */
   private async runWorkflowDiff(request: WorkflowDiffRequest): Promise<void> {
@@ -895,8 +872,9 @@ export class DesktopProgressBridge {
           await this.options.host.showErrorMessage('Failed to restore state');
         }
       },
-      applyFollowUpPlan: (plan) => this.applyFollowUpPlan(plan),
-      applyPolishResult: (result) => this.applyFollowUpPolishResult(result),
+      applyFollowUpPlan: (plan) => applyFollowUpPlan(plan, this.followUpPorts),
+      applyPolishResult: (result) =>
+        applyFollowUpPolishResult(result, this.followUpPorts),
       onPolishError: async (stream, error) => {
         const message = toErrorMessage(error);
         this.postToRenderer({

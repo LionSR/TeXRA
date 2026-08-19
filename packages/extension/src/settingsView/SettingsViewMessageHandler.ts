@@ -857,7 +857,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const cachedResults = options?.skipChecks
       ? (getLastCheckResults() ?? undefined)
       : undefined;
-    const items = await buildToolDashboardItems(cachedResults);
+    const items = await buildToolDashboardItems('extension', cachedResults);
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       items,

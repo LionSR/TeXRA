@@ -816,7 +816,7 @@ function createWindow(options: {
         buildItems: async (cachedResults) => {
           const { buildToolDashboardItems } =
             await import('@controllers/settingsView/ToolDashboardData');
-          return buildToolDashboardItems(cachedResults);
+          return buildToolDashboardItems('desktop', cachedResults);
         },
         getCachedCheckResults: async () => {
           const { getLastCheckResults } =

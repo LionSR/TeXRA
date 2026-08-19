@@ -19,7 +19,6 @@ import { replayApprovalRequestHandlers } from '@controllers/progressView/backend
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 
-import { appSignals } from '@eventBus/AppSignals';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
@@ -248,11 +247,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
   public async initialize(): Promise<void> {
     await this.backend.load();
-    this._disposables.add({
-      dispose: appSignals.on('extensionDeactivating', () => {
-        this.backend.markAllRunningTasksAsCancelled();
-      }),
-    });
     this.logger.debug('ProgressViewProvider initialized');
   }
 
