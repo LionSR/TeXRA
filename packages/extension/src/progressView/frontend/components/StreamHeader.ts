@@ -144,8 +144,9 @@ const EXECUTION_DEPENDENT_BUTTONS = new Set([
  * for a process stream, and owned by the external tool for a CLI-driven
  * session — so they are hidden (same mechanism as unsupported commands)
  * unless `identity` is a native agent run. An absent identity is still
- * pending and hides them too. Mirrors the backend gate in
- * `ProgressViewHost` / the `RESTORE_STATE` handler.
+ * pending and hides them too. Mirrors the backend gate
+ * `resolveNativeAgentRun` in `ProgressViewCommandHandlers`, which the
+ * `RESUME`, `RUN_NEW`, and `RESTORE_STATE` handlers all pass through.
  */
 const NATIVE_AGENT_ONLY_BUTTONS = new Set([
   ELEMENT_IDS.RESUME_BTN,
