@@ -5,13 +5,13 @@ import {
   formatSessionTitle,
   type SessionTitleState,
 } from '@shared/sessionTitle';
+import { subscribeToSignalChanges } from '@shared/signals';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 import { approvalQueueStatus } from './state/approvalQueue';
 import { rootRunPending, rootRunStreamId, streams } from './state/cliState';
 import { chatTuiCanStopActiveRun } from './state/sessionRunState';
-import { subscribeToSignalChanges } from './state/signalSubscription';
 import { terminalCapabilities } from './state/terminalCapabilities';
 
 // Directory names can contain characters that would prematurely terminate

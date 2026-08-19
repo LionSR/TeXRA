@@ -26,6 +26,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
+import { subscribeToSignalChanges } from '@shared/signals';
 import {
   isActivePhase,
   isTranscriptSettlementPhase,
@@ -45,7 +46,6 @@ import {
   streams,
 } from './cliState';
 import { isChildStreamRemoved, streamMetadataFor } from './childExecutions';
-import { subscribeToSignalChanges } from './signalSubscription';
 import {
   advanceSettledPrefixIndex,
   applyStreamChanges,
