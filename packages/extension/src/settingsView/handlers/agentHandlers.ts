@@ -315,8 +315,7 @@ export class AgentHandlers {
           applyTeamRosterWithPreflight(data.presetId, {
             catalog: this.catalogController,
             loadLocalCatalog: () => loadAgents({ includeRemote: false }),
-            canAccessRemoteCatalog: () =>
-              SupabaseClient.canAccessRemoteAgentCatalog(),
+            canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
             choose: async (preset, unavailableNames) => {
               const choice = await vscode.window.showInformationMessage(
                 `The "${preset.name}" team includes TeXRA-hosted members that are unavailable: ${unavailableNames.join(', ')}.`,

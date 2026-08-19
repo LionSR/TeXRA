@@ -178,12 +178,8 @@ vi.mock('@tools/lean/direct/directLspAdapter', () => ({
   registerDirectLeanLanguageServices: vi.fn(),
 }));
 
-// Installed so startup never reaches a real auth check; no test reads it.
-vi.spyOn(SupabaseClient, 'isAuthenticated');
-const canAccessRemoteAgentCatalogSpy = vi.spyOn(
-  SupabaseClient,
-  'canAccessRemoteAgentCatalog',
-);
+// Installed so startup never reaches a real auth check.
+const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
 
 function cliContext(
   overrides: Partial<Parameters<typeof initCliPlatform>[0]> = {},
@@ -241,7 +237,7 @@ describe('CLI platform init', () => {
     mocks.tryPlatform.mockReset();
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
     mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
-    canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
+    isAuthenticatedSpy.mockResolvedValue(false);
   });
 
   it('uses the configured storage root for CLI secrets', async () => {
@@ -495,7 +491,7 @@ describe('CLI platform init', () => {
   });
 
   it('wires setup sign-in to the existing CLI login implementation', async () => {
-    canAccessRemoteAgentCatalogSpy.mockResolvedValue(true);
+    isAuthenticatedSpy.mockResolvedValue(true);
     mocks.signInCliSupabase.mockResolvedValue({ account: { label: 'User' } });
 
     await initCliPlatform(cliContext());
