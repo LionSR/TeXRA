@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
+import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { GETTING_STARTED_COMMANDS } from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundHandlerRegistry } from '@shared/schemas';
@@ -65,7 +65,7 @@ export function createOnboardingHandlers(host: MainViewInboundHost) {
       await host.refreshOnboardingFunnel?.();
     },
     [MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT]: async () => {
-      await signInWithChatGptSubscription(host.channel);
+      await signInWithSubscription(host.channel, 'chatgpt');
       await host.refreshAfterCredentialChange();
     },
     [MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP]: async () => {

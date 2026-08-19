@@ -782,6 +782,29 @@ function createWindow(options: {
             clipboard.writeText(url);
           }
         },
+        presentSubscriptionDeviceCode: async (prompt, productName) => {
+          // The code is copied up front: the dialog closes on any button, so
+          // the user must not have to keep it open to read the code back.
+          clipboard.writeText(prompt.userCode);
+          const result = await dialog.showMessageBox(window, {
+            type: 'info',
+            message: `Sign in with ${productName}`,
+            detail:
+              `No browser could take the sign-in callback, so ${productName} ` +
+              'is signing in with a one-time code instead.\n\n' +
+              `1. Open ${prompt.verificationUrl}\n` +
+              `2. Enter the code: ${prompt.userCode} (copied to the clipboard)\n\n` +
+              'TeXRA is waiting for you to approve it.',
+            buttons: ['Open Verification Page', 'Close'],
+            defaultId: 0,
+            cancelId: 1,
+          });
+          if (result.response === 0) {
+            await previewHost.openExternal(
+              prompt.verificationUrlComplete ?? prompt.verificationUrl,
+            );
+          }
+        },
       },
       notifications: { showInfoMessage, showWarningMessage, showErrorMessage },
       auth: {

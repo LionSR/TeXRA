@@ -5,7 +5,7 @@ import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 const mocks = vi.hoisted(() => ({
   getCliAuthProfile: vi.fn(),
   initCliPlatform: vi.fn(),
-  signOutCliChatGpt: vi.fn(),
+  signOutCliSubscription: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
@@ -21,12 +21,12 @@ vi.mock('@cli/runtime/supabaseAuth', async (importOriginal) => {
   };
 });
 
-vi.mock('@cli/runtime/chatgptLogin', async (importOriginal) => {
+vi.mock('@cli/runtime/subscriptionLogin', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@cli/runtime/chatgptLogin')>();
+    await importOriginal<typeof import('@cli/runtime/subscriptionLogin')>();
   return {
     ...actual,
-    signOutCliChatGpt: mocks.signOutCliChatGpt,
+    signOutCliSubscription: mocks.signOutCliSubscription,
   };
 });
 
@@ -51,7 +51,7 @@ describe('CLI auth command', () => {
       authenticated: false,
     });
     mocks.initCliPlatform.mockReset().mockResolvedValue(undefined);
-    mocks.signOutCliChatGpt.mockReset().mockResolvedValue({
+    mocks.signOutCliSubscription.mockReset().mockResolvedValue({
       preferenceUpdate: { effective: false, target: 'global' },
     });
     stdoutSpy = spyOnStreamWrite(process.stdout, (text) => {
@@ -129,7 +129,7 @@ describe('CLI auth command', () => {
     ]);
 
     expect(result.exitCode).toBe(0);
-    expect(mocks.signOutCliChatGpt).toHaveBeenCalledOnce();
+    expect(mocks.signOutCliSubscription).toHaveBeenCalledOnce();
     expect(JSON.parse(stdout)).toEqual({
       authenticated: false,
       preferSubscription: false,
@@ -138,7 +138,7 @@ describe('CLI auth command', () => {
   });
 
   it('reports ChatGPT logout success when preference cleanup fails', async () => {
-    mocks.signOutCliChatGpt.mockResolvedValueOnce({
+    mocks.signOutCliSubscription.mockResolvedValueOnce({
       preferenceError: 'Config write failed',
     });
 

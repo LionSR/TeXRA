@@ -7,21 +7,24 @@ const mocks = vi.hoisted(() => ({
   tryOpenBrowser: vi.fn(),
 }));
 
-vi.mock('@auth/codex', () => ({
+vi.mock('@auth/codex', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@auth/codex')>()),
   codexCoordinator: mocks.codexCoordinator,
   loginWithDeviceCode: mocks.loginWithDeviceCode,
   loginWithLoopback: mocks.loginWithLoopback,
-}));
-
-vi.mock('@model/codex/codexPreference', () => ({
-  setPreferCodexSubscription: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/browser', () => ({
   tryOpenBrowser: mocks.tryOpenBrowser,
 }));
 
-const { signInCliChatGpt } = await import('@cli/runtime/chatgptLogin');
+const { signInCliSubscription } =
+  await import('@cli/runtime/subscriptionLogin');
+
+const signInCliChatGpt = (
+  init: { device: boolean; noBrowser: boolean },
+  options: { writeProgress: (message: string) => void; signal?: AbortSignal },
+) => signInCliSubscription('chatgpt', init, options);
 
 function loopbackSession() {
   return {
@@ -49,7 +52,7 @@ async function runSignIn(url: string, noBrowser = false): Promise<string[]> {
   return progress;
 }
 
-describe('signInCliChatGpt browser choice', () => {
+describe('signInCliSubscription (ChatGPT) browser choice', () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
