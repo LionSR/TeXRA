@@ -529,10 +529,9 @@ export function toOpenAIResponseTools(
  * Options for Anthropic tool conversion.
  */
 interface AnthropicToolOptions {
-  /** Whether the model supports native web search. Defaults to false. */
+  /** Whether the model supports native web search and fetch. Defaults to
+   *  false; Anthropic ships the two on the same model set. */
   supportsNativeWebSearch?: boolean;
-  /** Whether the model supports native web fetch. Defaults to false. */
-  supportsNativeWebFetch?: boolean;
 }
 
 /**
@@ -542,13 +541,12 @@ export function toAnthropicTools(
   defs: ToolDefinition[],
   options: AnthropicToolOptions = {},
 ): ToolUnion[] {
-  const { supportsNativeWebSearch = false, supportsNativeWebFetch = false } =
-    options;
+  const { supportsNativeWebSearch = false } = options;
 
   /** Tools that require an explicit capability flag to use as native. */
   const CONDITIONAL_NATIVE_TOOLS: Record<string, boolean> = {
     web_search: supportsNativeWebSearch,
-    web_fetch: supportsNativeWebFetch,
+    web_fetch: supportsNativeWebSearch,
   };
 
   return defs.map<ToolUnion>((d) => {

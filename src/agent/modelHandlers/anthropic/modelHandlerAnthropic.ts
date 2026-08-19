@@ -697,9 +697,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     if (tools?.length) {
       options.tools = toAnthropicTools(tools, {
+        // Web fetch ships on the same Anthropic models as native web search.
         supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
-        // Web fetch is available on the same Anthropic models that support native web search
-        supportsNativeWebFetch: this.capabilities.supportsNativeWebSearch,
       });
 
       options.tool_choice =

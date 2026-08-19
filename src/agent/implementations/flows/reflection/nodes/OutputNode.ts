@@ -13,7 +13,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   hasCompileFailures,
   hasRoundOutputs,
-  getStorageKey,
   roundsToPersisted,
   setCompileFailures,
 } from '../output/outputState';
@@ -22,11 +21,7 @@ import { extractFilesFromXml } from '../output/outputFileExtraction';
 import { traceFileLineage } from '../output/lineageMapping';
 import { resolveBaseFilesForDiff } from '../output/snapshotResolution';
 import { checkExpectedOutputs } from '../output/outputValidation';
-import {
-  blankRoundSummary,
-  summarizeRound,
-  type RoundSummary,
-} from '../output/roundSummary';
+import { summarizeRound, type RoundSummary } from '../output/roundSummary';
 import { formatCompileFailureRoundContext } from '../output/compileFailureRoundContext';
 import { tryOperation } from '../output/outputOperations';
 import type { LatexDiffManager } from '../output/LatexDiffManager';
@@ -197,12 +192,7 @@ export class OutputNode<C = unknown> extends BaseNode<
         `Output fallback summary failed; output files may be dropped: ${toErrorMessage(summaryError)}`,
         { data: summaryError },
       );
-      summary = blankRoundSummary({
-        storageKey: getStorageKey(outputState),
-        currRound: currentRound,
-        outputFile: outputLocation,
-        endTurn,
-      });
+      summary = { fileInfos: [], filesToOpen: [] };
     }
 
     outputState.rounds.set(currentRound, {
