@@ -96,6 +96,9 @@ importers:
       delay:
         specifier: ^7.0.0
         version: 7.0.0
+      diff:
+        specifier: ^9.0.0
+        version: 9.0.0
       diff-match-patch:
         specifier: ^1.0.5
         version: 1.0.5
@@ -460,6 +463,9 @@ importers:
       delay:
         specifier: ^7.0.0
         version: 7.0.0
+      diff:
+        specifier: ^9.0.0
+        version: 9.0.0
       diff-match-patch:
         specifier: ^1.0.5
         version: 1.0.5
@@ -835,6 +841,9 @@ importers:
       deepmerge:
         specifier: ^4.3.1
         version: 4.3.1
+      diff:
+        specifier: ^9.0.0
+        version: 9.0.0
       diff-match-patch:
         specifier: ^1.0.5
         version: 1.0.5
@@ -1061,9 +1070,9 @@ importers:
       delay:
         specifier: ^7.0.0
         version: 7.0.0
-      diff-match-patch:
-        specifier: ^1.0.5
-        version: 1.0.5
+      diff:
+        specifier: ^9.0.0
+        version: 9.0.0
       escape-string-regexp:
         specifier: ^5.0.0
         version: 5.0.0

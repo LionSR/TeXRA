@@ -46,8 +46,7 @@ async function computeDiffStats(
       AbsoluteFS.read(outputLocation.absolutePath),
     ]);
 
-    // Preserve diff-match-patch's omitted-argument default: checkLines=true.
-    return diffLineChanges(baseContent, outContent, { checkLines: true });
+    return diffLineChanges(baseContent, outContent);
   } catch (err) {
     const message = `Failed to compute diff stats: ${toErrorMessage(err)}`;
     if (isFileNotFoundError(err)) {

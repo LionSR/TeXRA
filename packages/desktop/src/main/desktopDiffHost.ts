@@ -10,11 +10,9 @@ import {
   type DiffViewHost,
 } from '@hosts/uiHosts';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
-import {
-  computeLineChangeSummary,
-  computeUserPatch,
-} from '@tools/approval/toolEditApproval';
+import { computeLineChangeSummary } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { unifiedDiffText } from '@utils/text/unifiedDiff';
 import { createTexraTempDir } from '@utils/files/tempDir';
 
 import {
@@ -185,9 +183,10 @@ export function createDesktopDiffHost(
       if (shownInRenderer) return { original, proposed, title };
 
       // External-editor fallback: write a unified patch file and open it.
-      const patch =
-        computeUserPatch(originalContent, proposedContent) ??
-        `No textual changes for ${path.basename(proposed.filePath)}.\n`;
+      const diffBody = unifiedDiffText(originalContent, proposedContent);
+      const patch = diffBody
+        ? `--- ${original.filePath}\n+++ ${proposed.filePath}\n${diffBody}\n`
+        : `No textual changes for ${path.basename(proposed.filePath)}.\n`;
       const tempDir = await createTexraTempDir('texra-desktop-diff-');
       if (disposed) {
         // The window closed while this fallback was in flight. If the drain

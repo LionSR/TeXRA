@@ -164,7 +164,7 @@ describe('CLI tool display lines', () => {
       [
         "● Edit (paper.tex)",
         "⎿ paper.tex",
-        "  @@ -1,1 +1,1 @@",
+        "  @@ -1 +1 @@",
         "  -We use a CNN.",
         "  +We use a transformer.",
       ]
@@ -249,7 +249,7 @@ describe('CLI tool display lines', () => {
       [
         "● edit_file (paper.tex)",
         "⎿ paper.tex",
-        "  @@ -1,1 +1,1 @@",
+        "  @@ -1 +1 @@",
         "  -We use a CNN.",
         "  +We use a transformer.",
       ]
@@ -431,11 +431,11 @@ describe('ToolUseRow edit patch rendering', () => {
     expect(rows).toMatchInlineSnapshot(`
       [
         "⎿ paper.tex",
-        "  @@ -1,1 +1,1 @@",
+        "  @@ -1 +1 @@",
         "  -first claim",
         "  +revised first claim",
         "⎿ paper.tex",
-        "  @@ -1,1 +1,1 @@",
+        "  @@ -1 +1 @@",
         "  -second claim",
         "  +revised second claim",
       ]

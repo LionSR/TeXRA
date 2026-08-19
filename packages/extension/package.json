@@ -1071,6 +1071,7 @@
     "arxiv-client": "^0.0.9",
     "bibtex": "^0.9.0",
     "deepmerge": "^4.3.1",
+    "diff": "^9.0.0",
     "diff-match-patch": "^1.0.5",
     "dotenv": "^17.4.2",
     "execa": "^10.0.1",

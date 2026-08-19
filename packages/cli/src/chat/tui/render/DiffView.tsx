@@ -17,6 +17,7 @@ import {
 } from '@cli/tui/overflowText';
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import { clamp } from '@utils/core';
+import { formatHunkHeader } from '@utils/text/unifiedDiff';
 
 import {
   COMPACT_SCROLLABLE_CONTENT_ROWS,
@@ -47,7 +48,7 @@ export function diffDisplayLines(hunks: readonly Hunk[]): DiffDisplayLine[] {
     const lines = hunk.lines.filter(
       (line) => !line.startsWith(NO_NEWLINE_MARKER),
     );
-    const hunkHeader = `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
+    const hunkHeader = formatHunkHeader(hunk);
     const rendered: DiffDisplayLine[] = [
       { kind: 'header', text: hunkHeader },
       ...lines.map((line): DiffDisplayLine => {

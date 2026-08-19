@@ -17,13 +17,13 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { computeAndWriteWorkflowDiffs } from '@tools/delegation/subagentResults';
 import {
   computeLineChangeSummary,
-  computeUserPatch,
   firstChangedLine,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { getRunDir } from '@utils/files/runStorageFs';
+import { unifiedDiffText } from '@utils/text/unifiedDiff';
 
 function installFakePlatform(
   files: Record<string, string> = {},
@@ -112,7 +112,7 @@ describe('shared text-diff caller fixtures', () => {
       AbsoluteFS.read(
         path.join(getRunDir(executionId), 'diffs/section_paper.tex.diff'),
       ),
-    ).resolves.toBe(' one\n-two\n+TWO\n three\n+four');
+    ).resolves.toBe('@@ -1,3 +1,4 @@\n one\n-two\n+TWO\n three\n+four');
   });
 
   it('preserves tool-edit approval diff summaries and patch application', async () => {
@@ -126,7 +126,7 @@ describe('shared text-diff caller fixtures', () => {
     expect(
       firstChangedLine('alpha\nbeta\nomega\n', 'alpha\ninsert\nbeta\nomega\n'),
     ).toBe(1);
-    const patch = computeUserPatch(original, final);
+    const patch = unifiedDiffText(original, final);
     expect(patch).toContain('-beta');
     expect(patch).toContain('+BETA');
 
