@@ -58,5 +58,8 @@ export function mergeBackendOwnedState(
     if (!Object.hasOwn(metadata, 'substate')) {
       delete draft.substate;
     }
+    if (!Object.hasOwn(metadata, 'runStartedAt')) {
+      delete draft.runStartedAt;
+    }
   });
 }
