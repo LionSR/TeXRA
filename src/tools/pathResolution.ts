@@ -128,12 +128,10 @@ export function resolveWorkspaceRelativePath(
   if (root) {
     // Absolute paths need special handling — locatePathInRoot only works with relative paths.
     if (input && path.isAbsolute(input)) {
-      // `relativeToRoot` owns containment for the whole repo: a lexical pass
-      // first, then a realpath comparison, so a root and a path that name the
-      // same directory through different symlink spellings resolve rather than
-      // being rejected. Re-deriving it here with a bare `isPathWithin` made
-      // this branch the only containment check in the repo that answers on
-      // spelling instead of identity.
+      // `relativeToRoot` is the shared symlink-aware absolute-path containment
+      // helper: it tries a lexical pass, then compares realpaths, so a root and
+      // path that name the same directory through different symlink spellings
+      // resolve rather than being rejected.
       const relative = relativeToRoot(root, input);
       if (relative === undefined) {
         return resolveOutsideRoot(
