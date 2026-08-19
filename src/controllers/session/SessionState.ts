@@ -476,12 +476,15 @@ export class SessionState {
    * claim — never from a bare `run.start`, which a delayed stale event could
    * replay after the deletion committed.
    */
-  claimStreamIdentity(stream: StreamTabId): number {
-    const next = this.incarnationOf(stream) + 1;
-    this._streamIncarnations.set(stream, next);
+  claimStreamIdentity(stream: StreamTabId): {
+    incarnation: number;
+    changedRosterParents: StreamTabId[];
+  } {
+    const incarnation = this.incarnationOf(stream) + 1;
+    this._streamIncarnations.set(stream, incarnation);
     // Rows from the prior incarnation must not become visible when dropping its
     // tombstone. A fresh authoritative roster can add the new identity back.
-    this.scrubStreamFromRosters(stream);
+    const changedRosterParents = this.scrubStreamFromRosters(stream);
     this._removedStreams.delete(stream);
     // A re-claimed identity starts a fresh run: drop any ephemeral session and
     // execution state the previous incarnation left behind (a provisional
@@ -490,7 +493,7 @@ export class SessionState {
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
     this._streamMetadataCache.delete(stream);
-    return next;
+    return { incarnation, changedRosterParents };
   }
 
   /** Whether `stream` was removed this session and must not be resurrected. */

@@ -43,6 +43,7 @@ import {
   createRecordingBackend,
   emitActiveStream,
   emitRunConfig,
+  emitRunEvent,
   stubStreamControls,
   toolUseConfig,
   track,
@@ -333,6 +334,40 @@ describe('ProgressBackend', () => {
       before,
       newestActive,
     ]);
+  });
+
+  it('notifies a parent roster when a workflow attachment reclaims a child identity', () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, session } = target;
+    const parent = 'workflow-reclaim-parent' as StreamTabId;
+    const childStream = 'workflow-reclaimed-child' as StreamTabId;
+    const child = childRosterRow(childStream);
+    setChildRoster(backend, parent, [child]);
+    backend.state.beginStreamRemoval(childStream);
+    backend.setupEventListeners();
+
+    emitRunEvent(target, childStream, {
+      type: 'run.start',
+      streamId: childStream,
+      executionId: 'workflow-reclaim' as ExecutionId,
+      identity: {
+        kind: 'multiAgentWorkflow',
+        workflowName: 'workflow-reclaim',
+      },
+    });
+    vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
+      {} as never,
+    );
+    const badgesChanged = vi.spyOn(backend.renderer, 'onBadgesChanged');
+
+    expect(
+      backend.applySessionFact({
+        type: 'setActiveStream',
+        payload: { streamId: childStream },
+      }),
+    ).toBe(true);
+    expect(backend.state.getStreamState(parent)?.subagents).toEqual([]);
+    expect(badgesChanged).toHaveBeenCalledWith(parent, { subagents: [] });
   });
 
   it('keeps superseded settlements from revealing rows across parent and child reclaims', () => {

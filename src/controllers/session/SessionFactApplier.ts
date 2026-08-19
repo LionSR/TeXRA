@@ -292,7 +292,10 @@ export class SessionFactApplier {
       // The fresh attachment is the first delivery for the new incarnation,
       // even when a prior host delete left this applier's registry untouched.
       this.registeredWithRenderer.delete(fact.payload.streamId);
-      this.state.claimStreamIdentity(fact.payload.streamId);
+      const { changedRosterParents } = this.state.claimStreamIdentity(
+        fact.payload.streamId,
+      );
+      this.notifyRosterParents(changedRosterParents);
     }
     if (
       fact.type !== 'removeStream' &&
@@ -461,7 +464,7 @@ export class SessionFactApplier {
     // the re-claim lives in `handleSessionFact`, on the workflow attachment that
     // carries live-execution evidence for the new incarnation.
     if (this.state.isStreamRemoved(streamId)) {
-      this.deferRunFact(streamId, streamId, event);
+      this.deferRunFact(streamId, event);
       return;
     }
     this.applyRunFact(streamId, event);
@@ -529,11 +532,10 @@ export class SessionFactApplier {
 
   /** Buffer a refused run fact for a provisional barrier, or drop it. */
   private deferRunFact(
-    removedStreamId: StreamTabId,
     streamId: StreamTabId,
     event: SessionRunFactEvent,
   ): void {
-    const pending = this.pendingDeletions.get(removedStreamId);
+    const pending = this.pendingDeletions.get(streamId);
     if (pending) pending.facts.push({ kind: 'run', streamId, event });
   }
 
