@@ -21,10 +21,7 @@ import {
 import { createLog } from '@logger/logUtils';
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import {
-  inferAndLogPersistedModelHandlerCompatibilityKey,
-  inferPersistedModelHandlerCompatibilityKey,
-} from './modelHandlerCompatibilityInference';
+import { inferPersistedModelHandlerCompatibilityKey } from './modelHandlerCompatibilityInference';
 import {
   ModelHandlerCompatibilityKeySchema,
   type ModelHandlerCompatibilityKey,
@@ -196,10 +193,7 @@ async function retrieveToolUseResumeData(
     };
     const modelHandlerCompatibilityKey =
       parsedShared.data.modelHandlerCompatibilityKey ??
-      inferAndLogPersistedModelHandlerCompatibilityKey(
-        currentConfig.model,
-        logger,
-      );
+      inferPersistedModelHandlerCompatibilityKey(currentConfig.model);
 
     const shared: PreparedShared = {
       ...parsedShared.data,

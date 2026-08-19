@@ -1,24 +1,11 @@
 import { ModelProvider } from 'llm-zoo';
 
-import type { AgentTrace } from '@agent/trace';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { isObject } from '@utils/core';
 import {
   ModelHandlerCompatibilityKeySchema,
   type ModelHandlerCompatibilityKey,
 } from './modelHandlerCompatibilityKey';
-
-/**
- * Narrow an arbitrary value to a plain-object record, or `undefined` if it
- * isn't one. `isObject` already narrows its own parameter, but narrowing
- * `message: ProviderMessage` (a union of provider SDK types with no common
- * shape) through it still leaves per-property access needing a cast — this
- * wraps that once for every shape-sniffing call site below instead of each
- * repeating `isObject(x) ? (x as Record<string, unknown>) : ...` by hand.
- */
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return isObject(value) ? value : undefined;
-}
 
 export function inferPersistedModelHandlerCompatibilityKey(
   model: string,
@@ -33,31 +20,14 @@ export function inferPersistedModelHandlerCompatibilityKey(
   return undefined;
 }
 
-export function inferAndLogPersistedModelHandlerCompatibilityKey(
-  model: string,
-  logger: Pick<AgentTrace, 'info'>,
-): ModelHandlerCompatibilityKey | undefined {
-  const compatibilityKey = inferPersistedModelHandlerCompatibilityKey(model);
-  if (compatibilityKey) {
-    logger.info(
-      'Inferred model-handler compatibility for keyless persisted run',
-      {
-        data: { model, compatibilityKey },
-      },
-    );
-  }
-  return compatibilityKey;
-}
-
 export function inferPersistedFlowModelHandlerCompatibilityKey(
   model: string,
   shared: unknown,
 ): ModelHandlerCompatibilityKey | undefined {
-  const record = asRecord(shared);
-  if (!record) return undefined;
+  if (!isObject(shared)) return undefined;
 
   const parsedKey = ModelHandlerCompatibilityKeySchema.nullish().safeParse(
-    record.modelHandlerCompatibilityKey,
+    shared.modelHandlerCompatibilityKey,
   );
   if (parsedKey.success && parsedKey.data) return parsedKey.data;
 
