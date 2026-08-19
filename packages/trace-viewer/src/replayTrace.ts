@@ -12,6 +12,7 @@ import {
   STREAM_PHASE,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_STATUS,
+  runIdentityDisplayName,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { buildStreamContentRender } from '@shared/streams/streamContentSync';
@@ -135,8 +136,9 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
   return trace.snapshot.status ?? STREAM_STATUS.READY;
 }
 
-/** The record's display name across both arms of the config union. */
-export function recordName(config: TraceDocument['config']): string {
+/** The raw configured name across both arms of the config union. Not a display
+ *  name — it still carries any source prefix. */
+function recordName(config: TraceDocument['config']): string {
   return 'agentCategory' in config ? config.agent : config.name;
 }
 
@@ -159,6 +161,24 @@ function legacyTraceIdentity(trace: TraceDocument): RunIdentity {
 }
 
 /**
+ * The run's identity. The embedded ExecutionMeta carries it; pre-migration
+ * exports have none and are NOT all agent runs (bash process and
+ * workflow-script traces exist), so those classify from the trace's stream-id
+ * prefix. An exported trace file is immutable, so unlike the storage-side
+ * readers retired in #9590 Stage 7 this fallback is permanent: it is the only
+ * place a stream-id prefix may be read as evidence.
+ */
+function traceIdentity(trace: TraceDocument): RunIdentity {
+  return trace.meta?.identity ?? legacyTraceIdentity(trace);
+}
+
+/** The run's display name — the same identity rule every host's stream tab
+ *  labels with, so the page title and the tab cannot disagree. */
+export function traceDisplayName(trace: TraceDocument): string {
+  return runIdentityDisplayName(traceIdentity(trace));
+}
+
+/**
  * Replays one finished execution through the REAL `dispatchMessage` pipeline
  * as a short synthetic message sequence — the same reducer logic a live host
  * uses, just fed once instead of over time. Order matters: `LOG_DELTA` is a
@@ -169,9 +189,13 @@ export function replayTrace(trace: TraceDocument): void {
   const { snapshot } = trace;
   const agentConfig =
     'agentCategory' in trace.config ? trace.config : undefined;
+  const identity = traceIdentity(trace);
   const streamTabBase = {
     name: trace.streamId,
-    label: recordName(trace.config),
+    // The identity owns the label everywhere else (`buildStreamTabInfo`), so
+    // it owns it here too — `recordName` keeps any source prefix, which would
+    // render `custom:polish` in this viewer and `polish` in every host.
+    label: runIdentityDisplayName(identity),
     agentCategory: agentConfig?.agentCategory,
     // Empty-entries traces have nothing to derive a creation time from;
     // fall back to "now" rather than the Unix epoch, which would render
@@ -180,14 +204,6 @@ export function replayTrace(trace: TraceDocument): void {
     executionId: trace.executionId,
     description: trace.meta?.description,
   };
-  // The embedded ExecutionMeta carries the run's identity. Pre-migration
-  // exports have no identity and are NOT all agent runs (bash process and
-  // workflow-script traces exist), so classify from the trace's stream-id
-  // prefix. An exported trace file is immutable, so unlike the storage-side
-  // readers retired in #9590 Stage 7 this fallback is permanent: it is the
-  // only place a stream-id prefix may be read as evidence.
-  const identity: RunIdentity =
-    trace.meta?.identity ?? legacyTraceIdentity(trace);
   const streamTabInfo: StreamTabInfo =
     identity.kind === 'process'
       ? { ...streamTabBase, identity, command: trace.config.instruction }
