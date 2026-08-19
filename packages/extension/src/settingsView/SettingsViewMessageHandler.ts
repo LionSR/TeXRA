@@ -155,6 +155,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       },
     });
     this.profileController = new SettingsProfileController({
+      host: 'vscode',
       globalState: globalSM,
       loadProviderKeyStatuses: () =>
         loadApiKeyStatusMap(platform().secrets, SecretManager.API_PROVIDERS),
@@ -562,6 +563,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    */
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
     const result = await applyStateSettingUpdate(key, value, {
+      host: 'vscode',
       stores: {
         config: platform().config,
         workspaceState: workspaceSM,
@@ -594,7 +596,18 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         result.error,
       );
     }
-    await this.postStateSettingSnapshot(result.entry.settingsViewSnapshot);
+    await this.postStateSettingSnapshot(result.entry.surfaces.settingsView);
+    if (result.kind !== 'applied') return;
+    if (result.entry.onWrite?.invalidatesModelOptions) {
+      invalidateModelOptionsCache();
+      await this.withActiveWebview((w) => this.sendModelSelectionData(w));
+      await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
+    }
+    if (codingPlanForUsageSetting(key) !== undefined) {
+      await this.withActiveWebview((w) =>
+        sendSubscriptionUsage(w, this.subscriptionUsage),
+      );
+    }
   }
 
   private async postStateSettingSnapshot(
@@ -826,24 +839,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    const usageVariantChanged =
-      codingPlanForUsageSetting(data.key) !== undefined;
     await this.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendProfileData(w),
         this.sendReliabilityAndOrchestrationSettings(w),
-        result.affectsModelAvailability
-          ? this.sendModelSelectionData(w)
-          : Promise.resolve(),
-        usageVariantChanged
-          ? sendSubscriptionUsage(w, this.subscriptionUsage)
-          : Promise.resolve(),
       ]);
     });
-
-    if (result.affectsModelAvailability) {
-      await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
-    }
   }
 
   // ============================================================

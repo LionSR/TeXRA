@@ -83,6 +83,7 @@ describe('agent skills workspace guard', () => {
       }),
       false,
       expect.any(Object),
+      'vscode',
     );
     expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('telemetry');
   });

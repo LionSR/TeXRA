@@ -15,14 +15,13 @@
  */
 
 import { platform } from '@platform/platform';
-import type { StateStore } from '@platform/interfaces';
 import {
   PROVIDER_STATE_ENTRIES,
   PROVIDER_URLS,
   type ProviderStateEntry,
 } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { readPlatformSetting } from './platformSettings';
+import { readPlatformSetting, writePlatformSetting } from './platformSettings';
 
 const PROVIDERS: ReadonlyMap<string, ProviderStateEntry> = new Map(
   PROVIDER_STATE_ENTRIES.map((provider) => [provider.id, provider]),
@@ -127,8 +126,8 @@ export function getGLMCodingPlan(): boolean {
   return readPlatformSetting<boolean>(GlobalStateKey.GLM_CODING_PLAN);
 }
 
-export async function setGLMCodingPlan(enabled: boolean): Promise<void> {
-  await platform().globalState.update(GlobalStateKey.GLM_CODING_PLAN, enabled);
+export function setGLMCodingPlan(enabled: boolean): Promise<void> {
+  return writePlatformSetting(GlobalStateKey.GLM_CODING_PLAN, enabled);
 }
 
 /**
@@ -140,23 +139,6 @@ export async function setGLMCodingPlan(enabled: boolean): Promise<void> {
  */
 export function getPreferKimiCode(): boolean {
   return readPlatformSetting<boolean>(GlobalStateKey.KIMI_CODE_PREFER);
-}
-
-/**
- * Set the Kimi Code routing preference and its OpenRouter exclusion.
- *
- * Kimi Code and OpenRouter are alternative routes for dual-backend Kimi
- * models. Keeping both writes here gives every caller the same transition.
- */
-export async function setPreferKimiCode(
-  enabled: boolean,
-  state: StateStore = platform().globalState,
-  options: { readonly preserveOpenRouter?: boolean } = {},
-): Promise<void> {
-  await state.update(GlobalStateKey.KIMI_CODE_PREFER, enabled);
-  if (enabled && options.preserveOpenRouter !== true) {
-    await state.update(GlobalStateKey.USE_OPENROUTER, false);
-  }
 }
 
 export function getWebSocketEnabled(): boolean {

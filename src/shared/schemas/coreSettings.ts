@@ -517,79 +517,9 @@ type _AssertCorePathsExhaustive = AssertNever<
   Exclude<LeafPaths<CoreSettings>, CoreSettingPath>
 >;
 
-/**
- * Core settings a non-VS-Code host (CLI, desktop) actually reads, keyed by
- * setting path alone.
- *
- * The split matters because `.texra/config.json` is shared by all three hosts,
- * but a setting only the extension reads is still inert in the CLI. The CLI's
- * unknown-key warning must report such a key rather than accept it silently.
- *
- * This mirrors the `cliConsumer` discipline {@link STATE_SETTINGS} enforces in
- * `stateSettings.ts`. State-backed settings additionally carry
- * `cliRuntimeReachability` because they are surfaced as editable rows in the
- * CLI `/config` panel; the entries here make the weaker claim that the key is
- * not a no-op. The reading files are not listed here: that file-path knowledge
- * belongs to the host split guardrail (test-kernel), which checks each reader
- * file exists and sits on the side of the split it is filed under.
- */
-export const CLI_CORE_SETTING_PATHS = [
-  'agentOutputs.autoOpenFinal',
-  'childRunConcurrencyBudget',
-  'goal.enabled',
-  'model.useOpenAIResponsesAPI',
-  'model.useGoogleInteractionsServerState',
-  'model.useBackgroundResponses',
-  'model.gpt5ReasoningSummary',
-  'model.openaiParallelToolCalls',
-  'model.compactionThresholdPercent',
-  'model.retry.maxAttempts',
-  'chatgptCodex.preferSubscription',
-  'xaiGrok.preferSubscription',
-  'maxImageDimension',
-  'bib.defaultPath',
-  'bib.zoteroPort',
-  'latex.latexindentConfig',
-  'latex.texfmtConfig',
-  'latex.tikzInputDirectory',
-  'latex.includeWorkspaceInTexinputs',
-  'latex.tikzTemplate',
-  'latex.wrapCritiqueInAlign',
-  'latex.enabledReplacements',
-  'latex.enabledReplacementsRegex',
-  'latex.customReplacementsRegex',
-  'latex.customReplacements',
-  'latexdiff.tempFileLocation',
-  // Only the extension's git commands read the commit count, but the setup
-  // assistant's `update_config` tool writes it from any host, so a CLI-written
-  // value must not then be reported as unknown.
-  'git.numberOfCommitsToShow',
-  'audio.soxPath',
-  'logger.debugMode',
-  'telemetry.enabled',
-  'debug.saveModelIO',
-  'skills.enabled',
-  'toolUse.requireEditApproval',
-  'toolUse.requireBashApproval',
-] as const satisfies readonly CoreSettingPath[];
-
-/**
- * Core settings only the VS Code extension reads. Setting one of these in
- * `.texra/config.json` does nothing, so the CLI reports it as unknown.
- * Keyed by setting path alone; the reading files are tracked by the host split
- * guardrail (test-kernel), not here.
- */
-export const EXTENSION_ONLY_CORE_SETTING_PATHS = [
-  'agentReview.runOnCommit',
-] as const satisfies readonly CoreSettingPath[];
-
-// Build fails when a Core setting is added without filing it on one side of the
-// host split, so a new extension-only key cannot silently rejoin the CLI's
-// known-key set.
-type _AssertEveryCorePathClassified = AssertNever<
-  Exclude<
-    CoreSettingPath,
-    | (typeof CLI_CORE_SETTING_PATHS)[number]
-    | (typeof EXTENSION_ONLY_CORE_SETTING_PATHS)[number]
-  >
->;
+// Which hosts honor each Core setting — and the file in each host that reads
+// it — is declared once on the setting catalog's rows (`stateSettings.ts`,
+// `CORE_SETTING_ROWS`), keyed exhaustively by `CoreSettingPath`. The CLI's
+// unknown-key whitelist and the extension-only set are filters over those rows,
+// so the two hand-kept path lists that used to live here (and the guard that
+// checked one against the other) no longer exist.
