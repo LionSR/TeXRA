@@ -1536,7 +1536,9 @@ export function modelsTabSettings(provider: string): readonly {
 }
 
 /** The entry's schema with the outer `.prefault()` wrapper peeled off. */
-function innerSchema(entry: StateSettingEntry): unknown {
+export function settingSchemaWithoutPrefault(
+  entry: StateSettingEntry,
+): unknown {
   return entry.schema instanceof z.ZodPrefault
     ? entry.schema.unwrap()
     : entry.schema;
@@ -1551,7 +1553,7 @@ function innerSchema(entry: StateSettingEntry): unknown {
 export function settingEnumOptions(
   entry: StateSettingEntry,
 ): readonly string[] | undefined {
-  const inner = innerSchema(entry);
+  const inner = settingSchemaWithoutPrefault(entry);
   return inner instanceof z.ZodEnum
     ? (inner.options as readonly string[])
     : undefined;
@@ -1580,15 +1582,15 @@ export function settingEnumChoices<T extends string = string>(
 
 /** Whether a setting's schema is a boolean (used to classify edit affordance). */
 export function settingIsBoolean(entry: StateSettingEntry): boolean {
-  return innerSchema(entry) instanceof z.ZodBoolean;
+  return settingSchemaWithoutPrefault(entry) instanceof z.ZodBoolean;
 }
 
 /** Whether a setting's schema is a string (free-text edit affordance). */
 export function settingIsString(entry: StateSettingEntry): boolean {
-  return innerSchema(entry) instanceof z.ZodString;
+  return settingSchemaWithoutPrefault(entry) instanceof z.ZodString;
 }
 
 /** Whether a setting's schema is a number (numeric free-text edit affordance). */
 export function settingIsNumber(entry: StateSettingEntry): boolean {
-  return innerSchema(entry) instanceof z.ZodNumber;
+  return settingSchemaWithoutPrefault(entry) instanceof z.ZodNumber;
 }
