@@ -121,7 +121,6 @@ function deriveTranscriptRowHeadline(row: TranscriptRow): string {
     case 'latexdiff':
       return `Latexdiff results (${row.entries.length})`;
     case 'statistics':
-      return 'Usage';
     case 'contextManagement':
     case 'compactionActivity':
       return row.label;

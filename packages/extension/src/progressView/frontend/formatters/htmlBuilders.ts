@@ -18,6 +18,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { diffWordsWithSpace } from 'diff';
 
 import type { FileListEntry } from '@shared/schemas';
+import type { FileListRow } from '@shared/transcript';
 import { hljs } from '@shared/highlighting/hljs';
 
 // Local imports - shared utilities
@@ -26,6 +27,7 @@ import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { copyWithFeedback } from '@shared/utils/clipboard';
 import { getBasename } from '@utils/core';
+import { formatBytes } from '@utils/text/stringUtils';
 
 // Local imports - formatter helpers
 import {
@@ -259,10 +261,14 @@ export function buildFileLinkSpan(
 }
 
 /** Build the `<li>` rows for a file-list banner. The summary line above them
- *  is the row's (`FileListRow.summary`), not derived here. */
+ *  is the row's (`FileListRow.summary`), not derived here. `media` is the
+ *  row's own subset — a file that reached the model as an image or audio clip
+ *  reports its kind and size beside its name. */
 export function buildFileListRender(
   files: readonly FileListEntry[],
+  media: FileListRow['media'],
 ): TemplateResult {
+  const mediaByPath = new Map(media.map((ref) => [ref.path, ref.media]));
   // prettier-ignore
   return html`${files.map((file) => {
     const iconName = file.ok ? 'check' : 'triangle-exclamation';
@@ -272,9 +278,10 @@ export function buildFileListRender(
     const source = file.source ?? 'unknown';
     const showSource = source !== 'unknown';
     const sourceText = file.sourceDisplay ?? source;
+    const loaded = mediaByPath.get(filePath);
 
     // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, fileName)}${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}</li>`;
+    return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, fileName)}${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}${loaded ? html` <span class="file-media">[${loaded.kind}, ${formatBytes(loaded.sizeBytes)}]</span>` : ''}</li>`;
   })}`;
 }
 
