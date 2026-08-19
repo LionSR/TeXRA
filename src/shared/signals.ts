@@ -76,16 +76,16 @@ export function subscribeToSignalChanges(
     queueMicrotask(() => {
       notifyPending = false;
       if (disposed) return;
-      // Read every pending computed so the watcher re-tracks its dependencies.
-      // A watched `Signal.State` never reports pending, so this is a no-op for
-      // subscribers that watch state signals directly.
-      for (const pending of watcher.getPending()) pending.get();
       // Re-arm in `finally`: a Watcher fires once and stays dormant until
-      // `watch()` runs again, so letting a throw from `notify()` skip it
-      // silently kills this subscription for the rest of the process. For a
-      // React subscriber that means a component frozen on stale data with no
-      // error and no recovery.
+      // `watch()` runs again, so letting a throw from a pending getter or
+      // `notify()` skip it silently kills this subscription for the rest of the
+      // process. For a React subscriber that means a component frozen on stale
+      // data with no error and no recovery.
       try {
+        // Read every pending computed so the watcher re-tracks its dependencies.
+        // A watched `Signal.State` never reports pending, so this is a no-op for
+        // subscribers that watch state signals directly.
+        for (const pending of watcher.getPending()) pending.get();
         notify();
       } finally {
         watcher.watch();
