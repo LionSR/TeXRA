@@ -499,7 +499,7 @@ function createWindow(options: {
     try {
       return (
         (await desktopAuth.signInAndWaitForSession(provider)) &&
-        (await SupabaseClient.canAccessRemoteAgentCatalog())
+        (await SupabaseClient.isAuthenticated())
       );
     } finally {
       teamSignInPending = false;
@@ -734,7 +734,7 @@ function createWindow(options: {
         chooseTeamAvailability(unavailableNames, presetName),
     },
     remoteCatalog: {
-      canAccess: () => SupabaseClient.canAccessRemoteAgentCatalog(),
+      canAccess: () => SupabaseClient.isAuthenticated(),
       signIn: signInForRemoteAgentCatalog,
     },
     notifications: { showInfoMessage, showErrorMessage },

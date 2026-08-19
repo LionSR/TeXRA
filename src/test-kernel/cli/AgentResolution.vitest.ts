@@ -12,10 +12,6 @@ import {
 import { AgentCategory } from '@shared/schemas';
 
 const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
-const canAccessRemoteAgentCatalogSpy = vi.spyOn(
-  SupabaseClient,
-  'canAccessRemoteAgentCatalog',
-);
 
 function agent(
   name: string,
@@ -38,7 +34,6 @@ describe('CLI agent resolution', () => {
   beforeEach(() => {
     for (const mock of Object.values(agentCatalogMock)) mock.mockReset();
     isAuthenticatedSpy.mockReset().mockResolvedValue(false);
-    canAccessRemoteAgentCatalogSpy.mockReset().mockResolvedValue(false);
   });
 
   it('loads the local registry and returns a local agent for signed-out users', async () => {
@@ -51,7 +46,7 @@ describe('CLI agent resolution', () => {
     expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith({
       includeRemote: false,
     });
-    expect(canAccessRemoteAgentCatalogSpy).toHaveBeenCalledOnce();
+    expect(isAuthenticatedSpy).toHaveBeenCalledOnce();
   });
 
   it('does a full registry load when the local registry misses', async () => {
@@ -66,13 +61,13 @@ describe('CLI agent resolution', () => {
       includeRemote: false,
     });
     expect(agentCatalogMock.loadAgents).toHaveBeenNthCalledWith(2);
-    expect(canAccessRemoteAgentCatalogSpy).not.toHaveBeenCalled();
+    expect(isAuthenticatedSpy).not.toHaveBeenCalled();
   });
 
   it('uses launch target category for authenticated remote-priority reloads', async () => {
     const local = agent('lean');
     const remote = agent('lean', 'remote');
-    canAccessRemoteAgentCatalogSpy.mockResolvedValue(true);
+    isAuthenticatedSpy.mockResolvedValue(true);
     agentCatalogMock.resolveAgentForLaunch
       .mockReturnValueOnce(resolution(local))
       .mockReturnValueOnce(resolution(remote));
@@ -99,7 +94,7 @@ describe('CLI agent resolution', () => {
 
   it('does not apply remote priority to source-qualified agent names', async () => {
     const local = agent('local:lean');
-    canAccessRemoteAgentCatalogSpy.mockResolvedValue(true);
+    isAuthenticatedSpy.mockResolvedValue(true);
     agentCatalogMock.getAgent.mockReturnValue(local);
 
     await expect(resolveCliAgent('local:lean')).resolves.toBe(local);
@@ -108,7 +103,7 @@ describe('CLI agent resolution', () => {
     expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith({
       includeRemote: false,
     });
-    expect(canAccessRemoteAgentCatalogSpy).not.toHaveBeenCalled();
+    expect(isAuthenticatedSpy).not.toHaveBeenCalled();
   });
 
   it('uses launch target category for local and remote-fallback lookups', async () => {
@@ -150,7 +145,7 @@ describe('CLI agent resolution', () => {
       'builtInToolUse:review',
       'builtInToolUse',
     );
-    expect(canAccessRemoteAgentCatalogSpy).not.toHaveBeenCalled();
+    expect(isAuthenticatedSpy).not.toHaveBeenCalled();
   });
 
   it('reports launch-specific missing-agent messages', async () => {
