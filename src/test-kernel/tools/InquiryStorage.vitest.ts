@@ -119,10 +119,12 @@ describe('InquiryStorage', () => {
   });
 
   it('opens, answers, and resolves a thread end-to-end', async () => {
+    const atomicWriteSpy = vi.spyOn(platform().fs, 'writeFileAtomic');
     const opened = await recordOpenQuestion({
       parentStreamId: STREAM_A,
       parentGenerationId: GENERATION_A,
       question: 'What is the Sobolev constant?',
+      context: 'Use the sharp Euclidean inequality.',
       suggestSearch: false,
     });
 
@@ -144,6 +146,15 @@ describe('InquiryStorage', () => {
     expect(answered!.manifest.status).toBe('answered');
     expect(answered!.turn.parentGenerationId).toBe(GENERATION_A);
     expect(answered!.turn.answer).toBe('C = (n(n-2))^{-1} * ω_n^{2/n}');
+
+    const turnDir = path.join(threadDirFor(opened.threadId), 't1');
+    expect(atomicWriteSpy.mock.calls.map(([target]) => target)).toEqual(
+      expect.arrayContaining([
+        path.join(turnDir, 'question.txt'),
+        path.join(turnDir, 'context.txt'),
+        path.join(turnDir, 'answer.txt'),
+      ]),
+    );
 
     const stillOpen = await listThreadsByStatus({
       status: 'open',

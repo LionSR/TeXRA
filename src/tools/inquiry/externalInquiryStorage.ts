@@ -365,14 +365,14 @@ export async function recordOpenQuestion(params: {
       : undefined;
 
     const writeOps: Promise<void>[] = [
-      GlobalStorageFS.write(
+      GlobalStorageFS.writeAtomic(
         path.join(turnPath, 'question.txt'),
         params.question,
       ),
     ];
     if (trimmedContext) {
       writeOps.push(
-        GlobalStorageFS.write(
+        GlobalStorageFS.writeAtomic(
           path.join(turnPath, 'context.txt'),
           trimmedContext,
         ),
@@ -427,7 +427,7 @@ export async function recordAnswerForOpenTurn(params: {
       const answerRelativePath = normalizeFilePath(path.join(td, 'answer.txt'));
       const sessionLinks = normalizeSessionLinks(params.sessionLinks);
 
-      await GlobalStorageFS.write(
+      await GlobalStorageFS.writeAtomic(
         path.join(turnPath, 'answer.txt'),
         params.answer,
       );
