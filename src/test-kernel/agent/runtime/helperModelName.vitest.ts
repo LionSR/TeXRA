@@ -85,7 +85,7 @@ describe('#7582 runtime vs Settings UI helper-model divergence', () => {
     // configured model is accepted as-is.
     expect(getHelperModelName()).toBe(configuredModel);
 
-    // Settings UI: `getVisibleModels()` substitutes DEFAULT_MODELS when the
+    // Settings UI: `getEnabledModels()` substitutes DEFAULT_MODELS when the
     // persisted enabled list is empty/unset, and `getEffectiveHelperModel`
     // requires membership in that substituted list -- so it falls back
     // instead of accepting the configured model as-is. This is a deliberate,

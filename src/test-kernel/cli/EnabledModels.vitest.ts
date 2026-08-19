@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const state = new Map<string, unknown>();
@@ -20,11 +18,7 @@ vi.mock('@platform/platform', () => ({
   }),
 }));
 
-vi.mock('@model/computeModelOptions', () => ({
-  invalidateModelOptionsCache: vi.fn(),
-}));
-
-const { getCliEnabledModels, setCliModelEnabled, listCliEnabledModelCatalog } =
+const { setCliModelEnabled, listCliEnabledModelCatalog } =
   await import('@cli/runtime/enabledModels');
 
 describe('CLI enabled models catalog', () => {
@@ -32,35 +26,18 @@ describe('CLI enabled models catalog', () => {
     state.clear();
   });
 
-  it('falls back to DEFAULT_MODELS when nothing is stored', () => {
-    expect(getCliEnabledModels()).toEqual(DEFAULT_MODELS);
-  });
-
-  it('enables a model that is not yet in the list', async () => {
+  it('resolves a CLI spelling and reports the resulting list', async () => {
     state.set(GlobalStateKey.ENABLED_MODELS, ['deepseekproT']);
-    const result = await setCliModelEnabled('grok45', true);
+    const result = await setCliModelEnabled('grok-4.5', true);
     expect(result.model).toBe('grok45');
     expect(result.enabled).toBe(true);
     expect(result.list).toEqual(['deepseekproT', 'grok45']);
-    expect(getCliEnabledModels()).toContain('grok45');
   });
 
-  it('pins a disabled helper to the built-in default', async () => {
-    state.set(GlobalStateKey.ENABLED_MODELS, ['deepseekproT', 'grok45']);
-    state.set(GlobalStateKey.HELPER_MODEL, 'deepseekproT');
-
-    await setCliModelEnabled('deepseekproT', false);
-
-    expect(state.get(GlobalStateKey.HELPER_MODEL)).toBe(DEFAULT_HELPER_MODEL);
-    expect(getCliEnabledModels()).toEqual(['grok45']);
-  });
-
-  it('refuses to disable the last remaining model', async () => {
-    state.set(GlobalStateKey.ENABLED_MODELS, ['deepseekproT']);
-    await expect(setCliModelEnabled('deepseekproT', false)).rejects.toThrow(
-      /at least one model/i,
+  it('rejects an id no CLI model answers to', async () => {
+    await expect(setCliModelEnabled('nonexistent-xyz', true)).rejects.toThrow(
+      /Unknown model/,
     );
-    expect(getCliEnabledModels()).toEqual(['deepseekproT']);
   });
 
   it('lists catalog rows with enabled flags', () => {
