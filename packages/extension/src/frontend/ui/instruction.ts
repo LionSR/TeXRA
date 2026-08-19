@@ -2,9 +2,9 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { globalSM } from '@common/state';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { createLog } from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 
 const NEVER_REMIND = 'Never remind again';
@@ -20,7 +20,7 @@ async function handleInstructionChoice(
   if (!choice) return;
 
   if (showSuppress && choice === NEVER_REMIND) {
-    await globalSM.update(stateKey, true);
+    await platform().globalState.update(stateKey, true);
     return;
   }
 
@@ -38,7 +38,7 @@ export async function showInstructionWithSuppress(
 ): Promise<void> {
   const stateKey = `${INSTRUCTION_PREFIX}${key}`;
 
-  if (showSuppress && globalSM.get<boolean>(stateKey)) {
+  if (showSuppress && platform().globalState.get<boolean>(stateKey)) {
     return;
   }
 

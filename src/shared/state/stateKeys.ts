@@ -6,11 +6,10 @@
  * natural `@shared/state/stateKeys` import path, without any risk of pulling in
  * the VS Code module.
  *
- * The runtime managers (`workspaceSM`, `globalSM`, `initializeStateManagers`)
- * live in `@common/state/stateManager`, which does import `vscode` and must
- * only be touched from VS Code-allowed zones (extension host wiring, command
- * handlers, webview backends). Those zones import from the `@common/state`
- * barrel, which re-exports both these keys and the vscode-coupled managers.
+ * The stores these keys address are reached through the platform port —
+ * `platform().workspaceState` / `platform().globalState` (or the
+ * bootstrap-tolerant `tryWorkspaceState()` / `tryGlobalState()`) from
+ * `@platform/platform`. Each host wires its own implementation at startup.
  */
 
 export enum WorkspaceStateKey {

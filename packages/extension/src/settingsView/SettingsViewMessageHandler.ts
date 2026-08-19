@@ -13,7 +13,6 @@ import * as vscode from 'vscode';
 // Shared schemas and dispatchers
 import { defaultSession } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
-import { globalSM, workspaceSM } from '@common/state';
 import { BaseViewMessageHandler } from '@common/webview';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
@@ -132,17 +131,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       withActiveWebview: (fn) => this.withActiveWebview(fn),
     };
 
-    // Must build inside the constructor: globalSM/workspaceSM are populated
-    // by extension.ts → initializeStateManagers and are still undefined at
-    // module load, so destructuring them at top level captures `undefined`
-    // and every later globalState.get(...) throws.
+    // Must build inside the constructor: the platform is initialized by
+    // extension.ts during activation, so destructuring its stores at module
+    // load would throw before that happens.
     this.settingsHost = new SettingsViewHost({
-      state: { workspaceState: workspaceSM, globalState: globalSM },
+      state: {
+        workspaceState: platform().workspaceState,
+        globalState: platform().globalState,
+      },
       memoryPrompt: new VscodePromptHost(),
     });
     this.profileController = new SettingsProfileController({
       host: 'vscode',
-      globalState: globalSM,
+      globalState: platform().globalState,
       loadProviderKeyStatuses: () =>
         loadApiKeyStatusMap(platform().secrets, SecretManager.API_PROVIDERS),
       getConfig,
@@ -503,8 +504,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private settingsStores(): SettingsStores {
     return {
       config: platform().config,
-      workspaceState: workspaceSM,
-      globalState: globalSM,
+      workspaceState: platform().workspaceState,
+      globalState: platform().globalState,
     };
   }
 

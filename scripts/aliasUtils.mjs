@@ -103,7 +103,6 @@ export function deriveDesktopPaths(rootPaths) {
 // include is intentionally limited to packages/agent/src and root src/types.
 export const BUILD_EXCLUDED_ALIASES = [
   'vscode-jsonrpc/node',
-  '@common/state',
   '@common/state/*',
   '@common/webview',
   '@common/webview/*',

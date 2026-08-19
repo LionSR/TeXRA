@@ -6,8 +6,8 @@
 import * as vscode from 'vscode';
 
 import { AUTH_COMMANDS } from '@auth/constants';
-import { globalSM } from '@common/state';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { platform } from '@platform/platform';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundHandlerRegistry } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -67,10 +67,16 @@ export function createBannerHandlers(host: MainViewInboundHost) {
       }
     },
     [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
-      await globalSM.update(GlobalStateKey.LOGIN_BANNER_DISMISSED, true);
+      await platform().globalState.update(
+        GlobalStateKey.LOGIN_BANNER_DISMISSED,
+        true,
+      );
     },
     [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: async () => {
-      await globalSM.update(GlobalStateKey.ORCHESTRATOR_BANNER_DISMISSED, true);
+      await platform().globalState.update(
+        GlobalStateKey.ORCHESTRATOR_BANNER_DISMISSED,
+        true,
+      );
     },
   } satisfies Partial<MainViewInboundHandlerRegistry>;
 }

@@ -77,7 +77,6 @@ vi.mock('@common/webview', () => ({
   getSharedLocalResourceRoots: () => [],
   SIDEBAR_VIEWS: { MAIN: 'main', PROGRESS: 'progress' },
 }));
-vi.mock('@common/state', () => ({ workspaceSM: {} }));
 vi.mock('@agent/trace', () => ({
   createChannelTrace: () => ({ debug: vi.fn(), error: vi.fn() }),
 }));

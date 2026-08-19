@@ -125,16 +125,6 @@ vi.mock('@model/setupCredentialAccess', () => ({
   },
 }));
 
-vi.mock('@common/state', () => ({
-  GlobalStateKey: {
-    USE_OPENROUTER: 'useOpenRouter',
-  },
-  globalSM: {
-    get: () => undefined,
-    update: () => Promise.resolve(),
-  },
-}));
-
 vi.mock('vscode', () => ({
   Uri: {
     file: (p: string) => ({ fsPath: p, toString: () => p, path: p }),
@@ -207,7 +197,6 @@ await import('@frontend/secretManager');
 await import('@agent/runtime/SessionHandle');
 await import('@controllers/onboarding/setupLaunch');
 await import('@model/setupCredentialAccess');
-await import('@common/state');
 
 // Module under test — imported after all mock factories are materialized.
 const { launchSetupAssistant } =
