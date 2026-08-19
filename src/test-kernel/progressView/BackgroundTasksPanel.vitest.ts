@@ -166,9 +166,9 @@ describe('background-tasks-panel', () => {
       (node) => node.textContent,
     );
     // Only the run carries a phase; a stream without one gains no span.
-    expect(phases).toEqual(['Reduce 2/3']);
+    expect(phases).toEqual(['Reduce (2/3)']);
     const rows = [...shadow.querySelectorAll('.task-header')];
-    expect(rows[0]?.textContent).toContain('Reduce 2/3');
+    expect(rows[0]?.textContent).toContain('Reduce (2/3)');
     expect(rows[1]?.textContent).not.toContain('Reduce');
 
     container.remove();

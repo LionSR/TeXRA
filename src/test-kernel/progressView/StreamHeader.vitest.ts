@@ -254,7 +254,7 @@ describe('stream-header', () => {
             stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
           }),
         },
-        text: 'Reduce 2/3',
+        text: 'Reduce (2/3)',
         tooltip: 'Phase 2 of 3: Reduce',
       },
       {
@@ -273,7 +273,7 @@ describe('stream-header', () => {
             conversationProgress: { toolCallCount: 4 },
           }),
         },
-        text: 'Reduce 2/3, 4 tool calls',
+        text: 'Reduce (2/3), 4 tool calls',
         tooltip: 'Phase 2 of 3: Reduce, Tool calls: 4',
       },
     ])('$name', async ({ props, text, tooltip }) => {

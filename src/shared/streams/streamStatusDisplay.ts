@@ -8,6 +8,7 @@ import {
   type StreamStage,
   type StreamSubstate,
 } from '@shared/schemas';
+import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 
 export type StreamStatusDisplayKey =
   | Exclude<StreamLifecycleStatus, typeof STREAM_STATUS.READY>
@@ -146,18 +147,19 @@ export function formatRoundStageLabel(
   return stage.total !== undefined ? `${current}/${stage.total}` : current;
 }
 
-/** Compact phase progress label for a workflow-script run: `Reduce 2/3` when
- *  the phase was declared with a position and a planned total, `Reduce 2` with
- *  only a position, and the bare title for a dynamically opened phase.
- *  Zero-based `index` renders one-based. Occupies the same row slot as
+/** Phase progress label for a workflow-script run, spelled by the one owner of
+ *  phase heading copy so this slot cannot drift from the transcript divider and
+ *  the run-status band that render beside it. Occupies the same row slot as
  *  `formatRoundStageLabel` — a run opens phases or rounds, never both. */
 export function formatPhaseStageLabel(
   stage: Readonly<PhaseStage> | undefined,
 ): string | undefined {
   if (stage === undefined) return undefined;
-  if (stage.index === undefined) return stage.label;
-  const current = `${stage.label} ${stage.index + 1}`;
-  return stage.total !== undefined ? `${current}/${stage.total}` : current;
+  return formatWorkflowPhaseHeading({
+    phaseLabel: stage.label,
+    phaseIndex: stage.index,
+    phaseTotal: stage.total,
+  });
 }
 
 /** Label for the one stage slot a stream fills: a workflow-script run advances
