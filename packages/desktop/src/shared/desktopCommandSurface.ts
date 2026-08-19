@@ -7,13 +7,13 @@ import type {
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   toElectronAccelerator,
-  toPlatformAccelerator,
   type DesktopPlatform,
 } from '@shared/commands/accelerators';
 import {
   commandCatalogById,
   settingsTabByCommand,
   type CommandId,
+  type CommandKeybinding,
   type SettingsTabCommandId,
 } from '@shared/commands/catalog';
 import {
@@ -177,9 +177,18 @@ export interface DesktopMainViewResetMessage {
   isResetOperation: true;
 }
 
+/**
+ * Desktop-only commands have no catalog row, so their label, category and
+ * keybinding live here. Keybindings use the same `CommandKeybinding` tokens the
+ * catalog uses so both branches of {@link getDesktopCommandMenuEntries} run
+ * through `toElectronAccelerator` — the one spelling the renderer's keydown
+ * comparison also produces.
+ */
 const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   DesktopLocalCommandId,
-  Omit<DesktopCommandMenuEntry, 'icon'>
+  Omit<DesktopCommandMenuEntry, 'icon' | 'accelerator'> & {
+    keybinding?: CommandKeybinding;
+  }
 >([
   [
     DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
@@ -187,7 +196,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
       label: 'Save',
       category: 'File',
-      accelerator: 'CommandOrControl+S',
+      keybinding: { key: 'ctrl+s', mac: 'cmd+s' },
     },
   ],
   [
@@ -212,7 +221,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
       label: 'Toggle Bottom Bar',
       category: 'View',
-      accelerator: 'CommandOrControl+J',
+      keybinding: { key: 'ctrl+j', mac: 'cmd+j' },
     },
   ],
   [
@@ -221,7 +230,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
       label: 'Toggle Side Panel',
       category: 'View',
-      accelerator: 'CommandOrControl+Alt+B',
+      keybinding: { key: 'ctrl+alt+b', mac: 'cmd+option+b' },
     },
   ],
   [
@@ -230,7 +239,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
       label: 'Toggle Summary Bar',
       category: 'View',
-      accelerator: 'CommandOrControl+Alt+S',
+      keybinding: { key: 'ctrl+alt+s', mac: 'cmd+option+s' },
     },
   ],
   [
@@ -239,7 +248,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
       label: 'Open Folder',
       category: 'File',
-      accelerator: 'CommandOrControl+O',
+      keybinding: { key: 'ctrl+o', mac: 'cmd+o' },
     },
   ],
   [
@@ -267,10 +276,13 @@ export function getDesktopCommandMenuEntries(
     if (isDesktopLocalCommandId(id)) {
       const localEntry = DESKTOP_LOCAL_COMMAND_ENTRIES.get(id);
       if (!localEntry) throw new Error(`Missing desktop command entry: ${id}`);
+      const { keybinding, ...entry } = localEntry;
       return {
-        ...localEntry,
+        ...entry,
         icon: DESKTOP_COMMAND_ICONS[id],
-        accelerator: toPlatformAccelerator(localEntry.accelerator, platform),
+        ...(keybinding && {
+          accelerator: toElectronAccelerator(keybinding, platform),
+        }),
       };
     }
 
