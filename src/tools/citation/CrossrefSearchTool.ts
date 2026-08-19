@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -20,13 +21,10 @@ import { rateLimitedApiCall } from './rateLimiter';
 
 const CROSSREF_SEARCH_FIELDS = {
   query: z.string().describe('Bibliographic search query for Crossref works.'),
-  rows: z
-    .int()
-    .positive()
-    .max(CROSSREF_CONSTANTS.MAX_ROWS)
-    .nullish()
-    .transform((v) => v ?? CROSSREF_CONSTANTS.DEFAULT_ROWS)
-    .describe('Maximum number of works to return.'),
+  rows: nullishWithDefault(
+    z.int().positive().max(CROSSREF_CONSTANTS.MAX_ROWS),
+    CROSSREF_CONSTANTS.DEFAULT_ROWS,
+  ).describe('Maximum number of works to return.'),
   offset: z
     .int()
     .min(0)

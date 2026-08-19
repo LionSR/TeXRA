@@ -14,7 +14,6 @@
 
 // Local imports
 import { getExecutionStore, type ResultMeta } from '@agent/storage';
-import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
 import {
   ExecutionLeaseLostError,
   runWithInactiveExecutionLease,
@@ -25,12 +24,12 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
+  type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { generateExecutionId, KeyedMutex } from '@utils/core';
@@ -39,6 +38,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
+  registerChildExecution,
   startDetachedChildRunLoop,
   type DetachedChildRunInput,
 } from './detachedChildRun';
@@ -376,22 +376,18 @@ async function executeInBand(
   const config = AgentConfigSchema.parse(options.configPayload);
   const startedAt = Date.now();
   const workingDirectory = config.workingDirectory ?? undefined;
-  const childStreamId = getStreamTabId(config.agent, { executionId });
   const store = getExecutionStore(executionId);
 
+  let childStreamId: StreamTabId;
   let runWithOwnership: OwnedExecutionLeaseScope;
   try {
-    runWithOwnership = await registerOwnedExecution(
+    ({ childStreamId, runWithOwnership } = await registerChildExecution({
       executionId,
       config,
-      options.agentName,
-      {
-        streamId: childStreamId,
-        identity: { kind: 'agent', agent: config.agent },
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-        parentExecutionId: options.parentExecutionId,
-      },
-    );
+      agentName: options.agentName,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      parentExecutionId: options.parentExecutionId,
+    }));
   } catch (cause) {
     if (mode === 'required-result') {
       throw new SubagentDurabilityError(
