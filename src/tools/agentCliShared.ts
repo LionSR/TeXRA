@@ -13,6 +13,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   startChildRunLoop,
   type ChildRunPorts,
@@ -48,7 +49,6 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import {
   childStreamDescription,
   createChildStream,
-  getChildStreamId,
   type ChildStream,
 } from './delegation/childStream';
 import type {
@@ -206,7 +206,7 @@ export async function launchAgentCliSession(
   params: AgentCliLaunchParams,
 ): Promise<ToolResult> {
   const executionId = generateExecutionId();
-  const childStreamId = getChildStreamId(executionId, params.streamPrefix);
+  const childStreamId = getStreamTabId(params.streamPrefix, { executionId });
   // An external CLI drives this agent: the CLI is both the agent name and the
   // driving tool, and `identity.tool` is what gates native-only affordances
   // (resume/rerun) off for this cohort.
