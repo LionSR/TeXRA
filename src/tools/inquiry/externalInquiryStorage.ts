@@ -105,24 +105,6 @@ export type ExternalInquiryThreadManifest = z.infer<
   typeof ExternalInquiryThreadManifestSchema
 >;
 
-// ============================================================================
-// Mirror types
-// ============================================================================
-
-interface ExternalInquiryExecutionMirrorPaths {
-  executionId: ExecutionId;
-  manifestPath: string;
-  questionPath: string;
-  contextPath?: string;
-  answerPath: string;
-}
-
-interface ExternalInquiryThreadMirrorPaths {
-  executionId: ExecutionId;
-  threadPath: string;
-  manifestPath: string;
-}
-
 interface PersistedOpenTurn {
   threadId: InquiryThreadId;
   manifest: ExternalInquiryThreadManifest;
@@ -133,7 +115,6 @@ interface PersistedAnsweredTurn {
   threadId: InquiryThreadId;
   manifest: ExternalInquiryThreadManifest;
   turn: AnsweredInquiryTurn;
-  executionMirrorPaths?: ExternalInquiryExecutionMirrorPaths;
 }
 
 // ============================================================================
@@ -254,42 +235,11 @@ async function copyGlobalDirectoryToExecution(
 export async function ensureExternalInquiryThreadMirror(params: {
   executionId: ExecutionId;
   threadId: InquiryThreadId;
-}): Promise<ExternalInquiryThreadMirrorPaths> {
-  const threadStoragePath = `${RUNS_STORAGE_DIR}/${params.executionId}/${EXEC_DIR}/${params.threadId}`;
+}): Promise<void> {
   await copyGlobalDirectoryToExecution(
     threadDir(params.threadId),
-    threadStoragePath,
+    `${RUNS_STORAGE_DIR}/${params.executionId}/${EXEC_DIR}/${params.threadId}`,
   );
-
-  const threadPath = `/${threadStoragePath}`;
-  return {
-    executionId: params.executionId,
-    threadPath,
-    manifestPath: `${threadPath}/manifest.json`,
-  };
-}
-
-async function mirrorThreadToExecution(params: {
-  executionId: ExecutionId;
-  threadId: InquiryThreadId;
-  turn: AnsweredInquiryTurn;
-}): Promise<ExternalInquiryExecutionMirrorPaths | undefined> {
-  const mirror = await ensureExternalInquiryThreadMirror({
-    executionId: params.executionId,
-    threadId: params.threadId,
-  });
-  const base = mirror.threadPath;
-  const toPath = (rel: string) => `${base}/${normalizeFilePath(rel)}`;
-
-  return {
-    executionId: mirror.executionId,
-    manifestPath: mirror.manifestPath,
-    questionPath: toPath(params.turn.questionRelativePath),
-    answerPath: toPath(params.turn.answerRelativePath),
-    ...(params.turn.contextRelativePath
-      ? { contextPath: toPath(params.turn.contextRelativePath) }
-      : {}),
-  };
 }
 
 function normalizeSessionLinks(links?: string[] | null): string[] | undefined {
@@ -309,7 +259,6 @@ function normalizeSessionLinks(links?: string[] | null): string[] | undefined {
 interface OpenTurnUpdate<T> {
   manifest: ExternalInquiryThreadManifest;
   result: T;
-  afterWrite?: () => Promise<void>;
 }
 
 /**
@@ -318,11 +267,6 @@ interface OpenTurnUpdate<T> {
  * thread is missing, not open, has no turns, or its last turn isn't open —
  * the shared guard behind `recordAnswerForOpenTurn` and
  * `persistOpenTurnDraft`.
- *
- * `afterWrite`, if returned by `update`, runs after the manifest write but
- * still inside the thread lock — for side effects (e.g. mirroring the
- * thread directory to an execution) that must not interleave with a
- * concurrent mutation of the same thread.
  */
 async function withOpenTurnUpdate<T>(
   threadId: InquiryThreadId,
@@ -346,7 +290,6 @@ async function withOpenTurnUpdate<T>(
     if (!outcome) return null;
 
     await writeThreadManifest(outcome.manifest);
-    await outcome.afterWrite?.();
     return { manifest: outcome.manifest, result: outcome.result };
   });
 }
@@ -466,8 +409,7 @@ export async function recordOpenQuestion(params: {
 
 /**
  * Persist the user-supplied answer onto the thread's current open turn.
- * Flips status `open → answered`. Mirrors the answered turn into the
- * caller execution if one is provided.
+ * Flips status `open → answered`.
  *
  * Returns `null` if the thread has no open turn (e.g. already answered,
  * or dropped).
@@ -476,10 +418,7 @@ export async function recordAnswerForOpenTurn(params: {
   threadId: InquiryThreadId;
   answer: string;
   sessionLinks?: string[] | null;
-  executionId?: ExecutionId;
 }): Promise<PersistedAnsweredTurn | null> {
-  let executionMirrorPaths: ExternalInquiryExecutionMirrorPaths | undefined;
-
   const outcome = await withOpenTurnUpdate(
     params.threadId,
     async (existing, lastTurn, timestamp) => {
@@ -511,23 +450,7 @@ export async function recordAnswerForOpenTurn(params: {
         turns: [...existing.turns.slice(0, -1), answeredTurn],
       };
 
-      return {
-        manifest: nextManifest,
-        result: answeredTurn,
-        // Mirroring copies the whole thread directory, so it must observe
-        // the manifest just written above and must not interleave with a
-        // concurrent mutation (e.g. a follow-up recordOpenQuestion) — both
-        // require staying inside the thread lock.
-        afterWrite: params.executionId
-          ? async () => {
-              executionMirrorPaths = await mirrorThreadToExecution({
-                executionId: params.executionId!,
-                threadId: params.threadId,
-                turn: answeredTurn,
-              });
-            }
-          : undefined,
-      };
+      return { manifest: nextManifest, result: answeredTurn };
     },
   );
 
@@ -537,7 +460,6 @@ export async function recordAnswerForOpenTurn(params: {
     threadId: params.threadId,
     manifest: outcome.manifest,
     turn: outcome.result,
-    executionMirrorPaths,
   };
 }
 
