@@ -19,6 +19,7 @@ import {
   type StreamArtifactReader,
 } from '@controllers/session/StreamArtifactProjection';
 import { type StreamTabId, type TokenUsageStats } from '@shared/schemas';
+import { subscribeToSignalChanges } from '@shared/signals';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -30,7 +31,6 @@ import {
   type StreamSlice,
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
-import { subscribeToSignalChanges } from './signalSubscription';
 
 /** Bumped whenever the artifact projection changes: after a focus/`/plan`
  *  preload completes or when a live fact mutates the snapshot store. Renderers

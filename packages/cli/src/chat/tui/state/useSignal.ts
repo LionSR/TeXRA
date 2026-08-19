@@ -4,7 +4,7 @@
 
 import { useCallback, useSyncExternalStore } from 'react';
 
-import { subscribeToSignalChanges } from './signalSubscription';
+import { subscribeToSignalChanges } from '@shared/signals';
 import type { Signal } from '@lit-labs/signals';
 
 type ReadableSignal<T> = Signal.State<T> | Signal.Computed<T>;
