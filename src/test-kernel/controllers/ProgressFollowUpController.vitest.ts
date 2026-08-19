@@ -148,8 +148,10 @@ describe('ProgressFollowUpController', () => {
     expect(config.instruction ?? '').toMatch(
       /Editable workspace targets: source\.tex, main\.tex/,
     );
+    // Addressed through the execution that owns the artifact (`exec-old`, on
+    // the failure's own locations), not the execution asking about it.
     expect(config.instruction ?? '').toMatch(
-      /output \/executions\/exec-123\/files\/answer\.tex; compile log \/executions\/exec-123\/files\/answer\.log/,
+      /output \/executions\/exec-old\/files\/answer\.tex; compile log \/executions\/exec-old\/files\/answer\.log/,
     );
   });
 

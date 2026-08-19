@@ -1,6 +1,9 @@
 import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
-import type { FileLocation } from '@shared/schemas';
-import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
+import {
+  fileLocationDisplayPath,
+  OUTPUT_DOCUMENTS_TAG,
+  type FileLocation,
+} from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { replaceInputCommands } from './fileMapping';
@@ -85,11 +88,7 @@ export class OutputFileProcessor {
     // a `% main.tex` header) must not map onto several same-named base
     // files in different directories.
     const pathOf = (location: FileLocation): string =>
-      normalizeFilePath(
-        location.kind === 'external'
-          ? location.absolutePath
-          : location.relativePath,
-      );
+      normalizeFilePath(fileLocationDisplayPath(location));
     const basesMatching = (source: string): number =>
       baseFiles.filter((base) => {
         const path = pathOf(base);

@@ -3,15 +3,15 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import { decideRunModel } from '@model/runModelDecision';
-import type {
-  CompileFailure,
-  FileLocation,
-  OutputFileInfo,
-  RoundIndexed,
-  StreamTabId,
+import {
+  AgentCategory,
+  fileLocationAddressPath,
+  type CompileFailure,
+  type OutputFileInfo,
+  type RoundIndexed,
+  type StreamTabId,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
-import { runStorageFilePath } from '@shared/copy/workflowRunContext';
+import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -198,16 +198,15 @@ export class ProgressFollowUpController {
     const editableFiles = targets.map((target) => target.path);
     const editableHint = `Editable workspace ${pluralize(editableFiles.length, 'target')}: ${editableFiles.join(', ')}`;
     const latexdiffContext = this.formatLatexdiffTargetContext(targets);
-    const failureLines = compileFailures.map((failure) => {
-      const outputPath = this.formatCompileFailureOutputPath(
-        failure.output,
-        executionId,
-      );
-      const logPath = executionId
-        ? runStorageFilePath(executionId, failure.logRelativePath)
-        : failure.log.absolutePath;
-      return `- r${failure.round} ${failure.displayName}: output ${outputPath}; compile log ${logPath}`;
-    });
+    // Both halves of the line address the artifact through the execution that
+    // owns it, which a run-storage location carries. The run asking about the
+    // failure is a second, potentially disagreeing source for the same fact --
+    // and when it disagrees (a failure recorded by an earlier execution of the
+    // stream), it is the wrong one.
+    const failureLines = compileFailures.map(
+      (failure) =>
+        `- ${formatRoundStageLabel({ index: failure.round })} ${failure.displayName}: output ${fileLocationAddressPath(failure.output)}; compile log ${fileLocationAddressPath(failure.log)}`,
+    );
 
     return [
       'The workflow compile check failed. Diagnose and fix the generated LaTeX output using the compile log context below.',
@@ -353,18 +352,5 @@ export class ProgressFollowUpController {
     const originalInputRecovery = originalConfig.inputFiles.filter(Boolean);
 
     return [...generatedOutputSources, ...originalInputRecovery];
-  }
-
-  private formatCompileFailureOutputPath(
-    output: FileLocation,
-    executionId: string | undefined,
-  ): string {
-    if (executionId && output.kind === 'runStorage') {
-      return runStorageFilePath(executionId, output.relativePath);
-    }
-    if (output.kind === 'external') {
-      return output.absolutePath;
-    }
-    return output.relativePath;
   }
 }

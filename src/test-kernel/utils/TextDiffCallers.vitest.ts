@@ -12,7 +12,7 @@ import {
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
-import type { ExecutionId } from '@shared/schemas';
+import { fileLocationDisplayPath, type ExecutionId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { computeAndWriteWorkflowDiffs } from '@tools/delegation/subagentResults';
 import {
@@ -22,10 +22,7 @@ import {
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import {
-  createExternalLocation,
-  getComparablePath,
-} from '@utils/files/fileLocation';
+import { createExternalLocation } from '@utils/files/fileLocation';
 import { getRunDir } from '@utils/files/runStorageFs';
 
 function installFakePlatform(
@@ -57,7 +54,7 @@ describe('shared text-diff caller fixtures', () => {
     ];
     const baseLocation = createExternalLocation('/workspace/base.tex');
     const mapping: RoundFileMapping = new Map([
-      [getComparablePath(outputLocation), { base: baseLocation }],
+      [fileLocationDisplayPath(outputLocation), { base: baseLocation }],
     ]);
 
     const [output] = await computeOutputDiffStats(

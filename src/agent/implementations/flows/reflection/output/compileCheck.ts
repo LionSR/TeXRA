@@ -3,12 +3,14 @@ import * as path from 'node:path';
 import type { AgentTrace } from '@agent/trace';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import { hasLatexCompiler } from '@latex/latexToolchain';
-import type {
-  CompileFailure,
-  CompileResult,
-  ExecutionId,
-  FileLocation,
-  OutputFileInfo,
+import {
+  fileLocationDisplayPath,
+  isGenericOutputStem,
+  type CompileFailure,
+  type CompileResult,
+  type ExecutionId,
+  type FileLocation,
+  type OutputFileInfo,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latexConfig';
@@ -16,7 +18,6 @@ import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
   createRunStorageLocation,
-  getComparablePath,
   pathToLocation,
 } from '@utils/files/fileLocation';
 import { type TaskRunFileService } from '@utils/files/taskRunStorage';
@@ -44,10 +45,6 @@ export interface CompileCheckContext {
 const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
-// Generic raw-wrapper stems are run-storage internals, not the meaningful
-// document name, so they must never leak into a compile display name.
-const GENERIC_OUTPUT_STEMS = new Set(['output', 'output.xml', 'output.tex']);
-
 export interface CompileCheckResult {
   failures: CompileFailure[];
   artifacts: CompiledPdfArtifact[];
@@ -72,7 +69,7 @@ export function getWorkflowAutoCompileTimeoutMs(): number {
 function getCompileDisplayName(file: OutputFileInfo): string {
   const rawBase = path.basename(file.location.absolutePath);
   const srcBase = file.source ? path.basename(file.source) : '';
-  return srcBase && srcBase !== rawBase && !GENERIC_OUTPUT_STEMS.has(srcBase)
+  return srcBase && srcBase !== rawBase && !isGenericOutputStem(srcBase)
     ? srcBase
     : rawBase;
 }
@@ -180,7 +177,7 @@ export async function runCompileCheck(
       // comparable path (still useful context, even though it isn't a log).
       let fallbackRelativePath: string;
       try {
-        fallbackRelativePath = getComparablePath(outputFile.location);
+        fallbackRelativePath = fileLocationDisplayPath(outputFile.location);
       } catch {
         fallbackRelativePath = outputFile.location.absolutePath;
       }
@@ -264,7 +261,7 @@ async function compileOne(
   // (ch1/main.tex vs ch2/main.tex). Strip the leading r<N>/ segment because
   // it is already added explicitly as `r${currentRound}_` below — without
   // this, a location like `r0/main.tex` would produce `r0_r0_main.tex.log`.
-  const rawComparablePath = getComparablePath(outputFile.location);
+  const rawComparablePath = fileLocationDisplayPath(outputFile.location);
   const comparablePath = rawComparablePath.replaceAll('\\', '/');
   const roundPrefix = `r${currentRound}/`;
   const pathForSafeName = comparablePath.startsWith(roundPrefix)
