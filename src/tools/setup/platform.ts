@@ -83,12 +83,10 @@ interface SetupExtensionAdapter {
  */
 export type { TerminalRunResult };
 
-export type SetupHost = ToolHost;
-
 /** Host-varying setup capabilities. */
 export interface SetupPlatform {
   /** Product surface currently running the shared setup agent. */
-  host: SetupHost;
+  host: ToolHost;
   /** Start the host's existing TeXRA account sign-in flow. */
   signIn: () => Promise<boolean>;
   /** VS Code-only command invocation. */

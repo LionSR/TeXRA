@@ -63,14 +63,6 @@ export const TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY = (() => {
 })();
 
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
-const TEXRA_CLI_CHECK = {
-  command: 'texra --version',
-  errorMessage: 'TeXRA CLI is not installed or not on PATH.',
-} as const;
-const TEXRA_LOCAL_CLI_CHECK = {
-  command: 'texra-local --version',
-  errorMessage: 'TeXRA local CLI is not installed or not on PATH.',
-} as const;
 
 // ============================================================
 // Type
@@ -178,8 +170,8 @@ function resolveGitHubPRPrerequisites(
 
 async function probeTexraCli(): Promise<boolean> {
   if (platform().toolAvailability.isTexraCliEntrypoint()) return true;
-  if (await checkToolInstalled(TEXRA_CLI_CHECK, false)) return true;
-  return checkToolInstalled(TEXRA_LOCAL_CLI_CHECK, false);
+  if (await checkToolInstalled('texra', false)) return true;
+  return checkToolInstalled('texra-local', false);
 }
 
 interface Lean4Prerequisites {

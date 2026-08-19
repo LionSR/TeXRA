@@ -15,7 +15,7 @@ interface ResolvedTeam {
   readonly resolution: TeamRosterResolution;
 }
 
-export type TeamRosterApplicationResult =
+type TeamRosterApplicationResult =
   | { readonly status: 'unknown' }
   | { readonly status: 'cancelled'; readonly preset: AgentModePreset }
   | {

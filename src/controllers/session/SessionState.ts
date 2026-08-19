@@ -716,6 +716,4 @@ export class SessionState {
     this.session.flushPendingTraces();
     await Promise.all([this.streamLogs.flush(), this.snapshots.flush()]);
   }
-
-  // -- Private helpers --------------------------------------------------------
 }

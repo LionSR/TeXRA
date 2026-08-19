@@ -803,15 +803,14 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   ): Promise<ResponseInputItem[]> {
     const tokensBefore = this.chainState.getCumulativeInputTokens();
     const contextWindow = this.getEffectiveContextWindow();
-    const utilizationBefore = roundedUtilizationPercent(
-      tokensBefore,
-      contextWindow,
-    );
 
     this.logger.debug('Compacting conversation', {
       data: {
         inputTokens: tokensBefore,
-        utilizationPercent: utilizationBefore,
+        utilizationPercent: roundedUtilizationPercent(
+          tokensBefore,
+          contextWindow,
+        ),
         contextWindow,
       },
     });
@@ -1081,7 +1080,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     // non-text items contribute nothing to the estimate.
     const text = messages
       .map((message) =>
-        contentToText((message as { content?: unknown }).content, ''),
+        isMessageItem(message) ? contentToText(message.content, '') : '',
       )
       .join('\n');
     return Math.max(1, estimateTokensFromText(text));
@@ -2148,22 +2147,11 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
         if (!responseId || !isUnhandledStreamEventError(streamError)) {
           throw streamError;
         }
-        if (!this.storesResponsesServerSide) {
-          this.logger.debug(
-            "OpenAI stream emitted an event outside the SDK's typed union for a stateless response; polling fallback is unavailable",
-            {
-              data: {
-                responseId,
-                ...buildErrorLogData(streamError, {
-                  operation: 'unhandled stream event',
-                }),
-              },
-            },
-          );
-          throw streamError;
-        }
+        const canPollById = this.storesResponsesServerSide;
         this.logger.debug(
-          "OpenAI stream emitted an event outside the SDK's typed union: falling back to polling",
+          canPollById
+            ? "OpenAI stream emitted an event outside the SDK's typed union: falling back to polling"
+            : "OpenAI stream emitted an event outside the SDK's typed union for a stateless response; polling fallback is unavailable",
           {
             data: {
               responseId,
@@ -2173,6 +2161,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
             },
           },
         );
+        if (!canPollById) throw streamError;
         return this.backgroundLifecycle.retrieveAndRemember(
           client,
           responseId,
