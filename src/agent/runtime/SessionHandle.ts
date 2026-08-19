@@ -1165,14 +1165,21 @@ export function forEachLiveSession(
  * Settle the executions live sessions still own, so a host exit leaves no
  * execution recorded as neither running nor finished.
  *
- * Run drivers settle their own executions as they unwind — `runAgent`,
- * `childRunLoop` and the CLI's headless shutdown handler all call
- * {@link SessionHandle.releaseExecutionLease}, and all of them run in the
- * BEFORE phase. Hosts therefore register this drain as their **first ON-phase
- * handler**: it runs after every driver has had its turn and before any
- * synchronous disposal, so what it sees is exactly what those drivers left
- * behind — a run the process is exiting out from under (quitting the desktop
- * app or VS Code mid-run) or a tool-use flow parked at its WAIT node.
+ * Run drivers settle their own executions as they unwind, through
+ * {@link SessionHandle.releaseExecutionLease}. Hosts register this drain as
+ * their **first ON-phase handler** so that every driver a BEFORE handler
+ * *does* reach has already had its turn — on the CLI that is the whole
+ * headless path, whose handler kills the run and awaits its unwind — and so
+ * that nothing has been disposed yet.
+ *
+ * On desktop and the extension no BEFORE handler aborts or awaits an
+ * in-process run: `registerAgentShutdownHandlers` interrupts background OS
+ * processes and the agent-CLI registries only. A run in flight there is still
+ * being driven when this runs, which is precisely why the drain exists — its
+ * driver's promise would otherwise never settle — and why the terminal write
+ * below yields to a driver that did reach its own outcome first. What is left
+ * for the drain is a run the process is exiting out from under (quitting the
+ * desktop app or VS Code mid-run) or a tool-use flow parked at its WAIT node.
  *
  * Each such execution gets the same durable settlement the CLI has always
  * given its own: the CANCELLED outcome, its flow record preserved so
