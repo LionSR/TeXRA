@@ -15,8 +15,6 @@ import {
 } from './kimiCodeSubscriptionRouting';
 import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
 
-type ProviderAuthMode = 'chatgpt-subscription' | 'xai-subscription';
-
 export interface OpenAIResponseProviderCapabilities {
   readonly backgroundMode: 'base' | 'disabled';
   readonly streaming: 'base' | 'forced';
@@ -31,7 +29,6 @@ export interface OpenAIResponseProviderCapabilities {
 }
 
 export interface ProviderCapabilityProfile {
-  readonly authMode: ProviderAuthMode;
   readonly contextWindow: number;
   readonly inputTokenLimit?: number;
   readonly inputPrice: number;
@@ -116,7 +113,6 @@ export function resolveCodexSubscriptionProfile({
   );
 
   return {
-    authMode: 'chatgpt-subscription',
     ...zeroCostAccessOverrides(contextWindow),
     inputTokenLimit,
     usageRoute: 'chatgpt-subscription',
@@ -201,7 +197,6 @@ export function resolveXaiSubscriptionCapabilities(
   if (config.provider !== ModelProvider.XAI) return null;
   if (config.openRouterOnly) return null;
   return {
-    authMode: 'xai-subscription',
     ...zeroCostAccessOverrides(config.contextWindow),
     usageRoute: 'xai-subscription',
   };
