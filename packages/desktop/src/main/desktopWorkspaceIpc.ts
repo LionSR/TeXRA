@@ -16,6 +16,7 @@ import {
   shouldVisitDirectory,
 } from '@common/files/fileListingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
+import { appSignals } from '@eventBus/AppSignals';
 import { platform } from '@platform/platform';
 import { normalizeFilePath } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -162,6 +163,22 @@ export function createDesktopWorkspaceIpc(
   options: DesktopWorkspaceIpcOptions,
 ): DesktopWorkspaceIpc {
   const reportError = (error: unknown) => options.onAsyncError?.(error);
+
+  // Accepted run outputs and accepted LaTeX diffs write straight to disk, past
+  // the editor's own write path, and the file tree caches its listing — so
+  // before this the newly written files stayed invisible until the user hit
+  // Refresh. There is no filesystem watcher here; this signal is the only
+  // notice the main process gets. Writes outside the workspace root cannot
+  // appear in the tree, so they are not worth a re-list. Lifetime == app,
+  // matching the desktop's other process-global subscriptions.
+  appSignals.on('workspaceFilesWritten', ({ absolutePaths }) => {
+    const root = WorkspaceFS.getPath();
+    if (!root) return;
+    if (!absolutePaths.some((path) => isPathWithin(root, path))) return;
+    renderer.postToRenderer({
+      command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
+    });
+  });
 
   function postFileError(
     requestId: string,

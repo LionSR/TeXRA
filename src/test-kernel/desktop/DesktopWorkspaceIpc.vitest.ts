@@ -20,6 +20,7 @@ import {
 import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
 import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
+import { appSignals } from '@eventBus/AppSignals';
 import { createFakePlatform } from '@test/support/FakePlatform';
 
 let fixtureRoot = '';
@@ -104,6 +105,25 @@ describe('desktop workspace IPC', () => {
 
   afterEach(() => {
     rmSync(fixtureRoot, { recursive: true, force: true });
+  });
+
+  // The file tree caches its listing and there is no filesystem watcher, so a
+  // run that accepts output files would leave it stale without this notice.
+  it('tells the renderer to re-list only when a write lands inside the workspace', () => {
+    const postToRenderer = vi.fn();
+    createIpc(postToRenderer);
+
+    appSignals.emit('workspaceFilesWritten', {
+      absolutePaths: [externalPath],
+    });
+    expect(postToRenderer).not.toHaveBeenCalled();
+
+    appSignals.emit('workspaceFilesWritten', {
+      absolutePaths: [externalPath, join(workspacePath, 'paper.tex')],
+    });
+    expect(postToRenderer).toHaveBeenCalledExactlyOnceWith({
+      command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
+    });
   });
 
   it('lists only direct children and loads nested directories on demand', async () => {
