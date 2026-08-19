@@ -5,7 +5,7 @@ import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
 import { getCleanAgentName, runIdentityDisplayName } from '@shared/schemas';
 
-export interface StreamTabInfoInputs {
+interface StreamTabInfoInputs {
   streamId: string;
   metadata: Readonly<SessionStreamMetadata>;
   /** Pre-resolved worktree context (branch, dirty, PR). Callers that have

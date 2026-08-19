@@ -22,10 +22,7 @@ import { createLog } from '@logger/logUtils';
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { inferPersistedModelHandlerCompatibilityKey } from './modelHandlerCompatibilityInference';
-import {
-  ModelHandlerCompatibilityKeySchema,
-  type ModelHandlerCompatibilityKey,
-} from './modelHandlerCompatibilityKey';
+import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const logger = createLog('SessionResumeRetrieval');
 

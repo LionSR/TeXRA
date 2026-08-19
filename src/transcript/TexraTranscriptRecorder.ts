@@ -157,7 +157,6 @@ interface StreamSinkState {
   ended: boolean;
   enabled: boolean;
   groupId: string | undefined;
-  level: LogLevel;
   messageType: MessageType;
   updateDebounce: FlushableDebounce;
 }
@@ -370,7 +369,7 @@ export function attachTranscriptRecorder(
       const entry = {
         id,
         type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: state.level,
+        level: 'info',
         timestamp: Date.now(),
         groupId: state.groupId,
         messageType: state.messageType,
@@ -674,7 +673,6 @@ export function attachTranscriptRecorder(
             ended: false,
             enabled: true,
             groupId: event.stageId,
-            level: 'info',
             messageType: asMessageType(event.kind),
             updateDebounce: createFlushableDebounce(() => {
               try {

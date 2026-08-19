@@ -25,7 +25,6 @@ import {
   getZoteroPort,
   BbtLibrarySchema,
   type BbtCollection,
-  type BbtLibrary,
 } from './bbtClient';
 
 const ZoteroCollectionsInputSchema = z.strictObject({

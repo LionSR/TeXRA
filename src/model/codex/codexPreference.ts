@@ -5,16 +5,11 @@
  * ChatGPT, Codex-eligible OpenAI models route through the subscription instead
  * of the user's API key.
  */
-import {
-  createSubscriptionPreference,
-  type SubscriptionPreferenceUpdate,
-} from '../subscriptionPreference';
+import { createSubscriptionPreference } from '../subscriptionPreference';
 
 /** Config key for the "prefer my ChatGPT subscription" switch (off by default). */
 export const CODEX_PREFER_SUBSCRIPTION_KEY =
   'texra.chatgptCodex.preferSubscription';
-
-export type CodexSubscriptionPreferenceUpdate = SubscriptionPreferenceUpdate;
 
 const preference = createSubscriptionPreference(CODEX_PREFER_SUBSCRIPTION_KEY);
 

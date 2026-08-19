@@ -139,6 +139,14 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
 
   // Document conversion tools
   pandoc: withDocs(featureTool('pandoc', PANDOC_INSTRUCTIONS), { docs: false }),
+
+  // TeXRA's own CLI entrypoints
+  texra: withDocs('TeXRA CLI is not installed or not on PATH.', {
+    docs: false,
+  }),
+  'texra-local': withDocs('TeXRA local CLI is not installed or not on PATH.', {
+    docs: false,
+  }),
 };
 
 /**
@@ -244,37 +252,27 @@ async function executeWithFallback(
 
 /**
  * Generic function to check if a tool is installed
- * @param toolOrConfig Tool name (string) or tool configuration object
+ * @param toolName Tool name (looked up in TOOL_CONFIGS)
  * @param showError Whether to show an error message if the tool is not installed
  * @returns Promise<boolean> True if the tool is installed
  */
 export async function checkToolInstalled(
-  toolOrConfig: string | ToolConfig,
+  toolName: string,
   showError: boolean = true,
 ): Promise<boolean> {
-  const toolName = typeof toolOrConfig === 'string' ? toolOrConfig : null;
-  const config: ToolConfig | undefined =
-    typeof toolOrConfig === 'string'
-      ? TOOL_CONFIGS[toolOrConfig]
-      : toolOrConfig;
+  const config = TOOL_CONFIGS[toolName];
 
   if (!config) {
     if (showError) {
-      await reportMissingTool(`Unknown tool: ${toolOrConfig}`);
+      await reportMissingTool(`Unknown tool: ${toolName}`);
     }
     return false;
   }
 
   // Generate default command if not specified
-  const command = config.command || (toolName ? `${toolName} --version` : null);
+  const command = config.command || `${toolName} --version`;
 
   try {
-    if (!command) {
-      throw new Error(
-        'No command specified and tool name could not be determined',
-      );
-    }
-
     let isInstalled = false;
 
     const extendedPath = extendEnvPath();
@@ -317,9 +315,7 @@ export async function checkToolInstalled(
   } catch (err) {
     // The user-facing message is always the tool's own install guidance, so
     // log the underlying cause instead of dropping it.
-    log.warn(
-      `Tool check for '${toolName ?? 'custom config'}' failed: ${toErrorMessage(err)}`,
-    );
+    log.warn(`Tool check for '${toolName}' failed: ${toErrorMessage(err)}`);
     if (showError) {
       await reportMissingTool(config.errorMessage);
     }

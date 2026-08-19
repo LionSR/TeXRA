@@ -55,16 +55,13 @@ export class TaskRunFileService {
     baseFiles: FileLocation[],
     options: {
       linkFiles?: FileLocation[];
-      mirrorBaseFiles?: boolean;
     } = {},
   ): Promise<void> {
     if (this.hasPreparedSnapshot) return;
 
     await ensureRunDir(this.executionId);
 
-    const linkTargets = new Set<FileLocation>(
-      options.mirrorBaseFiles !== false ? baseFiles : [],
-    );
+    const linkTargets = new Set<FileLocation>(baseFiles);
 
     // Add extra link files, filtering out any null/undefined entries
     for (const extra of options.linkFiles ?? []) {
