@@ -11,6 +11,7 @@ import { clamp } from '@utils/core';
  */
 export function useScrollableOffset({
   active = true,
+  bindArrowKeys = true,
   initialOffset = 0,
   maxScrollOffset,
   pageRows,
@@ -19,6 +20,10 @@ export function useScrollableOffset({
   /** Release the key bindings while another surface owns ↑/↓ (e.g. a
    *  feedback text input); the offset itself is retained. */
   readonly active?: boolean;
+  /** Bind ↑/↓ for line-by-line scroll alongside PgUp/PgDn. Set false when an
+   *  always-focused surface (e.g. a permanently visible text input) already
+   *  owns ↑/↓, so this hook only scrolls via PgUp/PgDn. */
+  readonly bindArrowKeys?: boolean;
   /** Row shown initially and restored whenever `resetKey` changes. */
   readonly initialOffset?: number;
   readonly maxScrollOffset: number;
@@ -51,8 +56,8 @@ export function useScrollableOffset({
 
   useInput(
     (_input, key) => {
-      if (key.downArrow) scrollBy(1);
-      else if (key.upArrow) scrollBy(-1);
+      if (bindArrowKeys && key.downArrow) scrollBy(1);
+      else if (bindArrowKeys && key.upArrow) scrollBy(-1);
       else if (key.pageDown) scrollBy(pageRows);
       else if (key.pageUp) scrollBy(-pageRows);
     },

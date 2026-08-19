@@ -229,11 +229,19 @@ export function ExternalInquiry(
     totalLines: questionLines.length,
   });
   const pageRows = Math.max(1, questionRows - 2);
+  // The answer BaseTextInput below is permanently focused (no feedback-mode
+  // toggle like EditApproval/PlanApproval/BashApproval) and already consumes
+  // ↑/↓ for in-draft cursor movement and history recall, so this hook must
+  // not also bind them — only PgUp/PgDn scroll the question here.
   const { scrollOffset: questionOffset, scrollable: questionScrollable } =
     useScrollableOffset({
+      bindArrowKeys: false,
       maxScrollOffset: maxQuestionOffset,
       pageRows,
-      resetKey: props.payload.requestId,
+      // requestId is a legacy alias for the thread id (constant across every
+      // follow-up turn in a thread); the question text is what actually
+      // changes between turns and is what should reset the scroll position.
+      resetKey: props.payload.question,
     });
   const questionDisplayLines = boundedExternalInquiryQuestionLines({
     maxDisplayLines: questionRows,
