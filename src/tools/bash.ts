@@ -376,6 +376,22 @@ export class BashTool extends defineTool({
     const contexts = getCurrentToolContexts();
     const callContext = contexts?.callContext;
     const runContext = contexts?.runContext;
+
+    // A background shell delivers its result as a follow-up message; a
+    // one-shot run ends after the current cycle, so nothing is left to collect
+    // it. Every other child type already answers this case — agent-CLI
+    // refuses, native subagents degrade to the parent trace, workflow-script
+    // awaits — and a background shell cannot degrade, because the follow-up
+    // IS its delivery. Refuse before requesting approval: in the SDK path
+    // (`packages/agent/src/index.ts`) the `finally` kills the process group,
+    // so launching here would run the user's command and then discard its
+    // result with nothing reported.
+    if (input.run_in_background && runContext?.stopAfterCycle) {
+      throw new ToolError(
+        'bash run_in_background is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Run the command in the foreground instead (omit run_in_background), raising `timeout` if it needs longer than the default.',
+      );
+    }
+
     const cwd =
       parseWorkingDirectory(getRunContextWorkingDirectory(runContext)) ??
       platform().workspace.getWorkspacePath();
