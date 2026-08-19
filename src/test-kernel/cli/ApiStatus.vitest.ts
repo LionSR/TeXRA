@@ -5,30 +5,19 @@ import {
   formatCliAuthStatusLine,
   formatRelayUsageStatus,
 } from '@cli/runtime/apiStatus';
-import type { RelayUsageSummary } from '@cli/runtime/relayUsage';
+import type { SpendingStatus } from '@shared/schemas';
 
 describe('CLI API status text', () => {
   it('shows relay quota usage as a percentage', () => {
-    const summary: RelayUsageSummary = {
-      periodStart: '2026-05-01T00:00:00.000Z',
-      periodEnd: '2026-06-01T00:00:00.000Z',
-      tier: 'Ultra',
-      limitUsd: 300,
-      costUsd: 42,
-      remainingUsd: 258,
-      usagePercent: 14,
-      streamCount: 3,
-      inputTokens: 1,
-      netInputTokens: 1,
-      outputTokens: 1,
-      cachedTokens: 0,
-      reasoningTokens: 0,
-      modelsUsed: 2,
-      providersUsed: 1,
+    const status: SpendingStatus = {
+      currentSpend: 42,
+      limit: 300,
+      remaining: 258,
+      percentUsed: 14,
     };
 
-    expect(formatRelayUsageStatus(summary)).toBe(
-      'included usage this month: 14.0% used, 86.0% remaining',
+    expect(formatRelayUsageStatus(status)).toBe(
+      'included usage this month: 14% used, 86% remaining',
     );
   });
 

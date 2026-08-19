@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  fetchRelayUsageSummary: vi.fn(),
+  getSpendingStatus: vi.fn(),
+  refreshSpendingStatus: vi.fn(),
+  getSpendingStatusError: vi.fn(),
   getCliApiMode: vi.fn(),
   getCliAuthProfile: vi.fn(),
-  getCliSessionAccessToken: vi.fn(),
   readCliModelAccessStatus: vi.fn(),
-  resolveCliUsageTier: vi.fn(),
   lookupApiKeyOrigin: vi.fn(),
   getSubscriptionUsage: vi.fn(),
   secrets: {},
@@ -32,12 +32,14 @@ vi.mock('@cli/runtime/apiAccessMode', async (importOriginal) => {
 
 vi.mock('@cli/runtime/supabaseAuth', () => ({
   getCliAuthProfile: mocks.getCliAuthProfile,
-  getCliSessionAccessToken: mocks.getCliSessionAccessToken,
-  resolveCliUsageTier: mocks.resolveCliUsageTier,
 }));
 
-vi.mock('@cli/runtime/relayUsage', () => ({
-  fetchRelayUsageSummary: mocks.fetchRelayUsageSummary,
+vi.mock('@auth/serverKeys', () => ({
+  getServerSideKeyService: () => ({
+    getSpendingStatus: mocks.getSpendingStatus,
+    refreshSpendingStatus: mocks.refreshSpendingStatus,
+    getSpendingStatusError: mocks.getSpendingStatusError,
+  }),
 }));
 
 vi.mock('@cli/runtime/modelAccessSelection', () => ({
@@ -94,6 +96,16 @@ function codingPlans(
   };
 }
 
+/** Server-computed relay spend snapshot, shaped as /tier-config returns it. */
+function spendingStatus(percentUsed: number) {
+  return {
+    currentSpend: percentUsed,
+    limit: 100,
+    remaining: 100 - percentUsed,
+    percentUsed,
+  };
+}
+
 /** Model-access status with the included fallback and every route off. */
 function useIncludedAccessStatus(): void {
   mocks.readCliModelAccessStatus.mockResolvedValue({
@@ -141,15 +153,13 @@ function renderPreferenceRoute(
 
 describe('loadCliApiStatus', () => {
   beforeEach(() => {
-    mocks.fetchRelayUsageSummary.mockReset();
+    mocks.getSpendingStatus.mockReset().mockReturnValue(null);
+    mocks.refreshSpendingStatus.mockReset().mockResolvedValue(null);
+    mocks.getSpendingStatusError.mockReset().mockReturnValue(null);
     mocks.getCliApiMode.mockReset().mockReturnValue('personal');
     mocks.getCliAuthProfile.mockReset().mockResolvedValue({
       authenticated: false,
     });
-    mocks.getCliSessionAccessToken
-      .mockReset()
-      .mockResolvedValue('session-token');
-    mocks.resolveCliUsageTier.mockReset().mockResolvedValue('free');
     mocks.readCliModelAccessStatus.mockReset().mockResolvedValue({
       apiFallback: 'personal',
       preferences: {
@@ -222,13 +232,14 @@ describe('loadCliApiStatus', () => {
       tier: 'Ultra',
       credentialSource: 'session',
     });
-    mocks.resolveCliUsageTier.mockResolvedValue('Ultra');
-    mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 100.3 });
+    mocks.getSpendingStatus.mockReturnValue(spendingStatus(100));
 
     await expect(loadCliApiStatus({ apiMode: 'included' })).resolves.toEqual([
       'api: included access',
-      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 100.3% used, 0% remaining',
+      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 100% used, 0% remaining',
     ]);
+    // The launcher reads the cached snapshot; it never pays a refresh.
+    expect(mocks.refreshSpendingStatus).not.toHaveBeenCalled();
   });
 
   it('groups personal keys with their route and omits unused included quota', async () => {
@@ -240,8 +251,7 @@ describe('loadCliApiStatus', () => {
       note: 'Account metadata may be stale.',
     });
     setPersonalKeys('deepseek');
-    mocks.resolveCliUsageTier.mockResolvedValue('Researcher');
-    mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 25 });
+    mocks.getSpendingStatus.mockReturnValue(spendingStatus(25));
 
     await expect(loadCliApiStatus()).resolves.toEqual([
       'api: your own API keys',
@@ -249,7 +259,7 @@ describe('loadCliApiStatus', () => {
       'auth: signed in as researcher@example.com · tier: Researcher',
       'Account metadata may be stale.',
     ]);
-    expect(mocks.fetchRelayUsageSummary).not.toHaveBeenCalled();
+    expect(mocks.getSpendingStatus).not.toHaveBeenCalled();
   });
 
   it('does not couple compact launcher status to model-access reads', async () => {
@@ -285,8 +295,7 @@ describe('loadCliApiStatus', () => {
       credentialSource: 'session',
     });
     setPersonalKeys('deepseek', 'glm', 'kimiCode');
-    mocks.resolveCliUsageTier.mockResolvedValue('Ultra');
-    mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 24.5 });
+    mocks.refreshSpendingStatus.mockResolvedValue(spendingStatus(25));
 
     const lines = await accountStatusLines('included');
     const joined = lines.join('\n');
@@ -298,7 +307,7 @@ describe('loadCliApiStatus', () => {
       'Kimi Code: preferred · key configured',
     );
     expect(lineFor(lines, 'Otherwise')).toBe(
-      'Otherwise: Included access · signed in as texra@example.com · Ultra · included usage this month: 24.5% used, 75.5% remaining',
+      'Otherwise: Included access · signed in as texra@example.com · Ultra · included usage this month: 25% used, 75% remaining',
     );
     expect(lineFor(lines, 'Other API keys')).toBe(
       'Other API keys: DeepSeek, GLM',
@@ -539,7 +548,7 @@ describe('loadCliApiStatus', () => {
     const lines = await accountStatusLines('included');
 
     expect(lines).toEqual(['Otherwise: Included access · signed out']);
-    expect(mocks.fetchRelayUsageSummary).not.toHaveBeenCalled();
+    expect(mocks.refreshSpendingStatus).not.toHaveBeenCalled();
   });
 
   it('keeps included-only account, tier, and usage on the fallback route', async () => {
@@ -550,37 +559,16 @@ describe('loadCliApiStatus', () => {
       tier: 'Researcher',
       credentialSource: 'session',
     });
-    mocks.resolveCliUsageTier.mockResolvedValue('Researcher');
-    mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 10 });
+    mocks.refreshSpendingStatus.mockResolvedValue(spendingStatus(10));
 
     const lines = await accountStatusLines('included');
 
     expect(lines).toEqual([
-      'Otherwise: Included access · signed in as included@example.com · Researcher · included usage this month: 10.0% used, 90.0% remaining',
+      'Otherwise: Included access · signed in as included@example.com · Researcher · included usage this month: 10% used, 90% remaining',
     ]);
   });
 
-  it('owns the CI-token limitation on the included fallback', async () => {
-    useIncludedAccessStatus();
-    mocks.getCliAuthProfile.mockResolvedValue({
-      authenticated: true,
-      accountLabel: 'CI token (TEXRA_RELAY_TOKEN)',
-      tier: 'Researcher',
-      credentialSource: 'relayToken',
-    });
-    mocks.getCliSessionAccessToken.mockResolvedValue(null);
-
-    const lines = await accountStatusLines('included');
-    const fallback = lineFor(lines, 'Otherwise');
-
-    expect(fallback).toContain('CI token (TEXRA_RELAY_TOKEN)');
-    expect(fallback).toContain('Researcher');
-    expect(fallback).toContain('TEXRA_RELAY_TOKEN on its own cannot read it');
-    expect(lines.filter((line) => line.includes('CI token'))).toHaveLength(1);
-    expect(mocks.fetchRelayUsageSummary).not.toHaveBeenCalled();
-  });
-
-  it('owns usage-fetch failures on the included fallback', async () => {
+  it('owns a failed server-side spend check on the included fallback', async () => {
     useIncludedAccessStatus();
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
@@ -588,8 +576,10 @@ describe('loadCliApiStatus', () => {
       tier: 'Ultra',
       credentialSource: 'session',
     });
-    mocks.resolveCliUsageTier.mockResolvedValue('Ultra');
-    mocks.fetchRelayUsageSummary.mockRejectedValue(new Error('quota offline'));
+    mocks.getSpendingStatusError.mockReturnValue({
+      spendCheckFailed: true,
+      failureReason: 'quota offline',
+    });
 
     const lines = await accountStatusLines('included');
 

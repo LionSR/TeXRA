@@ -1,18 +1,20 @@
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { configuredApiKeyProviders } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
-import type {
-  ApiAccessMode,
-  SubscriptionUsageProvider,
-  SubscriptionUsageSnapshot,
+import {
+  spendingQuotaRemainingPercent,
+  type ApiAccessMode,
+  type SpendingStatus,
+  type SubscriptionUsageProvider,
+  type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
 import { providerDisplayName } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatPercent } from '@utils/text/stringUtils';
 
 import { getCliApiMode } from './apiAccessMode';
@@ -26,13 +28,7 @@ import {
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import { readCliModelAccessStatus } from './modelAccessSelection';
-import { fetchRelayUsageSummary, type RelayUsageSummary } from './relayUsage';
-import {
-  getCliAuthProfile,
-  getCliSessionAccessToken,
-  resolveCliUsageTier,
-  type CliAuthProfile,
-} from './supabaseAuth';
+import { getCliAuthProfile, type CliAuthProfile } from './supabaseAuth';
 
 interface SubscriptionUsageReader {
   getUsage(
@@ -51,9 +47,15 @@ export const AUTH_SIGNED_IN_LINE_PREFIX = 'auth: signed in';
  *  tier, usage). The launcher truncates at this to keep the status line short. */
 export const AUTH_STATUS_SEGMENT_SEPARATOR = ' · ';
 
-export function formatRelayUsageStatus(summary: RelayUsageSummary): string {
-  const used = formatPercent(summary.usagePercent, 1);
-  const remaining = formatPercent(Math.max(0, 100 - summary.usagePercent), 1);
+/**
+ * Render the relay's own spend figure. Both percentages come from the
+ * server-computed `spendingStatus` — the same snapshot the chat status bar and
+ * the Settings quota meter read — so no two surfaces can quote different
+ * numbers for one month's included access.
+ */
+export function formatRelayUsageStatus(status: SpendingStatus): string {
+  const used = formatPercent(status.percentUsed);
+  const remaining = formatPercent(spendingQuotaRemainingPercent(status));
   return `included usage this month: ${used} used, ${remaining} remaining`;
 }
 
@@ -174,26 +176,35 @@ interface LoadCliApiStatusOptions {
   readonly includeActionHint?: boolean;
 }
 
+/**
+ * The included-access usage segment, read from the relay's own spend snapshot.
+ *
+ * `refresh` is for user-invoked status only: it bypasses the tier-config cache
+ * and pays a round-trip. The launcher leaves it off and reads whatever snapshot
+ * this process already holds, so opening the launcher never blocks on a spend
+ * query of its own; a snapshot that has not been fetched yet omits the segment
+ * rather than stalling the launcher. A spend check the server *failed* is never
+ * rendered as clean zero usage — it is reported on the line (TierService also
+ * logs it at `warn`).
+ */
 async function loadIncludedUsageLine(
   profile: CliAuthProfile,
+  options: { readonly refresh?: boolean } = {},
 ): Promise<string | undefined> {
   if (!profile.authenticated || !profile.tier) return undefined;
-  // Usage reads usage_logs via PostgREST with a session token; a relay-scoped
-  // CI token cannot read it, while a session alongside that token can.
-  const canReadUsage =
-    profile.credentialSource !== 'relayToken' ||
-    (await getCliSessionAccessToken()) !== null;
-  if (!canReadUsage) {
-    return 'included usage: run `texra login` to view usage (TEXRA_RELAY_TOKEN on its own cannot read it)';
+  const serverSideKeys = getServerSideKeyService();
+  const status = options.refresh
+    ? await serverSideKeys.refreshSpendingStatus()
+    : serverSideKeys.getSpendingStatus();
+  if (status) return formatRelayUsageStatus(status);
+
+  const failure = serverSideKeys.getSpendingStatusError();
+  if (failure) {
+    return `included usage: ${failure.failureReason ?? 'the server could not check your spend'}`;
   }
-  try {
-    const usageTier = (await resolveCliUsageTier(profile)) ?? 'free';
-    return formatRelayUsageStatus(
-      await fetchRelayUsageSummary({ tier: usageTier }),
-    );
-  } catch (error: unknown) {
-    return `included usage: ${toErrorMessage(error)}`;
-  }
+  return options.refresh
+    ? 'included usage: could not read your usage right now, try again in a moment'
+    : undefined;
 }
 
 /** Compact status lines used by the launcher. */
@@ -259,7 +270,7 @@ export async function loadCliDetailedAccountStatusLines(options: {
   ]);
   const includedUsage =
     access.apiFallback === 'included'
-      ? await loadIncludedUsageLine(profile)
+      ? await loadIncludedUsageLine(profile, { refresh: true })
       : undefined;
   // Detailed /api status is user-invoked, so reopening it is the manual refresh
   // path. Ordinary chat startup and the status bar never call this service.

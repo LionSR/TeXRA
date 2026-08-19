@@ -241,12 +241,16 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // Load the model registry up front so the launcher can offer a model pick
     // after an agent/team choice. Best-effort: an unavailable registry just
     // launches with the default model instead of blocking the launcher.
-    const [models, statusLines] = await Promise.all([
-      getCliModelAccessList({
-        apiMode,
-      }).catch((): readonly CliModelAccess[] => []),
-      loadCliApiStatus({ apiMode }),
-    ]);
+    const models = await getCliModelAccessList({
+      apiMode,
+    }).catch((): readonly CliModelAccess[] => []);
+    // Sequenced, not parallel: the model list is what fetches /tier-config with
+    // auth (computeModelOptionsData -> canUseServerSideKeys), which commits the
+    // relay spend snapshot the included-usage segment reads. Racing the two
+    // would drop that segment on a cold launch. The status read itself is warm
+    // (auth profile and secrets are already cached above), so it adds no
+    // round-trip of its own.
+    const statusLines = await loadCliApiStatus({ apiMode });
     const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
       launchContext,
       models,
