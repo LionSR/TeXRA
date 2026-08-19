@@ -16,6 +16,8 @@ import {
   formatCliChatGptPreference,
   formatCliGrokPreference,
   formatCliCodingPlanPreference,
+  formatCliModelAccessRoute,
+  formatCliModelAccessRouteInline,
   cliCodingPlanStatus,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
@@ -80,7 +82,7 @@ export async function loadCliModelAccessOverview(): Promise<CliModelAccessOvervi
       (plan) =>
         `${plan.displayName} preference: ${formatCliCodingPlanPreference(access, plan)}`,
     ),
-    `Otherwise: ${OWN_API_KEYS.label}`,
+    `Otherwise: ${formatCliModelAccessRoute('personal')}`,
     formatAccountStatusLine(
       RESEARCHER_ACCESS.label,
       profile.authenticated,
@@ -153,7 +155,7 @@ export async function loadCliApiStatus(
   );
 
   return [
-    `api: ${OWN_API_KEYS.inline}`,
+    `api: ${formatCliModelAccessRouteInline('personal')}`,
     ...(personalKeysLine ? [personalKeysLine] : []),
     authLine,
     ...(profile.note ? [profile.note] : []),
@@ -267,7 +269,7 @@ export async function loadCliDetailedAccountStatusLines(
     if (line) lines.push(withUsage(line, codingPlanUsage.get(plan.id)));
   }
 
-  lines.push(`Otherwise: ${OWN_API_KEYS.label}`);
+  lines.push(`Otherwise: ${formatCliModelAccessRoute('personal')}`);
 
   const otherPersonalKeys = formatPersonalApiKeysLine(
     providers.filter(

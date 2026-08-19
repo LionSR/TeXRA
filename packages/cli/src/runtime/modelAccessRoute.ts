@@ -11,6 +11,16 @@ import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 export const CLI_MODEL_ACCESS_DESCRIPTION =
   'Set subscription preferences and how the rest is paid for.';
 
+export type CliModelAccessRoute =
+  | 'chatgpt'
+  | 'grok'
+  | 'kimi-code'
+  | 'glm-code'
+  // LEGACY: renders historical usage recorded on the retired relay route
+  // (removed 2026-08; see docs/proposals/2026-08-18-relay-removal-and-recovery.md).
+  | 'included'
+  | 'personal';
+
 type CliSubscriptionPreferenceState = 'off' | 'on';
 type CliSubscriptionProvider =
   'chatgpt' | 'grok' | CodingPlanSubscription['cliProvider'];
@@ -113,32 +123,79 @@ export function resolveCliModelAccessRoute({
   readonly usageRoute?: UsageRoute;
   /** Route that would serve the next request (`activeSubscriptionUsageRoute`). */
   readonly prospectiveRoute?: UsageRoute;
-}): UsageRoute {
-  return usageRoute ?? prospectiveRoute ?? 'api-key';
+}): CliModelAccessRoute {
+  const route = usageRoute ?? prospectiveRoute;
+  switch (route) {
+    case undefined:
+      return 'personal';
+    case 'chatgpt-subscription':
+      return 'chatgpt';
+    case 'xai-subscription':
+      return 'grok';
+    case 'kimi-code-subscription':
+      return 'kimi-code';
+    case 'glm-coding-plan-subscription':
+      return 'glm-code';
+    case 'relay':
+      return 'included';
+    case 'api-key':
+      return 'personal';
+    default:
+      return route satisfies never;
+  }
 }
 
-/** Detailed CLI phrasing for an access route — `/status` and the `/api` form
- *  name the subscription itself, unlike the width-constrained badge copy in
- *  `usageRouteBadge`. */
-export function formatCliModelAccessRoute(route: UsageRoute): string {
+/** Status-bar form of the access route. Width-critical, so every arm is a
+ *  short display phrase; the enum value itself never reaches the screen. */
+export function shortCliModelAccessRoute(route: CliModelAccessRoute): string {
   switch (route) {
-    case 'chatgpt-subscription':
+    case 'chatgpt':
+    case 'grok':
+    case 'kimi-code':
+    case 'glm-code':
+      // The bar names how the call is paid for, not which provider; the /api
+      // form and /status name the subscription itself.
+      return 'subscription';
+    case 'included':
+      return 'Included';
+    case 'personal':
+      return OWN_API_KEYS.compactLabel;
+    default:
+      return route satisfies never;
+  }
+}
+
+export function formatCliModelAccessRoute(route: CliModelAccessRoute): string {
+  switch (route) {
+    case 'chatgpt':
       return 'ChatGPT subscription';
-    case 'xai-subscription':
+    case 'grok':
       return 'Grok subscription';
-    case 'kimi-code-subscription':
+    case 'kimi-code':
       return 'Kimi Code subscription';
-    case 'glm-coding-plan-subscription':
+    case 'glm-code':
       return 'GLM Coding Plan';
-    // LEGACY: renders historical usage recorded on the retired relay route
-    // (removed 2026-08; see docs/proposals/2026-08-18-relay-removal-and-recovery.md).
-    case 'relay':
+    case 'included':
       return 'Included access';
-    case 'api-key':
+    case 'personal':
       return OWN_API_KEYS.label;
     default:
       return route satisfies never;
   }
+}
+
+/** Sentence-fragment form derived from the canonical access label. */
+export function formatCliModelAccessRouteInline(
+  route: CliModelAccessRoute,
+): string {
+  const label = formatCliModelAccessRoute(route);
+  // Proper-noun labels keep their casing; plain labels lowercase like prose.
+  return route === 'chatgpt' ||
+    route === 'grok' ||
+    route === 'kimi-code' ||
+    route === 'glm-code'
+    ? label
+    : label.charAt(0).toLowerCase() + label.slice(1);
 }
 
 function formatCliSubscriptionPreference(
@@ -281,5 +338,5 @@ export function formatCliModelAccessSummary(
     const label = plan.displayName.split(' ')[0];
     return `${label} ${cliCodingPlanStatus(status, plan).preferred ? 'On' : 'Off'}`;
   });
-  return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${OWN_API_KEYS.inline}`;
+  return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${formatCliModelAccessRouteInline('personal')}`;
 }
