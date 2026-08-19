@@ -227,7 +227,9 @@ function snapshotMessage<S extends DerivedSettingsSnapshot>(snapshot: S) {
       Object.fromEntries(
         settingsViewSnapshotEntries(snapshot).map((entry) => [
           entry.key,
-          entry.schema,
+          entry.schema instanceof z.ZodPrefault
+            ? entry.schema.unwrap()
+            : entry.schema,
         ]),
       ),
     ),

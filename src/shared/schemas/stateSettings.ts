@@ -372,8 +372,8 @@ const REPLACEMENT_ENGINE_READER = 'src/replacement/engine.ts';
  * path lists.
  *
  * All three hosts read `.texra/config.json`, so the slot is uniform; the rows
- * differ only in who honors them and which UI renders them. Order within the
- * `model.*` block is the Models tab's control order.
+ * differ only in who honors them and which UI renders them. `CORE_SETTING_PATHS`
+ * owns iteration order, including the Models tab's control order.
  */
 const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
   'agentOutputs.autoOpenFinal': {
