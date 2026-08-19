@@ -26,8 +26,6 @@ import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplicatio
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import type { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
-import type { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
-import type { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
@@ -57,9 +55,7 @@ import {
 export class AgentHandlers {
   private readonly catalogController: SettingsAgentCatalogController;
   private readonly directoryController: SettingsAgentDirectoryController;
-  private readonly fileController: SettingsAgentFileController;
   private readonly remotePromptController: SettingsRemoteAgentPromptController;
-  private readonly visibilityController: SettingsAgentVisibilityController;
   private readonly roster: AgentRosterController;
   private readonly agentActions;
   private readonly activeCustomAgentDeletions = new Set<string>();
@@ -79,9 +75,7 @@ export class AgentHandlers {
     });
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
-    this.visibilityController = controllers.visibility;
     this.roster = controllers.roster;
-    this.fileController = controllers.fileController;
     this.remotePromptController = controllers.remotePromptController;
     this.agentActions = createSettingsAgentActions({
       directoryController: this.directoryController,
@@ -160,7 +154,7 @@ export class AgentHandlers {
       this.ctx,
       'Failed to update agent visibility',
       async () => {
-        await this.visibilityController.setAllAgentsEnabled({
+        await this.catalogController.setAllAgentsEnabled({
           category: data.category,
           source: data.source,
           enabled: data.enabled,
@@ -446,14 +440,14 @@ export class AgentHandlers {
           prompt: `Enter a name for the new ${categoryLabel} agent (without .yaml extension)`,
           placeHolder: 'my_agent',
           validateInput: (value) =>
-            this.fileController.validateTemplateName(value),
+            this.directoryController.validateTemplateName(value),
         });
         if (!name) return;
 
         const customDir = await agentDirectories.custom();
         await AbsoluteFS.ensureDir(customDir);
 
-        const templatePlan = this.fileController.planTemplateAgent({
+        const templatePlan = this.directoryController.planTemplateAgent({
           category,
           name,
           customDir,

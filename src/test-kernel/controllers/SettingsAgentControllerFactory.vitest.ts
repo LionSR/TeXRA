@@ -82,7 +82,7 @@ describe('createSettingsAgentControllers', () => {
         : [...agents[category]],
     );
 
-    await controllers.visibility.setAllAgentsEnabled({
+    await controllers.catalog.setAllAgentsEnabled({
       category: 'toolUse',
       source: 'custom',
       enabled: false,
