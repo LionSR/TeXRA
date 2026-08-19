@@ -75,12 +75,7 @@ export type ReportReviewIssueSink = (report: ReviewIssueReport) => {
   readonly reason?: string;
 };
 
-export interface HostInteractionOptions {
-  /** Internal identity used to cancel one forwarded presentation request. */
-  readonly cancellationScope?: object;
-}
-
-export interface HostRetryInteractionOptions extends HostInteractionOptions {
+export interface HostRetryInteractionOptions {
   /**
    * Rebuild the caller's model client after a host-side credential change.
    * A host that calls this successfully has prepared the next attempt; a
@@ -313,8 +308,6 @@ export interface HostInteractionCancelSelector {
   readonly streamId?: StreamTabId | null;
   readonly kind?: PendingInteractionKind;
   readonly cause?: string;
-  /** Internal identity for one forwarded presentation request. */
-  readonly cancellationScope?: object;
 }
 
 /** Shared selector predicate for the ports' pending registries. */
@@ -322,17 +315,10 @@ export function matchesCancelSelector(
   pending: {
     readonly kind: PendingInteractionKind;
     readonly streamId?: StreamTabId;
-    readonly cancellationScope?: object;
   },
   selector: HostInteractionCancelSelector,
 ): boolean {
   if (selector.kind !== undefined && pending.kind !== selector.kind) {
-    return false;
-  }
-  if (
-    selector.cancellationScope !== undefined &&
-    pending.cancellationScope !== selector.cancellationScope
-  ) {
     return false;
   }
   if (selector.streamId === undefined) return true;
@@ -370,19 +356,15 @@ export interface HostInteractions {
   showInfoMessage?(message: string): Promise<void> | void;
   requestToolEditApproval?(
     request: ToolEditApprovalRequest,
-    options?: HostInteractionOptions,
   ): Promise<ToolEditApprovalResult> | undefined;
   requestBashApproval?(
     request: HostBashApprovalRequest,
-    options?: HostInteractionOptions,
   ): Promise<BashSettlement> | undefined;
   requestPlanApproval?(
     request: HostPlanApprovalRequest,
-    options?: HostInteractionOptions,
   ): Promise<PlanApprovalResult> | undefined;
   requestAgentProposal?(
     request: HostAgentProposalRequest,
-    options?: HostInteractionOptions,
   ): Promise<ProposalResult> | undefined;
   requestRetry?(
     request: HostRetryRequest,
@@ -390,7 +372,6 @@ export interface HostInteractions {
   ): Promise<RetryResult> | undefined;
   askUserQuestion?(
     request: HostUserQuestionRequest,
-    options?: HostInteractionOptions,
   ): Promise<UserQuestionSettlement> | undefined;
   openExternalInquiry?(
     request: HostExternalInquiryRequest,
@@ -561,49 +542,44 @@ export class SessionHostInteractions implements HostInteractions {
 
   requestToolEditApproval(
     request: ToolEditApprovalRequest,
-    options?: HostInteractionOptions,
   ): Promise<ToolEditApprovalResult> {
     return this.enqueue<ToolEditApprovalResult>(
       'toolEdit',
       request.streamId,
-      (interactions) =>
-        interactions.requestToolEditApproval?.(request, options),
+      (interactions) => interactions.requestToolEditApproval?.(request),
       (cause) => cancellationResultFor('toolEdit', cause),
     );
   }
 
   requestBashApproval(
     request: HostBashApprovalRequest,
-    options?: HostInteractionOptions,
   ): Promise<BashSettlement> {
     return this.enqueue<BashSettlement>(
       'bash',
       request.streamId ?? undefined,
-      (interactions) => interactions.requestBashApproval?.(request, options),
+      (interactions) => interactions.requestBashApproval?.(request),
       (cause) => cancellationResultFor('bash', cause),
     );
   }
 
   requestPlanApproval(
     request: HostPlanApprovalRequest,
-    options?: HostInteractionOptions,
   ): Promise<PlanApprovalResult> {
     return this.enqueue<PlanApprovalResult>(
       'planApproval',
       request.streamId,
-      (interactions) => interactions.requestPlanApproval?.(request, options),
+      (interactions) => interactions.requestPlanApproval?.(request),
       (cause) => cancellationResultFor('planApproval', cause),
     );
   }
 
   requestAgentProposal(
     request: HostAgentProposalRequest,
-    options?: HostInteractionOptions,
   ): Promise<ProposalResult> {
     return this.enqueue<ProposalResult>(
       'proposal',
       request.streamId,
-      (interactions) => interactions.requestAgentProposal?.(request, options),
+      (interactions) => interactions.requestAgentProposal?.(request),
       (cause) => cancellationResultFor('proposal', cause),
     );
   }
@@ -622,12 +598,11 @@ export class SessionHostInteractions implements HostInteractions {
 
   askUserQuestion(
     request: HostUserQuestionRequest,
-    options?: HostInteractionOptions,
   ): Promise<UserQuestionSettlement> {
     return this.enqueue<UserQuestionSettlement>(
       'userQuestion',
       request.streamId || undefined,
-      (interactions) => interactions.askUserQuestion?.(request, options),
+      (interactions) => interactions.askUserQuestion?.(request),
       (cause) => cancellationResultFor('userQuestion', cause),
     );
   }

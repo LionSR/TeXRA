@@ -226,11 +226,8 @@ describe('createDesktopHostInteractions', () => {
       interactions.requestToolEditApproval(request),
     ).resolves.toEqual({ action: 'apply', appliedContent: 'new' });
     // The controller owns its window session (options.session), so the call
-    // carries only the request and the caller's interaction options.
-    expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(
-      request,
-      undefined,
-    );
+    // carries only the request.
+    expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(request);
   });
 
   it('rejects a plan decision for a pending bash request', async () => {

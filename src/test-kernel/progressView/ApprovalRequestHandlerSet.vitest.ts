@@ -20,7 +20,6 @@ function spyHandlerSet(
 
 describe('ApprovalRequestHandlerSet helpers', () => {
   it('routes cancellation through the handler named by the interaction kind', () => {
-    const cancellationScope = {};
     const request = { streamId: 'stream-1' };
     const cancelWhere = {
       bash: vi.fn(),
@@ -32,7 +31,7 @@ describe('ApprovalRequestHandlerSet helpers', () => {
     for (const cancel of Object.values(cancelWhere)) {
       cancel.mockImplementation((predicate, cause) => {
         expect(cause).toBe('Session closed.');
-        return predicate(request, cancellationScope) ? 1 : 0;
+        return predicate(request) ? 1 : 0;
       });
     }
     const handlers = spyHandlerSet('cancelWhere', cancelWhere);
@@ -49,7 +48,6 @@ describe('ApprovalRequestHandlerSet helpers', () => {
         cancelApprovalRequestHandlers(handlers, [kind], {
           kind,
           streamId: 'stream-1',
-          cancellationScope,
           cause: 'Session closed.',
         }),
       ).toBe(1);

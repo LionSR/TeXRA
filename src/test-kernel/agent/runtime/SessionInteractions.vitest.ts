@@ -4,7 +4,6 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   type BashSettlement,
   matchesCancelSelector,
-  type HostInteractionOptions,
   HostInteractions,
   type HostPlanApprovalRequest,
   type PlanApprovalResult,
@@ -166,7 +165,6 @@ function createControllablePlanAdapter(
     string,
     {
       readonly request: HostPlanApprovalRequest;
-      readonly cancellationScope?: object;
       readonly settle: (result: PlanApprovalResult) => void;
     }
   >();
@@ -176,25 +174,17 @@ function createControllablePlanAdapter(
     pending.clear();
   });
   const interactions: HostInteractions = {
-    requestPlanApproval(request, requestOptions?: HostInteractionOptions) {
+    requestPlanApproval(request) {
       requests.push(request);
       return new Promise((settle) =>
-        pending.set(request.requestId, {
-          request,
-          cancellationScope: requestOptions?.cancellationScope,
-          settle,
-        }),
+        pending.set(request.requestId, { request, settle }),
       );
     },
     cancel(selector = {}) {
       for (const [requestId, entry] of pending) {
         if (
           !matchesCancelSelector(
-            {
-              kind: 'planApproval',
-              streamId: entry.request.streamId,
-              cancellationScope: entry.cancellationScope,
-            },
+            { kind: 'planApproval', streamId: entry.request.streamId },
             selector,
           )
         )
