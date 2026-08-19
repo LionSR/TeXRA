@@ -1,6 +1,3 @@
-// Node imports
-import * as nodePath from 'node:path';
-
 // Local imports
 import {
   initializeBundledPrompts,
@@ -16,7 +13,6 @@ import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
 import type { LifecycleHost } from '@platform/interfaces';
-import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
   bootstrapNodeAgentDirectories,
@@ -24,10 +20,7 @@ import {
   initNodeAgentRuntime,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
-import {
-  TEXRA_CONFIG_FILE_NAME,
-  workspaceTexraConfigPath,
-} from '@platform/defaults/nodeStorage';
+import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
@@ -226,22 +219,20 @@ export async function initCliPlatform(
   );
 
   if (!tryPlatform()) {
-    const configStore = await JsonStore.open(
-      workspaceTexraConfigPath(cliWorkspaceCwd),
-    );
     const stateStores = await createCliStateStores({
       storageRoot: context.storageRoot,
       workspacePath: () => cliWorkspaceCwd,
     });
-    // User-level config (`~/.texra/global-storage/config.json`, the same file
-    // chatDefaults reads) backs the global target, mirroring the desktop host:
-    // workspace values shadow global on read and `update(..., 'global')` has
-    // somewhere to write instead of throwing.
-    const globalConfigStore = await JsonStore.open(
-      nodePath.join(
-        stateStores.storage.getGlobalStoragePath(),
-        TEXRA_CONFIG_FILE_NAME,
-      ),
+    // The project `.texra/config.json` backs the workspace target and
+    // user-level config (`~/.texra/global-storage/config.json`, the same file
+    // chatDefaults reads) backs the global target — the same pair of stores
+    // the extension and desktop hosts open, including the fallback to the
+    // internal workspace store when the project file cannot be read or its
+    // directory cannot be written.
+    const configStores = await openTexraConfigStores(
+      stateStores.storage,
+      cliWorkspaceCwd,
+      (message) => logAt('warn', 'cli.config', message),
     );
     // Same severity and wording as the extension/desktop hosts: a shutdown
     // handler failure is an error everywhere, not a warning in one host.
@@ -260,7 +251,7 @@ export async function initCliPlatform(
     });
     initPlatform(
       createNodePlatform({
-        configStores: { workspace: configStore, global: globalConfigStore },
+        configStores,
         globalState: stateStores.globalState,
         workspaceState: stateStores.workspaceState,
         storage: stateStores.storage,
