@@ -4,12 +4,11 @@
 
 // Third-party imports
 import { Box } from 'ink';
-import { useLayoutEffect, useMemo, type ReactNode } from 'react';
+import { useLayoutEffect, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import type { StreamTabId, WorkflowControlAction } from '@shared/schemas';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
 // Local imports - conversation panes and layout
@@ -75,7 +74,6 @@ interface ConversationRegionSnapshot {
   readonly childListFocused: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-  readonly subagentExecutionLabels: ExecutionLabels;
   readonly activeSubagentExecutionIds: ReadonlyMap<StreamTabId, string>;
   readonly childListTarget: ChildListTarget;
   readonly pendingApprovals: ReadonlyMap<
@@ -129,12 +127,12 @@ export function ConversationRegion({
     rootStreamId: snapshot.rootStreamId,
     scopedTranscript,
   });
-  const executionLabelsKey = useMemo(
-    () => JSON.stringify([...snapshot.subagentExecutionLabels]),
-    [snapshot.subagentExecutionLabels],
-  );
+  // The executions label used to be a segment of this key so a label landing
+  // would remount the static transcript and repaint the affected row. The
+  // label is now frozen into the row at projection time, so the scrollback
+  // identity is just its owner plus the terminal repaint epoch.
   const staticTranscriptRepaint = useSignal(staticTranscriptRepaintEpoch);
-  const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${executionLabelsKey}:${staticTranscriptRepaint}`;
+  const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${staticTranscriptRepaint}`;
 
   const activeSlice = snapshot.activeStreamId
     ? snapshot.streams.get(snapshot.activeStreamId)
@@ -246,7 +244,6 @@ export function ConversationRegion({
         onRenderKeyChange={onStaticTranscriptChange}
         renderKey={staticTranscriptKey}
         scrollbackStreamId={scrollbackTarget.streamId}
-        subagentExecutionLabels={snapshot.subagentExecutionLabels}
         width={transcriptWidth}
       />
       <Box flexDirection="column">
@@ -257,7 +254,6 @@ export function ConversationRegion({
               colorEnabled={colorEnabled}
               width={transcriptWidth}
               maxRows={conversationRows}
-              subagentExecutionLabels={snapshot.subagentExecutionLabels}
             />
           ) : null}
           {foregroundSurface ? (

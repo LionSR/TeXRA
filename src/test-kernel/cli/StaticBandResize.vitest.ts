@@ -19,10 +19,9 @@ import stripAnsi from 'strip-ansi';
 import { afterAll, describe, expect, it } from 'vitest';
 
 // Local imports
-import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
 import type { SessionMeta } from '@cli/chat/tui/state/cliState';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
+import type { TranscriptRow, ToolRowModelContext } from '@shared/transcript';
 import {
   FakeStdin,
   FakeStdout,
@@ -126,6 +125,8 @@ function completedToolEntry(fields: {
   input: Record<string, unknown>;
   outputText: string;
   settlementSeqNo?: number;
+  /** Projection-time label map — the fold's input, not a render-time prop. */
+  executionLabels?: ToolRowModelContext['executionLabels'];
 }): TranscriptRow {
   return toolRowFixture(
     fields.id,
@@ -135,6 +136,9 @@ function completedToolEntry(fields: {
       outputText: fields.outputText,
     },
     fields.settlementSeqNo,
+    fields.executionLabels === undefined
+      ? undefined
+      : { executionLabels: fields.executionLabels },
   );
 }
 
@@ -223,73 +227,53 @@ describe('Static band resize', () => {
     }
   });
 
-  it('replaces finalized execution rows when subagent labels arrive', async () => {
-    const {
-      ink,
-      React,
-      cliState,
-      clearTerminal,
-      StaticConversationTranscript,
-    } = await loadTranscriptStack();
+  it('paints the projected executions label and never re-derives it at render time', async () => {
+    const { ink, React, cliState, StaticConversationTranscript } =
+      await loadTranscriptStack();
     const { createElement } = React;
     const streamId = 'execution-label-stream' as StreamTabId;
-    const executionId = 'late-subagent-id';
-    const executionPath = `/executions/${executionId}/report`;
+    // The row is built the way the fold builds it: the label is folded into
+    // `model.headerPreview` at projection time. Nothing in the render path may
+    // re-derive it — the scrollback row is frozen once it prints.
     const executionEntry = completedToolEntry({
       id: 'execution-view',
       toolName: 'executions',
-      input: { path: executionPath },
+      input: { path: '/executions/late-subagent-id/report' },
       outputText: 'report',
       settlementSeqNo: 1,
+      executionLabels: new Map([['late-subagent-id', 'reviewer']]),
     });
 
     seedTranscript(cliState, streamId, '/tmp/execution-label-proof', [
       executionEntry,
     ]);
 
-    const inkRef: {
-      current?: { repaint(options: TuiRepaintOptions): void };
-    } = {};
-    function App({ labels }: { labels: ReadonlyMap<string, string> }): unknown {
-      const renderKey = JSON.stringify([...labels]);
+    function App(): unknown {
       return createElement(StaticConversationTranscript, {
-        onRenderKeyChange: () => {
-          inkRef.current?.repaint({
-            clearScrollback: true,
-            preserveStatic: false,
-          });
-        },
         ownerKey: 'execution-label-owner',
-        renderKey,
         scrollbackStreamId: streamId,
-        subagentExecutionLabels: labels,
         width: 80,
       });
     }
 
     const { instance: inst, stdout: out } = renderWithTerminalSize(
       ink,
-      createElement(App, { labels: new Map() }),
+      createElement(App),
       80,
       12,
     );
-    inkRef.current = inst;
 
     try {
-      await expectEventually(() => out.output.includes(executionPath));
-
-      out.output = '';
-      inst.rerender(
-        createElement(App, {
-          labels: new Map([[executionId, 'reviewer']]),
-        }),
+      // Match on the ANSI-stripped frame: the label is drawn across an SGR
+      // boundary (bold tool name, then the dim preview), so the raw bytes split
+      // the substring with an escape sequence and an unstripped `includes`
+      // never matches even when the visible text is correct.
+      await expectEventually(() =>
+        stripAnsi(out.output).includes('executions (view: reviewer/report)'),
       );
-
-      await expectEventually(() => out.output.includes(clearTerminal));
-      const frame = stripAnsi(latestRepaintFrame(out.output, clearTerminal));
-      expect(frame).toContain('executions (view: reviewer/report)');
-      expect(frame).not.toContain(executionPath);
-      expect(occurrences(frame, 'executions (view: reviewer/report)')).toBe(1);
+      expect(stripAnsi(out.output)).not.toContain(
+        '/executions/late-subagent-id/report',
+      );
     } finally {
       inst.unmount();
       cliState.resetCliState();

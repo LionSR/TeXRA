@@ -96,8 +96,7 @@ function boundStreamIds(state: SessionState): readonly StreamTabId[] {
 
 /**
  * Snapshot of every parent's child roster. Fresh map per invalidation —
- * consumers that gate expensive work compare content, not reference
- * (see `executionLabelsEqual` in the static transcript).
+ * consumers that gate expensive work compare content, not reference.
  */
 export const childRosters: Signal.Computed<ChildRosters> = computed(() => {
   const bound = BOUND.get();
@@ -146,6 +145,31 @@ export const subagentExecutionLabels: Signal.Computed<
   }
   return labels;
 });
+
+/**
+ * The same label projection, sampled synchronously — what the transcript fold
+ * reads at projection time. Reading the roster snapshot here (rather than the
+ * fold reaching the signal) keeps the fold free of the reactive graph: it
+ * re-runs per appended/dirtied entry, never per label invalidation, and a row
+ * re-projected on its own result-settle picks up whatever label has landed by
+ * then. Rows folded while a child is still launching carry the raw id until
+ * that settle — the one bounded window the projection-time read leaves open.
+ */
+export function subagentExecutionLabelsNow(): ReadonlyMap<string, string> {
+  const bound = BOUND.get();
+  if (!bound) return new Map();
+  const labels = new Map<string, string>();
+  for (const streamId of boundStreamIds(bound.state)) {
+    if (bound.state.isStreamRemoved(streamId)) continue;
+    const roster = bound.state.getStreamState(streamId)?.subagents;
+    if (!roster) continue;
+    for (const child of roster) {
+      const label = childExecutionLabel(child);
+      if (label !== child.executionId) labels.set(child.executionId, label);
+    }
+  }
+  return labels;
+}
 
 /** Whether a stream identity carries the session's removal tombstone. */
 export function isChildStreamRemoved(streamId: StreamTabId): boolean {

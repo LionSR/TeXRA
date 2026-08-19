@@ -36,12 +36,12 @@ export {
   type WorkflowTaskRow,
 } from './transcriptRow';
 export {
-  toolHeaderPreview,
   toolRowModel,
   type ToolChecklistSection,
   type ToolFileGroupsSection,
   type ToolFileListSection,
   type ToolFileSection,
+  type ToolRowModelContext,
   type ToolSection,
   type ToolSectionFile,
 } from './toolRowModel';

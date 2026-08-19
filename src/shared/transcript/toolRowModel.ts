@@ -234,14 +234,11 @@ function headerSummaryText(summary: string): string {
  * The header preview both hosts show, and the only statement of its
  * precedence: a shell call is described by its command, so `bash`-kind tools
  * prefer the input preview; every other tool reports its own summary first and
- * falls back to the input preview while it is still in flight.
- *
- * Exported because subagent execution labels exist only at paint time in the
- * terminal (they name live executions), so the CLI re-derives the preview once
- * the labels are known rather than restating the precedence over the model's
- * already-computed value.
+ * falls back to the input preview while it is still in flight. The `executions`
+ * subagent labels are folded here at projection time, so a host never
+ * re-derives the preview at paint time.
  */
-export function toolHeaderPreview(
+function toolHeaderPreview(
   normalized: NormalizedToolUse,
   ctx: ToolRowModelContext,
 ): string {

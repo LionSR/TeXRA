@@ -11,7 +11,7 @@ import { toolDisplaySpanTextProps } from '@cli/chat/tui/panes/ToolUseRow';
 
 // Local imports - shared schemas
 import type { NormalizedToolUse } from '@shared/schemas';
-import type { ToolRow } from '@shared/transcript';
+import type { ToolRow, ToolRowModelContext } from '@shared/transcript';
 
 // Local imports - test support
 import { loadInk } from '@test/support/inkTestHarness.ts';
@@ -21,8 +21,14 @@ function toolUse(
   toolName: string,
   input: unknown,
   overrides: Partial<NormalizedToolUse> = {},
+  ctx?: ToolRowModelContext,
 ): ToolRow {
-  return toolRowFixture(`tool-${toolName}`, { toolName, input, ...overrides });
+  return toolRowFixture(
+    `tool-${toolName}`,
+    { toolName, input, ...overrides },
+    undefined,
+    ctx,
+  );
 }
 
 function numberedLines(count: number): string {
@@ -198,33 +204,33 @@ describe('CLI tool display lines', () => {
       'executions',
       { action: 'wait', path: '/executions', ids: ['sub-1'] },
       { headerSummary: 'finished waiting' },
+      { executionLabels: new Map([['sub-1', 'reviewer']]) },
     );
 
-    expect(
-      toolUseDisplayLines(entry, {
-        executionLabels: new Map([['sub-1', 'reviewer']]),
-      }),
-    ).toEqual([
+    expect(toolUseDisplayLines(entry)).toEqual([
       '● executions (finished waiting)',
       '⎿ Action: wait (timeout: 300s)',
     ]);
   });
 
   it('renders executions targets with retained subagent labels', () => {
-    const entry = toolUse('executions', {
-      action: 'wait',
-      path: '/executions',
-      ids: ['sub-1', 'sub-2'],
-    });
-
-    expect(
-      toolUseDisplayLines(entry, {
+    const entry = toolUse(
+      'executions',
+      {
+        action: 'wait',
+        path: '/executions',
+        ids: ['sub-1', 'sub-2'],
+      },
+      {},
+      {
         executionLabels: new Map([
           ['sub-1', 'reviewer'],
           ['sub-2', 'leanSolver'],
         ]),
-      }),
-    ).toEqual([
+      },
+    );
+
+    expect(toolUseDisplayLines(entry)).toEqual([
       '● executions (wait: reviewer, leanSolver)',
       '⎿ Action: wait (timeout: 300s)',
     ]);
@@ -236,23 +242,24 @@ describe('CLI tool display lines', () => {
       path: '/executions/process-1',
     });
 
-    expect(
-      toolUseDisplayLines(entry, {
-        executionLabels: new Map([['sub-1', 'reviewer']]),
-      }),
-    ).toEqual(['● executions (view /executions/process-1)']);
+    expect(toolUseDisplayLines(entry)).toEqual([
+      '● executions (view /executions/process-1)',
+    ]);
   });
 
   it('keeps the resource path when labeling an executions target', () => {
-    const entry = toolUse('executions', {
-      path: '/executions/sub-1/workspace-files/review.md',
-    });
+    const entry = toolUse(
+      'executions',
+      {
+        path: '/executions/sub-1/workspace-files/review.md',
+      },
+      {},
+      { executionLabels: new Map([['sub-1', 'reviewer']]) },
+    );
 
-    expect(
-      toolUseDisplayLines(entry, {
-        executionLabels: new Map([['sub-1', 'reviewer']]),
-      }),
-    ).toEqual(['● executions (view: reviewer/workspace-files/review.md)']);
+    expect(toolUseDisplayLines(entry)).toEqual([
+      '● executions (view: reviewer/workspace-files/review.md)',
+    ]);
   });
 
   it('renders TeXRA edit_file calls through the native diff row', () => {

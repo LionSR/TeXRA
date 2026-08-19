@@ -20,7 +20,6 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import type { StreamTabId } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { readTranscriptSpill } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -141,13 +140,11 @@ export function transcriptReaderTitle(label: string | undefined): string {
 
 export function TranscriptReader({
   availableRows,
-  executionLabels,
   onClose,
   streamId,
   title,
 }: {
   readonly availableRows: number;
-  readonly executionLabels?: ExecutionLabels;
   readonly onClose: () => void;
   readonly streamId: StreamTabId;
   readonly title: string;
@@ -239,11 +236,9 @@ export function TranscriptReader({
   // Recomputed as the run appends rows, so the reader stays live rather than
   // freezing at the content present when it opened.
   const text = useMemo(() => {
-    const body = transcriptToLines(hydratedSlice, width, executionLabels)
-      .join('\n')
-      .trimEnd();
+    const body = transcriptToLines(hydratedSlice, width).join('\n').trimEnd();
     return body || EMPTY_TRANSCRIPT_TEXT;
-  }, [executionLabels, hydratedSlice, width]);
+  }, [hydratedSlice, width]);
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) {

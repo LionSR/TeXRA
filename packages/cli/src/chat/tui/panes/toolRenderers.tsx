@@ -25,18 +25,13 @@ import {
 } from '@cli/tui/ui/glyphs';
 import { TOOL_USE_STATUS } from '@shared/schemas';
 import {
-  toolHeaderPreview,
   transcriptText,
   type ToolRow,
   type ToolSection,
   type ToolSectionFile,
   type TranscriptText,
 } from '@shared/transcript';
-import { type ExecutionLabels } from '@shared/tools/executionsDisplay';
-import {
-  isMcpToolName,
-  normalizeToolName,
-} from '@shared/tools/toolDisplayName';
+import { isMcpToolName } from '@shared/tools/toolDisplayName';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -81,8 +76,6 @@ export interface DisplayLineOptions {
   readonly elide?: boolean;
   /** Terminal columns when the projection must match rich rendered rows. */
   readonly width?: number;
-  /** Retained subagent identities used by executions wait/view headers. */
-  readonly executionLabels?: ExecutionLabels;
   /** Suppressed-output tools in the full transcript: 'loaded' prepends the
    *  "Full output:" header, 'failed' shows the failure notice without it. */
   readonly compactOutput?: 'loaded' | 'failed';
@@ -419,17 +412,11 @@ export function toolUseStyledLines(
   toolRow: ToolRow,
   options: DisplayLineOptions = {},
 ): readonly ToolDisplayLine[] {
-  const { toolUse } = toolRow;
-  // Subagent execution labels name live executions, so they only exist at
-  // paint time and the shared model was built without them. Re-derive the
-  // preview through the shared rule rather than restating its precedence here.
-  const headerPreview =
-    normalizeToolName(toolUse.toolName) === 'executions' &&
-    options.executionLabels
-      ? toolHeaderPreview(toolUse, {
-          executionLabels: options.executionLabels,
-        })
-      : toolRow.model.headerPreview;
+  // The executions header label is frozen into the row at projection time
+  // (transcriptFold samples the live labels and the shared model folds them
+  // into `headerPreview`), so the painter reads the model's own value and
+  // never re-derives it — the same row the progress view paints.
+  const headerPreview = toolRow.model.headerPreview;
   const key = `${options.elide === false ? 'f' : 'e'}|${options.compactOutput ?? 'n'}|${options.width ?? 'd'}|${headerPreview}`;
   let cached = styledLinesCache.get(toolRow);
   const hit = cached?.get(key);

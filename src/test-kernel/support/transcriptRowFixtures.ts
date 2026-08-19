@@ -19,6 +19,7 @@ import {
   toolRowModel,
   transcriptText,
   type ToolRow,
+  type ToolRowModelContext,
   type TranscriptRow,
   type TranscriptRowOf,
 } from '@shared/transcript';
@@ -44,11 +45,15 @@ function toolUseFixture(
 }
 
 /** `settlementSeqNo` is the durable "this row is printable" order the recorder
- *  assigns; pass one to build a row the CLI treats as settled on arrival. */
+ *  assigns; pass one to build a row the CLI treats as settled on arrival.
+ *  `ctx` is the projection-time model context (subagent `executionLabels`,
+ *  `parsedOutput`) — a labeled executions row is built by passing the labels
+ *  here, the same way the fold does, not by re-deriving at paint time. */
 export function toolRowFixture(
   id: string,
   toolUse: Partial<NormalizedToolUse> & { readonly toolName: string },
   settlementSeqNo?: number,
+  ctx?: ToolRowModelContext,
 ): ToolRow {
   const normalized = toolUseFixture(toolUse);
   return {
@@ -58,7 +63,7 @@ export function toolRowFixture(
     level: 'info',
     ...(settlementSeqNo !== undefined ? { settlementSeqNo } : {}),
     toolUse: normalized,
-    model: toolRowModel(normalized),
+    model: toolRowModel(normalized, ctx),
   };
 }
 

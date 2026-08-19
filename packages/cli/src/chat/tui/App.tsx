@@ -88,7 +88,6 @@ import {
   parentStream as parentStreamSignal,
   sessionStateRevision,
   streamMetadataFor,
-  subagentExecutionLabels as subagentExecutionLabelsSignal,
 } from './state/childExecutions';
 import { focusedChildFollowUpRoute } from './state/focusedChildFollowUp';
 import {
@@ -167,7 +166,6 @@ export function App(props: AppProps): React.JSX.Element {
   const streams = useSignal(streamsSignal);
   const parentStream = useSignal(parentStreamSignal);
   const childRosters = useSignal(childRostersSignal);
-  const subagentExecutionLabels = useSignal(subagentExecutionLabelsSignal);
   const activeForm = useSignal(activeFormSignal);
   const formProgress = useSignal(formProgressSignal);
   const infoPane = useSignal(infoPaneSignal);
@@ -498,7 +496,6 @@ export function App(props: AppProps): React.JSX.Element {
         return (
           <TranscriptReader
             availableRows={availableRows}
-            executionLabels={subagentExecutionLabels}
             onClose={closeForegroundReader}
             streamId={foregroundReader.streamId}
             title={title}
@@ -835,7 +832,6 @@ export function App(props: AppProps): React.JSX.Element {
           workflowDashboard,
           workflowDashboardRootHasApproval,
           streams,
-          subagentExecutionLabels,
           activeSubagentExecutionIds,
           childListTarget,
           pendingApprovals: pendingApprovalsForRows,

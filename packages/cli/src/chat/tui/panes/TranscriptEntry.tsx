@@ -8,7 +8,6 @@ import { Box, Text } from 'ink';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { fillRows } from '@cli/runtime/terminalText';
 import type { TranscriptRow } from '@shared/transcript';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 // Local imports - CLI TUI rendering
 import { Markdown } from '../render/Markdown';
@@ -104,7 +103,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   width,
   colorEnabled,
   fillWidth,
-  subagentExecutionLabels,
 }: {
   readonly entry: TranscriptRow;
   /** The row printed directly above this one, so its bottom separator can
@@ -113,16 +111,9 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   readonly width?: number;
   readonly colorEnabled?: boolean;
   readonly fillWidth?: boolean;
-  readonly subagentExecutionLabels?: ExecutionLabels;
 }): React.JSX.Element {
   if (entry.kind === 'tool') {
-    return (
-      <ToolUseRow
-        subagentExecutionLabels={subagentExecutionLabels}
-        toolRow={entry}
-        width={width}
-      />
-    );
+    return <ToolUseRow toolRow={entry} width={width} />;
   }
 
   const layout = transcriptEntryLayout(entry, {
@@ -177,24 +168,15 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
   colorEnabled,
   entry,
   maxRows,
-  subagentExecutionLabels,
   width,
 }: {
   readonly colorEnabled?: boolean;
   readonly entry: TranscriptRow;
   readonly maxRows: number;
-  readonly subagentExecutionLabels?: ExecutionLabels;
   readonly width?: number;
 }): React.JSX.Element {
   if (entry.kind === 'tool') {
-    return (
-      <ToolUseRow
-        maxRows={maxRows}
-        subagentExecutionLabels={subagentExecutionLabels}
-        toolRow={entry}
-        width={width}
-      />
-    );
+    return <ToolUseRow maxRows={maxRows} toolRow={entry} width={width} />;
   }
 
   const layout = boundedTranscriptEntryLayout(

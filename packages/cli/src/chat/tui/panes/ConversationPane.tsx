@@ -12,7 +12,6 @@ import {
   workflowCallFailureTally,
   workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import {
   activeStreamId as activeStreamIdSignal,
@@ -58,20 +57,17 @@ interface ConversationPaneProps {
   readonly availableWidth?: number;
   readonly maxRows?: number;
   readonly colorEnabled?: boolean;
-  readonly subagentExecutionLabels?: ExecutionLabels;
 }
 
 function renderConversationPaneEntry({
   colorEnabled,
   entry,
   rowLimit,
-  subagentExecutionLabels,
   width,
 }: {
   readonly colorEnabled?: boolean;
   readonly entry: TranscriptRow;
   readonly rowLimit?: number;
-  readonly subagentExecutionLabels?: ExecutionLabels;
   readonly width?: number;
 }): React.JSX.Element | null {
   // When the newest row alone overflows the pane, the bounded renderer is the
@@ -84,20 +80,13 @@ function renderConversationPaneEntry({
           colorEnabled={colorEnabled}
           entry={entry}
           maxRows={rowLimit}
-          subagentExecutionLabels={subagentExecutionLabels}
           width={width}
         />
       );
     }
     switch (entry.kind) {
       case 'tool':
-        return (
-          <ToolUseRow
-            subagentExecutionLabels={subagentExecutionLabels}
-            toolRow={entry}
-            width={width}
-          />
-        );
+        return <ToolUseRow toolRow={entry} width={width} />;
       case 'assistant':
       case 'log':
         return <LiveTranscriptEntry entry={entry} width={width} />;
@@ -126,11 +115,7 @@ function renderConversationPaneEntry({
           <BoundedTranscriptEntry
             colorEnabled={colorEnabled}
             entry={entry}
-            maxRows={estimateTranscriptEntryRows(
-              entry,
-              width,
-              subagentExecutionLabels,
-            )}
+            maxRows={estimateTranscriptEntryRows(entry, width)}
             width={width}
           />
         );
@@ -249,11 +234,7 @@ export function ConversationPane(
         Math.max(0, maxRows - metadataRows),
         Math.max(
           MIN_PENDING_ROWS,
-          estimateLiveTranscriptEntryRows(
-            newestPendingEntry,
-            props.width,
-            props.subagentExecutionLabels,
-          ),
+          estimateLiveTranscriptEntryRows(newestPendingEntry, props.width),
         ),
       )
     : 0;
@@ -278,7 +259,6 @@ export function ConversationPane(
     displayEntries,
     Math.max(0, maxRows - metadataRows - detailRows),
     props.width,
-    props.subagentExecutionLabels,
   );
   const visibleRows =
     metadataRows +
@@ -316,7 +296,6 @@ export function ConversationPane(
           colorEnabled: props.colorEnabled,
           entry,
           rowLimit: visibleEntries.rowLimits.get(entry.id),
-          subagentExecutionLabels: props.subagentExecutionLabels,
           width: props.width,
         }),
       )}

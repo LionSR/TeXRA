@@ -5,7 +5,6 @@
 import { LRUCache } from 'lru-cache';
 
 import type { TranscriptRow } from '@shared/transcript';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { fullTranscriptEntryLayout } from '../panes/transcriptEntryLayout';
@@ -17,34 +16,22 @@ import type { StreamSlice } from './cliState';
 // entry is replaced/discarded, its cache slot (and everything nested under
 // it) becomes unreachable and is reclaimed with it. Each entry can be
 // rendered at several widths in the same frame (terminal transcript, static
-// row budget, task-detail panel), and occasionally under more than one
-// execution-labels snapshot (labels are a `computed()` signal that only
-// produces a new Map when the child-stream roster actually changes), so both
-// axes are folded into one composite key inside a flat `Map` nested one
-// level under the entry — GC-tied on the primary (entry) axis without the
-// extra WeakMap level for labels. `labelsToken` gives each distinct labels
-// object a small stable numeric id (itself WeakMap-backed, so retired labels
-// objects don't pin memory) to keep that composite key cheap to build.
-const EMPTY_EXECUTION_LABELS: ExecutionLabels = new Map();
-let nextLabelsToken = 0;
-const labelsTokens = new WeakMap<ExecutionLabels, number>();
-
-function labelsToken(executionLabels: ExecutionLabels): number {
-  const existing = labelsTokens.get(executionLabels);
-  if (existing !== undefined) return existing;
-  const token = nextLabelsToken++;
-  labelsTokens.set(executionLabels, token);
-  return token;
-}
+// row budget, task-detail panel), so the width axis is folded into the key
+// inside a flat `Map` nested one level under the entry — GC-tied on the
+// primary (entry) axis without an extra WeakMap level for the width.
+//
+// The executions header label is *not* an axis of this key: it is frozen into
+// the row at projection time (the fold samples the live labels, the shared
+// model folds them into `headerPreview`), so a change to the live label
+// roster can never make a cached line for an unchanged entry go stale.
 
 // Cap each entry's composite-key slots so a long session with many terminal
-// resizes / labels-roster changes can't grow an entry's inner cache forever —
-// only the outer WeakMap's entry-level eviction is free (GC-tied); the
-// `${token}:${cols}` keys inside it are strong references the entry itself
-// won't drop on its own. In practice only the current width and the current
-// labels snapshot are re-rendered at once, so a small cap costs no realistic
-// hit rate. Genuine LRU (not insertion-order) eviction costs nothing extra
-// here and avoids evicting a slot that was just re-hit.
+// resizes can't grow an entry's inner cache forever — only the outer
+// WeakMap's entry-level eviction is free (GC-tied); the width keys inside it
+// are strong references the entry itself won't drop on its own. In practice
+// only the current width is re-rendered at once, so a small cap costs no
+// realistic hit rate. Genuine LRU (not insertion-order) eviction costs nothing
+// extra here and avoids evicting a slot that was just re-hit.
 const MAX_LINES_PER_ENTRY = 4;
 
 const entryLinesCache = new WeakMap<
@@ -55,13 +42,12 @@ const entryLinesCache = new WeakMap<
 function transcriptEntryLines(
   entry: TranscriptRow,
   cols: number,
-  executionLabels: ExecutionLabels,
 ): readonly string[] {
-  const key = `${labelsToken(executionLabels)}:${cols}`;
+  const key = String(cols);
   const cachedByEntry = entryLinesCache.get(entry);
   const cached = cachedByEntry?.get(key);
   if (cached) return cached;
-  const lines = fullTranscriptEntryLayout(entry, cols, executionLabels).lines;
+  const lines = fullTranscriptEntryLayout(entry, cols).lines;
   if (cachedByEntry) {
     cachedByEntry.set(key, lines);
   } else {
@@ -113,7 +99,6 @@ function shouldSeparateEntries({
 export function transcriptToLines(
   slice: StreamSlice | undefined,
   cols: number,
-  executionLabels: ExecutionLabels = EMPTY_EXECUTION_LABELS,
 ): readonly string[] {
   if (!slice) return [];
   const out: string[] = [];
@@ -121,7 +106,7 @@ export function transcriptToLines(
   let previousLines: readonly string[] = [];
   for (const entry of slice.entries) {
     if (!isRenderableTranscriptEntry(entry)) continue;
-    const lines = transcriptEntryLines(entry, cols, executionLabels);
+    const lines = transcriptEntryLines(entry, cols);
     if (lines.length === 0) continue;
     if (
       out.length > 0 &&

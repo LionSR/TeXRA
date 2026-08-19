@@ -41,6 +41,7 @@ import {
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import type { StreamLog } from '@transcript';
 import { truncateSummary } from '@utils/text/stringUtils';
+import { subagentExecutionLabelsNow } from './childExecutions';
 import {
   isFinalizedTranscriptRow,
   isRenderableTranscriptEntry,
@@ -679,8 +680,17 @@ function applyChangedLogEntry(
   // Workflow-call model ids reach the shared projection already resolved to
   // their runtime display label; the projection itself never reaches into the
   // model registry.
+  //
+  // Sample the live subagent labels at projection time so the executions
+  // header is frozen into the row the same way the progress view freezes it.
+  // A tool entry is re-projected when its result settles (`existingPos` above
+  // finds the open row and re-runs this whole block), so a row projected
+  // before its child registers still gains the label on completion — the
+  // labels only ever name a child that is *in flight*, never one that will
+  // never register.
   const row = projectTranscriptRow(projectWorkflowCallEntry(entry), {
     ...(prev ? { previousRow: prev } : {}),
+    executionLabels: subagentExecutionLabelsNow(),
     projectLifecycleToTaskGroups: state.projectLifecycleToTaskGroups,
   });
   if (row === undefined || isPriorWorkflowAttemptRow(state, row)) {

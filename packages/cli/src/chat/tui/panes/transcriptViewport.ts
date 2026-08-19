@@ -2,7 +2,6 @@
 
 import { createLog } from '@logger/logUtils';
 import type { TranscriptRow } from '@shared/transcript';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   transcriptEntryLayout,
@@ -20,11 +19,10 @@ function estimateEntryRows(
   entry: TranscriptRow,
   mode: 'live' | undefined,
   width: number | undefined,
-  executionLabels: ExecutionLabels | undefined,
 ): number {
   try {
     return transcriptEntryLayoutRows(
-      transcriptEntryLayout(entry, { executionLabels, mode, width }),
+      transcriptEntryLayout(entry, { mode, width }),
     );
   } catch (error) {
     if (!brokenEntryIdsReported.has(entry.id)) {
@@ -40,9 +38,8 @@ function estimateEntryRows(
 export function estimateTranscriptEntryRows(
   entry: TranscriptRow,
   width?: number,
-  executionLabels?: ExecutionLabels,
 ): number {
-  return estimateEntryRows(entry, undefined, width, executionLabels);
+  return estimateEntryRows(entry, undefined, width);
 }
 
 // Live mode captures the pending-pane paint contract: assistant text uses its
@@ -51,9 +48,8 @@ export function estimateTranscriptEntryRows(
 export function estimateLiveTranscriptEntryRows(
   entry: TranscriptRow,
   width?: number,
-  executionLabels?: ExecutionLabels,
 ): number {
-  return estimateEntryRows(entry, 'live', width, executionLabels);
+  return estimateEntryRows(entry, 'live', width);
 }
 
 export interface TranscriptEntrySelection {
@@ -68,7 +64,6 @@ export function selectTranscriptEntriesForViewport(
   entries: readonly TranscriptRow[],
   maxRows: number,
   width?: number,
-  executionLabels?: ExecutionLabels,
 ): TranscriptEntrySelection {
   if (!Number.isFinite(maxRows) || maxRows <= 0) {
     return { entries: [], rowLimits: new Map(), usedRows: 0 };
@@ -80,11 +75,7 @@ export function selectTranscriptEntriesForViewport(
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     if (!isRenderableTranscriptEntry(entry)) continue;
-    const entryRows = estimateLiveTranscriptEntryRows(
-      entry,
-      width,
-      executionLabels,
-    );
+    const entryRows = estimateLiveTranscriptEntryRows(entry, width);
     if (usedRows + entryRows > maxRows) {
       if (selected.length === 0) {
         selected.unshift(entry);
