@@ -28,7 +28,7 @@ export const WorkflowSpecificFieldsSchema = FileFieldsSchema.extend({
 
 /** File fields shape consumed by {@link getProposalFileGroups} — the helper
  *  behind every proposal file list (tool-row model, ProposalRequestPanel,
- *  CLI approval summaries). */
+ *  CLI AgentProposal modal, approval summaries). */
 interface FileFields {
   readonly inputFiles?: readonly string[];
   readonly contextFiles?: readonly string[];
