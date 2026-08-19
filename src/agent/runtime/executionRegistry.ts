@@ -43,7 +43,14 @@ import { SessionEventHub } from './SessionEventHub';
 
 const logger = createChannelTrace('executionRegistry');
 
-/** Child policy shared by `kill()` and `stopAgentStream()`. */
+/**
+ * Child policy shared by `kill()` and `stopAgentStream()`. The caller owns the
+ * decision because only it knows which gesture it is serving: the configured
+ * stop surfaces resolve it through `detachSubagentsOnStop()`, the CLI's
+ * focus-scoped bare-Escape stop always detaches, and process shutdown always
+ * cascades. Omitting the field means cascade — the conservative reading, since
+ * a child left running has no owner to report to.
+ */
 export interface ExecutionStopOptions {
   readonly detachActiveChildren?: boolean;
 }
@@ -563,7 +570,7 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Stop a visible agent stream and apply the same child policy everywhere.
+   * Stop a visible agent stream and apply the caller's declared child policy.
    *
    * Hosts should call this instead of reconstructing stop behavior from
    * child-interrupts, root interrupts, and stream-status writes.
