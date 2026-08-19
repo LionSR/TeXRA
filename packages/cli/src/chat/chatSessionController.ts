@@ -327,6 +327,10 @@ export function createChatSessionController(
     clearApprovals();
     if (!session.streamId) return;
     session.interruptedStreamId = session.streamId;
+    // Ctrl-C is a configured stop surface: the user stopped the root run, so
+    // the detach-on-stop toggle decides whether active subagents survive it.
+    // `stopStream` below is the other gesture and answers deliberately
+    // differently.
     runtimeSession.executions.stopAgentStream(session.streamId, {
       detachActiveChildren: detachSubagentsOnStop(),
     });
@@ -862,6 +866,11 @@ export function createChatSessionController(
       requestStop();
       session.interruptedStreamId = streamId;
     }
+    // Bare Escape is a focus-scoped gesture — "stop only the focused stream"
+    // (#9009) — so descendants are always detached rather than cascaded into:
+    // the user stopped one stream, not the tree. The detach-on-stop toggle
+    // governs the configured stop surfaces (Ctrl-C above, the TUI kill action,
+    // the GUI stop buttons) and is deliberately not consulted here.
     runtimeSession.executions.stopAgentStream(streamId, {
       detachActiveChildren: true,
     });

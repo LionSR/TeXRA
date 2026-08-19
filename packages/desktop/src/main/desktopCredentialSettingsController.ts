@@ -24,9 +24,7 @@ import {
 } from '@model/computeModelOptions';
 import {
   API_PROVIDERS,
-  apiKeySecretName,
   invalidateApiKeyCache,
-  isApiProvider,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
 import { setPreferCodexSubscription } from '@model/codex/codexPreference';
@@ -164,23 +162,27 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         this.profileController.getProviderDisplayName(provider),
       getProviderKeyUrl: (provider) =>
         this.profileController.getProviderKeyUrl(provider),
-      getApiKeySecretName: (provider) => {
-        if (!isApiProvider(provider)) {
-          throw new Error(`Unknown API provider: ${provider}`);
-        }
-        return apiKeySecretName(provider);
-      },
-      setSecret: (key, value) => options.secrets.set(key, value),
-      deleteSecret: (key) => options.secrets.delete(key),
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
+      reportFailure: async (message, error) => {
+        await options.notifications.showErrorMessage(
+          `${message}: ${toErrorMessage(error)}`,
+        );
+        await this.postProfileData();
+      },
     });
     this.profileHandlers = {
       signIn: () => options.auth.signIn(),
       signOut: () => this.signOut(),
       setProviderKey: (message) =>
-        this.setProviderKey(message.provider, message.apiKey),
-      removeProviderKey: (message) => this.removeProviderKey(message.provider),
+        message.apiKey == null
+          ? this.profileKeyController.setProviderKey(message.provider)
+          : this.profileKeyController.commitProviderKey(
+              message.provider,
+              message.apiKey,
+            ),
+      removeProviderKey: (message) =>
+        this.profileKeyController.removeProviderKey(message.provider),
       openProviderKeyUrl: (message) =>
         this.profileKeyController.openProviderKeyUrl(message.provider),
       setProviderSetting: (message) =>
@@ -306,34 +308,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       enablePrefer: () => setPreferXaiSubscription(true),
       refresh: () => this.refreshAfterGrokAuthChange(),
     });
-  }
-
-  private async acceptKnownProvider(provider: string): Promise<boolean> {
-    if (isApiProvider(provider)) return true;
-    await this.options.notifications.showErrorMessage(
-      `Unknown API provider: ${provider}`,
-    );
-    return false;
-  }
-
-  private async setProviderKey(
-    provider: string,
-    submittedApiKey?: string,
-  ): Promise<void> {
-    if (!(await this.acceptKnownProvider(provider))) return;
-    if (submittedApiKey != null) {
-      await this.profileKeyController.commitProviderKey(
-        provider,
-        submittedApiKey,
-      );
-      return;
-    }
-    await this.profileKeyController.setProviderKey(provider);
-  }
-
-  private async removeProviderKey(provider: string): Promise<void> {
-    if (!(await this.acceptKnownProvider(provider))) return;
-    await this.profileKeyController.removeProviderKey(provider);
   }
 
   private async setProviderSetting(

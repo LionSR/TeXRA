@@ -8,7 +8,6 @@
  */
 
 // Local imports
-import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -19,7 +18,6 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
@@ -36,7 +34,10 @@ import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { startDetachedChildRunLoop } from './detachedChildRun';
+import {
+  registerChildExecution,
+  startDetachedChildRunLoop,
+} from './detachedChildRun';
 import { executeSubagentForDeliveryInBand } from './inBandSubagentExecution';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 
@@ -185,30 +186,16 @@ export async function executeSubagent(
   const executionId = generateExecutionId();
   const startedAt = Date.now();
   const config = AgentConfigSchema.parse(childConfigPayload);
-  // Must match the id `buildAgentLaunchContext` actually reserves for this
-  // executionId (see AgentLaunchContext.ts's `reservedStreamId`), or the
-  // loop acquires the wrong follow-up queue/interrupt slot. That reservation
-  // uses the canonical config's agent/model — not the `agentName` parameter,
-  // which callers may resolve differently
-  // (e.g. an approved agent override's display name vs. its registry name).
-  // Derive from the exact same fields, not a parallel formula.
-  const childStreamId = getStreamTabId(config.agent, {
-    executionId,
-  });
-  const runWithOwnership = await registerOwnedExecution(
+  const { childStreamId, runWithOwnership } = await registerChildExecution({
     executionId,
     config,
     agentName,
-    {
-      streamId: childStreamId,
-      identity: { kind: 'agent', agent: config.agent },
-      userFollowUpSupport:
-        config.agentCategory === AgentCategory.ToolUse
-          ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
-          : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      parentExecutionId,
-    },
-  );
+    userFollowUpSupport:
+      config.agentCategory === AgentCategory.ToolUse
+        ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
+        : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    parentExecutionId,
+  });
 
   return await runWithOwnership(async () => {
     const isToolUse = config.agentCategory === AgentCategory.ToolUse;

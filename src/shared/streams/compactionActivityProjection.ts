@@ -32,26 +32,6 @@ export const COMPACTION_ACTIVITY_LABEL: Record<
   interrupted: 'Context compaction interrupted',
 };
 
-/** Validate a projected block at a host rendering boundary. */
-export function isCompactionActivityBlock(
-  value: unknown,
-): value is CompactionActivityBlock {
-  if (typeof value !== 'object' || value === null) return false;
-  const block = value as Record<string, unknown>;
-  return (
-    typeof block.operationId === 'string' &&
-    block.operationId.length > 0 &&
-    typeof block.status === 'string' &&
-    Object.hasOwn(COMPACTION_ACTIVITY_LABEL, block.status) &&
-    typeof block.finalized === 'boolean' &&
-    (block.settledThroughSeqNo === undefined ||
-      typeof block.settledThroughSeqNo === 'number') &&
-    typeof block.startPosition === 'number' &&
-    typeof block.startedAt === 'number' &&
-    (block.finishedAt === undefined || typeof block.finishedAt === 'number')
-  );
-}
-
 export interface CompactionActivityProjection {
   readonly blocks: CompactionActivityBlock[];
   readonly indexByOperationId: Map<string, number>;

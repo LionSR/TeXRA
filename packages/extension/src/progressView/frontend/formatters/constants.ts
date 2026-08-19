@@ -96,9 +96,6 @@ export function getLanguageFromPath(filePath: string): string {
 export const DIFF_DETECTION_LINE_LIMIT = 20;
 export const DIFF_MARKER_THRESHOLD = 2;
 
-// Tool output patterns for filtering trivial responses
-export const TRIVIAL_WRITE_OUTPUT = 'written';
-
 /**
  * Tool icon mapping for different tool types.
  * Maps tool names to wa-icon names (codicon-style aliases supported via the

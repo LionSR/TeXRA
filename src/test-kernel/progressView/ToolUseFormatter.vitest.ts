@@ -4,10 +4,15 @@ import { beforeAll, describe, expect, it } from 'vitest';
 // Local imports - shared schemas
 import {
   LOG_LEVELS,
-  LogMessageDataSchema,
-  MESSAGE_TYPES,
-  type LogMessageOf,
+  STREAM_LOG_ENTRY_TYPES,
+  StreamLogEntrySchema,
 } from '@shared/schemas';
+import {
+  projectTranscriptRow,
+  type ErrorRow,
+  type StreamingTextRow,
+  type ToolRow,
+} from '@shared/transcript';
 
 // Local imports - test utilities
 import {
@@ -61,19 +66,26 @@ function renderTemplateInDocument(template: FormatterTemplate): HTMLElement {
   return container;
 }
 
-/** The shared shell of an INFO-level tool-use log entry. */
-function toolUseMessage(
+/** The projected tool row for an INFO-level tool-use log entry. */
+function toolUseRow(
   id: string,
   data: unknown,
-): LogMessageOf<typeof MESSAGE_TYPES.TOOL_USE> {
-  return LogMessageDataSchema.parse({
+  executionLabels?: Map<string, string>,
+): ToolRow {
+  const entry = StreamLogEntrySchema.parse({
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    seqNo: 1,
     id,
     text: '',
     level: LOG_LEVELS.INFO,
     timestamp: 1,
     messageType: 'toolUse',
     data,
-  }) as LogMessageOf<typeof MESSAGE_TYPES.TOOL_USE>;
+  });
+  return projectTranscriptRow(
+    entry,
+    executionLabels ? { executionLabels } : {},
+  ) as ToolRow;
 }
 
 /** Renders an `executions` tool call with subagent labels and returns the title. */
@@ -83,8 +95,11 @@ function executionsTitle(
 ): string | null | undefined {
   const container = renderTemplate(
     formatToolUseTemplate(
-      toolUseMessage('executions-title', { toolName: 'executions', input }),
-      { executionLabels: new Map(labels) },
+      toolUseRow(
+        'executions-title',
+        { toolName: 'executions', input },
+        new Map(labels),
+      ),
     ),
   );
   return container.querySelector('.tool-use-title')?.textContent;
@@ -103,7 +118,7 @@ const papers = await parallel(
   ),
 );
 return { papers, question: args.question };`;
-    const message = toolUseMessage('workflow-script', {
+    const row = toolUseRow('workflow-script', {
       toolName: 'delegate_multi_agents',
       input: {
         agent: 'research',
@@ -126,7 +141,7 @@ return { papers, question: args.question };`;
       },
     });
 
-    const container = renderTemplate(formatToolUseTemplate(message));
+    const container = renderTemplate(formatToolUseTemplate(row));
 
     const details = container.querySelector('wa-details.tool-use-details') as
       (HTMLElement & { open: boolean }) | null;
@@ -158,7 +173,9 @@ return { papers, question: args.question };`;
     expect(container.textContent).toContain('(Input)');
     expect(container.textContent).toContain('(Context)');
     expect(container.textContent).toContain('(Media)');
-    expect(container.textContent).not.toContain('"compared":2');
+    // The script's sections describe the call; its result is the output
+    // block, which the row no longer suppresses as 'rendered-by-sections'.
+    expect(container.textContent).toContain('"compared":2');
     expect(container.textContent).not.toContain('journal');
     expect(container.querySelector('.proposal-banner-setup')).toBeNull();
   });
@@ -166,7 +183,7 @@ return { papers, question: args.question };`;
   it('keeps an in-progress workflow script compact by default', () => {
     const container = renderTemplate(
       formatToolUseTemplate(
-        toolUseMessage('workflow-script-running', {
+        toolUseRow('workflow-script-running', {
           toolName: 'delegate_multi_agents',
           status: 'in_progress',
           input: {
@@ -188,7 +205,7 @@ return { papers, question: args.question };`;
   });
 
   it('shows explicit null workflow-script arguments as JSON', () => {
-    const message = toolUseMessage('workflow-script-null-args', {
+    const row = toolUseRow('workflow-script-null-args', {
       toolName: 'delegate_multi_agents',
       input: {
         agent: 'research',
@@ -197,7 +214,7 @@ return { papers, question: args.question };`;
       },
     });
 
-    const container = renderTemplate(formatToolUseTemplate(message));
+    const container = renderTemplate(formatToolUseTemplate(row));
 
     expect(
       container.querySelector('.code-block[data-language="json"] code')
@@ -210,29 +227,21 @@ return { papers, question: args.question };`;
       { length: 20 },
       (_, i) => `[${i}/100] Built Mathlib.Example.Module${i}`,
     ).join(' ');
-    const message: ReturnType<typeof toolUseMessage> = {
-      id: 'bash-timeout',
-      text: '',
-      level: LOG_LEVELS.ERROR,
-      timestamp: 1,
-      messageType: 'toolUse',
-      data: {
-        toolName: 'bash',
-        input: { command: 'lake build' },
-        error: `Foreground command timed out after 600s. <stdout>${stdout}`,
-        isError: true,
-      },
-    };
+    const row = toolUseRow('bash-timeout', {
+      toolName: 'bash',
+      input: { command: 'lake build' },
+      error: `Foreground command timed out after 600s. <stdout>${stdout}`,
+      isError: true,
+    });
 
-    const container = renderTemplate(formatToolUseTemplate(message));
+    const container = renderTemplate(formatToolUseTemplate(row));
 
     const title = container.querySelector('.tool-use-title');
     const body = container.querySelector('.banner-content');
 
-    expect(title?.textContent).toContain('bash');
-    expect(title?.textContent).toContain(
-      'Foreground command timed out after 600s.',
-    );
+    // A shell call is described by its command (the shared row model's
+    // header rule), so streamed stdout can reach neither the title nor it.
+    expect(title?.textContent).toBe('bash — lake build');
     expect(title?.textContent).not.toContain('Built Mathlib');
     expect(body?.textContent).toContain('Built Mathlib.Example.Module19');
 
@@ -246,13 +255,13 @@ return { papers, question: args.question };`;
   });
 
   it('renders write_file cards even when compact logs omit content', () => {
-    const message = toolUseMessage('write-file-compact', {
+    const row = toolUseRow('write-file-compact', {
       toolName: 'write_file',
       input: { path: 'src/main.ts' },
       output: 'Wrote src/main.ts',
     });
 
-    const container = renderTemplate(formatLogEntry(message));
+    const container = renderTemplate(formatLogEntry(row));
 
     expect(container.textContent).toContain('write_file');
     expect(container.textContent).toContain('src/main.ts');
@@ -263,7 +272,7 @@ return { papers, question: args.question };`;
   // `buildCodexMcpToolLog` (src/tools/codexShared.ts) persist them into a
   // stream log: a namespaced `claude:<tool>` name, and `mcp:<server>/<tool>`.
   it('strips the provider namespace from a delegated sub-agent tool title', () => {
-    const message = toolUseMessage('claude-edit', {
+    const row = toolUseRow('claude-edit', {
       toolName: 'claude:Edit',
       summary: 'paper.tex',
       input: {
@@ -274,14 +283,14 @@ return { papers, question: args.question };`;
       status: 'completed',
     });
 
-    const container = renderTemplate(formatToolUseTemplate(message));
+    const container = renderTemplate(formatToolUseTemplate(row));
 
     const title = container.querySelector('.tool-use-title')?.textContent;
     expect(title).toBe('Edit — paper.tex');
   });
 
   it('renders a diff for a delegated Edit call (old_string/new_string, file_path)', () => {
-    const message = toolUseMessage('claude-edit-diff', {
+    const row = toolUseRow('claude-edit-diff', {
       toolName: 'claude:Edit',
       input: {
         file_path: 'paper.tex',
@@ -291,7 +300,7 @@ return { papers, question: args.question };`;
       status: 'completed',
     });
 
-    const container = renderTemplate(formatToolUseTemplate(message));
+    const container = renderTemplate(formatToolUseTemplate(row));
 
     expect(container.querySelector('.edit-diff-container')).not.toBeNull();
     expect(container.textContent).toContain('CNN');
@@ -300,7 +309,7 @@ return { papers, question: args.question };`;
   });
 
   it('renders a diff per edit for a delegated MultiEdit call', () => {
-    const message = toolUseMessage('claude-multiedit-diff', {
+    const row = toolUseRow('claude-multiedit-diff', {
       toolName: 'claude:MultiEdit',
       input: {
         file_path: 'paper.tex',
@@ -312,7 +321,7 @@ return { papers, question: args.question };`;
       status: 'completed',
     });
 
-    const container = renderTemplate(formatToolUseTemplate(message));
+    const container = renderTemplate(formatToolUseTemplate(row));
 
     expect(container.querySelectorAll('.edit-diff-container')).toHaveLength(2);
     expect(container.textContent).toContain('transformer');
@@ -320,14 +329,14 @@ return { papers, question: args.question };`;
   });
 
   it('gives a delegated bash call the same command preview as the native tool', () => {
-    const message = toolUseMessage('claude-bash', {
+    const row = toolUseRow('claude-bash', {
       toolName: 'claude:Bash',
       input: { command: 'npm test' },
       output: 'passed',
       status: 'completed',
     });
 
-    const container = renderTemplate(formatToolUseTemplate(message));
+    const container = renderTemplate(formatToolUseTemplate(row));
 
     expect(container.querySelector('.tool-use-title')?.textContent).toBe(
       'Bash — npm test',
@@ -338,13 +347,13 @@ return { papers, question: args.question };`;
   });
 
   it('keeps the MCP provenance marker in the tool title', () => {
-    const message = toolUseMessage('mcp-search', {
+    const row = toolUseRow('mcp-search', {
       toolName: 'mcp:github/search',
       input: { query: 'texra' },
       output: { status: 'completed' },
     });
 
-    const container = renderTemplate(formatToolUseTemplate(message));
+    const container = renderTemplate(formatToolUseTemplate(row));
 
     expect(container.querySelector('.tool-use-title')?.textContent).toContain(
       'MCP github/search',
@@ -357,7 +366,7 @@ return { papers, question: args.question };`;
       action: 'wait',
       timeout: 3600,
     };
-    const message = toolUseMessage('executions-timeout', {
+    const row = toolUseRow('executions-timeout', {
       toolName: 'executions',
       input,
     });
@@ -367,7 +376,7 @@ return { papers, question: args.question };`;
       60_000,
     );
 
-    const container = renderTemplate(formatToolUseTemplate(message));
+    const container = renderTemplate(formatToolUseTemplate(row));
 
     expect(container.textContent).toContain('wait (timeout: 1800s)');
     expect(container.textContent).not.toContain('3600s');
@@ -376,7 +385,7 @@ return { papers, question: args.question };`;
   it('renders guarded executions conversation pagination arguments', () => {
     const valid = renderTemplate(
       formatToolUseTemplate(
-        toolUseMessage('executions-conversation-page', {
+        toolUseRow('executions-conversation-page', {
           toolName: 'executions',
           input: {
             path: '/executions/abc123/conversation',
@@ -396,7 +405,7 @@ return { papers, question: args.question };`;
 
     const invalid = renderTemplate(
       formatToolUseTemplate(
-        toolUseMessage('executions-invalid-conversation-page', {
+        toolUseRow('executions-invalid-conversation-page', {
           toolName: 'executions',
           input: {
             path: '/executions/abc123/conversation',
@@ -468,7 +477,7 @@ const SUMMARY_CONTROL_CASES = [
     controlSelector: 'button.proposal-restore-link',
     buildTemplate: () =>
       formatToolUseTemplate(
-        toolUseMessage('proposal-2', {
+        toolUseRow('proposal-2', {
           toolName: 'delegate_agent',
           input: { agent: 'assistant', instruction: 'do the thing' },
           output: 'proposed',
@@ -480,44 +489,56 @@ const SUMMARY_CONTROL_CASES = [
     detailsSelector: 'wa-details.banner-details',
     controlSelector: 'wa-button.banner-content-copy',
     buildTemplate: () =>
-      formatBannerContentTemplate({
-        id: 'thinking-1',
-        text: 'some thinking content',
-        level: LOG_LEVELS.INFO,
-        timestamp: 1,
-        messageType: 'thinking',
-        data: {},
-      }),
+      formatBannerContentTemplate(
+        projectTranscriptRow(
+          StreamLogEntrySchema.parse({
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            seqNo: 1,
+            id: 'thinking-1',
+            text: 'some thinking content',
+            level: LOG_LEVELS.INFO,
+            timestamp: 1,
+            messageType: 'thinking',
+            data: {},
+          }),
+        ) as StreamingTextRow,
+      ),
   },
   {
     control: 'error banner copy button',
     detailsSelector: 'wa-details.banner-details--error',
     controlSelector: 'wa-button.banner-content-copy',
     buildTemplate: () =>
-      formatErrorTemplate({
-        id: 'error-1',
-        text: 'something failed',
-        level: LOG_LEVELS.ERROR,
-        timestamp: 1,
-        messageType: 'error',
-        data: {
-          message: 'something failed',
-          operation: 'test-op',
-          userRetryable: false,
-        },
-      }),
+      formatErrorTemplate(
+        projectTranscriptRow(
+          StreamLogEntrySchema.parse({
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            seqNo: 1,
+            id: 'error-1',
+            text: 'something failed',
+            level: LOG_LEVELS.ERROR,
+            timestamp: 1,
+            messageType: 'error',
+            data: {
+              message: 'something failed',
+              operation: 'test-op',
+              userRetryable: false,
+            },
+          }),
+        ) as ErrorRow,
+      ),
   },
 ];
 
 describe('wa-details summary controls: activation does not toggle the panel', () => {
   it('clicking the proposal-restore-link ("Setup") button does not toggle the panel, and the click still bubbles to an outer delegated handler', async () => {
-    const message = toolUseMessage('proposal-1', {
+    const row = toolUseRow('proposal-1', {
       toolName: 'delegate_agent',
       input: { agent: 'assistant', instruction: 'do the thing' },
       output: 'proposed',
     });
 
-    const container = renderTemplateInDocument(formatToolUseTemplate(message));
+    const container = renderTemplateInDocument(formatToolUseTemplate(row));
 
     const waDetails = container.querySelector(
       'wa-details.tool-use-details',

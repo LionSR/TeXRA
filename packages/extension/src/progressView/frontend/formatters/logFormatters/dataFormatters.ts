@@ -19,16 +19,16 @@ import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared schemas and utilities
-import type { ExtendedTokenUsageStats, LogMessageOf } from '@shared/schemas';
-import {
-  MESSAGE_TYPES,
-  OUTPUT_DOCUMENTS_TAG,
-  parseDiffResultEntries,
-} from '@shared/schemas';
+import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
+import type {
+  FileListRow,
+  LatexdiffRow,
+  MissingOutputsRow,
+  StatisticsRow,
+} from '@shared/transcript';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { formatCompactTokenCount, getBasename } from '@utils/core';
-import { formatCostUsd } from '@utils/text/stringUtils';
+import { getBasename } from '@utils/core';
 
 // Local imports - formatter helpers
 import {
@@ -59,16 +59,12 @@ function buildFileListDetails(options: {
 }
 
 /** Format file list entry as TemplateResult. */
-export function formatFileListTemplate(
-  message: LogMessageOf<typeof MESSAGE_TYPES.FILE_LIST>,
-): FormatResult {
-  const { id, data } = message;
-  const { items, summary } = buildFileListRender(data);
+export function formatFileListTemplate(row: FileListRow): FormatResult {
   return buildFileListDetails({
-    logId: id,
+    logId: row.id,
     iconName: 'file',
-    label: summary,
-    items,
+    label: row.summary,
+    items: buildFileListRender(row.files),
   });
 }
 
@@ -81,10 +77,9 @@ function renderXmlLink(xmlFile: string): TemplateResult {
 
 /** Format missing outputs entry as TemplateResult. */
 export function formatMissingOutputsTemplate(
-  message: LogMessageOf<typeof MESSAGE_TYPES.MISSING_OUTPUTS>,
+  row: MissingOutputsRow,
 ): FormatResult {
-  const { id, data } = message;
-  const { missing, xmlFile } = data;
+  const { id, missing, xmlFile } = row;
 
   // Special case: only XML link, no missing files
   if (missing.length === 0 && xmlFile) {
@@ -100,7 +95,7 @@ export function formatMissingOutputsTemplate(
   return buildFileListDetails({
     logId: id,
     iconName: 'triangle-exclamation',
-    label: `Missing outputs (${missing.length})`,
+    label: row.summary,
     items: listItems,
     trailing: xmlFile ? renderXmlLink(xmlFile) : '',
   });
@@ -111,71 +106,31 @@ export function formatMissingOutputsTemplate(
 // =============================================================================
 
 /** Format latexdiff entry as TemplateResult. */
-export function formatLatexdiffTemplate(
-  message: LogMessageOf<typeof MESSAGE_TYPES.LATEXDIFF>,
-): FormatResult {
-  const { id, data } = message;
-  const entries = parseDiffResultEntries(data);
-  if (entries.length === 0) return null;
-
-  const aggregatedRunId = entries.find((e) => e.runId)?.runId;
+export function formatLatexdiffTemplate(row: LatexdiffRow): FormatResult {
   // prettier-ignore
-  return html`<latexdiff-results .logId=${id} .runId=${ifDefined(aggregatedRunId)} .entries=${entries}></latexdiff-results>`;
+  return html`<latexdiff-results .logId=${row.id} .runId=${ifDefined(row.runId)} .entries=${row.entries}></latexdiff-results>`;
 }
 
 // =============================================================================
 // Statistics Formatter
 // =============================================================================
 
-type NumericExtendedTokenUsageStatsKey = {
-  [K in keyof ExtendedTokenUsageStats]-?: NonNullable<
-    ExtendedTokenUsageStats[K]
-  > extends number
-    ? K
-    : never;
-}[keyof ExtendedTokenUsageStats];
-
-/** Configuration for a statistics field: [key, icon, label, formatter]. */
-type StatFieldConfig = readonly [
-  key: NumericExtendedTokenUsageStatsKey,
-  icon: TeXRAIconName,
-  label: string,
-  formatter: (value: number) => string,
-];
-
-// Statistics field configuration
-const STAT_FIELDS: readonly StatFieldConfig[] = [
-  ['inputTokens', 'arrow-up', 'Input tokens', formatCompactTokenCount],
-  ['outputTokens', 'arrow-down', 'Output tokens', formatCompactTokenCount],
-  [
-    'cacheReadInputTokens',
-    'clock-rotate-left',
-    'Cache hits',
-    formatCompactTokenCount,
-  ],
-  [
-    'cacheMissInputTokens',
-    'cloud-arrow-up',
-    'Cache misses',
-    formatCompactTokenCount,
-  ],
-  [
-    'cacheCreationInputTokens',
-    'floppy-disk',
-    'Cache writes',
-    formatCompactTokenCount,
-  ],
-  ['percentageCached', 'chart-line', 'Cached %', (v) => `${v.toFixed(2)}%`],
-  ['reasoningTokens', 'comments', 'Reasoning tokens', formatCompactTokenCount],
-  [
-    'toolUseTokens',
-    'screwdriver-wrench',
-    'Tool tokens',
-    formatCompactTokenCount,
-  ],
-  ['elapsedTime', 'clock', 'Elapsed time', (v) => `${v}s`],
-  ['cost', 'rocket', 'Cost', formatCostUsd],
-];
+/**
+ * Icon per statistics item key. Labels, ordering, and value formatting are the
+ * row's (`StatisticsRow.items`); only the glyph is this host's choice.
+ */
+const STAT_ICONS: Record<string, TeXRAIconName> = {
+  inputTokens: 'arrow-up',
+  outputTokens: 'arrow-down',
+  cacheReadInputTokens: 'clock-rotate-left',
+  cacheMissInputTokens: 'cloud-arrow-up',
+  cacheCreationInputTokens: 'floppy-disk',
+  percentageCached: 'chart-line',
+  reasoningTokens: 'comments',
+  toolUseTokens: 'screwdriver-wrench',
+  elapsedTime: 'clock',
+  cost: 'rocket',
+};
 
 /** Fixed header config for the statistics panel rendered via <context-management>. */
 const STATISTICS_CONFIG = Object.freeze({
@@ -185,19 +140,12 @@ const STATISTICS_CONFIG = Object.freeze({
 });
 
 /** Format statistics entry as TemplateResult. */
-export function formatStatisticsTemplate(
-  message: LogMessageOf<typeof MESSAGE_TYPES.STATISTICS>,
-): FormatResult {
-  const { id, data } = message;
-  const items = STAT_FIELDS.filter(([key]) => data[key] !== undefined).map(
-    ([key, icon, label, formatter]) => ({
-      icon,
-      label,
-      value: formatter(data[key]!),
-    }),
-  );
-
-  if (items.length === 0) return null;
+export function formatStatisticsTemplate(row: StatisticsRow): FormatResult {
+  const items = row.items.map((item) => ({
+    icon: STAT_ICONS[item.key] ?? 'chart-line',
+    label: item.label,
+    value: item.value,
+  }));
   // prettier-ignore
-  return html`<context-management .logId=${id} .items=${items} .config=${STATISTICS_CONFIG}></context-management>`;
+  return html`<context-management .logId=${row.id} .items=${items} .config=${STATISTICS_CONFIG}></context-management>`;
 }

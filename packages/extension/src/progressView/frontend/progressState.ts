@@ -393,10 +393,16 @@ const activeIsToolUse$ = new Signal.Computed(() => {
   return state ? isToolUseState(state) : false;
 });
 
-/** Session-wide identity projection; ordinary log ticks do not rebuild it. */
-const subagentExecutionLabels$ = new Signal.Computed((): ExecutionLabels => {
+/**
+ * Session-wide identity projection, read when a tool row is projected so an
+ * `executions` call names the subagent it waits on. Retained child streams
+ * keep their entry, so a completed subagent stays nameable.
+ */
+export function subagentExecutionLabels(
+  streams: Iterable<StreamTabInfo>,
+): ExecutionLabels {
   const labels = new Map<string, string>();
-  for (const child of streamById$.get().values()) {
+  for (const child of streams) {
     if (
       child.identity?.kind === 'process' ||
       !child.parentStreamId ||
@@ -410,7 +416,7 @@ const subagentExecutionLabels$ = new Signal.Computed((): ExecutionLabels => {
     }
   }
   return labels;
-});
+}
 
 /** Stream context derived from active stream + state. */
 export const streamContext$ = new Signal.Computed((): StreamContextValue => {
@@ -442,16 +448,16 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
   const streamLogs = activeStreamLogs$.get();
 
   return {
-    logs: streamLogs.logs,
-    updatedMessageIndices: streamLogs.updatedMessageIndices,
-    updatedMessageBaseGeneration: streamLogs.updatedMessageBaseGeneration,
-    messageGeneration: streamLogs.generation,
+    entries: streamLogs.entries,
+    rows: streamLogs.rows,
+    updatedRowIndices: streamLogs.updatedRowIndices,
+    updatedRowBaseGeneration: streamLogs.updatedRowBaseGeneration,
+    rowGeneration: streamLogs.generation,
     taskGroups: activeTaskGroups$.get(),
     isToolUse: activeIsToolUse$.get(),
     hasStreams,
     streamName: activeStreamInfo.name,
     streamStatus: activeStreamState$.get()?.status ?? null,
-    subagentExecutionLabels: subagentExecutionLabels$.get(),
     // Process agents emit raw stdout/stderr; render them terminal-style
     // (monospace, no timestamps, tight spacing) rather than logger entries.
     terminalMode: activeStreamInfo.identity?.kind === 'process',
