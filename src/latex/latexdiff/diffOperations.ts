@@ -233,7 +233,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     const roundOutputs = new Map<number, string>();
 
     // Legacy flat layout: files sit directly under outputDirPath as
-    // `<base>_<chunk>_r{round}_<normalizedModel>.tex`.
+    // `<base>_<chunk>_r{round}_<model>.tex`.
     const legacyPattern = legacyWorkflowOutputRoundRegex(
       baseInputName,
       agent,

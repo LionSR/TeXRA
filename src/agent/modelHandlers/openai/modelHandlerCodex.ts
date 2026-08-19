@@ -225,10 +225,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   }
 
   private hasConfiguredSubscriptionProfile(): boolean {
-    return (
-      this.configuredSubscriptionCapabilities()?.authMode ===
-      'chatgpt-subscription'
-    );
+    return this.configuredSubscriptionCapabilities() != null;
   }
 
   /**
@@ -242,9 +239,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   protected override prepareWireParams(
     params: ResponseCreateParamsBase,
   ): ResponseCreateParamsBase {
-    if (
-      this.getActiveProviderCapabilities()?.authMode !== 'chatgpt-subscription'
-    ) {
+    if (this.getActiveProviderCapabilities() == null) {
       return params;
     }
     // `rewriteCodexRequestBody` works on the parsed JSON body (a plain record),
@@ -284,7 +279,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
       selection === 'configured'
         ? this.configuredSubscriptionCapabilities()
         : null;
-    if (subscriptionCapabilities?.authMode !== 'chatgpt-subscription') {
+    if (subscriptionCapabilities == null) {
       // Preference switched off (e.g. after a usage limit) — route this request
       // through the user's OpenAI API key via the standard Responses client.
       this.logger.debug(

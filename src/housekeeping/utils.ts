@@ -10,7 +10,6 @@ import { createLog } from '@logger/logUtils';
 import {
   workflowOutputCopyStem,
   midEraWorkflowOutputStem,
-  normalizeLegacyModel,
 } from '@shared/constants/workflowOutput';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
@@ -44,7 +43,6 @@ function getFilePatterns(
   numRounds: number,
 ): string[] {
   const patterns: string[] = [];
-  const legacyModel = normalizeLegacyModel(model);
 
   // Mid-era layout: files live under `r{round}/<base>_<cleanAgent>_<model>.*`.
   // These files can still be present in workspaces for users who upgraded
@@ -65,42 +63,36 @@ function getFilePatterns(
   }
 
   for (let round = 0; round < numRounds; round++) {
-    // Legacy flat layout: `<base>_<chunk>_r{round}_<normalizedModel>.*`
+    // Legacy flat layout: `<base>_<chunk>_r{round}_<model>.*`
     const legacyStem = workflowOutputCopyStem({ base, agent, model, round });
-    // Legacy stem already includes `_<normalizedModel>`; for suffix variants
+    // Legacy stem already includes `_<model>`; for suffix variants
     // we reconstruct the prefix (everything up to the model token).
-    const legacyPrefix = legacyStem.slice(0, -(legacyModel.length + 1));
+    const legacyPrefix = legacyStem.slice(0, -(model.length + 1));
     patterns.push(
       legacyStem,
       `${legacyStem}_diff`,
-      `${legacyPrefix}_full_${legacyModel}`,
-      `${legacyPrefix}_full_${legacyModel}_diff`,
+      `${legacyPrefix}_full_${model}`,
+      `${legacyPrefix}_full_${model}_diff`,
       `${legacyStem}_thinking`,
     );
     if (round > 0) {
       const diffSuffix = buildBetweenRoundDiffSuffix(round, round - 1);
       patterns.push(
         `${legacyStem}${diffSuffix}`,
-        `${legacyPrefix}_full_${legacyModel}${diffSuffix}`,
+        `${legacyPrefix}_full_${model}${diffSuffix}`,
       );
     }
   }
   // Legacy merge output lived next to the input and was named after the
   // edited file (`<editedBase>_full_<model>.tex`). Requiring the `_` after
   // `<base>` keeps siblings like `paper2_…` from matching when the target
-  // is `paper.tex`. Emit both raw and normalized-model variants so legacy
-  // merge files written with the dot-stripped model token
-  // (`paper_full_gpt45`) are discovered alongside current-legacy files
-  // (`paper_full_gpt-4.5`).
-  const mergeModels = legacyModel === model ? [model] : [model, legacyModel];
-  for (const m of mergeModels) {
-    patterns.push(
-      `${base}_full_${m}`,
-      `${base}_full_${m}_diff`,
-      `${base}_*_full_${m}`,
-      `${base}_*_full_${m}_diff`,
-    );
-  }
+  // is `paper.tex`.
+  patterns.push(
+    `${base}_full_${model}`,
+    `${base}_full_${model}_diff`,
+    `${base}_*_full_${model}`,
+    `${base}_*_full_${model}_diff`,
+  );
   return patterns;
 }
 

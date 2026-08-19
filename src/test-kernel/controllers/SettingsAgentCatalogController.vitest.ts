@@ -65,7 +65,6 @@ function createController(options?: {
   enabled?: Partial<Record<AgentCategory, string[] | undefined>>;
   visible?: Partial<Record<AgentCategory, SettingsAgentCatalogEntry[]>>;
   customPresets?: unknown;
-  builtInOrchestratorAgentNames?: readonly string[];
   now?: number;
 }): {
   controller: SettingsAgentCatalogController;
@@ -77,7 +76,6 @@ function createController(options?: {
   return {
     controller: new SettingsAgentCatalogController({
       now: () => options?.now ?? 123,
-      builtInOrchestratorAgentNames: options?.builtInOrchestratorAgentNames,
       state: {
         getEnabledAgentKeys: (category) => enabled[category],
         setEnabledAgentKeys: async (category, enabledKeys) => {
@@ -234,19 +232,18 @@ describe('SettingsAgentCatalogController', () => {
           },
         ],
       },
-      builtInOrchestratorAgentNames: ['orchestrator'],
     });
 
     assert.deepEqual(controller.getOrchestratorAgentNames(), [
+      'engineer',
+      'leanOrchestrator',
       'orchestrator',
       'teamLead',
     ]);
   });
 
   it('selects preset roots without matching arbitrary orchestrator substrings', () => {
-    const { controller } = createController({
-      builtInOrchestratorAgentNames: ['engineer'],
-    });
+    const { controller } = createController();
 
     assert.equal(
       controller.getPresetToolUseRoot([

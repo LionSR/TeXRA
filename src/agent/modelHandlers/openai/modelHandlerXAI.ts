@@ -70,8 +70,8 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
   ): boolean {
     if (selection !== 'configured') return false;
     return (
-      resolveXaiSubscriptionCapabilities(this.config, getUseOpenRouter())
-        ?.authMode === 'xai-subscription'
+      resolveXaiSubscriptionCapabilities(this.config, getUseOpenRouter()) !=
+      null
     );
   }
 
