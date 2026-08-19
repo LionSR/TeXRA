@@ -8,7 +8,6 @@
  */
 import {
   AgentRosterController,
-  BUILTIN_TEAM_ROOT_AGENT_NAMES,
   getAgent,
   getAgentsByCategory,
   getRosterAgent,
@@ -42,7 +41,6 @@ interface AgentControllerFactoryOptions extends SettingsStatePorts {
   ) => Promise<string | undefined>;
   readonly getAgents?: (category: AgentCategory) => AgentEntry[];
   readonly getVisibleAgents?: (category: AgentCategory) => AgentEntry[];
-  readonly builtInOrchestratorAgentNames?: readonly string[];
 }
 
 export interface SettingsAgentControllers {
@@ -97,8 +95,6 @@ export function createSettingsAgentControllers(
 
   const catalog = new SettingsAgentCatalogController({
     state,
-    builtInOrchestratorAgentNames:
-      options.builtInOrchestratorAgentNames ?? BUILTIN_TEAM_ROOT_AGENT_NAMES,
   });
   const directory = new SettingsAgentDirectoryController({
     state: {

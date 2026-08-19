@@ -7,10 +7,10 @@ import { createSignedInProbe, type SignedInProbe } from '../signedInProbe';
 const signedIn = createSignedInProbe();
 
 /**
- * Install the app's Grok sign-in probe, or pass `null` to restore the
- * signed-out default. Called once per process from the host composition root.
+ * Install the app's Grok sign-in probe. Called once per process from the host
+ * composition root.
  */
-export function setXaiSignedInProbe(next: SignedInProbe | null): void {
+export function setXaiSignedInProbe(next: SignedInProbe): void {
   signedIn.setProbe(next);
 }
 

@@ -12,7 +12,7 @@ import type {
   AgentDirectoryIssueReporter,
   AgentDirectoryPathStorage,
   AgentDirectoryServiceLogger,
-} from '@agent/index';
+} from '@agent/index/AgentDirectoryService';
 
 const STORAGE_BASE_PATH = path.resolve('/global-storage');
 const VALID_PARENT_PATH = path.resolve('/valid-parent');
