@@ -291,7 +291,13 @@ export class UsagePanel extends LitElement {
     if (!this.contextState) return nothing;
     const { inputTokens, contextWindow, utilizationPercent } =
       this.contextState;
+    // The bar is a widget that cannot overflow its own track, so it takes the
+    // clamped value. The *text* states what the handler measured, floored at
+    // 1% so a window that is genuinely in use never reads as `0% context
+    // used` — the rule `formatSubscriptionUsagePercent` sets and the CLI
+    // status bar already applies to this same number.
     const clamped = clamp(utilizationPercent, 0, 100);
+    const percentLabel = `${Math.max(1, Math.round(utilizationPercent))}% context used`;
 
     return html`
       <span id="usage-context-gauge" class="context-gauge">
@@ -300,7 +306,7 @@ export class UsagePanel extends LitElement {
           <wa-progress-bar
             class="context-gauge__bar"
             value=${clamped}
-            label="${clamped.toFixed(0)}% context used"
+            label=${percentLabel}
             style=${styleMap({ '--indicator-color': fillColor(clamped) })}
           ></wa-progress-bar>
         </span>
@@ -309,9 +315,7 @@ export class UsagePanel extends LitElement {
           ${formatCompactTokenCount(contextWindow)}
         </span>
       </span>
-      <wa-tooltip for="usage-context-gauge"
-        >${clamped.toFixed(0)}% context used</wa-tooltip
-      >
+      <wa-tooltip for="usage-context-gauge">${percentLabel}</wa-tooltip>
     `;
   }
 
