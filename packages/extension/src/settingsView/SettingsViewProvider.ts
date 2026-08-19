@@ -6,6 +6,7 @@ import {
   BaseWebviewProvider,
   BundledViewContentProvider,
 } from '@common/webview';
+import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import {
   isAgentCatalogAuthRefreshDeferred,
@@ -21,7 +22,6 @@ export class SettingsViewProvider extends BaseWebviewProvider {
   public static readonly viewType = 'texra.settingsView';
   protected contentProvider: BundledViewContentProvider;
   protected messageHandler: SettingsViewMessageHandler;
-  public readonly signInChatGpt: () => Promise<void>;
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
@@ -35,7 +35,6 @@ export class SettingsViewProvider extends BaseWebviewProvider {
       },
     );
     this.messageHandler = new SettingsViewMessageHandler(context);
-    this.signInChatGpt = this.messageHandler.signInChatGpt;
 
     // Listen for auth state changes to refresh all data
     onTexraAuthSessionsChanged(context, () => {
@@ -49,6 +48,11 @@ export class SettingsViewProvider extends BaseWebviewProvider {
         void this.messageHandler.sendAllData(this._view.webview);
       }
     });
+  }
+
+  /** Sign in to a subscription provider from a command, not the webview. */
+  public signInSubscription(providerId: SubscriptionProviderId): Promise<void> {
+    return this.messageHandler.signInSubscription(providerId);
   }
 
   /** Refresh every credential-dependent surface after any API-key mutation. */
