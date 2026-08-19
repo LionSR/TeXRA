@@ -1,10 +1,7 @@
-import {
-  formatCliModelAccessRoute,
-  type CliModelAccessRoute,
-} from '@cli/runtime/modelAccessRoute';
+import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import type { StreamPhase, StreamSubstate } from '@shared/schemas';
+import type { StreamPhase, StreamSubstate, UsageRoute } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
@@ -25,7 +22,7 @@ export interface CliSessionStatusInput {
   readonly agent: string;
   readonly model: string;
   readonly teamName?: string;
-  readonly modelAccess: CliModelAccessRoute;
+  readonly modelAccess: UsageRoute;
   readonly approval: string;
   readonly approvalBypasses?: Partial<BypassState>;
   readonly status: StreamPhase | undefined;

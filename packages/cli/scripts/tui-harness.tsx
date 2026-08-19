@@ -64,6 +64,7 @@ import {
   transcriptText,
   type TranscriptRow,
 } from '@shared/transcript';
+import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -135,10 +136,7 @@ import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
-import {
-  formatCliModelAccessRouteInline,
-  resolveCliModelAccessRoute,
-} from '../src/runtime/modelAccessRoute';
+import { resolveCliModelAccessRoute } from '../src/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import {
   formatCliApiStatusActionHint,
@@ -634,7 +632,7 @@ function harnessOrchestrationStatusLines(): readonly string[] {
     accountLabel: authenticated ? 'harness@example.edu' : undefined,
   };
   return [
-    `api: ${formatCliModelAccessRouteInline('personal')}`,
+    `api: ${OWN_API_KEYS.inline}`,
     formatCliAuthStatusLine(profile),
     formatCliApiStatusActionHint(profile),
   ];
