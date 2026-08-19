@@ -10,7 +10,6 @@
       "@agent/followUp",
       "@agent/index",
       "@agent/index/platformAgentDirectories",
-      "@agent/modelHandlers/support/contextUtilization",
       "@agent/runtime",
       "@agent/storage",
       "@agent/trace"
