@@ -39,8 +39,6 @@ const latexProbe = {
     },
   ],
   hasCompiler: true,
-  hasBibliographyTool: false,
-  hasLatexmk: false,
 } as const;
 
 const availableModels = [
