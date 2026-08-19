@@ -143,7 +143,7 @@ import {
 } from './fileRequests';
 import { createMessageRoutes } from './messageRoutes';
 
-const appRoot = document.querySelector<HTMLElement>('#app')!;
+const appRoot = document.querySelector<HTMLElement>('#app');
 
 if (appRoot == null) {
   throw new Error('TeXRA desktop renderer root was not found.');
@@ -833,10 +833,11 @@ function taskConversationTemplate(): TemplateResult {
   const sidebarToggleLabel = shellState.sidebarCollapsed
     ? 'Show sidebar'
     : 'Hide sidebar';
+  const workspacePath = window.texraDesktop?.workspacePath;
   // Names the button even when the ≤560px container query collapses it to the
   // icon: the shadow button then has no visible text, so only `title` reaches
   // its accessible name.
-  const environmentButtonLabel = `${workspaceName(window.texraDesktop?.workspacePath)} environment`;
+  const environmentButtonLabel = `${workspaceName(workspacePath)} environment`;
   return html`
     <main class="task-conversation" aria-label="Task conversation">
       <header class="task-header">
@@ -869,9 +870,7 @@ function taskConversationTemplate(): TemplateResult {
                   with-caret
                 >
                   ${waIcon('folder-open', { slot: 'start' })}
-                  <span
-                    >${workspaceName(window.texraDesktop?.workspacePath)}</span
-                  >
+                  <span>${workspaceName(workspacePath)}</span>
                 </wa-button>
               `
             : nothing
@@ -925,7 +924,7 @@ function taskConversationTemplate(): TemplateResult {
         </div>
         ${
           shellState.summaryBarVisible
-            ? environmentPopoverTemplate(window.texraDesktop?.workspacePath)
+            ? environmentPopoverTemplate(workspacePath)
             : nothing
         }
       </header>

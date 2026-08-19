@@ -334,22 +334,18 @@ export async function stageCliHistoryTraceViewerAssets(params: {
   return 'staged';
 }
 
-/**
- * A live session (rare for the one-shot `history` command, but not
- * impossible) supplies the canonical lifecycle callbacks for cleanup.
- */
-function liveStreamCleanup() {
-  const session = tryDefaultSession();
-  return session?.transcripts.mode.kind === 'persistent'
-    ? createSessionStores(session)
-    : undefined;
-}
-
 export async function deleteCliHistory(options: {
   id?: ExecutionId;
   all?: boolean;
 }): Promise<CliHistoryDeleteResult> {
-  const cleanup = resolveAdjacentStreamCleanup(liveStreamCleanup());
+  // A live session (rare for the one-shot `history` command, but not
+  // impossible) supplies the canonical lifecycle callbacks for cleanup.
+  const liveSession = tryDefaultSession();
+  const cleanup = resolveAdjacentStreamCleanup(
+    liveSession?.transcripts.mode.kind === 'persistent'
+      ? createSessionStores(liveSession)
+      : undefined,
+  );
   if (options.all) {
     const result = await deleteAllExecutions({
       beforeDelete: (executionId) =>
@@ -538,7 +534,8 @@ async function toCliHistoryEntry(
   entry: AgentExecutionListingEntry,
 ): Promise<CliHistoryEntry> {
   const config = entry.record;
-  const inputBasename = firstInputBasename(config);
+  const firstInputFile = config.inputFiles.at(0);
+  const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
   const resumeData = await readCliResumeDataForListing(entry.id, config);
   return {
     id: entry.id,
@@ -562,9 +559,4 @@ async function toCliHistoryEntry(
 
 function teamPresetId(config: AgentConfig | null): string | undefined {
   return config?.cliMultiAgentPresetId?.trim() || undefined;
-}
-
-function firstInputBasename(config: AgentConfig): string {
-  const first = config.inputFiles.at(0);
-  return first ? path.basename(first) : '-';
 }

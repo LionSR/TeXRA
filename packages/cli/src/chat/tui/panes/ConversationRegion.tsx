@@ -301,7 +301,11 @@ export function ConversationRegion({
               streams={snapshot.streams}
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
             />
-            <TodosPlanPanel maxRows={todosPlanRows} />
+            <TodosPlanPanel
+              maxRows={todosPlanRows}
+              plan={activePlan}
+              todos={activeTodos}
+            />
           </Box>
         ) : null}
       </Box>

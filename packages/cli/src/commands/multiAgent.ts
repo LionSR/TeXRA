@@ -96,10 +96,6 @@ function formatMultiAgentDisplayInstruction(
     .join('\n\n');
 }
 
-function headlessAskMultiAgentMessage(presetId: string): string {
-  return `Cannot run multi-agent preset "${presetId}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`;
-}
-
 function writeMultiAgentRunResult(
   context: CliContext,
   plan: CliMultiAgentPresetRunPlan,
@@ -178,7 +174,9 @@ export async function runMultiAgentPreset(
       reloadRemoteAgents: !rejectsHeadlessAsk,
     });
   if (rejectsHeadlessAsk) {
-    writeTextStderr(headlessAskMultiAgentMessage(plan.preset.id));
+    writeTextStderr(
+      `Cannot run multi-agent preset "${plan.preset.id}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+    );
     return CliExitCode.Usage;
   }
   if (remoteCatalogRefreshAttempted) {

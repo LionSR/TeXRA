@@ -36,13 +36,13 @@ import {
 import { BaseTextInput } from '../input/BaseTextInput';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
-export interface UserQuestionProps {
+interface UserQuestionProps {
   readonly availableRows?: number;
   readonly payload: UserQuestionPermission;
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
-export interface UserQuestionPromptLine {
+interface UserQuestionPromptLine {
   readonly kind: 'context' | 'question' | 'overflow';
   readonly text: string;
 }

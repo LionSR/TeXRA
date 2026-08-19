@@ -25,7 +25,7 @@ type CliSubscriptionPreferenceState = 'off' | 'on';
 type CliSubscriptionProvider =
   'chatgpt' | 'grok' | CodingPlanSubscription['cliProvider'];
 
-export interface CliCodingPlanStatus {
+interface CliCodingPlanStatus {
   readonly preferred: boolean;
   readonly keySet: boolean;
 }

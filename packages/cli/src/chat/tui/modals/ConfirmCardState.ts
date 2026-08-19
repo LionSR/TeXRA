@@ -1,4 +1,4 @@
-import { isEscapeInput } from '@cli/tui/inputKeys';
+import { isEscapeInput, type ReturnKeyInput } from '@cli/tui/inputKeys';
 import {
   KEY_HINT_SEPARATOR,
   keyHintText,
@@ -9,23 +9,19 @@ import { APPROVAL_PULSE_FRAMES } from '@cli/tui/ui/glyphs';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
-export type ConfirmCardKeyAction =
+type ConfirmCardKeyAction =
   'approve' | 'reject' | 'approveAlways' | 'feedback' | 'ignore';
 
 export type ConfirmCardRejectionMode = 'feedback' | 'immediate';
 
-export interface ConfirmCardKey {
-  readonly escape?: boolean;
-  readonly ctrl?: boolean;
-  readonly meta?: boolean;
-}
+type ConfirmCardKey = Pick<ReturnKeyInput, 'escape' | 'ctrl' | 'meta'>;
 
-export interface ConfirmCardKeyOptions {
+interface ConfirmCardKeyOptions {
   readonly allowAlways: boolean;
   readonly rejectionMode: ConfirmCardRejectionMode;
 }
 
-export interface ConfirmCardHintOptions {
+interface ConfirmCardHintOptions {
   readonly approveLabel?: string;
   readonly rejectLabel?: string;
   readonly rejectionMode?: ConfirmCardRejectionMode;
@@ -33,16 +29,16 @@ export interface ConfirmCardHintOptions {
   readonly extraActions?: readonly KeyHint[];
 }
 
-export interface ConfirmCardHintWidthOptions extends ConfirmCardHintOptions {
+interface ConfirmCardHintWidthOptions extends ConfirmCardHintOptions {
   readonly maxColumns?: number;
 }
 
-export interface ConfirmCardCompactHintLayoutOptions extends ConfirmCardHintOptions {
+interface ConfirmCardCompactHintLayoutOptions extends ConfirmCardHintOptions {
   readonly title: string;
   readonly columns: number;
 }
 
-export interface ConfirmCardCompactHintLayout {
+interface ConfirmCardCompactHintLayout {
   readonly inlineHints: readonly KeyHint[];
   readonly stackedHints: readonly KeyHint[];
   readonly stack: boolean;
