@@ -10,7 +10,6 @@
 import { z } from 'zod';
 
 import { SETTINGS_VIEW_CMD, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import {
   LATEX_CONFIG_RANGES,
   LATEX_FORMATTER_VALUES,
@@ -24,6 +23,10 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
+import {
+  settingsViewSnapshotEntries,
+  type SettingsViewSnapshot,
+} from './stateSettings';
 import { GoalSchema } from './goal';
 
 import {
@@ -32,8 +35,6 @@ import {
   AgentSourceSchema,
 } from './agent';
 import { AgentModePresetSchema } from './agentPresets';
-import { AgentSkillsEnabledSchema } from './agentSkills';
-import { ChildRunConcurrencyBudgetSchema } from './coreSettings';
 import { ModelAvailabilityFieldsSchema } from './mainView/state';
 import {
   NumberSettingSchema,
@@ -56,14 +57,6 @@ import {
   UpdateMemoryMessageSchema,
   UpdateMemoryPreviewMessageSchema,
 } from './memoryViewMessages';
-import {
-  ClaudeAgentEffortSchema,
-  ClaudeAgentModelSchema,
-  ClaudeAgentPermissionModeSchema,
-  CodexApprovalPolicySchema,
-  CodexReasoningEffortSchema,
-  CodexSandboxModeSchema,
-} from './agentCliSettings';
 import { commandOnly } from './messageFactories';
 import { WebviewReadyMessageSchema } from './commonViewMessages';
 
@@ -189,6 +182,60 @@ const SetTabMessageSchema = z.object({
   tab: z.enum(SETTINGS_TAB_PANEL_NAMES),
   agentSubTab: AgentCategorySchema.optional(),
 });
+
+// ============================================================
+// Catalog-derived settings snapshots
+// ============================================================
+
+/**
+ * The wire command each catalog-derived snapshot travels under. Wire literals
+ * are frozen and predate the snapshot names, so the two are related here — one
+ * line per *snapshot*, never per setting.
+ *
+ * A snapshot absent from this map is one whose payload is not a plain list of
+ * catalog rows (`profile`, `models`) or whose builder lives behind a
+ * controller this module does not own (`latex`); those arms still declare
+ * their own shape below or in their own module.
+ */
+export const SETTINGS_SNAPSHOT_COMMANDS = {
+  approval: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+  'git-author': SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
+  'agent-skills': SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS,
+  telemetry: SETTINGS_VIEW_COMMANDS.UPDATE_TELEMETRY_SETTINGS,
+  'multi-agent': SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
+} as const satisfies Partial<Record<SettingsViewSnapshot, string>>;
+
+/** A snapshot whose whole payload is derived from the settings catalog. */
+export type DerivedSettingsSnapshot = keyof typeof SETTINGS_SNAPSHOT_COMMANDS;
+
+/**
+ * Outbound snapshot arm: the frozen wire command plus one `values` object
+ * carrying every catalog row tagged for that snapshot, keyed by its canonical
+ * `texra.*` key and validated by the row's own schema.
+ *
+ * This is the `pickProjection` idiom (`progressView/projectionShape.ts`)
+ * applied to settings: an arm reads the one declared shape instead of
+ * restating its fields, so a row added to a snapshot reaches the wire, the
+ * backend read, and the webview apply step together. Keying by catalog key
+ * also matches the inbound generic `UPDATE_STATE_SETTING` `{key, value}`
+ * boundary, so both directions address a setting the same way.
+ */
+function snapshotMessage<S extends DerivedSettingsSnapshot>(snapshot: S) {
+  return z.object({
+    command: z.literal(SETTINGS_SNAPSHOT_COMMANDS[snapshot]),
+    values: z.strictObject(
+      Object.fromEntries(
+        settingsViewSnapshotEntries(snapshot).map((entry) => [
+          entry.key,
+          entry.schema,
+        ]),
+      ),
+    ),
+  });
+}
+
+/** A catalog-derived snapshot payload, keyed by canonical `texra.*` key. */
+export type SettingsSnapshotValues = Readonly<Record<string, unknown>>;
 
 // ============================================================
 // Agent selection data schema
@@ -328,17 +375,15 @@ export type UpdateCustomAgentDirMessage = z.infer<
  * literal stays `updateSuperYoloEnabled` by the literal-freeze convention
  * (wire literals never chase renames), so only the schema and type carry the
  * payload's real name.
+ *
+ * `reliabilitySettings` is host-specific VS Code tuning with no catalog row, so
+ * it rides alongside the catalog-derived `values`.
  */
-const UpdateReliabilityAndOrchestrationMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED),
+const UpdateReliabilityAndOrchestrationMessageSchema = snapshotMessage(
+  'multi-agent',
+).extend({
   reliabilitySettings: z.array(NumberSettingSchema).prefault([]),
-  allowOrchestratorKill: z.boolean().prefault(true),
-  detachSubagentsOnStop: z.boolean().prefault(false),
-  childRunConcurrencyBudget: ChildRunConcurrencyBudgetSchema,
 });
-export type UpdateReliabilityAndOrchestrationMessage = z.infer<
-  typeof UpdateReliabilityAndOrchestrationMessageSchema
->;
 
 // ============================================================
 // Agent team data schema
@@ -433,56 +478,17 @@ const UpdateToolDashboardMessageSchema = z.object({
  * carries. Keep that stable wire discriminator while naming the schema by its
  * actual broader role.
  */
-const UpdateApprovalAndSafetySettingsMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
-  approvalPolicy: TexraApprovalPolicySchema,
-  editApprovalEnabled: z.boolean(),
-  bashApprovalEnabled: z.boolean(),
-  toolPathProtectionEnabled: z.boolean(),
-  codexSandboxMode: CodexSandboxModeSchema,
-  codexReasoningEffort: CodexReasoningEffortSchema,
-  codexApprovalPolicy: CodexApprovalPolicySchema,
-  claudeAgentModel: ClaudeAgentModelSchema,
-  claudeAgentPermissionMode: ClaudeAgentPermissionModeSchema,
-  claudeAgentEffort: ClaudeAgentEffortSchema,
-});
-export type UpdateApprovalAndSafetySettingsMessage = z.infer<
-  typeof UpdateApprovalAndSafetySettingsMessageSchema
->;
+const UpdateApprovalAndSafetySettingsMessageSchema =
+  snapshotMessage('approval');
 
 /** Outbound: backend → frontend agent skill-catalog setting. */
-const UpdateAgentSkillsSettingsMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS),
-  enabled: AgentSkillsEnabledSchema,
-});
-export type UpdateAgentSkillsSettingsMessage = z.infer<
-  typeof UpdateAgentSkillsSettingsMessageSchema
->;
+const UpdateAgentSkillsSettingsMessageSchema = snapshotMessage('agent-skills');
 
 /** Outbound: backend → frontend telemetry preference. */
-const UpdateTelemetrySettingsMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_TELEMETRY_SETTINGS),
-  enabled: z.boolean(),
-});
-export type UpdateTelemetrySettingsMessage = z.infer<
-  typeof UpdateTelemetrySettingsMessageSchema
->;
-
-// ============================================================
-// Git author settings data schema
-// ============================================================
+const UpdateTelemetrySettingsMessageSchema = snapshotMessage('telemetry');
 
 /** Outbound: backend → frontend git author settings */
-const UpdateGitAuthorSettingsMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS),
-  markCommits: z.boolean(),
-  authorName: z.string(),
-  authorEmail: z.string(),
-  worktreeSupport: z.boolean(),
-});
-export type UpdateGitAuthorSettingsMessage = z.infer<
-  typeof UpdateGitAuthorSettingsMessageSchema
->;
+const UpdateGitAuthorSettingsMessageSchema = snapshotMessage('git-author');
 
 /** Outbound: backend → frontend GitHub token status. */
 const UpdateGitHubTokenStatusMessageSchema = z.object({
