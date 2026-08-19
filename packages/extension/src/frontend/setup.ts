@@ -2,56 +2,15 @@ import * as path from 'node:path';
 
 import * as vscode from 'vscode';
 
-import {
-  BundledAgentDirectorySync,
-  GlobalStorageAgentDirectoryStorage,
-  PathAgentDirectoryBundleSource,
-} from '@agent/index/AgentDirectorySync';
-import { globalSM } from '@common/state';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { createLog } from '@logger/logUtils';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const log = createLog('extension');
-
-/**
- * Reconciles bundled agents in global storage from packaged resources.
- *
- * Built-in agent directories are generated cache; user-owned edits belong in
- * custom agent directories.
- */
-export async function copyDefaultAgents(
-  context: vscode.ExtensionContext,
-): Promise<void> {
-  const currentVersion = vscode.extensions.getExtension(context.extension.id)
-    ?.packageJSON.version;
-  const sync = new BundledAgentDirectorySync({
-    bundleSource: new PathAgentDirectoryBundleSource(
-      path.join(context.extensionPath, 'resources'),
-    ),
-    storage: new GlobalStorageAgentDirectoryStorage(),
-    versionStore: {
-      get: () => globalSM.get<string>(GlobalStateKey.LAST_KNOWN_VERSION),
-      update: (version) =>
-        globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, version),
-    },
-    logger: {
-      info: (message, data) => log.info(message, { data }),
-      warn: (message, data) => log.warn(message, { data }),
-    },
-  });
-
-  try {
-    await sync.reconcile(currentVersion);
-  } catch (err) {
-    log.error(`Error copying default agents: ${toErrorMessage(err)}`);
-  }
-}
 
 /** External-root registration options for the custom agents directory. */
 const CUSTOM_AGENT_ROOT_OPTIONS = {

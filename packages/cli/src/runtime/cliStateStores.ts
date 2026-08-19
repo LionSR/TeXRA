@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import type { StateStore, StorageProvider } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
+import { openNodeWorkspaceStateStore } from '@platform/defaults/nodeStores';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 
 export interface CliStateStores {
@@ -36,7 +37,7 @@ export async function createCliStateStores(
   });
   const [globalStore, workspaceStore] = await Promise.all([
     openCliGlobalStateStore(storage),
-    JsonStore.open(path.join(storage.getStoragePath(), 'state.json')),
+    openNodeWorkspaceStateStore(storage),
   ]);
 
   return {

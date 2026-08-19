@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 // Local imports - platform
 import { WORKSPACE_SIDECAR_FILE } from '@common/storage/storageLayout';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
+import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import {
   MEMORY_STORAGE_DIR,
   WorkspaceStorageProvider,
@@ -181,6 +182,32 @@ describe('workspace storage defaults', () => {
 
     expect(provider.getStoragePath()).toBe(storagePath);
     await expect(pathExists(storagePath)).resolves.toBe(false);
+  });
+
+  // Regression pin (#C4): a malformed project config used to fail CLI startup
+  // outright — `JsonStore.open` throws and only the GUI hosts caught it. Every
+  // host now degrades to the internal workspace store, loudly.
+  it('degrades to the internal workspace config store when the project config is malformed', async () => {
+    const root = await makeStorageRoot();
+    const workspacePath = await makeTempDir('texra-project-', tempDirs);
+    await mkdir(join(workspacePath, '.texra'), { recursive: true });
+    await writeFile(join(workspacePath, '.texra', 'config.json'), '{ broken');
+    const storage = createNodeStorageProvider({
+      storageRoot: root,
+      workspacePath,
+    });
+    const warnings: string[] = [];
+
+    const stores = await openTexraConfigStores(storage, workspacePath, (m) =>
+      warnings.push(m),
+    );
+    await stores.workspace.set('texra.files.exclude', ['dist']);
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('Cannot open project .texra/config.json');
+    await expect(
+      pathExists(join(storage.getStoragePath(), 'config.json')),
+    ).resolves.toBe(true);
   });
 
   it('uses the same workspace storage rule for node hosts', async () => {

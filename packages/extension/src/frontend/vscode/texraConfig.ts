@@ -1,7 +1,3 @@
-// Node imports
-import { access, constants } from 'node:fs/promises';
-import * as path from 'node:path';
-
 // Third-party imports
 import PQueue from 'p-queue';
 
@@ -11,9 +7,6 @@ import {
   type WorkspaceStorageTransitionHooks,
 } from '@agent/runtime';
 
-// Local imports - common
-import { isFileNotFoundError } from '@common/errors';
-
 // Local imports - eventBus
 import { appSignals } from '@eventBus/AppSignals';
 
@@ -22,56 +15,19 @@ import { createLog } from '@logger/logUtils';
 
 // Local imports - platform
 import type { ConfigTarget, StorageProvider } from '@platform/interfaces';
-import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import { JsonStore } from '@platform/defaults/jsonStore';
 import {
-  TEXRA_CONFIG_FILE_NAME,
-  workspaceTexraConfigPath,
-} from '@platform/defaults/nodeStorage';
+  JsonConfigProvider,
+  type ConfigStore,
+} from '@platform/defaults/jsonConfigProvider';
+import {
+  openTexraConfigStores,
+  openTexraWorkspaceConfigStore,
+} from '@platform/defaults/nodeStores';
 import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
-
-// Local imports - utilities
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('extension');
 
-/** Whether JsonStore can create its file beneath the deepest existing directory. */
-async function canCreateOrWrite(filePath: string): Promise<boolean> {
-  let dir = path.dirname(filePath);
-  for (;;) {
-    try {
-      await access(dir, constants.W_OK | constants.X_OK);
-      return true;
-    } catch (error) {
-      const parent = path.dirname(dir);
-      if (!isFileNotFoundError(error) || parent === dir) return false;
-      dir = parent;
-    }
-  }
-}
-
-async function openWorkspaceConfigStore(
-  workspaceRoot: string | undefined,
-  internalConfigPath: string,
-): Promise<JsonStore> {
-  if (workspaceRoot) {
-    const projectConfigPath = workspaceTexraConfigPath(workspaceRoot);
-    try {
-      const projectStore = await JsonStore.open(projectConfigPath);
-      if (
-        Object.keys(projectStore.snapshot()).length > 0 ||
-        (await canCreateOrWrite(projectConfigPath))
-      ) {
-        return projectStore;
-      }
-    } catch (error) {
-      log.warn(
-        `Cannot open project .texra/config.json; using the internal workspace config store. Cause: ${toErrorMessage(error)}`,
-      );
-    }
-  }
-  return JsonStore.open(internalConfigPath);
-}
+const warnConfigDegradation = (message: string): void => log.warn(message);
 
 export class ExtensionTexraConfig extends JsonConfigProvider {
   private transitionGeneration = 0;
@@ -80,8 +36,8 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
 
   constructor(
     private readonly storage: StorageProvider,
-    workspaceStore: JsonStore,
-    globalStore: JsonStore,
+    workspaceStore: ConfigStore,
+    globalStore: ConfigStore,
   ) {
     super({ workspace: workspaceStore, global: globalStore });
   }
@@ -122,7 +78,7 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
         return;
       }
 
-      let previousStore: JsonStore | undefined;
+      let previousStore: ConfigStore | undefined;
       let finalized = false;
       const seedSessionApprovalPolicy = (): void => {
         // No default session exists yet during activation's own config setup,
@@ -148,9 +104,10 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
         await reloadStorage({
           workspacePath: workspaceRoot,
           afterStorageCommit: async () => {
-            const workspaceStore = await openWorkspaceConfigStore(
+            const workspaceStore = await openTexraWorkspaceConfigStore(
+              this.storage,
               workspaceRoot,
-              path.join(this.storage.getStoragePath(), TEXRA_CONFIG_FILE_NAME),
+              warnConfigDegradation,
             );
             previousStore = this.replaceWorkspaceStore(workspaceStore);
             seedSessionApprovalPolicy();
@@ -184,13 +141,11 @@ export async function createExtensionTexraConfig(
   storage: StorageProvider,
   workspaceRoot: string | undefined,
 ): Promise<ExtensionTexraConfig> {
-  const workspaceStore = await openWorkspaceConfigStore(
+  const stores = await openTexraConfigStores(
+    storage,
     workspaceRoot,
-    path.join(storage.getStoragePath(), TEXRA_CONFIG_FILE_NAME),
-  );
-  const globalStore = await JsonStore.open(
-    path.join(storage.getGlobalStoragePath(), TEXRA_CONFIG_FILE_NAME),
+    warnConfigDegradation,
   );
 
-  return new ExtensionTexraConfig(storage, workspaceStore, globalStore);
+  return new ExtensionTexraConfig(storage, stores.workspace, stores.global);
 }

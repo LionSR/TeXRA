@@ -36,7 +36,6 @@ import { installTexraAccountProbes } from '@controllers/modelAccess/installTexra
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
 import {
-  copyDefaultAgents,
   initializeLatexSupport,
   registerAgentDirectoryRoots,
 } from '@frontend/setup';
@@ -72,18 +71,17 @@ import { redactSecrets } from '@logger/redaction';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
-import {
-  NO_TOOL_AVAILABILITY_HOST,
-  SHUTDOWN_PHASE,
-  type LifecycleHost,
-} from '@platform/interfaces';
+import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { initPlatform, platform } from '@platform/platform';
-import { nodeFileLocks } from '@platform/defaults/fileLocks';
+import {
+  bootstrapNodeAgentDirectories,
+  createNodePlatform,
+  initializeNodeRuntimeSkills,
+} from '@platform/defaults/nodeHost';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import {
   formatTexraApprovalPolicy,
   readPersistedTexraApprovalPolicy,
@@ -91,8 +89,6 @@ import {
 } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
-import { setRuntimeSkillSources } from '@skills/runtimeSkills';
-import { defaultSkillSources } from '@skills/skillSources';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { setSetupPlatform } from '@tools/setup';
@@ -232,35 +228,35 @@ export async function activate(context: vscode.ExtensionContext) {
   // extensions port, which both answer the same question.
   const isVscodeExtensionInstalled = (id: string) =>
     vscode.extensions.getExtension(id) !== undefined;
-  initPlatform({
-    config,
-    globalState: context.globalState,
-    workspaceState: workspaceSM,
-    fs: nodeFilesystem,
-    workspace,
-    storage,
-    fileLocks: nodeFileLocks,
-    secrets: new VscodeSecrets(context),
-    lifecycle,
-    agentDirectories,
-    agentResume: {
-      tryResumeStream: tryResumeFromResumeData,
-    },
-    toolAvailability: {
-      ...NO_TOOL_AVAILABILITY_HOST,
-      isVscodeExtensionInstalled,
-    },
-    languageModel,
-    toolMissingHandler: async (message, openDocsCommand) => {
-      const actions = openDocsCommand ? ['View Installation Guide'] : [];
-      log.error(message);
-      const choice = await vscode.window.showErrorMessage(message, ...actions);
-      if (choice === 'View Installation Guide' && openDocsCommand) {
-        const [command, ...args] = openDocsCommand.split(',');
-        void vscode.commands.executeCommand(command, ...args);
-      }
-    },
-  });
+  initPlatform(
+    createNodePlatform({
+      config,
+      globalState: context.globalState,
+      workspaceState: workspaceSM,
+      getWorkspacePath: rawWorkspacePath,
+      storage,
+      secrets: new VscodeSecrets(context),
+      lifecycle,
+      agentDirectories,
+      agentResume: {
+        tryResumeStream: tryResumeFromResumeData,
+      },
+      toolAvailability: { isVscodeExtensionInstalled },
+      languageModel,
+      toolMissingHandler: async (message, openDocsCommand) => {
+        const actions = openDocsCommand ? ['View Installation Guide'] : [];
+        log.error(message);
+        const choice = await vscode.window.showErrorMessage(
+          message,
+          ...actions,
+        );
+        if (choice === 'View Installation Guide' && openDocsCommand) {
+          const [command, ...args] = openDocsCommand.split(',');
+          void vscode.commands.executeCommand(command, ...args);
+        }
+      },
+    }),
+  );
   // TeXRA's account probes (Codex/xAI subscription eligibility). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes();
@@ -296,19 +292,16 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
   );
   registerAgentFeatures();
-  // Mirrors the CLI/desktop Node-host wiring (`nodeHost.ts`'s
-  // `initializeNodeRuntimeSkills`, inlined here rather than imported so the
-  // extension bundle doesn't also pull in that module's Lean direct-adapter
-  // import) so `AVAILABLE_SKILLS` is actually populated for tool-use agents in
-  // VS Code — without this call `loadRuntimeSkillCatalog` always sees zero
-  // sources and `texra.skills.enabled` has no observable effect (issue #7751
-  // FS5).
-  setRuntimeSkillSources(
-    defaultSkillSources({
-      cwd: workspaceRoot,
-      resourcesPath: path.join(context.extensionPath, 'resources'),
-    }),
-  );
+  // The same Node-host skill wiring the CLI and desktop use, so
+  // `AVAILABLE_SKILLS` is actually populated for tool-use agents in VS Code —
+  // without this call `loadRuntimeSkillCatalog` always sees zero sources and
+  // `texra.skills.enabled` has no observable effect (issue #7751 FS5).
+  // (`initNodeAgentRuntime`, which registers the direct Lean adapter, stays
+  // out: VS Code drives Lean through its own integration.)
+  initializeNodeRuntimeSkills({
+    cwd: workspaceRoot,
+    resourcesPath: path.join(context.extensionPath, 'resources'),
+  });
   // `disposeStatusListener` and `statusBarItem` are owned solely by
   // `context.subscriptions` (see the push near the end of `activate`), matching
   // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
@@ -364,11 +357,18 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // The following startup steps touch independent state, so they run
   // concurrently to shorten activation. Within the agent branch the order
-  // still matters: copyDefaultAgents populates the built-in directories,
-  // registerAgentDirectoryRoots exposes them, and loadAgents scans them.
+  // still matters: the bundled-agent reconciliation populates the built-in
+  // directories, registerAgentDirectoryRoots exposes them, and loadAgents
+  // scans them.
   await Promise.all([
     (async () => {
-      await copyDefaultAgents(context);
+      await bootstrapNodeAgentDirectories({
+        channel: 'extension',
+        resourcesPath: path.join(context.extensionPath, 'resources'),
+        currentVersion: vscode.extensions.getExtension(context.extension.id)
+          ?.packageJSON.version,
+        versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+      });
       await registerAgentDirectoryRoots(context);
       try {
         await loadAgents({ includeRemote: false });
