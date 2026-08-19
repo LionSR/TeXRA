@@ -42,7 +42,12 @@ export const RESUMABILITY_CAUSE = {
   INVALID_META: 'invalid-meta',
   UNREADABLE_FLOW: 'unreadable-flow',
   UNREADABLE_META: 'unreadable-meta',
-  /** A host still holds the execution's lease — it is running, not waiting. */
+  /**
+   * The execution's lease is still held, so it is not waiting to be resumed.
+   * `inspectExecutionLease` reports `foreign` for any owner it cannot prove
+   * dead, so this covers both a demonstrably live host and an owner whose
+   * liveness is merely unprovable — both fail closed for the same reason.
+   */
   ACTIVE_LEASE: 'active-lease',
   /** Ownership could not be classified, so liveness is unproven. */
   UNREADABLE_LEASE: 'unreadable-lease',

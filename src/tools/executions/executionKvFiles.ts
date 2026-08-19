@@ -1,10 +1,10 @@
 /**
  * Internal KV metadata files stored alongside an execution's generated
- * output. Shared by the run-directory listing in `ExecutionsTool.ts` and the
- * CLI's history file listing (`packages/cli/src/runtime/history/generatedFiles.ts`)
- * so the two stay in sync on what counts as internal metadata.
+ * output. Consumed by `runGeneratedFiles.ts`, the single run-directory walk
+ * behind both the agent-facing `/executions/{id}/files` listing and the CLI's
+ * history file listing, so the two agree on what counts as internal metadata.
  *
- * The reserved-key vocabulary itself (meta, config, todos, `child-*`, …) is
+ * The reserved-key vocabulary itself (meta, config, report, `child-*`, …) is
  * owned by `ExecutionKVStore`; the `flow_*` prefix is owned by
  * `persistedFlow`; workflow checkpoint keys are owned by `multiAgentWorkflow`.
  * This module only strips the on-disk `.json` suffix and defers to those
