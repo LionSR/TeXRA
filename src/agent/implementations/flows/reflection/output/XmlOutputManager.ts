@@ -22,6 +22,7 @@ import {
   DOCUMENT_NAME_REGEX,
   extractContentFromXMLbyTagMultiple,
   extractDocuments,
+  extractTextFromTag,
 } from '@utils/text/xmlExtraction';
 
 import {
@@ -62,7 +63,6 @@ const XML_PARSER_OPTIONS = {
 const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
   simple: 'using fallback method',
   latex_document: 'from legacy <latex_document> tag',
-  markdown: 'from markdown code block',
   latex: 'from \\documentclass block',
 };
 
@@ -310,41 +310,61 @@ export class XmlOutputManager {
       }
     }
 
-    if (
-      !documents &&
-      this.agentConfig.outputFiles.length === 1 &&
-      soleExpectedFile
-    ) {
+    // A response that carries an explicit <latex_document> has named its final
+    // answer, and an untagged fence has not — a model may well emit an example
+    // or a draft fence before the tagged answer. So the tagged tier below wins
+    // outright and this one stands down, exactly as it did before fence
+    // recovery moved here. Reads the raw response, which agrees with the
+    // cdataWrapped text the tagged tier parses: addCdataToTagsMultiple only
+    // wraps the thinking and document tags, never <latex_document>.
+    const taggedLatexDocument = extractTextFromTag(
+      rawOutputContent,
+      'latex_document',
+    );
+
+    if (!documents && soleExpectedFile && !taggedLatexDocument) {
       // This fully unlabeled tier is intentionally stricter than
       // filename-header recovery: without a trusted file label, only fences
-      // explicitly marked latex/tex are treated as output.
+      // explicitly marked latex/tex are treated as output. It handles the
+      // single-block case too (rather than leaving it to the legacy tier)
+      // because it strips the thinking tag first — a scratchpad that drafts
+      // inside a ```latex fence would otherwise be written to the user's file
+      // as if it were the answer.
       const fencedBlocks = this.collectLatexFencedBlocks(
         rawOutputContent,
         thinkingTag,
       );
-      if (fencedBlocks.length > 1) {
+      // A single-artifact agent (ocr/paper2slide: one declared output, many
+      // inputs) emits one fence per input, so all of them belong to the
+      // output. An edit agent reusing its input name emits the revised
+      // document first, and any later fence is explanatory prose.
+      const blocks =
+        this.agentConfig.outputFiles.length === 1
+          ? fencedBlocks
+          : fencedBlocks.slice(0, 1);
+      if (blocks.length > 0) {
         documents = [
           {
             name: soleExpectedFile,
-            content: fencedBlocks.join('\n\n'),
+            content: blocks.join('\n\n'),
           },
         ];
         logInternal(
           this.logger,
-          `Recovered ${OUTPUT_DOCUMENTS_TAG} by concatenating ` +
-            `unlabeled fenced blocks under ${soleExpectedFile} (${formatResultCount(fencedBlocks.length, 'block')})`,
+          `Recovered ${OUTPUT_DOCUMENTS_TAG} from ` +
+            `unlabeled fenced blocks under ${soleExpectedFile} (${formatResultCount(blocks.length, 'block')})`,
         );
       }
     }
 
     if (!documents && soleExpectedFile) {
       // Agents expected to write exactly one file whose model regressed to a
-      // legacy single-doc shape (<latex_document>, ```latex fence, or bare
-      // \documentclass) can still be recovered: pass that filename so the
-      // fallback can synthesize a named document. Agents with several
-      // expected files cannot safely recover — without per-document names
-      // there's no way to route content (and without a preferredName this
-      // call would just repeat the earlier one).
+      // legacy single-doc shape (<latex_document> or a bare \documentclass)
+      // can still be recovered: pass that filename so the fallback can
+      // synthesize a named document. Agents with several expected files
+      // cannot safely recover — without per-document names there's no way to
+      // route content (and without a preferredName this call would just
+      // repeat the earlier one).
       // Keep the relative path verbatim — getExtractedDocOutputFileName
       // preserves subdirectories so `Draft/Draft1.tex` lands at the right
       // workspace location instead of collapsing to the round root.
