@@ -28,6 +28,7 @@ import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
+  extractionShorthandToolConfig,
   WorkflowAgentProposalSchema,
   ToolUseAgentProposalSchema,
   type WorkflowAgentProposal,
@@ -156,8 +157,7 @@ Optional auto-attach from the input LaTeX:
       outputFiles: input.outputFiles,
       toolConfig: {
         ...DEFAULT_TOOL_CONFIG,
-        autoExtractFigure: input.extractFigures ?? false,
-        autoExtractTikzFigure: input.extractTikz ?? false,
+        ...extractionShorthandToolConfig(input),
       },
       memories: input.memories,
     } satisfies WorkflowAgentProposal);

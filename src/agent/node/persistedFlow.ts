@@ -157,7 +157,7 @@ export async function readPersistedFlowRecord(
   return parsed.data;
 }
 
-export function stampFlowRecordSchemaVersion<T extends FlowRecord>(flow: T): T {
+function stampFlowRecordSchemaVersion<T extends FlowRecord>(flow: T): T {
   flow.schemaVersion = FLOW_RECORD_SCHEMA_VERSION;
   return flow;
 }

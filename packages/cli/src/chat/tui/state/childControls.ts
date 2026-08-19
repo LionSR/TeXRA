@@ -10,10 +10,7 @@ import { formatCompactDuration } from '@utils/core';
 
 // Local imports - CLI state
 import { nearestActiveStreamAncestor, streamTreeEntries } from './streamViews';
-import {
-  visibleSubagentRows,
-  type ChildStreamEntries,
-} from './childExecutions';
+import { visibleSubagentRows, type ChildRosters } from './childExecutions';
 import type { StreamSlice } from './cliState';
 
 export interface ChildListTarget {
@@ -35,39 +32,33 @@ export function childElapsed(
 
 function hasChildListItems(
   parentStreamId: StreamTabId | undefined,
-  childStreamEntries: ChildStreamEntries,
-  streams: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'status'>>,
+  childRosters: ChildRosters,
 ): boolean {
   if (parentStreamId === undefined) return false;
-  return (
-    visibleSubagentRows(parentStreamId, childStreamEntries, streams).length > 0
-  );
+  return visibleSubagentRows(parentStreamId, childRosters).length > 0;
 }
 
 /** Resolve the nearest stream whose child sessions populate the persistent
  * child list. */
 export function resolveChildListTarget({
   activeStreamId,
-  childStreamEntries,
+  childRosters,
   parentStream,
   streams,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
-  readonly childStreamEntries: ChildStreamEntries;
+  readonly childRosters: ChildRosters;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): ChildListTarget {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  if (
-    activeStreamId &&
-    !hasChildListItems(activeStreamId, childStreamEntries, streams)
-  ) {
+  if (activeStreamId && !hasChildListItems(activeStreamId, childRosters)) {
     const ancestor = nearestActiveStreamAncestor({
       activeStreamId,
       parentStream,
       values: streams,
       canUseValue: (_slice, streamId) =>
-        hasChildListItems(streamId, childStreamEntries, streams),
+        hasChildListItems(streamId, childRosters),
     });
     if (ancestor) {
       return {
@@ -85,7 +76,7 @@ export function resolveChildListTarget({
 
 export function numericFocusTargetForActiveStream(init: {
   readonly activeStreamId: StreamTabId | undefined;
-  readonly childStreamEntries: ChildStreamEntries;
+  readonly childRosters: ChildRosters;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly zeroBasedIndex: number;
@@ -95,7 +86,7 @@ export function numericFocusTargetForActiveStream(init: {
   const target = resolveChildListTarget(init);
   return streamTreeEntries({
     activeStreamId: init.activeStreamId,
-    childStreamEntries: init.childStreamEntries,
+    childRosters: init.childRosters,
     parentStream: init.parentStream,
     rootStreamId: target.streamId,
     streams: init.streams,

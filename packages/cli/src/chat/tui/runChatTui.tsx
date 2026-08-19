@@ -94,7 +94,6 @@ import {
 import { subscribeStreamArtifacts } from './state/subscribeStreamArtifacts';
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
-import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import {
   appendLocalAssistantTranscript,
@@ -396,7 +395,6 @@ export async function runChat(
     followUpQueue,
     snapshotStore: runtimeSession.snapshots,
   });
-  disposables.add(subscribeStreamStatus());
   disposables.add(
     setCliAgentResumeHandler({
       tryResumeStream: chatController.tryResumeStream,

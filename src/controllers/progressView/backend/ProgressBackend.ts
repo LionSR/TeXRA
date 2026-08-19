@@ -13,7 +13,6 @@ import {
 } from '@controllers/progressView/backend/WebviewBridge';
 import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
 import { ProgressPresentationState } from '@controllers/progressView/backend/ProgressPresentationState';
-import { ProgressStreamProjectionBuilder } from '@controllers/progressView/backend/ProgressStreamProjectionBuilder';
 import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import {
   SessionFactApplier,
@@ -100,7 +99,6 @@ export class ProgressBackend {
   /** The single owner of Lit/progress-view delivery for this backend. */
   readonly renderer: LitSessionRenderer;
   readonly webviewBridge: WebviewBridge;
-  readonly projections: ProgressStreamProjectionBuilder;
   readonly approvalHandlers: ApprovalRequestHandlerSet;
   readonly setApprovalBypassState: (
     update: HostApprovalBypassStateUpdate,
@@ -143,19 +141,14 @@ export class ProgressBackend {
     };
     this.state = new SessionState(this.session, options.stores);
     this.presentation = new ProgressPresentationState(options.storage);
-    this.projections = new ProgressStreamProjectionBuilder(
-      this.state,
-      options.getStreamControls,
-    );
     this.webviewBridge = new WebviewBridge(
       this.state.streamLogs,
       options.sendMessage,
       () => this.presentation.activeStream || null,
     );
     this.renderer = new LitSessionRenderer(
-      this.projections,
-      this.state.snapshots,
-      this.state.followUps,
+      this.state,
+      options.getStreamControls,
       this.webviewBridge,
       this.postMessage,
       options.hasTarget,
@@ -202,10 +195,7 @@ export class ProgressBackend {
       projectedStream = this.latestActivationTarget;
     }
     this.renderer.sendStreamMetadata(
-      this.projections.streamRoster(
-        projectedStream,
-        this.state.streamStatus.getAllStreamStates(),
-      ),
+      projectedStream,
       rosterActiveStream,
       options.theme,
     );

@@ -88,23 +88,18 @@ describe('desktop composition root and launch environment', () => {
     expectOrderedAfter(source, 'installDesktopWindowTitle(', [
       'window.loadFile(',
     ]);
+    // Window-root ownership: the closed handler disposes the store instead of
+    // running a hand-ordered ledger; intra-window ordering is the store's LIFO.
     expectOrderedAfter(source, "window.once('closed'", [
-      'disposeWindowTitle()',
-      'presentationAbort.abort()',
-      'agentExecution.dispose()',
+      'windowResources.dispose()',
     ]);
 
     expectOrderedAfter(source, 'lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE', [
-      'disposeAgentResumeHandler()',
+      'agentResumeHandler.dispose()',
       'registerAgentShutdownHandlers(lifecycle)',
       'processSession.flushArtifacts()',
       'lifecycle.onShutdown(SHUTDOWN_PHASE.ON',
-      'disposeProcessStores()',
-      'processSession.dispose()',
-    ]);
-    expectOrderedAfter(source, 'await initializeDesktopProcessStores', [
-      'disposeProcessStores = () => processStores.dispose()',
-      'await processSession.waitUntilReady()',
+      'processResources.dispose()',
     ]);
   });
 
@@ -115,10 +110,11 @@ describe('desktop composition root and launch environment', () => {
       'const diffHostDisposeQueue = new PQueue({ concurrency: 1 });',
     );
     expect(source).not.toContain('createDesktopDiffHostDisposeQueue');
-    expectOrderedAfter(source, "window.once('closed'", [
-      'desktopDiffHost.dispose().catch(reportBackgroundError)',
-      'diffHostDisposeQueue.add(() => current)',
-    ]);
+    expectOrderedAfter(
+      source,
+      'const current = desktopDiffHost.dispose().catch(reportBackgroundError)',
+      ['diffHostDisposeQueue.add(() => current)'],
+    );
   });
 
   it('imports process-store initialization directly from its owner', async () => {
@@ -318,21 +314,17 @@ describe('desktop composition root and launch environment', () => {
       '@desktop/main/platform/pathFix',
     );
     const env = { PATH: '/custom/bin:/usr/bin' };
-    const fixPath = vi.fn();
 
     const first = repairLaunchPath({
       env,
-      fixPath,
       platform: 'darwin',
     });
     const second = repairLaunchPath({
       env,
-      fixPath,
       platform: 'darwin',
     });
 
     expect(first).toBe(second);
-    expect(fixPath).toHaveBeenCalledTimes(2);
     expect(second.split(':')).toEqual([
       '/Library/TeX/texbin',
       '/opt/homebrew/bin',
@@ -348,7 +340,6 @@ describe('desktop composition root and launch environment', () => {
     expect(
       repairLaunchPath({
         env: linuxEnv,
-        fixPath,
         platform: 'linux',
       }),
     ).toBe('/custom/bin');

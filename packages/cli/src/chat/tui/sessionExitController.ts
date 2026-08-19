@@ -38,7 +38,10 @@ import {
   setTransientNotice,
   streams as streamsSignal,
 } from './state/cliState';
-import { childStreamEntries as childStreamEntriesSignal } from './state/childExecutions';
+import {
+  childRosters as childRostersSignal,
+  type ChildRosters,
+} from './state/childExecutions';
 import {
   collectResumeTargets,
   collectResumeUsage,
@@ -143,13 +146,14 @@ export function createSessionExitController(
   };
   // Persist the reopen hint to native scrollback: the main session plus each
   // resumable tool-use subagent, so any route can be continued by its own id.
-  // Read the streams slice before resetCliState() clears it.
-  const printResumeHintOnExit = (): void => {
+  // Read the streams slice before resetCliState() clears it; the child rosters
+  // arrive as a snapshot taken while the session adapter was still bound.
+  const printResumeHintOnExit = (childRosters: ChildRosters): void => {
     if (!ctx.canResume || !session.executionId) return;
     const streams = streamsSignal.get();
     const hint = formatResumeHint(
       collectResumeTargets({
-        childStreamEntries: childStreamEntriesSignal.get(),
+        childRosters,
         rootExecutionId: session.executionId,
         streams,
       }),
@@ -308,6 +312,10 @@ export function createSessionExitController(
   const beginTeardown = async (cause: ExitCause): Promise<void> => {
     removeProcessHandlers();
     clearExitConfirmation();
+    // Snapshot the child rosters while the session-signals adapter is still
+    // bound: disposing ctx.disposables below detaches it, after which the
+    // roster signal reads empty — but the resume hint prints later.
+    const childRosters = childRostersSignal.get();
     if (cause.kind === 'signal') {
       const resumableIdle = ctx.isResumableIdle();
       ctx.suspendTerminalTitle();
@@ -316,7 +324,7 @@ export function createSessionExitController(
       // the terminal before the first await so a stalled flush cannot strand raw
       // mode or emulator keyboard state.
       cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
-      printResumeHintOnExit();
+      printResumeHintOnExit(childRosters);
       return persistBeforePlatformShutdown(resumableIdle).finally(() =>
         process.exit(cause.exitCode),
       );
@@ -349,7 +357,7 @@ export function createSessionExitController(
     ctx.disposeTerminalRestoreOnExit();
     // Print the resume hint after the terminal modes are restored, but before
     // resetCliState() clears the stream tree the hint is built from.
-    printResumeHintOnExit();
+    printResumeHintOnExit(childRosters);
     resetCliState();
     if (resumableIdle) {
       // The dangling runPromise keeps the event loop alive, so a normal return

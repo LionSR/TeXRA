@@ -32,8 +32,8 @@ import { initNodeAgentRuntime } from '@platform/defaults/nodeHost';
 import type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import {
-  ClaudeAgentSessions,
-  CodexThreads,
+  claudeAgentSessionsFor,
+  codexThreadsFor,
 } from '@tools/agentCliSessionStores';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
@@ -310,10 +310,10 @@ export function runAgent(input: RunAgentInput): AgentRun {
         session.executions.killBackgroundProcesses(),
       );
       releaseOrWarn('Failed to interrupt package Codex threads', () =>
-        CodexThreads.interruptAll(session.executions),
+        codexThreadsFor(session).interruptAll(),
       );
       releaseOrWarn('Failed to interrupt package Claude agent sessions', () =>
-        ClaudeAgentSessions.interruptAll(session.executions),
+        claudeAgentSessionsFor(session).interruptAll(),
       );
       releaseOrWarn('Failed to dispose package session', () =>
         session.dispose(),

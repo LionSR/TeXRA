@@ -95,8 +95,8 @@ import {
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import {
-  ClaudeAgentSessions,
-  CodexThreads,
+  claudeAgentSessionsFor,
+  codexThreadsFor,
 } from '@tools/agentCliSessionStores';
 import { createChildStream } from '@tools/delegation/childStream';
 import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
@@ -396,14 +396,14 @@ describe('childRunLoop E2E fixtures', () => {
         executionId: ExecutionId,
         runSession: SessionHandle,
       ) =>
-        CodexThreads.trackInFlight({
+        codexThreadsFor(runSession).trackInFlight({
           childStreamId,
           executionId,
           executions: runSession.executions,
         }),
-      interruptAll: () => CodexThreads.interruptAll(),
+      interruptAll: () => codexThreadsFor(session).interruptAll(),
       release: (executionId: ExecutionId) =>
-        CodexThreads.releaseByExecutionId(executionId),
+        codexThreadsFor(session).releaseByExecutionId(executionId),
     },
     {
       name: 'ClaudeAgentSessions',
@@ -412,14 +412,14 @@ describe('childRunLoop E2E fixtures', () => {
         executionId: ExecutionId,
         runSession: SessionHandle,
       ) =>
-        ClaudeAgentSessions.trackInFlight({
+        claudeAgentSessionsFor(runSession).trackInFlight({
           childStreamId,
           executionId,
           executions: runSession.executions,
         }),
-      interruptAll: () => ClaudeAgentSessions.interruptAll(),
+      interruptAll: () => claudeAgentSessionsFor(session).interruptAll(),
       release: (executionId: ExecutionId) =>
-        ClaudeAgentSessions.releaseByExecutionId(executionId),
+        claudeAgentSessionsFor(session).releaseByExecutionId(executionId),
     },
   ])(
     '$name interrupts a real initial-turn loop and releases ownership once',

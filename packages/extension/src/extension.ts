@@ -64,7 +64,6 @@ import {
   getInlineCommentProvider,
   registerInlineComments,
 } from '@frontend/comments/inlineComments';
-import { migrateLegacyVscodeStorage } from '@frontend/vscode/sharedStorageRoot';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
@@ -221,12 +220,10 @@ export async function activate(context: vscode.ExtensionContext) {
   lifecycleHost = lifecycle;
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
-  // #8622). Legacy `storageUri` data must finish moving before initPlatform()
-  // makes the shared root reachable to readers.
+  // #8622).
   const storage = createNodeStorageProvider({
     workspacePath: () => workspace.getWorkspacePath(),
   });
-  await migrateLegacyVscodeStorage(context, storage);
   const config = await createExtensionTexraConfig(
     storage,
     workspace.getWorkspacePath(),

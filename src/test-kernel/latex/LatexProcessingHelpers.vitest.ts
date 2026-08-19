@@ -53,7 +53,6 @@ const compilePdfConfig: ToolConfig = {
   autoExtractFigure: false,
   autoExtractTikzFigure: false,
   attachTeXCount: false,
-  attachDiagnostics: false,
   autoCompileInputPdf: true,
 };
 

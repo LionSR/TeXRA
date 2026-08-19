@@ -12,13 +12,11 @@ import {
 } from '@cli/chat/tui/state/streamViews';
 import {
   STREAM_PHASE,
+  type ActiveChildInfo,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
-import {
-  buildChildStreamEntries,
-  type ChildStreamEntryRow,
-} from '@test/support/childStreamEntries';
+import { buildChildRosters } from '@test/support/childStreamEntries';
 
 const root = 'root' as StreamTabId;
 const child = 'child' as StreamTabId;
@@ -28,12 +26,12 @@ function slice(overrides: Partial<StreamSlice> = {}): StreamSlice {
   return { ...emptySlice(root), ...overrides };
 }
 
-/** A running retained agent row whose execution id follows its name. */
-function retainedChild(
+/** A live agent roster row whose execution id follows its name. */
+function rosterChild(
   agentName: string,
   childStreamId: StreamTabId,
-  overrides: Partial<ChildStreamEntryRow> = {},
-): ChildStreamEntryRow {
+  overrides: Partial<ActiveChildInfo> = {},
+): ActiveChildInfo {
   return {
     executionId: `${agentName}-exec`,
     agentName,
@@ -76,10 +74,13 @@ describe('CLI child controls', () => {
   });
 
   it('resolves one child-list target and falls back to its immediate ancestor', () => {
-    const entries = buildChildStreamEntries({
+    const entries = buildChildRosters({
       parentStreamId: root,
-      retained: [
-        retainedChild('critic', child, { status: STREAM_PHASE.COMPLETED }),
+      rows: [
+        rosterChild('critic', child, {
+          status: STREAM_PHASE.COMPLETED,
+          finishedAt: 1,
+        }),
       ],
     });
     const streams = streamMap([root], [child, STREAM_PHASE.COMPLETED], [leaf]);
@@ -91,7 +92,7 @@ describe('CLI child controls', () => {
     expect(
       resolveChildListTarget({
         activeStreamId: leaf,
-        childStreamEntries: entries,
+        childRosters: entries,
         parentStream,
         streams,
       }),
@@ -103,13 +104,13 @@ describe('CLI child controls', () => {
 
   it('roots nested child-list rows at the resolved target stream', () => {
     const entries = new Map([
-      ...buildChildStreamEntries({
+      ...buildChildRosters({
         parentStreamId: root,
-        retained: [retainedChild('child', child)],
+        rows: [rosterChild('child', child)],
       }),
-      ...buildChildStreamEntries({
+      ...buildChildRosters({
         parentStreamId: child,
-        retained: [retainedChild('leaf', leaf)],
+        rows: [rosterChild('leaf', leaf)],
       }),
     ]);
     const streams = streamMap(
@@ -123,7 +124,7 @@ describe('CLI child controls', () => {
     ]);
     const target = resolveChildListTarget({
       activeStreamId: child,
-      childStreamEntries: entries,
+      childRosters: entries,
       parentStream,
       streams,
     });
@@ -132,7 +133,7 @@ describe('CLI child controls', () => {
     expect(
       streamTreeViews({
         activeStreamId: child,
-        childStreamEntries: entries,
+        childRosters: entries,
         parentStream,
         rootStreamId: target.streamId,
         streams,
@@ -142,7 +143,7 @@ describe('CLI child controls', () => {
     expect(
       numericFocusTargetForActiveStream({
         activeStreamId: child,
-        childStreamEntries: entries,
+        childRosters: entries,
         parentStream,
         streams,
         zeroBasedIndex: 0,
@@ -150,23 +151,20 @@ describe('CLI child controls', () => {
     ).toBe(leaf);
   });
 
-  // Row order is newest-first over the retained roster and nothing else: a
+  // Row order is newest-first over the shared roster and nothing else: a
   // child's workflow phase never regroups or reorders the list, so the
   // Alt+1..9 numbers follow the rows exactly as the tree yields them.
   it('assigns visible shortcut indices in newest-first roster order', () => {
     const ids = ['a', 'b', 'c', 'd', 'e'].map((id) => id as StreamTabId);
     const [a, b, c, d, e] = ids;
-    const entries = buildChildStreamEntries({
+    const entries = buildChildRosters({
       parentStreamId: root,
-      retained: [
-        retainedChild('a', a, { workflowPhase: 'Reduce' }),
-        retainedChild('b', b, {
-          workflowPhase: 'Map',
-          edgeParentStreamId: null,
-        }),
-        retainedChild('c', c, { workflowPhase: 'Reduce' }),
-        retainedChild('d', d),
-        retainedChild('e', e, { workflowPhase: 'Map' }),
+      rows: [
+        rosterChild('a', a, { workflowPhase: 'Reduce' }),
+        rosterChild('b', b, { workflowPhase: 'Map' }),
+        rosterChild('c', c, { workflowPhase: 'Reduce' }),
+        rosterChild('d', d),
+        rosterChild('e', e, { workflowPhase: 'Map' }),
       ],
     });
     const streams = streamMap(
@@ -177,12 +175,12 @@ describe('CLI child controls', () => {
       ids.filter((id) => id !== b).map((id) => [id, root] as const),
     );
 
-    // Retained oldest-first (a…e), reversed for display; the `Map`/`Reduce`
-    // tags on the roster rows do not move anybody.
+    // Roster order oldest-first (a…e), reversed for display; the
+    // `Map`/`Reduce` tags on the roster rows do not move anybody.
     expect(
       streamTreeEntries({
         activeStreamId: root,
-        childStreamEntries: entries,
+        childRosters: entries,
         parentStream,
         rootStreamId: root,
         streams,
@@ -197,7 +195,7 @@ describe('CLI child controls', () => {
     ]);
     const views = streamTreeViews({
       activeStreamId: root,
-      childStreamEntries: entries,
+      childRosters: entries,
       parentStream,
       rootStreamId: root,
       streams,
@@ -210,7 +208,7 @@ describe('CLI child controls', () => {
     expect(
       numericFocusTargetForActiveStream({
         activeStreamId: root,
-        childStreamEntries: entries,
+        childRosters: entries,
         parentStream,
         streams,
         zeroBasedIndex: 3,
@@ -219,16 +217,16 @@ describe('CLI child controls', () => {
   });
 
   it('preserves Alt/Esc-number stream focus order', () => {
-    const entries = buildChildStreamEntries({
+    const entries = buildChildRosters({
       parentStreamId: root,
-      retained: [retainedChild('critic', child)],
+      rows: [rosterChild('critic', child)],
     });
     const streams = streamMap([root], [child, STREAM_PHASE.RUNNING]);
 
     expect(
       numericFocusTargetForActiveStream({
         activeStreamId: root,
-        childStreamEntries: entries,
+        childRosters: entries,
         parentStream: new Map([[child, root]]),
         streams,
         zeroBasedIndex: 0,

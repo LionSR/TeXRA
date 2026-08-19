@@ -105,10 +105,9 @@ import {
 } from '../src/chat/tui/state/cliState';
 import {
   activeSubagentsFor,
-  projectChildRoster,
-  childStreamEntries,
+  childRosters,
+  streamMetadataFor,
   parentStream,
-  setParentStream,
   visibleSubagentRows,
 } from '../src/chat/tui/state/childExecutions';
 import { focusedChildFollowUpRoute } from '../src/chat/tui/state/focusedChildFollowUp';
@@ -127,7 +126,6 @@ import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import { attachSessionSignalsAdapter } from '../src/chat/tui/state/sessionSignalsAdapter';
 import { notifyStaticTranscriptErased } from '../src/chat/tui/state/staticTranscriptRepaint';
 import { createTuiHostInteractions } from '../src/chat/tui/state/subscribeApprovals';
-import { subscribeStreamStatus } from '../src/chat/tui/state/subscribeStreamStatus';
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
@@ -280,9 +278,9 @@ const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
 // #7967 / the "PTY ordering tests" section of
 // docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md): drives one child
 // stream through the real event-subscription path
-// (attachSessionSignalsAdapter + subscribeStreamStatus, exactly as
-// runChatTui.tsx/chatSessionController.ts wire a real run — see
-// `runChildEventOrderFixture` below) in each of the eight orderings the
+// (attachSessionSignalsAdapter, the single rail carrying status, roster,
+// edge, and removal facts, exactly as chatSessionController.ts wires a real
+// run — see `runChildEventOrderFixture` below) in each of the eight orderings the
 // design names, so validate-tui.mjs can assert both intermediate render
 // checkpoints and (for the four order-equivalent cases) a byte-identical
 // settled frame no matter which order the attachment/roster/edge/status
@@ -1010,7 +1008,7 @@ function makeRetryApprovalPayload(): RetryPermission {
 
 function makePlanApprovalPayload(): PlanApprovalPermission {
   return {
-    approvalId: 'harness-plan-approval',
+    requestId: 'harness-plan-approval',
     streamId: STREAM_ID,
     goalEnabled: PLAN_APPROVAL_GOAL,
     plan: {
@@ -1021,7 +1019,7 @@ function makePlanApprovalPayload(): PlanApprovalPermission {
 
 function makeAgentProposalPayload() {
   return {
-    proposalId: 'harness-agent-proposal',
+    requestId: 'harness-agent-proposal',
     streamId: STREAM_ID,
     agentCategory: AgentCategory.ToolUse,
     agent: 'review',
@@ -1239,7 +1237,7 @@ function seedWorkflowTimeline(): void {
   const executionId = 'aaaa0001f10e' as ExecutionId;
   const childStreamId = 'workflow-script#aaaa0001f10e' as StreamTabId;
   emitSetActiveStream(childStreamId, AgentCategory.Workflow);
-  emitChildEventOrderRoster(STREAM_ID, [
+  emitChildRoster(STREAM_ID, [
     {
       executionId,
       agentName: 'repositoryAudit',
@@ -1247,10 +1245,11 @@ function seedWorkflowTimeline(): void {
       identity: { kind: 'multiAgentWorkflow', workflowName: 'repositoryAudit' },
     },
   ]);
-  emitChildEventOrderEdge(childStreamId, STREAM_ID);
-  transitionChildEventOrderRunning(childStreamId);
+  emitParentStreamEdge(childStreamId, STREAM_ID);
+  transitionStreamRunning(childStreamId);
   // Mirror a user focusing the running child before its terminal transition.
-  // `subscribeStreamStatus` must return this focus to the owner below.
+  // The session adapter's status rail must return this focus to the owner
+  // below.
   activeStreamIdSignal.set(childStreamId);
 
   const output = {
@@ -1322,18 +1321,14 @@ function seedWorkflowTimeline(): void {
   secondRoundStage.end('completed');
   runStage.end('completed');
   syncStreamLog(childStreamId);
-  transitionChildEventOrderTerminal(childStreamId);
-  emitChildEventOrderRoster(STREAM_ID, []);
+  transitionStreamTerminal(childStreamId);
+  emitChildRoster(STREAM_ID, []);
   runTrace.dispose();
 
   if (activeStreamIdSignal.get() !== STREAM_ID) {
     throw new Error('Completed workflow child did not return focus to owner');
   }
-  const retained = visibleSubagentRows(
-    STREAM_ID,
-    childStreamEntries.get(),
-    streams.get(),
-  );
+  const retained = visibleSubagentRows(STREAM_ID, childRosters.get());
   if (!retained.some((child) => child.childStreamId === childStreamId)) {
     throw new Error('Completed workflow child was not retained for refocus');
   }
@@ -1347,7 +1342,7 @@ function seedRunningWorkflow(): void {
     'correct@harness-model#harness-workflow-agent-b' as StreamTabId;
 
   emitSetActiveStream(childStreamId, AgentCategory.Workflow);
-  emitChildEventOrderRoster(STREAM_ID, [
+  emitChildRoster(STREAM_ID, [
     {
       executionId,
       agentName: 'live-workflow-validation',
@@ -1358,10 +1353,32 @@ function seedRunningWorkflow(): void {
       },
     },
   ]);
-  emitChildEventOrderEdge(childStreamId, STREAM_ID);
-  transitionChildEventOrderRunning(childStreamId);
+  emitParentStreamEdge(childStreamId, STREAM_ID);
+  transitionStreamRunning(childStreamId);
 
   const runTrace = createRunTrace(childStreamId, defaultSession().transcripts);
+  // `runTrace.trace` only feeds the transcript recorder (see
+  // `createRunTrace`); a real launch also bridges it onto the session event
+  // hub via `session.attachRunTrace`, which is what lands a `run.start` in
+  // the durable summary mirror (`SessionHandle`'s `attachSessionEvents`) so
+  // `getStreamMetadata(...)` overlays `identity` regardless of the RUNNING
+  // transition's ephemeral metadata reset. Emit straight onto the hub here,
+  // the same way the output-file/compile-failure facts below do —
+  // `SubagentList`'s `workflowDashboardRoot` gate reads that overlay to pick
+  // the two-column task dashboard.
+  defaultSession().events.emit({
+    scope: 'run',
+    streamId: childStreamId,
+    event: {
+      type: 'run.start',
+      streamId: childStreamId,
+      executionId,
+      identity: {
+        kind: 'multiAgentWorkflow',
+        workflowName: 'live-workflow-validation',
+      },
+    },
+  });
   const runStage = runTrace.trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {
@@ -1425,17 +1442,10 @@ function seedRunningWorkflow(): void {
   ] as const satisfies readonly ActiveChildInfo[];
   for (const child of workflowChildren) {
     emitSetActiveStream(child.childStreamId, AgentCategory.Workflow);
-    emitChildEventOrderEdge(child.childStreamId, childStreamId);
-    transitionChildEventOrderRunning(child.childStreamId);
+    emitParentStreamEdge(child.childStreamId, childStreamId);
+    transitionStreamRunning(child.childStreamId);
   }
-  emitChildEventOrderRoster(childStreamId, workflowChildren);
-  patchStream(childStreamId, (slice) => ({
-    ...slice,
-    identity: {
-      kind: 'multiAgentWorkflow',
-      workflowName: 'live-workflow-validation',
-    },
-  }));
+  emitChildRoster(childStreamId, workflowChildren);
 
   HARNESS_DISPOSERS.push(() => {
     phaseStage.end('cancelled');
@@ -1446,6 +1456,7 @@ function seedRunningWorkflow(): void {
 
 function seedRunningProcessChild(): void {
   const childStreamId = 'bash#aaaa0003f10e' as StreamTabId;
+  emitSetActiveStream(childStreamId, AgentCategory.ToolUse);
   patchStream(childStreamId, (slice) => ({
     ...slice,
     identity: { kind: 'process', tool: 'bash' },
@@ -1457,7 +1468,7 @@ function seedRunningProcessChild(): void {
     streamId: childStreamId,
     status: STREAM_PHASE.RUNNING,
   });
-  projectChildRoster(STREAM_ID, [
+  emitChildRoster(STREAM_ID, [
     {
       executionId: 'aaaa0003f10e',
       agentName: 'bash',
@@ -1466,16 +1477,17 @@ function seedRunningProcessChild(): void {
       status: STREAM_PHASE.RUNNING,
     },
   ]);
-  setParentStream(childStreamId, STREAM_ID);
+  emitParentStreamEdge(childStreamId, STREAM_ID);
   activeStreamIdSignal.set(childStreamId);
 }
 
 // One child stream, its attachment/roster/edge/status/removal facts driven
-// through the real production subscription path rather than the CHILD_STREAMS
-// map mutators (`projectChildRoster`/`setParentStream`) directly — a
-// regression in `attachSessionSignalsAdapter` or `subscribeStreamStatus`
-// wiring must be able to fail these scenarios, matching the "PTY ordering
-// tests" section of docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md.
+// through the real production subscription path — the session adapter's
+// single rail, whose `SessionFactApplier` owns roster retention, parent
+// edges, removal tombstones, and the CLI status modality — so a regression
+// in `attachSessionSignalsAdapter` wiring must be able to fail these
+// scenarios, matching the "PTY ordering tests" section of
+// docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md.
 // No `startedAt` is set on the roster row, so `childElapsed` returns the
 // static `elapsed` string instead of a live-ticking duration
 // (packages/cli/src/chat/tui/state/childControls.ts); `setActiveStream`
@@ -1511,7 +1523,7 @@ function childEventOrderRosterRow(): ActiveChildInfo {
 
 // `child.activity` run fact — the real roster wiring
 // (`ExecutionRegistry.emitChildActivity`, src/agent/runtime/executionRegistry.ts).
-function emitChildEventOrderRoster(
+function emitChildRoster(
   parentStreamId: StreamTabId,
   children: readonly ActiveChildInfo[],
 ): void {
@@ -1528,7 +1540,7 @@ function emitChildEventOrderRoster(
 
 // `setParentStream` session fact — the real edge wiring
 // (`ExecutionRegistry.emitParentStreamUpdate`).
-function emitChildEventOrderEdge(
+function emitParentStreamEdge(
   childStreamId: StreamTabId,
   parentStreamId: StreamTabId | null,
 ): void {
@@ -1542,18 +1554,20 @@ function emitChildEventOrderEdge(
 }
 
 // `removeStream` session fact — the real removal wiring (src/tools/delegation/childStream.ts).
-function emitChildEventOrderRemoval(streamId: StreamTabId): void {
+function emitStreamRemoval(streamId: StreamTabId): void {
   defaultSession().events.emit({
     scope: 'session',
     event: { type: 'removeStream', payload: { streamId } },
   });
 }
 
-// `setActiveStream` session fact — used both as the child-order fixture's
-// "attachment" step and as the workflow-timeline/running-workflow focus
-// switch. Always background-registers (`suppressViewSwitch: true`) so the
-// harness's own active/focused stream never becomes the child (see the
-// wall-clock note above).
+// `setActiveStream` session fact — the child-order fixture's "attachment"
+// step and every seeded stream's registration with the substrate's log
+// store: `childRosters`/`parentStream` only surface streams the session
+// knows, so a roster or edge under an unregistered stream stays invisible.
+// Always background-registers (`suppressViewSwitch: true`) so the harness's
+// own active/focused stream never becomes the child (see the wall-clock
+// note above).
 function emitSetActiveStream(
   streamId: StreamTabId,
   agentCategory?: AgentCategory,
@@ -1567,11 +1581,11 @@ function emitSetActiveStream(
   });
 }
 
-// Real status-machine transitions on the default session —
-// `subscribeStreamStatus()` projects these into `cliState` (see
-// `runChildEventOrderFixture`), exactly as `runChatTui.tsx` wires it for a
-// real session.
-function transitionChildEventOrderRunning(streamId: StreamTabId): void {
+// Real status-machine transitions on the default session — the session
+// adapter's status rail projects these into `cliState` (see
+// `runChildEventOrderFixture`), exactly as `chatSessionController.ts` wires
+// it for a real session.
+function transitionStreamRunning(streamId: StreamTabId): void {
   defaultSession().status.transition(
     streamId,
     STREAM_PHASE.RUNNING,
@@ -1579,7 +1593,7 @@ function transitionChildEventOrderRunning(streamId: StreamTabId): void {
   );
 }
 
-function transitionChildEventOrderTerminal(streamId: StreamTabId): void {
+function transitionStreamTerminal(streamId: StreamTabId): void {
   defaultSession().status.transitionToTerminal(
     streamId,
     STREAM_PHASE.COMPLETED,
@@ -1619,14 +1633,14 @@ function childEventOrderSteps(order: ChildEventOrder): readonly (() => void)[] {
   const root = STREAM_ID as StreamTabId;
   const other = CHILD_EVENT_ORDER_OTHER_PARENT_ID;
   const A = () => emitSetActiveStream(child);
-  const Srun = () => transitionChildEventOrderRunning(child);
-  const Sterm = () => transitionChildEventOrderTerminal(child);
+  const Srun = () => transitionStreamRunning(child);
+  const Sterm = () => transitionStreamTerminal(child);
   const RPlus = (parent: StreamTabId) =>
-    emitChildEventOrderRoster(parent, [childEventOrderRosterRow()]);
-  const RMinus = (parent: StreamTabId) => emitChildEventOrderRoster(parent, []);
-  const EPlus = (parent: StreamTabId) => emitChildEventOrderEdge(child, parent);
-  const E0 = () => emitChildEventOrderEdge(child, null);
-  const X = (streamId: StreamTabId) => emitChildEventOrderRemoval(streamId);
+    emitChildRoster(parent, [childEventOrderRosterRow()]);
+  const RMinus = (parent: StreamTabId) => emitChildRoster(parent, []);
+  const EPlus = (parent: StreamTabId) => emitParentStreamEdge(child, parent);
+  const E0 = () => emitParentStreamEdge(child, null);
+  const X = (streamId: StreamTabId) => emitStreamRemoval(streamId);
 
   switch (order) {
     case 'canonical':
@@ -1714,7 +1728,7 @@ async function runChildEventOrderFixture(
 ): Promise<void> {
   const steps = childEventOrderSteps(order);
   // `render()` mounts synchronously, and this first flush establishes the
-  // single origin for the fixture protocol. No event may precede it.
+  // single origin for the fixture protocol. No fixture step may precede it.
   await ink.waitUntilRenderFlush();
   await writeChildEventOrderMarker('mounted');
 
@@ -1726,11 +1740,41 @@ async function runChildEventOrderFixture(
   }
 }
 
+// Mirror real CLI startup: `chatSessionController.ts` installs the session
+// adapter once per TUI session — the single rail that lands status, roster,
+// edge, and removal facts on the shared `SessionState` and projects them
+// into `cliState`. Attached before any seeding so every scenario below
+// drives child state through real facts; the harness keeps no side channel
+// into the roster or topology.
+HARNESS_DISPOSERS.push(
+  attachSessionSignalsAdapter({
+    events: defaultSession().events,
+    session: defaultSession(),
+    snapshots: defaultSession().snapshots,
+  }),
+);
+// Register the harness root with the substrate (a real run's attachment
+// fact does this at run start): rosters and edges are only derivable for
+// streams the session's log store knows.
+emitSetActiveStream(STREAM_ID);
+
+function emitStreamDescription(
+  streamId: StreamTabId,
+  description: string,
+): void {
+  defaultSession().events.emit({
+    scope: 'session',
+    event: {
+      type: 'updateStreamDescription',
+      payload: { streamId, description },
+    },
+  });
+}
+
 if (SHOW_CHILDREN) {
   const startedAt = Date.now() - 74_000;
   const nestedStartedAt = startedAt + 24_000;
   const nestedStrategyChild = {
-    kind: 'subagent' as const,
     executionId: 'harness-nested-local-checker',
     identity: { kind: 'agent' as const, agent: 'localChecker' },
     agentName: 'localChecker',
@@ -1776,14 +1820,14 @@ if (SHOW_CHILDREN) {
   const activeSubagents = childStreams.filter(
     (child) => child.status !== STREAM_PHASE.FAILED,
   );
-  // Seed through the real transition functions rather than poking StreamSlice
-  // fields directly: register the complete roster first (so the errored
-  // child gets a retained row), then re-apply the roster with it omitted —
+  // Seed through the real roster facts rather than poking StreamSlice
+  // fields directly: emit the complete roster first (so the errored
+  // child gets a retained row), then re-emit the roster with it omitted —
   // mirroring the production sequence where a roster stops including a child
   // once it leaves the runtime's active registry, while its retained history
   // survives.
-  projectChildRoster(STREAM_ID, childStreams);
-  projectChildRoster(STREAM_ID, activeSubagents);
+  emitChildRoster(STREAM_ID, childStreams);
+  emitChildRoster(STREAM_ID, activeSubagents);
   setStreamStatusInCliState({
     streamId: STREAM_ID,
     status: STREAM_PHASE.RUNNING,
@@ -1793,21 +1837,19 @@ if (SHOW_CHILDREN) {
     const streamId = child.childStreamId;
     const addNestedChildren =
       SHOW_NESTED_CHILDREN && child.agentName === 'strategy';
-    setParentStream(streamId, STREAM_ID);
-    if (addNestedChildren) projectChildRoster(streamId, [nestedStrategyChild]);
+    emitSetActiveStream(streamId, AgentCategory.ToolUse);
+    emitParentStreamEdge(streamId, STREAM_ID);
+    if (addNestedChildren) emitChildRoster(streamId, [nestedStrategyChild]);
+    emitStreamDescription(streamId, `${child.agentName} sub-workflow`);
     patchStream(streamId, (slice) => ({
       ...slice,
-      category: AgentCategory.ToolUse,
-      identity: child.identity,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-      description: `${child.agentName} sub-workflow`,
       entries: makeChildEntries(child.agentName, child.executionId),
       // One child carries usage so scenarios pin the row metadata column's
       // generated-token figure (`↓40k`).
-      cumulativeUsage:
+      usage:
         child.agentName === 'reviewer'
           ? { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 }
-          : slice.cumulativeUsage,
+          : slice.usage,
     }));
     setStreamStatusInCliState({
       streamId: streamId,
@@ -1817,15 +1859,20 @@ if (SHOW_CHILDREN) {
     });
   }
   if (SHOW_NESTED_CHILDREN) {
-    setParentStream(
+    emitSetActiveStream(
+      'harness-nested-local-checker-stream',
+      AgentCategory.ToolUse,
+    );
+    emitParentStreamEdge(
       'harness-nested-local-checker-stream',
       'harness-child-strategy-stream',
     );
+    emitStreamDescription(
+      'harness-nested-local-checker-stream',
+      'localChecker nested proof check',
+    );
     patchStream('harness-nested-local-checker-stream', (slice) => ({
       ...slice,
-      category: AgentCategory.ToolUse,
-      identity: nestedStrategyChild.identity,
-      description: 'localChecker nested proof check',
       entries: makeChildEntries('localChecker', 'nested proof check'),
     }));
     setStreamStatusInCliState({
@@ -1837,8 +1884,7 @@ if (SHOW_CHILDREN) {
 }
 
 if (SHOW_TODOS) {
-  patchStream(STREAM_ID, (slice) => ({
-    ...slice,
+  const workPlan = {
     todos: [
       {
         content: 'Split theorem into algebraic and analytic checks',
@@ -1867,8 +1913,7 @@ if (SHOW_TODOS) {
         'Have a subagent inspect the Lean-style finite case.',
       ].join('\n'),
     },
-  }));
-  const workPlan = streams.get().get(STREAM_ID)!;
+  };
   defaultSession().events.emit({
     scope: 'run',
     streamId: STREAM_ID,
@@ -2009,14 +2054,14 @@ function markHarnessInterrupted(): void {
   canInterrupt = false;
   rootRunPending.set(false);
   const childStreamIds = new Set(
-    visibleSubagentRows(STREAM_ID, childStreamEntries.get(), streams.get())
-      .map((child) => child.childStreamId)
-      .filter((streamId): streamId is string => streamId !== undefined),
+    visibleSubagentRows(STREAM_ID, childRosters.get()).map(
+      (child) => child.childStreamId,
+    ),
   );
-  // Clear active roster membership through the real transition function;
-  // each retained row's status comes from its own StreamSlice, set by the
-  // per-child patchStream loop below.
-  projectChildRoster(STREAM_ID, []);
+  // Clear active roster membership through the real roster fact; the shared
+  // applier retains each vanished row, and its displayed status comes from
+  // the phase-merge of the real per-child transitions below.
+  emitChildRoster(STREAM_ID, []);
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
     entries: [
@@ -2035,11 +2080,11 @@ function markHarnessInterrupted(): void {
     nowMs: undefined,
   });
   for (const streamId of childStreamIds) {
-    setStreamStatusInCliState({
-      streamId: streamId,
-      status: STREAM_PHASE.CANCELLED,
-      nowMs: undefined,
-    });
+    defaultSession().status.transition(
+      streamId,
+      STREAM_PHASE.CANCELLED,
+      STREAM_TRANSITION_CAUSE.USER_STOP,
+    );
   }
 }
 
@@ -2055,13 +2100,11 @@ function markHarnessStreamInterrupted(streamId: StreamTabId): void {
     canInterrupt = false;
     rootRunPending.set(false);
   } else {
-    projectChildRoster(
+    emitChildRoster(
       STREAM_ID,
-      activeSubagentsFor(
-        STREAM_ID,
-        childStreamEntries.get(),
-        streams.get(),
-      ).filter((child) => child.childStreamId !== streamId),
+      activeSubagentsFor(STREAM_ID, childRosters.get()).filter(
+        (child) => child.childStreamId !== streamId,
+      ),
     );
   }
   patchStream(streamId, (slice) => ({
@@ -2174,14 +2217,10 @@ function markHarnessExecutionStopped(executionId: string): void {
   const parentSlice = streams.get().get(STREAM_ID);
   if (!parentSlice) return;
 
-  const activeSubagentRows = activeSubagentsFor(
-    STREAM_ID,
-    childStreamEntries.get(),
-    streams.get(),
-  );
+  const activeSubagentRows = activeSubagentsFor(STREAM_ID, childRosters.get());
   const executionRows = [
     ...activeSubagentRows,
-    ...visibleSubagentRows(STREAM_ID, childStreamEntries.get(), streams.get()),
+    ...visibleSubagentRows(STREAM_ID, childRosters.get()),
   ];
   const executionRow = executionRows.find(
     (child) => child.executionId === executionId,
@@ -2189,7 +2228,7 @@ function markHarnessExecutionStopped(executionId: string): void {
   if (!executionRow) return;
 
   const messageId = `harness-killed-${executionId}-${Date.now()}`;
-  projectChildRoster(
+  emitChildRoster(
     STREAM_ID,
     activeSubagentRows.filter((child) => child.executionId !== executionId),
   );
@@ -2204,7 +2243,6 @@ function markHarnessExecutionStopped(executionId: string): void {
     ],
   }));
 
-  if (!executionRow.childStreamId) return;
   patchStream(executionRow.childStreamId, (slice) => ({
     ...slice,
     entries: [
@@ -2215,18 +2253,24 @@ function markHarnessExecutionStopped(executionId: string): void {
       ),
     ],
   }));
-  setStreamStatusInCliState({
-    streamId: executionRow.childStreamId,
-    status: STREAM_PHASE.CANCELLED,
-    nowMs: undefined,
-  });
+  // The real transition stamps CANCELLED onto the retained roster row via
+  // the adapter's phase-merge, and projects the slice status with it.
+  defaultSession().status.transition(
+    executionRow.childStreamId,
+    STREAM_PHASE.CANCELLED,
+    STREAM_TRANSITION_CAUSE.USER_STOP,
+  );
 }
 
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
+  const focusedActiveStreamId = activeStreamIdSignal.get();
   const focusedChildRoute = focusedChildFollowUpRoute({
-    activeStreamId: activeStreamIdSignal.get(),
+    activeStreamId: focusedActiveStreamId,
     parentStream: parentStream.get(),
+    metadata: focusedActiveStreamId
+      ? streamMetadataFor(focusedActiveStreamId)
+      : undefined,
     streams: streams.get(),
   });
   if (focusedChildRoute.kind === 'reject') {
@@ -2449,20 +2493,6 @@ if (SHOW_TERMINAL_RESUME_REPAINT) {
     void exitHarness(1);
   });
 }
-
-if (CHILD_EVENT_ORDER || SHOW_WORKFLOW_TIMELINE || SHOW_WORKFLOW_RUNNING) {
-  // Mirror real CLI startup: `runChatTui.tsx` installs
-  // the session adapter before `subscribeStreamStatus()` once per TUI
-  // session.
-  HARNESS_DISPOSERS.push(
-    attachSessionSignalsAdapter({
-      events: defaultSession().events,
-      session: defaultSession(),
-      snapshots: defaultSession().snapshots,
-    }),
-  );
-}
-HARNESS_DISPOSERS.push(subscribeStreamStatus());
 
 if (SHOW_WORKFLOW_TIMELINE) {
   seedWorkflowTimeline();

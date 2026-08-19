@@ -314,10 +314,16 @@ describe('MainViewMessageHandler interaction mappings', () => {
     await dispatch({ command: MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES });
 
     expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
-      { command: MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER },
       {
-        command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
-        missingTools: ['latexindent', 'gs'],
+        command: MAIN_VIEW_COMMANDS.SET_BANNER,
+        banner: 'dependency',
+        visible: false,
+      },
+      {
+        command: MAIN_VIEW_COMMANDS.SET_BANNER,
+        banner: 'dependency',
+        visible: true,
+        data: { missingTools: ['latexindent', 'gs'] },
       },
     ]);
   });

@@ -44,7 +44,6 @@ const mocks = vi.hoisted(() => ({
   setCliHelperModel: vi.fn(),
   startRootRun: vi.fn(),
   subscribeStreamLog: vi.fn(),
-  subscribeStreamStatus: vi.fn(),
   supportsTerminalJobControl: vi.fn(),
   terminalTitleDispose: vi.fn(),
   terminalTitleResume: vi.fn(),
@@ -169,14 +168,6 @@ vi.mock('@cli/chat/tui/state/subscribeStreamLog', async (importOriginal) => {
   return { ...actual, subscribeStreamLog: mocks.subscribeStreamLog };
 });
 
-vi.mock('@cli/chat/tui/state/subscribeStreamStatus', async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import('@cli/chat/tui/state/subscribeStreamStatus')
-    >();
-  return { ...actual, subscribeStreamStatus: mocks.subscribeStreamStatus };
-});
-
 vi.mock('@cli/chat/tui/commands/registerBuiltins', async (importOriginal) => {
   const actual =
     await importOriginal<
@@ -297,7 +288,6 @@ describe('runChat signal ownership wiring', () => {
       suspend: mocks.terminalTitleSuspend,
     });
     mocks.subscribeStreamLog.mockReturnValue(() => undefined);
-    mocks.subscribeStreamStatus.mockReturnValue(() => undefined);
     mocks.onSkillSelect = undefined;
     mocks.registerBuiltinSlashCommands.mockImplementation(
       (options: {

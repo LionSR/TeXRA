@@ -12,7 +12,6 @@ const MACOS_PATH_ENTRIES = [
 
 interface LaunchPathRepairOptions {
   env?: Pick<NodeJS.ProcessEnv, 'PATH'>;
-  fixPath?: () => void;
   platform?: NodeJS.Platform;
 }
 
@@ -34,11 +33,9 @@ export function repairLaunchPath(
   const env = options.env ?? process.env;
   const platform = options.platform ?? process.platform;
   if (platform === 'darwin') {
-    if (options.fixPath != null) {
-      options.fixPath();
-    } else if (env === process.env) {
-      fixPath();
-    }
+    // Only the real process environment goes through fix-path; injected
+    // environments get the deterministic prepend below only.
+    if (env === process.env) fixPath();
     // ':' is the POSIX PATH separator; this branch only runs on darwin.
     env.PATH = prependMissingPathEntries(env.PATH, MACOS_PATH_ENTRIES, ':');
   }

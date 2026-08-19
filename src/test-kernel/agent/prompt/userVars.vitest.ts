@@ -70,7 +70,6 @@ const baseConfig: AgentConfig = AgentConfigSchema.parse({
     autoExtractFigure: false,
     autoExtractTikzFigure: false,
     attachTeXCount: false,
-    attachDiagnostics: false,
     autoCompileInputPdf: false,
   },
 });

@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
-import { ProgressStreamProjectionBuilder } from '@controllers/progressView/backend/ProgressStreamProjectionBuilder';
 import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import type { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import { SessionState } from '@controllers/session/SessionState';
@@ -103,11 +102,9 @@ async function createSyncHarness(
     syncStream: vi.fn(),
     clearAll: vi.fn(),
   } as unknown as WebviewBridge;
-  const projections = new ProgressStreamProjectionBuilder(state, getControls);
   const renderer = new LitSessionRenderer(
-    projections,
-    state.snapshots,
-    state.followUps,
+    state,
+    getControls,
     bridge,
     (message) => {
       if (message.command !== PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT) {

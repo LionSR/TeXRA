@@ -1,13 +1,21 @@
+import '@test/support/defaultSessionTestSetup';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { ConversationPane } from '@cli/chat/tui/panes/ConversationPane';
 import { selectWorkflowRunDetailLines } from '@cli/chat/tui/panes/WorkflowRunDetails';
+import {
+  bindChildStreamState,
+  unbindChildStreamState,
+} from '@cli/chat/tui/state/childExecutions';
 import {
   activeStreamId,
   patchStream,
   resetCliState,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
+import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
   type CompileFailure,
@@ -88,7 +96,24 @@ function generatedFile(
   };
 }
 
+// Agent category is shared-substrate metadata now: `ConversationPane` reads it
+// via `streamMetadataFor` from the bound `SessionState`, whose authority is
+// the durable summary mirror.
+let boundState: SessionState | undefined;
+
+function seedWorkflowCategory(streamId: StreamTabId): void {
+  boundState = new SessionState(defaultSession());
+  bindChildStreamState(boundState);
+  defaultSession().transcripts.recordSummaryMeta(streamId, {
+    agentCategory: AgentCategory.Workflow,
+  });
+}
+
 afterEach(() => {
+  if (boundState) {
+    unbindChildStreamState(boundState);
+    boundState = undefined;
+  }
   resetCliState();
 });
 
@@ -136,18 +161,18 @@ describe('selectWorkflowRunDetailLines', () => {
     ]);
   });
 
-  it('renders a normalized rN round and sanitizes terminal controls', () => {
+  it('renders a typed round and sanitizes terminal controls', () => {
     const lines = selectWorkflowRunDetailLines(
       {
         taskGroups: projectTaskGroupsFromStreamLog([
           {
             seqNo: 1,
-            id: 'legacy-r3',
+            id: 'round-3',
             type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
             level: LOG_LEVELS.INFO,
             timestamp: 0,
             text: 'r3',
-            data: { status: STREAM_PHASE.RUNNING },
+            data: { status: STREAM_PHASE.RUNNING, kind: 'round', index: 3 },
           },
         ]),
         outputFilesByRound: {},
@@ -219,9 +244,9 @@ describe('selectWorkflowRunDetailLines', () => {
   });
 
   it('budgets detail rows together with the live transcript viewport', async () => {
+    seedWorkflowCategory(STREAM_ID);
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
-      category: AgentCategory.Workflow,
       taskGroups: [
         {
           id: 'r0',

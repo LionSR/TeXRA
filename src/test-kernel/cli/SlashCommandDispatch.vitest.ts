@@ -5,6 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
 import { applyCliModelAccessSelection } from '@cli/chat/tui/commands/handlers/modelAccessCommands';
 import {
@@ -38,18 +39,25 @@ import {
   type ConversationEntry,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
-import { projectChildRoster } from '@cli/chat/tui/state/childExecutions';
+import {
+  bindChildStreamState,
+  invalidateChildStreams,
+  unbindChildStreamState,
+} from '@cli/chat/tui/state/childExecutions';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as chatGptLogin from '@cli/runtime/chatgptLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
+import { SessionState } from '@controllers/session/SessionState';
 import type { StreamArtifactReader } from '@controllers/session/StreamArtifactProjection';
 import * as codexPreference from '@model/codex/codexPreference';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
+  AgentCategory,
   STREAM_PHASE,
+  type ActiveChildInfo,
   type ExecutionId,
   type Plan,
   type StreamPhase,
@@ -60,12 +68,43 @@ import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
 
+// Child rosters and parent edges live on the adapter-bound `SessionState`;
+// /status resolves both its child counts and the root transcript target from
+// there, so each roster row lands together with its metadata parent edge.
+let childState: SessionState | undefined;
+
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
+  if (childState) {
+    unbindChildStreamState(childState);
+    childState = undefined;
+  }
   resetCliState();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
+
+function seedChildRoster(
+  parentStreamId: StreamTabId,
+  rows: readonly ActiveChildInfo[],
+): void {
+  if (!childState) {
+    childState = new SessionState(defaultSession());
+    bindChildStreamState(childState);
+  }
+  const state = childState;
+  state.streamLogs.ensureStream(parentStreamId);
+  state.getOrCreateStreamState(parentStreamId, AgentCategory.ToolUse);
+  state.updateStreamState(parentStreamId, (prev) => ({
+    ...prev,
+    subagents: [...rows],
+  }));
+  for (const row of rows) {
+    state.streamLogs.ensureStream(row.childStreamId);
+    state.setStreamParent(row.childStreamId, parentStreamId);
+  }
+  invalidateChildStreams();
+}
 
 function createSession(): TuiSession {
   return new TuiSession();
@@ -287,7 +326,6 @@ describe('handleTuiSlashCommand', () => {
       ],
     };
     await handleTuiSlashCommand('/plan', context);
-    expect(streams.get().get(streamId)).toMatchObject(canonical);
     expect(snapshots.preload).toHaveBeenCalledTimes(2);
     expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
 
@@ -323,9 +361,6 @@ describe('handleTuiSlashCommand', () => {
     resolvePreload();
     await dispatched;
 
-    expect(streams.get().get(streamId)?.plan?.objective).toBe(
-      'Hydrated historical objective.',
-    );
     expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
   });
 
@@ -849,7 +884,7 @@ describe('handleTuiSlashCommand', () => {
       streamId: childStreamId,
       status: STREAM_PHASE.RUNNING,
     });
-    projectChildRoster(rootStreamId, [
+    seedChildRoster(rootStreamId, [
       {
         executionId: 'child-exec',
         identity: { kind: 'agent', agent: 'critic' },
@@ -911,13 +946,13 @@ describe('handleTuiSlashCommand', () => {
       elapsed: '1s',
       childStreamId,
     });
-    projectChildRoster(rootStreamId, [
+    seedChildRoster(rootStreamId, [
       rosterRow(parentStreamId, 0, STREAM_PHASE.WAITING),
       ...rootSiblingIds.map((streamId, index) =>
         rosterRow(streamId, index + 1, STREAM_PHASE.RUNNING),
       ),
     ]);
-    projectChildRoster(parentStreamId, [
+    seedChildRoster(parentStreamId, [
       rosterRow(runningChildId, 3, STREAM_PHASE.RUNNING),
       rosterRow(waitingChildId, 4, STREAM_PHASE.WAITING),
     ]);
@@ -948,7 +983,7 @@ describe('handleTuiSlashCommand', () => {
         status: index === 0 ? STREAM_PHASE.WAITING : STREAM_PHASE.COMPLETED,
       });
     }
-    projectChildRoster(
+    seedChildRoster(
       rootStreamId,
       childStreamIds.map((childStreamId, index) => ({
         executionId: `child-exec-${index}`,
@@ -981,7 +1016,7 @@ describe('handleTuiSlashCommand', () => {
         status: STREAM_PHASE.RUNNING,
       });
     }
-    projectChildRoster(
+    seedChildRoster(
       rootStreamId,
       [focusedChildId, siblingChildId].map((childStreamId, index) => ({
         executionId: `child-exec-${index}`,
@@ -1021,7 +1056,7 @@ describe('handleTuiSlashCommand', () => {
       streamId: idleSiblingId,
       status: STREAM_PHASE.WAITING,
     });
-    projectChildRoster(
+    seedChildRoster(
       rootStreamId,
       [focusedChildId, runningSiblingId, idleSiblingId].map(
         (childStreamId, index) => ({
@@ -1072,11 +1107,11 @@ describe('handleTuiSlashCommand', () => {
       elapsed: '1s',
       childStreamId,
     });
-    projectChildRoster(
+    seedChildRoster(
       rootStreamId,
       [parentStreamId, ...rootSiblingIds].map(rosterRow),
     );
-    projectChildRoster(parentStreamId, [rosterRow(grandchildId, 3)]);
+    seedChildRoster(parentStreamId, [rosterRow(grandchildId, 3)]);
 
     await handleTuiSlashCommand('/status', createContext(session));
 
@@ -1094,7 +1129,6 @@ describe('handleTuiSlashCommand', () => {
     patchSessionMeta({ model: 'gpt55' });
     patchStream(streamId, (slice) => ({
       ...slice,
-      model: 'gpt55',
       usage: {
         inputTokens: 1_000,
         outputTokens: 100,

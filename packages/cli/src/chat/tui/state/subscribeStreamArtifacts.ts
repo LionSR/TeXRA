@@ -57,7 +57,7 @@ registerCliStateResetHook(() => {
 });
 
 /** Invalidate the projection memo and repaint artifact readers. */
-export function bumpStreamArtifactRevision(): void {
+function bumpStreamArtifactRevision(): void {
   artifactProjectionMemo.clear();
   streamArtifactRevision.set(streamArtifactRevision.get() + 1);
 }
@@ -123,9 +123,8 @@ export function readStreamArtifacts(
 }
 
 /** The usage a caller presents for one stream: the canonical store projection
- *  (durable + live) first, then the live-fact slice mirror, then the latest
- *  per-run usage. Owned here so the exit summary and the workflow dashboard
- *  can't drift in precedence. */
+ *  (durable + live) first, then the latest per-run usage gauge. Owned here so
+ *  the exit summary and the workflow dashboard can't drift in precedence. */
 export function streamPreferredUsage(
   streamId: StreamTabId | undefined,
   slice: StreamSlice | undefined,
@@ -134,7 +133,7 @@ export function streamPreferredUsage(
     streamId !== undefined
       ? readStreamArtifacts(streamId)?.cumulativeUsage
       : undefined;
-  return projected ?? slice?.cumulativeUsage ?? slice?.usage;
+  return projected ?? slice?.usage;
 }
 
 function streamCanReceiveArtifacts(

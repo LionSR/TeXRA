@@ -110,7 +110,7 @@ function buildMainViewExecutionRequest(
       // Workflow output paths are implicit in the input list. Agent settings
       // may still declare generated filenames later during prompt rendering.
       outputFiles: [],
-      toolConfig: { ...toolConfigResult.data, attachDiagnostics: false },
+      toolConfig: toolConfigResult.data,
       mediaFiles: (files.mediaFiles ?? [])
         .map((file) =>
           file && isPastedImage(file) ? getPastedImageFullPath(file) : file,
