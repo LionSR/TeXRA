@@ -8,7 +8,6 @@ import {
   toolUseStyledLines,
 } from '@cli/chat/tui/panes/toolRenderers';
 import { toolDisplaySpanTextProps } from '@cli/chat/tui/panes/ToolUseRow';
-import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
 
 // Local imports - shared schemas
 import type { NormalizedToolUse } from '@shared/schemas';
@@ -49,17 +48,9 @@ async function renderBoundedTool(
   const { ink, React } = await loadInk();
   const { BoundedTranscriptEntry } =
     await import('@cli/chat/tui/panes/TranscriptEntry');
-  const transcriptEntry: ConversationEntry = {
-    finalized: false,
-    id: 'bounded-tool',
-    role: 'tool',
-    text: '',
-    row: entry,
-    toolUse: entry.toolUse,
-  };
   return ink.renderToString(
     React.createElement(BoundedTranscriptEntry, {
-      entry: transcriptEntry,
+      entry,
       maxRows,
       width: 80,
     }),

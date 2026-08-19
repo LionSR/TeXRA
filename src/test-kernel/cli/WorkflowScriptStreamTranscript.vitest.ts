@@ -20,12 +20,15 @@ import {
   buildStaticTranscriptState,
   StaticConversationTranscript,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
-import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
+import {
+  isFinalizedTranscriptRow,
+  splitTranscriptEntries,
+  transcriptRowHeadline,
+} from '@cli/chat/tui/panes/transcriptEntries';
 import {
   patchStream,
   resetCliState,
   streams,
-  type ConversationEntry,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
@@ -44,6 +47,7 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
+import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import { loadInk } from '@test/support/inkTestHarness.ts';
@@ -128,7 +132,7 @@ function appendItems(
   }).items;
 }
 
-function staticEntries(items: StaticItems): readonly ConversationEntry[] {
+function staticEntries(items: StaticItems): readonly TranscriptRow[] {
   return items
     .filter((item) => item.kind === 'entry')
     .map((item) => item.entry);
@@ -139,7 +143,7 @@ function entryIds(items: StaticItems): string[] {
 }
 
 function entryTexts(items: StaticItems): string[] {
-  return staticEntries(items).map((entry) => entry.text);
+  return staticEntries(items).map(transcriptRowHeadline);
 }
 
 function transcriptEntry(id: string): StreamLogEntry | undefined {
@@ -153,8 +157,18 @@ function streamSlice() {
   return streams.get().get(STREAM_ID);
 }
 
-function streamEntries(): readonly ConversationEntry[] {
+function streamEntries(): readonly TranscriptRow[] {
   return streamSlice()?.entries ?? [];
+}
+
+/** "Finalized" is derived now: a row is printable into append-only scrollback
+ *  when the slice's promotion frontier has reached it or it settles on its
+ *  own. These suites assert the per-row flag the fold used to store. */
+function finalizedFlags(entries: readonly TranscriptRow[]): boolean[] {
+  const frontier = streamSlice()?.finalizedFrontier ?? 0;
+  return entries.map((row, index) =>
+    isFinalizedTranscriptRow(row, index, frontier),
+  );
 }
 
 function expectOutputOrder(output: string, markers: readonly string[]): void {
@@ -203,10 +217,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     syncStreamLog(sdkStreamId);
 
     expect(
-      streams
-        .get()
-        .get(sdkStreamId)
-        ?.entries.map((entry) => entry.text),
+      streams.get().get(sdkStreamId)?.entries.map(transcriptRowHeadline),
     ).toContain('Claude SDK session');
   });
 
@@ -228,17 +239,16 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(plannedEntries).toMatchObject([
       {
         id: 'core-task',
-        role: 'workflowTask',
-        finalized: false,
-        task: { id: 'core', status: 'planned' },
+        kind: 'workflowTask',
+        call: { id: 'core', status: 'planned' },
       },
       {
         id: 'extension-task',
-        role: 'workflowTask',
-        finalized: false,
-        task: { id: 'extension', status: 'planned' },
+        kind: 'workflowTask',
+        call: { id: 'extension', status: 'planned' },
       },
     ]);
+    expect(finalizedFlags(plannedEntries)).toEqual([false, false]);
 
     const plannedItems = appendItems();
     expect(staticEntries(plannedItems)).toHaveLength(0);
@@ -259,19 +269,18 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(updatedEntries).toMatchObject([
       {
         id: 'core-task',
-        finalized: true,
         // Model ids reach the row already projected to their runtime label
         // (`projectWorkflowCallEntry`), so the row never resolves one itself.
-        task: { status: 'completed', model: 'DeepSeek V4 Flash (Thinking)' },
-        text: 'Finished: Audit core · DeepSeek V4 Flash (Thinking)',
+        call: { status: 'completed', model: 'DeepSeek V4 Flash (Thinking)' },
+        line: 'Finished: Audit core · DeepSeek V4 Flash (Thinking)',
       },
       {
         id: 'extension-task',
-        finalized: false,
-        task: { status: 'planned' },
-        text: 'Planned: Audit extension',
+        call: { status: 'planned' },
+        line: 'Planned: Audit extension',
       },
     ]);
+    expect(finalizedFlags(updatedEntries)).toEqual([true, false]);
 
     const updatedItems = appendItems(plannedItems);
     expect(entryTexts(updatedItems)).toEqual([
@@ -300,11 +309,12 @@ describe('CLI workflow-script child-stream transcript', () => {
     // end-of-stream projection used by the controller.
     syncStreamLog(STREAM_ID, { forceFinal: true });
 
-    expect(streamEntries().at(0)).toMatchObject({
-      finalized: false,
-      text: 'Running: Audit cancellation',
-      task: { status: 'running' },
+    const runningEntries = streamEntries();
+    expect(runningEntries.at(0)).toMatchObject({
+      line: 'Running: Audit cancellation',
+      call: { status: 'running' },
     });
+    expect(finalizedFlags(runningEntries)).toEqual([false]);
     let staticItems = appendItems();
     expect(staticEntries(staticItems)).toEqual([]);
 
@@ -325,13 +335,13 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(settledEntries).toMatchObject([
       {
         id: 'cancelled-running-task',
-        finalized: true,
-        task: {
+        call: {
           id: 'cancelled-running',
           status: 'failed',
         },
       },
     ]);
+    expect(finalizedFlags(settledEntries)).toEqual([true]);
     staticItems = appendItems(staticItems);
     syncStreamLog(STREAM_ID, { forceFinal: true });
     syncStreamLog(STREAM_ID);
@@ -369,11 +379,12 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     syncStreamLog(STREAM_ID, { forceFinal: true });
 
-    expect(streamEntries().at(0)).toMatchObject({
-      finalized: false,
-      text: 'Planned: Audit later',
-      task: { status: 'planned' },
+    const plannedEntries = streamEntries();
+    expect(plannedEntries.at(0)).toMatchObject({
+      line: 'Planned: Audit later',
+      call: { status: 'planned' },
     });
+    expect(finalizedFlags(plannedEntries)).toEqual([false]);
     let staticItems = appendItems();
     expect(staticEntries(staticItems)).toEqual([]);
 
@@ -394,14 +405,14 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(settledEntries).toMatchObject([
       {
         id: 'cancelled-planned-task',
-        finalized: true,
-        task: {
+        call: {
           id: 'cancelled-planned',
           status: 'skipped',
           reason: 'not-reached',
         },
       },
     ]);
+    expect(finalizedFlags(settledEntries)).toEqual([true]);
     staticItems = appendItems(staticItems);
     syncStreamLog(STREAM_ID, { forceFinal: true });
     syncStreamLog(STREAM_ID);
@@ -483,7 +494,9 @@ describe('CLI workflow-script child-stream transcript', () => {
       'Skipped: Audit after cancellation',
     );
 
-    const syntheticEntry = streamEntries().find((entry) => entry.synthetic);
+    const syntheticEntry = streamEntries().find(
+      (entry) => entry.origin === 'local',
+    );
     expect(syntheticEntry).toBeDefined();
     expect(transcriptEntry(response.id)).toMatchObject({
       settlementSeqNo: 2,
@@ -657,9 +670,11 @@ describe('CLI workflow-script child-stream transcript', () => {
     state = advance(state);
 
     const settledSlice = streamSlice();
-    expect(settledSlice?.entries.findLast((entry) => entry.finalized)?.id).toBe(
-      'audit-phase',
-    );
+    expect(
+      settledSlice?.entries.findLast((row, index) =>
+        isFinalizedTranscriptRow(row, index, settledSlice.finalizedFrontier),
+      )?.id,
+    ).toBe('audit-phase');
 
     const incrementalEntryIds = entryIds(state.items);
     expect(incrementalEntryIds).toEqual([
@@ -732,54 +747,67 @@ describe('CLI workflow-script child-stream transcript', () => {
   });
 
   it('orders synthetic rows against legacy source sequence coordinates', async () => {
+    // A host-synthesized row carries `origin: 'local'` plus the seq/settlement
+    // coordinates the CLI captured when it appended it; a legacy source row
+    // carries only its wire `seqNo`. The promotion frontier is set past every
+    // row so ordering — not settlement — is what this pins.
     const beforeLoad = {
+      kind: 'assistant',
       id: 'local-before-load',
-      role: 'assistant',
-      text: 'Before legacy load',
-      finalized: true,
-      synthetic: true,
-      syntheticKind: 'local',
-      syntheticAfterSeq: 0,
-      syntheticAfterSettlementSeqNo: 0,
-    } satisfies ConversationEntry;
+      timestamp: 0,
+      level: 'info',
+      text: transcriptText('Before legacy load'),
+      streaming: false,
+      origin: 'local',
+      seqNo: 0,
+      settlementSeqNo: 0,
+    } satisfies TranscriptRow;
     const legacyA = {
+      kind: 'assistant',
       id: 'legacy-a',
-      sourceSeqNo: 1,
-      role: 'assistant',
-      text: 'Legacy A',
-      finalized: true,
-    } satisfies ConversationEntry;
+      timestamp: 0,
+      level: 'info',
+      seqNo: 1,
+      text: transcriptText('Legacy A'),
+      streaming: false,
+    } satisfies TranscriptRow;
     const legacyB = {
+      kind: 'assistant',
       id: 'legacy-b',
-      sourceSeqNo: 2,
-      role: 'assistant',
-      text: 'Legacy B',
-      finalized: true,
-    } satisfies ConversationEntry;
+      timestamp: 0,
+      level: 'info',
+      seqNo: 2,
+      text: transcriptText('Legacy B'),
+      streaming: false,
+    } satisfies TranscriptRow;
     const afterLoad = {
+      kind: 'assistant',
       id: 'local-after-load',
-      role: 'assistant',
-      text: 'After legacy load',
-      finalized: true,
-      synthetic: true,
-      syntheticKind: 'local',
-      syntheticAfterSeq: 2,
-      syntheticAfterSettlementSeqNo: 2,
-    } satisfies ConversationEntry;
+      timestamp: 0,
+      level: 'info',
+      text: transcriptText('After legacy load'),
+      streaming: false,
+      origin: 'local',
+      seqNo: 2,
+      settlementSeqNo: 2,
+    } satisfies TranscriptRow;
 
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       entries: [beforeLoad],
+      finalizedFrontier: 1,
     }));
     let incrementalItems = appendItems();
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       entries: [beforeLoad, legacyA, legacyB],
+      finalizedFrontier: 3,
     }));
     incrementalItems = appendItems(incrementalItems);
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       entries: [beforeLoad, legacyA, legacyB, afterLoad],
+      finalizedFrontier: 4,
     }));
     incrementalItems = appendItems(incrementalItems);
     const coldItems = appendItems();
@@ -872,16 +900,17 @@ describe('CLI workflow-script child-stream transcript', () => {
 
     const heldSplit = splitTranscriptEntries(
       streamEntries(),
+      streamSlice()?.finalizedFrontier ?? 0,
       STREAM_PHASE.RUNNING,
     );
     expect(heldSplit.finalized).toEqual([]);
-    expect(heldSplit.pending.map((entry) => entry.role)).toEqual([
+    expect(heldSplit.pending.map((entry) => entry.kind)).toEqual([
       'tool',
-      'media',
+      'fileList',
     ]);
 
     let incrementalItems = appendItems();
-    expect(staticEntries(incrementalItems).map((entry) => entry.role)).toEqual(
+    expect(staticEntries(incrementalItems).map((entry) => entry.kind)).toEqual(
       [],
     );
 
@@ -897,8 +926,8 @@ describe('CLI workflow-script child-stream transcript', () => {
     syncStreamLog(STREAM_ID);
     incrementalItems = appendItems(incrementalItems);
     const coldItems = appendItems();
-    expect(staticEntries(incrementalItems).map((entry) => entry.role)).toEqual([
-      'media',
+    expect(staticEntries(incrementalItems).map((entry) => entry.kind)).toEqual([
+      'fileList',
       'tool',
     ]);
     expect(entryIds(coldItems)).toEqual(entryIds(incrementalItems));
@@ -952,8 +981,10 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     syncStreamLog(STREAM_ID);
     expect(
-      streamEntries().find((entry) => entry.id === 'introduction-task')?.text,
-    ).toBe('Planned: Draft introduction');
+      streamEntries()
+        .filter((entry) => entry.id === 'introduction-task')
+        .map(transcriptRowHeadline),
+    ).toEqual(['Planned: Draft introduction']);
 
     const phase = runTrace.trace.openStage('Draft sections', {
       id: 'draft-phase',
@@ -989,7 +1020,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     syncStreamLog(STREAM_ID);
 
     const entries = streamEntries();
-    const texts = entries.map((entry) => entry.text);
+    const texts = entries.map(transcriptRowHeadline);
     // The phase group row and the task's current state both surface.
     expect(texts).toContain('Draft sections');
     expect(texts).toContain(
@@ -999,14 +1030,14 @@ describe('CLI workflow-script child-stream transcript', () => {
       entries.filter((entry) => entry.id === 'introduction-task'),
     ).toHaveLength(1);
 
-    // The phase group is a distinct `role: 'phase'` header, not a plain
+    // The phase group is a distinct `kind: 'phase'` header, not a plain
     // assistant row, so the CLI can render it as a divider between phases.
-    const phaseEntry = entries.find((entry) => entry.text === 'Draft sections');
-    expect(phaseEntry).toMatchObject({
-      role: 'phase',
+    const phaseIndex = texts.indexOf('Draft sections');
+    expect(entries[phaseIndex]).toMatchObject({
+      kind: 'phase',
       phaseLabel: 'Draft sections',
-      finalized: true,
     });
+    expect(finalizedFlags(entries)[phaseIndex]).toBe(true);
 
     // Finalize the stream so the settled prefix promotes into scrollback.
     setStreamStatusInCliState({
@@ -1017,7 +1048,11 @@ describe('CLI workflow-script child-stream transcript', () => {
 
     const finalized = streamEntries();
     expect(
-      splitTranscriptEntries(finalized, STREAM_PHASE.COMPLETED).pending,
+      splitTranscriptEntries(
+        finalized,
+        streamSlice()?.finalizedFrontier ?? 0,
+        STREAM_PHASE.COMPLETED,
+      ).pending,
     ).toEqual([]);
 
     const staticItems = appendItems([], {

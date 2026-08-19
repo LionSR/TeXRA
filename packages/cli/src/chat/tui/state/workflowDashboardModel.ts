@@ -9,6 +9,7 @@
 
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
+import type { TranscriptRowOf } from '@shared/transcript';
 import { latestWorkflowCallsById } from '@shared/copy/workflowCall';
 
 // Local imports - TUI presentation constants
@@ -22,14 +23,8 @@ import {
 } from './childListSelection';
 import { currentWorkflowAttemptId, type StreamSlice } from './cliState';
 
-export type WorkflowTaskEntry = Extract<
-  StreamSlice['entries'][number],
-  { readonly role: 'workflowTask' }
->;
-type WorkflowPhaseEntry = Extract<
-  StreamSlice['entries'][number],
-  { readonly role: 'phase' }
->;
+export type WorkflowTaskEntry = TranscriptRowOf<'workflowTask'>;
+type WorkflowPhaseEntry = TranscriptRowOf<'phase'>;
 
 export interface WorkflowPhaseGroup {
   readonly value: ChildListValue;
@@ -93,35 +88,35 @@ export function workflowDashboardModel(
   );
   const currentCalls = new Set(
     latestWorkflowCallsById(
-      root.entries.flatMap((entry) =>
-        entry.role === 'workflowTask' ? [entry.task] : [],
+      root.entries.flatMap((row) =>
+        row.kind === 'workflowTask' ? [row.call] : [],
       ),
       currentAttemptId,
     ),
   );
   for (const entry of root.entries) {
-    if (entry.role !== 'phase' && entry.role !== 'workflowTask') continue;
-    if (entry.role === 'workflowTask' && !currentCalls.has(entry.task))
+    if (entry.kind !== 'phase' && entry.kind !== 'workflowTask') continue;
+    if (entry.kind === 'workflowTask' && !currentCalls.has(entry.call))
       continue;
     if (
-      entry.role === 'phase' &&
+      entry.kind === 'phase' &&
       currentAttemptId !== undefined &&
       (currentAttemptId === null || entry.attemptId !== currentAttemptId)
     ) {
       continue;
     }
-    const phase = entry.role === 'phase' ? entry.phaseLabel : entry.task.phase;
+    const phase = entry.kind === 'phase' ? entry.phaseLabel : entry.call.phase;
     let group = byPhase.get(phase);
     if (!group) {
       group = {
         value: workflowPhaseListValue(entry.id),
         label: phase ?? 'Unphased',
-        ...(entry.role === 'phase' ? { heading: entry } : {}),
+        ...(entry.kind === 'phase' ? { heading: entry } : {}),
         tasks: [],
       };
       byPhase.set(phase, group);
       groups.push(group);
-    } else if (entry.role === 'phase') {
+    } else if (entry.kind === 'phase') {
       // A rerun may retain the same phase label with revised index/total data.
       // Keep the stable first-appearance row identity, but display the latest
       // heading facts just as the status band does. A GROUP_END row can omit
@@ -134,7 +129,7 @@ export function workflowDashboardModel(
         ...(phaseTotal !== undefined ? { phaseTotal } : {}),
       };
     }
-    if (entry.role === 'workflowTask') {
+    if (entry.kind === 'workflowTask') {
       group.tasks.push(entry);
       tasks.push(entry);
     }
@@ -142,7 +137,7 @@ export function workflowDashboardModel(
 
   const childTaskIndex = new Map<StreamTabId, WorkflowTaskEntry | null>();
   for (const entry of tasks) {
-    const childStreamId = entry.task.childStreamId;
+    const childStreamId = entry.call.childStreamId;
     if (childStreamId === undefined) continue;
     childTaskIndex.set(
       childStreamId,
@@ -232,7 +227,7 @@ export function uniqueWorkflowChildStreamId(
   childTaskIndex: WorkflowChildTaskIndex,
   streams: ReadonlyMap<StreamTabId, StreamSlice>,
 ): StreamTabId | undefined {
-  const childStreamId = entry.task.childStreamId;
+  const childStreamId = entry.call.childStreamId;
   return childStreamId !== undefined &&
     childTaskIndex.get(childStreamId) === entry &&
     streams.has(childStreamId)
