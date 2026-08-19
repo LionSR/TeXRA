@@ -7,6 +7,7 @@ import { z } from 'zod';
 // Local imports
 import { createLog } from '@logger/logUtils';
 import type { ExecResult, FileLocation } from '@shared/schemas';
+import { SUPPORTED_LATEX_COMPILERS } from '@shared/constants/latexToolchain';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { runToolWithCheck } from '@utils/system/toolUtils';
@@ -26,7 +27,7 @@ const LOG_TAIL_LINES = 200;
 const LaTeXCompileOptionsSchema = z.object({
   channel: z.string().optional(),
   outputDirectory: z.string().optional(),
-  compiler: z.enum(['pdflatex', 'latexmk']).default('latexmk'),
+  compiler: z.enum(SUPPORTED_LATEX_COMPILERS).default('latexmk'),
   /** Millisecond timeout per compiler invocation. Kills the child on expiry. */
   timeout: z.int().positive().optional(),
   /**

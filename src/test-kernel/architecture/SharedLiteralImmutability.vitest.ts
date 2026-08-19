@@ -9,6 +9,7 @@ import { STATUS_DISPLAY, STATUS_ICONS, TODO_STATUS } from '@shared/schemas';
 import {
   CORE_LATEX_TOOLS,
   IMAGE_TOOLS,
+  SUPPORTED_LATEX_COMPILERS,
 } from '@shared/constants/latexToolchain';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
@@ -38,6 +39,7 @@ const SHARED_LITERALS = [
   ['LEAN_PROJECT_COMMANDS entry', LEAN_PROJECT_COMMANDS.build],
   ['CORE_LATEX_TOOLS', CORE_LATEX_TOOLS],
   ['IMAGE_TOOLS', IMAGE_TOOLS],
+  ['SUPPORTED_LATEX_COMPILERS', SUPPORTED_LATEX_COMPILERS],
   [
     'LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS',
     LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS,

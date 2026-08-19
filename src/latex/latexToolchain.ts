@@ -1,4 +1,7 @@
-import { CORE_LATEX_TOOLS } from '@shared/constants/latexToolchain';
+import {
+  CORE_LATEX_TOOLS,
+  SUPPORTED_LATEX_COMPILERS,
+} from '@shared/constants/latexToolchain';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
 // Kept in sync with @shared/constants/latex's CORE_LATEX_TOOLS SSOT: if one
@@ -28,8 +31,6 @@ interface LatexToolStatus {
 export interface LatexToolchainProbe {
   readonly tools: readonly LatexToolStatus[];
   readonly hasCompiler: boolean;
-  readonly hasBibliographyTool: boolean;
-  readonly hasLatexmk: boolean;
 }
 
 const TOOL_PURPOSES: Record<LatexToolName, string> = {
@@ -42,13 +43,6 @@ const TOOL_PURPOSES: Record<LatexToolName, string> = {
   latexdiff: 'LaTeX diff generation',
   latexindent: 'LaTeX formatting',
 };
-
-const COMPILER_TOOLS: readonly LatexToolName[] = [
-  'latexmk',
-  'pdflatex',
-  'xelatex',
-  'lualatex',
-];
 
 const REQUIRED_TOOLS = new Set<LatexToolName>(['latexmk']);
 
@@ -68,15 +62,13 @@ export async function probeLatexToolchain(): Promise<LatexToolchainProbe> {
   );
   return {
     tools,
-    hasCompiler: COMPILER_TOOLS.some((name) => installed.has(name)),
-    hasBibliographyTool: installed.has('bibtex') || installed.has('biber'),
-    hasLatexmk: installed.has('latexmk'),
+    hasCompiler: SUPPORTED_LATEX_COMPILERS.some((name) => installed.has(name)),
   };
 }
 
-/** Returns true when a supported LaTeX-to-PDF compiler is available. */
+/** Returns true when a compiler {@link compileLatex2Pdf} can drive is on PATH. */
 export async function hasLatexCompiler(): Promise<boolean> {
-  for (const tool of COMPILER_TOOLS) {
+  for (const tool of SUPPORTED_LATEX_COMPILERS) {
     if (await checkToolInstalled(tool, false)) return true;
   }
   return false;
