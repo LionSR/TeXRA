@@ -19,12 +19,12 @@ import {
 } from './ScrollableModalText';
 import {
   type ApprovalDecision,
-  type TuiRetryRequest,
+  type RetryApprovalPayload,
 } from '../state/approvalQueue';
 
 export interface RetryRequestProps {
   readonly availableRows?: number;
-  readonly payload: TuiRetryRequest;
+  readonly payload: RetryApprovalPayload;
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
@@ -45,26 +45,24 @@ function retryGuidanceRows(
 
 export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
-  const errorText = props.payload.errorMessage ?? props.payload.operation;
-  const isApiSwitchable = isCliApiSwitchableRetry(props.payload);
-  const personalApiKeyAvailable = props.payload.personalApiKeyAvailable;
+  const { data, tui } = props.payload;
+  const errorText = data.errorMessage ?? data.operation;
+  const isApiSwitchable = isCliApiSwitchableRetry(data);
+  const personalApiKeyAvailable = tui.personalApiKeyAvailable;
   const canSwitchToPersonalKey =
     isApiSwitchable && personalApiKeyAvailable === true;
   // Which subscription/plan toggle the switch disables is decided next to the
   // classifiers in approvalPrompts.ts; the modal only renders the action.
-  const switchDecision: ApprovalDecision = cliRetryApiSwitchDecision(
-    props.payload,
-  );
+  const switchDecision: ApprovalDecision = cliRetryApiSwitchDecision(data);
   let guidanceText: string | undefined;
   if (isApiSwitchable && personalApiKeyAvailable !== true) {
-    const requestedProvider = props.payload.errorDetails?.provider;
+    const requestedProvider = data.errorDetails?.provider;
     const provider =
       requestedProvider && isApiProvider(requestedProvider)
         ? requestedProvider
         : undefined;
     guidanceText =
-      props.payload.missingPersonalApiKeyMessage ??
-      missingApiKeyRetryMessage(provider);
+      tui.missingPersonalApiKeyMessage ?? missingApiKeyRetryMessage(provider);
   } else if (canSwitchToPersonalKey) {
     guidanceText = 'Press k to use your own API key for this retry.';
   }

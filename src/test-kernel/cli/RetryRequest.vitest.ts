@@ -6,6 +6,7 @@ import {
   clearApprovals,
   currentApproval,
   enqueueApproval,
+  type RetryApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import type { StreamTabId } from '@shared/schemas';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
@@ -18,18 +19,23 @@ import {
 describe('CLI retry request', () => {
   afterEach(() => clearApprovals());
 
-  function subscriptionLimitPayload(personalApiKeyAvailable: boolean) {
+  function subscriptionLimitPayload(
+    personalApiKeyAvailable: boolean,
+  ): RetryApprovalPayload {
     return {
-      requestId: 'subscription-limit',
-      streamId: 'retry-stream' as StreamTabId,
-      operation: 'Tool-use call',
-      errorMessage: 'ChatGPT subscription usage limit reached.',
-      errorDetails: {
-        message: 'ChatGPT subscription usage limit reached.',
-        exhaustionReason: 'chatgpt-subscription' as const,
-        provider: 'openai',
+      kind: 'retry',
+      data: {
+        requestId: 'subscription-limit',
+        streamId: 'retry-stream' as StreamTabId,
+        operation: 'Tool-use call',
+        errorMessage: 'ChatGPT subscription usage limit reached.',
+        errorDetails: {
+          message: 'ChatGPT subscription usage limit reached.',
+          exhaustionReason: 'chatgpt-subscription' as const,
+          provider: 'openai',
+        },
       },
-      personalApiKeyAvailable,
+      tui: { personalApiKeyAvailable },
     };
   }
 
@@ -37,12 +43,13 @@ describe('CLI retry request', () => {
     const { ink, React } = await loadInk();
     const decision = enqueueApproval({
       kind: 'retry',
-      payload: {
+      data: {
         requestId: 'retry-request',
         streamId: 'retry-stream' as StreamTabId,
         operation: 'Model invocation',
         errorMessage: 'Connection error',
       },
+      tui: {},
     });
     const { instance, stdin } = renderInteractive(
       ink,
@@ -66,13 +73,17 @@ describe('CLI retry request', () => {
       React.createElement(RetryRequest, {
         availableRows: 12,
         payload: {
-          requestId: 'tall-error',
-          streamId: 'retry-stream' as StreamTabId,
-          operation: 'Model invocation',
-          errorMessage: Array.from(
-            { length: 40 },
-            (_, index) => `stack frame ${index + 1}`,
-          ).join('\n'),
+          kind: 'retry',
+          data: {
+            requestId: 'tall-error',
+            streamId: 'retry-stream' as StreamTabId,
+            operation: 'Model invocation',
+            errorMessage: Array.from(
+              { length: 40 },
+              (_, index) => `stack frame ${index + 1}`,
+            ).join('\n'),
+          },
+          tui: {},
         },
         onDecide: vi.fn(),
       }),
@@ -89,8 +100,7 @@ describe('CLI retry request', () => {
   it('settles the approval queue from a real terminal k input', async () => {
     const { ink, React } = await loadInk();
     const decision = enqueueApproval({
-      kind: 'retry',
-      payload: subscriptionLimitPayload(true),
+      ...subscriptionLimitPayload(true),
     });
     const { instance, stdin } = renderInteractive(
       ink,
