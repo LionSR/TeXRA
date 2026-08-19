@@ -30,8 +30,6 @@ type BannerConfig = {
   iconName: TeXRAIconName;
   labelText: string;
   copyTitle: string;
-  /** Prefix for the stable copy-content id, so ids stay unique per banner kind. */
-  copyIdPrefix: string;
   contentClass: string;
   /** Whether the content also carries the entry's `message-{level}` class. */
   levelClass: boolean;
@@ -46,7 +44,6 @@ const BANNER_CONFIG: Record<StreamingTextRow['kind'], BannerConfig> = {
     iconName: 'lightbulb',
     labelText: 'Thinking',
     copyTitle: 'Copy thinking',
-    copyIdPrefix: 'banner',
     contentClass: 'banner-content--thinking',
     levelClass: false,
     showTimestamp: false,
@@ -56,7 +53,6 @@ const BANNER_CONFIG: Record<StreamingTextRow['kind'], BannerConfig> = {
     iconName: 'pencil',
     labelText: 'Scratchpad',
     copyTitle: 'Copy scratchpad',
-    copyIdPrefix: 'banner',
     contentClass: 'banner-content--scratchpad',
     levelClass: false,
     showTimestamp: false,
@@ -66,7 +62,6 @@ const BANNER_CONFIG: Record<StreamingTextRow['kind'], BannerConfig> = {
     iconName: 'wand-magic-sparkles',
     labelText: 'Assistant',
     copyTitle: 'Copy model output',
-    copyIdPrefix: 'model',
     contentClass: 'banner-content--model',
     levelClass: true,
     showTimestamp: true,
@@ -118,7 +113,6 @@ export function formatBannerContentTemplate(
     copyButton: {
       title: config.copyTitle,
       content: trimmedContent,
-      contentId: id ? `${config.copyIdPrefix}:${id}` : undefined,
     },
     extraContent: spillPath
       ? buildSpillArtifactButton(spillPath)

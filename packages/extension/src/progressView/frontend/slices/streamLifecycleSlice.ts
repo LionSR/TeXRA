@@ -37,10 +37,6 @@ import { settleCompactionActivityLogs } from './logSlice';
 import { clearResolvedProposalIds } from './permissionSlice';
 import { mergeBackendOwnedState } from './streamStateMerge';
 import {
-  clearCopyContentStore,
-  clearProposalInputStore,
-} from '../formatters/contentStore';
-import {
   clearFollowUpInputTransientStateStore,
   deleteFollowUpInputTransientState,
 } from '../followUpInputState';
@@ -287,8 +283,6 @@ export const streamLifecycleHandlers = {
 
     // Always clear module-level caches for deleted stream
     clearResolvedProposalIds();
-    clearCopyContentStore();
-    clearProposalInputStore();
     deleteFollowUpInputTransientState(streamId);
     void webviewStorage.update(logListStateKey(streamId), undefined);
 
@@ -312,8 +306,6 @@ export const streamLifecycleHandlers = {
 
   [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => {
     clearResolvedProposalIds();
-    clearCopyContentStore();
-    clearProposalInputStore();
     clearFollowUpInputTransientStateStore();
     // Clear all permissions — no streams means no valid permissions
     permissions$.set([]);
