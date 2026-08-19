@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as agentRegistry from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSession } from '@auth/SupabaseSession';
-import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
+import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import {
   createDesktopProtocolCallbackRouter,
   parseDesktopProtocolCallback,
@@ -871,9 +871,13 @@ describe('desktop Supabase auth', () => {
     const { ensureFreshToken, getSessionTokens, getStoredSessionState } =
       installAuthenticatedSupabaseProvider();
 
-    const message = await buildProfileMessage({
-      getProviderKeyStatuses: async () => [],
+    const controller = new SettingsProfileController({
+      host: 'desktop',
+      globalState: new FakeStateStore(),
+      loadProviderKeyStatuses: async () => ({}),
+      getConfig: (_key, defaultValue) => defaultValue,
     });
+    const message = await controller.buildProfileMessage();
 
     expect(getStoredSessionState).toHaveBeenCalledOnce();
     expect(getSessionTokens).not.toHaveBeenCalled();

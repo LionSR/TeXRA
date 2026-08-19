@@ -79,7 +79,10 @@ import type {
   ToolResult,
 } from '@shared/schemas';
 import { AgentCategory, MESSAGE_TYPES, OUTPUT_END_TAG } from '@shared/schemas';
-import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
+import {
+  MODEL_COMPACTION_THRESHOLD_SETTING,
+  ModelCompactionThresholdPercentSchema,
+} from '@shared/schemas';
 import { isObject } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
@@ -87,7 +90,7 @@ import {
   getProviderStreaming,
   getGlobalStreaming,
 } from '@utils/config/providerConfig';
-import { getConfig } from '@utils/config/configUtils';
+import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import {
@@ -1296,9 +1299,14 @@ export abstract class ModelHandler<
    * window. Returns 0 when compaction is disabled.
    */
   protected getCompactionThresholdPercent(): number {
-    return getConfig<number>(
-      'texra.model.compactionThresholdPercent',
-      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+    // Validated, like the sibling `model.retry.maxAttempts` reader: the
+    // settings row resolves this key through the same schema, so an
+    // out-of-range hand-edited value must not leave the row showing the
+    // default while this reader silently honors the invalid number.
+    return getValidatedConfig(
+      MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
+      ModelCompactionThresholdPercentSchema,
+      MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue,
     );
   }
 

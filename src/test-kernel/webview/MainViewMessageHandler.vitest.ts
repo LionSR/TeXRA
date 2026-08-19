@@ -91,7 +91,6 @@ vi.mock('@shared/state/onboardingState', () => ({
 vi.mock('@utils/config/constants', () => ({}));
 vi.mock('@utils/config/configUtils', () => ({
   getConfig: vi.fn(),
-  updateConfig: vi.fn(),
 }));
 vi.mock('@utils/config/providerConfig', () => ({
   getProviderKeyUrl: mocks.getProviderKeyUrl,

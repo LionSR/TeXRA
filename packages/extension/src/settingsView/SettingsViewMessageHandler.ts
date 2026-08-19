@@ -91,7 +91,7 @@ import {
 } from '@tools/toolAvailability';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { getConfig, updateConfig } from '@utils/config/configUtils';
+import { getConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
@@ -147,8 +147,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       loadProviderKeyStatuses: () =>
         loadApiKeyStatusMap(platform().secrets, SecretManager.API_PROVIDERS),
       getConfig,
-      updateConfig: (key, value) =>
-        updateConfig(key, value, { target: 'global', prefix: false }),
     });
     this.subscriptionUsage = new SubscriptionUsageService();
     this.profileKeyController = new SettingsProfileKeyController({
@@ -273,7 +271,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.profileKeyController.removeProviderKey(message.provider),
       openProviderKeyUrl: (message) =>
         this.profileKeyController.openProviderKeyUrl(message.provider),
-      setProviderSetting: (message) => this.handleSetProviderSetting(message),
       openExternalUrl: (message) => this.openExternalUrl(message.url),
       setModelEnabled: (message) =>
         this.setModelEnabled(message.modelName, message.enabled),
@@ -509,28 +506,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     };
   }
 
-  /**
-   * Post one catalog-derived snapshot. Every field comes from the settings
-   * catalog, so the only per-snapshot code left is the multi-agent arm's
-   * host-specific reliability tuning, which has no catalog row.
-   */
+  /** Post one catalog-derived snapshot. Every field comes from the catalog. */
   private async sendSettingsSnapshot(
     webview: vscode.Webview,
     snapshot: DerivedSettingsSnapshot,
   ): Promise<void> {
-    const message = buildSettingsSnapshotMessage(
-      snapshot,
-      this.settingsStores(),
-      'vscode',
-    );
     await webview.postMessage(
-      snapshot === 'multi-agent'
-        ? {
-            ...message,
-            reliabilitySettings:
-              this.profileController.getReliabilitySettings(),
-          }
-        : message,
+      buildSettingsSnapshotMessage(snapshot, this.settingsStores(), 'vscode'),
     );
   }
 
@@ -754,26 +736,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.viewName,
       ),
     ]);
-  }
-
-  private async handleSetProviderSetting(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_SETTING>,
-  ): Promise<void> {
-    const result = await this.profileController.setProviderSetting(data);
-    if (result.kind === 'rejected') {
-      this.logger.warn(
-        this.channel,
-        `Rejected unknown provider setting key: ${result.key}`,
-      );
-      return;
-    }
-
-    await this.withActiveWebview(async (w) => {
-      await Promise.all([
-        this.sendProfileData(w),
-        this.sendSettingsSnapshot(w, 'multi-agent'),
-      ]);
-    });
   }
 
   // ============================================================

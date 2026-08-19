@@ -757,16 +757,16 @@ describe('@shared/schemas deep-import ratchet', () => {
     const surface = publishedSurface(moduleMemo);
 
     expect(surface['@shared/schemas/profileViewMessages']?.type).toContain(
-      'NumberSetting',
+      'ProviderSetting',
     );
     expect(surface['@shared/schemas/profileViewMessages']?.value).not.toContain(
-      'NumberSetting',
+      'ProviderSetting',
     );
     expect(surface['@shared/schemas/settingsViewMessages']?.type).toContain(
-      'NumberSetting',
+      'ProviderSetting',
     );
     expect(surface['@shared/schemas/commonViewMessages']?.type).not.toContain(
-      'NumberSetting',
+      'ProviderSetting',
     );
     expect(surface['@shared/schemas/commonViewMessages']?.value).not.toContain(
       'ThemeSchema',
@@ -789,7 +789,7 @@ describe('@shared/schemas deep-import ratchet', () => {
         surface,
         '@shared/schemas/profileViewMessages',
         {
-          name: 'NumberSetting',
+          name: 'ProviderSetting',
           requestedSpace: 'ordinary',
         },
         moduleMemo,

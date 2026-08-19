@@ -73,11 +73,7 @@ describe('settings style contracts', () => {
     expect(commonStyles).toContain('.settings-section-heading');
     expect(commonStyles).toContain('.settings-section-heading-title');
 
-    for (const component of [
-      'ModelSelectionList.ts',
-      'ProviderKeyList.ts',
-      'ReliabilitySettingsSection.ts',
-    ]) {
+    for (const component of ['ModelSelectionList.ts', 'ProviderKeyList.ts']) {
       const source = read(path.join(SETTINGS_PROFILE_ROOT, component));
       expect(source).toContain('renderSettingsSectionHeading');
       expect(source).not.toMatch(/<h[1-6][\s>]/);
