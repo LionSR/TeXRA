@@ -243,8 +243,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       agentItems: buildCliAgentItems(toolUseAgents),
       teamItems: buildCliTeamItems(presetPlanSet.plans, {
         includeLoginHint: !presetPlanSet.remoteCatalogRefreshAttempted,
-        remoteAgentCatalogAvailable:
-          await SupabaseClient.canAccessRemoteAgentCatalog(),
+        remoteAgentCatalogAvailable: await SupabaseClient.isAuthenticated(),
         launchBlockReason: presetLaunchBlockReason,
       }),
       accountItems: buildCliAccountItems(accountStatus),
@@ -284,8 +283,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
           ]),
           remoteCatalogRefreshAttempted:
             presetPlanSet.remoteCatalogRefreshAttempted,
-          canAccessRemoteCatalog: () =>
-            SupabaseClient.canAccessRemoteAgentCatalog(),
+          canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
           choose: async (names) => {
             writeTextStderr(
               `Team ${action.preset} has unavailable TeXRA-hosted members: ${names.join(', ')}.`,
@@ -308,7 +306,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
             );
             return (
               code === CliExitCode.Success &&
-              (await SupabaseClient.canAccessRemoteAgentCatalog())
+              (await SupabaseClient.isAuthenticated())
             );
           },
           refresh: async () =>

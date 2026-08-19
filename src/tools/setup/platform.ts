@@ -118,13 +118,10 @@ export async function getSetupAuthStatus(): Promise<{
     return { authenticated: false, remoteAgentCatalogAvailable: false };
   }
 
-  const [user, remoteAgentCatalogAvailable] = await Promise.all([
-    SupabaseClient.getUser(),
-    SupabaseClient.canAccessRemoteAgentCatalog(),
-  ]);
+  const user = await SupabaseClient.getUser();
   return {
     authenticated: true,
-    remoteAgentCatalogAvailable,
+    remoteAgentCatalogAvailable: true,
     email: user?.email,
   };
 }
