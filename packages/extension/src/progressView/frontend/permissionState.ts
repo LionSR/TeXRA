@@ -18,7 +18,6 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { assertNever } from '@utils/core';
 
 export type PermissionState =
   | { kind: typeof PERMISSION_KIND.TOOL_EDIT; data: ToolEditPermission }
@@ -44,27 +43,14 @@ export type PermissionState =
     };
 
 /**
- * Each permission kind's wire schema names its id field differently
- * (`requestId` / `streamId` / `proposalId` / `approvalId`). Switching on
- * `kind` here narrows `data` to the matching variant, so callers get the id
- * without a `Record<string, unknown>` cast into an untyped field name.
+ * Every permission kind's wire schema carries `requestId`, except retry,
+ * which is keyed by `streamId` (one pending retry per stream, a new request
+ * replaces the old one).
  */
 export function permissionId(permission: PermissionState): string {
-  switch (permission.kind) {
-    case PERMISSION_KIND.RETRY:
-      return permission.data.streamId;
-    case PERMISSION_KIND.PLAN_APPROVAL:
-      return permission.data.approvalId;
-    case PERMISSION_KIND.PROPOSAL:
-      return permission.data.proposalId;
-    case PERMISSION_KIND.TOOL_EDIT:
-    case PERMISSION_KIND.BASH:
-    case PERMISSION_KIND.EXTERNAL_INQUIRY:
-    case PERMISSION_KIND.USER_QUESTION:
-      return permission.data.requestId;
-    default:
-      return assertNever(permission, 'Unhandled PermissionState kind');
-  }
+  return permission.kind === PERMISSION_KIND.RETRY
+    ? permission.data.streamId
+    : permission.data.requestId;
 }
 
 /** Stable identity key for a pending permission, used for selection/dedup. */

@@ -35,9 +35,9 @@ export type StateSlicesSnapshot = z.output<typeof StateSlicesSchema>;
  *
  * Default `z.object` semantics by decision (#10641), matching reflection's
  * shared schema: unknown top-level keys in a persisted record are accepted
- * but stripped at this parse boundary, and the existing deep-equal
- * self-heal checks on both resume paths then rewrite the healed record.
- * The heal is one-directional: an upgrade → resume-on-older-build →
+ * but stripped at this parse boundary, and the resumed flow's first
+ * persisted step then rewrites the stripped record. The strip is
+ * one-directional: an upgrade → resume-on-older-build →
  * upgrade cycle permanently erases the newer build's unknown keys, so a
  * future load-bearing top-level field must be added with that erasure in
  * mind. Deliberately not `z.strictObject` — a record written by a newer

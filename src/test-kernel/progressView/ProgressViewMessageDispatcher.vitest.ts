@@ -185,7 +185,7 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
       {
         kind: PERMISSION_KIND.PLAN_APPROVAL,
         data: {
-          approvalId: 'approval-1',
+          requestId: 'approval-1',
           streamId: 'stream-1' as StreamTabId,
           plan: { objective: 'Do the thing.' },
           goalEnabled: false,

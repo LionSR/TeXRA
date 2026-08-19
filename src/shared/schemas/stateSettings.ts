@@ -17,10 +17,12 @@ import {
   DASHSCOPE_USE_CHINA_PROVIDER_SETTING,
   GLM_CODING_PLAN_PROVIDER_SETTING,
   GLM_USE_CHINA_PROVIDER_SETTING,
+  DEFAULT_HELPER_MODEL,
   KIMI_CODE_PREFER_PROVIDER_SETTING,
   MINIMAX_USE_CHINA_PROVIDER_SETTING,
   MOONSHOT_USE_CHINA_PROVIDER_SETTING,
   PROVIDER_ENDPOINT_STATE_ENTRIES,
+  PROVIDER_STATE_ENTRIES,
   USE_OPENROUTER_PROVIDER_SETTING,
 } from '@shared/constants/providers';
 import {
@@ -107,7 +109,9 @@ export type SettingsViewSnapshot =
   | 'approval'
   | 'git-author'
   | 'latex'
+  | 'models'
   | 'multi-agent'
+  | 'profile'
   | 'telemetry';
 
 interface CliRuntimeReachability {
@@ -318,6 +322,9 @@ const TEXRA_APPROVAL_POLICY_RUNTIME_REACHABILITY = {
 const PROXY_CONFIG_CONSUMER =
   'src/agent/modelHandlers/support/ProxyConfigResolver.ts';
 
+// Written by the extension/desktop Models tab through the generic
+// `UPDATE_STATE_SETTING` boundary and by the CLI's `/config` panel — one
+// validating write path (contracts §2.5 retired the bespoke webview literal).
 const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
   ({ endpointKey, displayName }) =>
     stateSetting({
@@ -327,10 +334,35 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
       description: `Custom base URL for ${displayName} API requests. Leave empty to use the default endpoint.`,
       category: 'model',
       store: 'globalState',
-      hosts: ['cli'],
+      hosts: ['vscode', 'cli', 'desktop'],
       cliConsumer: PROXY_CONFIG_CONSUMER,
       cliRuntimeReachability: PROVIDER_ENDPOINT_RUNTIME_REACHABILITY,
+      settingsViewSnapshot: 'profile',
     }),
+);
+
+/**
+ * Per-provider streaming toggles, written through `UPDATE_STATE_SETTING` by
+ * the extension/desktop Models tab. Reads stay in `providerConfig`'s
+ * `getProviderStreaming`, whose default-when-unset is the *global* streaming
+ * toggle — the static `.prefault(true)` here matches that global default.
+ */
+const PROVIDER_STREAMING_SETTINGS = PROVIDER_STATE_ENTRIES.flatMap(
+  ({ streamingKey, displayName }) =>
+    streamingKey
+      ? [
+          stateSetting({
+            key: streamingKey,
+            schema: z.boolean().prefault(true),
+            title: `${displayName} streaming`,
+            description: `Stream ${displayName} responses incrementally instead of waiting for the full completion.`,
+            category: 'model',
+            store: 'globalState',
+            hosts: ['vscode', 'desktop'],
+            settingsViewSnapshot: 'profile',
+          }),
+        ]
+      : [],
 );
 
 /**
@@ -712,12 +744,47 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliRuntimeReachability: OPENAI_WEBSOCKET_RUNTIME_REACHABILITY,
   }),
 
-  // --- Provider endpoints ---------------------------------------------------
-  // The extension/desktop Models tab already has per-provider endpoint inputs.
-  // The CLI consumes the same global-state keys in `ProxyConfigResolver`, so
-  // these rows expose that existing runtime behavior through `/config` without
-  // adding another imperative settings list.
+  // --- Provider endpoints & streaming ---------------------------------------
+  // The extension/desktop Models tab edits these per-provider keys through the
+  // generic catalog write; the CLI consumes the endpoint keys in
+  // `ProxyConfigResolver` and surfaces them through `/config`.
   ...PROVIDER_ENDPOINT_SETTINGS,
+  ...PROVIDER_STREAMING_SETTINGS,
+  stateSetting({
+    key: GlobalStateKey.STREAMING_GLOBAL,
+    schema: z.boolean().prefault(true),
+    title: 'Enable streaming',
+    description: 'Global default for all providers.',
+    category: 'model',
+    store: 'globalState',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'profile',
+  }),
+
+  // --- Model picker preferences ---------------------------------------------
+  // Written through `UPDATE_STATE_SETTING` by the Models tab; read by the
+  // model-selection controller both hosts share.
+  stateSetting({
+    key: GlobalStateKey.HELPER_MODEL,
+    schema: z.string().min(1).prefault(DEFAULT_HELPER_MODEL),
+    title: 'Helper model',
+    description:
+      'Model used for auxiliary tasks: instruction polishing, merges, and session descriptions.',
+    category: 'model',
+    store: 'globalState',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'models',
+  }),
+  stateSetting({
+    key: GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+    schema: z.boolean().prefault(false),
+    title: 'Prefer short model names',
+    description: 'Show compact model names in pickers.',
+    category: 'model',
+    store: 'globalState',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'models',
+  }),
 
   // --- OpenRouter routing ----------------------------------------------------
   // Read by `getUseOpenRouter()` during model-handler routing. The extension

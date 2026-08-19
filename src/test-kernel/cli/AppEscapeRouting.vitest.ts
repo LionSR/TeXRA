@@ -29,14 +29,17 @@ import {
   streams,
 } from '@cli/chat/tui/state/cliState';
 import {
-  projectChildRoster,
-  setParentStream,
+  bindChildStreamState,
+  invalidateChildStreams,
+  unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
+import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
   STREAM_PHASE,
   USER_FOLLOW_UP_SUPPORT,
+  type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
 import {
@@ -46,6 +49,7 @@ import {
 } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import { createRunTrace } from '@transcript';
+import type { StreamSummaryMeta } from '@transcript/StreamLogStore';
 
 vi.mock('@cli/runtime/shortcutLabels', async (importOriginal) => {
   const actual =
@@ -82,14 +86,22 @@ function setRunning(...streamIds: StreamTabId[]): void {
   }
 }
 
+// Identity/category/follow-up-support metadata is shared-substrate state now:
+// the App reads it via `streamMetadataFor` from the bound `SessionState`,
+// whose authority is the durable summary mirror (`recordSummaryMeta` is a
+// whole-object replacement, so each seed states the full record it wants).
+function seedStreamMeta(streamId: StreamTabId, meta: StreamSummaryMeta): void {
+  childState.streamLogs.recordSummaryMeta(streamId, meta);
+  invalidateChildStreams();
+}
+
 function markToolUseAgent(...streamIds: StreamTabId[]): void {
   for (const streamId of streamIds) {
-    patchStream(streamId, (slice) => ({
-      ...slice,
+    seedStreamMeta(streamId, {
       identity: { kind: 'agent', agent: 'child' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-      category: AgentCategory.ToolUse,
-    }));
+      agentCategory: AgentCategory.ToolUse,
+    });
   }
 }
 
@@ -97,7 +109,7 @@ function runningChild(
   executionId: string,
   agentName: string,
   childStreamId: StreamTabId,
-): Parameters<typeof projectChildRoster>[1][number] {
+): ActiveChildInfo {
   return {
     executionId,
     agentName,
@@ -105,6 +117,33 @@ function runningChild(
     childStreamId,
     status: STREAM_PHASE.RUNNING,
   };
+}
+
+// Child rosters, parent edges, and tombstones live on the adapter-bound
+// `SessionState`; these helpers write through its public API and re-derive
+// the reactive snapshots the App renders from.
+let childState: SessionState;
+
+function seedChildRoster(
+  parentStreamId: StreamTabId,
+  rows: readonly ActiveChildInfo[],
+): void {
+  childState.streamLogs.ensureStream(parentStreamId);
+  childState.getOrCreateStreamState(parentStreamId, AgentCategory.ToolUse);
+  childState.updateStreamState(parentStreamId, (state) => ({
+    ...state,
+    subagents: [...rows],
+  }));
+  invalidateChildStreams();
+}
+
+function seedParentEdge(
+  streamId: StreamTabId,
+  parentStreamId: StreamTabId | null,
+): void {
+  childState.streamLogs.ensureStream(streamId);
+  childState.setStreamParent(streamId, parentStreamId);
+  invalidateChildStreams();
 }
 
 function seedRootStream(): void {
@@ -118,14 +157,14 @@ function seedChildHierarchy(): void {
   seedRootStream();
   setRunning(CHILD, GRANDCHILD);
   markToolUseAgent(CHILD, GRANDCHILD);
-  projectChildRoster(ROOT, [
+  seedChildRoster(ROOT, [
     runningChild('escape-child-execution', 'child', CHILD),
   ]);
-  projectChildRoster(CHILD, [
+  seedChildRoster(CHILD, [
     runningChild('escape-grandchild-execution', 'grandchild', GRANDCHILD),
   ]);
-  setParentStream(CHILD, ROOT);
-  setParentStream(GRANDCHILD, CHILD);
+  seedParentEdge(CHILD, ROOT);
+  seedParentEdge(GRANDCHILD, CHILD);
 }
 
 function finishNestedHierarchyAndFocusRoot(): void {
@@ -197,9 +236,17 @@ function fakeHistory(entries: readonly string[]): InputHistory {
   };
 }
 
-beforeEach(() => resetCliState());
+beforeEach(async () => {
+  resetCliState();
+  // Summary-mirror metadata seeded via `seedStreamMeta` lives in the shared
+  // transcript store and would otherwise leak across tests.
+  await defaultSession().transcripts.clear();
+  childState = new SessionState(defaultSession());
+  bindChildStreamState(childState);
+});
 afterEach(() => {
   clearApprovals();
+  unbindChildStreamState(childState);
   resetCliState();
 });
 
@@ -224,14 +271,15 @@ describe('App foreground Escape ownership', () => {
 
   it('renders and operates a canonical workflow dashboard with zero descendants', async () => {
     seedRootStream();
-    patchStream(ROOT, (slice) => ({
-      ...slice,
-      agent: 'solo-workflow',
+    seedStreamMeta(ROOT, {
       identity: {
-        kind: 'multiAgentWorkflow' as const,
+        kind: 'multiAgentWorkflow',
         workflowName: 'solo-workflow',
       },
-      category: AgentCategory.Workflow,
+      agentCategory: AgentCategory.Workflow,
+    });
+    patchStream(ROOT, (slice) => ({
+      ...slice,
       entries: [
         {
           id: 'task-planned-only',
@@ -265,15 +313,13 @@ describe('App foreground Escape ownership', () => {
   it('retains projected workflow rows while child detail is focused and returns to the same task', async () => {
     seedRootStream();
     setRunning(CHILD, GRANDCHILD);
-    patchStream(ROOT, (slice) => ({
-      ...slice,
-      agent: 'workflow',
+    seedStreamMeta(ROOT, {
       identity: {
-        kind: 'multiAgentWorkflow' as const,
+        kind: 'multiAgentWorkflow',
         workflowName: 'workflow',
       },
-      category: AgentCategory.Workflow,
-    }));
+      agentCategory: AgentCategory.Workflow,
+    });
     const runTrace = createRunTrace(ROOT, defaultSession().transcripts);
     const phase = runTrace.trace.openStage('Map', {
       id: 'phase-map',
@@ -299,12 +345,12 @@ describe('App foreground Escape ownership', () => {
       });
     }
     syncStreamLog(ROOT);
-    projectChildRoster(ROOT, [
+    seedChildRoster(ROOT, [
       runningChild('workflow-child-execution', 'duplicate', CHILD),
       runningChild('workflow-review-execution', 'duplicate', GRANDCHILD),
     ]);
-    setParentStream(CHILD, ROOT);
-    setParentStream(GRANDCHILD, ROOT);
+    seedParentEdge(CHILD, ROOT);
+    seedParentEdge(GRANDCHILD, ROOT);
     const { instance, stdin, stdout, onInterruptStream } =
       await renderWithInterrupt();
 
@@ -368,18 +414,19 @@ describe('App foreground Escape ownership', () => {
   it('preserves workflow selection when tasks share a child stream', async () => {
     seedRootStream();
     setRunning(CHILD);
-    projectChildRoster(ROOT, [
+    seedChildRoster(ROOT, [
       runningChild('shared-child-execution', 'shared-child', CHILD),
     ]);
-    setParentStream(CHILD, ROOT);
-    patchStream(ROOT, (slice) => ({
-      ...slice,
-      agent: 'ambiguous-workflow',
+    seedParentEdge(CHILD, ROOT);
+    seedStreamMeta(ROOT, {
       identity: {
-        kind: 'multiAgentWorkflow' as const,
+        kind: 'multiAgentWorkflow',
         workflowName: 'ambiguous-workflow',
       },
-      category: AgentCategory.Workflow,
+      agentCategory: AgentCategory.Workflow,
+    });
+    patchStream(ROOT, (slice) => ({
+      ...slice,
       entries: ['first', 'second'].map((id) => ({
         id: `task-${id}`,
         role: 'workflowTask' as const,
@@ -526,7 +573,7 @@ describe('App foreground Escape ownership', () => {
     try {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
-      setParentStream(CHILD, null);
+      seedParentEdge(CHILD, null);
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeStreamId.get()).toBe(CHILD);
@@ -544,7 +591,7 @@ describe('App foreground Escape ownership', () => {
     try {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
-      setParentStream(CHILD, null);
+      seedParentEdge(CHILD, null);
       stdin.write(ESC);
       await waitFor(() => onInterruptStream.mock.calls.length === 1);
 
@@ -676,7 +723,7 @@ describe('App foreground Escape ownership', () => {
     try {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
-      setParentStream(CHILD, null);
+      seedParentEdge(CHILD, null);
       stdin.write('x');
       await sleep(50);
 
@@ -782,13 +829,12 @@ describe('App foreground Escape ownership', () => {
         currentFrame(stdout).includes('preserved root draft'),
       );
 
-      patchStream(CHILD, (slice) => ({
-        ...slice,
+      seedStreamMeta(CHILD, {
         identity: { kind: 'process', tool: 'bash' },
         // Background Bash carries this synthetic category; identity remains
         // authoritative for the composer capability.
-        category: AgentCategory.ToolUse,
-      }));
+        agentCategory: AgentCategory.ToolUse,
+      });
       focusStream(CHILD);
       await waitFor(() => activeStreamId.get() === CHILD);
       await waitFor(
@@ -871,15 +917,15 @@ describe('App foreground Escape ownership', () => {
         {
           identity: { kind: 'agent' as const, agent: 'structured-child' },
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-          category: AgentCategory.ToolUse,
+          agentCategory: AgentCategory.ToolUse,
         },
         {
           identity: { kind: 'agent' as const, agent: 'workflow-child' },
-          category: AgentCategory.Workflow,
+          agentCategory: AgentCategory.Workflow,
         },
         {
           identity: { kind: 'process' as const, tool: 'bash' },
-          category: AgentCategory.ToolUse,
+          agentCategory: AgentCategory.ToolUse,
         },
         {
           identity: {
@@ -887,11 +933,11 @@ describe('App foreground Escape ownership', () => {
             agent: 'codex',
             tool: 'codex',
           },
-          category: AgentCategory.ToolUse,
+          agentCategory: AgentCategory.ToolUse,
         },
-      ]) {
+      ] satisfies readonly StreamSummaryMeta[]) {
         const writesBeforePatch = stdout.writes.length;
-        patchStream(CHILD, (slice) => ({ ...slice, ...fixture }));
+        seedStreamMeta(CHILD, fixture);
         await waitFor(
           () =>
             stdout.writes.length > writesBeforePatch &&
@@ -908,10 +954,11 @@ describe('App foreground Escape ownership', () => {
     const viewport = { columns: 40, rows: 12 } as const;
 
     seedChildHierarchy();
-    patchStream(CHILD, (slice) => ({
-      ...slice,
+    seedStreamMeta(CHILD, {
+      identity: { kind: 'agent', agent: 'child' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    }));
+      agentCategory: AgentCategory.ToolUse,
+    });
     focusStream(CHILD);
     const transcriptText = Array.from(
       { length: 20 },
@@ -982,13 +1029,13 @@ describe('App foreground Escape ownership', () => {
       name: 'structured single-cycle workflow call',
       identity: { kind: 'agent' as const, agent: 'structured-child' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      category: AgentCategory.ToolUse,
+      agentCategory: AgentCategory.ToolUse,
     },
     {
       name: 'workflow agent',
       identity: { kind: 'agent' as const, agent: 'workflow-child' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      category: AgentCategory.Workflow,
+      agentCategory: AgentCategory.Workflow,
     },
     {
       name: 'multi-agent workflow',
@@ -997,13 +1044,13 @@ describe('App foreground Escape ownership', () => {
         workflowName: 'workflow-child',
       },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      category: AgentCategory.Workflow,
+      agentCategory: AgentCategory.Workflow,
     },
     {
       name: 'background bash process',
       identity: { kind: 'process' as const, tool: 'bash' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      category: AgentCategory.ToolUse,
+      agentCategory: AgentCategory.ToolUse,
     },
     {
       name: 'terminal-backed agent',
@@ -1013,24 +1060,23 @@ describe('App foreground Escape ownership', () => {
         tool: 'codex',
       },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-      category: AgentCategory.ToolUse,
+      agentCategory: AgentCategory.ToolUse,
     },
     {
       name: 'missing metadata',
       identity: undefined,
       userFollowUpSupport: undefined,
-      category: undefined,
+      agentCategory: undefined,
     },
   ])(
     'ignores printable submission for a running $name child',
     async (fixture) => {
       seedChildHierarchy();
-      patchStream(CHILD, (slice) => ({
-        ...slice,
+      seedStreamMeta(CHILD, {
         identity: fixture.identity,
         userFollowUpSupport: fixture.userFollowUpSupport,
-        category: fixture.category,
-      }));
+        agentCategory: fixture.agentCategory,
+      });
       focusStream(CHILD);
       const onSubmit = vi.fn();
       const { instance, stdin, stdout } = await renderWithInterrupt({
@@ -1101,7 +1147,7 @@ describe('App foreground Escape ownership', () => {
 
   it('interrupts a promoted top-level stream because it has no back relation', async () => {
     seedChildHierarchy();
-    setParentStream(CHILD, null);
+    seedParentEdge(CHILD, null);
     focusStream(CHILD);
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
@@ -1206,18 +1252,19 @@ describe('App approval surface ownership', () => {
   it('focuses a dashboard root before presenting its bound approval', async () => {
     seedRootStream();
     setRunning(CHILD);
-    projectChildRoster(ROOT, [
+    seedChildRoster(ROOT, [
       runningChild('approval-task-execution', 'approval-task', CHILD),
     ]);
-    setParentStream(CHILD, ROOT);
-    patchStream(ROOT, (slice) => ({
-      ...slice,
-      agent: 'approval-workflow',
+    seedParentEdge(CHILD, ROOT);
+    seedStreamMeta(ROOT, {
       identity: {
-        kind: 'multiAgentWorkflow' as const,
+        kind: 'multiAgentWorkflow',
         workflowName: 'approval-workflow',
       },
-      category: AgentCategory.Workflow,
+      agentCategory: AgentCategory.Workflow,
+    });
+    patchStream(ROOT, (slice) => ({
+      ...slice,
       entries: [
         {
           id: 'approval-task',
@@ -1248,7 +1295,7 @@ describe('App approval surface ownership', () => {
     void enqueueApproval({
       kind: 'planApproval',
       payload: {
-        approvalId: 'plan-dashboard-root',
+        requestId: 'plan-dashboard-root',
         streamId: ROOT,
         plan: { objective: 'Verify the dashboard root.' },
         goalEnabled: false,
@@ -1263,7 +1310,7 @@ describe('App approval surface ownership', () => {
         const pending = currentApproval.get()?.payload;
         return (
           pending?.kind === 'planApproval' &&
-          pending.payload.approvalId === 'plan-dashboard-root'
+          pending.payload.requestId === 'plan-dashboard-root'
         );
       });
       await waitFor(() => stdout.output.includes('Approve plan?'));
@@ -1369,16 +1416,14 @@ describe('App approval surface ownership', () => {
 
   it('promotes an approval-only dashboard before workflow rows exist', async () => {
     seedRootStream();
-    patchStream(ROOT, (slice) => ({
-      ...slice,
-      agent: 'Starting workflow',
-      category: AgentCategory.Workflow,
+    seedStreamMeta(ROOT, {
       identity: {
         kind: 'multiAgentWorkflow',
         workflowName: 'starting-workflow',
       },
-      entries: [],
-    }));
+      agentCategory: AgentCategory.Workflow,
+    });
+    patchStream(ROOT, (slice) => ({ ...slice, entries: [] }));
     void enqueueApproval({
       kind: 'externalInquiry',
       payload: {

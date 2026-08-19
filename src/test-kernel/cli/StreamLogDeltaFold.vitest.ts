@@ -11,7 +11,7 @@
 
 import '@test/support/defaultSessionTestSetup';
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
@@ -24,11 +24,17 @@ import {
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
 import {
+  bindChildStreamState,
+  invalidateChildStreams,
+  unbindChildStreamState,
+} from '@cli/chat/tui/state/childExecutions';
+import {
   invalidateTranscriptFoldForTest,
   subscribeStreamLog,
   syncStreamLog,
   transcriptFoldCountersForTest,
 } from '@cli/chat/tui/state/subscribeStreamLog';
+import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
   LOG_LEVELS,
@@ -93,7 +99,6 @@ function projectedView(slice: StreamSlice | undefined): unknown {
     latestLine: slice?.latestLine,
     thinkingActive: slice?.thinkingActive ?? false,
     compactingActive: slice?.compactingActive ?? false,
-    activeSkills: slice?.activeSkills ?? [],
     taskGroups: slice?.taskGroups ?? [],
     workflowAttemptId: slice?.workflowAttemptId,
     workflowAttemptBoundaryDeclared:
@@ -366,14 +371,18 @@ function syncBothAndCompare(
   expect(fold, `step ${step}${extra}`).toEqual(oracle);
 }
 
+// Category/identity metadata is shared-substrate state now: the log
+// projection reads it via `streamMetadataFor` from the bound `SessionState`,
+// whose authority is the durable summary mirror.
 function configureStreams(config: StreamConfig): void {
   for (const streamId of MIRRORED) {
-    patchStream(streamId, (slice) => ({
-      ...slice,
-      category: config.category,
+    defaultSession().transcripts.recordSummaryMeta(streamId, {
+      agentCategory: config.category,
       ...(config.identity ? { identity: config.identity } : {}),
-    }));
+    });
+    patchStream(streamId, (slice) => ({ ...slice }));
   }
+  invalidateChildStreams();
 }
 
 /** Subscribe for the duration of `fn`, disposing even if an assertion throws. */
@@ -387,12 +396,20 @@ function withStreamSubscription(fn: () => void): void {
 }
 
 describe('transcript fold vs from-scratch oracle', () => {
+  let boundState: SessionState;
+
   beforeEach(async () => {
     await defaultSession().transcripts.clear();
     // Twice: the first reset retires the ids this suite reuses across tests,
     // the second starts the lifetime with no retired identity.
     resetCliState();
     resetCliState();
+    boundState = new SessionState(defaultSession());
+    bindChildStreamState(boundState);
+  });
+
+  afterEach(() => {
+    unbindChildStreamState(boundState);
   });
 
   it.each(

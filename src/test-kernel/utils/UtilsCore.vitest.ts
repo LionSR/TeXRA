@@ -365,13 +365,9 @@ describe('coalesceAsync', () => {
 });
 
 describe('truncatedHexId', () => {
-  it('defaults to a sha256 prefix of the requested length', () => {
+  it('returns a sha256 prefix of the requested length', () => {
     expect(truncatedHexId('source', 8)).toBe('41cf6794');
     expect(truncatedHexId('source', 16)).toBe('41cf6794ba4200b8');
-  });
-
-  it('keeps the compile-log sha1 spelling', () => {
-    expect(truncatedHexId('path.tex', 8, 'sha1')).toBe('eefc4296');
   });
 });
 

@@ -9,8 +9,9 @@ import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import { requestCliCompaction } from '@cli/chat/tui/state/compactionRequest';
 import {
   activeSubagentsFor,
-  childStreamEntries,
+  childRosters,
   parentStream,
+  streamMetadataFor,
 } from '@cli/chat/tui/state/childExecutions';
 import {
   activeStreamId as activeStreamIdSignal,
@@ -20,7 +21,6 @@ import {
   clearTransientNotice,
   finishWorkPlanReaderRequest,
   openInfoPane,
-  patchStream,
   sessionMeta,
   setTransientNotice,
   streams,
@@ -91,13 +91,6 @@ export async function showCliWorkPlan(
     setTransientNotice('The focused session has no work plan.');
     return;
   }
-  // The foreground reader still renders from the slice until the StreamSlice
-  // container collapses (Wave A cliState); patch only the two fields it reads.
-  patchStream(streamId, (slice) => ({
-    ...slice,
-    todos: projection.todos,
-    plan: projection.plan,
-  }));
   finishWorkPlanReaderRequest(request);
 }
 
@@ -108,9 +101,9 @@ export async function showCliSessionStatus(
   const activeStreamId = activeStreamIdSignal.get();
   const streamSlices = streams.get();
   const slice = activeStreamId ? streamSlices.get(activeStreamId) : undefined;
-  const childEntries = childStreamEntries.get();
+  const rosters = childRosters.get();
   const directActiveChildren = activeStreamId
-    ? activeSubagentsFor(activeStreamId, childEntries, streamSlices)
+    ? activeSubagentsFor(activeStreamId, rosters)
     : [];
   let workflowChildren = directActiveChildren;
   if (activeStreamId && directActiveChildren.length === 0) {
@@ -118,17 +111,17 @@ export async function showCliSessionStatus(
       activeStreamId,
       parentStream: parentStream.get(),
     });
-    workflowChildren = activeSubagentsFor(
-      parentOrSelfStreamId,
-      childEntries,
-      streamSlices,
-    );
+    workflowChildren = activeSubagentsFor(parentOrSelfStreamId, rosters);
   }
   const activeChildSessions = workflowChildren.filter((child) =>
     isActivePhase(child.status),
   ).length;
   // Use root-session access facts only before any stream exists.
-  const model = slice?.model ?? (meta.model || context.initialModel);
+  const model =
+    (activeStreamId
+      ? streamMetadataFor(activeStreamId)?.config?.model
+      : undefined) ??
+    (meta.model || context.initialModel);
   const [subscriptionActive, grokSubscriptionActive, kimiCodeActive] =
     await Promise.all([
       isCodexSubscriptionActive(model),

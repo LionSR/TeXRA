@@ -38,13 +38,6 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
 };
 
 /**
- * Edge function URL for custom token refresh.
- * Used for sessions minted by the auth edge functions rather than by a
- * standard Supabase OAuth callback.
- */
-export const GITHUB_TOKEN_REFRESH_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-github/refresh`;
-
-/**
  * Base URL for the device-code (RFC 8628 style) sign-in edge function.
  * Used by headless terminals where a loopback OAuth callback can't work.
  */

@@ -34,7 +34,7 @@ function createPermission(): ProposalRequestPanel['permission'] {
   return {
     kind: 'proposal',
     data: {
-      proposalId: 'proposal-1',
+      requestId: 'proposal-1',
       streamId: 'stream-a',
       agentCategory: AgentCategory.Workflow,
       agent: 'writer',

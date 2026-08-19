@@ -19,11 +19,11 @@ type AgentProposalActionInput =
   WithoutCommand<ProgressAgentProposalActionMessage>;
 
 export interface ProgressAgentProposalControllerDeps {
-  getPendingProposal(proposalId: string): AgentProposalPermission | undefined;
+  getPendingProposal(requestId: string): AgentProposalPermission | undefined;
   restoreRunConfig(config: AgentConfig): Promise<boolean>;
   openFile(path: string): Promise<void>;
-  settleProposal(proposalId: string, result: ProposalResult): void;
-  onMissingProposal?(proposalId: string): void;
+  settleProposal(requestId: string, result: ProposalResult): void;
+  onMissingProposal?(requestId: string): void;
   onInvalidProposal?(issues: unknown): void;
   onSetupComplete?(proposal: AgentProposalPermission): void;
 }
@@ -34,16 +34,16 @@ export class ProgressAgentProposalController {
   async handleAction(input: AgentProposalActionInput): Promise<boolean> {
     switch (input.action) {
       case 'setup':
-        return this.setupProposal(input.proposalId);
+        return this.setupProposal(input.requestId);
       case 'approve':
-        this.deps.settleProposal(input.proposalId, {
+        this.deps.settleProposal(input.requestId, {
           action: 'approve',
           ...(input.model ? { model: input.model } : {}),
           ...(input.agent ? { agent: input.agent } : {}),
         });
         return true;
       case 'reject':
-        this.deps.settleProposal(input.proposalId, {
+        this.deps.settleProposal(input.requestId, {
           action: 'reject',
           ...(input.feedback ? { feedback: input.feedback } : {}),
         });
@@ -60,10 +60,10 @@ export class ProgressAgentProposalController {
     return this.deps.restoreRunConfig(result.data);
   }
 
-  private async setupProposal(proposalId: string): Promise<boolean> {
-    const proposal = this.deps.getPendingProposal(proposalId);
+  private async setupProposal(requestId: string): Promise<boolean> {
+    const proposal = this.deps.getPendingProposal(requestId);
     if (!proposal) {
-      this.deps.onMissingProposal?.(proposalId);
+      this.deps.onMissingProposal?.(requestId);
       return false;
     }
 
@@ -75,7 +75,7 @@ export class ProgressAgentProposalController {
         );
         await this.deps.openFile(scriptPath.fsPath);
       } catch (error) {
-        this.deps.settleProposal(proposalId, {
+        this.deps.settleProposal(requestId, {
           action: 'reject',
           feedback: `Unable to open the workflow script for setup: ${toErrorMessage(error)}`,
         });
@@ -84,7 +84,7 @@ export class ProgressAgentProposalController {
     } else {
       const restored = await this.restoreProposalConfig(proposal);
       if (!restored) {
-        this.deps.settleProposal(proposalId, {
+        this.deps.settleProposal(requestId, {
           action: 'reject',
           feedback: 'Unable to restore the proposal configuration for setup.',
         });
@@ -92,7 +92,7 @@ export class ProgressAgentProposalController {
       }
     }
 
-    this.deps.settleProposal(proposalId, { action: 'setup' });
+    this.deps.settleProposal(requestId, { action: 'setup' });
     this.deps.onSetupComplete?.(proposal);
     return true;
   }

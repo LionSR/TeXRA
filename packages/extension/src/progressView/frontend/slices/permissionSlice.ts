@@ -43,7 +43,7 @@ export function addResolvedProposalId(id: string): void {
 // ============================================================
 
 /**
- * Upsert a proposal permission. If one with the same proposalId already exists
+ * Upsert a proposal permission. If one with the same requestId already exists
  * (e.g., a model-options update after the initial show), replace it in-place
  * to preserve ordering. Otherwise prepend as a new permission.
  */
@@ -54,7 +54,7 @@ function upsertProposalPermission(
   const idx = permissions.findIndex(
     (p) =>
       p.kind === PERMISSION_KIND.PROPOSAL &&
-      p.data.proposalId === permission.data.proposalId,
+      p.data.requestId === permission.data.requestId,
   );
   if (idx < 0) {
     permissions$.set([permission, ...permissions]);
@@ -121,7 +121,7 @@ export const permissionHandlers = {
       const { permission } = data;
       if (permission.kind === PERMISSION_KIND.PROPOSAL) {
         // Drop if this proposal was already resolved (out-of-order messages)
-        if (resolvedProposalIds.delete(permission.data.proposalId)) return;
+        if (resolvedProposalIds.delete(permission.data.requestId)) return;
         upsertProposalPermission({
           kind: PERMISSION_KIND.PROPOSAL,
           data: permission.data,

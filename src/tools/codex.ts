@@ -53,7 +53,7 @@ import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { type ChildStream } from './delegation/childStream';
-import { CodexThreads } from './agentCliSessionStores';
+import { codexThreadsFor } from './agentCliSessionStores';
 import {
   dispatchAgentCliTool,
   launchAgentCliSession,
@@ -407,7 +407,7 @@ function startCodexLoop(params: {
     agentName: 'codex',
     stageLabel: 'Codex session',
     initialPrompt,
-    store: CodexThreads,
+    store: codexThreadsFor,
     releaseFallbackClaim,
     runProviderTurn: (prompt, _ports, abortController) =>
       runStreamedTurn(
@@ -495,7 +495,7 @@ export class CodexTool extends defineTool({
     return dispatchAgentCliTool({
       agentName: 'codex',
       approvalLabel: `[codex ${sandboxMode}] ${input.prompt}`,
-      store: CodexThreads,
+      store: codexThreadsFor,
       resumeId: input.thread_id ?? undefined,
       prompt: input.prompt,
       labels: {

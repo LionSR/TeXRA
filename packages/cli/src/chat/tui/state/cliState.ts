@@ -9,7 +9,6 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type {
-  ActiveSkillSummary,
   AgentDelegationScope,
   CompileFailure,
   ConversationProgress,
@@ -37,11 +36,7 @@ import type {
   CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
 import { isActivePhase } from '@shared/streams/streamStatus';
-import {
-  applyChildStreamRemoval,
-  isChildStreamRemoved,
-  resetChildStreamEntries,
-} from './childExecutions';
+import { isChildStreamRemoved } from './childExecutions';
 
 // ---------------------------------------------------------------------------
 // types
@@ -233,10 +228,6 @@ export interface TranscriptFoldState {
   fullLogChild: boolean;
   workflowOperationalOnly: boolean;
   projectLifecycleToTaskGroups: boolean;
-  /** Highest-seq ACTIVE_SKILLS entry, with its parse cached by reference. */
-  activeSkillsEntry?: StreamLogEntry;
-  activeSkillsParsedFor?: StreamLogEntry;
-  activeSkills: readonly ActiveSkillSummary[];
   /** Highest-seq live-activity entry (drives the thinking indicator). */
   liveActivityEntry?: StreamLogEntry;
   /** Latest durable workflow-attempt marker and its source order. */
@@ -281,26 +272,17 @@ export interface BypassState {
   readonly superYolo: boolean;
 }
 
+/**
+ * CLI-only per-stream view state. Everything the shared substrate owns —
+ * identity/config/description metadata (`streamMetadataFor`), conversation
+ * progress and stage (`streamStateFor`), workflow artifacts and cumulative
+ * usage (`readStreamArtifacts`/`StreamArtifactProjection`), queued follow-ups
+ * (`queuedFollowUpsFor`) — is read from it at paint and has no field here.
+ * What remains is transcript-rail projection output (the fold rail stays
+ * separate from the fact rail by design) and terminal modality.
+ */
 export interface StreamSlice {
   readonly streamId: StreamTabId;
-  /** What owns this stream, verbatim from `run.start` (or the durable store
-   *  on cold read). Never re-derived from names, ids, or transcript roles. */
-  readonly identity?: RunIdentity | undefined;
-  /** Runtime behavior declared by the launch source, not UI visibility. */
-  readonly userFollowUpSupport?: UserFollowUpSupport | undefined;
-  /** Canonical agent name captured from this stream's `run.config`. */
-  readonly agent?: string | undefined;
-  /** Model identity captured from setTaskState for this specific stream. */
-  readonly model?: string | undefined;
-  /** Agent category for this stream (`toolUse` / `workflow` / …), captured
-   *  from `setTaskState` or `setActiveStream` for category-specific rendering
-   *  and focused-child follow-up behavior. */
-  readonly category: AgentCategory | undefined;
-  /** Canonical workflow artifacts, projected from the shared
-   *  `StreamSnapshotStore` accumulator — never accumulated here. */
-  readonly outputFilesByRound: RoundIndexed<OutputFileInfo>;
-  readonly missingOutputsByRound: RoundIndexed<string>;
-  readonly compileFailuresByRound: RoundIndexed<CompileFailure>;
   /** Run/round/phase lifecycle projected from the canonical StreamLog. */
   readonly taskGroups: readonly TaskGroup[];
   /** Latest physical workflow attempt declared by the durable stream. */
@@ -313,45 +295,24 @@ export interface StreamSlice {
    *  status. Drives the StatusBar's live elapsed-time segment so a long
    *  token-less "thinking" turn still shows liveness. */
   readonly runStartedAt: number | undefined;
-  /** Authoritative one-line description of what this stream is doing, owned by
-   *  the runtime (`updateStreamDescription`): the generated session
-   *  description for a tool-use run, or the delegated task for a child stream.
-   *  The same value the progress view shows; never derived from the
-   *  transcript. */
-  readonly description: string | undefined;
   /** CLI-only live status: the newest meaningful transcript line for this
    *  stream, recomputed on every log sync. Fills the stream-list summary slot
    *  until the runtime supplies a `description`. */
   readonly latestLine: string | undefined;
-  /** Latest model usage snapshot. The StatusBar treats this as current context
-   *  occupancy, so it must not be accumulated across turns. */
+  /** Latest model usage snapshot, carried by the usage fact (no synchronous
+   *  shared read exists for the latest gauge). The StatusBar treats this as
+   *  current context occupancy, so it must not be accumulated across turns. */
   readonly usage: TokenUsageStats | undefined;
-  /** Whole-stream usage for resume/exit summaries: the store's per-run
-   *  accumulator (`getRunUsage`) summed, never a second running sum here.
-   *  Kept separate from `usage` so the context-window indicator remains a
-   *  latest-snapshot display. */
-  readonly cumulativeUsage: TokenUsageStats | undefined;
   /** True while the latest hidden provider-side reasoning/thinking stream is
    *  the current live activity. The CLI never renders the content directly;
    *  this only drives a lightweight liveness indicator. */
   readonly thinkingActive: boolean;
   /** True while the runtime is summarizing prior conversation context. */
   readonly compactingActive: boolean;
-  readonly conversation: ConversationProgress | undefined;
-  /** Round/turn progress (tool-use runs) or workflow-script phase progress
-   *  (workflow runs) — a run advances through phases or rounds, never both,
-   *  so one discriminated slot fills the same row/segment either renderer
-   *  reads, instead of two independently-optional fields every consumer had
-   *  to fall back between. */
-  readonly stage?: StreamStage | undefined;
   readonly entries: readonly ConversationEntry[];
   /** Transcript-projection working state (see {@link TranscriptFoldState}).
    *  A mutable box owned by `subscribeStreamLog`; renderers ignore it. */
   readonly transcriptFold?: TranscriptFoldState;
-  readonly queuedFollowUpMessages: readonly string[];
-  readonly activeSkills: readonly ActiveSkillSummary[];
-  readonly todos: readonly TodoItem[];
-  readonly plan: Plan | null;
   /** YOLO / auto-approval state is stream-scoped upstream (see
    *  `permissionSlice.ts` in the extension), so concurrent parent/child
    *  sessions can show distinct badges. */
@@ -370,31 +331,17 @@ export const NO_BYPASS: BypassState = {
 export function emptySlice(streamId: StreamTabId): StreamSlice {
   return {
     streamId,
-    agent: undefined,
-    model: undefined,
-    category: undefined,
     status: undefined,
     substate: undefined,
     runStartedAt: undefined,
-    description: undefined,
     latestLine: undefined,
-    outputFilesByRound: {},
-    missingOutputsByRound: {},
-    compileFailuresByRound: {},
     taskGroups: [],
     workflowAttemptId: undefined,
     workflowAttemptBoundaryDeclared: false,
     thinkingActive: false,
     compactingActive: false,
     usage: undefined,
-    cumulativeUsage: undefined,
-    conversation: undefined,
-    stage: undefined,
     entries: [],
-    queuedFollowUpMessages: [],
-    activeSkills: [],
-    todos: [],
-    plan: null,
     bypass: NO_BYPASS,
   };
 }
@@ -849,11 +796,11 @@ export function bumpCodexPreferenceVersion(): void {
 // removeStream
 // ---------------------------------------------------------------------------
 
-// Cross-slice cleanup when a stream goes away: drops it from the streams map,
-// clears focus if it was active, and tombstones the stream identity in the
-// child-stream relationship map (childExecutions.ts) so no later roster,
-// edge, attachment, or status fact for it — or, if it was itself a parent,
-// for its former children — can resurrect it.
+// Cross-slice cleanup when a stream goes away: drops it from the streams map
+// and clears focus if it was active. The removal tombstone itself — what
+// refuses later roster, edge, attachment, and status facts for the identity —
+// is owned by the shared `SessionState` (the applier installs it before this
+// runs), not by CLI view state.
 
 export function removeStream(streamId: StreamTabId): void {
   const current = streams.get();
@@ -868,7 +815,6 @@ export function removeStream(streamId: StreamTabId): void {
   if (FOREGROUND_READER.get()?.streamId === streamId) {
     FOREGROUND_READER.set(undefined);
   }
-  applyChildStreamRemoval(streamId);
 }
 
 // ---------------------------------------------------------------------------
@@ -920,7 +866,6 @@ export function resetCliState(
   rootRunStartAvailable.set(true);
   rootRunPending.set(false);
   rootRunStreamId.set(undefined);
-  resetChildStreamEntries();
   activeForm.set(undefined);
   INFO_PANE_QUEUE.set([]);
   FOREGROUND_READER.set(undefined);

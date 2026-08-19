@@ -149,7 +149,7 @@ function userMessageEntryToMessages(
 ): unknown[] {
   if (!entry.text) return [];
   const attachments = entry.data?.attachments ?? [];
-  const role = archivedConversationRole(entry, 'user');
+  const role = 'user';
   if (attachments.length === 0) {
     return [{ role, content: entry.text }];
   }
@@ -168,18 +168,10 @@ function modelResponseEntryToMessages(entry: StreamLogEntry): unknown[] {
   if (!entry.text?.trim()) return [];
   return [
     {
-      role: archivedConversationRole(entry, 'assistant'),
+      role: 'assistant',
       content: [{ type: 'text', text: entry.text }],
     },
   ];
-}
-
-function archivedConversationRole(
-  entry: StreamLogEntry,
-  fallback: string,
-): string {
-  const data = isObject(entry.data) ? entry.data : {};
-  return typeof data.archivedRole === 'string' ? data.archivedRole : fallback;
 }
 
 function thinkingEntryToMessages(entry: StreamLogEntry): unknown[] {

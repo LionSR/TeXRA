@@ -1,6 +1,5 @@
 // Node imports
 import { randomUUID } from 'node:crypto';
-import { isDeepStrictEqual } from 'node:util';
 
 // Local imports
 import { logSdkError } from '@agent/trace';
@@ -17,10 +16,7 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   PersistedFlow,
   PersistedFlowStateError,
-  flowKey,
   readPersistedFlowRecord,
-  stampCompatibilityKey,
-  stampFlowRecordSchemaVersion,
 } from '@agent/node/persistedFlow';
 import { type AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
@@ -444,52 +440,40 @@ export async function runToolUseFlow<C = unknown>(
       throw startupInterruption;
     }
 
-    persistenceRecoveryPending = true;
-    const flowRecord = await readPersistedFlowRecord(kv, executionId);
-    // Cancellation can also arrive while the recovery read is pending. Do not
-    // start a migration or repair write after that handoff.
-    if (signal.aborted) {
+    if (input.resume) {
+      // `resumeToolUseFromResumeData` reads the record only after it owns the
+      // execution lease (acquire-then-read), so `input.resume.shared` is the
+      // authoritative persisted snapshot with no unleased window left to
+      // double-check. PersistedFlow's own schema-checked read below is the
+      // single disk read for the resumed state.
+      logger.debug('Resuming tool-use flow from persistence');
+    } else {
+      persistenceRecoveryPending = true;
+      const flowRecord = await readPersistedFlowRecord(kv, executionId);
+      // Cancellation can also arrive while the recovery read is pending. Do
+      // not start a repair write after that handoff.
+      if (signal.aborted) {
+        persistenceRecoveryPending = false;
+        earlyResult = { outcome };
+        throw startupInterruption;
+      }
+      if (flowRecord) {
+        const parsed = parseToolUseShared(flowRecord.shared);
+        if (!parsed.success) {
+          throw new PersistedFlowStateError(executionId, 'invalid-shared', {
+            cause: parsed.error,
+          });
+        }
+        throw new PersistedFlowStateError(executionId, 'unexpected-record');
+      }
+      // Cleanup may delete a terminal flow record only after absence was
+      // confirmed.
       persistenceRecoveryPending = false;
-      preserveResumeRecord = input.resume !== undefined;
-      earlyResult = { outcome };
-      throw startupInterruption;
     }
     // Past both startup cancellation guards: any later interrupt() is a
     // genuine mid-run cancellation, so go back to the normal destructive
     // queue clear instead of the resume-startup rescue above.
     inResumeStartupWindow = false;
-
-    if (flowRecord) logger.debug('Resuming tool-use flow from persistence');
-    if (flowRecord && input.resume) {
-      // `resumeToolUseFromResumeData` reloads the record only after it owns
-      // the execution lease. This is therefore the same authoritative record
-      // it handed to the flow, with no optimistic-concurrency window to check.
-      const resumedShared: PreparedShared = stampCompatibilityKey(
-        input.resume.shared,
-        compatibilityKey,
-      );
-      if (!isDeepStrictEqual(flowRecord.shared, resumedShared)) {
-        logger.debug(
-          'Healed a persisted tool-use shared-state mismatch after resume handoff.',
-        );
-        flowRecord.shared = resumedShared;
-        await kv.write(
-          flowKey(executionId),
-          stampFlowRecordSchemaVersion(flowRecord),
-        );
-      }
-    } else if (flowRecord) {
-      const parsed = parseToolUseShared(flowRecord.shared);
-      if (!parsed.success) {
-        throw new PersistedFlowStateError(executionId, 'invalid-shared', {
-          cause: parsed.error,
-        });
-      }
-      throw new PersistedFlowStateError(executionId, 'unexpected-record');
-    }
-    // Cleanup may delete a terminal flow record only after absence was
-    // confirmed or a present record passed its migration boundary.
-    persistenceRecoveryPending = false;
 
     let resumedFollowUps: readonly FollowUpQueueBatchItem[] = [
       ...(input.drainedFollowUps ?? []),

@@ -156,7 +156,7 @@ const BashApprovalActionMessageSchema = z.discriminatedUnion('action', [
 
 const ProposalActionMessageBase = {
   command: z.literal(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION),
-  proposalId: z.string().min(1),
+  requestId: z.string().min(1),
 };
 const AgentProposalActionMessageSchema = z.discriminatedUnion('action', [
   z.strictObject({
@@ -177,7 +177,7 @@ export type ProgressAgentProposalActionMessage = z.infer<
 
 const PlanActionMessageBase = {
   command: z.literal(PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION),
-  approvalId: z.string().min(1),
+  requestId: z.string().min(1),
 };
 const PlanApprovalActionMessageSchema = z.discriminatedUnion('action', [
   z.strictObject({

@@ -13,7 +13,7 @@ import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 
 function createWorkflowProposal(): AgentProposalPermission {
   return {
-    proposalId: 'proposal-1',
+    requestId: 'proposal-1',
     streamId: 'stream-1',
     agentCategory: AgentCategory.Workflow,
     agent: 'proofreader',
@@ -32,9 +32,9 @@ function createController(
   overrides: Partial<ProgressAgentProposalControllerDeps> = {},
 ): {
   controller: ProgressAgentProposalController;
-  resolved: { proposalId: string; result: unknown }[];
+  resolved: { requestId: string; result: unknown }[];
 } {
-  const resolved: { proposalId: string; result: unknown }[] = [];
+  const resolved: { requestId: string; result: unknown }[] = [];
   const controller = new ProgressAgentProposalController({
     getPendingProposal: () => createWorkflowProposal(),
     restoreRunConfig: async () => {
@@ -43,8 +43,8 @@ function createController(
     openFile: async () => {
       throw new Error('open should not run');
     },
-    settleProposal: (proposalId, result) => {
-      resolved.push({ proposalId, result });
+    settleProposal: (requestId, result) => {
+      resolved.push({ requestId, result });
     },
     ...overrides,
   });
@@ -90,13 +90,13 @@ describe('ProgressAgentProposalController', () => {
 
     expect(
       await controller.handleAction({
-        proposalId: proposal.proposalId,
+        requestId: proposal.requestId,
         action: 'setup',
       }),
     ).toBe(true);
     expect(restored).toHaveLength(1);
     expect(resolved).toStrictEqual([
-      { proposalId: 'proposal-1', result: { action: 'setup' } },
+      { requestId: 'proposal-1', result: { action: 'setup' } },
     ]);
     expect(restored[0]).toStrictEqual({
       agentCategory: AgentCategory.Workflow,
@@ -126,7 +126,7 @@ describe('ProgressAgentProposalController', () => {
 
     expect(
       await controller.handleAction({
-        proposalId: proposal.proposalId,
+        requestId: proposal.requestId,
         action: 'setup',
       }),
     ).toBe(true);
@@ -137,7 +137,7 @@ describe('ProgressAgentProposalController', () => {
       ).fsPath,
     ]);
     expect(resolved).toStrictEqual([
-      { proposalId: 'proposal-1', result: { action: 'setup' } },
+      { requestId: 'proposal-1', result: { action: 'setup' } },
     ]);
   });
 
@@ -152,13 +152,13 @@ describe('ProgressAgentProposalController', () => {
 
     expect(
       await controller.handleAction({
-        proposalId: proposal.proposalId,
+        requestId: proposal.requestId,
         action: 'setup',
       }),
     ).toBe(false);
     expect(resolved).toStrictEqual([
       {
-        proposalId: 'proposal-1',
+        requestId: 'proposal-1',
         result: {
           action: 'reject',
           feedback:
@@ -175,14 +175,14 @@ describe('ProgressAgentProposalController', () => {
       settleProposal: () => {
         throw new Error('resolve should not run');
       },
-      onMissingProposal: (proposalId) => {
-        missingProposalId = proposalId;
+      onMissingProposal: (requestId) => {
+        missingProposalId = requestId;
       },
     });
 
     expect(
       await controller.handleAction({
-        proposalId: 'missing-proposal',
+        requestId: 'missing-proposal',
         action: 'setup',
       }),
     ).toBe(false);
@@ -196,13 +196,13 @@ describe('ProgressAgentProposalController', () => {
 
     expect(
       await controller.handleAction({
-        proposalId: 'proposal-1',
+        requestId: 'proposal-1',
         action: 'setup',
       }),
     ).toBe(false);
     expect(resolved).toStrictEqual([
       {
-        proposalId: 'proposal-1',
+        requestId: 'proposal-1',
         result: {
           action: 'reject',
           feedback: 'Unable to restore the proposal configuration for setup.',
@@ -216,7 +216,7 @@ describe('ProgressAgentProposalController', () => {
 
     expect(
       await controller.handleAction({
-        proposalId: 'proposal-approve',
+        requestId: 'proposal-approve',
         action: 'approve',
         model: 'gpt-5.4',
         agent: 'critic',
@@ -224,18 +224,18 @@ describe('ProgressAgentProposalController', () => {
     ).toBe(true);
     expect(
       await controller.handleAction({
-        proposalId: 'proposal-reject',
+        requestId: 'proposal-reject',
         action: 'reject',
         feedback: 'too broad',
       }),
     ).toBe(true);
     expect(resolved).toStrictEqual([
       {
-        proposalId: 'proposal-approve',
+        requestId: 'proposal-approve',
         result: { action: 'approve', model: 'gpt-5.4', agent: 'critic' },
       },
       {
-        proposalId: 'proposal-reject',
+        requestId: 'proposal-reject',
         result: { action: 'reject', feedback: 'too broad' },
       },
     ]);
@@ -245,17 +245,17 @@ describe('ProgressAgentProposalController', () => {
     const { controller, resolved } = createController();
 
     await controller.handleAction({
-      proposalId: 'proposal-approve',
+      requestId: 'proposal-approve',
       action: 'approve',
     });
     await controller.handleAction({
-      proposalId: 'proposal-reject',
+      requestId: 'proposal-reject',
       action: 'reject',
     });
 
     expect(resolved).toStrictEqual([
-      { proposalId: 'proposal-approve', result: { action: 'approve' } },
-      { proposalId: 'proposal-reject', result: { action: 'reject' } },
+      { requestId: 'proposal-approve', result: { action: 'approve' } },
+      { requestId: 'proposal-reject', result: { action: 'reject' } },
     ]);
   });
 });

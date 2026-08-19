@@ -39,14 +39,19 @@ import {
 import { focusedChildFollowUpRoute } from '@cli/chat/tui/state/focusedChildFollowUp';
 import {
   activeSubagentsFor,
-  projectChildRoster,
-  childStreamEntries,
+  bindChildStreamState,
+  childRosters,
   focusOrderDescendants,
+  invalidateChildStreams,
   isChildStreamRemoved,
   parentStream,
+  queuedFollowUpsFor,
   retainedChildStreamsFor,
-  setParentStream,
+  sessionStateRevision,
+  streamMetadataFor,
+  streamStateFor,
   subagentExecutionLabels,
+  unbindChildStreamState,
   visibleSubagentRows,
 } from '@cli/chat/tui/state/childExecutions';
 import {
@@ -54,11 +59,11 @@ import {
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
 import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
-import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
   markArtifactStreamHydrated,
   readStreamArtifacts,
+  streamArtifactRevision,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import {
   estimateTranscriptEntryRows,
@@ -87,6 +92,8 @@ import {
   moveLocalTranscriptToStream,
   resolveLocalTranscriptStreamId,
 } from '@cli/chat/tui/state/transcript';
+import { projectStreamArtifacts } from '@controllers/session/StreamArtifactProjection';
+import { SessionState } from '@controllers/session/SessionState';
 import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 import {
   AgentCategory,
@@ -99,10 +106,12 @@ import {
   type ExecutionId,
   type ExtendedTokenUsageStats,
   type Plan,
+  type RunIdentity,
   type StorageKey,
   type StreamPhase,
   type StreamTabId,
   type TodoItem,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
@@ -120,24 +129,25 @@ const GOAL_PAUSED_TRANSCRIPT_NOTICE =
 
 function orderedSessionDescendants(parent: StreamTabId): StreamTabId[] {
   return [
-    ...focusOrderDescendants(parent, childStreamEntries.get(), streams.get()),
+    ...focusOrderDescendants(
+      parent,
+      childRosters.get(),
+      parentStream.get(),
+      streams.get(),
+    ),
   ];
 }
 
 function activeRows(parent: StreamTabId): readonly ActiveChildInfo[] {
-  return activeSubagentsFor(parent, childStreamEntries.get(), streams.get());
+  return activeSubagentsFor(parent, childRosters.get());
 }
 
 function retainedRows(parent: StreamTabId): readonly ActiveChildInfo[] {
-  return retainedChildStreamsFor(
-    parent,
-    childStreamEntries.get(),
-    streams.get(),
-  );
+  return retainedChildStreamsFor(parent, childRosters.get());
 }
 
 function visibleRows(parent: StreamTabId): readonly ActiveChildInfo[] {
-  return visibleSubagentRows(parent, childStreamEntries.get(), streams.get());
+  return visibleSubagentRows(parent, childRosters.get());
 }
 
 function streamEntries(streamId: StreamTabId): readonly ConversationEntry[] {
@@ -164,12 +174,15 @@ function setStatus(streamId: StreamTabId, status: StreamPhase): void {
   setStreamStatusInCliState({ streamId, status });
 }
 
+/** Drive a status transition on `session`'s machine; the resulting status
+ *  fact reaches the adapter through the session's own event hub. */
 function transitionStatus(
+  session: SessionHandle,
   streamId: StreamTabId,
   phase: StreamPhase,
   reason: StreamTransitionCause,
 ): boolean {
-  return defaultSession().status.transition(streamId, phase, reason);
+  return session.status.transition(streamId, phase, reason);
 }
 
 /** Mint a stream slice without a status of its own (activation step "A"). */
@@ -191,6 +204,49 @@ function childRosterRow(
     childStreamId,
     status,
   };
+}
+
+/** Register streams with the session transcript store. Attachment does this
+ *  before any roster or edge fact in production, and the child-stream
+ *  snapshots cover registered streams only. */
+function trackStreams(
+  session: SessionHandle,
+  ...streamIds: StreamTabId[]
+): void {
+  for (const streamId of streamIds) session.transcripts.ensureStream(streamId);
+}
+
+function emitChildRoster(
+  hub: SessionEventHub,
+  parentStreamId: StreamTabId,
+  items: readonly ActiveChildInfo[],
+): void {
+  hub.emit({
+    scope: 'run',
+    streamId: parentStreamId,
+    event: { type: 'child.activity', parentStreamId, items },
+  });
+}
+
+function emitParentEdge(
+  hub: SessionEventHub,
+  childStreamId: StreamTabId,
+  parentStreamId: StreamTabId | null,
+): void {
+  hub.emit({
+    scope: 'session',
+    event: {
+      type: 'setParentStream',
+      payload: { childStreamId, parentStreamId },
+    },
+  });
+}
+
+function emitRemoveStream(hub: SessionEventHub, streamId: StreamTabId): void {
+  hub.emit({
+    scope: 'session',
+    event: { type: 'removeStream', payload: { streamId } },
+  });
 }
 
 function emitStageStart(
@@ -243,6 +299,26 @@ function emitRunConfig(
         memories: [],
         workingDirectory: undefined,
       },
+    },
+  });
+}
+
+function emitRunStart(
+  hub: SessionEventHub,
+  streamId: StreamTabId,
+  executionId: ExecutionId,
+  identity: RunIdentity,
+  userFollowUpSupport?: UserFollowUpSupport,
+): void {
+  hub.emit({
+    scope: 'run',
+    streamId,
+    event: {
+      type: 'run.start',
+      streamId,
+      executionId,
+      identity,
+      ...(userFollowUpSupport === undefined ? {} : { userFollowUpSupport }),
     },
   });
 }
@@ -312,22 +388,41 @@ function localSyntheticEntry(
   } as const;
 }
 
-/** Mark a stream as a native tool-use agent that can accept child follow-ups. */
-function markToolUseAgent(streamId: StreamTabId): void {
-  patchStream(streamId, (slice) => ({
-    ...slice,
-    identity: { kind: 'agent', agent: 'critic' },
-    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-    category: AgentCategory.ToolUse,
-  }));
+/** Mark a stream as a native tool-use agent that can accept child follow-ups:
+ *  identity and follow-up support land with `run.start`, category and model
+ *  with `run.config`, read back through the shared metadata mirror. */
+function markToolUseAgent(hub: SessionEventHub, streamId: StreamTabId): void {
+  const executionId = 'follow-up-exec' as ExecutionId;
+  emitRunStart(
+    hub,
+    streamId,
+    executionId,
+    { kind: 'agent', agent: 'critic' },
+    USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+  );
+  emitRunConfig(hub, streamId, executionId);
 }
 
-/** Mark a stream slice as workflow-category. */
+// Shared-metadata seeding for tests that drive `syncStreamLog` without a
+// session adapter attached: bind a `SessionState` over the default session
+// and write through its public API.
+let metadataState: SessionState | undefined;
+
+function seedStreamMetadata(
+  streamId: StreamTabId,
+  patch: Parameters<SessionState['updateStreamMetadata']>[1],
+): void {
+  if (!metadataState) {
+    metadataState = new SessionState(defaultSession());
+    bindChildStreamState(metadataState);
+  }
+  metadataState.updateStreamMetadata(streamId, patch);
+  invalidateChildStreams();
+}
+
+/** Mark a stream as workflow-category in the shared stream metadata. */
 function markWorkflow(streamId: StreamTabId): void {
-  patchStream(streamId, (slice) => ({
-    ...slice,
-    category: AgentCategory.Workflow,
-  }));
+  seedStreamMetadata(streamId, { agentCategory: AgentCategory.Workflow });
 }
 
 /** Unfinalized tool-row entry with empty render text fields. */
@@ -380,18 +475,12 @@ function withRunFacts(
   }
 }
 
-/** Run `body` with the stream-status subscription attached. */
-function withStreamStatus(body: () => void): void {
-  const dispose = subscribeStreamStatus();
-  try {
-    body();
-  } finally {
-    dispose();
-  }
-}
-
 afterEach(() => {
   clearAllStreamStatusesForTest(defaultSession().status);
+  if (metadataState) {
+    unbindChildStreamState(metadataState);
+    metadataState = undefined;
+  }
   // A reset retires every stream id it clears, so an id reused by the next
   // test would stay refused by the status/focus owners. The second reset has
   // an empty map to retire and leaves no retired identity behind.
@@ -433,13 +522,11 @@ describe('cliState stream, focus, and child-edge fields', () => {
     });
   });
 
-  it('initialises every new slice with empty subagent/todo/plan/bypass defaults', () => {
+  it('initialises every new slice with empty subagent and bypass defaults', () => {
     setStatus(root, STREAM_PHASE.RUNNING);
     const slice = streams.get().get(root);
     expect(slice).toBeDefined();
     expect(activeRows(root)).toEqual([]);
-    expect(slice?.todos).toEqual([]);
-    expect(slice?.plan).toBeNull();
     expect(slice?.bypass).toEqual({
       bash: false,
       toolEdit: false,
@@ -448,37 +535,42 @@ describe('cliState stream, focus, and child-edge fields', () => {
   });
 
   it('prunes parent edges when a stream is removed', () => {
-    setParentStream(child1, root);
-    setParentStream(child2, root);
-    expect(parentStream.get().get(child1)).toBe(root);
-    expect(parentStream.get().get(child2)).toBe(root);
+    withRunFacts((hub, session) => {
+      trackStreams(session, root, child1, child2);
+      emitParentEdge(hub, child1, root);
+      emitParentEdge(hub, child2, root);
+      expect(parentStream.get().get(child1)).toBe(root);
+      expect(parentStream.get().get(child2)).toBe(root);
 
-    // Removing a child drops its own edge but leaves siblings intact.
-    setStatus(child1, STREAM_PHASE.RUNNING);
-    removeStream(child1);
-    expect(parentStream.get().has(child1)).toBe(false);
-    expect(parentStream.get().get(child2)).toBe(root);
+      // Removing a child drops its own edge but leaves siblings intact.
+      setStatus(child1, STREAM_PHASE.RUNNING);
+      emitRemoveStream(hub, child1);
+      expect(parentStream.get().has(child1)).toBe(false);
+      expect(parentStream.get().get(child2)).toBe(root);
 
-    // Removing the parent prunes every edge that pointed at it.
-    setStatus(root, STREAM_PHASE.RUNNING);
-    removeStream(root);
-    expect(parentStream.get().has(child2)).toBe(false);
+      // Removing the parent prunes every edge that pointed at it.
+      setStatus(root, STREAM_PHASE.RUNNING);
+      emitRemoveStream(hub, root);
+      expect(parentStream.get().has(child2)).toBe(false);
+    });
   });
 
   it('refuses focus for a removed stream identity', () => {
-    setStatus(child1, STREAM_PHASE.RUNNING);
-    focusStream(child1);
-    expect(activeStreamId.get()).toBe(child1);
+    withRunFacts((hub) => {
+      setStatus(child1, STREAM_PHASE.RUNNING);
+      focusStream(child1);
+      expect(activeStreamId.get()).toBe(child1);
 
-    removeStream(child1);
-    expect(activeStreamId.get()).toBeUndefined();
+      emitRemoveStream(hub, child1);
+      expect(activeStreamId.get()).toBeUndefined();
 
-    // A fact that arrives after the row is gone must not pull the view back
-    // onto it, with or without an existing focus.
-    focusStream(child1);
-    expect(activeStreamId.get()).toBeUndefined();
-    focusStream(child1, { onlyIfUnset: true });
-    expect(activeStreamId.get()).toBeUndefined();
+      // A fact that arrives after the row is gone must not pull the view back
+      // onto it, with or without an existing focus.
+      focusStream(child1);
+      expect(activeStreamId.get()).toBeUndefined();
+      focusStream(child1, { onlyIfUnset: true });
+      expect(activeStreamId.get()).toBeUndefined();
+    });
   });
 
   it('closes a foreground reader when its captured stream is removed', () => {
@@ -513,38 +605,52 @@ describe('cliState stream, focus, and child-edge fields', () => {
   });
 
   it('removes stale child rows when a stream is removed', () => {
-    activeStreamId.set(root);
-    // Roster-first (rule 3): registers both the retained history row and
-    // active membership, then the explicit edge arrives.
-    projectChildRoster(root, [
-      childRosterRow('critic', child1, STREAM_PHASE.RUNNING, 'agent-1'),
-    ]);
-    setParentStream(child1, root);
-    setStatus(child1, STREAM_PHASE.WAITING);
+    withRunFacts((hub, session) => {
+      activeStreamId.set(root);
+      trackStreams(session, root, child1);
+      emitChildRoster(hub, root, [
+        childRosterRow('critic', child1, STREAM_PHASE.RUNNING, 'agent-1'),
+      ]);
+      emitParentEdge(hub, child1, root);
+      setStatus(child1, STREAM_PHASE.WAITING);
 
-    expect(orderedSessionDescendants(root)[0]).toBe(child1);
+      expect(orderedSessionDescendants(root)[0]).toBe(child1);
 
-    removeStream(child1);
+      // Production ordering: the untrack path drops the child from the
+      // roster before the removal fact lands, so removal never has to scrub
+      // the roster itself.
+      emitChildRoster(hub, root, []);
+      emitRemoveStream(hub, child1);
 
-    expect(retainedRows(root)).toEqual([]);
-    expect(activeRows(root)).toEqual([]);
-    expect(visibleRows(root)).toEqual([]);
-    expect(isChildStreamRemoved(child1)).toBe(true);
-    expect(orderedSessionDescendants(root)[0]).toBeUndefined();
+      expect(isChildStreamRemoved(child1)).toBe(true);
+      expect(activeRows(root)).toEqual([]);
+      expect(orderedSessionDescendants(root)[0]).toBeUndefined();
+
+      // A stale roster cannot resurrect the tombstoned child — not even as a
+      // retained history row: the applier filters removed children at write
+      // time.
+      emitChildRoster(hub, root, [
+        childRosterRow('critic', child1, STREAM_PHASE.RUNNING, 'agent-1'),
+      ]);
+      expect(retainedRows(root)).toEqual([]);
+      expect(activeRows(root)).toEqual([]);
+      expect(visibleRows(root)).toEqual([]);
+    });
   });
 
   it('updates retained child rows when a failed subagent leaves the active list', () => {
-    withStreamStatus(() => {
-      projectChildRoster(root, [
+    withRunFacts((hub, session) => {
+      trackStreams(session, root);
+      emitChildRoster(hub, root, [
         childRosterRow('codex', child1, STREAM_PHASE.RUNNING, 'agent-1'),
       ]);
       // A later, empty roster clears active membership; the retained row
-      // survives and its status is read live from the child's own slice.
-      projectChildRoster(root, []);
+      // survives and later phase transitions still merge into it.
+      emitChildRoster(hub, root, []);
 
       expect(subagentExecutionLabels.get().get('agent-1')).toBe('codex');
 
-      transitionStatus(child1, STREAM_PHASE.FAILED, 'restart-repair');
+      transitionStatus(session, child1, STREAM_PHASE.FAILED, 'restart-repair');
 
       expect(activeRows(root)).toEqual([]);
       expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.FAILED);
@@ -559,16 +665,23 @@ describe('cliState stream, focus, and child-edge fields', () => {
   });
 
   it('treats a null-parent update as child promotion to top-level', () => {
-    setParentStream(child1, root);
-    expect(parentStream.get().get(child1)).toBe(root);
+    withRunFacts((hub, session) => {
+      trackStreams(session, child1);
+      emitParentEdge(hub, child1, root);
+      expect(parentStream.get().get(child1)).toBe(root);
 
-    setParentStream(child1, null);
+      emitParentEdge(hub, child1, null);
 
-    expect(parentStream.get().has(child1)).toBe(false);
+      expect(parentStream.get().has(child1)).toBe(false);
+    });
   });
 
-  it('projects phase stages onto the run slice and leaves rounds alone', () => {
-    withRunFacts((hub) => {
+  it('projects phase stages onto the shared stream state and leaves rounds alone', () => {
+    withRunFacts((hub, session) => {
+      // `run.config` resolves the category and RUNNING mints the execution
+      // state — the production order in which stage facts arrive.
+      emitRunConfig(hub, child1, 'exec-stage-child' as ExecutionId);
+      transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, child1, {
         id: 'phase-2',
         label: 'Reduce',
@@ -577,13 +690,15 @@ describe('cliState stream, focus, and child-edge fields', () => {
         total: 3,
       });
 
-      expect(streams.get().get(child1)?.stage).toEqual({
+      expect(streamStateFor(child1)?.stage).toEqual({
         kind: 'phase',
         label: 'Reduce',
         index: 1,
         total: 3,
       });
 
+      emitRunConfig(hub, root, 'exec-stage-root' as ExecutionId);
+      transitionStatus(session, root, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, root, {
         id: 'round-2',
         label: 'round 2',
@@ -592,7 +707,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
         total: 4,
       });
 
-      expect(streams.get().get(root)?.stage).toEqual({
+      expect(streamStateFor(root)?.stage).toEqual({
         kind: 'round',
         index: 1,
         total: 4,
@@ -601,36 +716,32 @@ describe('cliState stream, focus, and child-edge fields', () => {
   });
 
   it('keeps a dynamically opened phase positionless', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
+      emitRunConfig(hub, child1, 'exec-stage-child' as ExecutionId);
+      transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, child1, {
         id: 'phase-x',
         label: 'Cleanup',
         kind: 'phase',
       });
 
-      expect(streams.get().get(child1)?.stage).toEqual({
+      expect(streamStateFor(child1)?.stage).toEqual({
         kind: 'phase',
         label: 'Cleanup',
       });
     });
   });
 
-  it('registers subagent parent edges when active child rows arrive', () => {
-    withRunFacts((hub) => {
+  it('scopes focus order and the transcript viewport by child topology facts', () => {
+    withRunFacts((hub, session) => {
       activeStreamId.set(root);
+      trackStreams(session, root, child1);
       setStatus(child1, STREAM_PHASE.RUNNING);
 
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'child.activity',
-          parentStreamId: root,
-          items: [
-            childRosterRow('critic', child1, STREAM_PHASE.RUNNING, 'agent-1'),
-          ],
-        },
-      });
+      emitChildRoster(hub, root, [
+        childRosterRow('critic', child1, STREAM_PHASE.RUNNING, 'agent-1'),
+      ]);
+      emitParentEdge(hub, child1, root);
 
       expect(parentStream.get().get(child1)).toBe(root);
       expect(orderedSessionDescendants(root)[0]).toBe(child1);
@@ -1422,53 +1533,62 @@ describe('CLI TUI row allocation', () => {
   );
 
   it('selects the focused child stream as a follow-up target', () => {
-    setStatus(root, STREAM_PHASE.WAITING);
-    setStatus(child1, STREAM_PHASE.WAITING);
-    markToolUseAgent(child1);
-    setParentStream(child1, root);
+    withRunFacts((hub, session) => {
+      setStatus(root, STREAM_PHASE.WAITING);
+      setStatus(child1, STREAM_PHASE.WAITING);
+      markToolUseAgent(hub, child1);
+      trackStreams(session, child1);
+      emitParentEdge(hub, child1, root);
 
-    activeStreamId.set(root);
-    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({ kind: 'none' });
+      activeStreamId.set(root);
+      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({ kind: 'none' });
 
-    activeStreamId.set(child1);
-    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
-      kind: 'accept',
-      streamId: child1,
+      activeStreamId.set(child1);
+      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+        kind: 'accept',
+        streamId: child1,
+      });
     });
   });
 
   it('ignores stale child row status when routing focused child follow-ups', () => {
-    setStatus(root, STREAM_PHASE.WAITING);
-    projectChildRoster(root, [
-      childRosterRow('critic', child1, STREAM_PHASE.COMPLETED),
-    ]);
-    setStatus(child1, STREAM_PHASE.RUNNING);
-    markToolUseAgent(child1);
-    setParentStream(child1, root);
+    withRunFacts((hub, session) => {
+      setStatus(root, STREAM_PHASE.WAITING);
+      trackStreams(session, root, child1);
+      emitChildRoster(hub, root, [
+        childRosterRow('critic', child1, STREAM_PHASE.COMPLETED),
+      ]);
+      setStatus(child1, STREAM_PHASE.RUNNING);
+      markToolUseAgent(hub, child1);
+      emitParentEdge(hub, child1, root);
 
-    activeStreamId.set(child1);
-    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
-      kind: 'accept',
-      streamId: child1,
+      activeStreamId.set(child1);
+      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+        kind: 'accept',
+        streamId: child1,
+      });
     });
   });
 
-  // The roster row carries no status of its own: `reconstruct` resolves every
-  // child row's status from the stream status map, so a roster snapshot that
-  // still says RUNNING cannot keep a stopped child accepting follow-ups.
+  // Follow-up routing reads the focused child's own slice status; the status
+  // a roster row was stamped with cannot keep a stopped child accepting
+  // follow-ups.
   it('routes focused child follow-ups from the stream status, not the roster row', () => {
-    setStatus(root, STREAM_PHASE.WAITING);
-    projectChildRoster(root, [
-      childRosterRow('critic', child1, STREAM_PHASE.RUNNING),
-    ]);
-    setStatus(child1, STREAM_PHASE.CANCELLED);
-    markToolUseAgent(child1);
-    setParentStream(child1, root);
+    withRunFacts((hub, session) => {
+      setStatus(root, STREAM_PHASE.WAITING);
+      trackStreams(session, root, child1);
+      emitChildRoster(hub, root, [
+        childRosterRow('critic', child1, STREAM_PHASE.RUNNING),
+      ]);
+      setStatus(child1, STREAM_PHASE.CANCELLED);
+      markToolUseAgent(hub, child1);
+      emitParentEdge(hub, child1, root);
 
-    activeStreamId.set(child1);
-    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
-      kind: 'reject',
-      streamId: child1,
+      activeStreamId.set(child1);
+      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+        kind: 'reject',
+        streamId: child1,
+      });
     });
   });
 
@@ -1559,18 +1679,17 @@ describe('CLI TUI row allocation', () => {
     })),
   ])('gates the focused child composer for $name', (fixture) => {
     setStatus(child1, fixture.status);
-    patchStream(child1, (slice) => ({
-      ...slice,
-      identity: fixture.identity,
-      userFollowUpSupport: fixture.userFollowUpSupport,
-      category: fixture.category,
-    }));
-    setParentStream(child1, root);
 
     expect(
       focusedChildFollowUpRoute({
         activeStreamId: child1,
-        parentStream: parentStream.get(),
+        parentStream: new Map([[child1, root]]),
+        metadata: {
+          identity: fixture.identity,
+          userFollowUpSupport: fixture.userFollowUpSupport,
+          agentCategory: fixture.category,
+          creationTimestamp: 0,
+        },
         streams: streams.get(),
       }),
     ).toEqual({ kind: fixture.expected, streamId: child1 });
@@ -1579,65 +1698,72 @@ describe('CLI TUI row allocation', () => {
   it.each([
     {
       name: 'identity',
-      identity: undefined,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-      category: AgentCategory.ToolUse,
+      metadata: {
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+        agentCategory: AgentCategory.ToolUse,
+      },
     },
     {
       name: 'runtime support',
-      identity: { kind: 'agent' as const, agent: 'critic' },
-      userFollowUpSupport: undefined,
-      category: AgentCategory.ToolUse,
+      metadata: {
+        identity: { kind: 'agent' as const, agent: 'critic' },
+        agentCategory: AgentCategory.ToolUse,
+      },
     },
     {
       name: 'category',
-      identity: { kind: 'agent' as const, agent: 'critic' },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-      category: undefined,
+      metadata: {
+        identity: { kind: 'agent' as const, agent: 'critic' },
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      },
     },
-  ])('fails closed when child $name metadata is missing', (fixture) => {
+  ])('fails closed when child $name metadata is missing', ({ metadata }) => {
     setStatus(child1, STREAM_PHASE.RUNNING);
-    patchStream(child1, (slice) => ({
-      ...slice,
-      identity: fixture.identity,
-      userFollowUpSupport: fixture.userFollowUpSupport,
-      category: fixture.category,
-    }));
-    setParentStream(child1, root);
 
-    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({ kind: 'none' });
-    activeStreamId.set(child1);
-    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
-      kind: 'reject',
-      streamId: child1,
-    });
+    expect(
+      focusedChildFollowUpRoute({
+        activeStreamId: child1,
+        parentStream: new Map([[child1, root]]),
+        metadata: { creationTimestamp: 0, ...metadata },
+        streams: streams.get(),
+      }),
+    ).toEqual({ kind: 'reject', streamId: child1 });
   });
 
   it('fails closed when focused child status is missing while leaving root routing unchanged', () => {
-    mintSlice(child1);
-    markToolUseAgent(child1);
-    setParentStream(child1, root);
+    withRunFacts((hub, session) => {
+      mintSlice(child1);
+      markToolUseAgent(hub, child1);
+      trackStreams(session, child1);
+      emitParentEdge(hub, child1, root);
 
-    activeStreamId.set(child1);
-    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
-      kind: 'reject',
-      streamId: child1,
+      activeStreamId.set(child1);
+      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+        kind: 'reject',
+        streamId: child1,
+      });
+      activeStreamId.set(root);
+      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({ kind: 'none' });
     });
-    activeStreamId.set(root);
-    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({ kind: 'none' });
   });
 
   it('mirrors running child status events into focused child routing', () => {
-    withStreamStatus(() => {
+    withRunFacts((hub, session) => {
       setStatus(root, STREAM_PHASE.WAITING);
-      projectChildRoster(root, [
+      trackStreams(session, root, child1);
+      emitChildRoster(hub, root, [
         childRosterRow('critic', child1, STREAM_PHASE.COMPLETED),
       ]);
+      // The child leaves the roster: its row is retained for display and
+      // later phase transitions keep merging into it.
+      emitChildRoster(hub, root, []);
       setStatus(child1, STREAM_PHASE.CANCELLED);
-      markToolUseAgent(child1);
-      setParentStream(child1, root);
+      markToolUseAgent(hub, child1);
 
-      transitionStatus(child1, STREAM_PHASE.RUNNING, 'restart-repair');
+      transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'restart-repair');
+      // The RUNNING transition resets the child's per-run metadata; the edge
+      // fact lands after it, as the parent-link plumbing does for a real run.
+      emitParentEdge(hub, child1, root);
 
       activeStreamId.set(child1);
       expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.RUNNING);
@@ -1650,16 +1776,23 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('mirrors stopped child status events into focused child routing', () => {
-    withStreamStatus(() => {
+    withRunFacts((hub, session) => {
       setStatus(root, STREAM_PHASE.WAITING);
-      projectChildRoster(root, [
+      trackStreams(session, root, child1);
+      emitChildRoster(hub, root, [
         childRosterRow('critic', child1, STREAM_PHASE.RUNNING),
       ]);
+      emitChildRoster(hub, root, []);
       setStatus(child1, STREAM_PHASE.RUNNING);
-      markToolUseAgent(child1);
-      setParentStream(child1, root);
+      markToolUseAgent(hub, child1);
+      emitParentEdge(hub, child1, root);
 
-      transitionStatus(child1, STREAM_PHASE.CANCELLED, 'restart-repair');
+      transitionStatus(
+        session,
+        child1,
+        STREAM_PHASE.CANCELLED,
+        'restart-repair',
+      );
 
       activeStreamId.set(child1);
       expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.CANCELLED);
@@ -1672,59 +1805,70 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('returns a focused attached child to its immediate owner on lifecycle completion', () => {
-    withStreamStatus(() => {
+    withRunFacts((hub, session) => {
       // The owner must be a row of the current state lifetime: focus never
       // lands on a stream identity retired by an earlier `resetCliState`.
       setStatus(root, STREAM_PHASE.RUNNING);
-      setParentStream(child1, root);
       activeStreamId.set(child1);
 
-      expect(transitionStatus(child1, STREAM_PHASE.RUNNING, 'lifecycle')).toBe(
-        true,
-      );
       expect(
-        transitionStatus(child1, STREAM_PHASE.COMPLETED, 'lifecycle'),
+        transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'lifecycle'),
+      ).toBe(true);
+      // The edge lands after RUNNING resets the child's per-run metadata.
+      emitParentEdge(hub, child1, root);
+      expect(
+        transitionStatus(session, child1, STREAM_PHASE.COMPLETED, 'lifecycle'),
       ).toBe(true);
       expect(activeStreamId.get()).toBe(root);
     });
   });
 
   it('returns a user-stopped focused child to its immediate owner', () => {
-    withStreamStatus(() => {
+    withRunFacts((hub, session) => {
       setStatus(root, STREAM_PHASE.RUNNING);
-      setParentStream(child1, root);
       activeStreamId.set(child1);
 
-      expect(transitionStatus(child1, STREAM_PHASE.RUNNING, 'lifecycle')).toBe(
-        true,
-      );
       expect(
-        transitionStatus(child1, STREAM_PHASE.CANCELLED, 'user-stop'),
+        transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'lifecycle'),
+      ).toBe(true);
+      emitParentEdge(hub, child1, root);
+      expect(
+        transitionStatus(session, child1, STREAM_PHASE.CANCELLED, 'user-stop'),
       ).toBe(true);
       expect(activeStreamId.get()).toBe(root);
     });
   });
 
   it('does not auto-return for WAITING, repair, unrelated, or detached status events', () => {
-    withStreamStatus(() => {
+    withRunFacts((hub, session) => {
       const detachedChild = 'detached-child' as StreamTabId;
-      setParentStream(child1, root);
 
-      transitionStatus(child1, STREAM_PHASE.RUNNING, 'lifecycle');
+      transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'lifecycle');
+      emitParentEdge(hub, child1, root);
       activeStreamId.set(child1);
-      transitionStatus(child1, STREAM_PHASE.WAITING, 'wait');
+      transitionStatus(session, child1, STREAM_PHASE.WAITING, 'wait');
       expect(activeStreamId.get()).toBe(child1);
 
-      transitionStatus(child2, STREAM_PHASE.RUNNING, 'lifecycle');
-      transitionStatus(child2, STREAM_PHASE.FAILED, 'lifecycle');
+      transitionStatus(session, child2, STREAM_PHASE.RUNNING, 'lifecycle');
+      transitionStatus(session, child2, STREAM_PHASE.FAILED, 'lifecycle');
       expect(activeStreamId.get()).toBe(child1);
 
-      transitionStatus(child1, STREAM_PHASE.FAILED, 'restart-repair');
+      transitionStatus(session, child1, STREAM_PHASE.FAILED, 'restart-repair');
       expect(activeStreamId.get()).toBe(child1);
 
-      transitionStatus(detachedChild, STREAM_PHASE.RUNNING, 'lifecycle');
+      transitionStatus(
+        session,
+        detachedChild,
+        STREAM_PHASE.RUNNING,
+        'lifecycle',
+      );
       activeStreamId.set(detachedChild);
-      transitionStatus(detachedChild, STREAM_PHASE.COMPLETED, 'lifecycle');
+      transitionStatus(
+        session,
+        detachedChild,
+        STREAM_PHASE.COMPLETED,
+        'lifecycle',
+      );
       expect(activeStreamId.get()).toBe(detachedChild);
     });
   });
@@ -1828,58 +1972,6 @@ describe('CLI transcript state', () => {
   // it in place here so store-backed tests need no reset of their own.
   beforeEach(async () => {
     await defaultSession().transcripts.clear();
-  });
-
-  it('restores the latest active skills per stream and clears malformed snapshots', () => {
-    patchStream(root, (slice) => ({
-      ...slice,
-      category: AgentCategory.ToolUse,
-    }));
-    patchStream(child1, (slice) => ({
-      ...slice,
-      category: AgentCategory.ToolUse,
-    }));
-    const logger = runTrace(root);
-    logger.emit({
-      type: 'skills.snapshot',
-      skills: [
-        {
-          name: 'proof-audit',
-          description: 'Check proof steps.',
-          source: 'project',
-        },
-      ],
-    });
-
-    syncStreamLog(root);
-    syncStreamLog(child1);
-    expect(streams.get().get(root)?.activeSkills).toMatchObject([
-      { name: 'proof-audit', source: 'project' },
-    ]);
-    expect(streams.get().get(child1)?.activeSkills).toEqual([]);
-
-    resetCliState();
-    patchStream(root, (slice) => ({
-      ...slice,
-      category: AgentCategory.ToolUse,
-    }));
-    syncStreamLog(root);
-    expect(streams.get().get(root)?.activeSkills).toMatchObject([
-      { name: 'proof-audit' },
-    ]);
-
-    defaultSession()
-      .transcripts.get(root)
-      ?.appendSettled({
-        id: 'malformed-skills',
-        type: 'log',
-        level: 'info',
-        timestamp: 2,
-        messageType: MESSAGE_TYPES.ACTIVE_SKILLS,
-        data: { skills: [{ path: '/secret' }] },
-      });
-    syncStreamLog(root);
-    expect(streams.get().get(root)?.activeSkills).toEqual([]);
   });
 
   it('renders orchestrator follow-ups without protocol tags', () => {
@@ -2426,9 +2518,9 @@ describe('CLI transcript state', () => {
 
   it('bounds dormant workflow dashboard rows while preserving source order', () => {
     activeStreamId.set(root);
+    markWorkflow(child1);
     patchStream(child1, (slice) => ({
       ...slice,
-      category: AgentCategory.Workflow,
       entries: [
         localSyntheticEntry(
           'synthetic-compact-workflow-error',
@@ -2529,10 +2621,12 @@ describe('CLI transcript state', () => {
 
       syncStreamLog(child1);
 
-      expect(streams.get().get(child1)).toMatchObject({
-        description: 'Audit the compactness lemma.',
-        latestLine: 'The second lemma is valid.',
-      });
+      expect(streamMetadataFor(child1)?.description).toBe(
+        'Audit the compactness lemma.',
+      );
+      expect(streams.get().get(child1)?.latestLine).toBe(
+        'The second lemma is valid.',
+      );
     });
   });
 
@@ -2885,32 +2979,38 @@ describe('CLI transcript state', () => {
   });
 
   it('keeps root local notices out of a focused child stream', () => {
-    rootStreamId.set(root);
-    setParentStream(child1, root);
-    activeStreamId.set(child1);
+    withRunFacts((hub, session) => {
+      rootStreamId.set(root);
+      trackStreams(session, child1);
+      emitParentEdge(hub, child1, root);
+      activeStreamId.set(child1);
 
-    appendLocalAssistantTranscript('Available commands: /help');
-    appendLocalErrorTranscript('Model claude-opus-4-7 not found');
+      appendLocalAssistantTranscript('Available commands: /help');
+      appendLocalErrorTranscript('Model claude-opus-4-7 not found');
 
-    expect(
-      streamEntries(root).map((entry) => [entry.role, entry.text]),
-    ).toEqual([
-      ['assistant', 'Available commands: /help'],
-      ['error', 'Model claude-opus-4-7 not found'],
-    ]);
-    expect(streamEntries(child1)).toEqual([]);
-    expect(activeStreamId.get()).toBe(child1);
+      expect(
+        streamEntries(root).map((entry) => [entry.role, entry.text]),
+      ).toEqual([
+        ['assistant', 'Available commands: /help'],
+        ['error', 'Model claude-opus-4-7 not found'],
+      ]);
+      expect(streamEntries(child1)).toEqual([]);
+      expect(activeStreamId.get()).toBe(child1);
+    });
   });
 
   it('uses the focused child parent for local notices before root id is set', () => {
-    setParentStream(child1, root);
-    activeStreamId.set(child1);
+    withRunFacts((hub, session) => {
+      trackStreams(session, child1);
+      emitParentEdge(hub, child1, root);
+      activeStreamId.set(child1);
 
-    appendLocalAssistantTranscript('Slash command output.');
+      appendLocalAssistantTranscript('Slash command output.');
 
-    expect(entryTexts(root)).toEqual(['Slash command output.']);
-    expect(streamEntries(child1)).toEqual([]);
-    expect(activeStreamId.get()).toBe(child1);
+      expect(entryTexts(root)).toEqual(['Slash command output.']);
+      expect(streamEntries(child1)).toEqual([]);
+      expect(activeStreamId.get()).toBe(child1);
+    });
   });
 
   it('resolves root-owned local transcript targets before active children', () => {
@@ -3166,24 +3266,21 @@ describe('CLI transcript state', () => {
 
 describe('sessionSignalsAdapter run facts', () => {
   it('clears follow-up routing when current run metadata omits capability', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const executionId = 'e9911-adapter' as ExecutionId;
       setStatus(child1, STREAM_PHASE.WAITING);
-      setParentStream(child1, root);
+      trackStreams(session, child1);
+      emitParentEdge(hub, child1, root);
       emitRunConfig(hub, child1, executionId);
-      hub.emit({
-        scope: 'run',
-        streamId: child1,
-        event: {
-          type: 'run.start',
-          streamId: child1,
-          executionId,
-          identity: { kind: 'agent', agent: 'search' },
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        },
-      });
+      emitRunStart(
+        hub,
+        child1,
+        executionId,
+        { kind: 'agent', agent: 'search' },
+        USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      );
 
-      expect(streams.get().get(child1)?.userFollowUpSupport).toBe(
+      expect(streamMetadataFor(child1)?.userFollowUpSupport).toBe(
         USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       );
       focusStream(child1);
@@ -3192,18 +3289,12 @@ describe('sessionSignalsAdapter run facts', () => {
         streamId: child1,
       });
 
-      hub.emit({
-        scope: 'run',
-        streamId: child1,
-        event: {
-          type: 'run.start',
-          streamId: child1,
-          executionId,
-          identity: { kind: 'agent', agent: 'search' },
-        },
+      emitRunStart(hub, child1, executionId, {
+        kind: 'agent',
+        agent: 'search',
       });
 
-      expect(streams.get().get(child1)?.userFollowUpSupport).toBeUndefined();
+      expect(streamMetadataFor(child1)?.userFollowUpSupport).toBeUndefined();
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'reject',
         streamId: child1,
@@ -3212,7 +3303,7 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('keeps a session-scoped fact subscription live after state reset', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const nextRoot = 'root-after-clear' as StreamTabId;
       const todos: TodoItem[] = [
         {
@@ -3233,7 +3324,12 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(nextRoot)?.todos).toEqual(todos);
+      // The reset zeroed the artifact revision; the still-attached adapter
+      // re-bumped it, and the fact landed in the canonical snapshot store.
+      expect(streamArtifactRevision.get()).toBeGreaterThan(0);
+      expect(projectStreamArtifacts(session.snapshots, nextRoot).todos).toEqual(
+        todos,
+      );
     });
   });
 
@@ -3284,7 +3380,7 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('applies typed updateTodos run facts without host emission', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const todos: TodoItem[] = [
         {
           content: 'State the compactness lemma',
@@ -3303,12 +3399,14 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)?.todos).toEqual(todos);
+      expect(projectStreamArtifacts(session.snapshots, root).todos).toEqual(
+        todos,
+      );
     });
   });
 
   it('applies typed updatePlan run facts without host emission', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const plan: Plan = {
         objective:
           'Prove the local estimate and record the stopping criterion.',
@@ -3324,11 +3422,13 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)?.plan).toEqual(plan);
+      expect(projectStreamArtifacts(session.snapshots, root).plan).toEqual(
+        plan,
+      );
     });
   });
 
-  it('invalidates a hydrated artifact memo when the slice already matches', () => {
+  it('invalidates a hydrated artifact memo on a live work-plan fact', () => {
     const streamId = 'hydrated-artifact-memo' as StreamTabId;
     const previousTodos: TodoItem[] = [
       {
@@ -3363,10 +3463,8 @@ describe('sessionSignalsAdapter run facts', () => {
       markArtifactStreamHydrated(streamId);
       expect(readStreamArtifacts(streamId)?.todos).toEqual(previousTodos);
 
-      // Reproduce a pre-hydration mirror already holding the incoming value.
-      // The event still changes the canonical snapshot store and must clear
-      // the memo even though the slice patch itself is a no-op.
-      patchStream(streamId, (slice) => ({ ...slice, todos: nextTodos }));
+      // The event changes the canonical snapshot store and must clear the
+      // per-revision projection memo hydration populated.
       session.events.emit({
         scope: 'run',
         streamId,
@@ -3385,7 +3483,7 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('keeps a captured work-plan reader synchronized after focus moves', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const nextPlan: Plan = { objective: 'Updated reader objective.' };
       const nextTodos: TodoItem[] = [
         {
@@ -3418,10 +3516,9 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)).toMatchObject({
-        plan: nextPlan,
-        todos: nextTodos,
-      });
+      const projection = projectStreamArtifacts(session.snapshots, root);
+      expect(projection.plan).toEqual(nextPlan);
+      expect(projection.todos).toEqual(nextTodos);
       expect(foregroundReader.get()).toEqual({
         kind: 'workPlan',
         streamId: root,
@@ -3445,7 +3542,9 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('applies direct stage.start(kind: round) events without host emission', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
+      emitRunConfig(hub, root, 'exec-stage-root' as ExecutionId);
+      transitionStatus(session, root, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, root, {
         id: 'round-2',
         label: 'Round 2',
@@ -3454,7 +3553,7 @@ describe('sessionSignalsAdapter run facts', () => {
         total: 3,
       });
 
-      expect(streams.get().get(root)?.stage).toEqual({
+      expect(streamStateFor(root)?.stage).toEqual({
         kind: 'round',
         index: 1,
         total: 3,
@@ -3463,7 +3562,9 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('applies direct non-round stage.start events to the phase slot, not the round slot', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
+      emitRunConfig(hub, root, 'exec-stage-root' as ExecutionId);
+      transitionStatus(session, root, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, root, {
         id: 'phase-1',
         label: 'Compile phase',
@@ -3471,7 +3572,7 @@ describe('sessionSignalsAdapter run facts', () => {
         index: 0,
       });
 
-      expect(streams.get().get(root)?.stage).toEqual({
+      expect(streamStateFor(root)?.stage).toEqual({
         kind: 'phase',
         label: 'Compile phase',
         index: 0,
@@ -3480,7 +3581,7 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('applies direct child activity and parent-link facts without host emission', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const child: ActiveChildInfo = childRosterRow(
         'critic',
         child1,
@@ -3488,38 +3589,21 @@ describe('sessionSignalsAdapter run facts', () => {
         'agent-1',
       );
 
-      // The child's own status is the single owner the roster selectors read
-      // from (rule 8: the roster's copied status is discarded).
-      setStatus(child1, STREAM_PHASE.RUNNING);
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'child.activity',
-          parentStreamId: root,
-          items: [child],
-        },
-      });
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'setParentStream',
-          payload: {
-            childStreamId: child2,
-            parentStreamId: root,
-          },
-        },
-      });
+      trackStreams(session, root, child1, child2);
+      emitChildRoster(hub, root, [child]);
+      emitParentEdge(hub, child2, root);
 
+      // A live roster row is active, not retained: retention is decided by
+      // `finishedAt`, which only a later roster drop stamps.
       expect(activeRows(root)).toEqual([child]);
-      expect(retainedRows(root)).toEqual([child]);
-      expect(parentStream.get().get(child1)).toBe(root);
+      expect(retainedRows(root)).toEqual([]);
+      expect(visibleRows(root)).toEqual([child]);
       expect(parentStream.get().get(child2)).toBe(root);
     });
   });
 
   it('applies direct usage events without host emission', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const storageKey = 'root-direct-run' as StorageKey;
       const usage = {
         inputTokens: 100,
@@ -3536,7 +3620,9 @@ describe('sessionSignalsAdapter run facts', () => {
       expect(streams.get().get(root)?.usage).toEqual(usage);
       // Cumulative usage is the snapshot store's per-run accumulator summed;
       // reasoningTokens is part of the one accumulated vocabulary.
-      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
+      expect(
+        projectStreamArtifacts(session.snapshots, root).cumulativeUsage,
+      ).toEqual({
         inputTokens: 100,
         outputTokens: 20,
         cost: 1,
@@ -3574,10 +3660,12 @@ describe('sessionSignalsAdapter run facts', () => {
       });
 
       expect(activeStreamId.get()).toBe(root);
-      expect(streams.get().get(child1)).toMatchObject({
-        category: AgentCategory.ToolUse,
-        description: 'Checking the local compactness claim.',
-      });
+      expect(streams.get().has(child1)).toBe(true);
+      const metadata = streamMetadataFor(child1);
+      expect(metadata?.agentCategory).toBe(AgentCategory.ToolUse);
+      expect(metadata?.description).toBe(
+        'Checking the local compactness claim.',
+      );
 
       hub.emit({
         scope: 'session',
@@ -3592,25 +3680,20 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('applies direct run config and conversation progress without host emission', () => {
-    withRunFacts((hub) => {
-      // `onStreamMetadataChanged` reads display config from the summary
-      // mirror (#9947), so the agent name now arrives with `run.start` while
-      // `run.config` supplies model/category through the mirror.
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'run.start',
-          streamId: root,
-          executionId: 'exec-config' as ExecutionId,
-          identity: { kind: 'agent' as const, agent: 'search' },
-        },
+    withRunFacts((hub, session) => {
+      // The agent identity arrives with `run.start` while `run.config`
+      // supplies model/category through the summary mirror (#9947); RUNNING
+      // then mints the execution state that conversation progress lands on.
+      emitRunStart(hub, root, 'exec-config' as ExecutionId, {
+        kind: 'agent',
+        agent: 'search',
       });
       emitRunConfig(hub, root, 'exec-config', {
         input: ['src/Main.lean'],
         context: ['notes/proof.md'],
         output: ['build/Main.olean'],
       });
+      transitionStatus(session, root, STREAM_PHASE.RUNNING, 'lifecycle');
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3620,20 +3703,18 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)).toMatchObject({
-        agent: 'search',
-        model: 'kimi26T',
-        category: AgentCategory.ToolUse,
-        conversation: { toolCallCount: 3 },
+      const metadata = streamMetadataFor(root);
+      expect(metadata?.identity).toEqual({ kind: 'agent', agent: 'search' });
+      expect(metadata?.config?.model).toBe('kimi26T');
+      expect(metadata?.agentCategory).toBe(AgentCategory.ToolUse);
+      expect(streamStateFor(root)?.conversationProgress).toEqual({
+        toolCallCount: 3,
       });
-      // `StreamSlice.files` is dead state after #10498: `run.config` file
-      // lists are no longer projected into the TUI slice at all.
-      expect(streams.get().get(root)).not.toHaveProperty('files');
     });
   });
 
   it('streams every workflow output round into selected-agent state', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       // A real hex id: the snapshot store (now the accumulator the slice is
       // projected from) parses output-file payloads, and ExecutionIdSchema
       // rejects non-hex ids the old slice-spread silently accepted.
@@ -3690,7 +3771,9 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)?.outputFilesByRound).toEqual({
+      expect(
+        projectStreamArtifacts(session.snapshots, root).outputFilesByRound,
+      ).toEqual({
         0: [
           expect.objectContaining({
             location: expect.objectContaining({
@@ -3710,7 +3793,8 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('projects missing-output and compile facts and clears the addressed stream', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
+      const artifacts = () => projectStreamArtifacts(session.snapshots, root);
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3746,7 +3830,7 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)).toMatchObject({
+      expect(artifacts()).toMatchObject({
         missingOutputsByRound: { 0: ['missing.tex'] },
         compileFailuresByRound: {
           0: [expect.objectContaining({ displayName: 'paper.pdf' })],
@@ -3760,7 +3844,7 @@ describe('sessionSignalsAdapter run facts', () => {
           payload: { streamId: root },
         },
       });
-      expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
+      expect(artifacts().missingOutputsByRound).toEqual({});
 
       hub.emit({
         scope: 'run',
@@ -3779,15 +3863,13 @@ describe('sessionSignalsAdapter run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
-      expect(streams.get().get(root)?.compileFailuresByRound[0]).toHaveLength(
-        1,
-      );
+      expect(artifacts().missingOutputsByRound).toEqual({});
+      expect(artifacts().compileFailuresByRound[0]).toHaveLength(1);
     });
   });
 
   it('applies direct usage sequences exactly once', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const storageKey = 'root-direct-sequence-run' as StorageKey;
       const firstUsage = {
         inputTokens: 100,
@@ -3814,7 +3896,9 @@ describe('sessionSignalsAdapter run facts', () => {
       expect(streams.get().get(root)?.usage).toEqual(secondUsage);
       // Summed from the store's per-run map — the one accumulator, which
       // carries reasoningTokens — not a second running sum in the slice.
-      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
+      expect(
+        projectStreamArtifacts(session.snapshots, root).cumulativeUsage,
+      ).toEqual({
         inputTokens: 150,
         outputTokens: 30,
         cost: 1.5,
@@ -3850,10 +3934,9 @@ describe('sessionSignalsAdapter run facts', () => {
     withRunFacts((hub) => {
       emitRunConfig(hub, child1, 'exec-search');
 
-      expect(streams.get().get(child1)).toMatchObject({
-        model: 'kimi26T',
-        category: AgentCategory.ToolUse,
-      });
+      const metadata = streamMetadataFor(child1);
+      expect(metadata?.config?.model).toBe('kimi26T');
+      expect(metadata?.agentCategory).toBe(AgentCategory.ToolUse);
     });
   });
 
@@ -3864,6 +3947,7 @@ describe('sessionSignalsAdapter run facts', () => {
       const queue = session.followUps.queue(lease);
       try {
         queue.enqueue({ text: 'Keep the proof under one page.' });
+        const revisionBefore = sessionStateRevision.get();
         hub.emit({
           scope: 'session',
           event: {
@@ -3872,8 +3956,10 @@ describe('sessionSignalsAdapter run facts', () => {
           },
         });
 
-        let slice = streams.get().get(root);
-        expect(slice?.queuedFollowUpMessages).toEqual([
+        // The fact's remaining job is the repaint: bump the shared-state
+        // revision so renderers re-read the session-owned queue.
+        expect(sessionStateRevision.get()).toBeGreaterThan(revisionBefore);
+        expect(queuedFollowUpsFor(root)).toEqual([
           'Keep the proof under one page.',
         ]);
 
@@ -3886,8 +3972,7 @@ describe('sessionSignalsAdapter run facts', () => {
           },
         });
 
-        slice = streams.get().get(root);
-        expect(slice?.queuedFollowUpMessages).toEqual([]);
+        expect(queuedFollowUpsFor(root)).toEqual([]);
       } finally {
         session.followUps.terminalize(root);
       }
@@ -3895,7 +3980,7 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('keeps latest usage separate from cumulative resume usage', () => {
-    withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
       const storageKey = 'root-run' as StorageKey;
 
       emitUsage(hub, root, storageKey, {
@@ -3919,7 +4004,9 @@ describe('sessionSignalsAdapter run facts', () => {
         cacheReadInputTokens: 5,
         cacheCreationInputTokens: 7,
       });
-      expect(streams.get().get(root)?.cumulativeUsage).toEqual({
+      expect(
+        projectStreamArtifacts(session.snapshots, root).cumulativeUsage,
+      ).toEqual({
         inputTokens: 140,
         outputTokens: 30,
         cost: 3,
@@ -3934,373 +4021,30 @@ describe('sessionSignalsAdapter run facts', () => {
 
 describe('session tree order', () => {
   it('orders retained sibling sessions', () => {
-    projectChildRoster(root, [
-      childRosterRow('a', child1, undefined, 'e1'),
-      childRosterRow('b', child2, undefined, 'e2'),
-    ]);
-    setParentStream(child1, root);
-    setParentStream(child2, root);
-    setStatus(child1, STREAM_PHASE.RUNNING);
-    setStatus(child2, STREAM_PHASE.RUNNING);
-    expect(orderedSessionDescendants(root)).toEqual([child1, child2]);
+    withRunFacts((hub, session) => {
+      trackStreams(session, root);
+      emitChildRoster(hub, root, [
+        childRosterRow('a', child1, undefined, 'e1'),
+        childRosterRow('b', child2, undefined, 'e2'),
+      ]);
+      emitParentEdge(hub, child1, root);
+      emitParentEdge(hub, child2, root);
+      setStatus(child1, STREAM_PHASE.RUNNING);
+      setStatus(child2, STREAM_PHASE.RUNNING);
+      expect(orderedSessionDescendants(root)).toEqual([child1, child2]);
+    });
   });
 
   it('retains an inactive child session with history', () => {
-    setParentStream(child1, root);
-    setStatus(root, STREAM_PHASE.WAITING);
-    setStatus(child1, STREAM_PHASE.WAITING);
+    // An edge observed before any roster tick still makes the child
+    // focusable once its slice exists — no roster row required.
+    withRunFacts((hub, session) => {
+      trackStreams(session, child1);
+      emitParentEdge(hub, child1, root);
+      setStatus(root, STREAM_PHASE.WAITING);
+      setStatus(child1, STREAM_PHASE.WAITING);
 
-    expect(orderedSessionDescendants(root)).toEqual([child1]);
-  });
-});
-
-// Ordered event-transition matrix for the child-stream relationship map
-// (docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md, "Race-regression
-// plan" / "Ordered unit matrix"). Each scenario drives the real transition
-// functions the production event handlers call
-// (sessionSignalsAdapter.applyActiveSubagents -> projectChildRoster,
-// sessionSignalsAdapter.applyParentStream -> setParentStream, cliState's
-// removeStream -> applyChildStreamRemoval) in the stated order and asserts
-// the load-bearing checkpoint(s) each sequence exists to prove, per the
-// design's precedence rule:
-//   removeStream tombstone > explicit edge > roster-derived parent > none.
-describe('child-stream ordered transition matrix', () => {
-  const parentP = 'parent-p' as StreamTabId;
-  const parentQ = 'parent-q' as StreamTabId;
-  const kid = 'kid' as StreamTabId;
-
-  // Shared reference: `summaryUnchanged` compares `identity` by reference,
-  // so a per-call identity object would defeat the roster no-op detection
-  // that case 12 asserts.
-  const kidIdentity = { kind: 'agent' as const, agent: 'kid-agent' };
-
-  function rosterRow(status?: StreamPhase, elapsed?: string) {
-    return {
-      executionId: 'kid-exec',
-      agentName: 'kid-agent',
-      identity: kidIdentity,
-      childStreamId: kid,
-      status,
-      elapsed,
-    };
-  }
-
-  it('1. canonical order: A, S(running), R_P+, E_P+', () => {
-    // A: the child's slice exists with no status of its own yet.
-    mintSlice(kid);
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow()]);
-    setParentStream(kid, parentP);
-
-    expect(parentStream.get().get(kid)).toBe(parentP);
-    expect(activeRows(parentP)).toMatchObject([
-      { status: STREAM_PHASE.RUNNING },
-    ]);
-    expect(retainedRows(parentP)).toMatchObject([
-      { status: STREAM_PHASE.RUNNING },
-    ]);
-  });
-
-  it('2. roster first: R_P+, A, S(running), E_P+', () => {
-    projectChildRoster(parentP, [rosterRow()]);
-    // A: the child's slice exists with no status of its own yet.
-    mintSlice(kid);
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    setParentStream(kid, parentP);
-
-    expect(parentStream.get().get(kid)).toBe(parentP);
-    expect(activeRows(parentP)).toHaveLength(1);
-    expect(retainedRows(parentP)).toHaveLength(1);
-  });
-
-  it('3. edge first: E_P+, A, S(running), R_P+', () => {
-    setParentStream(kid, parentP);
-    // The roster hasn't arrived yet, but the edge alone already makes the
-    // child reachable from the focus cycle once its slice exists (invariant
-    // 6: an edge-only child is focusable once its StreamSlice exists).
-    // A: the child's slice exists with no status of its own yet.
-    mintSlice(kid);
-    expect(parentStream.get().get(kid)).toBe(parentP);
-
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow()]);
-
-    expect(activeRows(parentP)).toHaveLength(1);
-    expect(retainedRows(parentP)).toHaveLength(1);
-  });
-
-  it('4. status first: S(running), A, E_P+, R_P+', () => {
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    setParentStream(kid, parentP);
-    projectChildRoster(parentP, [rosterRow()]);
-
-    expect(parentStream.get().get(kid)).toBe(parentP);
-    expect(activeRows(parentP)).toMatchObject([
-      { status: STREAM_PHASE.RUNNING },
-    ]);
-  });
-
-  it('5. completion: A, S(running), R_P+, E_P+, R_P-, S(terminal)', () => {
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow()]);
-    setParentStream(kid, parentP);
-
-    // Untrack (roster omission) arrives before the terminal status.
-    projectChildRoster(parentP, []);
-    expect(activeRows(parentP)).toEqual([]);
-    expect(retainedRows(parentP)).toHaveLength(1);
-
-    setStatus(kid, STREAM_PHASE.COMPLETED);
-
-    expect(activeRows(parentP)).toEqual([]);
-    expect(retainedRows(parentP)).toMatchObject([
-      { status: STREAM_PHASE.COMPLETED },
-    ]);
-  });
-
-  it('5b. a live roster tick with only elapsed changed still updates the retained summary', () => {
-    // AgentRunLifecycle untracks a finishing child (so it drops out of the
-    // next roster) *before* transitioning its stream to a terminal phase, so
-    // production never sends a roster tick that carries both a terminal
-    // status and a fresh elapsed for this child - the last roster snapshot
-    // it ever appears in is always `running`. An elapsed-only delta must
-    // therefore still count as a change while the child is running, or the
-    // cached summary freezes at whichever tick happened to settle first
-    // (typically the very first one) instead of the last live value before
-    // removal - the value the retained row and `formatPostCompactionContext`
-    // read verbatim once the child is gone from the roster.
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '0s')]);
-    setParentStream(kid, parentP);
-
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '5s')]);
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '41s')]);
-
-    // The child is untracked (dropped from the roster) with its last-known
-    // elapsed already captured; the terminal status lands separately.
-    projectChildRoster(parentP, []);
-    setStatus(kid, STREAM_PHASE.COMPLETED);
-
-    expect(retainedRows(parentP)).toMatchObject([{ elapsed: '41s' }]);
-  });
-
-  it('6. promotion with stale roster: A, S(running), R_P+, E_P+, E0, R_P+', () => {
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
-    setParentStream(kid, parentP);
-
-    setParentStream(kid, null);
-    expect(parentStream.get().has(kid)).toBe(false);
-
-    // A stale roster from the former parent must not resurrect the edge or
-    // active membership.
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
-
-    expect(parentStream.get().has(kid)).toBe(false);
-    expect(activeRows(parentP)).toEqual([]);
-    // The historical row remains reachable from the former parent.
-    expect(retainedRows(parentP)).toMatchObject([{ executionId: 'kid-exec' }]);
-  });
-
-  it('6b. edge-before-retained-roster promotion still propagates cap eviction', () => {
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
-    setParentStream(kid, parentP);
-    setParentStream(kid, null);
-
-    projectChildRoster(parentP, [
-      { ...rosterRow(STREAM_PHASE.COMPLETED), finishedAt: 100 },
-    ]);
-    expect(retainedRows(parentP)).toHaveLength(1);
-
-    projectChildRoster(parentP, []);
-    expect(retainedRows(parentP)).toEqual([]);
-    expect(parentStream.get().has(kid)).toBe(false);
-  });
-
-  it('7. explicit reattachment: (6) then E_Q+, R_Q+, R_P+', () => {
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
-    setParentStream(kid, parentP);
-    setParentStream(kid, null);
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
-
-    setParentStream(kid, parentQ);
-    projectChildRoster(parentQ, [rosterRow(STREAM_PHASE.RUNNING)]);
-    // Late roster from the old parent must not erase active membership or
-    // metadata under the new parent.
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
-
-    expect(parentStream.get().get(kid)).toBe(parentQ);
-    expect(activeRows(parentQ)).toMatchObject([{ executionId: 'kid-exec' }]);
-    expect(activeRows(parentP)).toEqual([]);
-    // The historical row from the first parent survives (invariant 5/6).
-    expect(retainedRows(parentP)).toMatchObject([{ executionId: 'kid-exec' }]);
-  });
-
-  it('8. child removal with late facts: (5) then X(child), R_P+, E_P+, A, S(terminal)', () => {
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow()]);
-    setParentStream(kid, parentP);
-    projectChildRoster(parentP, []);
-    setStatus(kid, STREAM_PHASE.COMPLETED);
-
-    removeStream(kid);
-    expect(isChildStreamRemoved(kid)).toBe(true);
-
-    // Every later fact for the removed id must remain suppressed — status
-    // facts go through `setStreamStatusInCliState` (the actual production
-    // fact-application path), which checks the tombstone directly; a raw
-    // `patchStream` call (used elsewhere in this file as a low-level test
-    // shortcut) intentionally has no such guard.
-    projectChildRoster(parentP, [rosterRow()]);
-    setParentStream(kid, parentP);
-    setStatus(kid, STREAM_PHASE.RUNNING);
-
-    expect(activeRows(parentP)).toEqual([]);
-    expect(retainedRows(parentP)).toEqual([]);
-    expect(parentStream.get().has(kid)).toBe(false);
-    expect(streams.get().has(kid)).toBe(false);
-  });
-
-  it('9. fresh activation after removal uses a distinct id, not the removed one', () => {
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow()]);
-    setParentStream(kid, parentP);
-    removeStream(kid);
-
-    const freshKid = 'kid-2' as StreamTabId;
-    setStatus(freshKid, STREAM_PHASE.RUNNING);
-    setParentStream(freshKid, parentP);
-    projectChildRoster(parentP, [
-      childRosterRow('kid-agent', freshKid, STREAM_PHASE.RUNNING, 'kid-2-exec'),
-    ]);
-
-    expect(isChildStreamRemoved(kid)).toBe(true);
-    expect(activeRows(parentP)).toMatchObject([{ childStreamId: freshKid }]);
-    expect(parentStream.get().get(freshKid)).toBe(parentP);
-  });
-
-  it('10. two-child retention keeps stable order across reordering and shrinking rosters', () => {
-    const kidA = 'kid-a' as StreamTabId;
-    const kidB = 'kid-b' as StreamTabId;
-    const rowA = (status?: StreamPhase) =>
-      childRosterRow('a', kidA, status, 'exec-a');
-    const rowB = (status?: StreamPhase) =>
-      childRosterRow('b', kidB, status, 'exec-b');
-    setStatus(kidA, STREAM_PHASE.RUNNING);
-    setStatus(kidB, STREAM_PHASE.RUNNING);
-
-    // First-seen order: A then B.
-    projectChildRoster(parentP, [rowA(), rowB()]);
-    expect(retainedRows(parentP).map((r) => r.childStreamId)).toEqual([
-      kidA,
-      kidB,
-    ]);
-
-    // A later roster reorders (B, A) — retained order must not change.
-    projectChildRoster(parentP, [rowB(), rowA()]);
-    expect(retainedRows(parentP).map((r) => r.childStreamId)).toEqual([
-      kidA,
-      kidB,
-    ]);
-
-    // Shrink to just B; A completes.
-    projectChildRoster(parentP, [rowB()]);
-    setStatus(kidA, STREAM_PHASE.COMPLETED);
-
-    expect(activeRows(parentP).map((r) => r.childStreamId)).toEqual([kidB]);
-    // Retained order is still stable and A's historical row survives.
-    expect(retainedRows(parentP).map((r) => r.childStreamId)).toEqual([
-      kidA,
-      kidB,
-    ]);
-    expect(visibleRows(parentP).map((r) => r.status)).toEqual([
-      STREAM_PHASE.COMPLETED,
-      STREAM_PHASE.RUNNING,
-    ]);
-  });
-
-  it('11. parent removal with late facts: P -> child, X(P), R_P+, E_P+', () => {
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow()]);
-    setParentStream(kid, parentP);
-    setStatus(parentP, STREAM_PHASE.RUNNING);
-
-    removeStream(parentP);
-    expect(isChildStreamRemoved(parentP)).toBe(true);
-
-    // Late facts naming the removed parent must not resurrect it as an
-    // ancestor anywhere.
-    projectChildRoster(parentP, [rosterRow()]);
-    setParentStream(kid, parentP);
-
-    expect(parentStream.get().get(kid)).toBeUndefined();
-    expect(activeRows(parentP)).toEqual([]);
-    expect(retainedRows(parentP)).toEqual([]);
-  });
-
-  it('12. identical roster snapshot applied twice is a no-op (no store write)', () => {
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
-    const entriesAfterFirst = childStreamEntries.get();
-
-    // The runtime resends a fresh array/row object on every poll even when
-    // nothing changed; `rosterRow` below is a distinct object with identical
-    // field values, not `===` to the first call's row.
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
-
-    expect(childStreamEntries.get()).toBe(entriesAfterFirst);
-  });
-
-  it('13. first roster parent rejects a conflicting roster until an explicit edge arrives', () => {
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
-
-    projectChildRoster(parentQ, [
-      { ...rosterRow(STREAM_PHASE.RUNNING), agentName: 'stale-parent' },
-    ]);
-
-    expect(parentStream.get().get(kid)).toBe(parentP);
-    expect(activeRows(parentP)).toMatchObject([{ agentName: 'kid-agent' }]);
-    expect(activeRows(parentQ)).toEqual([]);
-  });
-
-  it('14. tombstones stay bounded: oldest removals are evicted, live entries kept', () => {
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
-
-    for (let index = 0; index < 250; index += 1) {
-      removeStream(`gone-${index}` as StreamTabId);
-    }
-
-    const entries = childStreamEntries.get();
-    const tombstones = [...entries.values()].filter(
-      (entry) => entry.kind === 'removed',
-    );
-    expect(tombstones).toHaveLength(200);
-    expect(isChildStreamRemoved('gone-0' as StreamTabId)).toBe(false);
-    expect(isChildStreamRemoved('gone-49' as StreamTabId)).toBe(false);
-    expect(isChildStreamRemoved('gone-50' as StreamTabId)).toBe(true);
-    expect(isChildStreamRemoved('gone-249' as StreamTabId)).toBe(true);
-    // Eviction never touches live relationship state.
-    expect(activeRows(parentP)).toMatchObject([{ childStreamId: kid }]);
-  });
-
-  it('15. a removed parent survives eviction while an orphaned child is still live', () => {
-    setStatus(kid, STREAM_PHASE.RUNNING);
-    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
-    setParentStream(kid, parentP);
-
-    removeStream(parentP);
-    for (let index = 0; index < 250; index += 1) {
-      removeStream(`gone-${index}` as StreamTabId);
-    }
-
-    // The child that lost this parent is still live, so the parent tombstone
-    // is pinned and a late edge fact cannot re-attach the removed ancestor.
-    expect(isChildStreamRemoved(parentP)).toBe(true);
-    setParentStream(kid, parentP);
-    expect(parentStream.get().has(kid)).toBe(false);
+      expect(orderedSessionDescendants(root)).toEqual([child1]);
+    });
   });
 });

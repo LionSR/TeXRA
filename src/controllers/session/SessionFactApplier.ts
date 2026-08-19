@@ -215,6 +215,16 @@ export class SessionFactApplier {
     // config resolves a real category (run.config lands before RUNNING on
     // live paths, and the snapshot seed supplies it on rehydration).
     if (knownCategory) {
+      // The reset above just cleared the ephemeral metadata this category
+      // came from (provisionally, before the reset). Write it back so
+      // `getStreamMetadata(...).agentCategory` (what renderers read) doesn't
+      // silently regress to undefined until an unrelated later fact
+      // (`run.config`) happens to refill it — `getOrCreateStreamState` below
+      // already commits the same resolved category to the execution-state
+      // side, and metadata must not drift from it.
+      this.state.updateStreamMetadata(streamId, {
+        agentCategory: knownCategory,
+      });
       this.state.getOrCreateStreamState(streamId, knownCategory);
     }
     this.state.resetPerRunChildState(streamId);

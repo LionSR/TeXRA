@@ -84,8 +84,10 @@ import {
 import { appendLocalAssistantTranscript } from './state/transcript';
 import {
   activeSubagentsFor,
-  childStreamEntries as childStreamEntriesSignal,
+  childRosters as childRostersSignal,
   parentStream as parentStreamSignal,
+  sessionStateRevision,
+  streamMetadataFor,
   subagentExecutionLabels as subagentExecutionLabelsSignal,
 } from './state/childExecutions';
 import { focusedChildFollowUpRoute } from './state/focusedChildFollowUp';
@@ -119,7 +121,7 @@ interface InputEventEmitterLike {
 function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
   const visibleListRootStreamId = resolveChildListTarget({
     activeStreamId: streamId,
-    childStreamEntries: childStreamEntriesSignal.get(),
+    childRosters: childRostersSignal.get(),
     parentStream: parentStreamSignal.get(),
     streams: streamsSignal.get(),
   }).streamId;
@@ -164,7 +166,7 @@ export function App(props: AppProps): React.JSX.Element {
   const rootStreamId = useSignal(rootStreamIdSignal);
   const streams = useSignal(streamsSignal);
   const parentStream = useSignal(parentStreamSignal);
-  const childStreamEntries = useSignal(childStreamEntriesSignal);
+  const childRosters = useSignal(childRostersSignal);
   const subagentExecutionLabels = useSignal(subagentExecutionLabelsSignal);
   const activeForm = useSignal(activeFormSignal);
   const formProgress = useSignal(formProgressSignal);
@@ -173,6 +175,9 @@ export function App(props: AppProps): React.JSX.Element {
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
+  // Render reads shared stream metadata through `streamMetadataFor`; the
+  // revision signal re-renders on metadata changes the roster signal misses.
+  useSignal(sessionStateRevision);
   const formBusy = formProgress?.status === 'running';
   const pendingSummaries = useSignal(pendingApprovalSummaries);
   const [childListSelection, dispatchChildListSelection] = useReducer(
@@ -197,11 +202,11 @@ export function App(props: AppProps): React.JSX.Element {
     () =>
       resolveChildListTarget({
         activeStreamId,
-        childStreamEntries,
+        childRosters,
         parentStream,
         streams,
       }),
-    [activeStreamId, childStreamEntries, parentStream, streams],
+    [activeStreamId, childRosters, parentStream, streams],
   );
 
   const stdin = useStdin();
@@ -211,8 +216,12 @@ export function App(props: AppProps): React.JSX.Element {
     infoPane !== undefined ||
     foregroundReader !== undefined;
   const childInputHidden =
-    focusedChildFollowUpRoute({ activeStreamId, parentStream, streams })
-      .kind === 'reject';
+    focusedChildFollowUpRoute({
+      activeStreamId,
+      parentStream,
+      metadata: activeStreamId ? streamMetadataFor(activeStreamId) : undefined,
+      streams,
+    }).kind === 'reject';
   const appInputDisabled = foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
     ? SESSION_LIST.choosing
@@ -258,7 +267,7 @@ export function App(props: AppProps): React.JSX.Element {
     () =>
       streamTreeViews({
         activeStreamId,
-        childStreamEntries,
+        childRosters,
         parentStream,
         rootStreamId: childListTarget.streamId,
         streams,
@@ -266,7 +275,7 @@ export function App(props: AppProps): React.JSX.Element {
     [
       activeStreamId,
       childListTarget.streamId,
-      childStreamEntries,
+      childRosters,
       parentStream,
       streams,
     ],
@@ -288,18 +297,16 @@ export function App(props: AppProps): React.JSX.Element {
         .filter((parentId): parentId is StreamTabId => parentId !== undefined),
     );
     for (const parentId of parentIds) {
-      for (const child of activeSubagentsFor(
-        parentId,
-        childStreamEntries,
-        streams,
-      )) {
+      for (const child of activeSubagentsFor(parentId, childRosters)) {
         executionIds.set(child.childStreamId, child.executionId);
       }
     }
     return executionIds;
-  }, [childStreamEntries, sessionViews, streams]);
+  }, [childRosters, sessionViews]);
   const workflowDashboardRoot =
-    childListTarget.slice?.identity?.kind === 'multiAgentWorkflow'
+    childListTarget.slice !== undefined &&
+    streamMetadataFor(childListTarget.slice.streamId)?.identity?.kind ===
+      'multiAgentWorkflow'
       ? childListTarget.slice
       : undefined;
   // The only derivation: `SubagentList` renders this instance and
@@ -348,12 +355,21 @@ export function App(props: AppProps): React.JSX.Element {
   const selectedChildKillable =
     selectedChildStreamId !== undefined &&
     activeSubagentExecutionIds.has(selectedChildStreamId);
+  const selectedChildParentId =
+    selectedChildStreamId !== undefined
+      ? parentStream.get(selectedChildStreamId)
+      : undefined;
   const selectedChildWorkflowControllable =
     selectedChildRowWorkflowControllable({
-      parentStream,
+      parentIdentity:
+        selectedChildParentId !== undefined
+          ? streamMetadataFor(selectedChildParentId)?.identity
+          : undefined,
+      selectedChildIdentity:
+        selectedChildStreamId !== undefined
+          ? streamMetadataFor(selectedChildStreamId)?.identity
+          : undefined,
       selectedChildKillable,
-      selectedChildStreamId,
-      streams,
     });
   useEffect(() => {
     dispatchChildListSelection({
@@ -474,7 +490,7 @@ export function App(props: AppProps): React.JSX.Element {
         if (foregroundReader?.kind !== 'transcript') return null;
         const title = transcriptReaderTitle(
           streamDisplayLabel({
-            childStreamEntries,
+            childRosters,
             parentStream,
             streamId: foregroundReader.streamId,
             streams,
@@ -494,7 +510,7 @@ export function App(props: AppProps): React.JSX.Element {
         if (foregroundReader?.kind !== 'workPlan') return null;
         const title = workPlanReaderTitle(
           streamDisplayLabel({
-            childStreamEntries,
+            childRosters,
             parentStream,
             streamId: foregroundReader.streamId,
             streams,
@@ -548,7 +564,7 @@ export function App(props: AppProps): React.JSX.Element {
     if (digit !== undefined) {
       const target = numericFocusTargetForActiveStream({
         activeStreamId,
-        childStreamEntries,
+        childRosters,
         parentStream,
         streams,
         zeroBasedIndex: digit - 1,
