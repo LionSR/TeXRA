@@ -108,21 +108,6 @@ function livenessCacheKey(owner: InstanceOwnerRecord): string {
   return `${owner.hostname}\0${owner.instanceId}\0${owner.socketPath}`;
 }
 
-function createCachedLivenessProbe(
-  probeOwner: (owner: InstanceOwnerRecord) => Promise<InstanceLiveness>,
-): (owner: InstanceOwnerRecord) => Promise<InstanceLiveness> {
-  const ownerLiveness = new Map<string, Promise<InstanceLiveness>>();
-  return (owner) => {
-    const key = livenessCacheKey(owner);
-    let liveness = ownerLiveness.get(key);
-    if (!liveness) {
-      liveness = probeOwner(owner);
-      ownerLiveness.set(key, liveness);
-    }
-    return liveness;
-  };
-}
-
 type ExecutionSettlement =
   | { readonly kind: 'unsettled' }
   | { readonly kind: 'settled'; readonly outcome: RunOutcome };
@@ -238,8 +223,18 @@ export async function repairRestartedStreams(
 ): Promise<RestartRepairResult> {
   const result: RestartRepairResult = { activeOwners: [] };
   const now = options.now ?? Date.now();
+  const probeOwner = options.probeOwner ?? probeInstance;
+  const ownerLiveness = new Map<string, Promise<InstanceLiveness>>();
   const inactiveLeaseOptions: InactiveExecutionLeaseOptions = {
-    probeOwner: createCachedLivenessProbe(options.probeOwner ?? probeInstance),
+    probeOwner: (owner) => {
+      const key = livenessCacheKey(owner);
+      let liveness = ownerLiveness.get(key);
+      if (!liveness) {
+        liveness = probeOwner(owner);
+        ownerLiveness.set(key, liveness);
+      }
+      return liveness;
+    },
   };
 
   for (const streamId of repairCandidates(
