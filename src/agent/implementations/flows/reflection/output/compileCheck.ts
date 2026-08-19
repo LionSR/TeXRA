@@ -254,9 +254,6 @@ async function compileOne(
   failureLogExcerpt: string;
   artifact: CompiledPdfArtifact | null;
 }> {
-  // compiledBasename is the actual on-disk filename LaTeX engines use when
-  // naming their .log; it may differ from displayName when file.source is set.
-  const compiledBasename = path.basename(outputFile.location.absolutePath);
   // Full relative path keeps two outputs sharing a basename distinct
   // (ch1/main.tex vs ch2/main.tex). Strip the leading r<N>/ segment because
   // it is already added explicitly as `r${currentRound}_` below — without
@@ -365,8 +362,7 @@ async function compileOne(
     await clearStaleLogs();
     const artifact = await tryPublishArtifact({
       ...target,
-      compiledBasename,
-      buildDir,
+      compiledPdfPath: compileResult.pdfPath,
     });
     return { failure: null, failureLogExcerpt: '', artifact };
   }
@@ -439,8 +435,7 @@ async function writeCompileFailure({
 }
 
 interface TryPublishArtifactArgs extends CompileTarget {
-  compiledBasename: string;
-  buildDir: string;
+  compiledPdfPath: string;
 }
 
 /**
@@ -454,14 +449,9 @@ async function tryPublishArtifact({
   displayName,
   currentRound,
   outputFile,
-  compiledBasename,
-  buildDir,
+  compiledPdfPath,
   executionId,
 }: TryPublishArtifactArgs): Promise<CompiledPdfArtifact | null> {
-  const compiledPdfPath = path.join(
-    buildDir,
-    `${compiledBasename.replace(/\.tex$/i, '')}.pdf`,
-  );
   try {
     const artifact = await publishCompiledPdfArtifact({
       runDirectory: opts.runDirectory,

@@ -65,12 +65,15 @@ describe('compileLatex2Pdf structured return', () => {
     await installPlatform({ workspacePath });
   });
 
-  it('returns { ok: true } with no logTail on a successful compile', async () => {
+  it('returns { ok: true } with the engine PDF path and no logTail on success', async () => {
     mocks.runToolWithCheck.mockResolvedValue(execResult(true));
 
     const result = await compile();
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({
+      ok: true,
+      pdfPath: path.join(workspacePath, 'build', 'main.pdf'),
+    });
   });
 
   it('surfaces the last 200 lines of the engine log as logTail on a failed compile', async () => {
@@ -158,7 +161,7 @@ describe('compileLatex2Pdf logger seam', () => {
 
     const result = await compile();
 
-    expect(result).toEqual({ ok: true });
+    expect(result.ok).toBe(true);
     expect(warn).toHaveBeenCalledWith(
       LATEX_COMMANDS_CHANNEL,
       expect.stringContaining('latexmk not found'),
@@ -179,7 +182,7 @@ describe('compileLatex2Pdf logger seam', () => {
       },
     );
 
-    expect(result).toEqual({ ok: true });
+    expect(result.ok).toBe(true);
     expect(warn).toHaveBeenCalledWith(
       'pinnedCompile',
       expect.stringContaining('latexmk not found'),

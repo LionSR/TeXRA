@@ -6,7 +6,6 @@ import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { ExternalOpener } from '@hosts/uiHosts';
 import type { FileLocation } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
-import { getFileStem } from '@utils/core';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -102,10 +101,6 @@ export function createDesktopPreviewHost(
     }
 
     const outputDirectory = path.dirname(sourcePath);
-    const pdfPath = path.join(
-      outputDirectory,
-      `${getFileStem(sourcePath)}.pdf`,
-    );
     const { hasLatexCompiler } = await import('@latex/latexToolchain');
     if (!(await hasLatexCompiler())) {
       await fail(
@@ -129,10 +124,12 @@ export function createDesktopPreviewHost(
       await fail(
         `LaTeX build failed for ${sourcePath}. See the LaTeX log next to the source for details.`,
       );
+      return;
     }
 
     // Confirm the PDF is on disk before rendering it (the iframe will
     // load nothing and present a blank surface otherwise).
+    const { pdfPath } = built;
     await ensurePathExists(pdfPath);
 
     if (tryShowPdfInRenderer(pdfPath, path.basename(pdfPath))) return;

@@ -14,8 +14,25 @@ import { loadSourceModule } from './loadSourceModule.ts';
 
 const mocks = createModuleMocks();
 
+type FakeCompile = (location: { absolutePath: string }) => Promise<{
+  ok: boolean;
+  pdfPath?: string;
+  logTail?: string;
+}>;
+
+/**
+ * Stand-in LaTeX engine: succeeds and reports the PDF it "wrote" next to the
+ * source, the way the real `compileLatex2Pdf` does.
+ */
+function fakeCompiler() {
+  return vi.fn(async (location: { absolutePath: string }) => ({
+    ok: true,
+    pdfPath: location.absolutePath.replace(/\.tex$/, '.pdf'),
+  }));
+}
+
 async function loadDesktopPreviewHost(
-  compileLatex2Pdf = vi.fn(async () => ({ ok: true })),
+  compileLatex2Pdf: FakeCompile = fakeCompiler(),
   access?: (filePath: string) => Promise<void>,
   checkToolInstalled = vi.fn(async () => true),
 ): Promise<typeof import('@desktop/main/desktopPreviewHost')> {
@@ -143,7 +160,7 @@ describe('desktop preview host', () => {
   });
 
   it('builds LaTeX previews and opens the generated PDF path', async () => {
-    const compileLatex2Pdf = vi.fn(async () => ({ ok: true }));
+    const compileLatex2Pdf = fakeCompiler();
     const { createDesktopPreviewHost } =
       await loadDesktopPreviewHost(compileLatex2Pdf);
     const { dir, texPath, pdfPath } = await makeTexFixture('preview');
@@ -160,7 +177,7 @@ describe('desktop preview host', () => {
   });
 
   it('opens compile-preview PDF targets without running LaTeX', async () => {
-    const compileLatex2Pdf = vi.fn(async () => ({ ok: true }));
+    const compileLatex2Pdf = fakeCompiler();
     const checkToolInstalled = vi.fn(async () => true);
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost(
       compileLatex2Pdf,
@@ -181,7 +198,7 @@ describe('desktop preview host', () => {
   });
 
   it('reports missing LaTeX toolchains before compiling preview sources', async () => {
-    const compileLatex2Pdf = vi.fn(async () => ({ ok: true }));
+    const compileLatex2Pdf = fakeCompiler();
     const checkToolInstalled = vi.fn(async () => false);
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost(
       compileLatex2Pdf,

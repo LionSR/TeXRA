@@ -139,14 +139,10 @@ export class ChatExportController {
     const location = pathToLocation(absolutePath);
     const compiled = await compileLatex2Pdf(location);
 
-    const pdfPath = compiled.ok
-      ? absolutePath.replace(/\.tex$/, '.pdf')
-      : undefined;
-
     return {
       storagePath,
       absolutePath,
-      pdfPath,
+      pdfPath: compiled.ok ? compiled.pdfPath : undefined,
       logTail: compiled.ok ? undefined : compiled.logTail,
     };
   }
