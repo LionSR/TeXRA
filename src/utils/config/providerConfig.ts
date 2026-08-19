@@ -7,11 +7,14 @@
  * Canonical read path: keys registered in the state-setting catalog
  * (`src/shared/schemas/stateSettings.ts`) are read via `readPlatformSetting()`,
  * which resolves the default from the entry's schema and snaps an
- * invalid/stale stored value back to that default. Keys not yet in the
- * catalog (the per-provider streaming toggles below) fall back to the
- * local `read()` helper — migrate a key to
- * `readPlatformSetting()` once it gets a catalog entry rather than adding a
- * fourth read path.
+ * invalid/stale stored value back to that default. The streaming toggles are
+ * the deliberate exception: they are catalogued
+ * (`PROVIDER_STREAMING_SETTINGS`, and the settings view writes them through
+ * `UPDATE_STATE_SETTING`), but their reads stay on the local `read()` helper
+ * so an unset per-provider key falls back to the *live* global streaming
+ * toggle — `readPlatformSetting()` would instead resolve the entry schema's
+ * static `.prefault(true)`. A key that genuinely has no catalog entry should
+ * be catalogued, not given a fourth read path.
  */
 
 import { platform } from '@platform/platform';
@@ -35,7 +38,7 @@ function entry(provider: string): ProviderStateEntry | undefined {
   return PROVIDERS.get(provider) ?? PROVIDERS.get(provider.toLowerCase());
 }
 
-/** Non-catalog fallback — see the module-level "Canonical read path" note. */
+/** Deliberate raw read — see the module-level "Canonical read path" note. */
 function read<T>(key: GlobalStateKey, defaultValue: T): T {
   return platform().globalState.get(key, defaultValue);
 }

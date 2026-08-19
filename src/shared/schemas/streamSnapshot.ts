@@ -88,7 +88,9 @@ export const PersistedWorkPlanSchema = z.object({
  * Normalized once here, at the parse entry point, into the canonical
  * `StreamPhase` via the same collapse `streamStatusToLifecycleStatus` performs
  * everywhere else; `ready` has no phase equivalent ("no run recorded") and
- * normalizes to absent. Downstream code never sees a legacy value.
+ * normalizes to `undefined` — the parsed snapshot keeps an own `status` key
+ * with that value (absent only when the input omits `status`). Downstream
+ * code never sees a legacy value.
  */
 const LegacyStreamStatusAsPhaseSchema = StreamStatusSchema.transform(
   (status) => {
