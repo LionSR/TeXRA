@@ -38,8 +38,9 @@ import { subscribeToSignalChanges } from './signalSubscription';
 export const streamArtifactRevision = signal<number>(0);
 
 /** Streams whose artifacts have established provenance this session: a
- *  completed preload, or a live artifact write the adapter marked hydrated
- *  (see `readStreamArtifacts`). A stream absent here has no established disk
+ *  completed preload, an authoritative `load` (resume reconciliation), or a
+ *  live artifact write the adapter marked hydrated (see
+ *  `readStreamArtifacts`). A stream absent here has no established disk
  *  provenance yet, so render-time reads return `undefined` — callers fall
  *  back to empty defaults — instead of hitting unseeded getters (and their
  *  `warnIfUnseeded` noise) mid-preload (#10730). */
@@ -110,7 +111,7 @@ export function beginLoadedStreamsReconcile(retained: readonly StreamTabId[]): {
 /** Read the canonical artifact projection for one stream from the live session.
  *  Returns `undefined` when no default session exists yet (harness/tests) or
  *  when the stream has no established provenance this session: no completed
- *  preload and no live artifact write. `sessionSignalsAdapter` marks a stream
+ *  preload or resume `load`, and no live artifact write. `sessionSignalsAdapter` marks a stream
  *  hydrated on every live files, missing-outputs, compile-failures, usage,
  *  todos, or plan write, so a never-focused stream with live writes projects
  *  here too; callers default to empty values (`artifacts?.todos ?? []`) while
