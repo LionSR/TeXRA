@@ -76,11 +76,8 @@ function writeCanonicalStreamFixture(input: {
   if (input.resumable) {
     writeJson(join(executionDirectory, `flow_${input.executionId}.json`), {
       schemaVersion: 2,
-      flowName: 'texra',
       shared: { messages: [] },
-      createdAt: new Date(input.timestamp).toISOString(),
       cursor: { nextNodeId: 'start' },
-      nodes: [],
     });
   }
 }

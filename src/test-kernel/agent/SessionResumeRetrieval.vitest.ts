@@ -107,10 +107,6 @@ type ToolUseSetupContext = Parameters<ToolUseFlowAttachment['attach']>[0];
 // A record parked on the wait node, as a resumable turn leaves it.
 const WAITING_AT_START = {
   cursor: { nextNodeId: WAIT_NODE_CURSOR },
-  nodes: [
-    { action: 'default', nodeId: 'start' },
-    { action: 'default', nodeId: 'start/default' },
-  ],
 };
 
 async function writeFlowRecord(
@@ -119,11 +115,8 @@ async function writeFlowRecord(
   overrides: Record<string, unknown> = {},
 ): Promise<void> {
   await getExecutionStore(executionId).write(flowKey(executionId), {
-    flowName: 'texra',
     shared,
-    createdAt: new Date().toISOString(),
     cursor: { nextNodeId: 'start' },
-    nodes: [],
     ...overrides,
   });
 }
@@ -1168,19 +1161,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       name: 'legacy record without a replay cursor',
       reason: 'unsupported-record',
       stored: {
-        flowName: 'texra',
         shared: VALID_TOOL_USE_SHARED,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        nodes: [],
       },
     },
     {
       name: 'missing shared state',
       reason: 'missing-shared',
       stored: {
-        flowName: 'texra',
-        createdAt: '2026-01-01T00:00:00.000Z',
-        nodes: [],
+        cursor: { nextNodeId: 'start' },
       },
     },
     {
@@ -1189,25 +1177,13 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       stored: null,
     },
     {
-      name: 'valid shared state without nodes',
-      reason: 'unsupported-record',
-      stored: {
-        flowName: 'texra',
-        shared: VALID_TOOL_USE_SHARED,
-        createdAt: '2026-01-01T00:00:00.000Z',
-      },
-    },
-    {
       name: 'future envelope schema version',
       reason: 'unsupported-record',
       stored: {
         schemaVersion: FLOW_RECORD_SCHEMA_VERSION + 1,
-        flowName: 'texra',
         shared: VALID_TOOL_USE_SHARED,
-        createdAt: '2026-01-01T00:00:00.000Z',
         // Cursor present so the version bound is the only failing constraint.
         cursor: { nextNodeId: 'start' },
-        nodes: [],
       },
     },
     // Fresh launches only: a resume handoff over a malformed record is
@@ -1360,8 +1336,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // Reject the flow's first node-step persist with the provider's abort:
     // the run then fails mid-flight through the public storage boundary, the
     // same way a real cancellation reaches `runToolUseFlow` out of the flow.
-    // Only step writes append to the nodes audit log, so any other write
-    // (nodes stays empty) passes through untouched.
+    // Only a step write stamps `cursor.lastAction` (the action the node just
+    // returned), so any other write passes through untouched.
     const realWrite = store.write.bind(store);
     let abortFired = false;
     const writeSpy = vi
@@ -1371,9 +1347,9 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           !abortFired &&
           value !== null &&
           typeof value === 'object' &&
-          'nodes' in value &&
-          Array.isArray(value.nodes) &&
-          value.nodes.length > 0
+          'cursor' in value &&
+          (value.cursor as { lastAction?: string } | null)?.lastAction !==
+            undefined
         ) {
           abortFired = true;
           flowContext?.interrupt();

@@ -70,11 +70,10 @@ describe('PersistedFlow', () => {
     await expectStoredRecord(store, executionId, {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       cursor: { nextNodeId: null, lastAction: 'complete' },
-      nodes: [{ action: 'complete' }],
     });
   });
 
-  it('replays from the cursor rather than the audit node log', async () => {
+  it('replays from the persisted cursor, not from the start node', async () => {
     const executionId = 'abc127' as ExecutionId;
     const store = getExecutionStore(executionId);
     const first = new ContinueOnceNode();
@@ -84,11 +83,8 @@ describe('PersistedFlow', () => {
 
     await store.write(flowKey(executionId), {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
-      flowName: 'texra',
       shared: { count: 0, continue: false },
-      createdAt: new Date().toISOString(),
       cursor: { nextNodeId: 'start/again', lastAction: 'again' },
-      nodes: [],
     } satisfies FlowRecord);
 
     await flow.run({ count: 999, continue: true });
@@ -96,11 +92,10 @@ describe('PersistedFlow', () => {
     await expectStoredRecord(store, executionId, {
       shared: { count: 1, continue: false },
       cursor: { nextNodeId: null, lastAction: 'complete' },
-      nodes: [{ action: 'complete', nodeId: 'start/again' }],
     });
   });
 
-  it('rejects a legacy no-cursor record loudly instead of replaying the node log', async () => {
+  it('rejects a legacy no-cursor record loudly', async () => {
     const executionId = 'abc128' as ExecutionId;
     const store = getExecutionStore(executionId);
     const first = new ContinueOnceNode();
@@ -111,10 +106,7 @@ describe('PersistedFlow', () => {
     // Deliberately invalid: pre-cursor records are no longer supported.
     await store.write(flowKey(executionId), {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
-      flowName: 'texra',
       shared: { count: 1, continue: false },
-      createdAt: new Date().toISOString(),
-      nodes: [{ action: 'again' }],
     });
 
     await expect(flow.run({ count: 999, continue: true })).rejects.toThrow(
@@ -135,7 +127,6 @@ describe('PersistedFlow', () => {
         nextNodeId: 'start',
         lastAction: FlowTransition.WAITING,
       },
-      nodes: [{ action: FlowTransition.WAITING, nodeId: 'start' }],
     });
 
     await expect(flow.run({ count: 999 })).resolves.toBe(

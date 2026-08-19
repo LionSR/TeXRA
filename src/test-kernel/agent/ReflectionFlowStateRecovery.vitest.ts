@@ -110,11 +110,8 @@ function recoveryCase(name: string) {
 
 function flowRecord(shared: unknown): FlowRecord {
   return {
-    flowName: 'texra',
     shared,
-    createdAt: '2026-01-01T00:00:00.000Z',
     cursor: { nextNodeId: null },
-    nodes: [],
   };
 }
 
@@ -160,11 +157,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
     {
       name: 'missing shared state',
       reason: 'missing-shared',
-      stored: {
-        flowName: 'texra',
-        createdAt: '2026-01-01T00:00:00.000Z',
-        nodes: [],
-      },
+      stored: {},
     },
     {
       name: 'unsupported null record',
@@ -172,12 +165,10 @@ describe('runReflectionFlow persisted-state recovery', () => {
       stored: null,
     },
     {
-      name: 'valid shared state without nodes',
+      name: 'valid shared state without a replay cursor',
       reason: 'unsupported-record',
       stored: {
-        flowName: 'texra',
         shared: reflectionFlowShared({ totalRounds: 1, context: null }),
-        createdAt: '2026-01-01T00:00:00.000Z',
       },
     },
     {

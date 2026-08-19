@@ -23,11 +23,8 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 
 const BASE_FLOW_RECORD: FlowRecord = {
-  flowName: 'texra',
   shared: { messages: [] },
-  createdAt: '2026-07-05T00:00:00.000Z',
   cursor: { nextNodeId: 'start' },
-  nodes: [],
 };
 
 describe('deriveResumability', () => {

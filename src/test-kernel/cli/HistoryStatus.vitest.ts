@@ -53,11 +53,8 @@ async function seedFlowRecord(
   });
   await releaseOwnedExecutionLease(id);
   await getExecutionStore(id).write(flowKey(id), {
-    flowName: 'test',
     shared,
-    createdAt: new Date().toISOString(),
     cursor: { nextNodeId: 'start' },
-    nodes: [],
   });
 }
 
