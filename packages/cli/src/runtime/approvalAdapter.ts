@@ -168,16 +168,6 @@ function toPromptedApprovalSettlement(
   });
 }
 
-/** Preserve a CLI host failure as a Bash cancellation, not user feedback. */
-export function toBashApprovalSettlement(
-  decision: CliApprovalDecision,
-): BashSettlement {
-  if (decision.rejectionCause !== undefined) {
-    return { action: 'reject', cause: decision.rejectionCause };
-  }
-  return toApprovalSettlement(decision);
-}
-
 function toRetryResult(
   decision: ApprovalDecision,
   humanInputAvailable: boolean,
@@ -262,7 +252,7 @@ export function createHeadlessCliHostInteractions(
         { summary: formatBashApprovalSummary(request) },
         hooks,
       );
-      return toBashApprovalSettlement(decision);
+      return toApprovalSettlement(decision);
     },
     async requestPlanApproval(request) {
       const { decision, prompted } = await decideApprovalEvent(
