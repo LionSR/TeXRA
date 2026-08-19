@@ -98,10 +98,8 @@ export type LoadedMediaMetadata = z.infer<typeof LoadedMediaMetadataSchema>;
 export const FileListEntrySchema = z.object({
   path: z.string(),
   ok: z.boolean(),
-  source: z.string().optional(),
   sourceDisplay: z.string().optional(),
   varName: z.string().optional(),
-  internal: z.boolean().optional(),
   /** Present only when this file was loaded through the media pipeline. */
   media: LoadedMediaMetadataSchema.optional(),
 });

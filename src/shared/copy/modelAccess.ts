@@ -87,10 +87,11 @@ export function usageRouteBadge(
 /**
  * One sentence stating what a usage record cost and who paid for it.
  *
- * Three outcomes: subscription routes with zero cost are free, a known route
- * is billed "via" its payment name, and an unknown route with no cost has
- * nothing to say (`undefined`) so callers can omit the line entirely rather
- * than print "$0.00" for a session that never reached a model.
+ * Four outcomes: a subscription route with zero cost is free, a known route
+ * is billed "via" its payment name, an unknown route with a cost shows the
+ * bare amount, and an unknown route with no cost has nothing to say
+ * (`undefined`) so callers can omit the line entirely rather than print
+ * "$0.000" for a session that never reached a model.
  */
 export function usageCostLabel(
   cost: number,
