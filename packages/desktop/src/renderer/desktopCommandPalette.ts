@@ -7,6 +7,7 @@ import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
+import { streamDisplayLabel } from '@progressView/frontend/utils';
 import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
 import {
   formatDesktopAccelerator,
@@ -399,18 +400,18 @@ function dispatchDesktopPaletteCommand(
 function toStreamPaletteEntry(stream: StreamTabInfo): CommandPaletteEntry {
   return {
     id: buildSwitchStreamCommandId(stream.name),
-    label: `Switch to ${stream.label || stream.name}`,
+    label: `Switch to ${stream.label}`,
+    // `label` is `runIdentityDisplayName(identity)` by construction
+    // (`buildStreamTabInfo`), so the subtitle reads the same cleaned name the
+    // title shows instead of re-deriving it from the raw identity fields —
+    // which printed a source-prefixed id ('custom:reviewer') beside the
+    // cleaned title. `command` exists only on process streams; the terminal
+    // 'Stream' covers an unresolved-empty label, which the schema does not
+    // forbid.
     description:
       stream.description ||
-      (stream.identity?.kind === 'multiAgentWorkflow'
-        ? stream.identity.workflowName
-        : undefined) ||
-      (stream.identity?.kind === 'agent'
-        ? stream.identity.agent || stream.modelLabel
-        : undefined) ||
-      (stream.identity?.kind === 'process'
-        ? stream.command || stream.identity.tool
-        : undefined) ||
+      stream.command ||
+      streamDisplayLabel(stream) ||
       'Stream',
     icon: 'terminal',
     category: 'Streams',
