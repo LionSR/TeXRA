@@ -5,6 +5,7 @@ import {
   isToolUseState,
   isWorkflowState,
   sumUsageStats,
+  type PermissionPayload,
   type StreamTabId,
   type TokenUsageStats,
   type ToolUseStreamState,
@@ -15,7 +16,6 @@ import {
 
 // Local imports
 import { setStreamStateForId } from './progressState';
-import type { PermissionState } from './permissionState';
 
 /**
  * Update a per-round record. Handles full reset and merge semantics.
@@ -56,9 +56,9 @@ export function goalToStateFields(goal: GoalState): {
  * Keeps permissions that have no streamId or match the given streamId.
  */
 export function filterPermissionsForStream(
-  permissions: PermissionState[],
+  permissions: PermissionPayload[],
   streamId: string | undefined,
-): PermissionState[] {
+): PermissionPayload[] {
   if (!streamId) return [];
   return permissions.filter(
     (permission) =>
@@ -71,9 +71,9 @@ export function filterPermissionsForStream(
  * Keeps permissions that have no streamId (global) or belong to a different stream.
  */
 export function removePermissionsForStream(
-  permissions: PermissionState[],
+  permissions: PermissionPayload[],
   streamId: string,
-): PermissionState[] {
+): PermissionPayload[] {
   return permissions.filter(
     (permission) => permission.data.streamId !== streamId,
   );

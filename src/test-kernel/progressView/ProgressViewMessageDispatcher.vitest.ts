@@ -18,7 +18,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
 
-import type { PermissionState } from '@progressView/frontend/permissionState';
 import {
   appState,
   permissions$,
@@ -30,7 +29,11 @@ import {
   logListStateKey,
   webviewStorage,
 } from '@progressView/frontend/webviewStorage';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  type PermissionPayload,
+  type StreamTabId,
+} from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchProgressViewOutbound,
@@ -190,7 +193,7 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
           plan: { objective: 'Do the thing.' },
           goalEnabled: false,
         },
-      } as PermissionState,
+      } as PermissionPayload,
     ]);
     const onError = vi.fn();
 

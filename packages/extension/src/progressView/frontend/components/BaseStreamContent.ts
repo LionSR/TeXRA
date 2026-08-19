@@ -16,7 +16,11 @@ import { consume } from '@lit/context';
 import { state } from 'lit/decorators.js';
 
 // Local imports - shared schemas
-import type { ContextStateData, TokenUsageStats } from '@shared/schemas';
+import type {
+  ContextStateData,
+  PermissionPayload,
+  TokenUsageStats,
+} from '@shared/schemas';
 
 // Local imports - progress view
 import { filterPermissionsForStream, totalRunUsage } from '../stateUtils';
@@ -28,7 +32,6 @@ import {
 } from '../streamContexts';
 
 // Local imports - types
-import type { PermissionState } from '../permissionState';
 
 // Side-effect imports - sibling components shared by both stream-content
 // containers (registered once, consumed by the render helpers below)
@@ -43,10 +46,10 @@ export abstract class BaseStreamContent extends LitElement {
 
   @consume({ context: permissionsContext, subscribe: true })
   @state()
-  protected permissionContext: PermissionState[] = [];
+  protected permissionContext: PermissionPayload[] = [];
 
   // Derived values - recomputed in willUpdate() before render.
-  protected filteredPermissions: PermissionState[] = [];
+  protected filteredPermissions: PermissionPayload[] = [];
 
   protected override willUpdate(changedProperties: PropertyValues): void {
     if (
