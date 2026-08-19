@@ -18,8 +18,6 @@ import {
 // Local imports - progress view contexts
 import { archivedContext } from '../streamContexts';
 
-// Local imports - progress view component types
-
 export abstract class BaseRequestPanel<
   K extends PermissionKind = PermissionKind,
 > extends LitElement {

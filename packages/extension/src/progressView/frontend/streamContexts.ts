@@ -21,8 +21,6 @@ import type {
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 
-// Local imports - progress view components
-
 /** Context value for stream state, providing all data needed by stream content components. */
 export interface StreamContextValue {
   streamInfo: StreamTabInfo | null;
