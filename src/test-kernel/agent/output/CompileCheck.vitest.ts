@@ -26,12 +26,16 @@ interface FakeCompileOptions {
   outputDirectory?: string;
 }
 
+// The compiled PDF the fake engine reports; no test seeds it, so artifact
+// publication is a no-op — the path only has to be a plausible absolute one.
+const COMPILED_PDF = '/build/main.pdf';
+
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(
     async (
       _location: FileLocation,
       _options?: FakeCompileOptions,
-    ): Promise<CompileLatex2PdfResult> => ({ ok: true }),
+    ): Promise<CompileLatex2PdfResult> => ({ ok: true, pdfPath: COMPILED_PDF }),
   ),
   hasLatexCompiler: vi.fn(async () => true),
 }));
@@ -75,7 +79,9 @@ function failedExcerpt(result: CompileCheckResult): string {
 
 describe('runCompileCheck', () => {
   beforeEach(() => {
-    mocks.compileLatex2Pdf.mockReset().mockResolvedValue({ ok: true });
+    mocks.compileLatex2Pdf
+      .mockReset()
+      .mockResolvedValue({ ok: true, pdfPath: COMPILED_PDF });
     mocks.hasLatexCompiler.mockReset().mockResolvedValue(true);
   });
 
@@ -211,7 +217,10 @@ describe('runCompileCheck', () => {
 
     // Re-run the same round (e.g. after a repaired retry); this time the
     // compile succeeds.
-    mocks.compileLatex2Pdf.mockResolvedValueOnce({ ok: true });
+    mocks.compileLatex2Pdf.mockResolvedValueOnce({
+      ok: true,
+      pdfPath: COMPILED_PDF,
+    });
     const secondResult = await runCompileCheck(ctx, 0);
     expect(secondResult.compileResult?.status).toBe('ok');
 
