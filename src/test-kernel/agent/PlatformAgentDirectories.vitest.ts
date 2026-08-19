@@ -31,9 +31,8 @@ vi.mock('@logger/logUtils', async (importOriginal) => {
   return { ...actual, createLog: () => logs };
 });
 
-const { bootstrapPlatformAgentDirectories } = await import(
-  '@agent/index/platformAgentDirectories'
-);
+const { bootstrapPlatformAgentDirectories } =
+  await import('@agent/index/platformAgentDirectories');
 
 function elocked(message: string): Error {
   return Object.assign(new Error(message), { code: 'ELOCKED' });
