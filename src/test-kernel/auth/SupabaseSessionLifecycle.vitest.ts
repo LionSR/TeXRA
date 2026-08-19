@@ -288,10 +288,6 @@ describe('SupabaseSession', () => {
           expires_at: 123,
           user: { id: 'user-id', email: 'user@example.com' },
         }),
-        {
-          fallbackLabel: 'fallback@example.com',
-          defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-        },
       );
 
       assert.deepEqual(session, {
@@ -306,23 +302,12 @@ describe('SupabaseSession', () => {
       });
     });
 
-    it('trims whitespace from the exchange fallback label', () => {
-      const session = toStorableSupabaseSession(makeExchangeResponse(), {
-        fallbackLabel: '  github@example.com  ',
-        defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-      });
-
-      assert.equal(session.account.label, 'github@example.com');
-    });
-
-    it('falls back to the supplied label and default expiry', () => {
+    it('falls back to the user id and the default expiry', () => {
       const earliestExpiry = Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS;
-      const session = toStorableSupabaseSession(makeExchangeResponse(), {
-        fallbackLabel: 'fallback@example.com',
-        defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-      });
+      const response = makeExchangeResponse();
+      const session = toStorableSupabaseSession(response);
 
-      assert.equal(session.account.label, 'fallback@example.com');
+      assert.equal(session.account.label, response.user.id);
       assert.ok(session.expiresAt >= earliestExpiry);
       assert.ok(
         session.expiresAt <= Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
@@ -343,46 +328,6 @@ describe('SupabaseSession', () => {
         refreshToken: 'refresh-token',
       });
       assert.equal(getReadCount(), 1);
-      assert.equal(coordinator.isTokenExpiringSoon(), false);
-    });
-
-    it('reports no expiry pressure before any session is observed', () => {
-      const { coordinator } = createCoordinator({
-        initialSession: soonExpiringSession(),
-      });
-
-      assert.equal(coordinator.isTokenExpiringSoon(), false);
-    });
-
-    it('answers expiry pressure from a session loaded cold', async () => {
-      const { coordinator } = createCoordinator({
-        initialSession: soonExpiringSession(),
-      });
-
-      await coordinator.loadSession();
-
-      assert.equal(coordinator.isTokenExpiringSoon(), true);
-    });
-
-    it('drops expiry pressure once the session is cleared', async () => {
-      const { coordinator } = createCoordinator({
-        initialSession: soonExpiringSession(),
-      });
-
-      await coordinator.loadSession();
-      await coordinator.clearSession();
-
-      assert.equal(coordinator.isTokenExpiringSoon(), false);
-    });
-
-    it('drops expiry pressure when a matched session is cleared', async () => {
-      const session = soonExpiringSession();
-      const { coordinator } = createCoordinator({ initialSession: session });
-
-      await coordinator.loadSession();
-      assert.equal(await coordinator.clearSessionIfCurrent(session), true);
-
-      assert.equal(coordinator.isTokenExpiringSoon(), false);
     });
 
     it('reads storage once when ensuring a cached fresh token', async () => {

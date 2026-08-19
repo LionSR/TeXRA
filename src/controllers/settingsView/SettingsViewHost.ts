@@ -7,10 +7,7 @@ import type {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { SettingsMemoryController } from './SettingsMemoryController';
-import {
-  SettingsModelSelectionController,
-  type ModelSelectionExtras,
-} from './SettingsModelSelectionController';
+import { SettingsModelSelectionController } from './SettingsModelSelectionController';
 
 type Awaitable<T> = T | PromiseLike<T>;
 type MemoryControllerOptions = ConstructorParameters<
@@ -34,7 +31,6 @@ interface SettingsViewHostOptions {
   readonly state: SettingsStatePorts;
   readonly memoryPrompt: MemoryControllerOptions['prompt'];
   readonly respond?: SettingsRespond;
-  readonly modelSelectionExtras?: ModelSelectionExtras;
   readonly controllers?: {
     readonly memory?: SettingsMemoryController;
     readonly modelSelection?: SettingsModelSelectionController;
@@ -70,7 +66,6 @@ export class SettingsViewHost {
     this.modelSelectionController =
       options.controllers?.modelSelection ??
       new SettingsModelSelectionController({
-        ...options.modelSelectionExtras,
         globalState: options.state.globalState,
       });
   }
