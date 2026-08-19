@@ -15,6 +15,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import { diffWordsWithSpace } from 'diff';
 
 import type { FileListEntry } from '@shared/schemas';
 import { hljs } from '@shared/highlighting/hljs';
@@ -23,8 +24,8 @@ import { hljs } from '@shared/highlighting/hljs';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { copyWithFeedback } from '@shared/utils/clipboard';
 import { getBasename } from '@utils/core';
-import { DIFF_DELETE, DIFF_INSERT, diffTextByChar } from '@utils/text/diff';
 
 // Local imports - formatter helpers
 import {
@@ -32,7 +33,6 @@ import {
   DIFF_DETECTION_LINE_LIMIT,
   DIFF_MARKER_THRESHOLD,
 } from './constants';
-import { registerCopyContent } from './contentStore';
 
 /** Build a tool-use section template. Empty label omits the label element. */
 export function buildToolUseSection(
@@ -122,15 +122,34 @@ export function buildSpillArtifactButton(spillPath: string): TemplateResult {
   return html`<button type="button" class="spill-artifact-link proposal-banner-setup" data-spill-path=${spillPath} title="Show full output" @keydown=${stopSummaryToggleKeydown}>${waIcon('file-lines')} Show full output</button>`;
 }
 
+/**
+ * Copy a copy-button's payload from a direct `@click` binding.
+ *
+ * `stopPropagation()` keeps the click from reaching the enclosing
+ * `<wa-details>` summary — and any delegated transcript handler above it — so
+ * copying never toggles the disclosure panel. A button built without content
+ * is inert and does not even stop the click.
+ */
+async function copyFromClick(
+  event: Event,
+  content: string | undefined,
+  successClass?: string,
+): Promise<void> {
+  if (content == null) return;
+  event.stopPropagation();
+  const button = event.currentTarget;
+  if (!(button instanceof HTMLElement)) return;
+  await copyWithFeedback(button, content, { successClass });
+}
+
 /** Build a copy button for banner content. */
 export function buildCopyButton(
   title: string,
-  options: { hidden?: boolean; content?: string; contentId?: string } = {},
+  options: { hidden?: boolean; content?: string } = {},
 ): TemplateResult {
-  const { hidden = false, content, contentId } = options;
-  const copyId = content != null ? registerCopyContent(content, contentId) : '';
+  const { hidden = false, content } = options;
   // prettier-ignore
-  return html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="s" type="button" title=${title} aria-label=${title} data-default-title=${title} data-success-title="Copied!" data-copy-id=${ifDefined(copyId || undefined)} data-copy-type="banner" ?hidden=${hidden} @keydown=${stopSummaryToggleKeydown}>${waIcon('copy')}</wa-button>`;
+  return html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="s" type="button" title=${title} aria-label=${title} ?hidden=${hidden} @click=${(event: Event) => copyFromClick(event, content)} @keydown=${stopSummaryToggleKeydown}>${waIcon('copy')}</wa-button>`;
 }
 
 /**
@@ -191,7 +210,6 @@ interface DetailsSummaryOptions {
     title: string;
     hidden?: boolean;
     content?: string;
-    contentId?: string;
   };
   /** Extra Lit template content rendered after the label (e.g. a live timer). */
   extraContent?: TemplateResult;
@@ -327,7 +345,7 @@ export function buildCodeBlock(
   // prettier-ignore
   const languageBadge = showLanguage ? html`<span class="code-block-language">${LANGUAGE_LABELS[language] ?? (language || 'Text')}</span>` : nothing;
   // prettier-ignore
-  const copyButton = showCopy ? html`<wa-button class="code-block-copy" appearance="plain" variant="neutral" size="s" type="button" title="Copy to clipboard" aria-label="Copy to clipboard" data-copy-id=${registerCopyContent(text)} data-copy-type="code-block">${waIcon('copy')}</wa-button>` : nothing;
+  const copyButton = showCopy ? html`<wa-button class="code-block-copy" appearance="plain" variant="neutral" size="s" type="button" title="Copy to clipboard" aria-label="Copy to clipboard" @click=${(event: Event) => copyFromClick(event, text, 'copied')}>${waIcon('copy')}</wa-button>` : nothing;
   // prettier-ignore
   const codeTemplate = html`<pre class=${classMap(preClasses)}><code>${isHighlighted ? unsafeHTML(highlighted) : text}</code></pre>`;
   // prettier-ignore
@@ -392,23 +410,25 @@ export function buildExecutionsPathDisplay(
 // Edit Diff Display (Inline Word-Level Diff)
 // ============================================================================
 
-/** Generate inline diff template showing changes between old and new text. */
+/**
+ * Generate inline diff template showing changes between old and new text.
+ *
+ * Word-level rather than character-level: whole-word runs are what a reader
+ * can scan, and they come from the same engine as every other diff in the
+ * product. The webview highlights inline spans while the terminal renders
+ * unified hunks — two correct paints of one payload for two media.
+ */
 function generateInlineDiff(oldText: string, newText: string): TemplateResult {
-  const diffs = diffTextByChar(oldText, newText, {
-    // Preserve diff_main's omitted-argument behavior (line-level speedup).
-    checkLines: true,
-    cleanupSemantic: true,
-  });
+  const parts = diffWordsWithSpace(oldText, newText);
 
-  return html`${diffs.map(([op, text]: [number, string]) => {
-    switch (op) {
-      case DIFF_DELETE:
-        return html`<span class="diff-inline-del">${text}</span>`;
-      case DIFF_INSERT:
-        return html`<span class="diff-inline-add">${text}</span>`;
-      default:
-        return text;
+  return html`${parts.map((part) => {
+    if (part.removed) {
+      return html`<span class="diff-inline-del">${part.value}</span>`;
     }
+    if (part.added) {
+      return html`<span class="diff-inline-add">${part.value}</span>`;
+    }
+    return part.value;
   })}`;
 }
 

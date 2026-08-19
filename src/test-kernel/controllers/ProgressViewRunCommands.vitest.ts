@@ -11,7 +11,9 @@ vi.mock('@platform/platform', () => ({
 }));
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
+import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
+import { createProgressViewCommandHandlers } from '@controllers/progressView/ProgressViewCommandHandlers';
+import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, type RunIdentity } from '@shared/schemas';
 import {
@@ -20,7 +22,7 @@ import {
 } from '../support/ProgressControllerHarnesses';
 
 interface HostHarness {
-  readonly host: ProgressViewHost;
+  readonly handlers: ReturnType<typeof createProgressViewCommandHandlers>;
   readonly executed: unknown[];
   readonly metadataReads: string[];
   readonly openedLabels: string[];
@@ -40,7 +42,7 @@ function createHostHarness(
   const bypassInfoMessages: string[] = [];
   const settledProposals: unknown[] = [];
 
-  const host = new ProgressViewHost({
+  const handlers = createProgressViewCommandHandlers({
     run: {
       state: {
         getRunMetadata: (stream) => {
@@ -56,7 +58,7 @@ function createHostHarness(
         executed.push(request);
       },
     },
-    workflowFileActions: {
+    workflowFileActions: new ProgressWorkflowFileActionsController({
       state: {
         getActiveStream: () => 'stream-a',
         getRunMetadata: () => ({ executionId: 'exec-1' }),
@@ -79,50 +81,48 @@ function createHostHarness(
         showError: vi.fn(),
       },
       sendFollowUp: vi.fn(),
-    },
-    agentProposal: {
+    }),
+    agentProposal: new ProgressAgentProposalController({
       getPendingProposal: () => undefined,
       restoreRunConfig: async () => false,
       openFile: vi.fn(),
       settleProposal: (requestId, result) => {
         settledProposals.push({ requestId, result });
       },
+    }),
+    lifecycle: {
+      setActiveStream: vi.fn(),
+      deleteStream: vi.fn(),
+      deleteAllStreams: vi.fn(),
+      stopStream: vi.fn(),
     },
-    commands: {
-      lifecycle: {
-        setActiveStream: vi.fn(),
-        deleteStream: vi.fn(),
-        deleteAllStreams: vi.fn(),
-        stopStream: vi.fn(),
+    followUp: {
+      sendFollowUp: vi.fn(),
+      reportImageSaveError: vi.fn(),
+    },
+    bypass: {
+      showInfo: (message: string) => {
+        bypassInfoMessages.push(message);
       },
-      followUp: {
-        sendFollowUp: vi.fn(),
-        reportImageSaveError: vi.fn(),
-      },
-      bypass: {
-        showInfo: (message: string) => {
-          bypassInfoMessages.push(message);
-        },
-      },
-      file: {
-        openFile: vi.fn(),
-        openSpillArtifact: vi.fn(),
-      },
-      approval: {
-        approvePendingDelegatedWork: vi.fn(async () => undefined),
-        handleToolEditApprovalAction: vi.fn(),
-        handleBashApprovalAction: vi.fn(),
-        handlePlanApprovalAction: vi.fn(),
-        handleUserQuestionAction: vi.fn(),
-      },
-      externalInquiry: {
-        dismiss: vi.fn(),
-      },
+    },
+    file: {
+      openFile: vi.fn(),
+      openSpillArtifact: vi.fn(),
+    },
+    approval: {
+      approvePendingDelegatedWork: vi.fn(async () => undefined),
+      handleToolEditApprovalAction: vi.fn(),
+      handleBashApprovalAction: vi.fn(),
+      handlePlanApprovalAction: vi.fn(),
+      handleUserQuestionAction: vi.fn(),
+    },
+    externalInquiry: {
+      dismiss: vi.fn(),
     },
   });
 
   return {
-    host,
+    handlers,
     executed,
     metadataReads,
     openedLabels,
@@ -139,29 +139,29 @@ function createToolUseHostHarness(identity?: RunIdentity): HostHarness {
   );
 }
 
-describe('ProgressViewHost', () => {
+describe('progress view run commands', () => {
   beforeEach(() => {
     tryResumeStreamMock.mockClear();
   });
 
-  it('constructs shared controllers and command handlers from host adapters', async () => {
+  it('routes run, label, and proposal commands through the shared controllers', async () => {
     const runConfig = createWorkflowConfig();
     const harness = createHostHarness(runConfig);
-    const { host } = harness;
+    const { handlers } = harness;
 
-    await host.commandHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW]?.({
+    await handlers[PROGRESS_VIEW_COMMANDS.RUN_NEW]?.({
       command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
       stream: 'stream-a',
     });
-    await host.commandHandlers[PROGRESS_VIEW_COMMANDS.RESUME]?.({
+    await handlers[PROGRESS_VIEW_COMMANDS.RESUME]?.({
       command: PROGRESS_VIEW_COMMANDS.RESUME,
       stream: 'stream-a',
     });
-    await host.commandHandlers[PROGRESS_VIEW_COMMANDS.OPEN_LABEL]?.({
+    await handlers[PROGRESS_VIEW_COMMANDS.OPEN_LABEL]?.({
       command: PROGRESS_VIEW_COMMANDS.OPEN_LABEL,
       label: 'main-thm',
     });
-    await host.commandHandlers[PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]?.({
+    await handlers[PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]?.({
       command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
       requestId: 'proposal-1',
       action: 'approve',
@@ -186,7 +186,7 @@ describe('ProgressViewHost', () => {
   it('resumes a tool-use stream through the host resume port', async () => {
     const harness = createToolUseHostHarness();
 
-    await harness.host.commandHandlers[PROGRESS_VIEW_COMMANDS.RESUME]?.({
+    await harness.handlers[PROGRESS_VIEW_COMMANDS.RESUME]?.({
       command: PROGRESS_VIEW_COMMANDS.RESUME,
       stream: 'stream-a',
     });
@@ -202,7 +202,7 @@ describe('ProgressViewHost', () => {
     });
     const harness = createHostHarness(runConfig);
 
-    await harness.host.commandHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW]?.({
+    await harness.handlers[PROGRESS_VIEW_COMMANDS.RUN_NEW]?.({
       command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
       stream: 'stream-a',
     });
@@ -224,11 +224,11 @@ describe('ProgressViewHost', () => {
     it(`refuses RESUME and RUN_NEW with feedback for ${JSON.stringify(identity)}`, async () => {
       const harness = createToolUseHostHarness(identity);
 
-      await harness.host.commandHandlers[PROGRESS_VIEW_COMMANDS.RESUME]?.({
+      await harness.handlers[PROGRESS_VIEW_COMMANDS.RESUME]?.({
         command: PROGRESS_VIEW_COMMANDS.RESUME,
         stream: 'stream-a',
       });
-      await harness.host.commandHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW]?.({
+      await harness.handlers[PROGRESS_VIEW_COMMANDS.RUN_NEW]?.({
         command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
         stream: 'stream-a',
       });

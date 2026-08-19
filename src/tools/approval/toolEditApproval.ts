@@ -25,16 +25,9 @@ import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
-import {
-  applyPatchToText,
-  diffTextByChar,
-  DIFF_DELETE,
-  DIFF_EQUAL,
-  DIFF_INSERT,
-  makePatchText,
-  type TextDiff,
-} from '@utils/text/diff';
-import { countLines, isNonEmptyString } from '@utils/text/stringUtils';
+import { applyPatchToText } from '@utils/text/diff';
+import { buildDiffHunks, unifiedDiffText } from '@utils/text/unifiedDiff';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 /**
  * Tool-edit approval request / result shapes.
@@ -137,13 +130,11 @@ export function prepareToolEditApprovalPrompt(
 // Pure diff helpers, shared with the hosts' native approval/diff surfaces
 // ============================================================================
 
-function createSemanticDiffs(original: string, proposed: string): TextDiff[] {
-  return diffTextByChar(original, proposed, {
-    checkLines: true,
-    cleanupSemantic: true,
-  });
-}
-
+/**
+ * Added/removed line counts for an edit, folded from the very hunks the host
+ * renders underneath them — the CLI card's `+N / −M` header and the diff body
+ * below it are now two readings of one computation, not two engines.
+ */
 export function computeLineChangeSummary(
   original: string,
   proposed: string,
@@ -152,25 +143,21 @@ export function computeLineChangeSummary(
     return { added: 0, removed: 0 };
   }
 
-  const diffs = createSemanticDiffs(original, proposed);
-
   let added = 0;
   let removed = 0;
-
-  for (const [type, text] of diffs) {
-    if (type === DIFF_INSERT) {
-      added += countLines(text);
-    } else if (type === DIFF_DELETE) {
-      removed += countLines(text);
+  for (const hunk of buildDiffHunks(original, proposed)) {
+    for (const line of hunk.lines) {
+      if (line.startsWith('+')) added += 1;
+      else if (line.startsWith('-')) removed += 1;
     }
   }
-
   return { added, removed };
 }
 
 /**
- * Compute the 0-based line number where the first change occurs.
- * Returns null if the content is identical.
+ * The 0-based line number in the proposed text where the first change occurs,
+ * used to scroll a host's diff view to it. Returns null if the content is
+ * identical.
  */
 export function firstChangedLine(
   original: string,
@@ -180,33 +167,19 @@ export function firstChangedLine(
     return null;
   }
 
-  const diffs = createSemanticDiffs(original, proposed);
-  let proposedLine = 0;
+  const [hunk] = buildDiffHunks(original, proposed);
+  if (!hunk) return null;
 
-  for (const [type, text] of diffs) {
-    switch (type) {
-      case DIFF_EQUAL:
-        proposedLine += (text.match(/\n/g) ?? []).length;
-        break;
-      case DIFF_INSERT:
-        return proposedLine;
-      case DIFF_DELETE:
-        return Math.max(proposedLine - 1, 0);
-    }
+  let line = hunk.newStart;
+  for (const text of hunk.lines) {
+    const marker = text.at(0);
+    if (marker === '+') return line - 1;
+    // A deletion has no line of its own in the proposed text; reveal the
+    // position it was removed from.
+    if (marker === '-') return Math.max(line - 1, 0);
+    line += 1;
   }
-
-  return 0;
-}
-
-export function computeUserPatch(
-  suggestedContent: string,
-  appliedContent: string,
-): string | undefined {
-  if (suggestedContent === appliedContent) {
-    return undefined;
-  }
-
-  return makePatchText(suggestedContent, appliedContent);
+  return Math.max(hunk.newStart - 1, 0);
 }
 
 // ============================================================================
@@ -279,7 +252,7 @@ function finalizeApprovalResult(
   const { appliedContent } = result;
   const userPatch =
     result.userPatch ??
-    computeUserPatch(request.proposedContent, appliedContent);
+    unifiedDiffText(request.proposedContent, appliedContent);
 
   // Compute startLine once here (convert 0-based to 1-based; null → line 1).
   const startLine =
@@ -359,7 +332,7 @@ export function appendApprovalDiffNote(
   appliedContent: string,
   separator: string = '\n\n',
 ): string {
-  const diffBody = computeUserPatch(proposedContent, appliedContent);
+  const diffBody = unifiedDiffText(proposedContent, appliedContent);
   return diffBody
     ? `${baseOutput}${separator}User adjustments to ${path}:\n\n\`\`\`diff\n${diffBody}\n\`\`\``
     : baseOutput;

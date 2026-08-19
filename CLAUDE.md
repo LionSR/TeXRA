@@ -49,11 +49,11 @@ Things the tree won't tell you:
   `src/test-kernel/architecture/` (including
   `approvalPolicyAuthorityRatchet.vitest.ts`) also pin single-authority
   invariants with hardcoded allowlists rather than baseline JSON.
-- **`src/utils/` is host-agnostic, not universally browser-safe.** Exactly seven
+- **`src/utils/` is host-agnostic, not universally browser-safe.** Exactly six
   modules are browser-reachable today: `@utils/core`,
   `@utils/core/boundedIdSet`, `@utils/core/keyedMutex`,
-  `@utils/errors/errorMessage`, `@utils/files/pastedImageName`,
-  `@utils/text/diff`, and `@utils/text/stringUtils`. The other 56
+  `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, and
+  `@utils/text/stringUtils`. The other 58
   TypeScript modules are not browser-reachable and must not be assumed
   browser-safe. Side-specific helpers still belong in `frontend/` or `common/`.
   (`scripts/check-browser-safe-utils.mjs` enforces the count and reachable set.)
@@ -159,10 +159,13 @@ services/shared-store split: AGENTS.md "Patterns across the codebase"
 (PocketFlow architecture) and `docs/architecture/pocketflow-state.md`.
 
 **The flow engine is local, not upstream PocketFlow.** `src/agent/node/index.ts`
-(~250 lines, built on `p-retry`) is the only definition of `BaseNode`, `Node`,
-and `Flow`. Upstream's `BatchNode`/`BatchFlow`,
-`ParallelBatchNode`/`ParallelBatchFlow`, and the `params`/`setParams` channel do
-not exist here — read the file rather than upstream docs.
+(~150 lines) is the only definition of `BaseNode` and `Flow`. Upstream's
+`BatchNode`/`BatchFlow`, `ParallelBatchNode`/`ParallelBatchFlow`, and the
+`params`/`setParams` channel do not exist here — read the file rather than
+upstream docs. There is no retrying `Node` class: the manual-retry loop
+(automatic `p-retry` batch → `retryPrompt` → one approved attempt at a time →
+`execFallback`) lives on `ModelInvocationNode`, its only implementor. A node
+that just needs a failure hook overrides `BaseNode.execFallback`.
 
 ## Design guardrails
 

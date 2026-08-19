@@ -12,7 +12,6 @@
 // beyond its plain-text projection.
 
 // Local imports - shared schemas and utilities
-import { buildHunks } from '@cli/runtime/diffHunks';
 import {
   textDisplayWidth,
   truncateSummaryToWidth,
@@ -41,6 +40,7 @@ import {
   normalizeToolName,
 } from '@shared/tools/toolDisplayName';
 import { toolDisplayKind } from '@shared/tools/toolKind';
+import { buildDiffHunks } from '@utils/text/unifiedDiff';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - CLI TUI rendering
@@ -284,7 +284,7 @@ function patchGroupsFromSections(
       continue;
     }
     if (section.kind !== 'diff') continue;
-    const hunks = buildHunks(fileLabel, section.oldText, section.newText);
+    const hunks = buildDiffHunks(section.oldText, section.newText);
     if (hunks.length > 0) groups.push({ fileLabel, hunks });
   }
   return groups.length > 0 ? groups : undefined;

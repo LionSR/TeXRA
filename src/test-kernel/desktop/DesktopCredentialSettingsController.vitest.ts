@@ -2,7 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
+import type { SubscriptionDeviceCodePrompt } from '@controllers/modelAccess/subscriptionProviders';
 import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
+import * as logger from '@logger/logUtils';
 import { apiKeySecretName } from '@model/apiProviders';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { assertSupported } from '@shared/utils/dispatcher';
@@ -21,7 +24,16 @@ const codexMocks = vi.hoisted(() => ({
     signedIn: false,
     preferSubscription: false,
   })),
-  login: vi.fn(async () => ({ email: 'user@example.com' })),
+  login: vi.fn(
+    async (_options: { openBrowser(url: string): void | Promise<void> }) => ({
+      email: 'user@example.com',
+    }),
+  ),
+  loginWithDeviceCode: vi.fn(
+    async (_options: {
+      onPrompt(prompt: SubscriptionDeviceCodePrompt): void;
+    }) => ({ email: 'user@example.com' }),
+  ),
   setPreferSubscription: vi.fn(async (enabled: boolean) => ({
     effective: enabled,
   })),
@@ -38,6 +50,7 @@ const modelMocks = vi.hoisted(() => ({
 vi.mock('@auth/codex', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@auth/codex')>()),
   codexCoordinator: () => ({ signOut: codexMocks.signOut }),
+  loginWithDeviceCode: codexMocks.loginWithDeviceCode,
   loginWithLoopback: codexMocks.login,
 }));
 
@@ -130,6 +143,7 @@ async function createFixture({
     },
     externalOpener: {
       openExternal: async () => undefined,
+      openSubscriptionSignInUrl: async () => undefined,
       presentSubscriptionSignInUrl: () => undefined,
       presentSubscriptionDeviceCode: () => undefined,
     },
@@ -178,6 +192,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       preferSubscription: false,
     });
     codexMocks.login.mockResolvedValue({ email: 'user@example.com' });
+    codexMocks.loginWithDeviceCode.mockResolvedValue({
+      email: 'user@example.com',
+    });
     codexMocks.setPreferSubscription.mockImplementation(async (enabled) => ({
       effective: enabled,
     }));
@@ -427,6 +444,65 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       'ChatGPT sign-in failed: authorization denied',
     ]);
     expect(fixture.onCredentialChanged).toHaveBeenCalledTimes(4);
+  });
+
+  it('falls back without reporting the browser-open failure twice and logs its cause', async () => {
+    const browserError = new Error('no browser handler');
+    const openExternal = vi.fn(async () => undefined);
+    const openSubscriptionSignInUrl = vi.fn(async () => {
+      throw browserError;
+    });
+    const presentSubscriptionSignInUrl = vi.fn();
+    const presentSubscriptionDeviceCode = vi.fn();
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const fixture = await createFixture({
+      externalOpener: {
+        openExternal,
+        openSubscriptionSignInUrl,
+        presentSubscriptionSignInUrl,
+        presentSubscriptionDeviceCode,
+      },
+    });
+    codexMocks.login.mockImplementationOnce(async ({ openBrowser }) => {
+      await openBrowser('https://auth.openai.com/authorize');
+      return { email: 'loopback@example.com' };
+    });
+    codexMocks.loginWithDeviceCode.mockImplementationOnce(
+      async ({ onPrompt }) => {
+        onPrompt({
+          userCode: 'ABCD-EFGH',
+          verificationUrl: 'https://auth.openai.com/device',
+        });
+        return { email: 'device@example.com' };
+      },
+    );
+
+    await fixture.controller.signInChatGpt();
+
+    expect(openSubscriptionSignInUrl).toHaveBeenCalledExactlyOnceWith(
+      'https://auth.openai.com/authorize',
+    );
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(presentSubscriptionSignInUrl).not.toHaveBeenCalled();
+    expect(presentSubscriptionDeviceCode).toHaveBeenCalledExactlyOnceWith(
+      {
+        userCode: 'ABCD-EFGH',
+        verificationUrl: 'https://auth.openai.com/device',
+      },
+      'ChatGPT',
+    );
+    expect(fixture.errors).toEqual([]);
+    expect(fixture.infos).toContain(
+      'Signed in with ChatGPT as device@example.com.',
+    );
+    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
+      'subscriptionProviders',
+      'ChatGPT browser sign-in is unavailable, falling back to a one-time device code: Could not open a browser for ChatGPT sign-in. Cause: no browser handler',
+      { data: expect.any(LoopbackTransportUnavailableError) },
+    );
+    const loggedError = warnSpy.mock.calls[0]?.[2]?.data;
+    expect(loggedError).toBeInstanceOf(LoopbackTransportUnavailableError);
+    expect((loggedError as Error).cause).toBe(browserError);
   });
 
   it('routes Codex through the subscription for a Settings-panel sign-in', async () => {

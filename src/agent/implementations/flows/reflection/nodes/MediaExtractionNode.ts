@@ -1,4 +1,4 @@
-import { Node } from '@agent/node';
+import { BaseNode } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -15,7 +15,7 @@ interface PrepInput {
   currentRound: number;
 }
 
-export class MediaExtractionNode<C = unknown> extends Node<
+export class MediaExtractionNode<C = unknown> extends BaseNode<
   ReflectionFlowShared,
   ReflectionServices<C>
 > {

@@ -72,6 +72,7 @@ const mocks = vi.hoisted(() => ({
   initializeNodeRuntimeSkills: vi.fn(),
   initNodeAgentRuntime: vi.fn(),
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
+  openTexraConfigStores: vi.fn(),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
   invalidateModelOptionsCache: vi.fn(),
   tryPlatform: vi.fn(),
@@ -153,9 +154,7 @@ vi.mock('@platform/defaults/lifecycleHost', () => ({
 // rule) is shared with the extension and desktop hosts; stubbed here so this
 // test exercises only the CLI-specific wiring.
 vi.mock('@platform/defaults/nodeStores', () => ({
-  openTexraConfigStores: vi
-    .fn()
-    .mockResolvedValue({ workspace: {}, global: {} }),
+  openTexraConfigStores: mocks.openTexraConfigStores,
 }));
 
 vi.mock('@platform/defaults/nodeFilesystem', () => ({ nodeFilesystem: {} }));
@@ -241,6 +240,10 @@ describe('CLI platform init', () => {
     mocks.tryPlatform.mockReset();
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
     mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
+    mocks.openTexraConfigStores.mockResolvedValue({
+      workspace: {},
+      global: {},
+    });
     isAuthenticatedSpy.mockResolvedValue(false);
   });
 
@@ -365,6 +368,49 @@ describe('CLI platform init', () => {
       stderrWrite.mockRestore();
       mocks.cliGlobalState.get.mockReset();
       mocks.cliGlobalState.update.mockReset();
+    }
+  });
+
+  it('shows one project-config degradation warning with its cause in quiet mode', async () => {
+    mocks.tryPlatform.mockReturnValueOnce(undefined);
+    mocks.cliGlobalState.get.mockImplementation((key: string) => {
+      if (key === GlobalStateKey.MODEL_LIST_VERSION) return MODEL_LIST_VERSION;
+      if (key === GlobalStateKey.ENABLED_MODELS) return ['sonnet5T'];
+      if (key === GlobalStateKey.COPILOT_ROUTE_MODELS) {
+        return ['gemini36f', 'gemini31p'];
+      }
+      return undefined;
+    });
+    mocks.cliGlobalState.update.mockResolvedValue(undefined);
+    mocks.openTexraConfigStores.mockImplementationOnce(
+      async (
+        _storage: unknown,
+        _cwd: string,
+        warn: (message: string) => void,
+      ) => {
+        warn(
+          'Cannot open project .texra/config.json; using the internal workspace config store. Cause: Unexpected token } in JSON at position 0',
+        );
+        return { workspace: {}, global: {} };
+      },
+    );
+    const stderrWrite = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+
+    try {
+      await initCliPlatform(cliContext({ installSignalHandlers: false }));
+
+      expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
+      expect(stderrWrite).toHaveBeenCalledOnce();
+      expect(stderrWrite).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Cause: Unexpected token } in JSON at position 0',
+        ),
+        expect.any(Function),
+      );
+    } finally {
+      stderrWrite.mockRestore();
     }
   });
 

@@ -10,6 +10,8 @@ import {
   type ProgressViewCommandActions,
   type ProgressViewSecondTierActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
+import type { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
+import type { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   ProgressViewInboundMessageSchema,
@@ -77,12 +79,16 @@ function createActions(
       stopStream: vi.fn(),
     },
     run: {
-      resumeStream: vi.fn(),
-      runNewStream: vi.fn(),
+      state: { getRunMetadata: vi.fn(() => ({})) },
+      runExecutionRequest: vi.fn(async () => {}),
     },
     file: {
       openFile: vi.fn(),
       openSpillArtifact: vi.fn(),
+    },
+    // Only the seven methods the command arms call; the rest of each
+    // controller is exercised by its own suite.
+    workflowFileActions: {
       openTaskStorage: vi.fn(),
       compareOriginal: vi.fn(),
       comparePrevious: vi.fn(),
@@ -90,7 +96,10 @@ function createActions(
       mergeFile: vi.fn(),
       latexdiffFile: vi.fn(),
       openLabel: vi.fn(),
-    },
+    } as unknown as ProgressWorkflowFileActionsController,
+    agentProposal: {
+      handleAction: vi.fn(),
+    } as unknown as ProgressAgentProposalController,
     followUp: {
       sendFollowUp: vi.fn(),
       reportImageSaveError: vi.fn(),
@@ -102,7 +111,6 @@ function createActions(
       handleBashApprovalAction: vi.fn(),
       handlePlanApprovalAction: vi.fn(),
       handleUserQuestionAction: vi.fn(),
-      handleAgentProposalAction: vi.fn(),
     },
     externalInquiry: {
       dismiss: vi.fn(),
@@ -222,23 +230,6 @@ describe('createProgressViewCommandHandlers', () => {
     expect(actions.lifecycle.stopStream).toHaveBeenCalledWith('stream-c');
   });
 
-  it('routes run-control commands to host actions', () => {
-    const actions = createActions();
-    const handlers = createProgressViewCommandHandlers(actions);
-
-    expectDispatched(
-      { command: PROGRESS_VIEW_COMMANDS.RESUME, stream: 'stream-a' },
-      handlers,
-    );
-    expectDispatched(
-      { command: PROGRESS_VIEW_COMMANDS.RUN_NEW, stream: 'stream-b' },
-      handlers,
-    );
-
-    expect(actions.run.resumeStream).toHaveBeenCalledWith('stream-a');
-    expect(actions.run.runNewStream).toHaveBeenCalledWith('stream-b');
-  });
-
   it('routes file commands to host actions', () => {
     const actions = createActions();
     const handlers = createProgressViewCommandHandlers(actions);
@@ -315,29 +306,33 @@ describe('createProgressViewCommandHandlers', () => {
     expect(actions.file.openSpillArtifact).toHaveBeenCalledWith(
       'executions/abcdef123456/toolOutput/tool.txt',
     );
-    expect(actions.file.openTaskStorage).toHaveBeenCalledWith('stream-a');
-    expect(actions.file.compareOriginal).toHaveBeenCalledWith(
+    expect(actions.workflowFileActions.openTaskStorage).toHaveBeenCalledWith(
+      'stream-a',
+    );
+    expect(actions.workflowFileActions.compareOriginal).toHaveBeenCalledWith(
       'edited.tex',
       'paper.tex',
     );
-    expect(actions.file.comparePrevious).toHaveBeenCalledWith(
+    expect(actions.workflowFileActions.comparePrevious).toHaveBeenCalledWith(
       'edited.tex',
       'paper.tex',
       'previous.tex',
     );
-    expect(actions.file.acceptFile).toHaveBeenCalledWith(
+    expect(actions.workflowFileActions.acceptFile).toHaveBeenCalledWith(
       'edited.tex',
       'paper.tex',
     );
-    expect(actions.file.mergeFile).toHaveBeenCalledWith(
+    expect(actions.workflowFileActions.mergeFile).toHaveBeenCalledWith(
       'edited.tex',
       'paper.tex',
     );
-    expect(actions.file.latexdiffFile).toHaveBeenCalledWith(
+    expect(actions.workflowFileActions.latexdiffFile).toHaveBeenCalledWith(
       'edited.tex',
       'paper.tex',
     );
-    expect(actions.file.openLabel).toHaveBeenCalledWith('thm:main');
+    expect(actions.workflowFileActions.openLabel).toHaveBeenCalledWith(
+      'thm:main',
+    );
   });
 });
 
@@ -704,7 +699,7 @@ describe('createProgressViewCommandHandlers - approvals', () => {
       action: 'submit',
       answers: { answer: 'yes' },
     });
-    expect(actions.approval.handleAgentProposalAction).toHaveBeenCalledWith({
+    expect(actions.agentProposal.handleAction).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
       requestId: 'proposal-1',
       action: 'approve',

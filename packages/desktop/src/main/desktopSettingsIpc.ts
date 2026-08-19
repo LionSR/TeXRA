@@ -209,7 +209,7 @@ export function createDesktopSettingsIpc(
     enabled: boolean;
   }): Promise<void> {
     await settingsHost.setModelEnabled(input, {
-      afterUpdate: () => invalidateModelOptionsCache(),
+      // The options cache is invalidated by the writer itself.
       afterPost: () =>
         options.credentialSettingsController.postMainModelOptionsData(),
     });

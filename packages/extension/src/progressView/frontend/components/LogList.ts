@@ -39,7 +39,6 @@ import { designTokens } from '@shared/styles';
 import { postMessage } from '@shared/hostBridge';
 import { PersistedState } from '@shared/state/PersistedState';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
-import { copyWithFeedback } from '@shared/utils/clipboard';
 import { logListStateKey, webviewStorage } from '../webviewStorage';
 import { getComposedPathElement } from '../utils';
 
@@ -52,9 +51,6 @@ import {
 
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
-
-// Local imports - progress view formatters
-import { getCopyContent, getProposalInput } from '../formatters/contentStore';
 
 // Local imports - progress view components (type-only)
 import type { TaskGroupList } from './TaskGroupList';
@@ -251,31 +247,10 @@ export class LogList extends LitElement {
     return createdEntry;
   }
 
-  /** Handle click events for file links, copy buttons, etc. */
-  private async handleClickEvent(event: Event): Promise<void> {
+  /** Handle click events for file links, spill artifacts, etc. */
+  private handleClickEvent(event: Event): void {
     if (!(event instanceof MouseEvent)) return;
-    if (this.activateLinkFromEvent(event)) return;
-
-    const copyButton = getComposedPathElement<HTMLElement>(
-      event,
-      '[data-copy-id]',
-    );
-    if (!copyButton) return;
-
-    event.stopPropagation();
-    const copyId = copyButton.dataset.copyId;
-    const textToCopy = copyId ? (getCopyContent(copyId) ?? '') : '';
-    if (!textToCopy.trim()) return;
-
-    const isCodeBlock = copyButton.dataset.copyType === 'code-block';
-    await copyWithFeedback(copyButton, textToCopy, {
-      defaultTitle:
-        copyButton.dataset.defaultTitle ||
-        copyButton.getAttribute('title') ||
-        'Copy to clipboard',
-      successTitle: copyButton.dataset.successTitle || 'Copied!',
-      successClass: isCodeBlock ? 'copied' : undefined,
-    });
+    this.activateLinkFromEvent(event);
   }
 
   /**
@@ -283,7 +258,8 @@ export class LogList extends LitElement {
    * (file-link / latex-ref). Copy buttons, the proposal-restore-link
    * ("Setup") control, and spill-artifact buttons are real
    * `<wa-button>`/`<button>` elements and are
-   * already keyboard-activatable via native click synthesis (handled by the
+   * already keyboard-activatable via native click synthesis (the first two
+   * carry their own `@click` bindings; spill artifacts are handled by the
    * click handler below), so they are intentionally excluded here to avoid
    * double-firing. proposal-restore-link additionally stops its own keydown
    * from propagating this far — see stopSummaryToggleKeydown — since each sits
@@ -302,8 +278,8 @@ export class LogList extends LitElement {
   }
 
   /**
-   * Dispatch a file-link / latex-ref / proposal-restore-link activation from a
-   * click or keydown event. Returns true when one was handled.
+   * Dispatch a spill-artifact / file-link / latex-ref activation from a click
+   * or keydown event. Returns true when one was handled.
    */
   private activateLinkFromEvent(event: Event): boolean {
     const spillLink = getComposedPathElement<HTMLElement>(
@@ -337,25 +313,6 @@ export class LogList extends LitElement {
       return true;
     }
 
-    // Handle proposal restore links. The wa-details toggle is suppressed
-    // separately: WA's own click handler already excludes this real
-    // <button>, and stopSummaryToggleKeydown stops its keydown from
-    // reaching wa-details' summary at all — this preventDefault only
-    // guards against any other native default action on the click.
-    const proposalLink = getComposedPathElement<HTMLElement>(
-      event,
-      '.proposal-restore-link',
-    );
-    if (proposalLink?.dataset.proposalInputId) {
-      event.preventDefault();
-      const proposal = getProposalInput(proposalLink.dataset.proposalInputId);
-      if (proposal) {
-        postMessage(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG, {
-          proposal,
-        });
-      }
-      return true;
-    }
     return false;
   }
 

@@ -221,8 +221,10 @@ its dormant `clearInlineAgents` export), desktop UsageLogService absence
 ## 4. Child work: subagents, background tasks, bash — the consistency matrix
 
 Second workflow, separately verified. The substrate is **consistent by
-construction**: one driver (`childRunLoop`) for all four child types
-(native detached, in-band/grandchild, workflow-script, agent-CLI), one
+construction**: one driver (`childRunLoop`) for all five child types
+(native detached, in-band/grandchild, workflow-script, agent-CLI, background
+shell — the fifth was a hand-rolled driver until it was folded in; the same
+wake-after-finalize bug had to be fixed twice, once in each copy), one
 lease protocol with three-layer double-ownership defense and working
 cross-host orphan adoption, host-invariant terminal persistence and
 parent-wake-after-finalize ordering, `registerAgentShutdownHandlers` wired

@@ -17,6 +17,7 @@ import {
 import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
 import {
   computeModelOptionsData,
+  getEnabledModels,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
 import {
@@ -48,6 +49,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   };
   readonly prompt: Pick<PromptHost, 'input' | 'confirm'>;
   readonly externalOpener: Pick<ExternalOpener, 'openExternal'> & {
+    openSubscriptionSignInUrl(url: string): Promise<void>;
     presentSubscriptionSignInUrl(
       url: string,
       productName: string,
@@ -238,7 +240,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   async postMainModelOptionsData(): Promise<void> {
-    const visibleModels = this.modelSelectionController.getVisibleModels();
+    const visibleModels = getEnabledModels(this.options.globalState);
     const modelOptions = await computeModelOptionsData(visibleModels);
     this.options.renderer.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
@@ -275,7 +277,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       },
       presentSignInUrl: async (url) => {
         try {
-          await this.options.externalOpener.openExternal(url);
+          await this.options.externalOpener.openSubscriptionSignInUrl(url);
         } catch (error) {
           throw new LoopbackTransportUnavailableError(
             `Could not open a browser for ${displayName} sign-in.`,
