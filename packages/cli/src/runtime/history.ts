@@ -31,6 +31,10 @@ import {
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import {
+  listRunGeneratedFiles,
+  type RunGeneratedFile,
+} from '@tools/executions/runGeneratedFiles';
+import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
 } from '@transcript';
@@ -38,6 +42,7 @@ import {
   cleanupExecutionAdjacentStreamState,
   resolveAdjacentStreamCleanup,
 } from '@transcript/adjacentStreamCleanup';
+import { byStringProp } from '@utils/core';
 
 import { readCliResumeDataForListing } from './toolUseResumeData';
 import {
@@ -50,12 +55,21 @@ import {
   formatConversationPreview,
   formatConversationTranscript,
 } from './history/conversationFormat';
-import {
-  listGeneratedFiles,
-  mergeHistoryFiles,
-} from './history/generatedFiles';
 
 const HISTORY_ENTRY_CONCURRENCY = 8;
+
+/** First group wins on a path collision; generated output precedes workspace. */
+function mergeHistoryFiles(
+  ...fileGroups: readonly (readonly CliHistoryFile[])[]
+): CliHistoryFile[] {
+  const files = new Map<string, CliHistoryFile>();
+  for (const group of fileGroups) {
+    for (const file of group) {
+      if (!files.has(file.path)) files.set(file.path, file);
+    }
+  }
+  return [...files.values()].sort(byStringProp((f) => f.path));
+}
 
 export interface CliHistoryEntry {
   readonly id: ExecutionId;
@@ -97,11 +111,8 @@ export interface CliHistoryConversationPreviewMessage {
   readonly truncated: boolean;
 }
 
-export interface CliHistoryFile {
-  readonly path: string;
-  readonly size: number;
-  readonly isDirectory: boolean;
-}
+/** A run's generated files and its edited workspace files render alike. */
+type CliHistoryFile = RunGeneratedFile;
 
 export const CLI_HISTORY_RESUMABLE_STATUS = 'resumable';
 
@@ -165,7 +176,7 @@ export async function readCliHistoryDetails(
     // Transcript sidecar owns completed-run display (#7246 Decision 1).
     readCompletedRunConversation(id),
     store.readWorkspaceFiles(),
-    listGeneratedFiles(id),
+    listRunGeneratedFiles(id),
   ]);
   const conversation = conversationResult.conversation;
   const hasTranscriptEvidence =
