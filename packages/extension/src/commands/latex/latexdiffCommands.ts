@@ -1,6 +1,3 @@
-// Node imports
-import * as path from 'node:path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -126,15 +123,9 @@ interface OpenedLatexdiffResult {
  * file whose PDF is not viewer-ready.
  */
 async function openLatexdiffResult(
-  base: FileLocation,
-  diffFileName: string,
+  diffFilePath: string,
   options: { scheduleViewer?: boolean } = {},
 ): Promise<OpenedLatexdiffResult | undefined> {
-  const baseDirectory = path.extname(base.absolutePath)
-    ? path.dirname(base.absolutePath)
-    : base.absolutePath;
-  const diffFilePath = path.join(baseDirectory, diffFileName);
-
   const diffLocation = pathToLocation(diffFilePath);
 
   if (!(await AbsoluteFS.exists(diffLocation.absolutePath))) {
@@ -206,12 +197,10 @@ async function prepareLatexdiffResultsAndScheduleViewer(
     for (const result of results) {
       const suffix = result.description ? ` (${result.description})` : '';
 
-      if (result.success && result.basePath && result.diffFileName) {
-        const opened = await openLatexdiffResult(
-          pathToLocation(result.basePath),
-          result.diffFileName,
-          { scheduleViewer: false },
-        );
+      if (result.success && result.diffPath) {
+        const opened = await openLatexdiffResult(result.diffPath, {
+          scheduleViewer: false,
+        });
         if (opened) {
           lastProcessedLocation = opened.diffLocation;
           log.debug(
@@ -260,10 +249,10 @@ async function runDiffAndOpen(
   log.info(`Running ${toolLabel} with math markup mode: ${mathMarkup}`);
 
   const result = await runDiff(mathMarkup);
-  if (!result.success || !result.diffFileName) {
+  if (!result.success || !result.diffPath) {
     throw new Error(result.message ?? 'Failed to generate diff file');
   }
-  await openLatexdiffResult(fileToUseLocation, result.diffFileName);
+  await openLatexdiffResult(result.diffPath);
 }
 
 // Turn pack/clean run results into user notifications. Folds the notification

@@ -92,8 +92,7 @@ async function executeDiffOperations(
     results.push({
       success: diffResult.success,
       message: diffResult.message,
-      basePath: operation.base.absolutePath,
-      diffFileName: diffResult.diffFileName,
+      diffPath: diffResult.diffPath,
       description: operation.description,
     });
   }
