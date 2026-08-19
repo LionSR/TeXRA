@@ -108,8 +108,9 @@ describe('codex progress events', () => {
       {
         payload: {
           streamId,
+          // Usage is keyed by storage key alone; an agent-CLI child's is its
+          // execution id.
           storageKey: executionId,
-          executionId,
           usage,
         },
       },
