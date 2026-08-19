@@ -9,6 +9,7 @@ import {
   HOMEBREW_INSTALL_COMMAND,
   IMAGE_TOOLS,
   SCOOP_INSTALL_COMMAND,
+  SUPPORTED_LATEX_COMPILERS,
   type OSPlatform,
 } from '@shared/constants/latexToolchain';
 
@@ -57,7 +58,9 @@ export class LatexToolingController {
       const installed = await this.checkTools();
       return {
         ...this.deps.getRecommendedStatus(),
-        texDistributionInstalled: installed.pdflatex || installed.latexmk,
+        texDistributionInstalled: SUPPORTED_LATEX_COMPILERS.some(
+          (compiler) => installed[compiler],
+        ),
         latexWorkshopInstalled: this.deps.isLatexWorkshopInstalled(),
         latexdiffInstalled: installed.latexdiff,
         latexindentInstalled: installed.latexindent && installed.perl,
