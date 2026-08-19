@@ -375,7 +375,7 @@ export async function initCliPlatform(
     host: 'cli',
     signIn: async () => {
       await signInCliSupabase({ openBrowser: true });
-      return SupabaseClient.canAccessRemoteAgentCatalog();
+      return SupabaseClient.isAuthenticated();
     },
   });
 
