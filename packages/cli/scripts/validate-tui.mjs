@@ -203,17 +203,17 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, '\r'],
     expect: [
-      'Repository audit Finished',
+      'Repository audit Completed',
       'Generated files',
       'paper.tex',
       'Compile check failed',
       'paper.log',
     ],
-    expectPatterns: [/r1\/2.*Finished/, /r2\/2.*Finished/],
+    expectPatterns: [/r1\/2.*Completed/, /r2\/2.*Completed/],
     ordered: [
-      { before: 'r1/2 Finished', after: 'Generated files' },
+      { before: 'r1/2 Completed', after: 'Generated files' },
       { before: 'Generated files', after: 'Compile check failed' },
-      { before: 'Compile check failed', after: 'r2/2 Finished' },
+      { before: 'Compile check failed', after: 'r2/2 Completed' },
     ],
   },
   {
