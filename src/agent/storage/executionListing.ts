@@ -284,7 +284,6 @@ export type DeleteExecutionResult =
 
 export interface DeleteAllExecutionsResult {
   readonly deleted: ExecutionId[];
-  readonly notFound: ExecutionId[];
   readonly active: ExecutionId[];
   readonly failed: readonly {
     readonly executionId: ExecutionId;
@@ -346,7 +345,7 @@ export interface DeleteAllExecutionsOptions {
 }
 
 /**
- * Delete every unleased execution and report deleted, raced-away, and active
+ * Delete every unleased execution and report deleted, active, and failed
  * execution IDs separately.
  */
 export async function deleteAllExecutions(
@@ -379,9 +378,6 @@ export async function deleteAllExecutions(
   return {
     deleted: results.flatMap((result) =>
       result.status === 'deleted' ? [result.executionId] : [],
-    ),
-    notFound: results.flatMap((result) =>
-      result.status === 'not-found' ? [result.executionId] : [],
     ),
     active: results.flatMap((result) =>
       result.status === 'active' ? [result.executionId] : [],
