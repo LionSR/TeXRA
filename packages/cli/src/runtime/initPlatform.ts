@@ -73,6 +73,10 @@ function logAt(
   writeTextStderr(`[${level}] [${channel}] ${message}`);
 }
 
+function showPersistentConfigWarning(message: string): void {
+  writeTextStderr(`[warn] [cli.config] ${message}`);
+}
+
 const cliPlatformLog: LogBackend = {
   debug: (channel, message) => logAt('debug', channel, message),
   info: (channel, message) => logAt('info', channel, message),
@@ -233,7 +237,7 @@ export async function initCliPlatform(
     const configStores = await openTexraConfigStores(
       stateStores.storage,
       cliWorkspaceCwd,
-      (message) => logAt('warn', 'cli.config', message),
+      showPersistentConfigWarning,
     );
     // Same severity and wording as the extension/desktop hosts: a shutdown
     // handler failure is an error everywhere, not a warning in one host.
