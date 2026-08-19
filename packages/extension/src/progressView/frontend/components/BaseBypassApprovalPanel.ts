@@ -10,8 +10,6 @@ import { BaseApprovalPanel } from './BaseApprovalPanel';
 // Local imports - progress view events
 import { APPROVE_SESSION_ACTION } from '../events';
 
-// Local imports - progress view state
-
 type BypassPermissionKind = 'toolEdit' | 'bash';
 type BypassPermission = Extract<
   PermissionPayload,
