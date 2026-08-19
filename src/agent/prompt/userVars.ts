@@ -130,11 +130,10 @@ export function buildUserVarPassthrough(): Readonly<Record<string, string>> {
 
 /**
  * Information about a loaded file for prompt variable substitution.
- * Extends FileListEntry with required source and varName fields.
+ * Extends FileListEntry with a required varName field.
  * Compatible with FileListEntry (can be passed to AgentTrace.fileList).
  */
 type LoadedFileEntry = FileListEntry & {
-  source: string;
   varName: string;
 };
 
@@ -521,8 +520,6 @@ async function getRequiredFileVars(
       path: fullPath,
       ok,
       varName,
-      source: 'requiredFilesInternal',
-      internal: true,
     });
   }
   return { vars, files };

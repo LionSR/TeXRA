@@ -26,7 +26,9 @@ export const WorkflowSpecificFieldsSchema = FileFieldsSchema.extend({
   toolConfig: ToolConfigSchema,
 });
 
-/** File fields shape used by all three rendering sites (toolFormatters, RequestPanels, PermissionCard). */
+/** File fields shape consumed by {@link getProposalFileGroups} — the helper
+ *  behind every proposal file list (tool-row model, ProposalRequestPanel,
+ *  CLI approval summaries). */
 interface FileFields {
   readonly inputFiles?: readonly string[];
   readonly contextFiles?: readonly string[];
