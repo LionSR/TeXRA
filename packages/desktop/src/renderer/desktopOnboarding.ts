@@ -25,11 +25,7 @@ import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_MODE_PRESETS } from '@shared/schemas';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-
-import { desktopCommandPaletteShortcut } from './desktopShortcutRegistry';
-import { getRendererPlatform } from './rendererPlatform';
 
 interface StartupPanelController {
   isVisible(): boolean;
@@ -44,6 +40,8 @@ export interface DesktopStartupTeamPanelOptions {
   showLauncher(): void;
   /** Opens the Settings tab focused on the team picker, for fine-tuning. */
   openMultiAgent(): void;
+  /** Returns the current display hint for the Commands shortcut. */
+  commandsHint(): string;
 }
 
 /**
@@ -108,16 +106,9 @@ export function createStartupTeamPanel({
   onVisibilityChanged,
   showLauncher,
   openMultiAgent,
+  commandsHint,
 }: DesktopStartupTeamPanelOptions): StartupPanelController {
   const titleId = nextPanelTitleId();
-  // The walkthrough names the Commands shortcut, so format it for the user's
-  // platform rather than hardcoding the macOS glyph.
-  const platform = getRendererPlatform(document.defaultView);
-  const commandsAccelerator = formatDesktopAccelerator(
-    desktopCommandPaletteShortcut(platform).accelerator,
-    platform,
-  );
-  const commandsHint = commandsAccelerator ? ` (${commandsAccelerator})` : '';
   let visible = false;
   let hideAtStartup = false;
   let step: TourStep = 'work';
@@ -307,7 +298,7 @@ export function createStartupTeamPanel({
             <strong>Tabs</strong>
             <span>
               Open a terminal, browser, or Settings from the buttons at the
-              bottom of the sidebar - or from Commands${commandsHint}. Open
+              bottom of the sidebar - or from Commands${commandsHint()}. Open
               files from the project list; everything stays open beside a
               running agent.
             </span>
@@ -318,8 +309,8 @@ export function createStartupTeamPanel({
           <div>
             <strong>Commands</strong>
             <span>
-              Open Commands${commandsHint} from the header for every action and
-              shortcut.
+              Open Commands${commandsHint()} from the header for every action
+              and shortcut.
             </span>
           </div>
         </li>

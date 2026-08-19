@@ -152,6 +152,24 @@ const startupTeamPanel = createStartupTeamPanel({
   onVisibilityChanged: rerenderShell,
   showLauncher: returnToLauncher,
   openMultiAgent: () => openSettingsTab('multi-agent'),
+  // Lazy by necessity: the panel is constructed above the shortcut registry's
+  // declaration (which lands much later at module scope), so an eager or
+  // captured read is a TDZ throw, and a bootstrap failure leaves the registry
+  // `undefined` forever. Reading at render time is also what lets a user
+  // override (registry `localStorage`) reach the hint; the construction-time
+  // default only ever printed cmd/ctrl+K.
+  commandsHint: () => {
+    const entry = shortcutRegistry
+      ?.entries()
+      .find((entry) => entry.id === DESKTOP_COMMAND_PALETTE_ID);
+    const accelerator = formatDesktopAccelerator(
+      entry
+        ? entry.accelerator
+        : desktopCommandPaletteShortcut(rendererPlatform).accelerator,
+      rendererPlatform,
+    );
+    return accelerator ? ` (${accelerator})` : '';
+  },
 });
 
 // =============================================================================
