@@ -40,6 +40,7 @@ function createController(
 
   return {
     controller: new SettingsProfileController({
+      host: 'vscode',
       globalState: state,
       loadProviderKeyStatuses: async () => ({
         openai: 'set',
@@ -57,47 +58,24 @@ function createController(
 }
 
 describe('SettingsProfileController', () => {
-  it('updates only whitelisted provider settings', async () => {
-    const state = new FakeStateStore();
-    const { controller } = createController({ state });
+  it('rejects keys it does not own', async () => {
+    // Per-provider toggles moved to the generic catalog write path, so this
+    // controller owns only the numeric reliability rows.
+    const { controller } = createController();
 
-    const rejected = await controller.setProviderSetting({
-      key: 'texra.unknownSetting',
-      value: true,
-    });
-    const updated = await controller.setProviderSetting({
-      key: GlobalStateKey.USE_OPENROUTER,
-      value: true,
-    });
-
-    expect(rejected).toEqual({
-      kind: 'rejected',
-      key: 'texra.unknownSetting',
-    });
-    expect(updated).toEqual({
-      kind: 'updated',
-      affectsModelAvailability: true,
-    });
-    expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
-    expect(invalidations).toHaveBeenCalledTimes(1);
-  });
-
-  it('recomputes model options when Prefer Kimi Code is toggled', async () => {
-    const state = new FakeStateStore();
-    const { controller } = createController({ state });
-
-    const updated = await controller.setProviderSetting({
-      key: GlobalStateKey.KIMI_CODE_PREFER,
-      value: true,
-    });
-
-    // Toggling the reroute must refresh the picker, mirroring OpenRouter.
-    expect(updated).toEqual({
-      kind: 'updated',
-      affectsModelAvailability: true,
-    });
-    expect(state.get(GlobalStateKey.KIMI_CODE_PREFER, false)).toBe(true);
-    expect(invalidations).toHaveBeenCalledTimes(1);
+    expect(
+      await controller.setProviderSetting({
+        key: 'texra.unknownSetting',
+        value: true,
+      }),
+    ).toEqual({ kind: 'rejected', key: 'texra.unknownSetting' });
+    expect(
+      await controller.setProviderSetting({
+        key: GlobalStateKey.USE_OPENROUTER,
+        value: true,
+      }),
+    ).toEqual({ kind: 'rejected', key: GlobalStateKey.USE_OPENROUTER });
+    expect(invalidations).toHaveBeenCalledTimes(0);
   });
 
   it('renders declared provider setting defaults when config is unset', async () => {
@@ -124,10 +102,7 @@ describe('SettingsProfileController', () => {
       value: 3,
     });
 
-    expect(result).toEqual({
-      kind: 'updated',
-      affectsModelAvailability: false,
-    });
+    expect(result).toEqual({ kind: 'updated' });
     expect(config[MAX_ATTEMPTS_KEY]).toBe(3);
     expect(invalidations).toHaveBeenCalledTimes(0);
     expect(controller.getReliabilitySettings()).toContainEqual(
@@ -197,10 +172,7 @@ describe('SettingsProfileController', () => {
       value: 101,
     });
 
-    expect(result).toEqual({
-      kind: 'updated',
-      affectsModelAvailability: false,
-    });
+    expect(result).toEqual({ kind: 'updated' });
     expect(config[COMPACTION_KEY]).toBe(101);
   });
 

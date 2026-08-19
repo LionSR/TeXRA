@@ -113,6 +113,7 @@ export interface DesktopCredentialSettingsController {
   postProfileData(): Promise<void>;
   postStartupData(): Promise<void>;
   postSubscriptionUsage(forceRefresh?: boolean): Promise<void>;
+  refreshAfterProviderSettingChange(key: string): Promise<void>;
   refreshAuthDependentData(): Promise<void>;
   signInChatGpt(): Promise<void>;
   signInGrok(): Promise<void>;
@@ -142,6 +143,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       globalState: options.globalState,
     });
     this.profileController = new SettingsProfileController({
+      host: 'desktop',
       globalState: options.globalState,
       loadProviderKeyStatuses: () =>
         loadApiKeyStatusMap(options.secrets, API_PROVIDERS),
@@ -353,8 +355,19 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     if (codingPlanForUsageSetting(key)) {
       await this.postSubscriptionUsage();
     }
-    if (!result.affectsModelAvailability) return;
+  }
 
+  /**
+   * Re-post everything a catalog-backed provider toggle can change. The write
+   * itself happens on the shared `UPDATE_STATE_SETTING` path, which owns
+   * validation and the row's `onWrite` exclusions; this is the desktop's half
+   * of the refresh.
+   */
+  async refreshAfterProviderSettingChange(key: string): Promise<void> {
+    await this.postProfileData();
+    if (codingPlanForUsageSetting(key)) {
+      await this.postSubscriptionUsage();
+    }
     await this.postModelSelectionData();
     await this.postMainModelOptionsData();
     await this.options.onCredentialChanged();

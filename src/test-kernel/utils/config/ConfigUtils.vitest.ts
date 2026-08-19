@@ -100,7 +100,7 @@ describe('readPlatformSetting', () => {
   it('throws for a key with no catalog entry', async () => {
     await installPlatform({});
     expect(() => readPlatformSetting('texra.not.a.catalog.key')).toThrow(
-      /no state-setting catalog entry/i,
+      /no setting catalog entry/i,
     );
   });
 });

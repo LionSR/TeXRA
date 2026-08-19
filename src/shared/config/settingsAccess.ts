@@ -5,7 +5,12 @@ import type {
   ConfigTarget,
   StateStore,
 } from '@platform/interfaces';
-import type { SettingStore, StateSettingEntry } from '@shared/schemas';
+import type {
+  SettingHost,
+  SettingStore,
+  StateSettingEntry,
+} from '@shared/schemas';
+import { settingByKey } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('settingsAccess');
@@ -17,9 +22,9 @@ const log = createLog('settingsAccess');
  * read surface, so reads dispatch uniformly. Writes differ (`ConfigProvider`
  * takes a target; `StateStore` does not), so they branch on the resolved slot.
  *
- * The resolved slot is `entry.cliStore ?? entry.store` for the CLI and
- * `entry.store` for the extension/desktop — the git-author keys are the only
- * rows that diverge (extension WorkspaceState vs CLI `.texra/config.json`).
+ * The slot is whatever the row's `slots` map declares for the calling host —
+ * there is no fallback chain, so a host that does not store a setting cannot
+ * silently read someone else's slot.
  */
 
 export interface SettingsStores {
@@ -28,18 +33,21 @@ export interface SettingsStores {
   readonly globalState: StateStore;
 }
 
-export type SettingsHostKind = 'extension' | 'cli';
-
 /**
- * The storage slot a setting resolves to for a host: the CLI's `cliStore`
- * override when set, otherwise the canonical `store`. Single source of the
- * resolution rule — display labels and read/write all go through it.
+ * The storage slot a setting resolves to for a host. Single source of the
+ * resolution rule — display labels and read/write all go through it. Throws
+ * when the row declares no slot for the host: a silent fallback would write
+ * the value where that host will never read it back.
  */
 export function settingSlot(
   entry: StateSettingEntry,
-  host: SettingsHostKind,
+  host: SettingHost,
 ): SettingStore {
-  return host === 'cli' && entry.cliStore ? entry.cliStore : entry.store;
+  const slot = entry.slots[host];
+  if (slot === undefined) {
+    throw new Error(`Setting "${entry.key}" has no ${host} storage slot`);
+  }
+  return slot;
 }
 
 /** The default-when-absent value for an entry, from its `.prefault()`. */
@@ -59,7 +67,7 @@ export function settingDefault(entry: StateSettingEntry): unknown {
 export function readSetting(
   entry: StateSettingEntry,
   stores: SettingsStores,
-  host: SettingsHostKind = 'extension',
+  host: SettingHost = 'vscode',
 ): unknown {
   const raw = stores[settingSlot(entry, host)].get<unknown>(entry.key);
   if (raw === undefined) {
@@ -87,7 +95,7 @@ function writeSlot(
   entry: StateSettingEntry,
   value: unknown,
   stores: SettingsStores,
-  host: SettingsHostKind,
+  host: SettingHost,
   target: ConfigTarget | undefined,
 ): Promise<void> {
   const slot = settingSlot(entry, host);
@@ -103,21 +111,38 @@ function writeSlot(
 }
 
 /**
- * Validate and persist a state-backed setting. Throws if `value` fails the
- * entry's schema. Config-backed settings use the target declared by their
- * catalog row, falling back to `'workspace'`; an explicit caller target wins.
- * State-store slots ignore target.
+ * Validate and persist a state-backed setting, then apply the row's declared
+ * write effects. Throws if `value` fails the entry's schema. Config-backed
+ * settings use the target declared by their catalog row, falling back to
+ * `'workspace'`; an explicit caller target wins. State-store slots ignore
+ * target.
+ *
+ * `onWrite.disablesWhenEnabled` is applied here rather than in each host's
+ * form so mutually exclusive routes (Kimi Code vs OpenRouter) cannot be
+ * enforced on one write path and skipped on another. The excluded rows are
+ * written directly — their own effects do not cascade, which is what keeps the
+ * rule a single hop.
  */
 export async function writeSetting(
   entry: StateSettingEntry,
   value: unknown,
   stores: SettingsStores,
-  host: SettingsHostKind = 'extension',
+  host: SettingHost = 'vscode',
   target?: ConfigTarget,
 ): Promise<void> {
   // `async` so a schema-rejected value surfaces as a rejected promise rather
   // than a synchronous throw — callers rely on the uniform promise contract.
   await writeSlot(entry, entry.schema.parse(value), stores, host, target);
+  if (value !== true) return;
+  for (const excludedKey of entry.onWrite?.disablesWhenEnabled ?? []) {
+    const excluded = settingByKey(excludedKey);
+    if (!excluded) {
+      throw new Error(
+        `Setting "${entry.key}" excludes unknown setting "${excludedKey}"`,
+      );
+    }
+    await writeSlot(excluded, false, stores, host, target);
+  }
 }
 
 /**
@@ -128,7 +153,7 @@ export async function writeSetting(
 export function resetSetting(
   entry: StateSettingEntry,
   stores: SettingsStores,
-  host: SettingsHostKind = 'extension',
+  host: SettingHost = 'vscode',
   target?: ConfigTarget,
 ): Promise<void> {
   return writeSlot(entry, undefined, stores, host, target);

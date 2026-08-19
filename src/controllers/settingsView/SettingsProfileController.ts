@@ -1,22 +1,21 @@
-import { createLog } from '@logger/logUtils';
 import { API_PROVIDERS } from '@model/apiProviders';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import {
   DEFAULT_CORE_SETTINGS,
+  modelsTabSettings,
   type NumberSetting,
   type ProviderKeyStatus,
   type ProviderSetting,
+  type SettingHost,
+  type StateSettingEntry,
   type UpdateProfileMessage,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
 } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 import {
   PROVIDER_DISPLAY_NAMES,
-  PROVIDER_SETTINGS,
   PROVIDER_URLS,
-  type ProviderSettingDef,
 } from '@shared/constants/providers';
 import {
   getProviderDisplayName,
@@ -26,8 +25,6 @@ import {
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
 import { buildProfileMessage } from './ProfileMessageBuilder';
-
-const logger = createLog('SettingsProfileController');
 
 type SettingsReliabilitySetting = Omit<NumberSetting, 'value'> & {
   defaultValue: number;
@@ -62,8 +59,7 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
 export type SettingsProfileConfigValue = boolean | number;
 
 type ProviderSettingUpdateResult =
-  | { kind: 'updated'; affectsModelAvailability: boolean }
-  | { kind: 'rejected'; key: string };
+  { kind: 'updated' } | { kind: 'rejected'; key: string };
 
 /**
  * Host-supplied storage/secrets wiring: `globalState`,
@@ -73,6 +69,8 @@ type ProviderSettingUpdateResult =
  * lookups built on it — is host-agnostic and read straight from its modules.
  */
 interface SettingsProfileControllerDeps {
+  /** The host reading the catalog, so `slots` resolves to its own entry. */
+  readonly host: SettingHost;
   readonly globalState: StateStore;
   loadProviderKeyStatuses(): Promise<
     Record<string, ProviderKeyStatus['status']>
@@ -82,22 +80,11 @@ interface SettingsProfileControllerDeps {
 }
 
 export class SettingsProfileController {
-  private readonly providerSettingsByKey: Map<string, ProviderSettingDef>;
   private readonly reliabilitySettingsByKey = new Map(
     SETTINGS_RELIABILITY_SETTINGS.map((setting) => [setting.key, setting]),
   );
 
-  constructor(private readonly deps: SettingsProfileControllerDeps) {
-    // Keep the first def per key: some keys (e.g. useBackgroundResponses)
-    // appear under multiple providers, and the original lookup resolved to
-    // the first match.
-    this.providerSettingsByKey = new Map();
-    for (const setting of Object.values(PROVIDER_SETTINGS).flat()) {
-      if (!this.providerSettingsByKey.has(setting.key)) {
-        this.providerSettingsByKey.set(setting.key, setting);
-      }
-    }
-  }
+  constructor(private readonly deps: SettingsProfileControllerDeps) {}
 
   async buildProfileMessage(): Promise<UpdateProfileMessage> {
     return buildProfileMessage({
@@ -134,39 +121,26 @@ export class SettingsProfileController {
     return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
   }
 
+  /**
+   * Numeric reliability settings only. The per-provider toggles this used to
+   * also write now go through the generic `UPDATE_STATE_SETTING` catalog path,
+   * which validates against the row schema and applies the row's `onWrite`
+   * exclusions — the raw `globalState.update` arm that skipped both is gone.
+   */
   async setProviderSetting(input: {
     key: string;
     value: SettingsProfileConfigValue;
   }): Promise<ProviderSettingUpdateResult> {
-    const providerSetting = this.providerSettingsByKey.get(input.key);
     const reliabilitySetting = this.reliabilitySettingsByKey.get(input.key);
     if (
-      (!providerSetting && !reliabilitySetting) ||
-      (reliabilitySetting?.schema &&
+      !reliabilitySetting ||
+      (reliabilitySetting.schema &&
         !reliabilitySetting.schema.safeParse(input.value).success)
     ) {
       return { kind: 'rejected', key: input.key };
     }
-
-    if (providerSetting?.globalStateKey) {
-      await this.deps.globalState.update(
-        providerSetting.globalStateKey,
-        input.value,
-      );
-    } else {
-      await this.deps.updateConfig(input.key, input.value);
-    }
-
-    // Toggles that re-route models change which entries are available and under
-    // which provider they appear, so the picker must be recomputed: OpenRouter
-    // (global route) and Prefer Kimi Code (reroutes dual-backend Kimi K3).
-    const affectsModelAvailability =
-      providerSetting?.globalStateKey === GlobalStateKey.USE_OPENROUTER ||
-      providerSetting?.globalStateKey === GlobalStateKey.KIMI_CODE_PREFER;
-    if (affectsModelAvailability) {
-      invalidateModelOptionsCache();
-    }
-    return { kind: 'updated', affectsModelAvailability };
+    await this.deps.updateConfig(input.key, input.value);
+    return { kind: 'updated' };
   }
 
   /**
@@ -186,19 +160,37 @@ export class SettingsProfileController {
     }));
   }
 
+  /**
+   * The provider's Models-tab controls, projected from the catalog rows that
+   * declare `surfaces.models` for it. The value and its default-when-absent
+   * both come from the row, so the old per-def `defaultValue` fallback ladder
+   * has nothing left to fall back through.
+   */
   private getProviderSettings(provider: string): ProviderSetting[] {
-    const defs = PROVIDER_SETTINGS[provider];
-    if (!defs) return [];
-    return defs.map((def) => ({
-      ...def,
-      value: def.globalStateKey
-        ? (this.deps.globalState.get<boolean>(
-            def.globalStateKey,
-            def.defaultValue ?? false,
-          ) ??
-          def.defaultValue ??
-          false)
-        : this.deps.getConfig<boolean>(def.key, def.defaultValue ?? false),
-    }));
+    return modelsTabSettings(provider).map(({ entry, surface }) => {
+      const { provider: _provider, ...display } = surface;
+      return { ...display, key: entry.key, value: this.readToggle(entry) };
+    });
+  }
+
+  /**
+   * A Models-tab toggle's current value, read from the slot its row declares
+   * for this host. Exhaustive over `SettingStore`: a future row backed by
+   * `workspaceState` must fail loudly here rather than read the schema default
+   * out of the config tree forever while `writeSetting` persists it elsewhere.
+   */
+  private readToggle(entry: StateSettingEntry): boolean {
+    const fallback = settingDefault(entry) === true;
+    const slot = settingSlot(entry, this.deps.host);
+    switch (slot) {
+      case 'globalState':
+        return this.deps.globalState.get<boolean>(entry.key, fallback) === true;
+      case 'config':
+        return this.deps.getConfig<boolean>(entry.key, fallback);
+      case 'workspaceState':
+        throw new Error(
+          `Models tab row "${entry.key}" is workspaceState-backed, which this controller cannot read`,
+        );
+    }
   }
 }

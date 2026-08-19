@@ -9,14 +9,15 @@ import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
 } from '@shared/codingPlanSubscriptions';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   getGLMCodingPlan,
   getProviderEndpoint,
   getPreferKimiCode,
   getUseOpenRouter,
   setGLMCodingPlan,
-  setPreferKimiCode,
 } from '@utils/config/providerConfig';
+import { writePlatformSetting } from '@utils/config/platformSettings';
 
 export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;
@@ -50,9 +51,17 @@ const RUNTIME_BY_ID = {
   },
   kimiCode: {
     getEnabled: getPreferKimiCode,
-    setEnabled: setPreferKimiCode,
-    restoreEnabled: (enabled) =>
-      setPreferKimiCode(enabled, undefined, { preserveOpenRouter: true }),
+    setEnabled: (enabled) =>
+      writePlatformSetting(GlobalStateKey.KIMI_CODE_PREFER, enabled),
+    // Restore writes the stored value directly: the catalog row's OpenRouter
+    // exclusion is a *user intent* rule, and re-applying it here would clear a
+    // newer competing route the user chose after the capture.
+    restoreEnabled: async (enabled) => {
+      await platform().globalState.update(
+        GlobalStateKey.KIMI_CODE_PREFER,
+        enabled,
+      );
+    },
     isActiveForModel: isKimiCodeSubscriptionActive,
   },
 } as const satisfies Record<

@@ -26,7 +26,6 @@ const mocks = vi.hoisted(() => ({
   setCliCodexSubscription: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
   refreshSubscriptionPreferenceViews: vi.fn(),
-  setPreferKimiCode: vi.fn(),
   setGLMCodingPlan: vi.fn(),
   updateGlobalState: vi.fn(),
 }));
@@ -70,7 +69,6 @@ vi.mock('@utils/config/providerConfig', async (importActual) => {
   return {
     ...actual,
     getPreferKimiCode: () => mocks.preferKimiCode,
-    setPreferKimiCode: mocks.setPreferKimiCode,
     getGLMCodingPlan: () => mocks.glmCodingPlan,
     setGLMCodingPlan: mocks.setGLMCodingPlan,
   };
@@ -342,10 +340,15 @@ beforeEach(() => {
   mocks.openRouter = false;
   mocks.apiKeyExistsUncached.mockResolvedValue(true);
   mocks.hasUsableApiKey.mockResolvedValue(false);
+  // `restoreEnabled` for Kimi Code writes the stored key directly so the
+  // catalog row's OpenRouter exclusion does not fire on a restore.
   mocks.updateGlobalState.mockImplementation(
     async (key: string, value: unknown) => {
       if (key === GlobalStateKey.USE_OPENROUTER) {
         mocks.openRouter = value === true;
+      }
+      if (key === GlobalStateKey.KIMI_CODE_PREFER) {
+        mocks.preferKimiCode = value === true;
       }
     },
   );
@@ -356,9 +359,6 @@ beforeEach(() => {
   mocks.setCliCodingPlanSubscription.mockImplementation(async (id, enabled) => {
     if (id === 'kimiCode') mocks.preferKimiCode = enabled;
     if (id === 'glmCodingPlan') mocks.glmCodingPlan = enabled;
-  });
-  mocks.setPreferKimiCode.mockImplementation(async (enabled) => {
-    mocks.preferKimiCode = enabled;
   });
   mocks.setGLMCodingPlan.mockImplementation(async (enabled) => {
     mocks.glmCodingPlan = enabled;
@@ -379,7 +379,6 @@ afterEach(() => {
   mocks.setCliCodexSubscription.mockReset();
   mocks.setCliCodingPlanSubscription.mockReset();
   mocks.refreshSubscriptionPreferenceViews.mockReset();
-  mocks.setPreferKimiCode.mockReset();
   mocks.setGLMCodingPlan.mockReset();
   mocks.updateGlobalState.mockReset();
 });
@@ -965,9 +964,10 @@ describe('TUI retry approvals', () => {
     // The plan was disabled before the failed preparation, so it must be put
     // back: a retry that never ran leaves no settings behind.
     expect(mocks.preferKimiCode).toBe(true);
-    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true, undefined, {
-      preserveOpenRouter: true,
-    });
+    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
+      GlobalStateKey.KIMI_CODE_PREFER,
+      true,
+    );
     expect(mocks.refreshSubscriptionPreferenceViews).toHaveBeenCalled();
     expectNoPreferenceWrites();
   });
@@ -994,9 +994,10 @@ describe('TUI retry approvals', () => {
     await settleRetryContinuation();
 
     expect(mocks.preferKimiCode).toBe(true);
-    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true, undefined, {
-      preserveOpenRouter: true,
-    });
+    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
+      GlobalStateKey.KIMI_CODE_PREFER,
+      true,
+    );
   });
 
   it('serializes coding-plan rollback ahead of a newer coding-plan switch', async () => {
@@ -1035,13 +1036,14 @@ describe('TUI retry approvals', () => {
       decisionSource: 'automatic',
       feedback: undefined,
     });
-    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true, undefined, {
-      preserveOpenRouter: true,
-    });
+    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
+      GlobalStateKey.KIMI_CODE_PREFER,
+      true,
+    );
     // The stale rollback restores the plan before the newer switch disables it
     // again, so the second retry still runs on the personal route.
     expect(
-      mocks.setPreferKimiCode.mock.invocationCallOrder[0] ?? 0,
+      mocks.updateGlobalState.mock.invocationCallOrder[0] ?? 0,
     ).toBeLessThan(
       mocks.setCliCodingPlanSubscription.mock.invocationCallOrder[1] ?? 0,
     );
@@ -1070,9 +1072,10 @@ describe('TUI retry approvals', () => {
     });
     expect(mocks.preferKimiCode).toBe(true);
     expect(mocks.openRouter).toBe(true);
-    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true, undefined, {
-      preserveOpenRouter: true,
-    });
+    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
+      GlobalStateKey.KIMI_CODE_PREFER,
+      true,
+    );
     expect(mocks.refreshSubscriptionPreferenceViews).toHaveBeenCalledOnce();
   });
 
