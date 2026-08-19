@@ -3,11 +3,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 
 // Third-party imports
-import * as ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import {
   ALL_HOST_PRODUCTION_ROOTS,
+  collectModuleSpecifiers,
+  parseSourceFile,
   REPO_ROOT,
   SOURCE_FILE,
   sourceFilesUnder,
@@ -55,51 +56,6 @@ const PRODUCTION_FILES = scanFiles(true);
 const ALL_SOURCE_FILES = scanFiles(false);
 const SOURCE_TEXT_BY_FILE = new Map<string, string>();
 const MODULE_SPECIFIERS_BY_FILE = new Map<string, string[]>();
-
-function literalText(node: ts.Expression | undefined): string | null {
-  return node != null && ts.isStringLiteralLike(node) ? node.text : null;
-}
-
-function moduleSpecifierFromImportEquals(
-  node: ts.ImportEqualsDeclaration,
-): string | null {
-  const reference = node.moduleReference;
-  if (!ts.isExternalModuleReference(reference)) return null;
-  return literalText(reference.expression);
-}
-
-function moduleSpecifierFromCall(node: ts.CallExpression): string | null {
-  const [firstArg] = node.arguments;
-  if (
-    node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-    (ts.isIdentifier(node.expression) && node.expression.text === 'require')
-  ) {
-    return literalText(firstArg);
-  }
-  return null;
-}
-
-function collectModuleSpecifiers(sourceFile: ts.SourceFile): string[] {
-  const specifiers: string[] = [];
-
-  function visit(node: ts.Node): void {
-    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-      const specifier = literalText(node.moduleSpecifier);
-      if (specifier != null) specifiers.push(specifier);
-    } else if (ts.isImportEqualsDeclaration(node)) {
-      const specifier = moduleSpecifierFromImportEquals(node);
-      if (specifier != null) specifiers.push(specifier);
-    } else if (ts.isCallExpression(node)) {
-      const specifier = moduleSpecifierFromCall(node);
-      if (specifier != null) specifiers.push(specifier);
-    }
-
-    ts.forEachChild(node, visit);
-  }
-
-  visit(sourceFile);
-  return specifiers;
-}
 
 function resolveAgentAlias(specifier: string): string | null {
   if (specifier === OLD_AGENT_RUNTIME_ALIAS) return OLD_AGENT_RUNTIME_MODULE;
@@ -151,13 +107,9 @@ function importsModule(file: string, targetModule: string): boolean {
 
   let moduleSpecifiers = MODULE_SPECIFIERS_BY_FILE.get(file);
   if (moduleSpecifiers === undefined) {
-    const sourceFile = ts.createSourceFile(
-      file,
-      sourceText,
-      ts.ScriptTarget.Latest,
-      true,
+    moduleSpecifiers = collectModuleSpecifiers(
+      parseSourceFile(file, { text: sourceText }),
     );
-    moduleSpecifiers = collectModuleSpecifiers(sourceFile);
     MODULE_SPECIFIERS_BY_FILE.set(file, moduleSpecifiers);
   }
 
