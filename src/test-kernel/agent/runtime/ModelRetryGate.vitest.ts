@@ -21,9 +21,6 @@ const TRANSIENT = new Error('temporary connection failure');
 const RATE_LIMIT = Object.assign(new Error('model rate limited'), {
   status: 429,
 });
-const ADMISSION_REJECTED = Object.assign(new Error('request limited'), {
-  status: 429,
-});
 const UNAUTHORIZED = Object.assign(new Error('credential expired'), {
   status: 401,
 });
@@ -41,10 +38,6 @@ function options(
 
 async function throwTransient(): Promise<never> {
   throw TRANSIENT;
-}
-
-async function throwAdmissionRejected(): Promise<never> {
-  throw ADMISSION_REJECTED;
 }
 
 /** Holds the gate's probe open until `complete()` is called. */
@@ -345,30 +338,6 @@ describe('ModelRetryGate', () => {
     const recoveredOperation = vi.fn(async () => undefined);
     const recovered = gate.run(ROUTE, scopedOptions, recoveredOperation);
     await expectAdmittedAfter(recovered, recoveredOperation, 1000);
-  });
-
-  it('preserves a route streak when admission rejects before the route', async () => {
-    const scopedOptions = {
-      ...options(),
-      classifyFailure: (error: Error) => (error === TRANSIENT ? {} : undefined),
-      isUnobservedFailure: (error: Error) => error === ADMISSION_REJECTED,
-    };
-
-    await expect(gate.run(ROUTE, scopedOptions, throwTransient)).rejects.toBe(
-      TRANSIENT,
-    );
-    await recoverRoute(gate, scopedOptions);
-
-    await expect(
-      gate.run(ROUTE, scopedOptions, throwAdmissionRejected),
-    ).rejects.toBe(ADMISSION_REJECTED);
-    await expect(gate.run(ROUTE, scopedOptions, throwTransient)).rejects.toBe(
-      TRANSIENT,
-    );
-
-    const recoveredOperation = vi.fn(async () => undefined);
-    const recovered = gate.run(ROUTE, scopedOptions, recoveredOperation);
-    await expectAdmittedAfter(recovered, recoveredOperation, 2000);
   });
 
   it('does not let a stale success erase a newer failed probe', async () => {

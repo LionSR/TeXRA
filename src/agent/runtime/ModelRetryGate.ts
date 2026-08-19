@@ -33,7 +33,6 @@ interface RoutePolicy {
   readonly key: string;
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
   readonly isReachableFailure?: (error: Error) => boolean;
-  readonly isUnobservedFailure?: (error: Error) => boolean;
 }
 
 interface RunOptions {
@@ -41,7 +40,6 @@ interface RunOptions {
   readonly baseBackoffMs: number;
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
   readonly isReachableFailure?: (error: Error) => boolean;
-  readonly isUnobservedFailure?: (error: Error) => boolean;
   readonly additionalRoutes?: readonly RoutePolicy[];
   readonly onWait?: (delayMs: number) => void;
 }
@@ -78,7 +76,6 @@ export class ModelRetryGate {
         key: route,
         classifyFailure: options.classifyFailure,
         isReachableFailure: options.isReachableFailure,
-        isUnobservedFailure: options.isUnobservedFailure,
       },
     ];
     const acquired = await this.acquireAll(policies, options);
@@ -105,10 +102,6 @@ export class ModelRetryGate {
             );
           } else if (entry.isReachableFailure?.(error as Error)) {
             this.markReachable(entry.key, entry.permit);
-          } else if (entry.isUnobservedFailure?.(error as Error)) {
-            // An earlier admission boundary rejected the request, so this
-            // route was never observed. Preserve its recovery state.
-            this.abandon(entry.key, entry.permit);
           } else if (entry.permit.probe) {
             // An unclassified failure does not prove that a recovering route
             // is reachable. Keep the cohort closed and hand probe ownership

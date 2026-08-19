@@ -251,8 +251,6 @@ interface CapturedModelRetry {
   readonly classifyModelFailure: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
-  readonly isWireUnobservedFailure?: (error: Error) => boolean;
-  readonly isModelUnobservedFailure?: (error: Error) => boolean;
   readonly gateCalls: number;
 }
 
@@ -315,8 +313,6 @@ async function captureModelRetry(
       modelRetryRoute: modelRoute.key,
       classifyFailure: modelOptions.classifyFailure,
       classifyModelFailure: modelRoute.classifyFailure,
-      isWireUnobservedFailure: modelOptions.isUnobservedFailure,
-      isModelUnobservedFailure: modelRoute.isUnobservedFailure,
       gateCalls: run.mock.calls.length,
     };
   } finally {
