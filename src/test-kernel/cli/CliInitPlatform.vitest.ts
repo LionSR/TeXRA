@@ -125,8 +125,11 @@ vi.mock('@platform/platform', () => ({
 vi.mock('@platform/defaults/nodeHost', () => ({
   bootstrapNodeAgentDirectories: mocks.bootstrapNodeAgentDirectories,
   createNodePlatform: mocks.createNodePlatform,
-  initNodeAgentRuntime: mocks.initNodeAgentRuntime,
   initializeNodeRuntimeSkills: mocks.initializeNodeRuntimeSkills,
+}));
+
+vi.mock('@platform/defaults/nodeAgentRuntime', () => ({
+  initNodeAgentRuntime: mocks.initNodeAgentRuntime,
 }));
 
 vi.mock('@telemetry/UsageLogService', () => ({

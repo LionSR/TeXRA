@@ -14,10 +14,10 @@ import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
 import type { LifecycleHost } from '@platform/interfaces';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
-  initNodeAgentRuntime,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
@@ -251,7 +251,7 @@ export async function initCliPlatform(
     });
     initPlatform(
       createNodePlatform({
-        configStores,
+        config: configStores,
         globalState: stateStores.globalState,
         workspaceState: stateStores.workspaceState,
         storage: stateStores.storage,

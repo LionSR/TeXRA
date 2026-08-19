@@ -4,6 +4,7 @@ import {
 } from '@common/errors/errorPredicates';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   AgentDirectoryService,
   type AgentDirectoryIssueReporter,
@@ -79,5 +80,13 @@ export async function bootstrapPlatformAgentDirectories(
     },
   });
 
-  await sync.reconcile(options.currentVersion);
+  try {
+    await sync.reconcile(options.currentVersion);
+  } catch (error) {
+    // An unreadable or partially written agent directory must not abort host
+    // startup — VS Code activation in particular has to survive it. Loud, not
+    // silent: the cause is logged at error and the host continues with
+    // whatever bundled agents already reconciled.
+    log.error(`Error copying default agents: ${toErrorMessage(error)}`);
+  }
 }

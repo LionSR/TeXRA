@@ -28,7 +28,7 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { createLog } from '@logger/logUtils';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
-import { initNodeAgentRuntime } from '@platform/defaults/nodeHost';
+import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import {

@@ -11,10 +11,10 @@ import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
-  initNodeAgentRuntime,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
 import {
@@ -91,7 +91,7 @@ export async function initializeElectronPlatform(
   });
   initPlatform(
     createNodePlatform({
-      configStores,
+      config: configStores,
       globalState: globalStateStore,
       workspaceState: workspaceStateStore,
       storage,

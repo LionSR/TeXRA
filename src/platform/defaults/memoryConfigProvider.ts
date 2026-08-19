@@ -1,57 +1,40 @@
-import { getCoreSettingDefault } from '@shared/schemas';
-import { canonicalConfigKey } from '@shared/config/configKeys';
+import { JsonConfigProvider, type ConfigStore } from './jsonConfigProvider';
 
-import type {
-  ConfigInspection,
-  ConfigProvider,
-  ConfigTarget,
-} from '../interfaces';
+/** Process-local {@link ConfigStore}, the in-memory twin of a `JsonStore`. */
+class MemoryConfigStore implements ConfigStore {
+  private readonly values = new Map<string, unknown>();
+
+  get<T>(key: string): T | undefined {
+    return this.values.get(key) as T | undefined;
+  }
+
+  has(key: string): boolean {
+    return this.values.has(key);
+  }
+
+  async set(key: string, value: unknown): Promise<void> {
+    // `JsonStore.set` treats `undefined` as a delete; match it so
+    // `isExplicitlySet` agrees across backings.
+    if (value === undefined) {
+      this.values.delete(key);
+    } else {
+      this.values.set(key, value);
+    }
+  }
+}
 
 /**
  * In-memory {@link ConfigProvider} for process-local hosts (the default Node
- * platform, tests). Resolves settings exactly like the file-backed
- * {@link JsonConfigProvider}: workspace values shadow global values, then the
- * core-schema default, then the caller's fallback — so embedders observe the
- * same effective settings as every host.
+ * platform, tests). Settings resolve exactly as they do for a file-backed
+ * host — workspace shadows global, then the core-schema default, then the
+ * caller's fallback — because it is the same provider over in-memory stores,
+ * not a second implementation of the same rule.
  */
-export class MemoryConfigProvider implements ConfigProvider {
-  private readonly global = new Map<string, unknown>();
-  private readonly workspace = new Map<string, unknown>();
-
-  get<T>(key: string, defaultValue?: T): T {
-    const storedKey = canonicalConfigKey(key);
-    const workspaceValue = this.workspace.get(storedKey) as T | undefined;
-    if (workspaceValue !== undefined) return workspaceValue;
-    const globalValue = this.global.get(storedKey) as T | undefined;
-    if (globalValue !== undefined) return globalValue;
-    const schemaDefault = getCoreSettingDefault(storedKey) as T | undefined;
-    return schemaDefault === undefined ? (defaultValue as T) : schemaDefault;
-  }
-
-  async update<T>(
-    key: string,
-    value: T,
-    target: ConfigTarget = 'workspace',
-  ): Promise<void> {
-    const values = target === 'global' ? this.global : this.workspace;
-    const storedKey = canonicalConfigKey(key);
-    if (value === undefined) {
-      values.delete(storedKey);
-    } else {
-      values.set(storedKey, value);
-    }
-  }
-
-  inspect<T = unknown>(key: string): ConfigInspection<T> {
-    const storedKey = canonicalConfigKey(key);
-    return {
-      globalValue: this.global.get(storedKey) as T | undefined,
-      workspaceValue: this.workspace.get(storedKey) as T | undefined,
-    };
-  }
-
-  isExplicitlySet(key: string): boolean {
-    const storedKey = canonicalConfigKey(key);
-    return this.workspace.has(storedKey) || this.global.has(storedKey);
+export class MemoryConfigProvider extends JsonConfigProvider {
+  constructor() {
+    super({
+      workspace: new MemoryConfigStore(),
+      global: new MemoryConfigStore(),
+    });
   }
 }
