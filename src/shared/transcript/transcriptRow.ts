@@ -20,7 +20,6 @@ import {
   TOOL_USE_STATUS,
   isTerminalWorkflowCallProgress,
   type ContextManagementData,
-  type ContextStateData,
   type DiffResultDisplay,
   type ErrorLogData,
   type ExtendedTokenUsageStats,
@@ -233,17 +232,6 @@ export interface ContextManagementRow extends TranscriptRowBase {
   readonly summary?: TranscriptText;
 }
 
-/**
- * Context utilization as the model handler actually measured it. Neither host
- * paints this inline: the webview folds it into the usage panel and the CLI
- * into its status bar. It is a row so the fact travels the same path as every
- * other one, with one owner instead of a second derivation per host.
- */
-interface ContextStateRow extends TranscriptRowBase {
-  readonly kind: 'contextState';
-  readonly data: ContextStateData;
-}
-
 export interface ProgressStatusRow extends TranscriptRowBase {
   readonly kind: 'progressStatus';
   readonly summary: TranscriptText;
@@ -295,7 +283,6 @@ export type TranscriptRow =
   | LatexdiffRow
   | StatisticsRow
   | ContextManagementRow
-  | ContextStateRow
   | ProgressStatusRow
   | WorkflowTaskRow
   | CompactionActivityRow
@@ -314,6 +301,42 @@ export type TranscriptRowOf<K extends TranscriptRowKind> = Extract<
 // ---------------------------------------------------------------------------
 
 /**
+ * Kinds whose content is complete the moment the row appears. A tool call or a
+ * workflow task is deliberately absent: it does reach a typed terminal state,
+ * but only in a position the producer chose, so it settles through
+ * {@link isSettledRow} rather than on its own.
+ */
+const IMMEDIATELY_SETTLED_ROW_KINDS = new Set<TranscriptRowKind>([
+  'user',
+  'error',
+  'phase',
+  'fileList',
+  'missingOutputs',
+  'latexdiff',
+  'statistics',
+  'contextManagement',
+  'progressStatus',
+]);
+
+/**
+ * Whether a row's content is fixed the moment it appears, independent of
+ * anything around it — the recorder assigned it a durable settlement order,
+ * the host synthesized it so no producer is still writing to it, a compaction
+ * block reached a terminal state, or the kind is complete on arrival.
+ *
+ * This is the position-independent half of {@link isSettledRow}, which a host
+ * with an append-only surface asks about a row it holds no position for.
+ */
+export function isSelfSettledRow(row: TranscriptRow): boolean {
+  if (row.kind === 'compactionActivity') return row.block.finalized;
+  return (
+    row.settlementSeqNo !== undefined ||
+    row.origin === 'local' ||
+    IMMEDIATELY_SETTLED_ROW_KINDS.has(row.kind)
+  );
+}
+
+/**
  * Whether a row's content can no longer change, so it is safe to print once
  * into append-only scrollback.
  *
@@ -325,8 +348,7 @@ export function isSettledRow(
   row: TranscriptRow,
   hasLaterRow: boolean,
 ): boolean {
-  // A host-synthesized row has no producer still writing to it.
-  if (row.origin === 'local') return true;
+  if (isSelfSettledRow(row)) return true;
   switch (row.kind) {
     case 'assistant':
       return !row.pendingEmbeddedFollowup && hasLaterRow;
@@ -353,7 +375,6 @@ export function isSettledRow(
     case 'latexdiff':
     case 'statistics':
     case 'contextManagement':
-    case 'contextState':
     case 'progressStatus':
     case 'phase':
     case 'log':

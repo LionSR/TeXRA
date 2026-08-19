@@ -24,7 +24,11 @@ import {
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
 import type { WorkflowCallProgress } from '@shared/schemas';
-import type { TranscriptRow, TranscriptRowKind } from '@shared/transcript';
+import {
+  isSelfSettledRow,
+  type TranscriptRow,
+  type TranscriptRowKind,
+} from '@shared/transcript';
 import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
@@ -32,7 +36,6 @@ import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { transcriptRowBodyLines } from '../render/transcriptRowLines';
 import {
   isInquiryContinuationText,
-  isSelfSettledRow,
   transcriptRowHeadline,
 } from './transcriptEntries';
 import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
@@ -97,7 +100,6 @@ const ROW_GEOMETRY = {
   statistics: DETAIL_GEOMETRY,
   contextManagement: DETAIL_GEOMETRY,
   progressStatus: DETAIL_GEOMETRY,
-  contextState: DETAIL_GEOMETRY,
   error: {
     firstPrefix: ERROR_ENTRY_PREFIX,
     continuationPrefix: ' '.repeat(ERROR_ENTRY_PREFIX.length),

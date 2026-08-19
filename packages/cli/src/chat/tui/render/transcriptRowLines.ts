@@ -140,7 +140,6 @@ export function transcriptRowBodyLines(
       case 'tool':
       case 'workflowTask':
       case 'compactionActivity':
-      case 'contextState':
       case 'phase':
       case 'log':
         return [];
