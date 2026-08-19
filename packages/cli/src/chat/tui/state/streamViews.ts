@@ -1,25 +1,30 @@
-// Stream-scoped display projection for CLI controls. The authoritative state
-// remains `StreamSlice` plus the child->parent edge map; this module owns the
-// derived labels and active tree order so tabs, headers, and lists do not
-// each rebuild them differently.
+// Stream-scoped display projection for CLI controls. Display fields come from
+// the shared `buildStreamTabInfo` — the same builder the extension and desktop
+// tabs use, so one run never carries two names — and this module owns only the
+// CLI's own concerns: the active tree order, focus scope, and ancestor walks.
 
 // Local imports - shared schemas
-import type { RunIdentity, StreamTabId } from '@shared/schemas';
+import { buildStreamTabInfo } from '@controllers/session/streamTabInfo';
+import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
 
 // Local imports - CLI state
 import {
-  childExecutionLabel,
   focusOrderDescendants,
+  streamMetadataFor,
   visibleSubagentRows,
   type ChildRosters,
 } from './childExecutions';
 import type { StreamSlice } from './cliState';
 
+/** The root conversation's own label — it is the session, not a tab. */
+const ROOT_STREAM_LABEL = 'main';
+
 export interface StreamView {
   readonly id: StreamTabId;
+  /** Shared tab projection: label, identity, model label, worktree, remoteness.
+   *  Absent only when no session state is bound (nothing has attached yet). */
+  readonly info?: StreamTabInfo;
   readonly label: string;
-  /** What owns the child stream, retained with the child execution. */
-  readonly identity?: RunIdentity;
   readonly parentId?: StreamTabId;
   readonly parentLabel?: string;
   readonly slice: StreamSlice | undefined;
@@ -97,63 +102,62 @@ export function nearestActiveStreamAncestor<T>(init: {
   return undefined;
 }
 
-function childStreamReferenceLabel(
-  parentStreamId: StreamTabId,
-  childRosters: ChildRosters,
-  streamId: StreamTabId,
-): string {
-  const child = visibleSubagentRows(parentStreamId, childRosters).find(
-    (entry) => entry.childStreamId === streamId,
-  );
-  return child ? childExecutionLabel(child) : streamId;
+/**
+ * The shared tab projection for one stream. Its own metadata is the identity
+ * authority; the parent's roster row is the fallback for a child whose
+ * `run.start` has not landed yet (`child.activity` can arrive first — the
+ * `roster-first` child-event order).
+ */
+function streamTabInfoFor(init: {
+  readonly childRosters: ChildRosters;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly streamId: StreamTabId;
+}): StreamTabInfo | undefined {
+  const metadata = streamMetadataFor(init.streamId);
+  if (!metadata) return undefined;
+  const parentStreamId = init.parentStream.get(init.streamId);
+  const identity =
+    metadata.identity ??
+    (parentStreamId
+      ? visibleSubagentRows(parentStreamId, init.childRosters).find(
+          (child) => child.childStreamId === init.streamId,
+        )?.identity
+      : undefined);
+  return buildStreamTabInfo({
+    streamId: init.streamId,
+    metadata: identity ? { ...metadata, identity } : metadata,
+  });
 }
 
 export function streamDisplayLabel(init: {
   readonly childRosters: ChildRosters;
-  /** Batch-resolved labels from {@link streamTreeViews}; single lookups compute on demand. */
-  readonly labels?: ReadonlyMap<StreamTabId, string>;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): string {
-  const parentStreamId = init.parentStream.get(init.streamId);
-  if (!parentStreamId) return 'main';
-  const precomputed = init.labels?.get(init.streamId);
-  if (precomputed !== undefined) return precomputed;
-  return childStreamReferenceLabel(
-    parentStreamId,
-    init.childRosters,
-    init.streamId,
-  );
+  if (!init.parentStream.get(init.streamId)) return ROOT_STREAM_LABEL;
+  // With no session state bound (nothing has attached yet) the id is all
+  // there is to say.
+  return streamTabInfoFor(init)?.label ?? init.streamId;
 }
 
 export function streamViewForId(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly childRosters: ChildRosters;
-  /** Batch-resolved labels from {@link streamTreeViews}; single lookups compute on demand. */
-  readonly labels?: ReadonlyMap<StreamTabId, string>;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): StreamView {
   const parentId = init.parentStream.get(init.streamId);
-  const rosterRow = parentId
-    ? visibleSubagentRows(parentId, init.childRosters).find(
-        (child) => child.childStreamId === init.streamId,
-      )
-    : undefined;
   return {
     id: init.streamId,
+    info: streamTabInfoFor(init),
     label: streamDisplayLabel(init),
-    identity: rosterRow?.identity,
     parentId,
     parentLabel: parentId
       ? streamDisplayLabel({
           childRosters: init.childRosters,
-          labels: init.labels,
           parentStream: init.parentStream,
           streamId: parentId,
-          streams: init.streams,
         })
       : undefined,
     slice: init.streams.get(init.streamId),
@@ -195,60 +199,15 @@ export function streamTreeEntries(
   return out;
 }
 
-/**
- * Display labels for a batch of stream ids in one pass: grouping ids by
- * parent walks each parent's roster once rather than once per child, so a
- * wide child list costs one roster scan per distinct parent per render
- * instead of one per row. A parentless id gets no entry here —
- * `streamDisplayLabel` answers 'main' for it without consulting the map.
- */
-function childStreamLabels(
-  init: Pick<StreamTreeViewInput, 'childRosters' | 'parentStream'>,
-  streamIds: readonly StreamTabId[],
-): ReadonlyMap<StreamTabId, string> {
-  const idsByParent = new Map<StreamTabId, StreamTabId[]>();
-  for (const streamId of streamIds) {
-    const parentStreamId = init.parentStream.get(streamId);
-    if (!parentStreamId) continue;
-    const bucket = idsByParent.get(parentStreamId);
-    if (bucket) bucket.push(streamId);
-    else idsByParent.set(parentStreamId, [streamId]);
-  }
-  const labels = new Map<StreamTabId, string>();
-  for (const [parentStreamId, ids] of idsByParent) {
-    const unresolved = new Set(ids);
-    for (const child of visibleSubagentRows(
-      parentStreamId,
-      init.childRosters,
-    )) {
-      if (unresolved.delete(child.childStreamId)) {
-        labels.set(child.childStreamId, childExecutionLabel(child));
-      }
-    }
-    // Not on the parent's roster: the same fallback childStreamReferenceLabel
-    // uses when its find misses.
-    for (const streamId of unresolved) labels.set(streamId, streamId);
-  }
-  return labels;
-}
-
 export function streamTreeViews(
   init: StreamTreeViewInput,
 ): readonly StreamView[] {
   const ordered = streamTreeEntries(init);
   if (ordered.length < 2) return [];
-  // Resolve every row's label in one pass: per-row resolution searches the
-  // parent's roster, so looking it up per row (and again per parent label)
-  // costs one roster scan per child per render.
-  const labels = childStreamLabels(
-    init,
-    ordered.map((entry) => entry.id),
-  );
   return ordered.map((entry) =>
     streamViewForId({
       activeStreamId: init.activeStreamId,
       childRosters: init.childRosters,
-      labels,
       parentStream: init.parentStream,
       streamId: entry.id,
       streams: init.streams,

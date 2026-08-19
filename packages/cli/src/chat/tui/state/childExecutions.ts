@@ -44,7 +44,7 @@ export function unbindChildStreamState(state: SessionState): void {
 /**
  * Re-derive the child-stream snapshots from the bound `SessionState`. Called
  * by the adapter after any change that can move rosters, parent edges, or
- * tombstones: `onBadgesChanged`, `onParentStreamChanged`,
+ * tombstones: `onBadgesChanged`, `invalidate(…, 'parentStreamId')`,
  * `onStreamMetadataChanged` (a new RUNNING drops the previous run's retained
  * rows and surfaces only here), and the adapter's `deleteStream` removal hook
  * (removal fires no renderer-port callback by design).

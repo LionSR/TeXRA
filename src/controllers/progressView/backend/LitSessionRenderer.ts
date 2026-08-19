@@ -8,6 +8,7 @@ import {
 import type {
   PresentedStreamId,
   SessionRendererPort,
+  SessionRenderSlice,
 } from '@controllers/session/SessionRendererPort';
 import type {
   SessionState,
@@ -38,6 +39,7 @@ import type {
 import { buildStreamContentRender } from '@shared/streams/streamContentSync';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import {
+  assertNever,
   createFlushableDebounce,
   mapToRecord,
   type FlushableDebounce,
@@ -146,13 +148,47 @@ export class LitSessionRenderer implements SessionRendererPort {
     });
   }
 
-  onParentStreamChanged(
-    childStreamId: StreamTabId,
-    _parentStreamId: StreamTabId | null,
-  ): void {
-    // Parent edge rides `StreamTabInfo.parentStreamId` on the metadata wire.
-    if (!this.isAvailable()) return;
-    this.updateStreamMetadata(childStreamId);
+  invalidate(streamId: StreamTabId, slice: SessionRenderSlice): void {
+    switch (slice) {
+      case 'files':
+        return this.sendIfActive(streamId, () =>
+          this.sendMessage({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
+            stream: streamId,
+            rounds: nonEmptyRounds(
+              this.state.snapshots.getOutputFiles(streamId),
+            ),
+          }),
+        );
+      case 'compileFailures':
+        return this.sendIfActive(streamId, () =>
+          this.sendMessage({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
+            stream: streamId,
+            rounds: nonEmptyRounds(
+              this.state.snapshots.getCompileFailures(streamId),
+            ),
+            reset: true,
+          }),
+        );
+      case 'queuedFollowUps':
+        return this.sendIfActive(streamId, () =>
+          this.sendMessage({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
+            stream: streamId,
+            messages: this.state.followUps.getAll(streamId),
+          }),
+        );
+      case 'parentStreamId':
+        // Parent edge rides `StreamTabInfo.parentStreamId` on the metadata wire.
+        if (!this.isAvailable()) return;
+        return this.updateStreamMetadata(streamId);
+      case 'goalPaused':
+        // Lit surfaces pause via the goal chip (`goalStateChanged`); no
+        // transcript notice, unlike the TUI.
+        return;
+    }
+    assertNever(slice, 'Unhandled session render slice');
   }
 
   onConversationProgressChanged(
@@ -202,16 +238,6 @@ export class LitSessionRenderer implements SessionRendererPort {
     });
   }
 
-  onFilesChanged(streamId: StreamTabId): void {
-    this.sendIfActive(streamId, () =>
-      this.sendMessage({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
-        stream: streamId,
-        rounds: nonEmptyRounds(this.state.snapshots.getOutputFiles(streamId)),
-      }),
-    );
-  }
-
   onMissingOutputsChanged(
     streamId: StreamTabId,
     options?: { reset?: boolean },
@@ -233,19 +259,6 @@ export class LitSessionRenderer implements SessionRendererPort {
         ),
       });
     });
-  }
-
-  onCompileFailuresChanged(streamId: StreamTabId): void {
-    this.sendIfActive(streamId, () =>
-      this.sendMessage({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
-        stream: streamId,
-        rounds: nonEmptyRounds(
-          this.state.snapshots.getCompileFailures(streamId),
-        ),
-        reset: true,
-      }),
-    );
   }
 
   onRunUsageChanged(
@@ -286,16 +299,6 @@ export class LitSessionRenderer implements SessionRendererPort {
     });
   }
 
-  onQueuedFollowUpsChanged(streamId: StreamTabId): void {
-    this.sendIfActive(streamId, () => {
-      this.sendMessage({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
-        stream: streamId,
-        messages: this.state.followUps.getAll(streamId),
-      });
-    });
-  }
-
   onInquiryThreadUpdated(thread: InquiryThreadUpdatedEvent): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD,
@@ -315,10 +318,6 @@ export class LitSessionRenderer implements SessionRendererPort {
       ...(details?.status ? { status: details.status } : {}),
       ...(details?.objective ? { objective: details.objective } : {}),
     });
-  }
-
-  onGoalPaused(_streamId: StreamTabId): void {
-    // Lit surfaces pause via the goal chip (`goalStateChanged`); no transcript.
   }
 
   syncStreamContent(
