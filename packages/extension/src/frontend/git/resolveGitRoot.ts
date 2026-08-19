@@ -56,7 +56,7 @@ export async function resolveGitCommonRoot(
     const stat = await vscode.workspace.fs.stat(gitEntryUri);
 
     if (isDirectory(stat.type)) {
-      return repo.rootUri.fsPath;
+      return normalizeFilePath(repo.rootUri.fsPath);
     }
 
     if (!isFile(stat.type)) {
