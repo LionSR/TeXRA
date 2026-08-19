@@ -59,8 +59,11 @@ import { getTimeFormatter } from '../formatters/timestampUtils';
 
 // Local imports - sibling helpers
 import { TranscriptIndex, type GroupTree } from './messageIndex';
-import { TerminalBuffer, processTerminalText } from './terminalBuffer';
+// Side-effect import: registers <terminal-output>, which the terminal-stream
+// render path below instantiates.
+import './TerminalOutput';
 import { ProgressEvents } from '../events';
+import type { TerminalOutput } from './TerminalOutput';
 
 const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
 const TIMELINE_ITEM_WINDOW_STEP = 120;
@@ -140,7 +143,6 @@ export class TaskGroupList extends LitElement {
   private previousStatuses = new Map<string, string>();
 
   private readonly index = new TranscriptIndex();
-  private readonly terminalBuffer = new TerminalBuffer();
 
   /** Number of recent top-level timeline entries currently rendered. */
   @state() private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
@@ -153,9 +155,9 @@ export class TaskGroupList extends LitElement {
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
   private scrollContainer?: HTMLElement;
 
-  /** Terminal committed-line node, managed imperatively to avoid full text rewrites. */
-  @query('.terminal-pre--committed')
-  private terminalCommittedPre?: HTMLPreElement;
+  /** xterm renderer for terminal-mode streams; owns its own viewport. */
+  @query('terminal-output')
+  private terminalOutput?: TerminalOutput;
 
   /**
    * Sticky scroll state: when true, new content auto-scrolls to bottom.
@@ -176,6 +178,14 @@ export class TaskGroupList extends LitElement {
 
   /** Public method to scroll to bottom - called by parent LogList */
   scrollToBottom(): void {
+    if (this.terminal) {
+      // xterm owns the viewport for terminal streams. LogList calls this on a
+      // tab switch, which is also the first moment this tree is unhidden and
+      // can measure itself — every fit attempted while hidden was skipped.
+      this.terminalOutput?.refitIfVisible();
+      this.terminalOutput?.scrollToBottom();
+      return;
+    }
     if (this.scrollContainer) {
       scrollToBottom(this.scrollContainer);
     }
@@ -183,6 +193,10 @@ export class TaskGroupList extends LitElement {
 
   /** Scroll to bottom only when sticky (user hasn't scrolled away). */
   scrollToBottomIfSticky(): void {
+    // Terminal streams: the terminal keeps its own viewport pinned unless the
+    // user scrolled away inside it, and the outer container never overflows,
+    // so there is nothing here to follow.
+    if (this.terminal) return;
     if (!this.isSticky) return;
     this.scrollToBottom();
   }
@@ -195,30 +209,9 @@ export class TaskGroupList extends LitElement {
   override willUpdate(changedProperties: Map<string, unknown>): void {
     const groupsChanged = changedProperties.has('groups');
     const rowsChanged = changedProperties.has('rows');
-    const entriesChanged = changedProperties.has('entries');
 
     if (groupsChanged) {
       this.checkForCompletedRuns();
-    }
-
-    if (this.terminal) {
-      const fullText = (): string =>
-        this.entries.map((entry) => entry.text ?? '').join('');
-      const previousEntries = changedProperties.get('entries') as
-        StreamLogEntry[] | undefined;
-      const prevCount = previousEntries?.length ?? 0;
-      if (changedProperties.has('terminal')) {
-        this.terminalBuffer.rebuild(fullText());
-      } else if (entriesChanged && this.entries.length > prevCount) {
-        this.terminalBuffer.append(
-          this.entries
-            .slice(prevCount)
-            .map((entry) => entry.text ?? '')
-            .join(''),
-        );
-      } else if (entriesChanged) {
-        this.terminalBuffer.rebuild(fullText());
-      }
     }
 
     const renderWindowsStale = this.index.apply({
@@ -243,15 +236,6 @@ export class TaskGroupList extends LitElement {
 
   override updated(): void {
     this.processedRowGeneration = this.rowGeneration;
-
-    if (this.terminal) {
-      if (this.terminalCommittedPre) {
-        this.terminalBuffer.sync(this.terminalCommittedPre);
-      }
-      return;
-    }
-
-    this.terminalBuffer.resetDomState();
   }
 
   private canUseUpdatedRowIndices(): boolean {
@@ -543,14 +527,10 @@ export class TaskGroupList extends LitElement {
   }
 
   private renderTerminalOutput(): TemplateResult {
-    const tailText = processTerminalText(this.terminalBuffer.tail);
-    // Single-line templates: a wrapped `<pre>` would put the reflowed
-    // whitespace inside the preformatted block.
-    const committedClass = 'terminal-pre terminal-pre--committed';
-    const tailClass = 'terminal-pre terminal-pre--tail';
-    const committed = html`<pre class=${committedClass}></pre>`;
-    const tail = html`<pre class=${tailClass}>${tailText}</pre>`;
-    return html`<div class="terminal-container">${[committed, tail]}</div>`;
+    return html`<terminal-output
+      fill
+      .text=${this.entries.map((entry) => entry.text ?? '').join('')}
+    ></terminal-output>`;
   }
 
   private handleGettingStartedAction(action: GettingStartedAction): void {
