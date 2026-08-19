@@ -1,3 +1,6 @@
+// Standard library imports
+import { basename } from 'node:path';
+
 // Third-party imports
 import { ModelProvider } from 'llm-zoo';
 import OpenAI, { OpenAIError } from 'openai';
@@ -1245,7 +1248,8 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
           {
             type: 'input_file',
             file_data: toDataUrl(mediaType, media.data),
-            filename: media.file_name,
+            // `file_name` may be workspace-relative; this field is a filename.
+            filename: basename(media.file_name),
           },
         ];
       }

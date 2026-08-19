@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { basename } from 'node:path';
 
 import { GoogleGenAI, type File } from '@google/genai';
 
@@ -157,7 +158,8 @@ export async function uploadGoogleMediaEntries<T>(
       );
       const uploaded: File = await client.files.upload({
         file: uploadPath,
-        config: { mimeType, displayName: fileName },
+        // `fileName` may be workspace-relative; displayName is a filename.
+        config: { mimeType, displayName: basename(fileName) },
       });
       const fileUri = uploaded.uri;
       if (!fileUri) {

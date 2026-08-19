@@ -1263,7 +1263,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
             media_type: 'application/pdf',
             data: media.data,
           },
-          title: media.file_name,
+          // `file_name` may be workspace-relative; the title is a filename.
+          title: basename(media.file_name),
         } satisfies BetaRequestDocumentBlock;
         return [descriptionBlock, documentBlock];
       }
