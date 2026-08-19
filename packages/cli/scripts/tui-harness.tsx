@@ -2349,7 +2349,6 @@ function appendHarnessStatus(): void {
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        subscriptionActive: false,
         usageRoute: slice?.usage?.usageRoute,
       }),
       approval: formatTexraApprovalPolicy(harnessRuntimeSession.approvalPolicy),

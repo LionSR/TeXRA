@@ -1,14 +1,20 @@
 import { ModelProvider } from 'llm-zoo';
 
 import { hasUsableApiKey } from '@model/apiProviders';
+import {
+  isKimiCodeRoute,
+  resolveKimiCodeRoutingFacts,
+} from '@model/kimiCodeSubscriptionRouting';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
-import { isKimiCodeSubscriptionActive } from '@model/providerCapabilities';
+import { oauthSubscriptionUsageRoute } from '@model/providerCapabilities';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
 } from '@shared/codingPlanSubscriptions';
+import type { UsageRoute } from '@shared/schemas';
+import { isKimiSubscriptionEligible } from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   getGLMCodingPlan,
@@ -40,6 +46,21 @@ async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
     return false;
   }
   return hasUsableApiKey(platform().secrets, 'glm');
+}
+
+/**
+ * Whether the model currently routes through the Kimi Code coding endpoint
+ * (Moonshot coding subscription, authenticated by the Kimi Code API key).
+ * Mirrors ModelFactory's dispatch facts: registry eligibility, the OpenRouter
+ * toggle, a stored key, and the "Prefer Kimi Code" switch.
+ */
+async function isKimiCodeSubscriptionActive(modelId: string): Promise<boolean> {
+  const config = await resolveRuntimeModelConfig(modelId);
+  if (!config || !isKimiSubscriptionEligible(config)) return false;
+  return isKimiCodeRoute(
+    config,
+    await resolveKimiCodeRoutingFacts(getUseOpenRouter()),
+  );
 }
 
 const RUNTIME_BY_ID = {
@@ -90,4 +111,27 @@ export async function activeCodingPlanForModel(
     })),
   );
   return active.find((candidate) => candidate.active)?.runtime;
+}
+
+/**
+ * The subscription route that would serve this model's next request, or
+ * undefined when it would be paid for with the user's own API key.
+ *
+ * Single owner of "which subscription serves this model next": the OAuth
+ * subscriptions answer from their capability profile's `usageRoute`, the
+ * coding plans from their catalog descriptor. Callers get a `UsageRoute` — the
+ * same vocabulary completed usage is stamped with — so no surface has to
+ * re-order per-provider booleans to reach the same answer. At most one arm can
+ * resolve: each subscription requires its own `config.provider`.
+ *
+ * Lives here rather than in `@model/providerCapabilities` so the OAuth-only
+ * module stays free of the coding-plan runtime, which reads stored keys.
+ */
+export async function activeSubscriptionUsageRoute(
+  modelId: string,
+): Promise<UsageRoute | undefined> {
+  return (
+    (await oauthSubscriptionUsageRoute(modelId)) ??
+    (await activeCodingPlanForModel(modelId))?.descriptor.usageRoute
+  );
 }

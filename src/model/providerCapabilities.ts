@@ -6,13 +6,8 @@ import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import type { UsageRoute } from '@shared/schemas';
-import { isKimiSubscriptionEligible } from '@shared/model/kimiCodeRetryGate';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
-import {
-  isKimiCodeRoute,
-  resolveKimiCodeRoutingFacts,
-} from './kimiCodeSubscriptionRouting';
 import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
 
 type ProviderAuthMode = 'chatgpt-subscription' | 'xai-subscription';
@@ -157,32 +152,60 @@ export function resolveCodexSubscriptionCapabilities(
  * Shared signed-in-subscription probe: resolve the model config, ask the
  * per-provider capability resolver whether the subscription route is active
  * under the live OpenRouter toggle, and confirm the provider is signed in.
- * The Kimi probe cannot share this (it has no sign-in probe and adds the
- * key-set + included-access facts), so it stays standalone.
+ * Returns the profile's own `usageRoute` so callers never restate which route
+ * a provider serves. The coding plans cannot share this (they have no sign-in
+ * probe and add key-set facts), so they answer from their catalog descriptor
+ * in `@model/codingPlanSubscriptions`.
  */
-async function isSignedInSubscriptionActive(
+async function signedInSubscriptionUsageRoute(
   modelId: string,
   resolveCapabilities: (
     config: ModelConfig,
     useOpenRouter: boolean,
   ) => ProviderCapabilityProfile | null,
   isSignedIn: () => boolean | Promise<boolean>,
-): Promise<boolean> {
+): Promise<UsageRoute | undefined> {
   const config = await resolveRuntimeModelConfig(modelId);
-  if (!config) return false;
+  if (!config) return undefined;
   const capabilities = resolveCapabilities(config, getUseOpenRouter());
-  if (!capabilities) return false;
-  return isSignedIn();
+  if (!capabilities) return undefined;
+  return (await isSignedIn()) ? capabilities.usageRoute : undefined;
+}
+
+/**
+ * The OAuth-subscription route serving this model's next request, if any.
+ *
+ * Pairing each capability resolver with its own sign-in probe stays inside
+ * this module — the one that owns those profiles. `activeSubscriptionUsageRoute`
+ * (`@model/codingPlanSubscriptions`) unions this with the API-key coding plans.
+ */
+export async function oauthSubscriptionUsageRoute(
+  modelId: string,
+): Promise<UsageRoute | undefined> {
+  return (
+    (await signedInSubscriptionUsageRoute(
+      modelId,
+      resolveCodexSubscriptionCapabilities,
+      isCodexSignedIn,
+    )) ??
+    (await signedInSubscriptionUsageRoute(
+      modelId,
+      resolveXaiSubscriptionCapabilities,
+      isXaiSignedIn,
+    ))
+  );
 }
 
 /** Whether the model currently routes through a signed-in ChatGPT subscription. */
 export async function isCodexSubscriptionActive(
   modelId: string,
 ): Promise<boolean> {
-  return isSignedInSubscriptionActive(
-    modelId,
-    resolveCodexSubscriptionCapabilities,
-    isCodexSignedIn,
+  return (
+    (await signedInSubscriptionUsageRoute(
+      modelId,
+      resolveCodexSubscriptionCapabilities,
+      isCodexSignedIn,
+    )) !== undefined
   );
 }
 
@@ -211,26 +234,11 @@ export function resolveXaiSubscriptionCapabilities(
 export async function isXaiSubscriptionActive(
   modelId: string,
 ): Promise<boolean> {
-  return isSignedInSubscriptionActive(
-    modelId,
-    resolveXaiSubscriptionCapabilities,
-    isXaiSignedIn,
-  );
-}
-
-/**
- * Whether the model currently routes through the Kimi Code coding endpoint
- * (Moonshot coding subscription, authenticated by the Kimi Code API key).
- * Mirrors ModelFactory's dispatch facts: registry eligibility, the OpenRouter
- * toggle, a stored key, and the "Prefer Kimi Code" switch.
- */
-export async function isKimiCodeSubscriptionActive(
-  modelId: string,
-): Promise<boolean> {
-  const config = await resolveRuntimeModelConfig(modelId);
-  if (!config || !isKimiSubscriptionEligible(config)) return false;
-  return isKimiCodeRoute(
-    config,
-    await resolveKimiCodeRoutingFacts(getUseOpenRouter()),
+  return (
+    (await signedInSubscriptionUsageRoute(
+      modelId,
+      resolveXaiSubscriptionCapabilities,
+      isXaiSignedIn,
+    )) !== undefined
   );
 }
