@@ -72,7 +72,10 @@ export async function loadInputHistory(): Promise<InputHistory> {
       if (records.length > MAX_LINES) {
         const drop = records.length - MAX_LINES;
         records.splice(0, drop);
-        await GlobalStorageFS.write(HISTORY_PATH, serializeRecords(records));
+        await GlobalStorageFS.writeAtomic(
+          HISTORY_PATH,
+          serializeRecords(records),
+        );
         return;
       }
       await GlobalStorageFS.appendFile(
