@@ -29,7 +29,10 @@ import {
   ReasoningLevelSchema,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { isFastFirstResponseModel } from '@shared/constants/providers';
+import {
+  isFastFirstResponseModel,
+  MODEL_SOURCE_ORDER,
+} from '@shared/constants/providers';
 import { byName } from '@utils/core';
 
 export interface SettingsModelSelectionControllerDeps {
@@ -68,6 +71,9 @@ const EFFORT_TO_LEVEL = new Map<ReasoningEffort, ReasoningLevel>(
     ([level, effort]) => [effort, level as ReasoningLevel] as const,
   ),
 );
+
+/** Membership form of the order the Models tab groups by. */
+const MODEL_SELECTION_SOURCES = new Set<string>(MODEL_SOURCE_ORDER);
 
 export class SettingsModelSelectionController {
   constructor(private readonly deps: SettingsModelSelectionControllerDeps) {}
@@ -174,6 +180,16 @@ export class SettingsModelSelectionController {
     const configs = new Map<string, ModelConfig>(staticModelConfigEntries());
     const candidates = [...configs.values()]
       .filter((config) => config.provider !== ModelProvider.COPILOT)
+      // The Models tab groups rows by `MODEL_SOURCE_ORDER`, so a config whose
+      // resolved source is outside that order can never render as a row.
+      // Admitting it anyway would leak it into the serialized `models` payload
+      // and — once enabled — into the helper-model dropdown, which does not
+      // group. Registry-derived, so a new provider needs no edit here.
+      .filter((config) =>
+        MODEL_SELECTION_SOURCES.has(
+          resolveModelSource(config) ?? config.provider,
+        ),
+      )
       .map((config) => config.name);
     const resolveModelOptions =
       this.deps.resolveModelOptions ?? computeModelOptionsData;
