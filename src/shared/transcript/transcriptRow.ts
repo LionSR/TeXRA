@@ -221,6 +221,9 @@ export interface StatisticsRow extends TranscriptRowBase {
   /** Partial by contract: a run reports only the counters its provider
    *  returned. */
   readonly stats: Partial<ExtendedTokenUsageStats>;
+  /** `Statistics` — the panel heading, owned here so both hosts say the same
+   *  word. Mirrors {@link ContextManagementRow.label}. */
+  readonly label: string;
   readonly items: readonly StatItem[];
 }
 

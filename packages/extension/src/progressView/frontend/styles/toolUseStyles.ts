@@ -31,6 +31,17 @@ export const toolUseStyles = css`
     font-size: var(--font-size-sm);
   }
 
+  /* Single-line facts the model carries beside the output block. */
+  .tool-exit-code {
+    color: var(--color-error);
+    font-size: var(--font-size-sm);
+  }
+
+  .tool-no-output {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+
   :is(.tool-use-error, .banner-details--error)
     > .details-summary
     :is(.tool-use-title, .label, wa-icon),
