@@ -30,7 +30,7 @@ export function ApprovalModal(
       return (
         <BashApproval
           availableRows={availableRows}
-          payload={payload.payload}
+          payload={payload.data}
           onDecide={decide}
         />
       );
@@ -38,7 +38,7 @@ export function ApprovalModal(
       return (
         <EditApproval
           availableRows={availableRows}
-          request={payload.payload}
+          payload={payload}
           onDecide={decide}
         />
       );
@@ -46,7 +46,7 @@ export function ApprovalModal(
       return (
         <PlanApproval
           availableRows={availableRows}
-          payload={payload.payload}
+          payload={payload.data}
           onDecide={decide}
         />
       );
@@ -54,7 +54,7 @@ export function ApprovalModal(
       return (
         <AgentProposal
           availableRows={availableRows}
-          payload={payload.payload}
+          payload={payload.data}
           onDecide={decide}
         />
       );
@@ -62,7 +62,7 @@ export function ApprovalModal(
       return (
         <RetryRequest
           availableRows={availableRows}
-          payload={payload.payload}
+          payload={payload}
           onDecide={decide}
         />
       );
@@ -70,7 +70,7 @@ export function ApprovalModal(
       return (
         <ExternalInquiry
           availableRows={availableRows}
-          payload={payload.payload}
+          payload={payload.data}
           onDecide={decide}
         />
       );
@@ -78,7 +78,7 @@ export function ApprovalModal(
       return (
         <UserQuestion
           availableRows={availableRows}
-          payload={payload.payload}
+          payload={payload.data}
           onDecide={decide}
         />
       );

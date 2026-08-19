@@ -68,6 +68,7 @@ import {
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
+import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -1942,11 +1943,24 @@ if (SHOW_TODOS) {
 }
 
 if (SHOW_EDIT_APPROVAL) {
-  const showApproval = () =>
-    enqueueHarnessApproval(
-      { kind: 'toolEdit', payload: makeEditApprovalRequest() },
+  const showApproval = () => {
+    const request = makeEditApprovalRequest();
+    return enqueueHarnessApproval(
+      {
+        kind: 'toolEdit',
+        data: prepareToolEditApprovalPrompt(defaultSession(), {
+          requestId: 'harness-edit-approval',
+          request,
+          relativePath: request.path,
+        }),
+        tui: {
+          originalContent: request.originalContent,
+          proposedContent: request.proposedContent,
+        },
+      },
       applyHarnessApprovalDecision,
     );
+  };
 
   if (EDIT_APPROVAL_DELAY_MS > 0) {
     globalThis.setTimeout(showApproval, EDIT_APPROVAL_DELAY_MS);
@@ -1960,7 +1974,7 @@ if (SHOW_BASH_APPROVAL) {
     enqueueApproval(
       {
         kind: 'bash',
-        payload: makeBashApprovalPayload(index),
+        data: makeBashApprovalPayload(index),
       },
       { onPresent: () => notify('approvalNeeded') },
     );
@@ -2023,7 +2037,7 @@ if (SHOW_EXTERNAL_INQUIRY) {
   enqueueHarnessApproval(
     {
       kind: 'externalInquiry',
-      payload: {
+      data: {
         requestId: 'harness-external-inquiry',
         mode: 'followUp' as const,
         question: EXTERNAL_INQUIRY_QUESTION,
@@ -2038,21 +2052,21 @@ if (SHOW_EXTERNAL_INQUIRY) {
 
 if (SHOW_USER_QUESTION) {
   enqueueHarnessApproval(
-    { kind: 'userQuestion', payload: makeUserQuestionPayload() },
+    { kind: 'userQuestion', data: makeUserQuestionPayload() },
     applyHarnessApprovalDecision,
   );
 }
 
 if (SHOW_PLAN_APPROVAL) {
   enqueueHarnessApproval(
-    { kind: 'planApproval', payload: makePlanApprovalPayload() },
+    { kind: 'planApproval', data: makePlanApprovalPayload() },
     appendHarnessPlanDecision,
   );
 }
 
 if (SHOW_AGENT_PROPOSAL) {
   enqueueHarnessApproval(
-    { kind: 'proposal', payload: makeAgentProposalPayload() },
+    { kind: 'proposal', data: makeAgentProposalPayload() },
     applyHarnessApprovalDecision,
   );
 }
