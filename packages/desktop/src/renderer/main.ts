@@ -1372,6 +1372,13 @@ const MESSAGE_ROUTES = createMessageRoutes({
   saveAllFiles: () => {
     void editorPane.save();
   },
+  // `refresh()` re-lists from the root and drops the expansion state, which is
+  // the same reset the Files rail already performs each time it is opened —
+  // so this stays consistent with how the pane behaves everywhere else rather
+  // than introducing a second, subtler kind of refresh.
+  reloadWorkspaceFiles: () => {
+    void editorPane.refresh();
+  },
   isBootstrapFailed: () => bootstrapFailed,
   returnToLauncher,
   openKind,
