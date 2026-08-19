@@ -48,7 +48,7 @@ function handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
   multiFiles$.set({ ...multiFiles$.get(), [list.key]: files });
 }
 
-// File-local (not exported): narrows a `CurrentFileType` to `DocumentFileType`
+// File-local (not exported): narrows a current-file value to `DocumentFileType`
 // via the schema itself, so a future addition to `DocumentFileTypeSchema`
 // takes effect here without a matching hand-written literal check.
 const DOCUMENT_FILE_TYPES = new Set<string>(DocumentFileTypeSchema.options);

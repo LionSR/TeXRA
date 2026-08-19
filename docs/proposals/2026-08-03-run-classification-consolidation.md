@@ -236,12 +236,12 @@ gates workflow affordances on `AgentCategory.Workflow`
    `bash.ts:415` (`'process'`) and `runAgent.ts:102` (`config.agentCategory`).
    That is why no execution on disk is ever tagged `workflowScript`.
 3. **The progress-view Resume button relaunches borrowed identity.**
-   `ProgressViewHost.resumeStream` (`ProgressViewHost.ts:62-79`) branches only
+   `resumeStream` (`ProgressViewCommandHandlers.ts:109-133`) branches only
    on `config.agentCategory`; for a workflow-script stream the persisted
    category is `Workflow`, so Resume re-executes the _borrowed default agent's
    config_ as a plain workflow run — not the script. Post-demotion
    bash/codex/claude streams take the same branch. `RESTORE_STATE`
-   (`ProgressViewCommandHandlers.ts:457-459`) similarly pushes a synthetic
+   (`ProgressViewCommandHandlers.ts:575-585`) similarly pushes a synthetic
    bash config into the main-view launcher form.
 
 ### Two prior beliefs that did not survive checking
@@ -712,8 +712,8 @@ _Ephemeral._ **Add:** `ProgressFactApplier` consumes `run.start` identity at
 stream birth; `StreamTabInfo.identity` (struct verbatim, display fields
 beside it); explicit category naming on `StreamMetadata`/`SYNC_STREAM_CONTENT`;
 resume/rerun/restore gated on `identity.kind === 'agent'`
-(`ProgressViewHost.ts:62-88`, `ProgressViewCommandHandlers.ts:457-459` —
-fixes live defect 3).
+(`resumeStream`/`runNewStream`, `ProgressViewCommandHandlers.ts:109-150`;
+`RESTORE_STATE`, `:575-585` — fixes live defect 3).
 **Delete:** `ProgressStreamRunDetails`; the `streamId.split('@')` parse and
 `isProcessAgent` in `buildStreamTabInfo` and `ProgressViewState.ts:320-323`;
 `StreamHeader.ts:521-527` parent-label string parsing; the `?? Workflow`
