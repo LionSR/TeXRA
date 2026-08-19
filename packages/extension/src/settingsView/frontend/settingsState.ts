@@ -61,7 +61,7 @@ import {
   type ToolDashboardItem,
 } from '@shared/schemas';
 import type { SettingsTabPanelName } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 /** Target for the desktop-host "set provider key" modal. */
@@ -211,10 +211,10 @@ export const orchestratorAgents = trackedSignal<string[]>(() => []);
 // ---------------------------------------------------------------------------
 export const reliabilitySettings = trackedSignal<NumberSetting[]>(() => []);
 export const allowOrchestratorKill = settingSignal<boolean>(
-  WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+  GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
 );
 export const detachSubagentsOnStop = settingSignal<boolean>(
-  WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+  GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
 );
 export const childRunConcurrencyBudget = settingSignal<number>(
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,

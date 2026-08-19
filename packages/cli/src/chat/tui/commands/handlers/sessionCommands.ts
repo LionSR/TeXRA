@@ -40,6 +40,7 @@ import {
   isXaiSubscriptionActive,
 } from '@model/providerCapabilities';
 import { formatTexraApprovalPolicy } from '@shared/approvalPolicy';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -94,6 +95,24 @@ export async function showCliWorkPlan(
   finishWorkPlanReaderRequest(request);
 }
 
+/**
+ * Skill names in effect for `streamId`, read straight from the stream log.
+ *
+ * A tool-use run emits one ACTIVE_SKILLS snapshot at prompt-build time, so the
+ * newest entry is the answer; older ones only exist across resumed lifetimes.
+ * Read on demand rather than folded per delta — `/status` is a one-shot
+ * command, and the projected `ConversationEntry[]` deliberately carries no row
+ * for this message type (`projectTranscriptRow`), so the raw log is the source.
+ */
+function activeSkillNamesFor(streamId: string | undefined): readonly string[] {
+  if (streamId === undefined) return [];
+  const entries = defaultSession().transcripts.get(streamId)?.getRange(0) ?? [];
+  const latest = entries.findLast(
+    (entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS,
+  );
+  return latest?.data.skills.map((skill) => skill.name) ?? [];
+}
+
 export async function showCliSessionStatus(
   context: SlashCommandContext,
 ): Promise<void> {
@@ -145,6 +164,7 @@ export async function showCliSessionStatus(
       substate: slice?.substate,
       activeChildSessions,
       goal: activeStreamId ? GoalStore.getForStream(activeStreamId) : undefined,
+      activeSkills: activeSkillNamesFor(activeStreamId),
       // Only surface the resume id once a stream exists — never next to
       // a "not started" status.
       sessionId:

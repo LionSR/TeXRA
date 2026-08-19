@@ -1,5 +1,6 @@
 import { platform } from '@platform/platform';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { warnAbandonedSlotValue } from '@shared/config/settingsAccess';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 /**
  * Whether stopping or killing an agent stream should detach its active child
@@ -28,11 +29,16 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
  * The platform must be initialized before a run can be stopped or killed.
  */
 export function detachSubagentsOnStop(): boolean {
+  warnAbandonedSlotValue(
+    GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+    'workspaceState',
+    platform().workspaceState,
+  );
   // `get<boolean>` casts rather than coerces, so a hand-edited `1` or "true"
   // in the persisted state would otherwise escape as a non-boolean.
   return (
-    platform().workspaceState.get<boolean>(
-      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+    platform().globalState.get<boolean>(
+      GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
       false,
     ) === true
   );

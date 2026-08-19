@@ -20,8 +20,6 @@ export enum WorkspaceStateKey {
   // Agent visibility
   /** Roster selection; the `custom` member carries a category-keyed record. */
   AGENT_ROSTER_SELECTION = 'texra.agentRosterSelection',
-  ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
-  DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',
   CUSTOM_AGENT_PRESETS = 'texra.customAgentPresets',
 
   // Codex settings
@@ -69,6 +67,15 @@ export enum GlobalStateKey {
   CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION = 'texra.cli.bundledAgents.lastKnownVersion',
   MODEL_LIST_VERSION = 'modelListVersion',
   MEMORY_ENABLED = 'texra.memory.enabled',
+
+  // Child-work policy. Global rather than per-workspace: these describe how the
+  // user wants their own child runs handled, not anything about a checkout.
+  // The string values are unchanged from when they lived in
+  // `WorkspaceStateKey`, so a value written before the slot move is still
+  // *findable* in the old store — it is deliberately abandoned there, loudly
+  // (`warnAbandonedSlotValue`), rather than migrated.
+  ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
+  DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',
 
   // Model selection settings
   ENABLED_MODELS = 'enabledModels',

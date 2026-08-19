@@ -595,7 +595,8 @@ export function projectTranscriptRow(
     // ── No row ──────────────────────────────────────────────────────────
     // A compaction lifecycle row is not a row of its own: the correlated
     // block a stream projects from several of them is, via
-    // `compactionActivityRow`. `activeSkills` is stream state, and
+    // `compactionActivityRow`. `activeSkills` is a per-run snapshot read on
+    // demand from the log (the CLI's `/status`), not a transcript row, and
     // `internal` is a durable marker (the workflow-attempt boundary) that
     // nothing renders.
     case MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY:

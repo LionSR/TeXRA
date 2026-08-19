@@ -6,7 +6,10 @@ import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirect
 import { isFileNotFoundError } from '@common/errors';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/shared/workspacePath.js';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { initPlatform } from '@platform/platform';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
@@ -19,6 +22,7 @@ import {
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { UsageLogService } from '@telemetry/UsageLogService';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -151,6 +155,43 @@ export async function initializeElectronPlatform(
   // TeXRA's account plane (ChatGPT / Grok sign-in). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes();
+
+  // Route desktop model traffic to the same Supabase usage log the extension
+  // and CLI write to, tagged with editorType 'desktop' and the app version.
+  // Without this call the 30 s flush cadence never starts and every entry
+  // carries an undefined host/version, so a queue shorter than one batch is
+  // lost at quit — including plan accounting. `dispose()` drains it, from the
+  // same BEFORE phase the other two hosts use.
+  UsageLogService.initialize({}, app.getVersion(), 'desktop');
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
+
+  // Reconcile the persisted enabled-models list against the current curated
+  // defaults, as the extension and CLI hosts do at startup. Preferred defaults
+  // reconcile when MODEL_LIST_VERSION changes; retired entries and stale
+  // Copilot route preferences are swept on every startup. Runs here so it is
+  // upstream of the settings view's first model-list paint.
+  try {
+    const { added, removed, reordered, routePreferencesCleared } =
+      await refreshModelListStateIfNeeded(globalStateStore);
+    const changed = added.length > 0 || removed.length > 0 || reordered;
+    if (changed || routePreferencesCleared.length > 0) {
+      invalidateModelOptionsCache();
+      if (changed) {
+        console.info(
+          `[desktop] Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
+        );
+      }
+      if (routePreferencesCleared.length > 0) {
+        console.info(
+          `[desktop] Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
+        );
+      }
+    }
+  } catch (error) {
+    console.error(
+      `[desktop] Failed to refresh model list: ${toErrorMessage(error)}`,
+    );
+  }
 
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected. Mirrors the

@@ -52,6 +52,24 @@
 > by **deleting** the CLI's ACTIVE_SKILLS handling, so the CLI can no longer
 > observe active skills at all.
 
+> **Reconciled again (2026-08-19, origin/main `82cc8b089d`).** **V2 LANDED** —
+> `initializeElectronPlatform` now calls `UsageLogService.initialize({},
+app.getVersion(), 'desktop')` with a BEFORE-phase `dispose()`, and
+> `refreshModelListStateIfNeeded` against the desktop `globalState`. **The
+> "no production caller on any host" escalation below is REFUTED**: at HEAD
+> `refreshModelListStateIfNeeded` had two live production callers
+> (`packages/extension/src/extension.ts`, `packages/cli/src/runtime/initPlatform.ts`)
+> and no commit in available history removed either. The entry's original
+> desktop-only framing was correct; read the escalation as an error of method
+> (a `src/`-only grep). **C13b RESOLVED, and the premise it rested on was
+> half-wrong**: the extension folded ACTIVE_SKILLS into
+> `StreamState.activeSkills`, but _nothing rendered that field either_ — three
+> hosts, zero renderers. Rather than restoring a shared derivation between one
+> live and one dead consumer, the fact now has one owner and one surface: the
+> CLI's `/status` reads the newest ACTIVE_SKILLS entry straight from the stream
+> log and prints a `skills:` line, and the extension's reader-less fold plus
+> the `activeSkills` field on `ToolUseStreamStateSchema` are deleted.
+
 > **Follow-up:** the maintainer subsequently ruled for maximal consolidation
 > ("same data structure, UI rendered differently, collapse
 > projectors/adapters/bridges, single source of truth"). The target
@@ -153,10 +171,13 @@ is withdrawn** (see the row). C20 **LANDED #10932** (the "zero CLI callers"
 claim is now false: `streamViews.ts:124` calls `buildStreamTabInfo`; residual
 ad-hoc `getRuntimeModelLabel` calls survive in four CLI files). C13a **OPEN**
 — three live copies, `isEmptyUsage` still with zero host importers. C13b
-**RESOLVED BY DELETION, flag it** — the CLI's two ACTIVE_SKILLS sites went with
-the Wave A slice retype (#10895) rather than converging on a shared
-`latestActiveSkills`, so the CLI cannot observe active skills at all; that is a
-capability regression to triage, not a consolidation. C13c **OPEN**. C17
+**RESOLVED 2026-08-19** — the CLI's two ACTIVE_SKILLS sites went with the Wave
+A slice retype (#10895) rather than converging on a shared
+`latestActiveSkills`, leaving the CLI unable to observe active skills at all.
+Triaged as the capability regression it was, and fixed by giving the fact one
+owner and one surface (CLI `/status` reads the log directly; the extension's
+reader-less fold and `StreamState.activeSkills` are deleted) — see the row.
+C13c **OPEN**. C17
 **OPEN** — the counts still are not on `ToolEditApprovalRequest` and
 `DiffView.statsFromHunks` still recomputes. C22 **PARTIAL #10892 — and now
 three representations, not two**: `startedAt` shipped and the CLI ticks from
@@ -218,7 +239,14 @@ longer exists; the live owner is `src/shared/streams/streamContentSync.ts`.
   - _ACTIVE_SKILLS last-entry-wins_: three sites, two hosts
     (`logSlice.ts:100-112`, `subscribeStreamLog.ts:388-393`,
     `transcriptFold.ts:1057-1066`). → shared `latestActiveSkills(entries)`.
-    **Net:** ~−25 L.
+    **Net:** ~−25 L. **RESOLVED 2026-08-19, not as written.** The shared
+    helper was not built: after #10895 deleted the CLI's two sites, the only
+    remaining fold (the extension's) wrote a field with no renderer, so a
+    "shared derivation consumed by both hosts" would have had one live
+    consumer and one dead one — a single-caller extraction. Instead the fact
+    got one owner and one surface: the CLI's `/status` reads the newest
+    ACTIVE_SKILLS entry from the stream log directly, and the extension's fold
+    and `StreamState.activeSkills` are deleted.
   - _Transcript-row membership_: the extension's drop rule
     (`logSlice.ts:149` + suppression list) and the CLI's
     `TRANSCRIPT_MESSAGE_TYPES` sets (`transcriptFold.ts:96-134,846-877`)
@@ -580,8 +608,10 @@ and not in the catalog. Everything else — V1, V2, V5, V6, V7, V10, V11 — is
 the relay retirement removed the mitigation this entry relied on: `UsageMonitor`
 no longer force-flushes per relay round, so on desktop any queue under ten
 entries is now silently dropped at quit, including plan accounting.
-`refreshModelListStateIfNeeded` is a stronger finding than the entry claims: it
-has **no production caller on any host**.
+~~`refreshModelListStateIfNeeded` is a stronger finding than the entry claims:
+it has **no production caller on any host**.~~ **REFUTED 2026-08-19** — two
+live production callers (`extension.ts`, CLI `initPlatform.ts`); the gap was
+desktop-only, as the entry originally said, and is now closed.
 
 **V5's harm changed, and the entry's framing with it.** The 120 s stale horizon
 this entry cites is gone — #10778 replaced heartbeat liveness with
@@ -647,8 +677,9 @@ login` does not sign in the GUI hosts and vice-versa. Ruling: is
     cross-host single sign-on a goal? If yes, this is a keychain-backed
     shared-store design note; if no, fence it and say so in `texra login`
     help.
-- **V2. Desktop telemetry is partially initialized.** _(Narrowed twice on
-  review/verification — "dead" overstated it.)_ The catalog row declares
+- **V2. Desktop telemetry is partially initialized.** **LANDED 2026-08-19** —
+  both calls now sit in `initializeElectronPlatform`, in the CLI's ordering.
+  _(Narrowed twice on review/verification — "dead" overstated it.)_ The catalog row declares
   `hosts: ['vscode','desktop']` (`stateSettings.ts:881-890`), the desktop
   renders + persists the toggle (`desktopSettingsIpc.ts:248`), and the
   toggle DOES gate collection (`log()` checks the setting per entry).
@@ -662,7 +693,9 @@ login` does not sign in the GUI hosts and vice-versa. Ruling: is
   desktop never calls `refreshModelListStateIfNeeded` at startup (ext
   `extension.ts:385`, CLI `initPlatform.ts:298`), so retired-model sweeps and
   stale Copilot-route clears never run there. Both are FS-class
-  (advertised-toggle-no-ops); both are plain wiring fixes.
+  (advertised-toggle-no-ops); both are plain wiring fixes. This paragraph — the
+  desktop-only framing — is the one that held up; the later escalation to
+  "no production caller on any host" did not.
 - **V3. Two contradicting SSOTs for "which host honors setting X".**
   `CLI_CORE_SETTING_PATHS` (`coreSettings.ts:508-562`) vs
   `STATE_SETTINGS[].hosts`: `toolUse.requireEditApproval` /
@@ -992,7 +1025,7 @@ Band 1 items are independent, PR-sized, and net-negative; Band 2 items each
 start with a one-paragraph ruling (several are recorded above as plain bugs
 needing none). Suggested order:
 
-1. **Plain bugs, no ruling** — V2 (desktop
+1. **Plain bugs, no ruling** — V2 **LANDED 2026-08-19** (desktop
    `UsageLogService.initialize` + `refreshModelListStateIfNeeded`), §4i
    (silent CLI render failures), §4k (math patterns + tests), V1a's missing
    host argument at `desktopSettingsIpc.ts:258`.
