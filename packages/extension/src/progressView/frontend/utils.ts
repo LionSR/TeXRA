@@ -3,18 +3,15 @@
 import type { StreamTabInfo } from '@shared/schemas';
 
 /**
- * The single accessor for a stream's user-facing display label. Every
- * `StreamTabInfo.label` is guaranteed non-empty by `buildStreamTabInfo()`
- * (`src/controllers/session/streamTabInfo.ts`) — this function exists so no
- * call site is tempted to add its own `?? info.name` / `?? streamId`
- * fallback on top of it. `.label` itself may still equal the stream's own
- * opaque id for a stream whose identity hasn't resolved yet — deliberately:
- * that id's prefix already is the clean agent name (`getStreamTabId()`,
- * `src/agent/runtime/streamTab.ts`), so it's the best available label, not a
- * fallback to avoid. Returns undefined only when there's no entry to read
- * from at all (e.g. a lookup by id came back empty because that stream's
- * tab was evicted) — callers decide their own placeholder or omit the label
- * entirely.
+ * The single accessor for a stream's user-facing display label.
+ * `buildStreamTabInfo()` normally supplies the cleaned identity name, and may
+ * deliberately use the stream's opaque id while identity is unresolved. The
+ * schema still permits an empty string, for example from a custom identity
+ * with no name after its source prefix, so a surface that requires non-empty
+ * copy must provide its own available fallback. Returns undefined only when
+ * there's no entry to read from at all (for example, a lookup by id came back
+ * empty because that stream's tab was evicted); callers decide their own
+ * placeholder or omit the label entirely.
  */
 export function streamDisplayLabel(info: Pick<StreamTabInfo, 'label'>): string;
 export function streamDisplayLabel(

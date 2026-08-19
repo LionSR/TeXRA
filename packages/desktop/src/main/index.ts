@@ -818,7 +818,10 @@ function createWindow(options: {
       onCredentialChanged: async () => {
         await onboardingIpcRef.current?.refreshOnboardingFunnel();
       },
-      onError: reportAsyncError,
+      // Credential operations already show their specific failure dialog. Keep
+      // the shared callback log-only so one failure never opens a second,
+      // generic desktop-operation dialog.
+      onError: reportBackgroundError,
     });
   const toolingSettingsController = new DefaultDesktopToolingSettingsController(
     {
