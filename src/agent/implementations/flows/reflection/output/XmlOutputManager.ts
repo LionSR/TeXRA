@@ -22,6 +22,7 @@ import {
   DOCUMENT_NAME_REGEX,
   extractContentFromXMLbyTagMultiple,
   extractDocuments,
+  extractTextFromTag,
 } from '@utils/text/xmlExtraction';
 
 import {
@@ -309,14 +310,26 @@ export class XmlOutputManager {
       }
     }
 
-    if (!documents && soleExpectedFile) {
+    // A response that carries an explicit <latex_document> has named its final
+    // answer, and an untagged fence has not — a model may well emit an example
+    // or a draft fence before the tagged answer. So the tagged tier below wins
+    // outright and this one stands down, exactly as it did before fence
+    // recovery moved here. Reads the raw response, which agrees with the
+    // cdataWrapped text the tagged tier parses: addCdataToTagsMultiple only
+    // wraps the thinking and document tags, never <latex_document>.
+    const taggedLatexDocument = extractTextFromTag(
+      rawOutputContent,
+      'latex_document',
+    );
+
+    if (!documents && soleExpectedFile && !taggedLatexDocument) {
       // This fully unlabeled tier is intentionally stricter than
       // filename-header recovery: without a trusted file label, only fences
-      // explicitly marked latex/tex are treated as output. It owns every
-      // fenced-block recovery, including the single-block case, because it is
-      // the only reader that strips the thinking tag first — a scratchpad
-      // that drafts inside a ```latex fence would otherwise be written to the
-      // user's file as if it were the answer.
+      // explicitly marked latex/tex are treated as output. It handles the
+      // single-block case too (rather than leaving it to the legacy tier)
+      // because it strips the thinking tag first — a scratchpad that drafts
+      // inside a ```latex fence would otherwise be written to the user's file
+      // as if it were the answer.
       const fencedBlocks = this.collectLatexFencedBlocks(
         rawOutputContent,
         thinkingTag,

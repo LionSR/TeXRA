@@ -193,8 +193,9 @@ export interface MultipleExtractionResult {
  * function reads the whole response including the model's thinking tag, so a
  * fence inside the scratchpad would win over the real answer. Fence recovery
  * belongs to `collectLatexFencedBlocks`, which strips the thinking tag first
- * and parses fences per CommonMark; `XmlOutputManager` runs that tier before
- * this one.
+ * and parses fences per CommonMark. `XmlOutputManager` runs that tier ahead of
+ * this one, except when the response carries an explicit <latex_document>:
+ * a tagged final answer outranks an untagged fence, so this tier keeps it.
  *
  * @param outputContent The raw output content to extract from
  * @param containerTag The container tag to look for documents within
