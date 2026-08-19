@@ -242,6 +242,9 @@ export const streamLifecycleHandlers = {
         } else {
           delete draft.substate;
         }
+        if (status !== STREAM_PHASE.RUNNING) {
+          delete draft.runStartedAt;
+        }
         draft.lastTimestamp = lastTimestamp ?? current.lastTimestamp;
         if (isToolUseState(current) && shouldFocus) {
           (draft as typeof current).ui.shouldFocusFollowUp = true;
