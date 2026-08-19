@@ -31,7 +31,6 @@ import {
   firstChangedLine,
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { pluralize } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ToolEditApproval';
@@ -61,10 +60,6 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
       context,
       staged,
     );
-  }
-
-  relativeDisplayPath(filePath: string): string {
-    return vscode.workspace.asRelativePath(WorkspaceFS.fullPath(filePath));
   }
 
   async revealApprovalSurface(): Promise<void> {
