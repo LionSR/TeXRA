@@ -143,7 +143,7 @@ import {
 } from './fileRequests';
 import { createMessageRoutes } from './messageRoutes';
 
-const appRoot = document.querySelector<HTMLElement>('#app');
+const appRoot = document.querySelector<HTMLElement>('#app')!;
 
 if (appRoot == null) {
   throw new Error('TeXRA desktop renderer root was not found.');
