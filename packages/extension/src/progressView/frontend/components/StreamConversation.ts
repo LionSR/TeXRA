@@ -6,7 +6,10 @@ import { provide } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared
-import type { InquiryThreadUpdatedEvent } from '@shared/schemas';
+import type {
+  InquiryThreadUpdatedEvent,
+  PermissionPayload,
+} from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 
 // Local imports - progress view
@@ -38,7 +41,6 @@ import {
   type StreamContextValue,
   type StreamLogContextValue,
 } from '../streamContexts';
-import type { PermissionState } from '../permissionState';
 
 // Side-effect imports - body components rendered below.
 import './ToolUseStreamContent';
@@ -90,7 +92,7 @@ export class StreamConversation extends SignalWatcher(LitElement) {
 
   @provide({ context: permissionsContext })
   @state()
-  private permissionsContextValue: PermissionState[] = [];
+  private permissionsContextValue: PermissionPayload[] = [];
 
   @provide({ context: streamByIdContext })
   @state()

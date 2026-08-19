@@ -8,7 +8,10 @@
 import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ProgressViewOutboundHandlerRegistry } from '@shared/schemas';
+import type {
+  PermissionPayload,
+  ProgressViewOutboundHandlerRegistry,
+} from '@shared/schemas';
 import { deriveGoalState } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
@@ -16,7 +19,7 @@ import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { clearInquiryDraft } from './inquiryDraftState';
 import { permissions$ } from '../progressState';
 import { goalToStateFields, updateToolUseState } from '../stateUtils';
-import { permissionId, type PermissionState } from '../permissionState';
+import { permissionId } from '../permissionState';
 
 // ============================================================
 // Module state
@@ -48,7 +51,7 @@ export function addResolvedProposalId(id: string): void {
  * to preserve ordering. Otherwise prepend as a new permission.
  */
 function upsertProposalPermission(
-  permission: PermissionState & { kind: typeof PERMISSION_KIND.PROPOSAL },
+  permission: Extract<PermissionPayload, { kind: 'proposal' }>,
 ): void {
   const permissions = permissions$.get();
   const idx = permissions.findIndex(
@@ -66,7 +69,7 @@ function upsertProposalPermission(
 }
 
 export function removePrompt(
-  kind: PermissionState['kind'],
+  kind: PermissionPayload['kind'],
   idValue: string,
 ): boolean {
   const current = permissions$.get();
@@ -122,12 +125,7 @@ export const permissionHandlers = {
       if (permission.kind === PERMISSION_KIND.PROPOSAL) {
         // Drop if this proposal was already resolved (out-of-order messages)
         if (resolvedProposalIds.delete(permission.data.requestId)) return;
-        upsertProposalPermission({
-          kind: PERMISSION_KIND.PROPOSAL,
-          data: permission.data,
-          modelOptions: permission.modelOptionsData,
-          agentOptions: permission.agentOptionsData,
-        });
+        upsertProposalPermission(permission);
       } else {
         // Prepend newest permissions so keyboard shortcuts target the latest request.
         // Deduplicate by id to prevent duplicate UI when replay() re-sends
