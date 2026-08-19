@@ -99,7 +99,7 @@ export class VerifySetupTool extends defineTool({
       credSummary =
         'signed in but no provider API key is configured. Add one to run models';
     } else {
-      credSummary = 'NONE: need an API key or sign-in';
+      credSummary = 'NONE: need a provider API key or a provider subscription';
     }
     lines.push(`Credentials: ${credSummary}.`);
 

@@ -208,7 +208,7 @@ async function checkAuth(
       'auth',
       'TeXRA account',
       'Not signed in.',
-      'Run `texra login` for the hosted research-agent catalog, or add a provider API key with `texra setup`.',
+      'Run `texra login` for the hosted research-agent catalog. For model access, add a provider API key with `texra setup`.',
     );
   } catch (error) {
     return failFromError(

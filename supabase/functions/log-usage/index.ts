@@ -4,7 +4,7 @@
  * Receives batched usage entries from the TeXRA extension and stores them
  * via service-role RPCs, which aggregate per-stream so the tables grow by run
  * rather than by round. Subscription-backed usage is kept in a separate table
- * from paid relay/API-key usage.
+ * from paid API-key usage.
  *
  * Authentication: JWT token in Authorization header (Bearer {jwt})
  *

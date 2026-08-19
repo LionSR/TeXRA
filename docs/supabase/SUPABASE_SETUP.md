@@ -210,10 +210,11 @@ Go to **SQL Editor** in Supabase dashboard and run this SQL:
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Profiles table (user metadata)
--- tier: internal tier names for future API key access
---   'free' - default, no API key access
---   'Max' - research access program members (researchers, academics)
---   'Ultra' - special sponsors who engaged with TeXRA development
+-- tier: vestigial — dates from when the tier gated included model access.
+--   Included model access is discontinued (model calls now always use the
+--   user's own API keys or a provider subscription), so no edge function
+--   reads this column anymore. Left in place, not dropped, in case a future
+--   feature needs it; do not gate anything on it.
 -- permissions: array of visibility values user can access (e.g., 'researcher', 'math', 'cs')
 CREATE TABLE profiles (
   user_id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
@@ -225,6 +226,8 @@ CREATE TABLE profiles (
 );
 
 -- Remote agents metadata table
+-- Hosted remote-agent catalog access is gated by `visibility` below plus RLS
+-- (see get-agent-config), not by profiles.tier.
 -- visibility: array of group names that can access the agent (e.g., ARRAY['math', 'cs'])
 -- agent_category: 'workflow' (multi-turn) or 'toolUse' (single-turn with tools)
 -- tools: cached tool names from YAML for tool-use agents (e.g., ARRAY['web_search', 'arxiv_search'])
@@ -669,7 +672,8 @@ That's it! No Supabase URLs, API keys, or other configuration.
 
 - Verify agent exists in `remote_agents` table
 - Check that `storage_path` matches the actual file in storage
-- Ensure user has correct tier or is whitelisted
+- Ensure the user's account is covered by the agent's `visibility` groups (or
+  otherwise permitted by RLS) — see `get-agent-config`
 
 ### Edge Function Not Working
 
@@ -694,7 +698,6 @@ That's it! No Supabase URLs, API keys, or other configuration.
 - [ ] Set up automated backups in Supabase
 - [ ] Configure additional OAuth providers (Google, GitLab)
 - [ ] Create admin dashboard for managing users and agents
-- [ ] Implement usage quotas and rate limiting
 - [ ] Add email notifications for important events
 
 ---

@@ -935,7 +935,7 @@ function createWindow(options: {
         const message = await buildDesktopSetupExecuteMessage();
         if (!message) {
           await showErrorMessage(
-            'No model is available for your current credentials. Sign in with ChatGPT, add a provider API key, or check your Researcher Access tier, then try setup again.',
+            'No model is available for your current credentials. Sign in with ChatGPT or Grok, or add a provider API key, then try setup again.',
           );
           // Throw so the onboarding IPC clears its kickoff guard and a later
           // credential change can re-trigger the auto-start.

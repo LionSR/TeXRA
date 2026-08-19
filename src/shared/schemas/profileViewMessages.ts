@@ -16,9 +16,9 @@ import { commandOnly } from './messageFactories';
 // ============================================================
 
 /**
- * Defaults for prefaulted UPDATE_PROFILE fields, exported so the settings
- * frontend's pre-hydration state can share them instead of restating the
- * literals.
+ * Default for the prefaulted UPDATE_PROFILE streaming field, exported so the
+ * settings frontend's pre-hydration state can share it instead of restating
+ * the literal.
  */
 export const DEFAULT_GLOBAL_STREAMING = true;
 

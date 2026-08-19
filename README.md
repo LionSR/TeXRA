@@ -26,23 +26,23 @@ npm install -g @texra-ai/cli
 brew install texra-ai/tap/texra
 ```
 
-Sign in with GitHub or Google for hosted access (no key management
-required), or set `<PROVIDER>_API_KEY` to use your own credentials.
+Set `<PROVIDER>_API_KEY` to use your own provider credentials, or connect a
+provider subscription (ChatGPT, Grok, Kimi Code, GLM Coding Plan) — see
+[Models](#models) below.
 
-### Researcher Access Program
+### Hosted Remote Agents
 
-Academic researchers can sign in for complimentary hosted access to
-a curated set of budget-friendly models — enough to run the
-Orchestrator and the full roster of hosted specialists on real work,
-without managing provider keys or paying per-token rates. Sign in
-through the Profile view in VS Code, or `texra login` in the
-terminal.
+Sign in with GitHub or Google — through the Profile view in VS Code, or
+`texra login` in the terminal — to unlock the hosted remote-agent catalog:
+`orchestrator`, `search`, `simplifier`, and the rest of the hosted
+specialists, ready to run without installing or configuring anything
+locally. It covers the hosted agent catalog only — remote agents run on the
+same credential as your built-in agents, your own provider API key or a
+provider subscription. Sign-in does not supply model access on its own.
 
-The program is sustained by the community. If TeXRA helps your
-research, consider supporting it via
+If TeXRA helps your research, consider supporting its development via
 [GitHub Sponsors](https://github.com/sponsors/texra-ai) or
-[Buy Me a Coffee](https://buymeacoffee.com/texra.ai) to keep it open
-for everyone.
+[Buy Me a Coffee](https://buymeacoffee.com/texra.ai).
 
 ## Run
 
@@ -104,6 +104,10 @@ or any OpenAI-compatible endpoint. Each agent in a team can run a
 different model — pair a flagship reasoner for orchestration with
 cheaper, faster models for routine sub-tasks.
 
+Already paying for ChatGPT or Grok? Connect the subscription instead of
+managing a key — Kimi Code and the GLM Coding Plan also run on a
+subscription, authenticated with a plan-specific key.
+
 In the extension, run **`TeXRA: Set API Key`** (stored in VS Code's
 encrypted SecretStorage) or add a workspace `.env`:
 
@@ -113,8 +117,13 @@ ANTHROPIC_API_KEY=…
 GOOGLE_API_KEY=…
 ```
 
-In the CLI, export the same variables in your shell and run with
-`--api-mode personal`.
+In the CLI, export the same variables in your shell — they're picked up
+automatically — or connect a subscription:
+
+```sh
+texra auth chatgpt login    # Codex models through your ChatGPT plan
+texra auth grok login       # Grok models through an xAI subscription
+```
 
 ## Requirements
 

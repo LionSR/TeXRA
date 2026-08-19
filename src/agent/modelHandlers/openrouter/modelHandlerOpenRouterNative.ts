@@ -210,8 +210,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
     // Reasoning configuration:
     // OpenRouter SDK serializes `reasoning.effort` but not `reasoning.enabled`.
-    // Use getEffectiveReasoningEffort() for tier-based restrictions (e.g. GPT-5
-    // xhigh capped to high for Max-tier users on server-side keys).
+    // getEffectiveReasoningEffort() returns the user's configured effort (or
+    // null); toOpenRouterReasoningEffort() below then maps 'max' down to
+    // 'xhigh' unless the model's declared ceiling
+    // (getDeclaredMaxReasoningEffort) is itself MAX.
     if (this.capabilities.supportsReasoning) {
       const effective = this.capabilities.supportsReasoningEffort
         ? (this.getEffectiveReasoningEffort() ?? 'low')

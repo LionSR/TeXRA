@@ -224,10 +224,8 @@ export async function runChat(
     writeTextStderr(agentUsageError);
     return { exitCode: CliExitCode.Usage };
   }
-  // One API mode for the whole session: an explicit --api-mode/env override
-  // wins, otherwise the persisted account default. Model resolution, the
-  // no-models hints, and the header/status all read this same value so they can
-  // never disagree.
+  // Model resolution, the no-models hints, and the header/status all read this
+  // same value so they can never disagree.
   let modelSelection: CliRunnableModelResolution;
   try {
     modelSelection = await selectCliRunnableModel(defaults.model, {

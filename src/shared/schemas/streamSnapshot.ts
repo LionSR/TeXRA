@@ -128,10 +128,12 @@ export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
   executionId: ExecutionIdSchema.optional(),
   parentStreamId: StreamTabIdSchema.optional(),
   /**
-   * Legacy sidecar mirror only (#9590 Stage 6): current records carry their
-   * description on `ExecutionMeta.description` (A4), which display readers use
-   * — e.g. the trace viewer reads `trace.meta.description`. Populated here
-   * only from a legacy sidecar that still holds the retired mirror field.
+   * LIVE, not compat residue — do not delete. The authority is
+   * `ExecutionMeta.description` (#9590 A4), and this is its in-memory
+   * projection, set by the `updateStreamDescription` session event or by
+   * load-time hydration (see `StreamSnapshotStore`). The stream sidecar
+   * carries no description field at all — that mirror was retired early — so
+   * nothing reaches this field off disk.
    */
   description: z.string().optional(),
 

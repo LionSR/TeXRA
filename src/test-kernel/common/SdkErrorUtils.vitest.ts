@@ -872,7 +872,6 @@ describe('provider error schemas', () => {
     const errorLog = ErrorLogDataSchema.parse({
       message: 'old persisted error',
       retryable: false,
-      isRelayError: false,
     });
     const retryInfo = RetryErrorInfoSchema.parse({
       message: 'old retry state',

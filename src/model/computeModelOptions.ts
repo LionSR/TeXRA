@@ -509,8 +509,8 @@ const EXPLICIT_MODELS_CACHE_PREFIX = 'models:';
 
 /**
  * TTL-based cache for computeModelOptionsData.
- * Avoids redundant async work (SecretManager + server-side key checks)
- * when multiple callers request model options in quick succession.
+ * Avoids redundant async work (SecretManager checks) when multiple callers
+ * request model options in quick succession.
  *
  * State is split into resolved data vs in-flight promise to avoid
  * sentinel values (like `data: []`) that could leak to callers.
@@ -533,7 +533,7 @@ export function invalidateModelOptionsCache(): void {
  * When `models` is provided, the caller's view of the visible-models list is
  * honored verbatim. Explicit lists are cached by their exact ordered contents,
  * so alternate global-state views stay isolated while repeated settings/CLI
- * refreshes do not redo secret and server-side key checks.
+ * refreshes do not redo secret checks.
  *
  * Passing `access` computes directly from that dependency snapshot and skips
  * the shared TTL cache. Use it when the caller owns access-state freshness,

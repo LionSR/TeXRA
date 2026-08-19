@@ -985,7 +985,7 @@ describe('CLI root argument routing', () => {
     });
 
     expect(formatCliModelListError(error)).toBe(
-      'texra: could not fetch model access metadata from remote.texra.ai: getaddrinfo ENOTFOUND remote.texra.ai',
+      'texra: could not reach TeXRA account services: getaddrinfo ENOTFOUND remote.texra.ai',
     );
   });
 

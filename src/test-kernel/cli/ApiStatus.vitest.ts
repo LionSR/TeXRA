@@ -41,7 +41,7 @@ describe('CLI API status text', () => {
     [
       { authenticated: false },
       undefined,
-      'actions: choose Model access below, add a provider key, or sign in with Researcher Access',
+      'actions: choose Model access below, or add a provider key',
     ],
     [
       { authenticated: false },

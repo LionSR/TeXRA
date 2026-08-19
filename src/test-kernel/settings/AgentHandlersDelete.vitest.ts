@@ -35,7 +35,7 @@ vi.mock('@agent/remote/remoteAgentConfigClient', () => ({
   fetchRemoteAgentConfigYaml: vi.fn(),
 }));
 vi.mock('@auth/SupabaseClient', () => ({
-  SupabaseClient: { getAccessToken: vi.fn(), getUserTier: vi.fn() },
+  SupabaseClient: { getAccessToken: vi.fn() },
 }));
 vi.mock('@common/state', () => ({ globalSM: {}, workspaceSM: {} }));
 vi.mock('@common/teams/TeamRosterApplication', () => ({

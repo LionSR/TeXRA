@@ -114,9 +114,10 @@ export class ProbeEnvironmentTool extends defineTool({
           (key) => key.origin === 'secret' || key.origin === 'env',
         ),
         // `hasAnyUsableCredential` is the broader "can setup launch a
-        // model right now" signal — direct key, ChatGPT subscription,
-        // or server-side Researcher Access. Kept as a separate field
-        // so the agent can reason about API keys separately.
+        // model right now" signal — a direct provider API key or a
+        // provider subscription (ChatGPT/Codex, Grok). Kept as a
+        // separate field so the agent can reason about API keys
+        // separately.
         hasAnyUsableCredential: credentialReadiness.available,
         usableCredentialStatus: credentialReadiness.status,
         apiKeys,
@@ -154,17 +155,19 @@ export class ProbeEnvironmentTool extends defineTool({
     if (summary.credentials.chatGptSubscription.enabled) {
       creds.push('ChatGPT subscription enabled');
     }
-    if (summary.credentials.researcherAccess.authenticated)
-      creds.push('signed in');
     if (
       summary.credentials.hasAnyUsableCredential &&
       !summary.credentials.anyApiKeySet &&
-      !summary.credentials.researcherAccess.authenticated &&
       !summary.credentials.chatGptSubscription.enabled
     ) {
       creds.push('usable credential');
     }
     parts.push(`credentials: ${creds.length > 0 ? creds.join(' + ') : 'none'}`);
+    // Account sign-in is reported apart from credentials: it unlocks the
+    // hosted agent catalog, never model access.
+    parts.push(
+      `TeXRA account: ${summary.credentials.researcherAccess.authenticated ? 'signed in' : 'signed out'}`,
+    );
     const headline = parts.join('; ');
 
     return executed(

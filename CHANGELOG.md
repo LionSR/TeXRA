@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### Breaking Changes
+
+- **Included model access is discontinued** — the Researcher Access
+  model-access tier (complimentary hosted models) has been removed. Model
+  calls now always use your own provider API keys or a provider subscription
+  (ChatGPT, Grok, Kimi Code, GLM Coding Plan). Signing in to TeXRA still
+  unlocks the hosted research-agent catalog — it no longer grants model
+  access on its own.
+
 #### Features
 
 - **Export a conversation from the progress toolbar** — Markdown, HTML, and
@@ -44,6 +53,13 @@ All notable changes to this project will be documented in this file.
   also no longer drop a request's body, headers, or cancellation.
 
 ### Extension (VS Code) and Desktop
+
+#### Breaking Changes
+
+- **The Settings → Account model-access picker and quota meter are removed**
+  — with included model access discontinued, the extension no longer shows a
+  hosted-model picker or a usage quota meter. Configure a provider API key or
+  connect a provider subscription in the Models tab instead.
 
 #### Bug Fixes
 
@@ -108,6 +124,14 @@ All notable changes to this project will be documented in this file.
   leftover servers from earlier worktrees.
 
 ### CLI
+
+#### Breaking Changes
+
+- **Included model access is removed from the CLI** — the `--api-mode` flag
+  and the `/api included` option are gone; `--api-mode` now errors. The
+  `texra setup-token` and `texra auth token` commands are also removed. Use
+  your own provider API keys or `texra auth <provider> login` for a
+  supported subscription.
 
 #### Features
 

@@ -90,8 +90,7 @@ function warnOnboardingFailure(action: string, error: unknown): void {
   logWarning(LOG_CHANNEL, `${action} failed: ${toErrorMessage(error)}`);
 }
 
-const SKIP_SUMMARY =
-  "Setup skipped — run `texra login` or `texra setup` when you're ready.";
+const SKIP_SUMMARY = "Setup skipped — run `texra setup` when you're ready.";
 
 // Fits the current 30-column onboarding action labels without truncation.
 const ONBOARDING_SELECT_LABEL_MAX_COLS = 34;
@@ -143,9 +142,8 @@ export async function maybeRunCliOnboarding(
         },
       )
     : false;
-  // LAST_KNOWN_VERSION is stamped by desktop/extension startup. The CLI's
-  // API-mode preference is written during platform init, including first launch,
-  // so it is not a reliable prior-install signal.
+  // LAST_KNOWN_VERSION is stamped by desktop/extension startup, so its
+  // presence is the prior-install signal for a CLI-only fresh install.
   const hasPriorInstall =
     needsFirstRunBackfill &&
     globalState.get<string | undefined>(GlobalStateKey.LAST_KNOWN_VERSION) !==

@@ -24,6 +24,10 @@ export const UsageRouteSchema = z.enum([
   'xai-subscription',
   'kimi-code-subscription',
   'glm-coding-plan-subscription',
+  /** LEGACY: the relay route. Producers were removed 2026-08
+   *  (docs/proposals/2026-08-18-relay-removal-and-recovery.md); the member
+   *  stays so persisted usage records can still be reparsed. Delete after
+   *  2026-11. */
   'relay',
   'api-key',
 ]);

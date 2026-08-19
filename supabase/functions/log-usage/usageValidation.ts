@@ -15,9 +15,13 @@ const UsageRouteSchema = z.enum([
   'glm-coding-plan-subscription',
   'kimi-code-subscription',
   'xai-subscription',
-  // 'relay' and `usedRelay` below are legacy wire tolerance: relay producers
-  // were removed 2026-08 (docs/proposals/2026-08-18-relay-removal-and-recovery.md)
-  // but released clients still report them. Delete after 2026-11.
+  // PERMANENT, not dated. Relay producers were removed 2026-08
+  // (docs/proposals/2026-08-18-relay-removal-and-recovery.md), but this is a
+  // released wire format and already-installed clients keep reporting it.
+  // `UsageBatchSchema` validates a batch whole, so dropping this member would
+  // reject an old client's ENTIRE batch — its valid entries included — and
+  // that telemetry is gone (the rejection is returned non-retryable). Retire
+  // only behind a minimum-supported-client gate, never on a calendar date.
   'relay',
   'api-key',
 ]);

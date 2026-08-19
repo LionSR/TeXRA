@@ -13,9 +13,12 @@ import {
   SETUP_INSTRUCTION,
 } from '@controllers/onboarding/setupLaunch';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
+import { signInWithGrokSubscription } from '@frontend/auth/xaiSubscriptionSignIn';
 import { createLog } from '@logger/logUtils';
+import { hasUsableApiKey } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
+import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { agentName } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
@@ -76,11 +79,37 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
  * Pre-flight uses the shared host-neutral predicate (adapter-level checks, so
  * blank env keys do not count as credentials and then fail later as "No model
  * is available") so this host can't drift from desktop's credential gate. The
- * CLI has its own apiMode-aware policy and doesn't call this predicate — see
- * the note on `hasUsableSetupCredential`.
+ * CLI composes the same probes itself (`hasCliRunCredential`) rather than
+ * calling this predicate directly, so it can wrap each probe with per-probe
+ * error logging — see the note on `hasUsableSetupCredential`.
  */
 export async function hasAnyUsableSetupCredential(): Promise<boolean> {
   return hasUsableSetupCredential(platform().secrets);
+}
+
+/**
+ * Turn on a coding-plan subscription (Kimi Code, GLM). Unlike the OAuth
+ * subscriptions, the plan key IS the credential, so the preference is flipped
+ * only once a key exists — enabling it without one leaves a preference that
+ * can never route, which is what the CLI's equivalent path refuses outright.
+ */
+async function enableCodingPlanSubscription(planId: string): Promise<void> {
+  // Loaded on demand: the runtime binds provider-config accessors, while the
+  // picker above only needs the dependency-free descriptor catalog.
+  const { codingPlanSubscriptionRuntimes } =
+    await import('@model/codingPlanSubscriptions');
+  const runtime = codingPlanSubscriptionRuntimes.find(
+    (candidate) => candidate.descriptor.id === planId,
+  );
+  if (!runtime) return;
+  const { apiProvider } = runtime.descriptor;
+  const secrets = platform().secrets;
+  if (!(await hasUsableApiKey(secrets, apiProvider))) {
+    await vscode.commands.executeCommand(apiKeyCommands.setApiKey, apiProvider);
+  }
+  if (await hasUsableApiKey(secrets, apiProvider)) {
+    await runtime.setEnabled(true);
+  }
 }
 
 async function ensureCredentialOrPrompt(): Promise<boolean> {
@@ -92,6 +121,16 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
       description: ONBOARDING_CHOICE_CHATGPT.description,
       id: 'chatgpt' as const,
     },
+    {
+      label: '$(comment-discussion) Use Grok subscription',
+      description: 'xAI models through SuperGrok; no API key needed',
+      id: 'grok' as const,
+    },
+    ...CODING_PLAN_SUBSCRIPTIONS.map((plan) => ({
+      label: `$(credit-card) Use ${plan.displayName}`,
+      description: `${plan.modelFamily} through your plan key`,
+      id: plan.id,
+    })),
     {
       label: `$(key) ${ONBOARDING_CHOICE_API_KEY.label}`,
       description: ONBOARDING_CHOICE_API_KEY.description,
@@ -106,7 +145,7 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
 
   type CredentialPick = (typeof picks)[number];
   // Each option already carries its own description, so the picker needs no
-  // second explanation of the same three choices.
+  // second explanation of the same choices.
   const picked = await vscode.window.showQuickPick<CredentialPick>(picks, {
     title: 'TeXRA setup',
     placeHolder:
@@ -121,6 +160,9 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
     case 'chatgpt':
       await signInWithChatGptSubscription(CHANNEL);
       break;
+    case 'grok':
+      await signInWithGrokSubscription(CHANNEL);
+      break;
     case 'apiKey':
       await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
       break;
@@ -129,6 +171,9 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
         EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
       );
       return false;
+    default:
+      await enableCodingPlanSubscription(picked.id);
+      break;
   }
 
   return hasAnyUsableSetupCredential();
@@ -217,7 +262,7 @@ export async function launchSetupAssistant(): Promise<
       // credentials. Refuse launch rather than pick a model that crashes at
       // runtime.
       const choice = await vscode.window.showWarningMessage(
-        'No model is available with your current keys. Add a provider API key or sign in with your ChatGPT subscription, then try again.',
+        'No model is available with your current credentials. Sign in with ChatGPT or Grok, or add a provider API key, then try again.',
         { modal: true },
         'Open Models tab',
         'Set API key',

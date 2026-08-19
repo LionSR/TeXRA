@@ -51,9 +51,6 @@ export interface CliModelAccessStatus {
   readonly codingPlans: Readonly<
     Record<CodingPlanSubscriptionId, CliCodingPlanStatus>
   >;
-  readonly texraSignedIn?: boolean;
-  /** Display names of providers with configured API keys (e.g. `['DeepSeek']`). */
-  readonly personalKeyProviders?: readonly string[];
 }
 
 interface CliModelAccessItem {

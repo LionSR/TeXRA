@@ -489,7 +489,6 @@ describe('loadCliApiStatus', () => {
         chatGptSignedIn: true,
         grokSignedIn: false,
         chatGptAccountLabel: 'chatgpt@example.com',
-        texraSignedIn: true,
       },
       lines: [
         'ChatGPT preference: On · chatgpt@example.com',

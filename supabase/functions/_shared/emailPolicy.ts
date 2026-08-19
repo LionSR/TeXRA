@@ -38,7 +38,7 @@ const DISPOSABLE_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
   'trashmail.de',
 ]);
 
-// Privacy-relay providers disproportionately used for free-tier abuse.
+// Privacy-relay providers disproportionately used for abuse of account-backed resources.
 // Kept separate from DISPOSABLE so it can be moved to soft-review independently.
 const PRIVACY_RELAY_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
   'protonmail.com',

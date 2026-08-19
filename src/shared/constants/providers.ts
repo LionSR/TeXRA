@@ -166,7 +166,7 @@ const PROVIDER_REGISTRY = [
  */
 const EXTRA_API_KEY_PROVIDER_IDS = ['openRouter', 'kimiCode'] as const;
 
-/** Providers not in the main registry (no server-side keys, no model selection). */
+/** Providers not in the main registry (no model selection). */
 const EXTRA_DISPLAY_NAMES: Record<string, string> = {
   openRouter: 'OpenRouter',
   kimiCode: 'Kimi Code',

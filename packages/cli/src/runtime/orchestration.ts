@@ -6,6 +6,7 @@ import {
 import type { ExecutionId } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
+import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
@@ -272,13 +273,13 @@ export function buildCliAccountItems(
     items.push({
       value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       label: 'Log out of TeXRA',
-      description: '',
+      description: RESEARCHER_ACCESS_AUTH.logoutDescription,
     });
   } else {
     items.push({
       value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       label: 'Log in to TeXRA',
-      description: '',
+      description: RESEARCHER_ACCESS_AUTH.loginDescription,
     });
   }
   return items;

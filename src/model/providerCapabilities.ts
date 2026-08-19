@@ -158,7 +158,7 @@ export function resolveCodexSubscriptionCapabilities(
  * per-provider capability resolver whether the subscription route is active
  * under the live OpenRouter toggle, and confirm the provider is signed in.
  * The Kimi probe cannot share this (it has no sign-in probe and adds the
- * key-set + included-access facts), so it stays standalone.
+ * key-set fact), so it stays standalone.
  */
 async function isSignedInSubscriptionActive(
   modelId: string,

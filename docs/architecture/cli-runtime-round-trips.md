@@ -206,8 +206,8 @@ team planning. Startup should need only names, descriptions, and availability.
   Return a `CliMultiAgentPlanSnapshot` from the planner and let launch validate or
   reuse it unless registry/auth state changed.
 - Model selection ownership:
-  Root model paths now use `selectCliRootModel` for API-mode-aware runnable
-  resolution plus helper-model persistence. Keep candidate precedence
+  Root model paths now use `selectCliRunnableModel` for credential-aware
+  runnable resolution plus helper-model persistence. Keep candidate precedence
   entrypoint-specific (`chat` defaults, headless `run`, resume history), but do
   not reintroduce direct resolve-and-persist pairs outside the runtime helper.
 - Stream status lookup:

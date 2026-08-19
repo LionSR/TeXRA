@@ -45,7 +45,7 @@ describe('formatSlashCommandHelp', () => {
       '- `/key` (`/keys`) — Add a provider API key with masked input',
     );
     expect(help).toContain(
-      '- `/login` — Sign in to ChatGPT or Researcher Access',
+      '- `/login` — Sign in to ChatGPT for models, or Researcher Access for the hosted agent catalog',
     );
   });
 

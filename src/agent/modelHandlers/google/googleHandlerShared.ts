@@ -29,7 +29,8 @@ interface ResolveGoogleClientParams {
   sdkLabel: string;
   credential: ResolvedClientCredential;
   logger: AgentTrace;
-  /** Current cached client (server-side keys bypass the cache). */
+  /** Current cached client, keyed by apiKey/baseUrl/route (see the reuse
+   *  check below); null on a cold start or after invalidation. */
   cached: GoogleClientCache | null;
   /** Stores a freshly-created client for reuse with personal API keys. */
   setCached: (cache: GoogleClientCache) => void;

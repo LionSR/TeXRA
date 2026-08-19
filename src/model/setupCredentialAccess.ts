@@ -1,6 +1,12 @@
 import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
-import { isCodexSubscriptionActive } from '@model/providerCapabilities';
-import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
+import {
+  isCodexSubscriptionActive,
+  isXaiSubscriptionActive,
+} from '@model/providerCapabilities';
+import {
+  CHATGPT_SETUP_MODEL,
+  XAI_SETUP_MODEL,
+} from '@model/setupModelDefaults';
 import type { PlatformSecrets } from '@platform/secrets';
 import { isNonEmptyString } from '@utils/core';
 
@@ -16,15 +22,19 @@ export async function hasAnyUsableProviderApiKey(
 }
 
 /**
- * Whether the setup model can run through ChatGPT or a provider key.
+ * Whether the setup model can run through ChatGPT, Grok, or a provider key.
  *
- * Desktop and extension use this complete policy. The CLI composes
- * {@link hasAnyUsableProviderApiKey} separately.
+ * Desktop and extension use this complete policy. The CLI composes the same
+ * probes itself (`hasCliRunCredential`) so it can wrap each one with
+ * per-probe error logging.
  */
 export async function hasUsableSetupCredential(
   secrets: PlatformSecrets,
 ): Promise<boolean> {
   if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
+    return true;
+  }
+  if (await isXaiSubscriptionActive(XAI_SETUP_MODEL)) {
     return true;
   }
   return hasAnyUsableProviderApiKey(secrets);

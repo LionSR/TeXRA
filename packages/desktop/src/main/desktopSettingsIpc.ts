@@ -193,8 +193,8 @@ export function createDesktopSettingsIpc(
   }
 
   async function postInitialSettingsData(): Promise<void> {
-    // Model availability can change without a session event (a server-side
-    // tier or subscription flip), so the panel must not paint a stale list.
+    // Model availability can change without a session event (a subscription
+    // flip), so the panel must not paint a stale list.
     invalidateModelOptionsCache();
     postGitAuthorSettings();
     options.toolingSettingsController.postLatexConfigValues();

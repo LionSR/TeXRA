@@ -37,6 +37,7 @@ import {
 import { planTeamRun } from '@common/teams/TeamPlan';
 import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 
 function codingPlans(
   kimiPreferred = false,
@@ -534,7 +535,7 @@ describe('CLI orchestration items', () => {
       }),
       expect.objectContaining({
         label: 'Log out of TeXRA',
-        description: '',
+        description: RESEARCHER_ACCESS_AUTH.logoutDescription,
         value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       }),
     ]);
@@ -575,7 +576,7 @@ describe('CLI orchestration items', () => {
       }),
       expect.objectContaining({
         label: 'Log in to TeXRA',
-        description: '',
+        description: RESEARCHER_ACCESS_AUTH.loginDescription,
         value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       }),
     ]);

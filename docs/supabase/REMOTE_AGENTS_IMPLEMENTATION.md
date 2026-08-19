@@ -74,7 +74,8 @@ We've successfully implemented a complete authentication and remote agents syste
 
 - Agents stored in Supabase Storage (never on disk)
 - Row-Level Security (RLS) for access control
-- Tier-based permissions (free vs researcher access program)
+- Visibility-group permissions (`remote_agents.visibility` + RLS); the
+  `profiles.tier` column is vestigial and not read by any edge function
 - Optional per-user whitelisting
 - Metadata database for agent discovery
 
@@ -162,7 +163,7 @@ We've successfully implemented a complete authentication and remote agents syste
 
 2. **Row-Level Security**
    - Database enforces access at PostgreSQL level
-   - Researcher agents only visible to researcher access program users
+   - Agents are only visible to accounts covered by `remote_agents.visibility`
    - Whitelist table allows exceptions
 
 3. **Edge Function Decryption**
@@ -259,7 +260,7 @@ npm run compile:fast
    - Run `TeXRA: Sign In`
 
 3. **"Agent not found or access denied"**
-   - Check user tier in database
+   - Check the user's account is covered by the agent's `visibility` groups
    - Verify agent exists in storage
    - Check RLS policies
 
@@ -283,7 +284,7 @@ You now have a **production-ready** authentication and remote agents system:
 - ✅ OAuth login with multiple providers
 - ✅ Secure token management
 - ✅ Remote agent storage in Supabase
-- ✅ Tier-based permissions
+- ✅ Visibility-group permissions
 - ✅ Row-level security
 - ✅ VS Code integration
 - ✅ Comprehensive documentation

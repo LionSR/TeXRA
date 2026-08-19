@@ -48,7 +48,6 @@ vi.mock('@auth/SupabaseClient', async () => ({
   )),
   SupabaseClient: {
     canAccessRemoteAgentCatalog,
-    getUserTier: () => undefined,
     getAccessToken: async () => undefined,
   },
 }));

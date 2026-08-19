@@ -170,8 +170,7 @@ export async function setCliHelperModel(
 /**
  * Init for commands that act on local state only (no model invocation):
  * inspect paths (history/agents/memory/multi-agent list+show) plus
- * local-destructive paths (history delete). Quiet logs and skip the
- * included-model-access probe, since no model is run.
+ * local-destructive paths (history delete). Quiet logs, since no model is run.
  *
  * Not actually read-only — the name describes the boundary (local-only,
  * no provider calls), not safety. Destructive local operations belong here.

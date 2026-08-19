@@ -52,11 +52,9 @@ export const RESEARCHER_ACCESS_AUTH = {
   deviceCodeLabel: 'Researcher device code',
   logoutDescription: `Sign out of your ${RESEARCHER_ACCESS.label} account`,
   /** `/login` slash-command description. */
-  slashLoginDescription: `Sign in to ${CHATGPT_AUTH.label} or ${RESEARCHER_ACCESS.label}`,
-  /** Compact launcher /api action hint. */
-  actionHintLogin: `\`texra login\` signs in with ${RESEARCHER_ACCESS.label}`,
+  slashLoginDescription: `Sign in to ${CHATGPT_AUTH.label} for models, or ${RESEARCHER_ACCESS.label} for the hosted agent catalog`,
   /** Longer launcher action hint when keys are also an option. */
-  actionHintLoginOrKey: `choose Model access below, add a provider key, or sign in with ${RESEARCHER_ACCESS.label}`,
+  actionHintLoginOrKey: 'choose Model access below, or add a provider key',
   startingDevice: `Starting ${RESEARCHER_ACCESS.label} device-code sign-in.`,
   startingNoBrowser: (provider: string): string =>
     `Starting ${RESEARCHER_ACCESS.label} ${provider} sign-in.`,

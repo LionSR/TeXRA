@@ -126,9 +126,9 @@ export function resolveProxyEndpoint(config: ProxyConfig): {
 }
 
 /**
- * The standard routing cascade used whenever neither a custom base URL nor
- * server-side keys apply: OpenRouter, then a per-provider dashboard endpoint,
- * then provider defaults (including region toggles).
+ * The standard routing cascade used whenever no custom base URL applies:
+ * OpenRouter, then a per-provider dashboard endpoint, then provider defaults
+ * (including region toggles).
  */
 function resolveDirectEndpoint(config: {
   provider: ModelProvider;

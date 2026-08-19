@@ -1,6 +1,7 @@
 /**
- * Legacy run-config wrapper. `AgentConfig` is the live run-config vocabulary;
- * this shape survives at exactly one boundary and has no other callers: the
+ * FROZEN CLI wire shape — not deletable legacy. `AgentConfig` is the live
+ * run-config vocabulary; this shape survives at exactly one boundary and has
+ * no other callers: the
  * frozen CLI NDJSON `setTaskState` event payload, whose wire shape may not
  * change (projected from `AgentConfig` by `agentConfigToTaskState`). The
  * `meta.taskState` disk-read shim that once shared it was retired with the

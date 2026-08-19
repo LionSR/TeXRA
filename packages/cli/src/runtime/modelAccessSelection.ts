@@ -1,10 +1,7 @@
 import { getCodexStatus } from '@auth/codex';
 import { getXaiStatus, xaiAccountLabel } from '@auth/xai';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
-import {
-  configuredApiKeyProviders,
-  hasUsableApiKey,
-} from '@model/apiProviders';
+import { hasUsableApiKey } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   codingPlanSubscriptionRuntimes,
@@ -20,7 +17,6 @@ import {
   setPreferXaiSubscription,
 } from '@model/xai/xaiPreference';
 import { platform } from '@platform/platform';
-import { providerDisplayName } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { signInCliChatGpt } from './chatgptLogin';
@@ -43,27 +39,25 @@ export interface CliModelAccessSelectionResult {
 
 export async function readCliModelAccessStatus(): Promise<CliModelAccessStatus> {
   const secrets = platform().secrets;
-  const [chatGpt, grok, configuredProviders, codingPlanEntries] =
-    await Promise.all([
-      getCodexStatus(),
-      getXaiStatus(),
-      configuredApiKeyProviders(secrets),
-      Promise.all(
-        codingPlanSubscriptionRuntimes.map(
-          async (runtime) =>
-            [
-              runtime.descriptor.id,
-              {
-                preferred: runtime.getEnabled(),
-                keySet: await hasUsableApiKey(
-                  secrets,
-                  runtime.descriptor.apiProvider,
-                ),
-              },
-            ] as const,
-        ),
+  const [chatGpt, grok, codingPlanEntries] = await Promise.all([
+    getCodexStatus(),
+    getXaiStatus(),
+    Promise.all(
+      codingPlanSubscriptionRuntimes.map(
+        async (runtime) =>
+          [
+            runtime.descriptor.id,
+            {
+              preferred: runtime.getEnabled(),
+              keySet: await hasUsableApiKey(
+                secrets,
+                runtime.descriptor.apiProvider,
+              ),
+            },
+          ] as const,
       ),
-    ]);
+    ),
+  ]);
   const codingPlans = Object.fromEntries(
     codingPlanEntries,
   ) as CliModelAccessStatus['codingPlans'];
@@ -71,9 +65,6 @@ export async function readCliModelAccessStatus(): Promise<CliModelAccessStatus> 
     chatGpt: isPreferCodexSubscription() ? 'on' : 'off',
     grok: isPreferXaiSubscription() ? 'on' : 'off',
   } as const;
-  const personalKeyProviders = configuredProviders.map((provider) =>
-    providerDisplayName(provider),
-  );
   return {
     preferences,
     chatGptSignedIn: chatGpt.signedIn,
@@ -81,7 +72,6 @@ export async function readCliModelAccessStatus(): Promise<CliModelAccessStatus> 
     grokSignedIn: grok.signedIn,
     grokAccountLabel: grok.email,
     codingPlans,
-    personalKeyProviders,
   };
 }
 

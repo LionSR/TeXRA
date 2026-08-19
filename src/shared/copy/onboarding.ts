@@ -41,7 +41,7 @@ export const ONBOARDING_CHOICE_API_KEY = {
   description: 'Anthropic, OpenAI, Google, and more',
 } as const;
 
-/** State 0 choice 4 - quiet link, persists the shared declined flag. */
+/** State 0 choice 3 - quiet link, persists the shared declined flag. */
 export const ONBOARDING_CHOICE_SKIP_LABEL = 'Skip for now';
 
 /**
