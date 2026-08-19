@@ -40,11 +40,8 @@ const executionId = 'abc123' as ExecutionId;
 const streamId = `crashed#${executionId}` as StreamTabId;
 const META_TIMESTAMP = '2026-07-26T00:00:00.000Z';
 const validFlowRecord = {
-  flowName: 'texra',
   shared: { messages: [] },
-  createdAt: META_TIMESTAMP,
   cursor: { nextNodeId: 'start' },
-  nodes: [],
 };
 
 /** Sessions opened by a test, disposed in afterEach (dispose is idempotent). */
