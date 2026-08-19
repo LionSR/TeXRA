@@ -50,7 +50,7 @@ import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/wa
 import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
-import { signInWithGrokSubscription } from '@frontend/auth/xaiSubscriptionSignIn';
+import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { runCleanBuild, runCleanOutput } from '@housekeeping/clean';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -104,7 +104,10 @@ export function createExtensionCommandActions(
     signIn: authSignIn,
     signInChatGpt: settingsViewProvider.signInChatGpt,
     async signInGrok() {
-      const signedIn = await signInWithGrokSubscription(GROK_SIGN_IN_CHANNEL);
+      const signedIn = await signInWithSubscription(
+        GROK_SIGN_IN_CHANNEL,
+        'grok',
+      );
       await Promise.all([
         vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
         vscode.commands.executeCommand('texra.refreshAllOptions'),
