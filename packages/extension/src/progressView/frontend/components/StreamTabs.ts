@@ -415,7 +415,6 @@ export class StreamTabs extends LitElement {
     }
 
     const projection = computeStreamTreeProjection({
-      streamStates: this.streamStates,
       childStreamsByParent: this.childStreamsByParent,
       userOverrides: this.userOverride,
       pendingApprovalStreamIds: this.pendingApprovalStreamIds,

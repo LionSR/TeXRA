@@ -185,12 +185,4 @@ export const proposalRequestPanelStyles: CSSResult = css`
   .workflow-proposal__file-name--wrap {
     word-break: break-word;
   }
-
-  .workflow-proposal__input-files .workflow-proposal__file-label {
-    color: var(--wa-color-text-normal);
-  }
-
-  .workflow-proposal__output-files .workflow-proposal__file-label {
-    color: var(--wa-color-text-link);
-  }
 `;
