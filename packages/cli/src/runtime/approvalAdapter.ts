@@ -59,16 +59,10 @@ export function toToolEditResult(
   decision: CliApprovalDecision,
   proposedContent: string,
 ): ToolEditApprovalResult {
-  if (decision.accepted) {
-    return { action: 'apply', appliedContent: proposedContent };
-  }
-  if (decision.rejectionCause !== undefined) {
-    return { action: 'reject', cause: decision.rejectionCause };
-  }
-  return {
-    action: 'reject',
-    ...(decision.userMessage && { feedback: decision.userMessage }),
-  };
+  const settled = toApprovalSettlement(decision);
+  return settled.action === 'approve'
+    ? { action: 'apply', appliedContent: proposedContent }
+    : settled;
 }
 
 async function decideToolEdit(
@@ -135,21 +129,20 @@ async function decideApprovalEvent(
   return { decision, prompted: true };
 }
 
-/** Approve/reject settlement shared by the bash, plan, and proposal ports of
- *  both CLI hosts — none of them offers the extra actions their result unions
- *  allow, except the TUI's plan `approve_and_goal`, which the TUI overlays on
- *  the approve branch. A rejection without a user message omits `feedback`
- *  rather than sending an explicit `undefined`. */
+/** Approve/reject settlement shared by the bash, plan, proposal, and tool-edit
+ *  ports of both CLI hosts — none of them offers the extra actions their result
+ *  unions allow, except the TUI's plan `approve_and_goal`, which the TUI
+ *  overlays on the approve branch. `BashSettlement` is the narrowest of those
+ *  unions (`approve` plus a `RejectionProvenance` reject), so it is assignable
+ *  to every one of them and the CLI does not re-declare the provenance channels
+ *  that `RejectionProvenance` already owns. A rejection without a user message
+ *  omits `feedback` rather than sending an explicit `undefined`. */
 export function toApprovalSettlement(
   decision: ApprovalDecision & {
     readonly rejectionCause?: string;
     readonly rejectionReason?: string;
   },
-):
-  | { action: 'approve' }
-  | { action: 'reject'; feedback?: string }
-  | { action: 'reject'; reason: string }
-  | { action: 'reject'; cause: string | undefined } {
+): BashSettlement {
   if (decision.accepted) return { action: 'approve' };
   if (decision.rejectionCause !== undefined) {
     return { action: 'reject', cause: decision.rejectionCause };
@@ -166,7 +159,7 @@ export function toApprovalSettlement(
 function toPromptedApprovalSettlement(
   decision: ApprovalDecision & { readonly rejectionCause?: string },
   prompted: boolean,
-): ReturnType<typeof toApprovalSettlement> {
+): BashSettlement {
   if (prompted || decision.accepted) return toApprovalSettlement(decision);
   return toApprovalSettlement({
     ...decision,
