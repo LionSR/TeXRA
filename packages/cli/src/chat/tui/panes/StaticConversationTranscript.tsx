@@ -12,6 +12,7 @@ import { Box, Static, Text } from 'ink';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { StreamPhase, StreamTabId } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { safeHomedir } from '@utils/system/platformPaths';
@@ -19,7 +20,6 @@ import { safeHomedir } from '@utils/system/platformPaths';
 import {
   sessionMeta as sessionMetaSignal,
   streams as streamsSignal,
-  type ConversationEntry,
   type SessionMeta,
   type StreamSlice,
 } from '../state/cliState';
@@ -59,7 +59,7 @@ export type StaticTranscriptItem =
   | {
       readonly id: string;
       readonly kind: 'entry';
-      readonly entry: ConversationEntry;
+      readonly entry: TranscriptRow;
     };
 
 export interface StaticTranscriptState {
@@ -234,7 +234,7 @@ const COMPACT_SESSION_HEADER_ROWS = 1;
  *  collapse against. */
 function entryAbove(
   item: StaticTranscriptItem | undefined,
-): ConversationEntry | undefined {
+): TranscriptRow | undefined {
   return item?.kind === 'entry' ? item.entry : undefined;
 }
 
@@ -871,6 +871,7 @@ export function buildStaticTranscriptItems(
   const entries = slice?.entries ?? [];
   const orderedStaticEntries = orderedStaticTranscriptEntries(
     entries,
+    slice?.finalizedFrontier ?? 0,
     slice?.status,
   );
   const appendItem = (item: StaticTranscriptItem): void => {
@@ -926,7 +927,7 @@ function StaticTranscriptItemContent({
       );
     case 'entry':
       return (
-        <EntryErrorBoundary label={item.entry.role}>
+        <EntryErrorBoundary label={item.entry.kind}>
           <TranscriptEntry
             entry={item.entry}
             previousEntry={entryAbove(previousItem)}
@@ -940,15 +941,21 @@ function StaticTranscriptItemContent({
 }
 
 function scanStaticTranscriptFromStart(
-  entries: readonly ConversationEntry[] | undefined,
+  entries: readonly TranscriptRow[] | undefined,
+  finalizedFrontier: number,
   status: StreamPhase | undefined,
 ): StaticTranscriptScanCursor {
-  return incrementalStaticTranscriptEntries(entries, status, {
-    entriesRef: undefined,
-    scannedIndex: 0,
-    lastScannedEntry: undefined,
-    status: undefined,
-  }).cursor;
+  return incrementalStaticTranscriptEntries(
+    entries,
+    finalizedFrontier,
+    status,
+    {
+      entriesRef: undefined,
+      scannedIndex: 0,
+      lastScannedEntry: undefined,
+      status: undefined,
+    },
+  ).cursor;
 }
 
 export function buildStaticTranscriptState({
@@ -1006,10 +1013,15 @@ export function buildStaticTranscriptState({
   const scan = waitingForChildIdentity
     ? incrementalStaticTranscriptEntries(
         slice?.entries,
+        slice?.finalizedFrontier ?? 0,
         slice?.status,
         undefined,
       ).cursor
-    : scanStaticTranscriptFromStart(slice?.entries, slice?.status);
+    : scanStaticTranscriptFromStart(
+        slice?.entries,
+        slice?.finalizedFrontier ?? 0,
+        slice?.status,
+      );
   return {
     ownerKey,
     items: built.items,
@@ -1060,6 +1072,7 @@ export function advanceStaticTranscriptState(
   // here would break cursor identity on every dependency tick while the
   // scrollback slice is absent.
   const entries = slice?.entries;
+  const finalizedFrontier = slice?.finalizedFrontier ?? 0;
   const status = slice?.status;
 
   // An out-of-band terminal erase (`/clear`) forces a rebuild even when the
@@ -1177,6 +1190,7 @@ export function advanceStaticTranscriptState(
 
   const plan = incrementalStaticTranscriptEntries(
     entries,
+    finalizedFrontier,
     status,
     current.scan,
   );

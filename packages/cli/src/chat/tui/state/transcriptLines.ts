@@ -4,11 +4,12 @@
 
 import { LRUCache } from 'lru-cache';
 
+import type { TranscriptRow } from '@shared/transcript';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { fullTranscriptEntryLayout } from '../panes/transcriptEntryLayout';
-import type { ConversationEntry, StreamSlice } from './cliState';
+import type { StreamSlice } from './cliState';
 
 // Wrapped-line cache keyed by the immutable entry object. Entries are
 // replaced (never mutated in place) when their content changes, so hits are
@@ -47,12 +48,12 @@ function labelsToken(executionLabels: ExecutionLabels): number {
 const MAX_LINES_PER_ENTRY = 4;
 
 const entryLinesCache = new WeakMap<
-  ConversationEntry,
+  TranscriptRow,
   LRUCache<string, readonly string[]>
 >();
 
 function transcriptEntryLines(
-  entry: ConversationEntry,
+  entry: TranscriptRow,
   cols: number,
   executionLabels: ExecutionLabels,
 ): readonly string[] {
@@ -74,17 +75,17 @@ function transcriptEntryLines(
 }
 
 function isCompactToolEntry(
-  entry: ConversationEntry,
+  entry: TranscriptRow,
   lines: readonly string[],
 ): boolean {
-  return entry.role === 'tool' && lines.length <= 1;
+  return entry.kind === 'tool' && lines.length <= 1;
 }
 
 function isPromptToToolTurn(
-  previousEntry: ConversationEntry,
-  nextEntry: ConversationEntry,
+  previousEntry: TranscriptRow,
+  nextEntry: TranscriptRow,
 ): boolean {
-  return previousEntry.role === 'user' && nextEntry.role === 'tool';
+  return previousEntry.kind === 'user' && nextEntry.kind === 'tool';
 }
 
 function shouldSeparateEntries({
@@ -93,9 +94,9 @@ function shouldSeparateEntries({
   nextEntry,
   nextLines,
 }: {
-  readonly previousEntry: ConversationEntry | undefined;
+  readonly previousEntry: TranscriptRow | undefined;
   readonly previousLines: readonly string[];
-  readonly nextEntry: ConversationEntry;
+  readonly nextEntry: TranscriptRow;
   readonly nextLines: readonly string[];
 }): boolean {
   if (!previousEntry) return false;
@@ -116,7 +117,7 @@ export function transcriptToLines(
 ): readonly string[] {
   if (!slice) return [];
   const out: string[] = [];
-  let previousEntry: ConversationEntry | undefined;
+  let previousEntry: TranscriptRow | undefined;
   let previousLines: readonly string[] = [];
   for (const entry of slice.entries) {
     if (!isRenderableTranscriptEntry(entry)) continue;

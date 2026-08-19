@@ -16,6 +16,7 @@ import {
   slashSubmitText,
   type InputBarHandle,
 } from '@cli/chat/tui/panes/InputBar';
+import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   registerSlashCommand,
@@ -160,8 +161,11 @@ describe('InputBar slash submit', () => {
         streams
           .get()
           .get(CLI_LOCAL_STREAM_ID)
-          ?.entries.map(({ role, text }) => ({ role, text })),
-      ).toEqual([{ role: 'user', text: '/model' }]);
+          ?.entries.map((row) => ({
+            kind: row.kind,
+            text: transcriptRowHeadline(row),
+          })),
+      ).toEqual([{ kind: 'user', text: '/model' }]);
     } finally {
       instance.unmount();
       unregisterSlashCommand('model');

@@ -20,9 +20,12 @@ import {
   resetCliState,
   setStreamStatusInCliState,
   streams,
-  type ConversationEntry,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
+import {
+  isFinalizedTranscriptRow,
+  transcriptRowHeadline,
+} from '@cli/chat/tui/panes/transcriptEntries';
 import {
   bindChildStreamState,
   invalidateChildStreams,
@@ -45,6 +48,7 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
+import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import {
   appendTranscriptEntry,
   appendTranscriptText,
@@ -96,6 +100,9 @@ const CONFIGS: readonly StreamConfig[] = [
 function projectedView(slice: StreamSlice | undefined): unknown {
   return {
     entries: slice?.entries ?? [],
+    // Promotion into `<Static>` is a slice-level cursor now, so the two paths
+    // must agree on it as well as on the rows themselves.
+    finalizedFrontier: slice?.finalizedFrontier ?? 0,
     latestLine: slice?.latestLine,
     thinkingActive: slice?.thinkingActive ?? false,
     compactingActive: slice?.compactingActive ?? false,
@@ -104,6 +111,18 @@ function projectedView(slice: StreamSlice | undefined): unknown {
     workflowAttemptBoundaryDeclared:
       slice?.workflowAttemptBoundaryDeclared ?? false,
   };
+}
+
+/** Whether the row carrying `id` may be printed into append-only scrollback:
+ *  the slice's promotion frontier reached it, or it settles on its own. */
+function rowFinalized(streamId: StreamTabId, id: string): boolean {
+  const slice = streams.get().get(streamId);
+  const rows = slice?.entries ?? [];
+  const index = rows.findIndex((row) => row.id === id);
+  return (
+    index >= 0 &&
+    isFinalizedTranscriptRow(rows[index]!, index, slice?.finalizedFrontier ?? 0)
+  );
 }
 
 /** Mutation-op generator driving both mirrored streams identically. */
@@ -334,15 +353,19 @@ class MirroredOps {
       for (const streamId of MIRRORED) {
         const head = store.get(streamId)?.head ?? 0;
         patchStream(streamId, (slice) => {
-          const entry: ConversationEntry = {
+          // A host-synthesized row: `origin: 'local'` is what makes it
+          // immutable from birth and anchors it after an equal-keyed source
+          // row through the two log cursors captured here.
+          const entry: TranscriptRow = {
+            kind: 'assistant',
             id: syntheticId,
-            role: 'assistant',
-            text: `local notice ${syntheticId}`,
-            finalized: true,
-            synthetic: true,
-            syntheticKind: 'local',
-            syntheticAfterSeq: head,
-            syntheticAfterSettlementSeqNo: 0,
+            origin: 'local',
+            seqNo: head,
+            settlementSeqNo: 0,
+            timestamp: 0,
+            level: 'info',
+            text: transcriptText(`local notice ${syntheticId}`),
+            streaming: false,
           };
           return { ...slice, entries: [...slice.entries, entry] };
         });
@@ -657,11 +680,14 @@ describe('transcript fold vs from-scratch oracle', () => {
       );
       const slice = streams.get().get(FOLD_STREAM);
       const row = slice?.entries.find((e) => e.id === 'compaction:op-1');
-      expect(row?.text).toBe('Compacting context…');
-      expect(row?.finalized).toBe(false);
+      expect(row).toMatchObject({
+        kind: 'compactionActivity',
+        label: 'Compacting context…',
+      });
+      expect(rowFinalized(FOLD_STREAM, 'compaction:op-1')).toBe(false);
       expect(slice?.compactingActive).toBe(true);
       // The settled prefix ahead of the compaction is still promoted.
-      expect(slice?.entries.find((e) => e.id === 'u1')?.finalized).toBe(true);
+      expect(rowFinalized(FOLD_STREAM, 'u1')).toBe(true);
 
       // The later completion event must still complete the block.
       for (const streamId of MIRRORED) {
@@ -684,8 +710,11 @@ describe('transcript fold vs from-scratch oracle', () => {
         .get()
         .get(FOLD_STREAM)
         ?.entries.find((e) => e.id === 'compaction:op-1');
-      expect(done?.text).toBe('Context compacted');
-      expect(done?.finalized).toBe(true);
+      expect(done).toMatchObject({
+        kind: 'compactionActivity',
+        label: 'Context compacted',
+      });
+      expect(rowFinalized(FOLD_STREAM, 'compaction:op-1')).toBe(true);
       expect(streams.get().get(FOLD_STREAM)?.compactingActive).toBe(false);
     });
   });
@@ -706,7 +735,7 @@ describe('transcript fold vs from-scratch oracle', () => {
       streams
         .get()
         .get(FOLD_STREAM)
-        ?.entries.map((entry) => entry.text),
+        ?.entries.map((row) => transcriptRowHeadline(row)),
     ).toEqual(['first']);
 
     // Deltas emitted while unsubscribed are lost: a real gap.
@@ -742,7 +771,7 @@ describe('transcript fold vs from-scratch oracle', () => {
       streams
         .get()
         .get(FOLD_STREAM)
-        ?.entries.map((entry) => entry.text),
+        ?.entries.map((row) => transcriptRowHeadline(row)),
     ).toEqual(['first', 'second', 'third', 'fourth']);
 
     second();

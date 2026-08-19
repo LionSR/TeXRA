@@ -69,6 +69,16 @@ export interface TranscriptRowBase {
   readonly messageType?: MessageType;
   /** Recorder-owned full artifact for a text this row abbreviates. */
   readonly spillPath?: string;
+  /** Set by a host's on-demand full-output reader when the {@link spillPath}
+   *  artifact could not be loaded, so the painter shows the failure notice
+   *  without the "full output" affordance. */
+  readonly spillFailed?: boolean;
+  /** Present when a host synthesized this row rather than projecting it from a
+   *  `StreamLogEntry` — a local notice the run itself never recorded. Such a
+   *  row is immutable from birth, carries the host's own id, and anchors into
+   *  the merged order through the {@link seqNo}/{@link settlementSeqNo} the
+   *  host captured when it appended it. */
+  readonly origin?: 'local';
 }
 
 // ---------------------------------------------------------------------------
@@ -315,6 +325,8 @@ export function isSettledRow(
   row: TranscriptRow,
   hasLaterRow: boolean,
 ): boolean {
+  // A host-synthesized row has no producer still writing to it.
+  if (row.origin === 'local') return true;
   switch (row.kind) {
     case 'assistant':
       return !row.pendingEmbeddedFollowup && hasLaterRow;
