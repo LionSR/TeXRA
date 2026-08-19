@@ -26,6 +26,11 @@ import {
   normalizeRunLatexdiffOutputsByRound,
   runLatexdiffForExecution,
 } from '@latex/latexdiff/runLatexdiff';
+import {
+  latexdiffAllFailedMessage,
+  LATEXDIFF_GENERATE_FAILED_MESSAGE,
+  NO_LATEXDIFF_OPERATIONS_MESSAGE,
+} from '@latex/latexdiff/latexdiffCopy';
 import { CHANNEL, latexdiffService } from '@latex/latexdiff/service';
 import {
   DEFAULT_MATH_MARKUP,
@@ -249,7 +254,7 @@ async function runDiffAndOpen(
 
   const result = await runDiff(mathMarkup);
   if (!result.success || !result.diffPath) {
-    throw new Error(result.message ?? 'Failed to generate diff file');
+    throw new Error(result.message ?? LATEXDIFF_GENERATE_FAILED_MESSAGE);
   }
   await openLatexdiffResult(result.diffPath);
 }
@@ -424,19 +429,14 @@ async function handleRunLatexdiff(
       const { results } = outcome;
 
       if (results.length === 0) {
-        vscode.window.showInformationMessage(
-          'No LaTeX diff operations available for this run.',
-        );
+        vscode.window.showInformationMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
         return;
       }
 
       const successCount = results.filter((r) => r.success).length;
 
       if (successCount === 0) {
-        await showLoggedMessage(
-          CHANNEL,
-          `All LaTeX diff operations failed (math markup: "${mathMarkup}")`,
-        );
+        await showLoggedMessage(CHANNEL, latexdiffAllFailedMessage(mathMarkup));
       } else if (successCount < results.length) {
         vscode.window.showWarningMessage(
           `${successCount} of ${results.length} LaTeX diff operations completed successfully (math markup: "${mathMarkup}")`,

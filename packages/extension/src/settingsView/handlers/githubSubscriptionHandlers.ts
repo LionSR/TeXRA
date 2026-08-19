@@ -22,6 +22,9 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
 import {
   GITHUB_TOKEN_CREATE_URL,
+  GITHUB_TOKEN_PROMPT,
+  GITHUB_TOKEN_REMOVED_MESSAGE,
+  GITHUB_TOKEN_SAVED_MESSAGE,
   GITHUB_TOKEN_STORAGE_KEY,
 } from '@tools/github/githubAuth';
 import {
@@ -43,8 +46,7 @@ export class GitHubSubscriptionHandlers {
 
   async handleSetGitHubToken(): Promise<void> {
     const token = await vscode.window.showInputBox({
-      prompt:
-        'Paste a GitHub personal access token (repo or public_repo scope)',
+      prompt: GITHUB_TOKEN_PROMPT,
       password: true,
       placeHolder: 'ghp_…',
       ignoreFocusOut: true,
@@ -56,7 +58,7 @@ export class GitHubSubscriptionHandlers {
       'Failed to save GitHub token',
       async () => {
         await platform().secrets.set(GITHUB_TOKEN_STORAGE_KEY, trimmed);
-        void vscode.window.showInformationMessage('GitHub token saved.');
+        void vscode.window.showInformationMessage(GITHUB_TOKEN_SAVED_MESSAGE);
         await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
       },
     );
@@ -68,7 +70,7 @@ export class GitHubSubscriptionHandlers {
       'Failed to remove GitHub token',
       async () => {
         await platform().secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
-        void vscode.window.showInformationMessage('GitHub token removed.');
+        void vscode.window.showInformationMessage(GITHUB_TOKEN_REMOVED_MESSAGE);
         await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
       },
     );

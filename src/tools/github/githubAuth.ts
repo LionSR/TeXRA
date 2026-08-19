@@ -22,6 +22,20 @@ export const GITHUB_TOKEN_STORAGE_KEY = 'github.token';
 export const GITHUB_TOKEN_CREATE_URL =
   'https://github.com/settings/tokens/new?description=TeXRA%20PR%20subscription&scopes=repo';
 
+/**
+ * Prompt shown by the Git settings tab when asking for the token. The scope
+ * wording has to agree with what {@link GITHUB_TOKEN_CREATE_URL} pre-fills, so
+ * the two live together.
+ */
+export const GITHUB_TOKEN_PROMPT =
+  'Paste a GitHub personal access token (repo or public_repo scope)';
+
+/** Confirmation after the token is written to the host secret store. */
+export const GITHUB_TOKEN_SAVED_MESSAGE = 'GitHub token saved.';
+
+/** Confirmation after the token is cleared from the host secret store. */
+export const GITHUB_TOKEN_REMOVED_MESSAGE = 'GitHub token removed.';
+
 /** Environment variables accepted by GitHub tools, in precedence order. */
 const GITHUB_TOKEN_ENV_VARS = ['GH_TOKEN', 'GITHUB_TOKEN'] as const;
 
