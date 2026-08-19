@@ -24,6 +24,10 @@ interface DesktopShellAdapter {
 }
 
 export interface DesktopPreviewHost extends ExternalOpener {
+  openExternal(
+    url: string,
+    options?: { readonly reportFailure?: boolean },
+  ): Promise<void>;
   /** Open a workspace file in the OS default application. */
   openPath(filePath: string): Promise<void>;
   openBuildDisplay: BuildDisplayFn;
@@ -69,10 +73,14 @@ export function createDesktopPreviewHost(
     }
   }
 
-  async function openExternal(url: string): Promise<void> {
+  async function openExternal(
+    url: string,
+    { reportFailure = true }: { readonly reportFailure?: boolean } = {},
+  ): Promise<void> {
     try {
       await options.shell.openExternal(url);
     } catch (error) {
+      if (!reportFailure) throw error;
       await fail(`Failed to open URL ${url}: ${toErrorMessage(error)}`);
     }
   }
