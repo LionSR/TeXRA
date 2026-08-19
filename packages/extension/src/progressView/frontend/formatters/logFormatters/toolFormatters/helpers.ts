@@ -21,11 +21,10 @@ import type { TranscriptRowBase } from '@shared/transcript';
 import {
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
-  EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
-  EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
+  executionsWaitTimeoutSeconds,
 } from '@shared/toolUse';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { clamp, isObject } from '@utils/core';
+import { isObject } from '@utils/core';
 
 // Side-effect import to register <tool-timer> custom element
 import '@progressView/frontend/components/ToolTimer';
@@ -35,11 +34,15 @@ import '@progressView/frontend/components/TerminalOutput';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
-/** Known per-tool default timeouts (ms) for display in the running timer. */
+/**
+ * Known per-tool default timeouts (ms) for display in the running timer.
+ * Every entry must be a timeout the tool actually enforces: a tool with no
+ * timeout belongs nowhere in this map, so its card shows a bare elapsed timer
+ * rather than a limit it will never hit.
+ */
 const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
   bash: BASH_TOOL_DEFAULT_TIMEOUT_MS,
   executions: EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS * 1000,
-  codex: 300_000, // generous default — Codex turns can be slow
 };
 
 /**
@@ -49,16 +52,6 @@ const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
 const TIMEOUT_GATED_BY_ACTION: Record<string, string> = {
   executions: 'wait',
 };
-
-function executionsWaitTimeoutSeconds(timeout: unknown): number {
-  return typeof timeout === 'number' && Number.isFinite(timeout)
-    ? clamp(
-        timeout,
-        EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
-        EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
-      )
-    : EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS;
-}
 
 /**
  * Extract the effective timeout for a tool call from its input.
