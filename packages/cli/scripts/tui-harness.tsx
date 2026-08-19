@@ -680,7 +680,6 @@ if (HARNESS_AUTHENTICATED === '1' || HARNESS_AUTHENTICATED === '0') {
     getStoredSessionState: async () =>
       accessToken === null ? 'none' : 'authenticated',
     getStoredAccountLabel: async () => null,
-    isTokenExpiringSoon: () => false,
     getLastRefreshFailure: () => null,
   });
 }

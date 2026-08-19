@@ -211,7 +211,6 @@ function installAuthenticatedSupabaseProvider() {
     getSessionTokens,
     getStoredSessionState,
     getStoredAccountLabel: vi.fn(async () => null),
-    isTokenExpiringSoon: vi.fn(() => false),
     getLastRefreshFailure: vi.fn(() => null),
   });
   vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
