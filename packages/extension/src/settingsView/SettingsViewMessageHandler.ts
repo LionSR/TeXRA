@@ -53,6 +53,7 @@ import {
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,
@@ -642,11 +643,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
     const mainView = await getMainWebview(this.viewName);
     if (mainView) {
-      const anyKeyExists = await SecretManager.anyApiKeyExists();
+      const setupComplete = await hasUsableSetupCredential(platform().secrets);
       mainView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_BANNER,
         banner: 'apiKey',
-        visible: !anyKeyExists,
+        visible: !setupComplete,
       });
     }
     await this.refreshCredentialDependentSurfaces({
