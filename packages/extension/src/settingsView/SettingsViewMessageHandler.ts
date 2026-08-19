@@ -63,6 +63,7 @@ import {
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
 import type {
+  DerivedSettingsSnapshot,
   SettingsMessageFor,
   SettingsViewInboundHandlerRegistry,
   SettingsViewSnapshot,
@@ -79,21 +80,14 @@ import {
 } from '@shared/settingsView/handlers/stateSettingWrite';
 
 import { unsupportedCommands } from '@shared/utils/dispatcher';
-import { buildApprovalSettingsMessage } from '@shared/settingsView/handlers/approvalHandlers';
-import { buildAgentSkillsSettingsMessage } from '@shared/settingsView/handlers/agentSkillsHandlers';
-import { buildTelemetrySettingsMessage } from '@shared/settingsView/handlers/telemetrySettingsHandlers';
-import { buildReliabilityAndOrchestrationMessage } from '@shared/settingsView/handlers/superYoloHandlers';
+import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   getLastCheckResults,
   refreshToolAvailability,
 } from '@tools/toolAvailability';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import {
-  buildGitAuthorSettingsMessage,
-  readGitAuthorSettingsFromState,
-  type GitAuthorSettings,
-} from '@utils/system/gitAuthorSettings';
 import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
 import { AgentHandlers } from './handlers/agentHandlers';
@@ -431,16 +425,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.memoryHandlers.sendMemoryEnabled(webview),
       this.agentHandlers.sendAgentSelectionData(webview),
       this.agentHandlers.sendCustomAgentDir(webview),
-      this.sendReliabilityAndOrchestrationSettings(webview),
+      this.sendSettingsSnapshot(webview, 'multi-agent'),
       this.agentHandlers.sendAgentModePresets(webview),
-      this.sendGitAuthorSettings(webview),
+      this.sendSettingsSnapshot(webview, 'git-author'),
       this.githubHandlers.sendGitHubTokenStatus(webview),
       this.chatgptHandlers.sendAuthStatus(webview),
       this.grokHandlers.sendAuthStatus(webview),
       this.githubHandlers.sendPRSubscriptions(webview),
-      this.sendApprovalSettings(webview),
-      this.sendAgentSkillsSettings(webview),
-      this.sendTelemetrySettings(webview),
+      this.sendSettingsSnapshot(webview, 'approval'),
+      this.sendSettingsSnapshot(webview, 'agent-skills'),
+      this.sendSettingsSnapshot(webview, 'telemetry'),
       this.latexHandlers.sendLatexSettingsStatus(webview),
       this.latexHandlers.sendLatexConfigValues(webview),
       this.sendInlineCriticismEnabled(webview),
@@ -484,62 +478,48 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   // ============================================================
-  // Multi-agent coordination handler implementations
+  // Catalog-derived settings snapshots
   // ============================================================
 
-  private async sendReliabilityAndOrchestrationSettings(
+  private settingsStores(): SettingsStores {
+    return {
+      config: platform().config,
+      workspaceState: workspaceSM,
+      globalState: globalSM,
+    };
+  }
+
+  /**
+   * Post one catalog-derived snapshot. Every field comes from the settings
+   * catalog, so the only per-snapshot code left is the multi-agent arm's
+   * host-specific reliability tuning, which has no catalog row.
+   */
+  private async sendSettingsSnapshot(
     webview: vscode.Webview,
+    snapshot: DerivedSettingsSnapshot,
   ): Promise<void> {
+    const message = buildSettingsSnapshotMessage(
+      snapshot,
+      this.settingsStores(),
+      'vscode',
+    );
     await webview.postMessage(
-      buildReliabilityAndOrchestrationMessage({
-        workspaceState: workspaceSM,
-        globalState: globalSM,
-        config: platform().config,
-        getReliabilitySettings: () =>
-          this.profileController.getReliabilitySettings(),
-      }),
+      snapshot === 'multi-agent'
+        ? {
+            ...message,
+            reliabilitySettings:
+              this.profileController.getReliabilitySettings(),
+          }
+        : message,
     );
   }
 
-  // ============================================================
-  // Git author settings handler implementations
-  // ============================================================
-
-  private async sendGitAuthorSettings(
-    webview: vscode.Webview,
-    settings?: GitAuthorSettings,
+  private rebroadcastSnapshot(
+    snapshot: DerivedSettingsSnapshot,
   ): Promise<void> {
-    await webview.postMessage(
-      buildGitAuthorSettingsMessage(
-        settings ?? readGitAuthorSettingsFromState(workspaceSM),
-      ),
+    return this.withActiveWebview((w) =>
+      this.sendSettingsSnapshot(w, snapshot),
     );
-  }
-
-  // ============================================================
-  // Approval settings handler implementations
-  // ============================================================
-
-  private async sendApprovalSettings(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(
-      buildApprovalSettingsMessage({
-        workspaceState: workspaceSM,
-        globalState: globalSM,
-        config: platform().config,
-      }),
-    );
-  }
-
-  private async sendAgentSkillsSettings(
-    webview: vscode.Webview,
-  ): Promise<void> {
-    await webview.postMessage(
-      buildAgentSkillsSettingsMessage(platform().config),
-    );
-  }
-
-  private async sendTelemetrySettings(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(buildTelemetrySettingsMessage(platform().config));
   }
 
   /**
@@ -548,11 +528,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
     const result = await applyStateSettingUpdate(key, value, {
       host: 'vscode',
-      stores: {
-        config: platform().config,
-        workspaceState: workspaceSM,
-        globalState: globalSM,
-      },
+      stores: this.settingsStores(),
       // The shared function already gates this hook on
       // `configTarget !== 'global'`; this checks only the workspace half.
       requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
@@ -598,15 +574,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     snapshot: SettingsViewSnapshot,
   ): Promise<void> {
     await dispatchStateSettingSnapshot(snapshot, {
-      'agent-skills': () =>
-        this.withActiveWebview((w) => this.sendAgentSkillsSettings(w)),
-      approval: () =>
-        this.withActiveWebview((w) => this.sendApprovalSettings(w)),
+      'agent-skills': () => this.rebroadcastSnapshot('agent-skills'),
+      approval: () => this.rebroadcastSnapshot('approval'),
       'git-author': () => {
-        const settings = applyGitAuthorConfig();
-        return this.withActiveWebview((w) =>
-          this.sendGitAuthorSettings(w, settings),
-        );
+        // Git identity is also process env, so the write must reach `git`
+        // before the webview is told the new value stuck.
+        applyGitAuthorConfig();
+        return this.rebroadcastSnapshot('git-author');
       },
       latex: () =>
         this.withActiveWebview((w) =>
@@ -614,13 +588,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         ),
       models: () =>
         this.withActiveWebview((w) => this.sendModelSelectionData(w)),
-      'multi-agent': () =>
-        this.withActiveWebview((w) =>
-          this.sendReliabilityAndOrchestrationSettings(w),
-        ),
+      'multi-agent': () => this.rebroadcastSnapshot('multi-agent'),
       profile: () => this.withActiveWebview((w) => this.sendProfileData(w)),
-      telemetry: () =>
-        this.withActiveWebview((w) => this.sendTelemetrySettings(w)),
+      telemetry: () => this.rebroadcastSnapshot('telemetry'),
     });
   }
 
@@ -781,7 +751,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendProfileData(w),
-        this.sendReliabilityAndOrchestrationSettings(w),
+        this.sendSettingsSnapshot(w, 'multi-agent'),
       ]);
     });
   }
