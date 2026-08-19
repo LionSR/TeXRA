@@ -1,6 +1,5 @@
 // Node imports
-import { access, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { access, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -10,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const mocks = vi.hoisted(() => ({
@@ -58,6 +58,7 @@ async function withProcessCwd<T>(
 }
 
 describe('CLI Overleaf clone command', () => {
+  const tempDirs = useTempDirs();
   let workspacePath: string;
   let stdout: string;
   let stderr: string;
@@ -65,7 +66,7 @@ describe('CLI Overleaf clone command', () => {
   let stderrSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
-    workspacePath = await mkdtemp(path.join(tmpdir(), 'texra-clone-'));
+    workspacePath = await makeTempDir('texra-clone-', tempDirs);
     stdout = '';
     stderr = '';
     stdoutSpy = spyOnStreamWrite(process.stdout, (text) => {
@@ -99,11 +100,9 @@ describe('CLI Overleaf clone command', () => {
   afterEach(async () => {
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
-    await rm(workspacePath, { recursive: true, force: true });
   });
 
   it('clones into --cwd with a stored token and emits structured output', async () => {
-    const canonicalWorkspacePath = await realpath(workspacePath);
     const result = await runCli([
       'clone',
       PROJECT_ID,
@@ -124,7 +123,7 @@ describe('CLI Overleaf clone command', () => {
         '.',
       ],
       {
-        cwd: canonicalWorkspacePath,
+        cwd: workspacePath,
         env: { GIT_TERMINAL_PROMPT: '0', PATH: extendEnvPath() },
       },
     );
@@ -132,7 +131,7 @@ describe('CLI Overleaf clone command', () => {
       cloned: true,
       provider: 'overleaf',
       host: 'git.overleaf.com',
-      destination: canonicalWorkspacePath,
+      destination: workspacePath,
     });
     expect(`${stdout}${stderr}`).not.toContain('olp_secret');
   });
@@ -149,7 +148,6 @@ describe('CLI Overleaf clone command', () => {
         '--no-input',
       ]),
     );
-    const canonicalDestination = await realpath(destination);
 
     expect(result.exitCode).toBe(CliExitCode.Success);
     expect(mocks.execa).toHaveBeenCalledWith(
@@ -160,13 +158,13 @@ describe('CLI Overleaf clone command', () => {
         '.',
       ],
       {
-        cwd: canonicalDestination,
+        cwd: destination,
         env: { GIT_TERMINAL_PROMPT: '0', PATH: extendEnvPath() },
       },
     );
     expect(JSON.parse(stdout)).toMatchObject({
       cloned: true,
-      destination: canonicalDestination,
+      destination: destination,
     });
   });
 

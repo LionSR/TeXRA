@@ -12,14 +12,9 @@ import {
 } from '@cli/runtime/skills';
 import { defaultSkillSources } from '@skills/skillSources';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-const tempRoots: string[] = [];
-
-async function createTempRoot(): Promise<string> {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-skills-'));
-  tempRoots.push(root);
-  return root;
-}
+const tempRoots = useTempDirs();
 
 async function writeSkill(
   root: string,
@@ -34,13 +29,8 @@ async function writeSkill(
   );
 }
 
-afterEach(async () => {
+afterEach(() => {
   setRuntimeSkillSources([]);
-  await Promise.all(
-    tempRoots
-      .splice(0)
-      .map((root) => fs.rm(root, { recursive: true, force: true })),
-  );
 });
 
 describe('CLI skills runtime', () => {
@@ -161,8 +151,8 @@ describe('CLI skills runtime', () => {
   });
 
   it('lists custom duplicate names before bundled skills', async () => {
-    const resources = await createTempRoot();
-    const custom = await createTempRoot();
+    const resources = await makeTempDir('texra-cli-skills-', tempRoots);
+    const custom = await makeTempDir('texra-cli-skills-', tempRoots);
     await fs.mkdir(path.join(resources, 'skills'));
     await writeSkill(
       path.join(resources, 'skills'),
@@ -208,8 +198,8 @@ describe('CLI skills runtime', () => {
   });
 
   it('lists project duplicate names before bundled skills', async () => {
-    const project = await createTempRoot();
-    const resources = await createTempRoot();
+    const project = await makeTempDir('texra-cli-skills-', tempRoots);
+    const resources = await makeTempDir('texra-cli-skills-', tempRoots);
     await fs.mkdir(path.join(project, '.texra', 'skills'), {
       recursive: true,
     });
@@ -272,7 +262,7 @@ describe('CLI skills runtime', () => {
   });
 
   it('reports explicit custom skill sources that are not directories', async () => {
-    const root = await createTempRoot();
+    const root = await makeTempDir('texra-cli-skills-', tempRoots);
     const sourceFile = path.join(root, 'skills-file');
     await fs.writeFile(sourceFile, 'not a directory');
 
@@ -297,7 +287,7 @@ describe('CLI skills runtime', () => {
   });
 
   it('reads the runtime skill source registry used by prompt injection', async () => {
-    const root = await createTempRoot();
+    const root = await makeTempDir('texra-cli-skills-', tempRoots);
     await writeSkill(root, 'proof-audit', 'Review mathematical proof steps.');
     setRuntimeSkillSources([
       {

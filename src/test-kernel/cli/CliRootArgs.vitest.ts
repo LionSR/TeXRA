@@ -50,7 +50,11 @@ import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
-import { withTempDir } from '@test/support/tempDirPlatform';
+import {
+  makeTempDir,
+  useTempDirs,
+  withTempDir,
+} from '@test/support/tempDirPlatform';
 
 type StoredResumeConfig = Parameters<typeof resumeWorkflowOutputFile>[0];
 
@@ -1132,12 +1136,11 @@ describe('runCli usage output stream routing', () => {
   let stderrSpy: ReturnType<typeof vi.spyOn>;
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  const tempDirs = useTempDirs();
   let platformStorageRoot = '';
 
   beforeEach(async () => {
-    platformStorageRoot = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'texra-cli-root-'),
-    );
+    platformStorageRoot = await makeTempDir('texra-cli-root-', tempDirs);
     await initNodeBackedPlatform({
       storagePath: path.join(platformStorageRoot, 'storage'),
       globalStoragePath: path.join(platformStorageRoot, 'global-storage'),
@@ -1168,10 +1171,6 @@ describe('runCli usage output stream routing', () => {
     stderrSpy.mockRestore();
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
-    if (platformStorageRoot) {
-      await fs.rm(platformStorageRoot, { recursive: true, force: true });
-      platformStorageRoot = '';
-    }
     await initDefaultFakePlatform();
   });
 

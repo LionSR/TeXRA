@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
@@ -144,7 +144,7 @@ const config = AgentConfigSchema.parse({
   outputFiles: ['chapters/intro.tex'],
 });
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 // An internal tool-use agent config with no input/output files, built from
 // the base `config` with per-test field overrides.
@@ -289,10 +289,6 @@ describe('CLI history runtime', () => {
     mocks.exists.mockResolvedValue(false);
     mocks.readCliToolUseResumeData.mockResolvedValue(null);
     mocks.readCliResumeDataForListing.mockResolvedValue(null);
-  });
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
   });
 
   it('formats history list rows with the stable tab-separated text shape', async () => {

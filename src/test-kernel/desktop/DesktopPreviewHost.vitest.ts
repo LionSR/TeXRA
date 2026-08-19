@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createModuleMocks } from '@test/support/moduleMocks';
 import {
-  cleanupTempDirs,
   makeTempDir as makeSharedTempDir,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { createExternalLocation } from '@utils/files/fileLocation';
 
@@ -41,11 +41,10 @@ function makeShell(openPathResult = '') {
 }
 
 describe('desktop preview host', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   async function makeTempDir(): Promise<string> {

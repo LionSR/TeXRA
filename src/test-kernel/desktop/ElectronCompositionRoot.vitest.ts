@@ -2,10 +2,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { sourceFilesUnder } from '@test/support/repoScan';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { normalizeFilePath } from '@utils/core';
 import {
   DESKTOP_SRC_DIR,
@@ -57,11 +57,7 @@ function expectOrderedAfter(
 }
 
 describe('desktop composition root and launch environment', () => {
-  const tempDirs: string[] = [];
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
+  const tempDirs = useTempDirs();
 
   async function createResourceTree(resourcesPath: string): Promise<void> {
     await Promise.all([

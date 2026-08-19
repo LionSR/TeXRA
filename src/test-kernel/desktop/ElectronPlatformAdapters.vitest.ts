@@ -12,8 +12,8 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 // Local imports - test support
 import { pathExists } from '@test/support/fsTestUtils';
 import {
-  cleanupTempDirs,
   makeTempDir as makeSharedTempDir,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import {
   app as electronApp,
@@ -36,7 +36,7 @@ async function loadJsonStore(): Promise<
 }
 
 describe('desktop platform adapters', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
   const originalEnv = { ...process.env };
   const testSecretKey = 'TEXRA_TEST_TOKEN';
 
@@ -46,7 +46,6 @@ describe('desktop platform adapters', () => {
     if (stubUserDataPath != null) tempDirs.push(stubUserDataPath);
     resetElectronTestStub();
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   async function makeTempDir(prefix: string): Promise<string> {

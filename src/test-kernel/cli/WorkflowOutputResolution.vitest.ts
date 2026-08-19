@@ -1,8 +1,7 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   expectedOutputFilesForOutputDir,
@@ -13,22 +12,11 @@ import {
 import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
 
-const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(
-    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
-  );
-});
-
-async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'texra-workflow-output-'));
-  tempDirs.push(dir);
-  return dir;
-}
+const tempDirs = useTempDirs();
 
 /** Writes a generated file under `<cwd>/run/` and returns its absolute path. */
 async function writeRunFile(
@@ -79,7 +67,7 @@ function workflowResult(
 
 describe('CLI workflow output resolution', () => {
   it('fails --output-dir resolution when an expected multi-input output is missing', async () => {
-    const cwd = await makeTempDir();
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runOutput = await writeRunFile(cwd, 'r1/a.tex', 'A');
 
     await expect(
@@ -97,7 +85,7 @@ describe('CLI workflow output resolution', () => {
   });
 
   it('does not publish cancelled workflow outputs to requested destinations', async () => {
-    const cwd = await makeTempDir();
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runOutput = await writeRunFile(cwd, 'r0/paper.tex', 'provisional');
     const outputFile = join(cwd, 'out.tex');
     const outputDirectoryFile = join(cwd, 'out', 'paper.tex');
@@ -148,7 +136,7 @@ describe('CLI workflow output resolution', () => {
   });
 
   it('carries only the cancelled outcome for missing workflow outputs', async () => {
-    const cwd = await makeTempDir();
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
 
     const result = await resolveWorkflowOutput(
       'out.tex',
@@ -170,7 +158,7 @@ describe('CLI workflow output resolution', () => {
   });
 
   it('copies every expected --output-dir workflow output', async () => {
-    const cwd = await makeTempDir();
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
     const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
     const runB = await writeRunFile(cwd, 'r1/b.tex', 'B');
@@ -204,7 +192,7 @@ describe('CLI workflow output resolution', () => {
   });
 
   it('uses a stable output name for materialized stdin input', async () => {
-    const cwd = await makeTempDir();
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runOutput = await writeRunFile(cwd, 'r1/stdin.tex', 'from stdin');
 
     const expectedOutputFiles = expectedOutputFilesForOutputDir(undefined, [
@@ -245,7 +233,7 @@ describe('CLI workflow output resolution', () => {
   });
 
   it('preserves expected nested input paths when copying flattened workflow outputs', async () => {
-    const cwd = await makeTempDir();
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runMain = await writeRunFile(cwd, 'r1/main.tex', 'main');
     const runSeries = await writeRunFile(cwd, 'r1/series.tex', 'series');
 
@@ -293,7 +281,7 @@ describe('CLI workflow output resolution', () => {
   });
 
   it('uses original-path lineage before flat generated names when basenames collide', async () => {
-    const cwd = await makeTempDir();
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runRoot = await writeRunFile(cwd, 'root/main.tex', 'root');
     const runNested = await writeRunFile(cwd, 'nested/main.tex', 'nested');
 
@@ -341,7 +329,7 @@ describe('CLI workflow output resolution', () => {
   });
 
   it('does not remap arbitrary same-source outputs to an expected input name', async () => {
-    const cwd = await makeTempDir();
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runDerived = await writeRunFile(cwd, 'r1/derived.tex', 'derived');
 
     await expect(
@@ -365,7 +353,7 @@ describe('CLI workflow output resolution', () => {
   });
 
   it('derives safe expected --output-dir paths from relative and absolute inputs', async () => {
-    const external = await makeTempDir();
+    const external = await makeTempDir('texra-workflow-output-', tempDirs);
 
     expect(
       expectedOutputFilesForOutputDir(undefined, [
@@ -382,7 +370,7 @@ describe('CLI workflow output resolution', () => {
   });
 
   it('does not remap output paths on partial original-path segment matches', async () => {
-    const cwd = await makeTempDir();
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runSeries = await writeRunFile(cwd, 'r1/series.tex', 'series');
 
     await expect(
@@ -412,7 +400,7 @@ describe('CLI workflow output resolution', () => {
   });
 
   it('uses the latest round when --output-dir workflow outputs arrive out of order', async () => {
-    const cwd = await makeTempDir();
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
     const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
 
@@ -436,7 +424,7 @@ describe('CLI workflow output resolution', () => {
   });
 
   it('uses the latest round when a single requested output arrives out of order', async () => {
-    const cwd = await makeTempDir();
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
     const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
 
@@ -463,7 +451,7 @@ describe('CLI workflow output resolution', () => {
   });
 
   it('copies the last output of the final round for a multi-document workflow', async () => {
-    const cwd = await makeTempDir();
+    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runMain = await writeRunFile(cwd, 'r2/main.tex', 'MAIN2');
     const runAppendix = await writeRunFile(cwd, 'r2/appendix.tex', 'APPENDIX2');
     const runMain1 = await writeRunFile(cwd, 'r1/main.tex', 'MAIN1');

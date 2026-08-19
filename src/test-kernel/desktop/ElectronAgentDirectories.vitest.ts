@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -19,6 +18,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 import { loadSourceModule } from './loadSourceModule.ts';
 
@@ -28,13 +28,10 @@ async function writeText(filePath: string, content: string): Promise<void> {
 }
 
 describe('desktop agent directory bootstrap', () => {
-  let tempDir: string | undefined;
+  const tempDirs = useTempDirs();
 
-  afterEach(async () => {
+  afterEach(() => {
     vi.resetModules();
-    if (tempDir == null) return;
-    await rm(tempDir, { recursive: true, force: true });
-    tempDir = undefined;
   });
 
   async function createHarness(): Promise<{
@@ -45,7 +42,7 @@ describe('desktop agent directory bootstrap', () => {
     storage: StorageProvider;
   }> {
     vi.resetModules();
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-electron-agents-'));
+    const tempDir = await makeTempDir('texra-electron-agents-', tempDirs);
     const resourcesPath = join(tempDir, 'resources');
     const userDataPath = join(tempDir, 'userData');
     const workspacePath = join(tempDir, 'workspace');
