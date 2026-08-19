@@ -155,8 +155,10 @@ function applyEntry(
   // Every non-`LOG` entry stops here: run/round/session lifecycle *and* phase
   // headings are this host's task-group surface, which `upsertTaskGroupFromStreamLog`
   // above has already fed. That is a stronger rule than the projector's
-  // `projectLifecycleToTaskGroups`, which the CLI needs because it keeps phase
-  // rows inline — so this host never reaches row projection for them and never
+  // `projectLifecycleToTaskGroups`, which the CLI needs to keep run/round/session
+  // lifecycle headings inline for full-log children that have no task-group
+  // renderer; phase headings stay inline on the CLI independently of that
+  // flag — so this host never reaches row projection for them and never
   // passes that flag.
   if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) {
     return { ...compactionResult, stateChanged };

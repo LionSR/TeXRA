@@ -582,8 +582,9 @@ const CREF_FIG = '\\\\cref\\{(fig:[^,}]+)\\}';
  * progress-view KaTeX macro table; project documents compile against the
  * user's own preamble, where `\sS` is undefined. `\S` compiles everywhere.
  *
- * Boundary-aware for the same reason as the migration rule: a literal
- * `_\sS` prefix replacement would corrupt `_\sStrat`-style commands.
+ * Boundary-aware on purpose: the `(?![A-Za-z])` lookahead exists so an
+ * unanchored `_\sS` replacement does not corrupt S-prefixed commands like
+ * `_\sStrat`.
  */
 export function restoreLatexSectionSign(text: string): string {
   return text.replaceAll(/([_^])\\sS(?![A-Za-z])/g, '$1\\S');
