@@ -242,6 +242,11 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? subscriptionQuotaRead.snapshot
       : undefined;
 
+  // Shared execution record for the displayed stream: stage and the model
+  // handler's context-occupancy snapshot both come from it.
+  const displayStreamState =
+    displayStreamId === undefined ? undefined : streamStateFor(displayStreamId);
+
   const runStartedAt = isActivePhase(statusSlice?.status)
     ? statusSlice?.runStartedAt
     : undefined;
@@ -270,15 +275,12 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     queuedFollowUpMessages:
       displayStreamId === undefined ? [] : queuedFollowUpsFor(displayStreamId),
     usage: statusSlice?.usage,
-    stage:
-      displayStreamId === undefined
-        ? undefined
-        : streamStateFor(displayStreamId)?.stage,
+    contextState: displayStreamState?.contextState,
+    stage: displayStreamState?.stage,
     subagents: subagentCount,
     runningSessions: props.runningSessions ?? 0,
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,
-    model: accessModel,
     modelAccess,
     subscriptionQuota,
     transcriptMode: sessionMeta.transcriptMode,
