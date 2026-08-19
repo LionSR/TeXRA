@@ -1,4 +1,4 @@
-import { Node } from '@agent/node';
+import { BaseNode } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -19,7 +19,7 @@ import type { ToolUseRunShared, CyclePrepResult } from './types';
  * `../toolUseRound/`, which is the inner per-LLM-call prep node that
  * runs at the start of every model invocation inside `ToolUseRoundFlow`.
  */
-export class ToolUsePrepareNode<C> extends Node<
+export class ToolUsePrepareNode<C> extends BaseNode<
   ToolUseRunShared,
   ToolUseServices<C>
 > {

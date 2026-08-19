@@ -1,4 +1,4 @@
-import { Node } from '@agent/node';
+import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { getTeXCountStats } from '@latex/texcount';
 import type { FileLocation } from '@shared/schemas';
@@ -7,7 +7,7 @@ import { getFilesForRound } from '../helpers';
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionServices } from '../ReflectionServices';
 
-export class TeXCountNode<C = unknown> extends Node<
+export class TeXCountNode<C = unknown> extends BaseNode<
   ReflectionFlowShared,
   ReflectionServices<C>
 > {

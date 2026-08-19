@@ -1,4 +1,4 @@
-import { Node } from '@agent/node';
+import { BaseNode } from '@agent/node';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
@@ -50,7 +50,7 @@ interface OutputExecResult {
   emitCompileFailures: boolean;
 }
 
-export class OutputNode<C = unknown> extends Node<
+export class OutputNode<C = unknown> extends BaseNode<
   ReflectionFlowShared,
   ReflectionServices<C>
 > {

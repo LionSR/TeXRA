@@ -1,4 +1,4 @@
-import { Node } from '@agent/node';
+import { BaseNode } from '@agent/node';
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
@@ -21,7 +21,7 @@ interface WaitPrepResult {
   afterError: boolean;
 }
 
-export class ToolUseWaitNode<C> extends Node<
+export class ToolUseWaitNode<C> extends BaseNode<
   ToolUseRunShared,
   ToolUseServices<C>
 > {

@@ -1,4 +1,4 @@
-import { Node } from '@agent/node';
+import { BaseNode } from '@agent/node';
 import { ConversationRoundStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
@@ -16,7 +16,7 @@ interface PrepInput {
   compileFailureContext?: string;
 }
 
-export class PrepareContextNode<C = unknown> extends Node<
+export class PrepareContextNode<C = unknown> extends BaseNode<
   ReflectionFlowShared,
   ReflectionServices<C>
 > {

@@ -2,10 +2,15 @@
  * The model invocation node and everything its retry lifecycle owns: node-level
  * retry configuration, the shared-route recovery gate, the manual retry
  * prompt, and the cancelled/failed fallbacks — one deep module behind the
- * plain `Node` interface the cycle flows compose.
+ * plain `BaseNode` interface the cycle flows compose. It is the flow kernel's
+ * only retrying node: the manual-retry loop below (automatic p-retry batch →
+ * `retryPrompt` → one approved attempt at a time → `execFallback`) lives here
+ * because `ModelInvocationNode` is its only implementor.
  */
 
-import { Node } from '@agent/node';
+import pRetry, { AbortError } from 'p-retry';
+
+import { BaseNode } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
 import {
@@ -59,7 +64,12 @@ const EMPTY_RESPONSE_ERROR_MESSAGE =
  */
 const RETRY_BACKOFF_MS = 1000;
 
-/** One initial attempt plus the configured number of automatic retries. */
+/**
+ * One initial attempt plus the configured number of automatic retries.
+ * `ModelRetryMaxAttemptsSchema` bounds the setting to [0, 5] and falls back to
+ * the default on anything else, so the result is always >= 1 — the retry loop
+ * needs no lower-bound guard on it.
+ */
 function getNodeMaxRetries(): number {
   return (
     1 +
@@ -160,13 +170,27 @@ type InvocationServices = Pick<
 export class ModelInvocationNode<
   TShared extends BaseCycleFields,
   TServices extends InvocationServices = InvocationServices,
-> extends Node<TShared, TServices> {
+> extends BaseNode<TShared, TServices> {
   private readonly _config: ModelInvocationConfig<TShared, TServices>;
   protected _userCancelled = false;
   private _retryLifecycle: RetryLifecycleState | undefined;
 
+  /** One initial attempt plus automatic retries. Re-read on every `_exec`. */
+  maxRetries: number;
+  /** Seconds between automatic retries. Re-read on every `_exec`. */
+  wait: number;
+  /**
+   * The run's abort signal. When it fires, the retry loop skips the remaining
+   * retries and goes straight to `execFallback()`, so a cancelled run makes no
+   * further provider calls. `_exec` reassigns it from the run scope on every
+   * execution, so it needs no reset on clone.
+   */
+  signal?: AbortSignal;
+
   constructor(config: ModelInvocationConfig<TShared, TServices>) {
-    super(getNodeMaxRetries(), RETRY_BACKOFF_MS / 1000);
+    super();
+    this.maxRetries = getNodeMaxRetries();
+    this.wait = RETRY_BACKOFF_MS / 1000;
     this._config = config;
   }
 
@@ -370,9 +394,96 @@ export class ModelInvocationNode<
     // handling; an interrupt is read back off the same signal in
     // `getFallbackResult`, so there is nothing to register or clear here.
     this.signal = this.services.runScope.signal;
-    return super._exec(prepRes);
+    return this.execWithRetries(prepRes);
   }
 
+  /**
+   * Run `exec()` through the automatic retry batch, then one manually approved
+   * attempt at a time, and hand the last failure to `execFallback()`.
+   */
+  protected async execWithRetries(prepRes: unknown): Promise<unknown> {
+    // `_run` hands `prep()`'s result through the kernel untyped; this node's
+    // `exec`/`execFallback` narrow it, so widen it back once here.
+    const prep = prepRes as BaseInvocationPrepResult;
+    // Track the last exec error so we can forward it to execFallback when
+    // the abort signal fires during the inter-retry delay (p-retry would
+    // otherwise rethrow signal.reason, discarding the original failure).
+    let lastExecError: Error | undefined;
+    let attemptThrew = false;
+    const runAttempts = async (retries: number): Promise<unknown> => {
+      attemptThrew = false;
+      return await pRetry(
+        async () => {
+          // Throw AbortError at each attempt start so p-retry surfaces it
+          // immediately (before any delay) and skips onFailedAttempt.
+          if (this.signal?.aborted)
+            throw new AbortError('Operation cancelled by user');
+          try {
+            return await this.exec(prep);
+          } catch (error) {
+            attemptThrew = true;
+            throw error;
+          }
+        },
+        {
+          retries,
+          minTimeout: this.wait * 1000,
+          factor: 1, // linear (fixed) delay to preserve existing behaviour
+          randomize: false, // explicit: default is false; no jitter on fixed delays
+          signal: this.signal, // aborts an attempt or inter-retry delay early
+          shouldRetry: ({ error }) => {
+            lastExecError = error;
+            if (this.signal?.aborted) return false;
+            return this.shouldAutoRetry(error);
+          },
+        },
+      );
+    };
+
+    let retryError: Error;
+    try {
+      return await runAttempts(this.maxRetries - 1);
+    } catch (e) {
+      // User cancellation surfaces here as p-retry's aborted-delay rejection
+      // (signal.reason) or as the unwrapped error from our pre-attempt check
+      // (p-retry rethrows an AbortError's originalError, not the AbortError).
+      // Forward the recorded exec failure when one exists.
+      if (this.signal?.aborted) {
+        return await this.execFallback(prep, lastExecError ?? (e as Error));
+      }
+      retryError = e as Error;
+    }
+
+    for (;;) {
+      const shouldRetry = await this.retryPrompt(prep, retryError);
+      if (!shouldRetry || this.signal?.aborted) {
+        return await this.execFallback(prep, retryError);
+      }
+
+      try {
+        return await runAttempts(0);
+      } catch (e) {
+        const approvedError = e as Error;
+        if (this.signal?.aborted) {
+          return await this.execFallback(
+            prep,
+            attemptThrew ? approvedError : retryError,
+          );
+        }
+        retryError = approvedError;
+      }
+    }
+  }
+
+  /**
+   * Called when the automatic retry batch is exhausted or declined. Returns
+   * true to grant one more attempt, false to proceed to `execFallback`. A
+   * failed approved attempt calls this again.
+   *
+   * NOTE: keep this a regular method, not an arrow-function property.
+   * `BaseNode.clone()` uses Object.assign, which copies instance properties;
+   * an arrow function would capture the original instance's `this`.
+   */
   async retryPrompt(_prepRes: unknown, error: Error): Promise<boolean> {
     if (isUserAbort(error)) return false;
     // A missing credential cannot be fixed by retrying; fail immediately.
