@@ -25,6 +25,7 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { ElectronSecrets } from './electronSecrets.js';
