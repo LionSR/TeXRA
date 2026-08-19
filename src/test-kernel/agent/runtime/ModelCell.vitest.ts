@@ -123,11 +123,11 @@ describe('ModelCell', () => {
     };
     const cell = clientHandlerCell({
       getClient: vi.fn(async () => first),
-      getCredentialRouteForClient: () => 'relay' as const,
+      getCredentialRouteForClient: () => 'openrouter' as const,
     });
 
     await expect(cell.getClient()).resolves.toBe(first);
-    expect(cell.route).toBe('relay');
+    expect(cell.route).toBe('openrouter');
 
     cell.swap(nextHandler as unknown as RunModelHandler, 'sonnet46T');
 

@@ -801,17 +801,6 @@ describe('@shared/schemas deep-import ratchet', () => {
         moduleMemo,
       ),
     ).toBe('type');
-    expect(
-      reachableSpace(
-        surface,
-        '@shared/schemas/profileViewMessages',
-        {
-          name: 'API_ACCESS_MODE_OPTIONS',
-          requestedSpace: 'ordinary',
-        },
-        moduleMemo,
-      ),
-    ).toBe('value');
   });
 
   const baselineBeforeUpdate = JSON.parse(

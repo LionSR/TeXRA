@@ -10,15 +10,11 @@ import { suppressCliFetchStackLogs } from './_helpers/fetchSilencer';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/cliContext';
 
-export function doctorPlatformInitContext(context: CliContext) {
-  return { ...context, quietLogs: true };
-}
-
 async function runDoctor(context: CliContext): Promise<number> {
   let initError: unknown;
   try {
     await suppressCliFetchStackLogs(async () => {
-      await initCliPlatform(doctorPlatformInitContext(context));
+      await initCliPlatform({ ...context, quietLogs: true });
     });
   } catch (error) {
     initError = error;

@@ -13,7 +13,6 @@ import {
 
 const mocks = vi.hoisted(() => ({
   apiKeyExistsUncached: vi.fn(),
-  apiMode: 'included' as 'included' | 'personal',
   hasUsableApiKey: vi.fn(),
   handleExternalInquiryAction: vi.fn(),
   invalidateApiKeyCache: vi.fn(),
@@ -24,7 +23,6 @@ const mocks = vi.hoisted(() => ({
   openRouter: false,
   retryCopyFailure: undefined as Error | undefined,
   secrets: {},
-  setCliApiMode: vi.fn(),
   setCliCodexSubscription: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
   refreshSubscriptionPreferenceViews: vi.fn(),
@@ -58,16 +56,6 @@ vi.mock('@model/codex/codexPreference', () => ({
 vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: mocks.notify,
 }));
-
-vi.mock('@cli/runtime/apiAccessMode', async (importActual) => {
-  const actual =
-    await importActual<typeof import('@cli/runtime/apiAccessMode')>();
-  return {
-    ...actual,
-    getCliApiMode: () => mocks.apiMode,
-    setCliApiMode: mocks.setCliApiMode,
-  };
-});
 
 vi.mock('@cli/chat/tui/state/codexSubscription', () => ({
   refreshSubscriptionPreferenceViews: mocks.refreshSubscriptionPreferenceViews,
@@ -123,12 +111,7 @@ import {
   pendingApprovalSummaries,
   type ApprovalDecision,
 } from '@cli/chat/tui/state/approvalQueue';
-import {
-  patchSessionMeta,
-  resetCliState,
-  sessionMeta,
-  streams,
-} from '@cli/chat/tui/state/cliState';
+import { resetCliState, streams } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -193,37 +176,19 @@ function tui(
   };
 }
 
-function relayRetry(params: {
-  streamId: string;
-  provider?: string;
-  message?: string;
-}): RetryPermission {
-  const message = params.message ?? 'Relay monthly limit reached.';
-  return {
-    streamId: params.streamId,
-    operation: 'model request',
-    errorMessage: message,
-    errorDetails: {
-      message,
-      exhaustionReason: 'relay-limit',
-      isRelayError: true,
-      ...(params.provider ? { provider: params.provider } : {}),
-    },
-  } as RetryPermission;
-}
-
-/** Relay retry on the shared `same-stream` stream the replacement cases below
- *  queue two requests against. */
+/** Coding-plan retry on the shared `same-stream` stream the replacement cases
+ *  below queue two requests against. */
 function requestSameStreamRetry(
   interactions: HostInteractions,
   message: string,
 ): ReturnType<NonNullable<HostInteractions['requestRetry']>> {
-  return interactions.requestRetry?.(
-    relayRetry({ streamId: 'same-stream', provider: 'openai', message }),
-  );
+  return interactions.requestRetry?.({
+    ...kimiCodeSubscriptionRetry('same-stream'),
+    errorMessage: message,
+  } as RetryPermission);
 }
 
-/** Transient retry with no relay or subscription exhaustion behind it. */
+/** Transient retry with no subscription exhaustion behind it. */
 function ordinaryRetry(
   streamId: string,
   requestId: string = streamId,
@@ -289,14 +254,12 @@ function decideRetry(decision: ApprovalDecision): void {
   pending?.decide(decision);
 }
 
-/** The pre-switch route: included API access with the ChatGPT subscription. */
-function expectIncludedSubscriptionRoute(): void {
-  expect(mocks.apiMode).toBe('included');
+/** The pre-switch route: the ChatGPT subscription is still preferred. */
+function expectChatGptSubscriptionRoute(): void {
   expect(mocks.preferSubscription).toBe(true);
 }
 
 function expectNoPreferenceWrites(): void {
-  expect(mocks.setCliApiMode).not.toHaveBeenCalled();
   expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
 }
 
@@ -322,7 +285,6 @@ async function settleRetryContinuation(): Promise<void> {
 
 const PERSONAL_KEY_RETRY: ApprovalDecision = {
   accepted: true,
-  apiMode: 'personal',
   disableQuotaRoute: 'chatgpt',
 };
 
@@ -358,7 +320,7 @@ async function approveOrdinaryRetryOnOldRoute(
   streamId: string,
 ): Promise<void> {
   const ordinaryPrepare = vi.fn(async () => {
-    expectIncludedSubscriptionRoute();
+    expectChatGptSubscriptionRoute();
   });
   const ordinary = interactions.requestRetry?.(ordinaryRetry(streamId), {
     prepareRetry: ordinaryPrepare,
@@ -374,8 +336,6 @@ async function approveOrdinaryRetryOnOldRoute(
 }
 
 beforeEach(() => {
-  mocks.apiMode = 'included';
-  patchSessionMeta({ apiMode: 'included' });
   mocks.preferSubscription = true;
   mocks.openRouter = false;
   mocks.apiKeyExistsUncached.mockResolvedValue(true);
@@ -392,11 +352,6 @@ beforeEach(() => {
       }
     },
   );
-  // Mirrors setCliApiMode: included access turns OpenRouter routing off.
-  mocks.setCliApiMode.mockImplementation(async (mode) => {
-    mocks.apiMode = mode;
-    if (mode === 'included') mocks.openRouter = false;
-  });
   mocks.setCliCodexSubscription.mockImplementation(async (enabled) => {
     mocks.preferSubscription = enabled;
     return { effective: enabled, target: 'global' };
@@ -421,7 +376,6 @@ afterEach(() => {
   mocks.handleExternalInquiryAction.mockReset();
   mocks.invalidateApiKeyCache.mockReset();
   mocks.notify.mockReset();
-  mocks.setCliApiMode.mockReset();
   mocks.setCliCodexSubscription.mockReset();
   mocks.setCliCodingPlanSubscription.mockReset();
   mocks.refreshSubscriptionPreferenceViews.mockReset();
@@ -746,10 +700,18 @@ describe('TUI retry approvals', () => {
     expect(isBashApprovalBypassedForStream(streamId)).toBe(false);
   });
 
-  it('fails closed when a relay retry does not identify its provider', async () => {
+  it('fails closed when a switchable retry does not identify its provider', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     const { interactions, prepareRetry } = tui();
-    const result = interactions.requestRetry?.(relayRetry({ streamId: 's1' }));
+    const result = interactions.requestRetry?.({
+      streamId: 's1',
+      operation: 'model request',
+      errorMessage: 'ChatGPT subscription usage limit reached.',
+      errorDetails: {
+        message: 'ChatGPT subscription usage limit reached.',
+        exhaustionReason: 'chatgpt-subscription',
+      },
+    } as RetryPermission);
 
     await waitForApproval('retry', {
       personalApiKeyAvailable: false,
@@ -768,7 +730,7 @@ describe('TUI retry approvals', () => {
     mocks.hasUsableApiKey.mockRejectedValue(new Error('keychain unavailable'));
 
     const { interactions } = tui();
-    const retry = relayRetry({ streamId: 's2', provider: 'openai' });
+    const retry = chatGptSubscriptionRetry('s2');
     void interactions.requestRetry?.(retry);
 
     await waitForApproval('retry', {
@@ -783,43 +745,20 @@ describe('TUI retry approvals', () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
 
     const { interactions } = tui();
-    const retry = relayRetry({
+    const retry = {
       streamId: 'unknown-provider',
-      provider: 'custom-provider',
-    });
+      operation: 'model request',
+      errorMessage: 'ChatGPT subscription usage limit reached.',
+      errorDetails: {
+        message: 'ChatGPT subscription usage limit reached.',
+        exhaustionReason: 'chatgpt-subscription',
+        provider: 'custom-provider',
+      },
+    } as RetryPermission;
     void interactions.requestRetry?.(retry);
 
     await waitForApproval('retry', { streamId: 'unknown-provider' });
     expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
-  });
-
-  it('auto-switches relay retries detected by monthly-limit message fallback', async () => {
-    mocks.hasUsableApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) => provider === 'openai',
-    );
-
-    const { interactions } = tui();
-    const result = interactions.requestRetry?.({
-      streamId: 'message-fallback',
-      operation: 'model request',
-      errorMessage: 'Monthly spending limit reached.',
-      errorDetails: {
-        message: 'Monthly spending limit reached.',
-        exhaustionReason: 'relay-limit',
-        isRelayError: false,
-        provider: 'openai',
-      },
-    } as RetryPermission);
-
-    await vi.waitFor(() => {
-      expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-    });
-    await expect(result).resolves.toEqual({
-      action: 'retry',
-      decisionSource: 'automatic',
-      feedback: undefined,
-    });
-    expect(currentApproval.get()).toBeUndefined();
   });
 
   it('requires an explicit decision before switching a ChatGPT subscription retry to an API key', async () => {
@@ -844,7 +783,6 @@ describe('TUI retry approvals', () => {
       action: 'retry',
       feedback: undefined,
     });
-    expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
     expect(mocks.setCliCodexSubscription).toHaveBeenCalledWith(false);
     expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
     expect(mocks.apiKeyExistsUncached).toHaveBeenCalledWith(
@@ -869,9 +807,6 @@ describe('TUI retry approvals', () => {
       kimiCodeSubscriptionRetry('kimi-limit'),
     );
 
-    await vi.waitFor(() => {
-      expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-    });
     await expect(result).resolves.toEqual({
       action: 'retry',
       decisionSource: 'automatic',
@@ -991,9 +926,6 @@ describe('TUI retry approvals', () => {
     const { interactions, prepareRetry } = tui();
     const result = interactions.requestRetry?.(glmCodingPlanRetry('glm-limit'));
 
-    await vi.waitFor(() => {
-      expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-    });
     await expect(result).resolves.toEqual({
       action: 'retry',
       decisionSource: 'automatic',
@@ -1066,7 +998,6 @@ describe('TUI retry approvals', () => {
       GlobalStateKey.KIMI_CODE_PREFER,
       true,
     );
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
   });
 
   it('serializes coding-plan rollback ahead of a newer coding-plan switch', async () => {
@@ -1209,7 +1140,7 @@ describe('TUI retry approvals', () => {
       reason: 'OpenAI client construction failed',
     });
     expectNoPreferenceWrites();
-    expectIncludedSubscriptionRoute();
+    expectChatGptSubscriptionRoute();
     expect(prepareRetry).toHaveBeenCalledOnce();
   });
 
@@ -1227,10 +1158,9 @@ describe('TUI retry approvals', () => {
       { prepareRetry },
     );
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
-    expectIncludedSubscriptionRoute();
+    expectChatGptSubscriptionRoute();
 
-    // A later /api, /key, login, or logout selection owns these values now.
-    mocks.apiMode = 'included';
+    // A later /api, /key, login, or logout selection owns this value now.
     mocks.preferSubscription = true;
     preparation.resolve();
 
@@ -1239,7 +1169,7 @@ describe('TUI retry approvals', () => {
       reason: 'OpenAI client construction failed',
     });
     expectNoPreferenceWrites();
-    expectIncludedSubscriptionRoute();
+    expectChatGptSubscriptionRoute();
   });
 
   it('cancels stalled candidate construction without publishing settings', async () => {
@@ -1264,7 +1194,7 @@ describe('TUI retry approvals', () => {
     await expect(result).resolves.toEqual({ action: 'cancel' });
     expect(prepareRetry.mock.calls[0]?.[1]?.aborted).toBe(true);
     await vi.waitFor(() => {
-      expectIncludedSubscriptionRoute();
+      expectChatGptSubscriptionRoute();
     });
 
     const laterPrepare = vi.fn(async (selection) => {
@@ -1282,46 +1212,6 @@ describe('TUI retry approvals', () => {
       feedback: undefined,
     });
     expect(laterPrepare).toHaveBeenCalledOnce();
-  });
-
-  it('rolls back a cancelled persistence write and releases the session commit queue', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    mocks.setCliApiMode.mockImplementationOnce(async (mode) => {
-      mocks.apiMode = mode;
-      // Simulate storage that never settles after updating in-memory state.
-      await neverSettles();
-    });
-    const { interactions } = tui();
-    const { result } = await beginSubscriptionSwitch(
-      interactions,
-      'stalled-mode-persistence',
-    );
-    await vi.waitFor(() => expect(mocks.setCliApiMode).toHaveBeenCalledOnce());
-    expect(mocks.apiMode).toBe('personal');
-
-    interactions.cancel({
-      streamId: 'stalled-mode-persistence',
-      kind: 'retry',
-      cause: 'Cancelled in test.',
-    });
-    await expect(result).resolves.toEqual({ action: 'cancel' });
-    await vi.waitFor(() => expect(mocks.apiMode).toBe('included'));
-
-    const laterPrepare = vi.fn(async () => undefined);
-    const later = interactions.requestRetry?.(
-      relayRetry({
-        streamId: 'after-stalled-persistence',
-        provider: 'openai',
-      }),
-      { prepareRetry: laterPrepare },
-    );
-    await expect(later).resolves.toEqual({
-      action: 'retry',
-      decisionSource: 'automatic',
-      feedback: undefined,
-    });
-    expect(laterPrepare).toHaveBeenCalledOnce();
-    expect(mocks.apiMode).toBe('personal');
   });
 
   it('reports any preference that cannot be restored after commit fails', async () => {
@@ -1347,65 +1237,7 @@ describe('TUI retry approvals', () => {
         'Previous access settings could not be fully restored: Could not restore the ChatGPT subscription preference: settings storage unavailable',
       ),
     });
-    expect(mocks.apiMode).toBe('included');
     expect(mocks.preferSubscription).toBe(false);
-  });
-
-  it('restores OpenRouter routing when the credential switch rolls back', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    mocks.openRouter = true;
-    mocks.setCliCodexSubscription.mockRejectedValueOnce(
-      new Error('subscription write failed'),
-    );
-
-    const { interactions } = tui();
-    const { result } = await beginSubscriptionSwitch(
-      interactions,
-      'openrouter-rollback',
-    );
-
-    await expect(result).resolves.toEqual({
-      action: 'deny',
-      reason: expect.stringContaining('subscription write failed'),
-    });
-    expect(mocks.apiMode).toBe('included');
-    expect(mocks.openRouter).toBe(true);
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      GlobalStateKey.USE_OPENROUTER,
-      true,
-    );
-  });
-
-  it('reports unconfirmed persistence when API-mode rollback restores memory before rejecting', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    mocks.setCliApiMode
-      .mockImplementationOnce(async (mode) => {
-        mocks.apiMode = mode;
-      })
-      .mockImplementationOnce(async (mode) => {
-        mocks.apiMode = mode;
-        throw new Error('API mode storage unavailable');
-      });
-    mocks.setCliCodexSubscription.mockRejectedValueOnce(
-      new Error('subscription storage unavailable'),
-    );
-    const prepareRetry = vi.fn(async () => undefined);
-
-    const { interactions } = tui();
-    const { result } = await beginSubscriptionSwitch(
-      interactions,
-      'rollback-persistence-failure',
-      { prepareRetry },
-    );
-
-    await expect(result).resolves.toEqual({
-      action: 'deny',
-      reason: expect.stringContaining(
-        'Previous access settings could not be fully restored: The previous API mode appears restored in memory, but persistence could not be confirmed: API mode storage unavailable',
-      ),
-    });
-    expectIncludedSubscriptionRoute();
-    expect(prepareRetry).toHaveBeenCalledOnce();
   });
 
   it('cancels a credential switch during candidate construction without settings writes', async () => {
@@ -1420,17 +1252,15 @@ describe('TUI retry approvals', () => {
       { prepareRetry },
     );
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
-    expect(sessionMeta.get().apiMode).toBe('included');
 
     void interactions.requestRetry?.(chatGptSubscriptionRetry('commit-race'));
     await expect(first).resolves.toEqual({ action: 'cancel' });
     preparation.resolve();
     await preparation.promise;
     await vi.waitFor(() => {
-      expectIncludedSubscriptionRoute();
+      expectChatGptSubscriptionRoute();
     });
 
-    expect(sessionMeta.get().apiMode).toBe('included');
     expectNoPreferenceWrites();
   });
 
@@ -1470,7 +1300,6 @@ describe('TUI retry approvals', () => {
       action: 'retry',
       feedback: undefined,
     });
-    expect(mocks.apiMode).toBe('personal');
     expect(mocks.preferSubscription).toBe(false);
   });
 
@@ -1532,7 +1361,7 @@ describe('TUI retry approvals', () => {
 
     const { interactions } = tui();
     const retry = interactions.requestRetry?.(
-      relayRetry({ streamId: 'preparing-stream', provider: 'openai' }),
+      chatGptSubscriptionRetry('preparing-stream'),
     );
     const bash = interactions.requestBashApproval?.({
       command: 'echo ok',
@@ -1569,7 +1398,7 @@ describe('TUI retry approvals', () => {
 
     const { interactions } = tui();
     const cleared = interactions.requestRetry?.(
-      relayRetry({ streamId: 'cleared-retry', provider: 'openai' }),
+      chatGptSubscriptionRetry('cleared-retry'),
     );
     await waitForApproval('retry', { streamId: 'cleared-retry' });
     clearApprovals();
@@ -1577,7 +1406,7 @@ describe('TUI retry approvals', () => {
     await expect(cleared).resolves.toEqual({ action: 'cancel' });
 
     const refused = interactions.requestRetry?.(
-      relayRetry({ streamId: 'refused-retry', provider: 'openai' }),
+      chatGptSubscriptionRetry('refused-retry'),
     );
     await waitForApproval('retry', { streamId: 'refused-retry' });
     decideRetry({ accepted: false });
@@ -1633,7 +1462,7 @@ describe('TUI retry approvals', () => {
 
       const handle = tui();
       const result = handle.interactions.requestRetry?.(
-        relayRetry({ streamId, provider: 'openai' }),
+        chatGptSubscriptionRetry(streamId),
       );
       invalidate(handle);
       await expect(result).resolves.toEqual({ action: 'cancel' });
@@ -1641,7 +1470,7 @@ describe('TUI retry approvals', () => {
       resolveLookup?.(true);
       await settleRetryContinuation();
 
-      expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+      expectNoPreferenceWrites();
       expect(currentApproval.get()).toBeUndefined();
     },
   );
@@ -1651,7 +1480,7 @@ describe('TUI retry approvals', () => {
 
     const { interactions } = tui();
     const result = interactions.requestRetry?.(
-      relayRetry({ streamId: 'modal-interrupt', provider: 'openai' }),
+      chatGptSubscriptionRetry('modal-interrupt'),
     );
 
     await waitForApproval('retry', { streamId: 'modal-interrupt' });
@@ -1681,7 +1510,7 @@ describe('TUI retry approvals', () => {
     resolveFirstLookup?.(true);
     await settleRetryContinuation();
 
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+    expect(mocks.setCliCodingPlanSubscription).not.toHaveBeenCalled();
   });
 
   it('clears an older retry modal when a newer retry auto-switches', async () => {
@@ -1722,22 +1551,16 @@ describe('TUI retry approvals', () => {
 
     const older = tui();
     const newer = tui();
-    const olderResult = older.interactions.requestRetry?.(
-      relayRetry({
-        streamId: 'shared-stream',
-        provider: 'openai',
-        message: 'older host retry',
-      }),
-    );
+    const olderResult = older.interactions.requestRetry?.({
+      ...chatGptSubscriptionRetry('shared-stream'),
+      errorMessage: 'older host retry',
+    } as RetryPermission);
     await waitForApproval('retry', { errorMessage: 'older host retry' });
 
-    const newerResult = newer.interactions.requestRetry?.(
-      relayRetry({
-        streamId: 'shared-stream',
-        provider: 'openai',
-        message: 'newer host retry',
-      }),
-    );
+    const newerResult = newer.interactions.requestRetry?.({
+      ...chatGptSubscriptionRetry('shared-stream'),
+      errorMessage: 'newer host retry',
+    } as RetryPermission);
     await vi.waitFor(() => {
       expect(pendingApprovalSummaries.get()).toHaveLength(2);
     });
@@ -1762,10 +1585,10 @@ describe('TUI retry approvals', () => {
     const older = tui();
     const newer = tui();
     const detached = older.interactions.requestRetry?.(
-      relayRetry({ streamId: 'detached-host', provider: 'openai' }),
+      chatGptSubscriptionRetry('detached-host'),
     );
     const live = newer.interactions.requestRetry?.(
-      relayRetry({ streamId: 'live-host', provider: 'openai' }),
+      chatGptSubscriptionRetry('live-host'),
     );
     await vi.waitFor(() => {
       expect(pendingApprovalSummaries.get()).toEqual([
@@ -1819,7 +1642,7 @@ describe('TUI retry approvals', () => {
 
     const { interactions, prepareRetry } = tui();
     const result = interactions.requestRetry?.(
-      relayRetry({ streamId: 'preparation-failure', provider: 'openai' }),
+      chatGptSubscriptionRetry('preparation-failure'),
     );
 
     await waitForApproval('retry', { streamId: 'preparation-failure' });
@@ -1830,98 +1653,5 @@ describe('TUI retry approvals', () => {
       feedback: undefined,
     });
     expect(prepareRetry).toHaveBeenCalledWith('configured', expect.anything());
-  });
-
-  it('cancels a retry parked behind another commit without waiting for it', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    const blockingWrite = pDefer<undefined>();
-    mocks.setCliApiMode.mockImplementationOnce(async (mode) => {
-      mocks.apiMode = mode;
-      await blockingWrite.promise;
-    });
-    const queuedPreparation = pDefer<void>();
-    const queuedPrepare = vi.fn(() => queuedPreparation.promise);
-
-    const { interactions } = tui();
-    const blocking = interactions.requestRetry?.(
-      relayRetry({ streamId: 'blocking-commit', provider: 'openai' }),
-    );
-    await vi.waitFor(() => expect(mocks.setCliApiMode).toHaveBeenCalledOnce());
-
-    const queued = interactions.requestRetry?.(
-      relayRetry({ streamId: 'queued-commit', provider: 'openai' }),
-      { prepareRetry: queuedPrepare },
-    );
-    await vi.waitFor(() => expect(queuedPrepare).toHaveBeenCalledOnce());
-    queuedPreparation.resolve();
-    // The retry continuation parks its commit behind the blocked one.
-    await queuedPreparation.promise;
-    await settleRetryContinuation();
-
-    interactions.cancel({
-      streamId: 'queued-commit',
-      kind: 'retry',
-      cause: 'Cancelled in test.',
-    });
-    await expect(queued).resolves.toEqual({ action: 'cancel' });
-    expect(mocks.setCliApiMode).toHaveBeenCalledOnce();
-
-    blockingWrite.resolve(undefined);
-    await expect(blocking).resolves.toEqual({
-      action: 'retry',
-      decisionSource: 'automatic',
-      feedback: undefined,
-    });
-    expect(mocks.setCliApiMode).toHaveBeenCalledOnce();
-  });
-
-  it('serializes a newer switch behind stale-switch rollback', async () => {
-    const firstModeSwitch = pDefer<undefined>();
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    mocks.setCliApiMode
-      .mockImplementationOnce(async (mode) => {
-        mocks.apiMode = mode;
-        await firstModeSwitch.promise;
-      })
-      .mockImplementationOnce(async (mode) => {
-        mocks.apiMode = mode;
-      });
-
-    const { interactions, prepareRetry } = tui();
-    void requestSameStreamRetry(interactions, 'first retry');
-    await vi.waitFor(() => {
-      expect(mocks.setCliApiMode).toHaveBeenCalledTimes(1);
-    });
-
-    const second = requestSameStreamRetry(interactions, 'second retry');
-    await Promise.resolve();
-    await vi.waitFor(() =>
-      expect(mocks.setCliApiMode).toHaveBeenCalledTimes(2),
-    );
-    expect(mocks.apiMode).toBe('included');
-
-    firstModeSwitch.reject(new Error('stale mode switch failed'));
-    await expect(second).resolves.toEqual({
-      action: 'retry',
-      decisionSource: 'automatic',
-      feedback: undefined,
-    });
-    expect(mocks.setCliApiMode.mock.calls.map(([mode]) => mode)).toEqual([
-      'personal',
-      'included',
-      'personal',
-    ]);
-    expect(mocks.apiMode).toBe('personal');
-    expect(prepareRetry).toHaveBeenCalledTimes(2);
-    expect(prepareRetry).toHaveBeenNthCalledWith(
-      1,
-      'personal',
-      expect.anything(),
-    );
-    expect(prepareRetry).toHaveBeenNthCalledWith(
-      2,
-      'personal',
-      expect.anything(),
-    );
   });
 });

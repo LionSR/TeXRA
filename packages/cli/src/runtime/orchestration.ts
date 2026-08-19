@@ -3,7 +3,7 @@ import {
   canLaunchTeam,
   teamTexraHostedMissingNames,
 } from '@common/teams/TeamPlan';
-import type { ApiAccessMode, ExecutionId } from '@shared/schemas';
+import type { ExecutionId } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -17,8 +17,8 @@ import { pickDefaultToolUseAgent } from './defaultAgents';
 import { formatCliHistoryResumeSummary } from './historyLabels';
 import { resumableCliHistoryEntries, type CliHistoryEntry } from './history';
 import {
-  modelAccessLaunchBlockDescriptionForCliMode,
-  modelSelectItemsForCliMode,
+  modelAccessLaunchBlockDescription,
+  modelSelectItemsForCli,
   type CliModelAccess,
   type CliModelPickerItem,
 } from './modelAccess';
@@ -93,7 +93,6 @@ type CliAccountOperation = 'sign-in' | 'sign-out';
 export interface CliAccountStatus {
   readonly texraSignedIn: boolean;
   readonly texraAccountLabel?: string;
-  readonly texraCredentialSource?: 'session' | 'relayToken';
   readonly chatGptSignedIn: boolean;
   readonly chatGptAccountLabel?: string;
   readonly grokSignedIn: boolean;
@@ -109,7 +108,6 @@ export function isCliOrchestrationModelPickAction(
 export function orchestrationModelAccessView(
   items: readonly CliOrchestrationItem[],
   models: readonly CliModelAccess[],
-  apiMode: ApiAccessMode,
   options: {
     readonly allowDefaultModelLaunch?: boolean;
   } = {},
@@ -117,7 +115,7 @@ export function orchestrationModelAccessView(
   readonly items: readonly CliOrchestrationItem[];
   readonly modelItems: readonly CliModelPickerItem[];
 } {
-  const modelItems = modelSelectItemsForCliMode(models, apiMode);
+  const modelItems = modelSelectItemsForCli(models);
   if (
     models.length === 0 ||
     modelItems.length > 0 ||
@@ -126,10 +124,7 @@ export function orchestrationModelAccessView(
     return { items, modelItems };
   }
 
-  const description = modelAccessLaunchBlockDescriptionForCliMode(
-    models,
-    apiMode,
-  );
+  const description = modelAccessLaunchBlockDescription();
   return {
     modelItems,
     items: items.map((item) => {
@@ -205,18 +200,13 @@ export function buildCliOrchestrationItems(
 
 function accountSummary(status: CliAccountStatus): string {
   const signed: string[] = [];
-  if (status.texraCredentialSource === 'relayToken') {
-    signed.push('TEXRA_RELAY_TOKEN');
-  } else if (status.texraSignedIn) {
+  if (status.texraSignedIn) {
     signed.push('TeXRA');
   }
   if (status.chatGptSignedIn) signed.push('ChatGPT');
   if (status.grokSignedIn) signed.push('Grok');
   if (signed.length === 0) return 'Sign in or manage accounts';
   if (signed.length === 1) {
-    if (status.texraCredentialSource === 'relayToken') {
-      return 'TEXRA_RELAY_TOKEN configured';
-    }
     if (status.chatGptSignedIn) {
       return `ChatGPT · ${status.chatGptAccountLabel ?? 'signed in'}`;
     }
@@ -282,11 +272,7 @@ export function buildCliAccountItems(
     items.push({
       value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       label: 'Log out of TeXRA',
-      description:
-        status.texraCredentialSource === 'relayToken'
-          ? 'Managed by the TEXRA_RELAY_TOKEN environment variable'
-          : '',
-      disabled: status.texraCredentialSource === 'relayToken',
+      description: '',
     });
   } else {
     items.push({

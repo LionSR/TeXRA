@@ -222,8 +222,7 @@ export async function isXaiSubscriptionActive(
  * Whether the model currently routes through the Kimi Code coding endpoint
  * (Moonshot coding subscription, authenticated by the Kimi Code API key).
  * Mirrors ModelFactory's dispatch facts: registry eligibility, the OpenRouter
- * toggle, included (relay) access, a stored key, and the "Prefer Kimi Code"
- * switch.
+ * toggle, a stored key, and the "Prefer Kimi Code" switch.
  */
 export async function isKimiCodeSubscriptionActive(
   modelId: string,

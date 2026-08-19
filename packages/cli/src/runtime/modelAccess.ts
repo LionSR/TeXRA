@@ -5,13 +5,8 @@ import {
   type RunModelCandidate,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
-import type {
-  ApiAccessMode,
-  ModelAvailabilityKind,
-  ModelOptionData,
-} from '@shared/schemas';
+import type { ModelOptionData } from '@shared/schemas';
 import { isModelOptionAvailable } from '@shared/schemas';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { assertNever, unique } from '@utils/core';
 import { getGLMCodingPlan } from '@utils/config/providerConfig';
 
@@ -20,7 +15,7 @@ import { resolveKnownCliModelId } from './cliConfig';
 
 export interface CliModelAccess {
   readonly model: ModelOptionData;
-  /** Runnable in the API mode used to load this access list. */
+  /** Runnable with the currently configured credentials. */
   readonly available: boolean;
   readonly status: string;
 }
@@ -55,7 +50,6 @@ const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
 } satisfies Record<RunModelDecisionReason, CliModelFallbackMode>;
 
 export interface CliModelAccessListOptions {
-  readonly apiMode?: ApiAccessMode;
   readonly models?: readonly string[];
 }
 
@@ -66,7 +60,7 @@ export interface CliModelAccessEntryOptions extends CliModelAccessListOptions {
 
 export interface CliRunnableModelOptions extends Pick<
   CliModelAccessEntryOptions,
-  'apiMode' | 'accessList'
+  'accessList'
 > {
   /** Decision reason that owns unavailable-model fallback behavior. */
   readonly fallbackReason?: RunModelDecisionReason;
@@ -78,162 +72,40 @@ export interface CliModelListOptions {
 }
 
 export interface CliNoAvailableModelsRecoveryOptions {
-  readonly includedModeAction?: string;
-  readonly loginAction?: string;
-  readonly personalModeAction?: string;
   readonly configureKeyAction?: string;
 }
 
-export type NoRunnableModelAccessReason =
-  ApiAccessMode | 'includedLoginRequired';
+const NO_RUNNABLE_MODEL_ACCESS_COPY = 'No models are available';
 
-const CLI_MODEL_AVAILABILITY_BY_API_MODE = {
-  // The ChatGPT subscription is the user's own credential, and the Codex
-  // routing overrides the relay/personal credential either way, so a
-  // subscription model is runnable in both API modes.
-  included: new Set<ModelAvailabilityKind>([
-    'included-access',
-    'subscription-access',
-  ]),
-  personal: new Set<ModelAvailabilityKind>([
-    'provider-key',
-    'openrouter-key',
-    'subscription-access',
-  ]),
-} satisfies Record<ApiAccessMode, ReadonlySet<ModelAvailabilityKind>>;
-
-const INCLUDED = INCLUDED_ACCESS.inline;
-
-const INCLUDED_ACCESS_STATUS_BY_AVAILABILITY = {
-  'included-access': `${INCLUDED}: available`,
-  'not-included': `${INCLUDED}: unavailable`,
-  'included-login-required': `${INCLUDED}: sign-in required`,
-  'relay-quota-exhausted': `${INCLUDED}: usage limit reached`,
-  'provider-key': `${INCLUDED}: unavailable; API key set`,
-  'openrouter-key': `${INCLUDED}: unavailable; OpenRouter key set`,
-  'missing-key': `${INCLUDED}: unavailable; missing API key`,
-  'subscription-access': 'ChatGPT subscription',
-  'copilot-access': 'copilot: unavailable in CLI',
-  'copilot-consent-required': 'copilot: unavailable in CLI',
-  'copilot-unavailable': 'copilot: unavailable in CLI',
-  'provider-unavailable': 'unavailable through selected provider',
-  retired: 'retired',
-  'unknown-model': 'unknown model',
-} satisfies Record<ModelAvailabilityKind, string>;
-
-/** One statement per reason; the launcher shows it bare, messages add a period. */
-const NO_RUNNABLE_MODEL_ACCESS_COPY = {
-  includedLoginRequired: `Sign in to use ${INCLUDED}`,
-  included: `No models are available with ${INCLUDED}`,
-  personal: `No models are available with ${OWN_API_KEYS.inline}`,
-} satisfies Record<NoRunnableModelAccessReason, string>;
-
-const DEFAULT_CLI_MODEL_RECOVERY_ACTIONS = {
-  includedModeAction: 'retry with `--api-mode included`',
-  loginAction: 'run `texra login`',
-  personalModeAction: 'retry with `--api-mode personal`',
-  // Point shell users at the guided setup picker rather than leaving them to
-  // figure out key storage on their own; TUI contexts override this with
-  // slash-command phrasing.
-  configureKeyAction: 'add a provider API key with `texra setup`',
-} satisfies Required<CliNoAvailableModelsRecoveryOptions>;
+// Point shell users at the guided setup picker rather than leaving them to
+// figure out key storage on their own; TUI contexts override this with
+// slash-command phrasing.
+const DEFAULT_CONFIGURE_KEY_ACTION =
+  'add a provider API key with `texra setup`';
 
 function startSentence(text: string): string {
   if (text.length === 0) return text;
   return `${text.at(0)!.toUpperCase()}${text.slice(1)}`;
 }
 
-function cliModelRecoveryActions(
-  options: CliNoAvailableModelsRecoveryOptions,
-): Required<CliNoAvailableModelsRecoveryOptions> {
-  return {
-    includedModeAction:
-      options.includedModeAction ??
-      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.includedModeAction,
-    loginAction:
-      options.loginAction ?? DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.loginAction,
-    personalModeAction:
-      options.personalModeAction ??
-      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.personalModeAction,
-    configureKeyAction:
-      options.configureKeyAction ??
-      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.configureKeyAction,
-  };
-}
-
-function isCliModelOptionAllowedInMode(
-  model: ModelOptionData,
-  apiMode?: ApiAccessMode,
-): boolean {
-  if (apiMode == null) return true;
-
-  const availability = model.availability;
-  return (
-    availability != null &&
-    CLI_MODEL_AVAILABILITY_BY_API_MODE[apiMode].has(availability)
-  );
-}
-
-function isCliModelOptionRunnableInMode(
-  model: ModelOptionData,
-  apiMode?: ApiAccessMode,
-): boolean {
-  return (
-    isModelOptionAvailable(model) &&
-    isCliModelOptionAllowedInMode(model, apiMode)
-  );
-}
-
 export function runnableCliModelAccessEntries(
   models: readonly CliModelAccess[],
-  apiMode?: ApiAccessMode,
 ): CliModelAccess[] {
-  return models.filter(
-    (entry) =>
-      entry.available && isCliModelOptionAllowedInMode(entry.model, apiMode),
-  );
-}
-
-export function noRunnableModelAccessReason(
-  models: readonly CliModelAccess[],
-  apiMode: ApiAccessMode,
-): NoRunnableModelAccessReason {
-  if (
-    apiMode === 'included' &&
-    models.some(
-      (model) => model.model.availability === 'included-login-required',
-    )
-  ) {
-    return 'includedLoginRequired';
-  }
-  return apiMode;
+  return models.filter((entry) => entry.available);
 }
 
 function formatCliNoRunnableModelsRecovery(
-  reason: NoRunnableModelAccessReason,
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
-  const {
-    includedModeAction,
-    loginAction,
-    personalModeAction,
-    configureKeyAction,
-  } = cliModelRecoveryActions(options);
-
-  if (reason === 'includedLoginRequired') {
-    return `${startSentence(loginAction)} or ${personalModeAction}.`;
-  }
-  if (reason === 'included') {
-    return `${startSentence(personalModeAction)} or try again later.`;
-  }
-  return `${startSentence(configureKeyAction)} or ${includedModeAction}.`;
+  const configureKeyAction =
+    options.configureKeyAction ?? DEFAULT_CONFIGURE_KEY_ACTION;
+  return `${startSentence(configureKeyAction)}.`;
 }
 
 export function formatCliNoRunnableModelsMessage(
-  reason: NoRunnableModelAccessReason,
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
-  return `${NO_RUNNABLE_MODEL_ACCESS_COPY[reason]}. ${formatCliNoRunnableModelsRecovery(reason, options)}`;
+  return `${NO_RUNNABLE_MODEL_ACCESS_COPY}. ${formatCliNoRunnableModelsRecovery(options)}`;
 }
 
 function formatModelAccessStatus(model: ModelOptionData): string {
@@ -246,35 +118,20 @@ function formatModelAccessStatus(model: ModelOptionData): string {
   return 'unavailable';
 }
 
-export function formatModelStatusForCliMode(
-  model: CliModelAccess,
-  apiMode: ApiAccessMode,
-): string {
-  if (apiMode === 'personal') {
-    if (model.model.provider === 'kimiCode')
-      return 'api: Kimi Code subscription';
-    // GLM models route through the Coding Plan endpoint when the toggle is on.
-    // Gate on the resolved provider-key route (not just provider + toggle): the
-    // coding-plan path only applies to the direct GLM endpoint, never to an
-    // OpenRouter route, which stays reported as its own key status.
-    if (
-      model.model.provider === 'glm' &&
-      model.model.availability === 'provider-key' &&
-      getGLMCodingPlan()
-    ) {
-      return 'api: GLM Coding Plan';
-    }
-    return `api: ${model.status}`;
+export function formatModelStatusForCli(model: CliModelAccess): string {
+  if (model.model.provider === 'kimiCode') return 'api: Kimi Code subscription';
+  // GLM models route through the Coding Plan endpoint when the toggle is on.
+  // Gate on the resolved provider-key route (not just provider + toggle): the
+  // coding-plan path only applies to the direct GLM endpoint, never to an
+  // OpenRouter route, which stays reported as its own key status.
+  if (
+    model.model.provider === 'glm' &&
+    model.model.availability === 'provider-key' &&
+    getGLMCodingPlan()
+  ) {
+    return 'api: GLM Coding Plan';
   }
-
-  const availability = model.model.availability;
-  if (availability == null) return `${INCLUDED}: ${model.status}`;
-  // Prefer the availability label for subscription rows so Grok OAuth is not
-  // hard-coded as "chatgpt subscription" (kind is shared with ChatGPT).
-  if (availability === 'subscription-access') {
-    return model.status;
-  }
-  return INCLUDED_ACCESS_STATUS_BY_AVAILABILITY[availability];
+  return `api: ${model.status}`;
 }
 
 // Reason a given model id cannot be switched to right now, or undefined if it can.
@@ -282,14 +139,13 @@ export type GetModelSwitchDisabledReason = (
   model: string,
 ) => string | undefined;
 
-export function modelSelectItemsForCliMode(
+export function modelSelectItemsForCli(
   models: readonly CliModelAccess[],
-  apiMode: ApiAccessMode,
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason,
 ): readonly CliModelPickerItem[] {
-  return runnableCliModelAccessEntries(models, apiMode).map((model) => {
+  return runnableCliModelAccessEntries(models).map((model) => {
     const disabledReason = getModelSwitchDisabledReason?.(model.model.value);
-    const status = formatModelStatusForCliMode(model, apiMode);
+    const status = formatModelStatusForCli(model);
     return {
       value: model.model.value,
       label: model.model.label || model.model.value,
@@ -299,53 +155,26 @@ export function modelSelectItemsForCliMode(
   });
 }
 
-export function modelAccessLaunchBlockDescriptionForCliMode(
-  models: readonly CliModelAccess[],
-  apiMode: ApiAccessMode,
-): string {
-  return NO_RUNNABLE_MODEL_ACCESS_COPY[
-    noRunnableModelAccessReason(models, apiMode)
-  ];
+export function modelAccessLaunchBlockDescription(): string {
+  return NO_RUNNABLE_MODEL_ACCESS_COPY;
 }
 
-export function emptyModelListMessageForCliMode(
-  models: readonly CliModelAccess[],
-  apiMode: ApiAccessMode,
+export function emptyModelListMessage(
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
-  return formatCliNoRunnableModelsMessage(
-    noRunnableModelAccessReason(models, apiMode),
-    options,
-  );
+  return formatCliNoRunnableModelsMessage(options);
 }
 
 export function formatCliNoAvailableModelsRecovery(
-  apiMode?: ApiAccessMode,
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
-  const {
-    includedModeAction,
-    loginAction,
-    personalModeAction,
-    configureKeyAction,
-  } = cliModelRecoveryActions(options);
-
-  if (apiMode === 'personal') {
-    return `${startSentence(configureKeyAction)}, or ${includedModeAction} and ${loginAction}.`;
-  }
-  if (apiMode === 'included') {
-    return `${startSentence(loginAction)} for ${INCLUDED}, or ${personalModeAction} after configuring a provider API key.`;
-  }
-  return `${startSentence(loginAction)}, ${includedModeAction}, or ${configureKeyAction}.`;
+  return formatCliNoRunnableModelsRecovery(options);
 }
 
-function toCliModelAccess(
-  model: ModelOptionData,
-  apiMode?: ApiAccessMode,
-): CliModelAccess {
+function toCliModelAccess(model: ModelOptionData): CliModelAccess {
   return {
     model,
-    available: isCliModelOptionRunnableInMode(model, apiMode),
+    available: isModelOptionAvailable(model),
     status: formatModelAccessStatus(model),
   };
 }
@@ -354,7 +183,7 @@ export async function getCliModelAccessList(
   options: CliModelAccessListOptions = {},
 ): Promise<CliModelAccess[]> {
   const models = await computeModelOptionsData(options.models);
-  return models.map((model) => toCliModelAccess(model, options.apiMode));
+  return models.map((model) => toCliModelAccess(model));
 }
 
 export function findCliModelAccessEntry(
@@ -396,7 +225,6 @@ export function listableModelAccessEntries(
 }
 
 export function formatNoListableModelsMessage(
-  apiMode: ApiAccessMode | undefined,
   options: CliModelListOptions = {},
 ): string {
   return [
@@ -406,51 +234,21 @@ export function formatNoListableModelsMessage(
       : [
           'Run `texra models list --all` to see unavailable models and access status.',
         ]),
-    formatCliNoAvailableModelsRecovery(apiMode),
+    formatCliNoAvailableModelsRecovery(),
   ].join('\n');
 }
 
-function formatCliModelRecovery(
-  entry: CliModelAccess,
-  apiMode: ApiAccessMode | undefined,
-): string | undefined {
+function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
   if (entry.available) return undefined;
-
-  const {
-    includedModeAction,
-    loginAction,
-    personalModeAction,
-    configureKeyAction,
-  } = DEFAULT_CLI_MODEL_RECOVERY_ACTIONS;
 
   const availability = entry.model.availability;
 
   switch (availability) {
-    case 'included-login-required':
-      return apiMode === 'personal'
-        ? `${startSentence(loginAction)} for ${INCLUDED}, then ${includedModeAction}.`
-        : `${startSentence(loginAction)} for ${INCLUDED}, or ${personalModeAction} after configuring a provider API key.`;
-    case 'relay-quota-exhausted':
-      return apiMode === 'personal'
-        ? 'Retry later.'
-        : `Retry later, or ${personalModeAction} after configuring a provider API key.`;
     case 'missing-key':
-      return apiMode === 'personal'
-        ? `${startSentence(configureKeyAction)}, or ${loginAction} and ${includedModeAction} if your plan covers this model.`
-        : `${startSentence(configureKeyAction)}, then ${personalModeAction}.`;
+      return `${startSentence(DEFAULT_CONFIGURE_KEY_ACTION)}.`;
     case 'provider-key':
     case 'openrouter-key':
-      return apiMode === 'included'
-        ? `${startSentence(personalModeAction)}.`
-        : undefined;
-    case 'included-access':
-      return apiMode === 'personal'
-        ? `${startSentence(includedModeAction)}.`
-        : undefined;
-    case 'not-included':
-      return apiMode === 'personal'
-        ? `${startSentence(configureKeyAction)}.`
-        : `${startSentence(configureKeyAction)}, then ${personalModeAction}.`;
+      return undefined;
     case 'retired':
       return 'Choose an active model.';
     case 'provider-unavailable':
@@ -469,10 +267,7 @@ function formatCliModelRecovery(
   }
 }
 
-export function formatCliModelDetails(
-  entry: CliModelAccess,
-  apiMode?: ApiAccessMode,
-): string {
+export function formatCliModelDetails(entry: CliModelAccess): string {
   const { model, status } = entry;
   const lines: string[] = [];
   lines.push(`id: ${model.value}`);
@@ -481,7 +276,7 @@ export function formatCliModelDetails(
   lines.push(`status: ${status}`);
   if (model.availabilityLabel)
     lines.push(`availability: ${model.availabilityLabel}`);
-  const recovery = formatCliModelRecovery(entry, apiMode);
+  const recovery = formatCliModelRecovery(entry);
   if (recovery) lines.push(`recovery: ${recovery}`);
   if (model.context) lines.push(`context: ${model.context}`);
   if (model.cost) lines.push(`cost: ${model.cost}`);
@@ -495,12 +290,7 @@ export function formatCliModelDetails(
 async function loadCliModelAccessList(
   options: CliModelAccessEntryOptions,
 ): Promise<readonly CliModelAccess[]> {
-  return (
-    options.accessList ??
-    getCliModelAccessList({
-      apiMode: options.apiMode,
-    })
-  );
+  return options.accessList ?? getCliModelAccessList();
 }
 
 export async function loadCliModelAccessEntry(
@@ -522,12 +312,12 @@ export async function loadCliModelAccessEntry(
     );
   }
 
-  return toCliModelAccess(hiddenModelOption, options.apiMode);
+  return toCliModelAccess(hiddenModelOption);
 }
 
 type CliAvailableModelsMessageOptions = Pick<
   CliRunnableModelOptions,
-  'apiMode' | 'noAvailableModelsMessage'
+  'noAvailableModelsMessage'
 >;
 
 function formatAvailableModels(
@@ -536,8 +326,7 @@ function formatAvailableModels(
 ): string {
   if (ids.length > 0) return `Available models: ${ids.join(', ')}.`;
   const recoveryMessage =
-    options.noAvailableModelsMessage ??
-    formatCliNoAvailableModelsRecovery(options.apiMode);
+    options.noAvailableModelsMessage ?? formatCliNoAvailableModelsRecovery();
   return `No models are currently available. ${recoveryMessage}`;
 }
 
@@ -548,7 +337,7 @@ function formatUnavailableModelMessage(
   options: CliAvailableModelsMessageOptions,
 ): string {
   const status = entry ? ` (${entry.status})` : '';
-  return `Model "${model}" is not available in the active API mode${status}. ${formatAvailableModels(availableIds, options)}`;
+  return `Model "${model}" is not available${status}. ${formatAvailableModels(availableIds, options)}`;
 }
 
 type NormalizedCliModelCandidate = RunModelCandidate & {
@@ -592,7 +381,6 @@ export async function selectCliRunnableModel(
   const hiddenEntries = await Promise.allSettled(
     requestedModels.map((model) =>
       loadCliModelAccessEntry(model, {
-        apiMode: options.apiMode,
         accessList: models,
       }),
     ),
@@ -614,10 +402,7 @@ export async function selectCliRunnableModel(
       entryErrorByModel.set(model, result.reason);
     }
   }
-  const runnableEntries = runnableCliModelAccessEntries(
-    modelsWithHiddenEntry,
-    options.apiMode,
-  );
+  const runnableEntries = runnableCliModelAccessEntries(modelsWithHiddenEntry);
   const availableIds = runnableEntries.map((entry) => entry.model.value);
   const decision = decideRunModel(
     [

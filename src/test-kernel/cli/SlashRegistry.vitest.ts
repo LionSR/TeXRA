@@ -33,10 +33,7 @@ import {
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
-import {
-  cliApiFallbackSelection,
-  type CliModelAccessSelection,
-} from '@cli/runtime/modelAccessRoute';
+import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { AgentCategory } from '@shared/schemas';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
@@ -46,24 +43,28 @@ import {
 } from '@test/support/asyncTestUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const INCLUDED_CHAT_SESSION: SessionMeta = {
+const CHAT_SESSION: SessionMeta = {
   agent: 'chat',
   category: AgentCategory.ToolUse,
   model: 'deepseekT',
   modelSource: 'builtin-default',
   cwd: '/tmp/workspace',
-  apiMode: 'included',
   approvalPolicy: 'ask',
   canDelegate: false,
   transcriptMode: 'persistent',
   version: 'test',
 };
 
-const PERSONAL_CHAT_SESSION: SessionMeta = {
-  ...INCLUDED_CHAT_SESSION,
+const OVERRIDDEN_MODEL_CHAT_SESSION: SessionMeta = {
+  ...CHAT_SESSION,
   model: 'gpt54',
   modelSource: 'explicit-override',
-  apiMode: 'personal',
+};
+
+const CHATGPT_PREFERENCE_SELECTION: CliModelAccessSelection = {
+  kind: 'subscription-preference',
+  provider: 'chatgpt',
+  state: 'on',
 };
 
 afterEach(() => {
@@ -237,8 +238,8 @@ describe('slashRegistry', () => {
     expect(activeForm.get()?.commandName).toBe('skills');
   });
 
-  it('chains selectable agent picks into the API-mode-aware model picker', async () => {
-    resetCliState(INCLUDED_CHAT_SESSION);
+  it('chains selectable agent picks into the model picker', async () => {
+    resetCliState(CHAT_SESSION);
     registerBuiltinSlashCommands();
     const agentNode = openSlashForm<{
       onSelect?: (value: string) => void;
@@ -250,17 +251,15 @@ describe('slashRegistry', () => {
     expect(activeForm.get()?.commandName).toBe('model');
 
     const modelNode = renderOpenForm<{
-      apiMode?: string;
       selectable?: boolean;
     }>();
     expect(modelNode.props).toMatchObject({
-      apiMode: 'included',
       selectable: true,
     });
   });
 
   it('does not advance agent picks into the model form when model selection is unavailable', async () => {
-    resetCliState(INCLUDED_CHAT_SESSION);
+    resetCliState(CHAT_SESSION);
     registerBuiltinSlashCommands({
       canSelectModel: () => false,
     });
@@ -276,7 +275,7 @@ describe('slashRegistry', () => {
   });
 
   it('marks the agent picker read-only when root selection is closed', () => {
-    resetCliState(INCLUDED_CHAT_SESSION);
+    resetCliState(CHAT_SESSION);
     registerBuiltinSlashCommands({
       canSelectAgent: () => false,
       canSelectModel: () => true,
@@ -290,7 +289,7 @@ describe('slashRegistry', () => {
   });
 
   it('keeps the model picker selectable after root agent selection is closed', () => {
-    resetCliState(INCLUDED_CHAT_SESSION);
+    resetCliState(CHAT_SESSION);
     registerBuiltinSlashCommands({
       canSelectAgent: () => false,
       canSelectModel: () => true,
@@ -309,7 +308,7 @@ describe('slashRegistry', () => {
   });
 
   it('passes live model-switch disabled reasons into the model picker', () => {
-    resetCliState(PERSONAL_CHAT_SESSION);
+    resetCliState(OVERRIDDEN_MODEL_CHAT_SESSION);
     registerBuiltinSlashCommands({
       canSelectModel: () => true,
       getModelSwitchDisabledReason: (model) =>
@@ -381,7 +380,7 @@ describe('slashRegistry', () => {
   });
 
   it('routes API picker selection failures to the shared error handler', async () => {
-    resetCliState(INCLUDED_CHAT_SESSION);
+    resetCliState(CHAT_SESSION);
     const errors: string[] = [];
     registerBuiltinSlashCommands({
       onModelAccessSelect: async () => {
@@ -394,17 +393,14 @@ describe('slashRegistry', () => {
     const apiNode = openSlashForm<{
       onSelect?: (value: CliModelAccessSelection) => void;
     }>('api');
-    apiNode.props?.onSelect?.(cliApiFallbackSelection('personal'));
+    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_SELECTION);
     await settleFormSelection();
 
     expect(errors).toEqual(['api mode failed']);
-    // Selecting "Your own API keys" still advances to the key configuration
-    // form so the user can set keys even when the mode switch itself failed.
-    expect(activeForm.get()?.commandName).toBe('key');
   });
 
   it('keeps model-access selection in a busy form until it settles', async () => {
-    resetCliState(INCLUDED_CHAT_SESSION);
+    resetCliState(CHAT_SESSION);
     const selection = createDeferred<void>();
     registerBuiltinSlashCommands({
       onModelAccessSelect: () => selection.promise,
@@ -412,7 +408,7 @@ describe('slashRegistry', () => {
     const apiNode = openSlashForm<{
       onSelect?: (value: CliModelAccessSelection) => void;
     }>('api');
-    apiNode.props?.onSelect?.(cliApiFallbackSelection('personal'));
+    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_SELECTION);
     await settleFormSelection();
 
     expect(apiNode.isClosed()).toBe(false);
@@ -423,14 +419,10 @@ describe('slashRegistry', () => {
 
     selection.resolve();
     await settleFormSelection();
-
-    // After switching to personal mode, the API key configuration form opens
-    // in place of the model access form.
-    expect(activeForm.get()?.commandName).toBe('key');
   });
 
   it('keeps provider API keys inside the masked local form', async () => {
-    resetCliState(INCLUDED_CHAT_SESSION);
+    resetCliState(CHAT_SESSION);
     const saves: Array<{ provider: string; key: string }> = [];
     registerBuiltinSlashCommands({
       onApiKeySave: async (provider, key) => {
@@ -617,8 +609,8 @@ describe('slashRegistry', () => {
     const apiNode = openSlashForm<{
       onSelect?: (value: CliModelAccessSelection) => void;
     }>('api');
-    apiNode.props?.onSelect?.(cliApiFallbackSelection('personal'));
-    resetCliState(INCLUDED_CHAT_SESSION);
+    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_SELECTION);
+    resetCliState(CHAT_SESSION);
     selection.resolve();
     await settleFormSelection();
 

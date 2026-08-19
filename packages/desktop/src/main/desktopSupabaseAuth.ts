@@ -20,7 +20,6 @@ import {
   type SupabaseSession,
   type SupabaseSessionLog,
 } from '@auth/SupabaseSession';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import type { AuthCallbackUriParts } from '@auth/authCallback';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -384,7 +383,6 @@ export function createDesktopSupabaseAuth(
         await callbackState.clearAwaitingCallback();
         await coordinator.clearSession();
       });
-      clearDesktopServerSideKeyCaches(log);
       await refreshRemoteAgentCatalogAfterSignOut(
         invalidateRemoteAgentsAfterSignOut,
         (message) => log.warn(message),
@@ -407,16 +405,6 @@ export function createDesktopAuthCoordinator(options: {
     secrets: options.secrets,
     log: createSessionLog(options.log),
   });
-}
-
-function clearDesktopServerSideKeyCaches(log: DesktopAuthLog): void {
-  try {
-    getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
-  } catch (error) {
-    log.debug(
-      `Desktop server-side key cache clear skipped: ${toErrorMessage(error)}`,
-    );
-  }
 }
 
 async function processProtocolCallback(
@@ -465,7 +453,6 @@ async function processProtocolCallback(
     await coordinator.storeSession(result.session);
     if (!(await stillOwned())) return false;
 
-    clearDesktopServerSideKeyCaches(log);
     try {
       await host.showInfoMessage(
         `Signed in as ${result.session.account.label}`,

@@ -6,8 +6,7 @@
  * rather than by round. Subscription-backed usage is kept in a separate table
  * from paid relay/API-key usage.
  *
- * Authentication: JWT token in Authorization header (Bearer {jwt}), or a
- * CI relay token minted by `texra setup-token` (prefix `texra_relay_`)
+ * Authentication: JWT token in Authorization header (Bearer {jwt})
  *
  * Endpoints:
  * - POST /log-usage - Log a batch of usage entries
@@ -29,14 +28,13 @@
  * - RPCs: usage_logs_upsert, subscription_usage_logs_upsert (service role only)
  */
 
-import { bearerToken } from '../_shared/auth.ts';
+import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
 import {
   adminClient,
   SUPABASE_ANON_KEY,
   SUPABASE_URL,
 } from '../_shared/edgeClients.ts';
-import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
 import { jsonResponse } from '../_shared/responses.ts';
 import { equivalentListCost } from './equivalentCost.ts';
 import {
@@ -225,14 +223,14 @@ Deno.serve(async (req: Request) => {
       return errorResponse(req, 'Missing authorization token', 401);
     }
 
-    // 2. Validate user with Supabase. CI relay tokens (texra setup-token)
-    // are accepted too so headless pipeline usage still feeds the spending
-    // accounting the relay enforces.
-    const credential = await resolveRelayCredential(jwtToken, adminClient);
-    if (!credential.ok) {
-      return errorResponse(req, credential.message, credential.status);
+    // 2. Validate user with Supabase. CI relay tokens went away with the
+    // relay (2026-08, see docs/proposals/2026-08-18-relay-removal-and-recovery.md);
+    // only signed-in sessions log usage now.
+    const auth = await authenticateJwt(jwtToken);
+    if (!auth) {
+      return errorResponse(req, 'Invalid or expired token', 401);
     }
-    const userId = credential.userId;
+    const userId = auth.user.id;
 
     // 3. Parse request body
     let body: unknown;

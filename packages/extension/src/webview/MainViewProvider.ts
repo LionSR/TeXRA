@@ -159,11 +159,6 @@ export class MainViewProvider
       }
       void this.refreshOptionsAndView();
     });
-    this.context.subscriptions.push({
-      dispose: appSignals.on('includedModelAccessChanged', () => {
-        void this.refreshOptionsAndView();
-      }),
-    });
   }
 
   /** Returns the sidebar webview, but only when in main mode. */

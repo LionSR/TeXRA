@@ -1,19 +1,17 @@
 // Credential checks used by the interactive first-run onboarding gate.
-//
-// The default check remains mode-independent for launchers that have not pinned
-// an API mode. When a command explicitly asks for included relay or personal
-// keys, use the credential source that can actually satisfy that mode so a
-// provider key does not suppress included-relay sign-in setup, and vice versa.
 
 import { warn as logWarning } from '@logger/logUtils';
-import { isCodexSubscriptionActive } from '@model/providerCapabilities';
+import {
+  isCodexSubscriptionActive,
+  isXaiSubscriptionActive,
+} from '@model/providerCapabilities';
 import { hasAnyUsableProviderApiKey } from '@model/setupCredentialAccess';
-import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
+import {
+  CHATGPT_SETUP_MODEL,
+  XAI_SETUP_MODEL,
+} from '@model/setupModelDefaults';
 import { platform } from '@platform/platform';
-import type { ApiAccessMode } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-import { getCliAuthProfile } from './supabaseAuth';
 
 const LOG_CHANNEL = 'CLI Credentials';
 
@@ -36,13 +34,6 @@ async function probeCredential(
   });
 }
 
-function hasIncludedRelaySignIn(): Promise<boolean> {
-  return probeCredential('Included access sign-in', async () => {
-    const profile = await getCliAuthProfile();
-    return profile.authenticated;
-  });
-}
-
 function hasProviderApiKey(): Promise<boolean> {
   return probeCredential('Provider API key', () =>
     hasAnyUsableProviderApiKey(platform().secrets),
@@ -50,21 +41,15 @@ function hasProviderApiKey(): Promise<boolean> {
 }
 
 /** Never rejects: every probe resolves to false with a logged reason. */
-export async function hasCliCredentialForApiMode(
-  apiMode: ApiAccessMode | undefined,
-): Promise<boolean> {
+export async function hasCliRunCredential(): Promise<boolean> {
   const hasChatGptSubscription = await probeCredential(
     'ChatGPT subscription',
     () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
   );
   if (hasChatGptSubscription) return true;
-
-  switch (apiMode) {
-    case 'included':
-      return hasIncludedRelaySignIn();
-    case 'personal':
-      return hasProviderApiKey();
-    default:
-      return (await hasIncludedRelaySignIn()) || (await hasProviderApiKey());
-  }
+  const hasGrokSubscription = await probeCredential('Grok subscription', () =>
+    isXaiSubscriptionActive(XAI_SETUP_MODEL),
+  );
+  if (hasGrokSubscription) return true;
+  return hasProviderApiKey();
 }

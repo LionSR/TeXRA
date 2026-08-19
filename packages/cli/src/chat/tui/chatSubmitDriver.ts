@@ -170,11 +170,9 @@ export function createChatSubmitDriver(
         const currentModel = meta.model || initialModel;
         const selection = await selectCliRunnableModel(currentModel, {
           fallbackReason: meta.model ? meta.modelSource : initialModelSource,
-          apiMode: meta.apiMode,
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-            meta.apiMode,
-            // In-session root starts (not process startup): guide `/api` and
-            // `/login` rather than relaunching `texra chat --api-mode …`.
+            // In-session root starts (not process startup): guide `/key`
+            // rather than relaunching `texra chat`.
             CHAT_API_MODE_MODEL_RECOVERY,
           ),
         });

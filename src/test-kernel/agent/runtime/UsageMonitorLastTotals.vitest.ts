@@ -14,10 +14,7 @@ import {
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
-import {
-  USAGE_LOG_FLUSH_OUTCOME,
-  UsageLogService,
-} from '@telemetry/UsageLogService';
+import { UsageLogService } from '@telemetry/UsageLogService';
 
 // Local file imports
 import { testModelCell } from '../modelCellTestUtils';
@@ -195,32 +192,6 @@ describe('UsageMonitor', () => {
         expect.objectContaining({ provider: 'openrouter' }),
       );
       expect(warn).not.toHaveBeenCalled();
-    });
-  });
-
-  it('reports permanent relay rejection to the spend-cap caller', async () => {
-    await withMonitor(async ({ logger, monitor }) => {
-      const error = vi.spyOn(logger, 'error');
-      vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
-      vi.spyOn(UsageLogService, 'flush').mockResolvedValue(
-        USAGE_LOG_FLUSH_OUTCOME.REJECTED,
-      );
-
-      const state = AgentRunStateSnapshotSchema.parse({});
-      recordNormalizedUsage(state.usageAccumulator, {
-        inputTokens: 10,
-        outputTokens: 2,
-        cost: 0.01,
-        responseTimeMs: 50,
-        provider: 'openai-response',
-        usageRoute: 'relay',
-      });
-
-      await monitor.recordUsage(state);
-
-      expect(error).toHaveBeenCalledWith(
-        'Relay usage logging was permanently rejected; spend-cap accounting is incomplete.',
-      );
     });
   });
 });

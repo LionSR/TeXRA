@@ -75,12 +75,9 @@ export async function applyCliModelSelection(
 ): Promise<void> {
   const nextModel = model.trim();
   if (chatTuiCanStartRootRun(context.session)) {
-    const { apiMode } = sessionMeta.get();
     const selection = await selectCliRunnableModel(nextModel, {
       fallbackReason: 'explicit-override',
-      apiMode,
       noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-        apiMode,
         CHAT_API_MODE_MODEL_RECOVERY,
       ),
     });

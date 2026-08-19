@@ -4,7 +4,7 @@
 
 export type { AgentSource } from '@shared/schemas';
 
-/** All built-in delegating team roots (relay-served + bundled). */
+/** All built-in delegating team roots (remote-catalog + bundled). */
 export { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 
 export {

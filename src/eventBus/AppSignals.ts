@@ -8,9 +8,6 @@ import { EventEmitter } from 'node:events';
  * CLAUDE.md.
  */
 export interface AppSignalPayloads {
-  /** The VS Code extension is shutting down. */
-  extensionDeactivating: undefined;
-
   /**
    * GitHub rejected the configured token. Frontends can surface the failure
    * and direct the user to token settings.
@@ -38,9 +35,6 @@ export interface AppSignalPayloads {
    * update). Surfaces that re-paint the status-bar policy line.
    */
   approvalPolicyChanged: undefined;
-
-  /** The included-model-access preference changed. */
-  includedModelAccessChanged: boolean;
 
   /**
    * One or more files were written directly to the workspace. Frontends can

@@ -1,4 +1,3 @@
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { lookupApiKey, API_PROVIDERS } from '@model/apiProviders';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import {
@@ -16,7 +15,6 @@ import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import { AgentCategory, type MainViewExecuteMessage } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { isNonEmptyString } from '@utils/core';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
@@ -26,30 +24,19 @@ export const SETUP_INSTRUCTION =
 
 /**
  * Scan non-OpenRouter setup credentials in host-shared priority order:
- * ChatGPT/Codex subscription, server-side default, server-side provider setup
- * model, then direct provider key.
+ * ChatGPT/Codex subscription, then direct provider key.
  */
 export async function selectSetupCredentialModelExcludingOpenRouter(
   secrets: PlatformSecrets,
   useOpenRouter = false,
 ): Promise<string | null> {
-  // Subscription and relay routes follow the global OpenRouter selection.
+  // Subscription routes follow the global OpenRouter selection.
   // When it is enabled, only managed direct credentials can bypass it.
-  if (!useOpenRouter) {
-    if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
-      return CHATGPT_SETUP_MODEL;
-    }
-
-    const serverKeys = getServerSideKeyService();
-    if (await serverKeys.canUseServerSideKeysForModel(DEFAULT_AGENT_MODEL)) {
-      return DEFAULT_AGENT_MODEL;
-    }
-    if (await serverKeys.canUseServerSideKeys()) {
-      for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
-        if (provider === 'openRouter') continue;
-        if (serverKeys.canUseModelSync(model)) return model;
-      }
-    }
+  if (
+    !useOpenRouter &&
+    (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL))
+  ) {
+    return CHATGPT_SETUP_MODEL;
   }
 
   for (const provider of API_PROVIDERS) {

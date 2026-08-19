@@ -763,37 +763,10 @@ async function validateOrchestrateOnboardingPickers() {
     env: {},
     expected: [
       'Use ChatGPT subscription',
-      'Sign in with Researcher Access',
       'Use your own API keys',
       'Skip for now',
     ],
     forbidden: truncatedOnboardingLabels,
-  });
-  await validateOrchestrateOnboardingPicker({
-    label: 'texra orchestrate included-mode onboarding',
-    args: ['orchestrate', '--api-mode', 'included'],
-    env: { ANTHROPIC_API_KEY: VALIDATION_FAKE_API_KEY },
-    expected: [
-      'Use ChatGPT subscription',
-      'Sign in with Researcher Access',
-      'Skip for now',
-    ],
-    forbidden: [
-      'Use your own API keys',
-      'Anthropic, OpenAI, Google, and more',
-      ...truncatedOnboardingLabels,
-    ],
-  });
-  await validateOrchestrateOnboardingPicker({
-    label: 'texra orchestrate personal-mode onboarding',
-    args: ['orchestrate', '--api-mode', 'personal'],
-    env: {},
-    expected: [
-      'Use ChatGPT subscription',
-      'Use your own API keys',
-      'Skip for now',
-    ],
-    forbidden: ['Sign in with Researcher Access', ...truncatedOnboardingLabels],
   });
 }
 
@@ -1055,7 +1028,7 @@ prompts:
 
 function validateMultiAgentRunCommand() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-multi-agent-run-'));
-  // This preset has a local built-in delegating root; relay-only teams such as
+  // This preset has a local built-in delegating root; remote-catalog teams such as
   // mathematician are unavailable in signed-out validation environments.
   const validationPreset = 'software-engineer';
   try {
