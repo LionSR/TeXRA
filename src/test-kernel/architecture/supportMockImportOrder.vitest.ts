@@ -6,7 +6,12 @@ import { resolve } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-import { REPO_ROOT, sourceFilesUnder, toRepoPath } from '../support/repoScan';
+import {
+  parseSourceFile,
+  REPO_ROOT,
+  sourceFilesUnder,
+  toRepoPath,
+} from '../support/repoScan';
 
 /**
  * Architecture guard for the shared mock modules extracted by #10361.
@@ -63,13 +68,7 @@ function declarationIsTypeOnly(
 }
 
 function collectImportsFromSource(file: string, source: string): ImportSite[] {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const sourceFile = parseSourceFile(file, { text: source });
 
   const imports: ImportSite[] = [];
   for (const statement of sourceFile.statements) {

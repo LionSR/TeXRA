@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import * as yaml from 'yaml';
 
 // Local imports
-import { REPO_ROOT } from '@test/support/repoScan';
+import { parseSourceFile, REPO_ROOT } from '@test/support/repoScan';
 
 /** A tool-use agent: declares the tool roster its prompt refers to. */
 interface ToolUseAgentYaml {
@@ -214,12 +214,7 @@ function workflowRounds(parsed: Record<string, unknown>): string[] {
 }
 
 function typeScriptStrings(relativePath: string): string[] {
-  const sourceFile = ts.createSourceFile(
-    relativePath,
-    readFileSync(resolve(REPO_ROOT, relativePath), 'utf8'),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const sourceFile = parseSourceFile(resolve(REPO_ROOT, relativePath));
   const strings: string[] = [];
 
   function visit(node: ts.Node): void {

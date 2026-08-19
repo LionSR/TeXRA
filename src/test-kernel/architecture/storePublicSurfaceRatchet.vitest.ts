@@ -19,7 +19,7 @@ import { resolve } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-import { REPO_ROOT } from '../support/repoScan';
+import { parseSourceFile, REPO_ROOT } from '../support/repoScan';
 
 const BASELINE_FILE = 'config/ratchets/store-public-surface-baseline.json';
 const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
@@ -51,13 +51,7 @@ function isPublicMethod(
 }
 
 function storeSourceFile(store: StoreName): ts.SourceFile {
-  const file = resolve(REPO_ROOT, STORES[store]);
-  return ts.createSourceFile(
-    file,
-    readFileSync(file, 'utf8'),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  return parseSourceFile(resolve(REPO_ROOT, STORES[store]));
 }
 
 /** Public (static + instance) method names of one store class, sorted. */

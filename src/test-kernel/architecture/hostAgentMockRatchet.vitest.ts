@@ -21,7 +21,12 @@ import { resolve } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-import { REPO_ROOT, sourceFilesUnder, toRepoPath } from '../support/repoScan';
+import {
+  parseSourceFile,
+  REPO_ROOT,
+  sourceFilesUnder,
+  toRepoPath,
+} from '../support/repoScan';
 
 const MOCK_FORMS = ['mock', 'doMock'] as const;
 
@@ -88,13 +93,7 @@ function mockFormFromCall(
 }
 
 function collectAgentMockSites(file: string): MockSite[] {
-  const sourceFile = ts.createSourceFile(
-    file,
-    readFileSync(file, 'utf8'),
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const sourceFile = parseSourceFile(file);
 
   const sites: MockSite[] = [];
   const visit = (node: ts.Node): void => {
