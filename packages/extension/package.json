@@ -1088,7 +1088,6 @@
     "markdown-it": "^15.0.0",
     "markdown-it-texmath": "^1.0.0",
     "mime-types": "^3.0.1",
-    "minimatch": "^10.2.6",
     "mutative": "^1.3.0",
     "nanoid": "^6.0.1",
     "openai": "^7.4.0",
