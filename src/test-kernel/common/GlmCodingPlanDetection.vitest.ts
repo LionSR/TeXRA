@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  describeGlmCodingPlanLimit,
   describeGlmCodingPlanRateLimit,
   isGlmCodingPlanRateLimit,
   parseGlmCodingPlanLimit,
@@ -115,12 +114,6 @@ describe('parseGlmCodingPlanLimit', () => {
   it('does not treat quota exhaustion as a rate limit', () => {
     expect(isGlmCodingPlanRateLimit(WEEKLY_LIMIT_BODY)).toBe(false);
   });
-
-  it('formats a human-readable reset hint', () => {
-    const text = describeGlmCodingPlanLimit({ resetsInSeconds: 3600 });
-    expect(text).toContain('GLM Coding Plan usage limit');
-    expect(text).toContain('regular GLM endpoint');
-  });
 });
 
 describe('formatProviderHttpError for GLM Coding Plan limits', () => {
@@ -136,7 +129,12 @@ describe('formatProviderHttpError for GLM Coding Plan limits', () => {
 
     expect(providerError.exhaustionReason).toBe('glm-coding-plan');
     expect(providerError.userRetryable).toBe(true);
-    expect(providerError.message).toContain('GLM Coding Plan usage limit');
+    expect(providerError.message).toContain(
+      'GLM Coding Plan usage limit reached',
+    );
+    expect(providerError.message).toContain(
+      'Switch to the regular GLM endpoint',
+    );
   });
 
   it('does not classify a GLM rate limit as a coding-plan exhaustion', () => {
