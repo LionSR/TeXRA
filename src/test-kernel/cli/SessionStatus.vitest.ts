@@ -14,6 +14,7 @@ function sessionStatus(overrides: Partial<CliSessionStatusInput> = {}): string {
     modelAccess: 'personal',
     approval: 'ask',
     status: STREAM_PHASE.RUNNING,
+    activeSkills: [],
     queuedFollowUpMessages: [],
     ...overrides,
   });
