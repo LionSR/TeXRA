@@ -179,6 +179,14 @@ export interface StatusEvent extends StageStamp {
   readonly previousPhase?: StreamPhase;
   readonly cause: StreamTransitionCause;
   readonly substate?: StreamSubstate;
+  /**
+   * Epoch ms when this stream entered its current active phase, stamped by the
+   * status machine and held across substate changes; absent once the phase is
+   * no longer active. Travelling with the transition is what lets every host
+   * show the same run start instead of each deriving one from its own clock at
+   * the moment it happened to observe the fact.
+   */
+  readonly runStartedAt?: number;
 }
 
 /** Session-owned subagent activity for a parent run stream. */
