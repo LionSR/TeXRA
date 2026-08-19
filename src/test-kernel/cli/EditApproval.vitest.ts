@@ -93,7 +93,7 @@ describe('CLI edit approval layout', () => {
   });
 
   it('pluralizes the hunk count in the summary line', () => {
-    // The summary line renders formatResultCount(stats.hunks, 'hunk').
+    // The summary line renders formatResultCount(hunks.length, 'hunk').
     expect(formatResultCount(1, 'hunk')).toBe('1 hunk');
     expect(formatResultCount(2, 'hunk')).toBe('2 hunks');
   });

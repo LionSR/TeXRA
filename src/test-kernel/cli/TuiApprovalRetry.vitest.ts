@@ -89,6 +89,7 @@ vi.mock('@platform/platform', async () => {
   return {
     platform: () => ({
       secrets: mocks.secrets,
+      workspace: { getWorkspacePath: () => undefined },
       globalState: {
         get: (key: string, fallback: unknown) =>
           key === GlobalStateKey.USE_OPENROUTER ? mocks.openRouter : fallback,
@@ -290,10 +291,15 @@ const PERSONAL_KEY_RETRY: ApprovalDecision = {
 
 async function waitForApproval(
   kind: string,
-  payload: Record<string, unknown>,
+  data: Record<string, unknown>,
+  tui?: Record<string, unknown>,
 ): Promise<void> {
   await vi.waitFor(() => {
-    expect(currentApproval.get()?.payload).toMatchObject({ kind, payload });
+    expect(currentApproval.get()?.payload).toMatchObject({
+      kind,
+      data,
+      ...(tui ? { tui } : {}),
+    });
   });
 }
 
@@ -602,7 +608,7 @@ describe('TUI retry approvals', () => {
     });
     void enqueueApproval({
       kind: 'planApproval',
-      payload: {
+      data: {
         requestId: 'plan-excluded',
         streamId,
         goalEnabled: false,
@@ -611,15 +617,16 @@ describe('TUI retry approvals', () => {
     });
     void enqueueApproval({
       kind: 'retry',
-      payload: {
+      data: {
         requestId: 'retry-excluded',
         streamId,
         operation: 'model request',
       },
+      tui: {},
     });
     void enqueueApproval({
       kind: 'externalInquiry',
-      payload: {
+      data: {
         requestId: 'inquiry-excluded',
         allowBypass: false,
         streamId,
@@ -630,7 +637,7 @@ describe('TUI retry approvals', () => {
     });
     void enqueueApproval({
       kind: 'userQuestion',
-      payload: {
+      data: {
         requestId: 'question-excluded',
         allowBypass: false,
         streamId,
@@ -644,7 +651,7 @@ describe('TUI retry approvals', () => {
     });
     void enqueueApproval({
       kind: 'bash',
-      payload: {
+      data: {
         requestId: 'other-stream-bash',
         allowBypass: true,
         streamId: 'other-approval-stream',
@@ -713,12 +720,16 @@ describe('TUI retry approvals', () => {
       },
     } as RetryPermission);
 
-    await waitForApproval('retry', {
-      personalApiKeyAvailable: false,
-      missingPersonalApiKeyMessage: expect.stringContaining(
-        'provider could not be identified',
-      ),
-    });
+    await waitForApproval(
+      'retry',
+      {},
+      {
+        personalApiKeyAvailable: false,
+        missingPersonalApiKeyMessage: expect.stringContaining(
+          'provider could not be identified',
+        ),
+      },
+    );
     decideRetry({ accepted: false });
 
     await expect(result).resolves.toEqual({ action: 'cancel' });
@@ -733,12 +744,15 @@ describe('TUI retry approvals', () => {
     const retry = chatGptSubscriptionRetry('s2');
     void interactions.requestRetry?.(retry);
 
-    await waitForApproval('retry', {
-      streamId: 's2',
-      personalApiKeyAvailable: false,
-      missingPersonalApiKeyMessage:
-        'TeXRA could not check whether the OpenAI API key is available. Press n to dismiss, then use `/key` to try again.',
-    });
+    await waitForApproval(
+      'retry',
+      { streamId: 's2' },
+      {
+        personalApiKeyAvailable: false,
+        missingPersonalApiKeyMessage:
+          'TeXRA could not check whether the OpenAI API key is available. Press n to dismiss, then use `/key` to try again.',
+      },
+    );
   });
 
   it('does not auto-switch when a retry provider is not an API provider', async () => {
@@ -769,11 +783,14 @@ describe('TUI retry approvals', () => {
     const { interactions, prepareRetry } = tui();
     const result = interactions.requestRetry?.(chatGptSubscriptionRetry('s3'));
 
-    await waitForApproval('retry', {
-      streamId: 's3',
-      errorMessage: 'ChatGPT subscription usage limit reached.',
-      personalApiKeyAvailable: true,
-    });
+    await waitForApproval(
+      'retry',
+      {
+        streamId: 's3',
+        errorMessage: 'ChatGPT subscription usage limit reached.',
+      },
+      { personalApiKeyAvailable: true },
+    );
     expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
     expectNoPreferenceWrites();
 
@@ -876,11 +893,8 @@ describe('TUI retry approvals', () => {
     expect(
       (
         currentApproval.get()?.payload as
-          | {
-              personalApiKeyAvailable?: boolean;
-            }
-          | undefined
-      )?.personalApiKeyAvailable,
+          { tui?: { personalApiKeyAvailable?: boolean } } | undefined
+      )?.tui?.personalApiKeyAvailable,
     ).toBeUndefined();
     expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
     decideRetry({ accepted: false });
@@ -906,10 +920,11 @@ describe('TUI retry approvals', () => {
       const { interactions, prepareRetry } = tui();
       const result = interactions.requestRetry?.(retry());
 
-      await waitForApproval('retry', {
-        streamId: 'plan-no-key',
-        personalApiKeyAvailable: false,
-      });
+      await waitForApproval(
+        'retry',
+        { streamId: 'plan-no-key' },
+        { personalApiKeyAvailable: false },
+      );
       decideRetry({ accepted: false });
 
       await expect(result).resolves.toEqual({ action: 'cancel' });
@@ -1087,10 +1102,11 @@ describe('TUI retry approvals', () => {
       chatGptSubscriptionRetry('missing-openai-key'),
     );
 
-    await waitForApproval('retry', {
-      streamId: 'missing-openai-key',
-      personalApiKeyAvailable: false,
-    });
+    await waitForApproval(
+      'retry',
+      { streamId: 'missing-openai-key' },
+      { personalApiKeyAvailable: false },
+    );
     decideRetry({ accepted: false });
 
     await expect(result).resolves.toEqual({ action: 'cancel' });
@@ -1566,7 +1582,7 @@ describe('TUI retry approvals', () => {
     });
     expect(currentApproval.get()?.payload).toMatchObject({
       kind: 'retry',
-      payload: { errorMessage: 'older host retry' },
+      data: { errorMessage: 'older host retry' },
     });
 
     older.dispose();

@@ -78,8 +78,11 @@ import {
   prepareBashApprovalPrompt,
   setBashApprovalSessionBypass,
 } from '@tools/approval/bashApproval';
+import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
+import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 import { notify } from '../notifications/terminalNotifier';
 import { patchStream } from './cliState';
@@ -99,7 +102,7 @@ import {
   reserveApproval,
   type ApprovalDecision,
   type ApprovalPayload,
-  type TuiRetryRequest,
+  type RetryApprovalPayload,
 } from './approvalQueue';
 
 // =========================================================================
@@ -123,9 +126,9 @@ import {
  * provider).
  */
 function maybeAutoSwitchRetry(
-  payload: TuiRetryRequest,
+  payload: RetryApprovalPayload,
 ): ApprovalDecision | undefined {
-  const action = classifyCliRetryAction(payload);
+  const action = classifyCliRetryAction(payload.data);
 
   // Coding-plan quotas (Kimi Code, GLM Coding Plan) have a fallback route that
   // re-uses an already-stored key, so auto-switch when that key exists.
@@ -133,14 +136,14 @@ function maybeAutoSwitchRetry(
   // Kimi Code-exclusive models never reach this branch: the classifier above
   // gates them to 'none', keeping the modal without an API-key switch.
   if (action.startsWith('disable-quota-route:')) {
-    const decision = cliRetryApiSwitchDecision(payload);
+    const decision = cliRetryApiSwitchDecision(payload.data);
     if (
       decision.disableQuotaRoute === undefined ||
       !isCodingPlanQuotaRoute(decision.disableQuotaRoute)
     ) {
       return undefined;
     }
-    if (payload.personalApiKeyAvailable !== true) return undefined;
+    if (payload.tui.personalApiKeyAvailable !== true) return undefined;
     return decision;
   }
 
@@ -164,7 +167,18 @@ export function createTuiHostInteractions(
   return {
     emit: (event, payload) => host.emit(event, payload),
     async requestToolEditApproval(request) {
-      const decision = await decidePresentedApproval('toolEdit', request);
+      const decision = await enqueueDecision({
+        kind: 'toolEdit',
+        data: prepareToolEditApprovalPrompt(currentSession(), {
+          requestId: `approval-${generateShortId()}`,
+          request,
+          relativePath: WorkspaceFS.relativePath(request.path),
+        }),
+        tui: {
+          originalContent: request.originalContent,
+          proposedContent: request.proposedContent,
+        },
+      });
       if (
         decision.accepted &&
         decision.bypass === 'toolEdit' &&
@@ -262,15 +276,11 @@ function prepareRetryClient(
 
 // Retry carries its own policy lookup (`showRetryRequest`) and owns a queue
 // reservation, so it does not enter through this path.
-async function decidePresentedApproval<
-  K extends 'bash' | 'toolEdit' | 'planApproval' | 'proposal',
-  P,
->(kind: K, payload: P): Promise<ApprovalDecision> {
+async function enqueueDecision(
+  payload: ApprovalPayload,
+): Promise<ApprovalDecision> {
   try {
-    return await enqueueTuiApproval({ kind, payload } as Extract<
-      ApprovalPayload,
-      { kind: K }
-    >);
+    return await enqueueTuiApproval(payload);
   } catch (error) {
     logWarning(
       'cli.tui',
@@ -283,10 +293,9 @@ async function decidePresentedApproval<
   }
 }
 
-async function decideWithPolicy<K extends 'planApproval' | 'proposal', P>(
+async function decideWithPolicy(
   context: CliContext,
-  kind: K,
-  payload: P,
+  payload: Extract<ApprovalPayload, { kind: 'planApproval' | 'proposal' }>,
 ): Promise<ApprovalDecision> {
   const policy = settleExecutable(context);
   if (policy && !policy.accepted) {
@@ -295,14 +304,16 @@ async function decideWithPolicy<K extends 'planApproval' | 'proposal', P>(
       rejectionReason: policy.userMessage ?? '',
     };
   }
-  return policy ?? decidePresentedApproval(kind, payload);
+  return policy ?? enqueueDecision(payload);
 }
 
 async function requestBashInteraction(
   request: HostBashApprovalRequest,
 ): Promise<BashSettlement> {
-  const payload = prepareBashApprovalPrompt(request);
-  const decision = await decidePresentedApproval('bash', payload);
+  const decision = await enqueueDecision({
+    kind: 'bash',
+    data: prepareBashApprovalPrompt(request),
+  });
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true);
   }
@@ -313,7 +324,10 @@ async function requestPlanInteraction(
   request: PlanApprovalPermission,
   context: CliContext,
 ): Promise<PlanApprovalResult> {
-  const decision = await decideWithPolicy(context, 'planApproval', request);
+  const decision = await decideWithPolicy(context, {
+    kind: 'planApproval',
+    data: request,
+  });
   // `approve_and_goal` is a TUI-only plan action; every other outcome is the
   // shared approve/reject settlement.
   if (decision.accepted && decision.planAction) {
@@ -326,7 +340,10 @@ async function requestProposalInteraction(
   request: AgentProposalPermission,
   context: CliContext,
 ): Promise<ProposalResult> {
-  const decision = await decideWithPolicy(context, 'proposal', request);
+  const decision = await decideWithPolicy(context, {
+    kind: 'proposal',
+    data: request,
+  });
   if (
     decision.accepted &&
     decision.bypass === 'superYolo' &&
@@ -356,12 +373,16 @@ async function requestRetryInteraction(
 ): Promise<RetryResult> {
   clearRetryApprovalsForStream(request.streamId, attachment.owner);
   const reservation = reserveApproval(
-    { kind: 'retry', payload: request },
+    { kind: 'retry', data: request, tui: {} },
     { onPresent: announceApproval, owner: attachment.owner },
   );
   // Written before any path that can produce a credential-changing decision:
   // only the modal and the auto-switch produce one, and both run after this.
-  let promptRequest: TuiRetryRequest = request;
+  let promptRequest: RetryApprovalPayload = {
+    kind: 'retry',
+    data: request,
+    tui: {},
+  };
   const retryDecision: { source: 'human' | 'automatic' } = {
     source: 'human',
   };
@@ -398,9 +419,9 @@ async function requestRetryInteraction(
             }
           }
           promptRequest = {
-            ...request,
-            personalApiKeyAvailable,
-            missingPersonalApiKeyMessage,
+            kind: 'retry',
+            data: request,
+            tui: { personalApiKeyAvailable, missingPersonalApiKeyMessage },
           };
         }
         autoSwitch = maybeAutoSwitchRetry(promptRequest);
@@ -419,7 +440,7 @@ async function requestRetryInteraction(
         return;
       }
       try {
-        reservation.present({ kind: 'retry', payload: promptRequest });
+        reservation.present(promptRequest);
       } catch (error) {
         logWarning(
           'cli.tui',
@@ -492,7 +513,10 @@ async function requestUserQuestionInteraction(
     return { action: 'reject', reason: denial.reason };
   }
 
-  const decision = await enqueueTuiApproval({ kind: 'userQuestion', payload });
+  const decision = await enqueueTuiApproval({
+    kind: 'userQuestion',
+    data: payload,
+  });
   if (decision.rejectionCause !== undefined) {
     return { action: 'reject', cause: decision.rejectionCause };
   }
@@ -746,7 +770,7 @@ async function applyRetryCredentialCommit(
 
 async function switchRetryToPersonalCredentials(
   decision: ApprovalDecision,
-  request: TuiRetryRequest,
+  request: RetryApprovalPayload,
   options: {
     prepareRetry?: HostRetryInteractionOptions['prepareRetry'];
     preparationSignal: AbortSignal;
@@ -755,7 +779,7 @@ async function switchRetryToPersonalCredentials(
 ): Promise<void> {
   const signal = options.preparationSignal;
 
-  const requestedProvider = request.errorDetails?.provider;
+  const requestedProvider = request.data.errorDetails?.provider;
   if (!requestedProvider || !isApiProvider(requestedProvider)) {
     throw new Error(
       'The failed API provider could not be identified, so TeXRA did not change access settings.',
@@ -767,7 +791,7 @@ async function switchRetryToPersonalCredentials(
   );
   if (!keyExists) {
     throw new Error(
-      request.missingPersonalApiKeyMessage ??
+      request.tui.missingPersonalApiKeyMessage ??
         missingApiKeyRetryMessage(requestedProvider),
     );
   }
@@ -866,7 +890,7 @@ function handleExternalInquiry(
   if (!threadId) return;
 
   if (denyExternalInquiryIfNoHumanInput(threadId, context)) return;
-  void enqueueTuiApproval({ kind: 'externalInquiry', payload }).then(
+  void enqueueTuiApproval({ kind: 'externalInquiry', data: payload }).then(
     (decision) => {
       // User-accept with text submits an answer; empty text, reject, and
       // modal-cancel all drop the durable inquiry thread.

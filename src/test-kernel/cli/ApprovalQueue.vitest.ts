@@ -33,7 +33,7 @@ const INTERRUPTED = {
 function bashPayload(streamId: string): ApprovalPayload {
   return {
     kind: 'bash',
-    payload: {
+    data: {
       requestId: `bash-${streamId}`,
       allowBypass: true,
       streamId,
@@ -45,7 +45,7 @@ function bashPayload(streamId: string): ApprovalPayload {
 function externalInquiryPayload(streamId: string): ApprovalPayload {
   return {
     kind: 'externalInquiry',
-    payload: {
+    data: {
       requestId: `external-${streamId}`,
       mode: 'followUp' as const,
       question: 'Please verify the finite enumeration independently.',
@@ -230,19 +230,19 @@ describe('CLI approval queue', () => {
     expect(
       approvalPayloadStreamId({
         kind: 'toolEdit',
-        payload: { streamId: 'child-edit' },
+        data: { streamId: 'child-edit' },
       } as ApprovalPayload),
     ).toBe('child-edit');
     expect(
       approvalPayloadStreamId({
         kind: 'retry',
-        payload: { streamId: 'child-retry' },
+        data: { streamId: 'child-retry' },
       } as ApprovalPayload),
     ).toBe('child-retry');
     expect(
       approvalPayloadStreamId({
         kind: 'externalInquiry',
-        payload: { streamId: '' },
+        data: { streamId: '' },
       } as ApprovalPayload),
     ).toBeUndefined();
   });
@@ -255,7 +255,7 @@ describe('CLI approval queue', () => {
   it('clears every pending kind for a stream via clearApprovalsWhere, leaving other streams alone', async () => {
     const planPayload = {
       kind: 'planApproval',
-      payload: { requestId: 'approval-1', streamId: 'stream-a' },
+      data: { requestId: 'approval-1', streamId: 'stream-a' },
     } as ApprovalPayload;
     const staleForStreamA = bashPayload('stream-a');
     const untouched = bashPayload('stream-b');
