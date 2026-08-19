@@ -1,5 +1,4 @@
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
-import type { StreamBadgeSnapshot } from '@controllers/session/SessionState';
 import type {
   ConversationProgress,
   GoalStatus,
@@ -85,7 +84,9 @@ export interface SessionRendererPort {
    */
   onStageChanged(streamId: StreamTabId, stage: StreamStage): void;
 
-  onBadgesChanged(streamId: StreamTabId, badges: StreamBadgeSnapshot): void;
+  /** The stream's child-activity roster changed; hosts re-read
+   *  `SessionState.getStreamState(streamId).subagents`. */
+  onBadgesChanged(streamId: StreamTabId): void;
 
   /** Delta-semantic: `reset` clears the stream's rounds instead of replacing
    *  them, so this one keeps its own envelope rather than folding into

@@ -11,10 +11,7 @@ import type {
   SessionRendererPort,
   SessionRenderSlice,
 } from '@controllers/session/SessionRendererPort';
-import {
-  SessionState,
-  type StreamBadgeSnapshot,
-} from '@controllers/session/SessionState';
+import { SessionState } from '@controllers/session/SessionState';
 import { redactSecrets } from '@logger/redaction';
 import type {
   ActiveChildInfo,
@@ -445,7 +442,7 @@ class HeadlessPort implements SessionRendererPort {
     this.renderer.refreshFor(streamId);
   }
 
-  onBadgesChanged(streamId: StreamTabId, _badges: StreamBadgeSnapshot): void {
+  onBadgesChanged(streamId: StreamTabId): void {
     this.renderer.refreshFor(streamId, true);
   }
 

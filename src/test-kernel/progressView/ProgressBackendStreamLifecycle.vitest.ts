@@ -250,9 +250,7 @@ describe('ProgressBackend', () => {
         before,
         after,
       ]);
-      expect(badgesChanged).toHaveBeenLastCalledWith(parent, {
-        subagents: [before, after],
-      });
+      expect(badgesChanged).toHaveBeenLastCalledWith(parent);
     } finally {
       await backend.state.clearAll();
     }
@@ -367,7 +365,7 @@ describe('ProgressBackend', () => {
       }),
     ).toBe(true);
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([]);
-    expect(badgesChanged).toHaveBeenCalledWith(parent, { subagents: [] });
+    expect(badgesChanged).toHaveBeenCalledWith(parent);
   });
 
   it('keeps superseded settlements from revealing rows across parent and child reclaims', () => {
@@ -1303,9 +1301,13 @@ describe('ProgressBackend', () => {
     const roster = [before, child, after];
     backend.state.streamLogs.ensureStream(stream);
     setChildRoster(backend, parent, roster);
+    // The notification no longer carries the roster, so capture what a host
+    // would re-read at scrub time to keep the scrub→restore sequence observable.
+    let rosterDuringScrub: ActiveChildInfo[] | undefined;
     const badgesChanged = vi
       .spyOn(backend.renderer, 'onBadgesChanged')
       .mockImplementationOnce(() => {
+        rosterDuringScrub = backend.state.getStreamState(parent)?.subagents;
         throw new Error('renderer unavailable during roster scrub');
       });
     const clearStream = vi
@@ -1324,10 +1326,8 @@ describe('ProgressBackend', () => {
     expect(selectableAtRebuild).toContainEqual([stream]);
     expect(backend.state.isStreamRemoved(stream)).toBe(false);
     expect(backend.state.getStreamState(parent)?.subagents).toEqual(roster);
-    expect(badgesChanged).toHaveBeenCalledWith(parent, {
-      subagents: [before, after],
-    });
-    expect(badgesChanged).toHaveBeenCalledWith(parent, { subagents: roster });
+    expect(rosterDuringScrub).toEqual([before, after]);
+    expect(badgesChanged).toHaveBeenCalledWith(parent);
     expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(0, 1);
   });
 
