@@ -696,7 +696,7 @@ export class ExecutionRegistry {
     const result: ActiveChildInfo[] = [];
     for (const handle of this.handles.values()) {
       if (!isChildExecution(handle, parentStreamId)) continue;
-      const { status, elapsed } = this.getStatus(handle);
+      const { status } = this.getStatus(handle);
       result.push({
         executionId: handle.executionId,
         identity: handle.identity,
@@ -706,7 +706,6 @@ export class ExecutionRegistry {
         agentName: handle.agentName,
         status,
         startedAt: handle.startedAt,
-        elapsed,
         childStreamId: handle.childStreamId,
         ...(handle.workflowPhase
           ? { workflowPhase: handle.workflowPhase }

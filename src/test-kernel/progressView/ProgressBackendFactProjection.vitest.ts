@@ -747,7 +747,6 @@ describe('ProgressBackend', () => {
       identity: { kind: 'agent' as const, agent: 'orchestrator' },
       status: 'running',
       startedAt: 1,
-      elapsed: null,
     };
     const inquiryThread = {
       threadId: 'ei_123456789abc',
