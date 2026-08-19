@@ -8,7 +8,7 @@
  */
 
 import { resolveAgentForLaunch } from '@agent/index';
-import { writeSessionDescription } from '@agent/storage';
+import { writeSessionDescription } from '@agent/storage/executionLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {

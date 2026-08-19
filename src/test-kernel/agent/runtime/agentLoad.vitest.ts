@@ -13,15 +13,15 @@ import {
 import { z } from 'zod';
 
 import {
-  clearInlineAgents,
   getAgent,
   loadAgents,
   refresh,
   registerInlineAgents,
   resolveAgent,
   resolveAgentForLaunch,
-  type ResolvedAgent,
 } from '@agent/index';
+import type { ResolvedAgent } from '@agent/index/agentEntry';
+import { clearInlineAgents } from '@agent/index/agentRegistry';
 import {
   loadAgentSettingAndPrompts,
   validateAgentYamlContent,

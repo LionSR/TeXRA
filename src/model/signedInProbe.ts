@@ -14,8 +14,8 @@
 export type SignedInProbe = () => Promise<boolean>;
 
 export interface SignedInProbeSlot {
-  /** Install the app's sign-in probe, or pass `null` to restore the default. */
-  setProbe(next: SignedInProbe | null): void;
+  /** Install the app's sign-in probe. */
+  setProbe(next: SignedInProbe): void;
   isSignedIn(): Promise<boolean>;
 }
 
@@ -25,7 +25,7 @@ export function createSignedInProbe(): SignedInProbeSlot {
   let probe: SignedInProbe = SIGNED_OUT;
   return {
     setProbe(next) {
-      probe = next ?? SIGNED_OUT;
+      probe = next;
     },
     isSignedIn() {
       return probe();

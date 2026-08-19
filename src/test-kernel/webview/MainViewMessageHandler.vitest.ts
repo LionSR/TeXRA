@@ -60,9 +60,6 @@ vi.mock('@frontend/agents/AgentDirectoryManager', () => ({
 }));
 
 vi.mock('@frontend/agents/optionsLoader', () => ({ loadOptions: vi.fn() }));
-vi.mock('@frontend/auth/codexSubscriptionSignIn', () => ({
-  signInWithChatGptSubscription: vi.fn(),
-}));
 vi.mock('@frontend/media/RecordingManager', () => ({
   RecordingManager: class RecordingManager {},
 }));

@@ -133,10 +133,7 @@ describe('desktop IPC adapters', () => {
       '@desktop/main/desktopViewStateIpc',
     );
     const postToRenderer = vi.fn();
-    const stateIpc = createDesktopViewStateIpc(
-      { postToRenderer },
-      { debugMode: true },
-    );
+    const stateIpc = createDesktopViewStateIpc({ postToRenderer });
 
     // WEBVIEW_READY is a broadcast every webview posts on mount; only the
     // main webview's readiness should sync theme/debug-mode here.
@@ -160,7 +157,7 @@ describe('desktop IPC adapters', () => {
     });
     expect(postToRenderer).toHaveBeenCalledWith({
       command: COMMON_COMMANDS.DEBUG_MODE_SET,
-      debugMode: true,
+      debugMode: false,
     });
 
     nativeTheme.shouldUseHighContrastColors = true;

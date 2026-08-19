@@ -47,14 +47,11 @@ export async function runTerminalCommand(
  * user closes them; treat those as gone.
  */
 function revealTerminal(request: TerminalRunRequest): vscode.Terminal {
-  const { name, cwd, env } = request;
-  const hasLaunchOverrides = cwd !== undefined || env !== undefined;
-  const existing = hasLaunchOverrides
-    ? undefined
-    : vscode.window.terminals.find(
-        (t) => t.name === name && t.exitStatus === undefined,
-      );
-  const terminal = existing ?? vscode.window.createTerminal({ name, cwd, env });
+  const { name } = request;
+  const existing = vscode.window.terminals.find(
+    (t) => t.name === name && t.exitStatus === undefined,
+  );
+  const terminal = existing ?? vscode.window.createTerminal({ name });
   terminal.show();
   return terminal;
 }

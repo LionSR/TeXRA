@@ -3,11 +3,7 @@ import * as path from 'node:path';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import {
-  isRemoteAgent,
-  resolveAgentForLaunch,
-  type ResolvedAgent,
-} from '@agent/index';
+import { isRemoteAgent, resolveAgentForLaunch } from '@agent/index';
 import {
   logSdkError,
   logUserMessage,
@@ -15,6 +11,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
+import type { ResolvedAgent } from '@agent/index/agentEntry';
 import {
   createToolPolicy,
   type AgentCore,

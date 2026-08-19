@@ -9,11 +9,8 @@
  * - Workflow: agentConfig + executionId + transcript-format key
  */
 
-import {
-  deriveResumability,
-  RESUMABILITY_CAUSE,
-  type ResumabilityDecision,
-} from '@agent/storage';
+import { deriveResumability, type ResumabilityDecision } from '@agent/storage';
+import { RESUMABILITY_CAUSE } from '@agent/storage/resumability';
 import type { FlowRecord } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
