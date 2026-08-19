@@ -53,11 +53,29 @@ export type LatexdiffTempFileLocation =
  * the schema and the UI cannot disagree about the range.
  */
 export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = Object.freeze({
+  configKey: 'texra.model.retry.maxAttempts',
   defaultValue: 2,
   min: 0,
   max: 5,
   description:
     'Additional automatic retries after the initial model request (0–5). Long-running background requests retain at least two recovery retries.',
+} as const);
+
+/**
+ * Bounds, default, and copy for `model.compactionThresholdPercent`. The value
+ * is the share of the model's context window that triggers automatic
+ * compaction, and `0` disables it. Shared by
+ * {@link ModelCompactionThresholdPercentSchema}, the runtime reader, and the
+ * settings-view reliability row so the schema, runtime, and UI cannot disagree
+ * about the range.
+ */
+export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
+  configKey: 'texra.model.compactionThresholdPercent',
+  defaultValue: 75,
+  min: 0,
+  max: 100,
+  description:
+    "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
 } as const);
 
 /**
@@ -87,7 +105,7 @@ export const DEFAULT_CORE_SETTINGS = {
     useGoogleInteractionsServerState: true,
     useBackgroundResponses: true,
     openaiParallelToolCalls: true,
-    compactionThresholdPercent: 75,
+    compactionThresholdPercent: MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue,
     gpt5ReasoningSummary: false,
     retry: {
       maxAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
@@ -187,6 +205,13 @@ export const ModelRetryMaxAttemptsSchema = z
   .describe(MODEL_RETRY_MAX_ATTEMPTS_SETTING.description)
   .prefault(MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue);
 
+export const ModelCompactionThresholdPercentSchema = z
+  .number()
+  .min(MODEL_COMPACTION_THRESHOLD_SETTING.min)
+  .max(MODEL_COMPACTION_THRESHOLD_SETTING.max)
+  .describe(MODEL_COMPACTION_THRESHOLD_SETTING.description)
+  .prefault(MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue);
+
 export const ChildRunConcurrencyBudgetSchema = z
   .int()
   .min(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min)
@@ -237,11 +262,7 @@ export const CoreSettingsShape = {
         DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
         'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool execution.',
       ),
-      compactionThresholdPercent: numberField(
-        DEFAULT_CORE_SETTINGS.model.compactionThresholdPercent,
-        "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
-        { min: 0, max: 100 },
-      ),
+      compactionThresholdPercent: ModelCompactionThresholdPercentSchema,
       gpt5ReasoningSummary: boolField(
         DEFAULT_CORE_SETTINGS.model.gpt5ReasoningSummary,
         "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",

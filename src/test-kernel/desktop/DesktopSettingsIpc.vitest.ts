@@ -664,7 +664,6 @@ describe('desktop settings IPC', () => {
       workspaceState: new FakeStateStore(),
     };
     const setProviderKey = vi.fn(async () => undefined);
-    const setProviderSetting = vi.fn(async () => undefined);
     const signIn = vi.fn(async () => undefined);
     const signOut = vi.fn(async () => undefined);
     const setPreferSubscription = vi.fn(async () => undefined);
@@ -676,7 +675,6 @@ describe('desktop settings IPC', () => {
           signIn,
           signOut,
           setProviderKey,
-          setProviderSetting,
         },
         chatGptHandlers: {
           ...stub.chatGptHandlers,
@@ -703,13 +701,6 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING,
-        key: GlobalStateKey.GLM_USE_CHINA,
-        value: false,
-      }),
-    ).toBe(true);
-    expect(
-      settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
         enabled: true,
       }),
@@ -722,11 +713,6 @@ describe('desktop settings IPC', () => {
       command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
       provider: 'google',
       apiKey: 'sk-test',
-    });
-    expect(setProviderSetting).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING,
-      key: GlobalStateKey.GLM_USE_CHINA,
-      value: false,
     });
     expect(setPreferSubscription).toHaveBeenCalledWith({
       command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,

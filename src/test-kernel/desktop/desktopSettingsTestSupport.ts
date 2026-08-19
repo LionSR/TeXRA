@@ -63,7 +63,6 @@ export function createStubDesktopCredentialSettingsController(
       setProviderKey: noOp,
       removeProviderKey: noOp,
       openProviderKeyUrl: noOp,
-      setProviderSetting: noOp,
       openExternalUrl: noOp,
     },
     chatGptHandlers: {

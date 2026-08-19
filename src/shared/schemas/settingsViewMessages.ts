@@ -38,7 +38,6 @@ import {
 import { AgentModePresetSchema } from './agentPresets';
 import { ModelAvailabilityFieldsSchema } from './mainView/state';
 import {
-  NumberSettingSchema,
   SignInMessageSchema,
   SignOutMessageSchema,
   UpdateProfileMessageSchema,
@@ -78,7 +77,6 @@ export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
 
 export {
   DEFAULT_GLOBAL_STREAMING,
-  type NumberSetting,
   type ProviderKeyStatus,
   type ProviderSetting,
   type SessionProblem,
@@ -374,17 +372,11 @@ export type UpdateCustomAgentDirMessage = z.infer<
 /**
  * Outbound: backend → frontend reliability + orchestration settings. The wire
  * literal stays `updateSuperYoloEnabled` by the literal-freeze convention
- * (wire literals never chase renames), so only the schema and type carry the
+ * (wire literals never chase renames), so only the schema carries the
  * payload's real name.
- *
- * `reliabilitySettings` is host-specific VS Code tuning with no catalog row, so
- * it rides alongside the catalog-derived `values`.
  */
-const UpdateReliabilityAndOrchestrationMessageSchema = snapshotMessage(
-  'multi-agent',
-).extend({
-  reliabilitySettings: z.array(NumberSettingSchema).prefault([]),
-});
+const UpdateReliabilityAndOrchestrationMessageSchema =
+  snapshotMessage('multi-agent');
 
 // ============================================================
 // Agent team data schema
@@ -766,12 +758,6 @@ const OpenProviderKeyUrlMessageSchema = providerCommand(
   CMD.OPEN_PROVIDER_KEY_URL,
 );
 
-const SetProviderSettingMessageSchema = z.object({
-  command: z.literal(CMD.SET_PROVIDER_SETTING),
-  key: z.string().min(1),
-  value: z.union([z.boolean(), z.number()]),
-});
-
 const OpenExternalUrlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_EXTERNAL_URL),
   url: z.url(),
@@ -1006,7 +992,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetProviderKeyMessageSchema,
     RemoveProviderKeyMessageSchema,
     OpenProviderKeyUrlMessageSchema,
-    SetProviderSettingMessageSchema,
     OpenExternalUrlMessageSchema,
     // Model selection messages
     SetModelEnabledMessageSchema,

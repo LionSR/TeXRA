@@ -1,16 +1,14 @@
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { API_PROVIDERS } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
+import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  DEFAULT_CORE_SETTINGS,
   modelsTabSettings,
-  type NumberSetting,
   type ProviderKeyStatus,
   type ProviderSetting,
   type SettingHost,
   type StateSettingEntry,
   type UpdateProfileMessage,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  ModelRetryMaxAttemptsSchema,
 } from '@shared/schemas';
 import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 import {
@@ -18,55 +16,20 @@ import {
   PROVIDER_URLS,
 } from '@shared/constants/providers';
 import {
+  getGlobalStreaming,
   getProviderDisplayName,
   getProviderEndpoint,
   getProviderKeyUrl,
   getProviderStreaming,
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
-import { buildProfileMessage } from './ProfileMessageBuilder';
-
-type SettingsReliabilitySetting = Omit<NumberSetting, 'value'> & {
-  defaultValue: number;
-  schema?: {
-    safeParse(value: unknown): { success: boolean };
-  };
-};
-
-const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
-  {
-    key: 'texra.model.compactionThresholdPercent',
-    label: 'Compaction threshold',
-    description:
-      'Context window percentage to trigger automatic context compaction. Set to 0 to disable.',
-    min: 0,
-    max: 100,
-    unit: '%',
-    defaultValue: DEFAULT_CORE_SETTINGS.model.compactionThresholdPercent,
-  },
-  {
-    key: 'texra.model.retry.maxAttempts',
-    label: 'Automatic retries',
-    description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
-    min: MODEL_RETRY_MAX_ATTEMPTS_SETTING.min,
-    max: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
-    step: 1,
-    defaultValue: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
-    schema: ModelRetryMaxAttemptsSchema,
-  },
-];
-
-export type SettingsProfileConfigValue = boolean | number;
-
-type ProviderSettingUpdateResult =
-  { kind: 'updated' } | { kind: 'rejected'; key: string };
 
 /**
- * Host-supplied storage/secrets wiring: `globalState`,
- * `loadProviderKeyStatuses`, and `getConfig`/`updateConfig` all depend on
- * host-specific storage and secrets, so each host must supply them. Everything
- * else the controller needs — the provider catalog and the region-aware
- * lookups built on it — is host-agnostic and read straight from its modules.
+ * Host-supplied storage wiring: `globalState`, `loadProviderKeyStatuses`, and
+ * `getConfig` all depend on host-specific storage and secrets, so each host
+ * must supply them. Everything else the controller needs — the provider catalog
+ * and the region-aware lookups built on it — is host-agnostic and read straight
+ * from its modules.
  */
 interface SettingsProfileControllerDeps {
   /** The host reading the catalog, so `slots` resolves to its own entry. */
@@ -76,37 +39,59 @@ interface SettingsProfileControllerDeps {
     Record<string, ProviderKeyStatus['status']>
   >;
   getConfig<T>(key: string, defaultValue: T): T;
-  updateConfig(key: string, value: SettingsProfileConfigValue): Promise<void>;
 }
 
 export class SettingsProfileController {
-  private readonly reliabilitySettingsByKey = new Map(
-    SETTINGS_RELIABILITY_SETTINGS.map((setting) => [setting.key, setting]),
-  );
-
   constructor(private readonly deps: SettingsProfileControllerDeps) {}
 
+  /**
+   * Assemble the canonical `UPDATE_PROFILE` message for either host.
+   *
+   * Profile-metadata reads degrade gracefully: a transient failure keeps the
+   * user signed in with fallback values rather than failing the whole refresh.
+   */
   async buildProfileMessage(): Promise<UpdateProfileMessage> {
-    return buildProfileMessage({
-      getProviderKeyStatuses: () => this.getProviderKeyStatuses(),
-    });
-  }
+    const [storedSessionState, providerKeyStatuses] = await Promise.all([
+      SupabaseClient.getStoredSessionState(),
+      this.getProviderKeyStatuses(),
+    ]);
+    const base = {
+      command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
+      providerKeyStatuses,
+      globalStreamingDefault: getGlobalStreaming(),
+    };
 
-  getReliabilitySettings(): NumberSetting[] {
-    return SETTINGS_RELIABILITY_SETTINGS.map((definition) => {
-      const { defaultValue, schema, ...setting } = definition;
-      const configuredValue = this.deps.getConfig<number>(
-        setting.key,
-        defaultValue,
-      );
+    // Preserve the distinction between an authoritatively rejected refresh
+    // credential and a transient transport/service failure. Both have a stored
+    // account but require different user guidance.
+    const hasStoredSession = storedSessionState !== 'none';
+    let sessionProblem: UpdateProfileMessage['sessionProblem'] = null;
+    if (storedSessionState === 'invalid') {
+      sessionProblem = 'expired';
+    } else if (storedSessionState === 'transient') {
+      sessionProblem = 'unavailable';
+    }
+    const storedEmail = hasStoredSession
+      ? await SupabaseClient.getStoredAccountLabel()
+      : null;
+
+    if (storedSessionState !== 'authenticated') {
       return {
-        ...setting,
-        value:
-          schema && !schema.safeParse(configuredValue).success
-            ? defaultValue
-            : configuredValue,
+        ...base,
+        authenticated: false,
+        user: storedEmail ? { email: storedEmail } : null,
+        sessionProblem,
       };
-    });
+    }
+
+    const user = await SupabaseClient.getUser();
+
+    return {
+      ...base,
+      authenticated: true,
+      user: { email: user?.email ?? storedEmail ?? 'N/A' },
+      sessionProblem,
+    };
   }
 
   getProviderDisplayName(provider: string): string {
@@ -119,28 +104,6 @@ export class SettingsProfileController {
   getProviderKeyUrl(provider: string): string | undefined {
     const defaultUrl = PROVIDER_URLS[provider];
     return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
-  }
-
-  /**
-   * Numeric reliability settings only. The per-provider toggles this used to
-   * also write now go through the generic `UPDATE_STATE_SETTING` catalog path,
-   * which validates against the row schema and applies the row's `onWrite`
-   * exclusions — the raw `globalState.update` arm that skipped both is gone.
-   */
-  async setProviderSetting(input: {
-    key: string;
-    value: SettingsProfileConfigValue;
-  }): Promise<ProviderSettingUpdateResult> {
-    const reliabilitySetting = this.reliabilitySettingsByKey.get(input.key);
-    if (
-      !reliabilitySetting ||
-      (reliabilitySetting.schema &&
-        !reliabilitySetting.schema.safeParse(input.value).success)
-    ) {
-      return { kind: 'rejected', key: input.key };
-    }
-    await this.deps.updateConfig(input.key, input.value);
-    return { kind: 'updated' };
   }
 
   /**
