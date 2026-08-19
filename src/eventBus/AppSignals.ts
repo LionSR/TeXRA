@@ -88,12 +88,7 @@ export interface AppSignalPayloads {
 type AppSignal = keyof AppSignalPayloads;
 
 class AppSignals {
-  // Node's default 10-listener leak warning assumes a listener count that
-  // grows with runtime activity. Here it grows with *host composition*: each
-  // host wires a fixed handful of subscriptions at startup and never
-  // subscribes again, so a real process stays in single digits and the
-  // warning only fires in tests that compose several hosts in one process.
-  private readonly emitter = new EventEmitter().setMaxListeners(0);
+  private readonly emitter = new EventEmitter();
 
   on<K extends AppSignal>(
     event: K,

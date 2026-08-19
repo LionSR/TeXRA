@@ -113,6 +113,7 @@ export function createStubDesktopToolingSettingsController(
     },
     postLatexConfigValues: () => undefined,
     postStartupData: noOp,
+    dispose: () => undefined,
     ...overrides,
   };
 }

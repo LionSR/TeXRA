@@ -97,6 +97,14 @@ export interface DesktopSettingsIpc extends DesktopMessageHandler {
     deferAgentCatalogRefresh?: boolean;
   }): Promise<void>;
   signInChatGpt(): Promise<void>;
+  /**
+   * Releases the goal and app-signal subscriptions. They are scoped to the
+   * window that built this IPC, not to the process: `createWindow` runs again
+   * on macOS dock reactivation, so an undisposed listener would post to a
+   * destroyed window's renderer — and, for `githubTokenInvalid`, raise a
+   * dialog against a `BrowserWindow` that no longer exists.
+   */
+  dispose(): void;
 }
 
 export function createDesktopSettingsIpc(
@@ -285,9 +293,11 @@ export function createDesktopSettingsIpc(
 
   // Agent runs execute in this same main process and the settings panel shares
   // the app window with run progress, so a Goals tab left open during a run
-  // needs the push. Lifetime == app, matching the extension's process-global
-  // stance, so there is no dispose to hold.
-  subscribeGoalStateChanges(options.session, () => runAsync(postGoalList()));
+  // needs the push. The session outlives the window, so the subscription is
+  // window-scoped and released in `dispose` below.
+  const subscriptions = [
+    subscribeGoalStateChanges(options.session, () => runAsync(postGoalList())),
+  ];
 
   // ── GitHub token + PR/repo/issue subscriptions (Git tab) ──
 
@@ -338,18 +348,19 @@ export function createDesktopSettingsIpc(
   // The same stance as the goal subscription above: a run that binds or
   // releases a PR, repo, or issue subscription changes the list the Git tab is
   // showing, and until now the desktop only re-read it when the user asked.
-  appSignals.on('githubSubscriptionsChanged', () =>
-    runAsync(postGitHubSubscriptions()),
-  );
-  // Outside VS Code a rejected token left the pollers failing in silence. Say
-  // so, and re-read the token status so the Git tab stops presenting the
-  // stored token as usable.
-  appSignals.on('githubTokenInvalid', ({ message }) =>
-    runAsync(
-      (async () => {
-        await options.ui.showErrorMessage(`GitHub token rejected: ${message}`);
-        await postGitHubTokenStatus();
-      })(),
+  subscriptions.push(
+    appSignals.on('githubSubscriptionsChanged', () =>
+      runAsync(postGitHubSubscriptions()),
+    ),
+    // Outside VS Code a rejected token left the pollers failing in silence.
+    // The dialog is the whole fix: `resolveGitHubTokenSource` reports only
+    // which store holds a token, and rejection leaves the secret in place, so
+    // re-posting the token status would repaint the same "token set" badge.
+    // Marking a stored token as rejected would need a new status on the wire.
+    appSignals.on('githubTokenInvalid', ({ message }) =>
+      runAsync(
+        options.ui.showErrorMessage(`GitHub token rejected: ${message}`),
+      ),
     ),
   );
 
@@ -441,6 +452,10 @@ export function createDesktopSettingsIpc(
   return {
     refreshAuthDependentData,
     signInChatGpt: () => options.credentialSettingsController.signInChatGpt(),
+
+    dispose() {
+      for (const unsubscribe of subscriptions.splice(0)) unsubscribe();
+    },
 
     handleMessage(message: DesktopCommandMessage) {
       // WEBVIEW_READY is a broadcast: act on it but return false so sibling
