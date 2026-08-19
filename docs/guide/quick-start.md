@@ -25,8 +25,8 @@ TeXRA sits inside VS Code and helps you polish writing, fix errors, create figur
 5. Review the diff
 
 > 💡 **Tip:** Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page
-> (or by running `TeXRA: Open Getting Started Walkthrough`). It tells the same story in three beats — sign in,
-> use ChatGPT, or add a key; the setup assistant takes it from here; meet the orchestrator — and links directly
+> (or by running `TeXRA: Open Getting Started Walkthrough`). It tells the same story in three beats — choose a
+> credential; the setup assistant takes it from here; meet the orchestrator — and links directly
 > to the relevant commands.
 
 ::: tip Prefer the terminal?
@@ -37,32 +37,37 @@ interactive session with `texra chat`, or run a single agent with
 available.
 :::
 
-## Sign in, use ChatGPT, or add a key
+## Add a key or connect a subscription
 
 A credential is the one step no agent can do for you. On a fresh install, the **Welcome to TeXRA** card in the
 TeXRA panel offers the main access choices:
 
-1. **Sign in — free for academics** — Researcher Access: no API key needed (recommended). Run **TeXRA: Sign In**
-   from the Command Palette, or pick the sign-in option on the welcome card. Signing in also unlocks remote
-   agents, including the orchestrator.
+1. **Use your own provider API key** — Anthropic, OpenAI, Google, and more. Open the **Providers & Models** tab
+   (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
+   set your provider's key in the **API Configuration** table, or place a `.env` file in your workspace with
+   variables like `OPENAI_API_KEY`.
 2. **Use ChatGPT subscription** — Codex models through your ChatGPT plan. Open the Dashboard's **Subscriptions**
-   tab (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
-   use the **ChatGPT subscription** sign-in section.
-3. **Use GitHub Copilot in VS Code** — compatible models through a Copilot subscription. Open **Subscriptions →
+   tab and use the **ChatGPT subscription** sign-in section.
+3. **Use another provider subscription** — Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
+   already pay for. Connect them from the same **Subscriptions** tab.
+4. **Use GitHub Copilot in VS Code** — compatible models through a Copilot subscription. Open **Subscriptions →
    Copilot in VS Code** and grant access through VS Code's native consent prompt. This source does not appear in
    the CLI or desktop applications.
-4. **Use your own provider API key** — Anthropic, OpenAI, Google, and more. Open the **Providers & Models** tab
-   and set your provider's key in the **API Configuration** table, or place a `.env` file in your workspace with
-   variables like `OPENAI_API_KEY`.
 
 The full per-provider key reference — the API Configuration table, Set / Get / Remove actions, and per-provider toggles — lives in [Models → Setting API Keys](./models.md#setting-api-keys).
+
+::: tip Signing in to TeXRA
+**TeXRA: Sign In** is separate from model access: a TeXRA account (Researcher Access) unlocks the hosted
+research-agent catalog — remote agents such as the orchestrator — and those agents still run on the credential
+you configured above. See [Remote Agents](./remote-agents.md).
+:::
 
 Once a credential is in place, the setup assistant takes it from here: one conversation that checks your environment, applies a team for your field, and runs your first polish, ending at a diff. [First run](./first-run.md) is the manual mirror of that conversation.
 
 ::: tip CLI credentials
-The terminal uses the same paths — `texra login` for included hosted
-access, `texra auth chatgpt login` for ChatGPT subscription, or provider
-env vars for your own keys. See
+The terminal uses the same paths — provider env vars for your own keys,
+`texra auth chatgpt login` for a ChatGPT subscription, or `/api` in a chat
+to pick among connected subscriptions. See
 [Authentication](./texra-cli.md#authentication) on the CLI page.
 :::
 
@@ -176,8 +181,8 @@ The same agents are one command away from the terminal. After
 `brew install texra-ai/tap/texra`:
 
 ```bash
-# Sign in for included hosted access, or set ANTHROPIC_API_KEY / OPENAI_API_KEY in your shell:
-texra login
+# Set ANTHROPIC_API_KEY / OPENAI_API_KEY in your shell, or connect a subscription:
+texra auth chatgpt login
 
 # One-shot run (prints the revised file's path; --output copies it next to the input):
 texra run polish --input draft.tex \

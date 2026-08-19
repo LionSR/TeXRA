@@ -193,7 +193,6 @@ const INTERACTIVE_CONTEXT: CliContext = createTestCliContext({
   mode: 'interactive',
   outputFormat: 'text',
   approvalPolicy: 'ask',
-  apiMode: 'personal',
   stdoutIsTty: true,
   termIsDumb: false,
   stderrIsTty: true,

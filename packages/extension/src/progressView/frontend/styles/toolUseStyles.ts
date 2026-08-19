@@ -47,18 +47,6 @@ export const toolUseStyles = css`
     word-break: break-word;
   }
 
-  .banner-details--relay-error {
-    border-inline-start: var(--border-medium) solid var(--color-warning);
-    border-start-start-radius: 0;
-    border-end-start-radius: 0;
-    border-start-end-radius: var(--border-radius-small);
-    border-end-end-radius: var(--border-radius-small);
-  }
-
-  .banner-details--relay-error > .details-summary .label {
-    color: var(--color-warning);
-  }
-
   /* Hide <wa-details>'s built-in disclosure icon when there's nothing to
      expand (mirrors the old native-details toggle-icon visibility:hidden). */
   wa-details.banner-details--no-toggle::part(icon) {

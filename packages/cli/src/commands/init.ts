@@ -1,6 +1,5 @@
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
-import type { ApiAccessMode } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
@@ -9,7 +8,6 @@ import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
-import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import {
   formatCliNoAvailableModelsRecovery,
   getCliModelAccessList,
@@ -42,7 +40,7 @@ export function defaultInitAgentOptions(
   }));
 }
 
-async function gatherOptions(apiMode: ApiAccessMode): Promise<{
+async function gatherOptions(): Promise<{
   agents: InitAgentOption[];
   models: CliModelAccess[];
 }> {
@@ -50,9 +48,7 @@ async function gatherOptions(apiMode: ApiAccessMode): Promise<{
   const agents = defaultInitAgentOptions(
     getVisibleAgents(AgentCategory.ToolUse),
   );
-  const models = await getCliModelAccessList({
-    apiMode,
-  });
+  const models = await getCliModelAccessList();
   return { agents, models };
 }
 
@@ -91,14 +87,13 @@ interface InitSummary {
 function initWarning(
   answers: InitAnswers,
   models: readonly CliModelAccess[],
-  apiMode: ApiAccessMode,
 ): InitSummary['warning'] {
   const chosen = models.find((model) => model.model.value === answers.model);
   if (chosen?.available === true) return undefined;
   return {
     model: answers.model,
-    message: `"${answers.model}" is not usable in the current access mode.`,
-    recovery: `${formatCliNoAvailableModelsRecovery(apiMode)} Run \`texra models list --all\` to inspect access.`,
+    message: `"${answers.model}" is not currently usable.`,
+    recovery: `${formatCliNoAvailableModelsRecovery()} Run \`texra models list --all\` to inspect access.`,
   };
 }
 
@@ -142,9 +137,8 @@ function emitInitSummary(
   config: InitConfigShape,
   models: readonly CliModelAccess[],
   gitignore: GitignoreOutcome | undefined,
-  apiMode: ApiAccessMode,
 ): void {
-  const warning = initWarning(answers, models, apiMode);
+  const warning = initWarning(answers, models);
   const summary: InitSummary = {
     path: filePath,
     agent: answers.agent,
@@ -171,9 +165,6 @@ async function runInit(
     gitignore: boolean | undefined;
   },
 ): Promise<number> {
-  // Don't skip included access: model availability must reflect the user's
-  // real access mode (a signed-in relay user has no personal keys but can use
-  // included models), so the picker annotates and defaults correctly.
   await initCliPlatform({ ...context, quietLogs: true });
 
   const filePath = workspaceTexraConfigPath(context.cwd);
@@ -184,8 +175,7 @@ async function runInit(
     return CliExitCode.Usage;
   }
 
-  const apiMode = effectiveCliApiMode(context);
-  const { agents, models } = await gatherOptions(apiMode);
+  const { agents, models } = await gatherOptions();
 
   const interactive =
     !opts.yes &&
@@ -221,15 +211,7 @@ async function runInit(
     ? await ensureTexraGitignored(context.cwd)
     : undefined;
 
-  emitInitSummary(
-    context,
-    filePath,
-    answers,
-    config,
-    models,
-    gitignoreOutcome,
-    apiMode,
-  );
+  emitInitSummary(context, filePath, answers, config, models, gitignoreOutcome);
   return CliExitCode.Success;
 }
 

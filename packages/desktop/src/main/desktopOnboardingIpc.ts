@@ -25,9 +25,8 @@ import {
 export interface DesktopOnboardingIpcOptions {
   state?: StateStore;
   /**
-   * Host-provided check for a usable credential (relay sign-in + server-side
-   * keys, or any provider API key). Async because both the relay auth check
-   * and the secrets read can involve disk/network I/O.
+   * Host-provided check for a usable credential (a subscription or any
+   * provider API key). Async because the secrets read can involve disk I/O.
    */
   hasCredential: () => boolean | Promise<boolean>;
   /** Post SET_SELECTED_AGENT to the renderer when entering State 1. */

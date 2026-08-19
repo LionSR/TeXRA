@@ -1,25 +1,23 @@
 // `/model` form. It loads the same registry used by `texra models list`, then
-// shows only the entries that can run in the active API mode. Before the first
+// shows only the runnable entries. Before the first
 // message it chooses the root model; once a tool-use chat is waiting, it can
 // switch the live conversation to a compatible model for future turns.
 
 import { Box, Text } from 'ink';
 
 import {
-  emptyModelListMessageForCliMode,
+  emptyModelListMessage,
   getCliModelAccessList,
-  modelSelectItemsForCliMode,
+  modelSelectItemsForCli,
   type CliModelAccess,
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/modelAccess';
-import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
   type SelectWindowSize,
 } from '@cli/tui/selectWindow';
-import type { ApiAccessMode } from '@shared/schemas';
 import {
   CompactPickerKeyHints,
   FormFrame,
@@ -30,7 +28,6 @@ import { CHAT_API_MODE_MODEL_RECOVERY } from '../commands/handlers/slashContext'
 
 export interface ModelListFormProps {
   readonly currentModel: string;
-  readonly apiMode: ApiAccessMode;
   readonly availableRows?: number;
   readonly selectable: boolean;
   readonly getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
@@ -53,7 +50,7 @@ export function modelListDescription({
   readonly itemCount: number;
   readonly selectable: boolean;
 }): string {
-  if (itemCount === 0) return 'No model choices in this API mode.';
+  if (itemCount === 0) return 'No model choices available.';
   return selectable
     ? 'Choose the model for future turns.'
     : 'Available models. Finish the active response before switching models.';
@@ -63,23 +60,15 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const picker = useAsyncPickerForm<readonly CliModelAccess[], string>({
     title: '/model',
     loadingLabel: 'Loading models...',
-    load: () =>
-      getCliModelAccessList({
-        apiMode: props.apiMode,
-      }),
+    load: () => getCliModelAccessList(),
     isEmpty: (models) => !models.some((model) => model.available),
     closeEmptyOnEnter: true,
     items: (models) =>
-      modelSelectItemsForCliMode(
-        models,
-        props.apiMode,
-        props.getModelSwitchDisabledReason,
-      ),
+      modelSelectItemsForCli(models, props.getModelSwitchDisabledReason),
     selectable: props.selectable,
     onSelect: (value) => props.onSelect?.(value),
     onClose: props.onClose,
   });
-  const models = picker.data ?? [];
   const items = picker.items;
   const selectWindow = modelSelectWindow({
     availableRows: props.availableRows,
@@ -94,10 +83,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
 
   if (isCompactFormRows(props.availableRows) && items.length > 0) {
     return (
-      <FormFrame
-        title={`/model · ${formatCliModelAccessRoute(props.apiMode)}`}
-        showCloseHint={false}
-      >
+      <FormFrame title="/model" showCloseHint={false}>
         <Text dimColor>Available models</Text>
         <Select
           items={items}
@@ -113,19 +99,10 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   }
 
   return (
-    <FormFrame
-      title={`/model · ${formatCliModelAccessRoute(props.apiMode)}`}
-      showCloseHint={false}
-    >
+    <FormFrame title="/model" showCloseHint={false}>
       <Text dimColor>{description}</Text>
       {items.length === 0 ? (
-        <Text>
-          {emptyModelListMessageForCliMode(
-            models,
-            props.apiMode,
-            CHAT_API_MODE_MODEL_RECOVERY,
-          )}
-        </Text>
+        <Text>{emptyModelListMessage(CHAT_API_MODE_MODEL_RECOVERY)}</Text>
       ) : (
         <Box flexDirection="column">
           <Select

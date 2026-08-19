@@ -57,7 +57,7 @@ function planLoadedCliMultiAgentPresets(
 
 /**
  * Resolve a preset plan, then when it still has gaps and the user is
- * authenticated, perform a remote load and replan. Relay-served premium agents
+ * authenticated, perform a remote load and replan. Account-served remote agents
  * are only visible after a remote load. Both headless `multi-agent run` and the
  * interactive `orchestrate` menu route through this runtime helper so command
  * entrypoints cannot drift.

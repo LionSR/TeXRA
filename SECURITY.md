@@ -14,7 +14,7 @@ Do not open a public issue for a security problem.
 Email **contact@texra.ai** with `SECURITY` in the subject line, and include:
 
 - what the issue is, and which surface it affects (extension, desktop, CLI, or
-  the hosted relay at `remote.texra.ai`)
+  the hosted account services at `remote.texra.ai`)
 - the version you saw it on
 - steps to reproduce, or a proof of concept
 - the impact you believe it has
@@ -27,8 +27,8 @@ anonymous.
 ## In scope
 
 - **Credential storage and transport** — provider API keys (VS Code
-  SecretStorage, the Electron keychain, the CLI credential store), OAuth tokens,
-  and relay access tokens.
+  SecretStorage, the Electron keychain, the CLI credential store) and OAuth
+  tokens.
 - **Authentication flows** — OAuth callbacks and deep links, the device-code
   flow, and the auth bridge.
 - **Agent tool execution** — shell, file-write, and edit tools, including the
@@ -36,7 +36,8 @@ anonymous.
 - **Prompt injection that escalates privilege** — content in a user's documents,
   tool results, or fetched pages that makes an agent take an action the approval
   gate should have covered.
-- **The hosted relay** — authentication, tier enforcement, rate and spend limits.
+- **The hosted account services** — authentication and the remote-agent
+  catalog.
 - **Webview and renderer isolation** — the VS Code webviews and the Electron
   renderer, including navigation policy and any path from rendered content to
   host APIs.
@@ -53,8 +54,8 @@ anonymous.
 
 ## API keys
 
-TeXRA runs agents against model providers using either your own API keys or
-TeXRA's hosted relay. Where a key lives depends on how you supplied it:
+TeXRA runs agents against model providers using your own API keys or provider
+subscription credentials. Where a key lives depends on how you supplied it:
 
 - **Entered through TeXRA** (`TeXRA: Set API Key`, the desktop credential
   settings, or `texra auth`) — stored in the host's secret store: VS Code
@@ -64,8 +65,7 @@ TeXRA's hosted relay. Where a key lives depends on how you supplied it:
   the environment at request time and never enter any secret store. A `.env` is
   plain text in your workspace, so keep it out of version control.
 
-Either way the key is sent only to the provider, or to the relay when a request
-is routed through it.
+Either way the key is sent only to the provider.
 
 If you think a key of yours has been exposed by TeXRA, rotate it with your
 provider first, then report it.

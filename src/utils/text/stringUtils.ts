@@ -75,20 +75,6 @@ export function formatCompactDuration(durationMs: number): string {
 }
 
 /**
- * Format a percentage value for compact status displays (e.g. `12%`, `12.5%`).
- *
- * Non-finite or non-positive input renders as `0%`, and a positive value below
- * one renders as `<1%` so a tiny-but-present share never reads as `0%`. The
- * `decimals` argument controls the fractional digits of the rendered number
- * (default `0` for whole-percent displays).
- */
-export function formatPercent(value: number, decimals = 0): string {
-  if (!Number.isFinite(value) || value <= 0) return '0%';
-  if (value < 1) return '<1%';
-  return `${value.toFixed(decimals)}%`;
-}
-
-/**
  * Format token counts for compact usage displays.
  *
  * Token displays intentionally stay raw until they exceed 4096, the common

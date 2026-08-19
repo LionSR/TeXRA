@@ -6,18 +6,16 @@ import {
   validateExecutionRequest,
   type ExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { BaseViewMessageHandler } from '@common/webview';
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
+import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
+import { ProgressFollowUpController } from '@controllers/progressView/ProgressFollowUpController';
 import {
-  ProgressFollowUpPolishController,
-  type ProgressFollowUpPolishResult,
-} from '@controllers/progressView/ProgressFollowUpPolishController';
-import {
-  ProgressFollowUpController,
-  type ProgressFollowUpPlan,
-} from '@controllers/progressView/ProgressFollowUpController';
+  applyFollowUpPlan,
+  applyFollowUpPolishResult,
+  type FollowUpApplyPorts,
+} from '@controllers/progressView/followUpApply';
 import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
@@ -101,6 +99,25 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    */
   private readonly showInfo = async (message: string): Promise<void> => {
     await this.host.info(message);
+  };
+
+  /** This host's bindings for the shared follow-up plan/polish interpreters. */
+  private readonly followUpPorts: FollowUpApplyPorts = {
+    showInfo: this.showInfo,
+    showWarning: async (message) => {
+      await this.host.warning(message);
+    },
+    showError: async (message) => {
+      await this.host.error(message);
+    },
+    logError: (message, error) => {
+      this.logger.error(this.channel, message, { data: error });
+    },
+    post: (message) => {
+      this.postToActiveView(message);
+    },
+    runCompileFixer: (request) =>
+      this.executeValidated(request, { preferHelperModel: true }),
   };
 
   constructor(
@@ -190,8 +207,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       restoreRunConfig: async (config) => {
         await this.runViewCommand('texra.restoreState', [config]);
       },
-      applyFollowUpPlan: (plan) => this.applyFollowUpPlan(plan),
-      applyPolishResult: (result) => this.applyFollowUpPolishResult(result),
+      applyFollowUpPlan: (plan) => applyFollowUpPlan(plan, this.followUpPorts),
+      applyPolishResult: (result) =>
+        applyFollowUpPolishResult(result, this.followUpPorts),
       onPolishProgress: (message) => {
         polishProgress?.report({ message });
       },
@@ -637,10 +655,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       promptForApiKey: async (provider) => {
         await this.runViewCommand(apiKeyCommands.setApiKey, [provider]);
       },
-      getUseIncludedModelAccess: () =>
-        getServerSideKeyService().getUseIncludedModelAccess(),
-      setUseIncludedModelAccess: (enabled) =>
-        getServerSideKeyService().setUseIncludedModelAccess(enabled),
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
         this.interactions.isRetryPending(stream, requestId),
@@ -749,7 +763,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     let prepared = await this.apiKeyRetryController.ensureOwnApiKey({
       provider: fallback.provider,
       exhaustionReason: data.exhaustionReason,
-      viaRelay: data.viaRelay,
     });
     if (!prepared) return;
     if (!this.interactions.isRetryPending(data.stream, data.requestId)) return;
@@ -767,7 +780,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       prepared = await this.apiKeyRetryController.ensureOwnApiKey({
         provider: fallback.provider,
         exhaustionReason: data.exhaustionReason,
-        viaRelay: data.viaRelay,
       });
       if (!prepared) return;
       if (!this.interactions.isRetryPending(data.stream, data.requestId)) {
@@ -803,7 +815,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           model: fallback.model,
           exhaustionReason: data.exhaustionReason,
           chatGptSubscriptionEligible: fallback.chatGptSubscriptionEligible,
-          viaRelay: data.viaRelay,
         },
         async (copilotRouteOverride) => {
           if (!this.interactions.isRetryPending(data.stream, data.requestId)) {
@@ -838,29 +849,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  private async applyFollowUpPolishResult(
-    result: ProgressFollowUpPolishResult,
-  ): Promise<void> {
-    switch (result.kind) {
-      case 'skipped':
-        return;
-      case 'updated':
-        this.postToActiveView(result.update);
-        return;
-      case 'failed':
-        this.postToActiveView(result.update);
-        await this.host.error(result.userMessage);
-        return;
-      case 'exception':
-        this.postToActiveView(result.update);
-        this.logger.error(this.channel, result.logMessage, {
-          data: result.logData,
-        });
-        await this.host.error(result.userMessage);
-        return;
-    }
-  }
-
   private handlePlanApprovalAction(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION>,
   ): void {
@@ -878,8 +866,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   /**
-   * Validate an agent request and run it. Both callers own their own
-   * user-facing failure reporting, so a rejected request is only logged.
+   * Validate an agent request and run it. No caller reports the rejection, so
+   * this owns it: a request dropped here is a run the user asked for and would
+   * otherwise never see start or fail.
    */
   private async executeValidated(
     request: ExecutionRequest,
@@ -888,6 +877,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
       this.logger.error(this.channel, validation.message);
+      await this.host.error(validation.message);
       return;
     }
     await this.runViewCommand('texra.execute', [
@@ -905,6 +895,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
       this.logger.error(this.channel, validation.message);
+      await this.host.error(validation.message);
       return false;
     }
 
@@ -922,20 +913,5 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         () => resolve(false),
       );
     });
-  }
-
-  private async applyFollowUpPlan(plan: ProgressFollowUpPlan): Promise<void> {
-    switch (plan.kind) {
-      case 'warning':
-        await this.host.warning(plan.message);
-        return;
-      case 'info':
-        await this.host.info(plan.message);
-        return;
-      case 'execute':
-        // Follow-up 'execute' plans are the compile fixer (latexFixer), so run
-        // them on the configured helper model.
-        await this.executeValidated(plan.request, { preferHelperModel: true });
-    }
   }
 }

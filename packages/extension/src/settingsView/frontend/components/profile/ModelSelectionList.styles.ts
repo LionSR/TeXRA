@@ -162,7 +162,7 @@ export const modelSelectionListStyles: CSSResult = css`
     background: var(--wa-color-surface-lowered);
   }
 
-  /* Unavailable model rows (not in relay allowlist) */
+  /* Unavailable model rows (no usable credential) */
   /* No row-level dim. At 0.5 on top of an already-translucent secondary text
      token this composited to 1.91:1, and it also dimmed .model-metadata and
      .reasoning-level-select, which render OUTSIDE the wa-switch and so never

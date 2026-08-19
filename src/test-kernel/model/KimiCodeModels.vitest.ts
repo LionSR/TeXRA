@@ -5,7 +5,6 @@ import { resolveModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory
 
 import { kimiCodeWireModelId } from '@model/kimiCodeSubscriptionRouting';
 import {
-  allowsModelRelay,
   resolveModelApiKeyProvider,
   resolveModelSource,
   shouldRouteModelThroughOpenRouter,
@@ -124,13 +123,7 @@ describe('Kimi Code routing', () => {
     ).toBe('ModelHandlerOpenRouterNative');
   });
 
-  it('never sends managed-service credentials through the TeXRA relay', () => {
-    expect(allowsModelRelay(MODEL_CONFIGS.kimiCoding)).toBe(false);
-    expect(allowsModelRelay(MODEL_CONFIGS.kimiCodingFast)).toBe(false);
-  });
-
   it('does not divert other moonshot models off their normal routes', () => {
-    expect(allowsModelRelay(MODEL_CONFIGS.kimi3)).toBe(true);
     expect(resolveModelApiKeyProvider(MODEL_CONFIGS.kimi25T, false)).toBe(
       'moonshot',
     );

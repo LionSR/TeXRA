@@ -382,7 +382,7 @@ export const CoreSettingsShape = {
     .strictObject({
       enabled: boolField(
         DEFAULT_CORE_SETTINGS.telemetry.enabled,
-        'Send a usage record for each model round to TeXRA: model and provider, agent name and category, token counts, cost, response time, how the round was paid for, stream id, and the TeXRA version and host. Never prompt text, document content, or file names. Records are sent only while signed in. Turning this off stops reporting for rounds billed to your own API keys; rounds covered by included access or a subscription are still recorded, because they meter your hosted usage against your plan. Setting TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1 in the environment turns it off regardless of this setting.',
+        'Send a usage record for each model round to TeXRA: model and provider, agent name and category, token counts, cost, response time, how the round was paid for, stream id, and the TeXRA version and host. Never prompt text, document content, or file names. Records are sent only while signed in. Turning this off stops reporting for rounds billed to your own API keys; rounds covered by a subscription are still recorded, because they meter your usage against your plan. Setting TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1 in the environment turns it off regardless of this setting.',
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.telemetry),

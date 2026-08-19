@@ -24,3 +24,6 @@ packages/extension/resources/templates/
 # triggers a "refusing to update workflow" push rejection. Skip them
 # entirely from format runs.
 .github/workflows/
+
+# Retired sources kept for restoration (see attic/README.md) - Deno-formatted
+attic/

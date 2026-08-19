@@ -1,10 +1,9 @@
-import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
+import { ModelProvider, type ModelConfig, ReasoningEffort } from 'llm-zoo';
 
 import {
   hasConfigurableReasoningEffort,
   LEVEL_TO_EFFORT,
 } from '@agent/modelHandlers/support/reasoningEffort';
-import { FREE_TIER, MAX_TIER } from '@auth/config';
 import { preferredCopilotRouteModels } from '@model/copilotRouting';
 import { resolveModelSource } from '@model/openRouterRouting';
 import {
@@ -38,8 +37,6 @@ export interface SettingsModelSelectionControllerDeps {
   /** Persisted picker state: enabled models, helper model, reasoning levels. */
   globalState: StateStore;
   modelSources?: readonly string[];
-  useIncludedAccess?: () => boolean;
-  getUserTier?: () => string | undefined;
   getCopilotRoutes?: () => Promise<ReadonlyMap<string, CopilotModelRoute>>;
   getPreferredCopilotRouteModels?: () => readonly string[];
   /**
@@ -200,7 +197,7 @@ export class SettingsModelSelectionController {
     const enabledSet = new Set(this.getVisibleModels());
     const reasoningOverrides = this.getReasoningLevelOverrides();
 
-    // Resolve availability (relay/included, personal-key, quota) once for the
+    // Resolve availability (personal-key, subscription) once for the
     // models this host shows, via the same shared computation the CLI picker
     // uses. Passing an explicit list keeps the picker's view authoritative and
     // avoids re-deriving availability at render time. Copilot routes are not
@@ -281,32 +278,10 @@ export class SettingsModelSelectionController {
       item.defaultReasoningLevel = defaultLevel;
     }
 
-    const includedAccessCap = this.getIncludedAccessReasoningCap(config);
-    if (includedAccessCap) {
-      item.includedAccessReasoningCap = includedAccessCap;
-    }
-
     const parsed = ReasoningLevelSchema.safeParse(override);
     if (parsed.success) {
       item.reasoningLevel = parsed.data;
     }
-  }
-
-  private getIncludedAccessReasoningCap(
-    config: ModelConfig,
-  ): ReasoningLevel | undefined {
-    if (
-      !this.deps.useIncludedAccess?.() ||
-      !isGpt5ModelName(config.name) ||
-      config.capabilities.reasoningEffort !== ReasoningEffort.XHIGH
-    ) {
-      return undefined;
-    }
-
-    const userTier = this.deps.getUserTier?.();
-    if (userTier === MAX_TIER) return 'high';
-    if (userTier === FREE_TIER) return 'medium';
-    return undefined;
   }
 }
 

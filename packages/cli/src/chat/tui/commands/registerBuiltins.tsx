@@ -2,10 +2,7 @@
 
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import { parseCliHistoryId } from '@cli/runtime/history';
-import {
-  cliApiFallbackSelection,
-  type CliModelAccessSelection,
-} from '@cli/runtime/modelAccessRoute';
+import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import {
   type CliLogoutTarget,
   parseChatLoginSlashArgs,
@@ -15,7 +12,7 @@ import type { ApiProvider } from '@model/apiProviders';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type ExecutionId } from '@shared/schemas';
 import { providerDisplayName } from '@shared/constants/providers';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
+import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -53,7 +50,7 @@ import {
   applyCliModelAccessSelection,
   applyCliProviderApiKey,
   showCliAuthStatus,
-} from './handlers/apiModeCommands';
+} from './handlers/modelAccessCommands';
 import {
   applyCliApprovalPolicySelection,
   YOLO_USAGE,
@@ -340,23 +337,12 @@ export function registerBuiltinSlashCommands(options?: {
   }
 
   function ModelAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
-    const current = sessionMeta.get().apiMode;
     return (
       <ModelAccessForm
-        apiMode={current}
         availableRows={props.availableRows}
         onSelect={formSelectionHandler<CliModelAccessSelection>({
           action: onModelAccessSelect,
-          onDone: (value) => {
-            // Selecting "Your own API keys" switches to personal mode and then
-            // opens the API key configuration form so keys can be set in place
-            // instead of requiring a separate `/key` run.
-            if (value.kind === 'api-fallback' && value.apiMode === 'personal') {
-              openCliSlashCommandForm('key', '');
-              return;
-            }
-            props.onDone(value);
-          },
+          onDone: props.onDone,
           onError: options?.onError,
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
@@ -456,7 +442,6 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <ModelListForm
         currentModel={current}
-        apiMode={sessionMeta.get().apiMode}
         availableRows={props.availableRows}
         selectable={selectable}
         getModelSwitchDisabledReason={options?.getModelSwitchDisabledReason}
@@ -580,7 +565,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'api',
-    description: `Choose ChatGPT, Grok, Kimi Code, ${INCLUDED_ACCESS.inline}, or ${OWN_API_KEYS.inline}`,
+    description: `Choose ChatGPT, Grok, Kimi Code, GLM, or ${OWN_API_KEYS.inline}`,
     category: 'configuration',
     echo: 'ifPersists',
     handler: applyCliModelAccessInput,
@@ -723,15 +708,6 @@ export function registerBuiltinSlashCommands(options?: {
           onError={async (error) => {
             props.onPersist?.();
             await options?.onError?.(error);
-          }}
-          onApiModePersonal={async () => {
-            // A key save only needs the mode switch when leaving included
-            // access; already-personal sessions require no state change.
-            if (sessionMeta.get().apiMode === 'personal') return;
-            await onModelAccessSelect(
-              cliApiFallbackSelection('personal'),
-              transcriptSlashCommandOutput,
-            );
           }}
         />
       );

@@ -6,15 +6,10 @@ import { waitForCondition } from '@test/support/asyncTestUtils';
 import { FakeStdin, FakeStdout } from '@test/support/inkTestHarness.ts';
 
 const mocks = vi.hoisted(() => ({
-  updateCliModelAccess: vi.fn(),
   saveProviderApiKey: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStdout: vi.fn(),
   state: new Map<string, unknown>(),
-}));
-
-vi.mock('@cli/runtime/modelAccessSelection', () => ({
-  updateCliModelAccess: mocks.updateCliModelAccess,
 }));
 
 vi.mock('@cli/runtime/providerApiKey', () => ({
@@ -65,7 +60,6 @@ function restoreProcessStream(
 beforeEach(() => {
   mocks.state.clear();
   mocks.saveProviderApiKey.mockReset().mockResolvedValue(undefined);
-  mocks.updateCliModelAccess.mockReset();
   mocks.writeTextStderr.mockReset();
   mocks.writeTextStdout.mockReset();
 });
@@ -82,14 +76,8 @@ afterEach(() => {
 });
 
 describe('provider-key onboarding flow', () => {
-  it('emits the access-route warning returned after the submitted key without exposing the key', async () => {
-    const warning =
-      'DISTINCTIVE OVERRIDE: workspace policy keeps ChatGPT subscription active.';
+  it('saves the submitted key without exposing it', async () => {
     const providerKey = 'sk-ant-integration-secret';
-    mocks.updateCliModelAccess.mockResolvedValue({
-      apiMode: 'personal',
-      message: warning,
-    });
 
     Object.defineProperty(console, 'Console', {
       value: Console,
@@ -115,7 +103,7 @@ describe('provider-key onboarding flow', () => {
         stdin.listenerCount('readable') > 0 &&
         stdout.output.includes('Choose how to power model calls'),
     );
-    stdin.write('3');
+    stdin.write('2');
     await waitForOnboarding(() =>
       stdout.output.includes('Choose your provider:'),
     );
@@ -135,13 +123,8 @@ describe('provider-key onboarding flow', () => {
       'anthropic',
       providerKey,
     );
-    expect(mocks.updateCliModelAccess).toHaveBeenCalledWith(undefined, {
-      kind: 'api-fallback',
-      apiMode: 'personal',
-    });
     expect(mocks.writeTextStdout).toHaveBeenCalledWith(
-      'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment). ' +
-        warning,
+      'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment).',
     );
     expect(mocks.writeTextStdout).not.toHaveBeenCalledWith(
       expect.stringContaining(providerKey),

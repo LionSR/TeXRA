@@ -7,7 +7,6 @@ import {
   xaiAccountLabel,
   xaiCoordinator,
 } from '@auth/xai';
-import { relayTokenSignOutNotice } from '@auth/relayToken';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
@@ -41,9 +40,7 @@ import {
 } from '@shared/codingPlanSubscriptions';
 import {
   SUBSCRIPTION_USAGE_PROVIDERS,
-  type ApiAccessMode,
   type SettingsViewInboundHandlerRegistry,
-  type SpendingStatus,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
 import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
@@ -72,18 +69,11 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
     signIn(): Promise<void>;
     signOut(): Promise<void>;
   };
-  readonly setUseIncludedModelAccess: (enabled: boolean) => Promise<void>;
-  readonly refreshSpendingStatus: () => Promise<SpendingStatus | null>;
   readonly subscriptionUsage?: Pick<
     SubscriptionUsageService,
     'getUsage' | 'invalidate'
   >;
-  /**
-   * Included-Access entitlement readers. Injected rather than imported so the
-   * controller stays unit-testable; without them the model list would omit the
-   * reasoning cap the entitlement actually enforces.
-   */
-  readonly modelSelectionExtras: ModelSelectionExtras;
+  readonly modelSelectionExtras?: ModelSelectionExtras;
   readonly onCredentialChanged: () => Promise<void>;
   readonly onError: (error: unknown) => void;
 }
@@ -92,7 +82,6 @@ type DesktopProfileHandlers = Pick<
   SettingsViewInboundHandlerRegistry,
   | typeof SETTINGS_VIEW_COMMANDS.SIGN_IN
   | typeof SETTINGS_VIEW_COMMANDS.SIGN_OUT
-  | typeof SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE
   | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY
   | typeof SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY
   | typeof SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL
@@ -160,8 +149,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         loadApiKeyStatusMap(options.secrets, API_PROVIDERS),
       getConfig: (key, defaultValue) => options.config.get(key, defaultValue),
       updateConfig: (key, value) => options.config.update(key, value, 'global'),
-      setUseIncludedModelAccess: options.setUseIncludedModelAccess,
-      refreshSpendingStatus: options.refreshSpendingStatus,
     });
     this.profileKeyController = new SettingsProfileKeyController({
       prompt: {
@@ -191,7 +178,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     this.profileHandlers = {
       signIn: () => options.auth.signIn(),
       signOut: () => this.signOut(),
-      setApiAccessMode: (message) => this.setApiAccessMode(message.mode),
       setProviderKey: (message) =>
         this.setProviderKey(message.provider, message.apiKey),
       removeProviderKey: (message) => this.removeProviderKey(message.provider),
@@ -350,19 +336,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.profileKeyController.removeProviderKey(provider);
   }
 
-  private async setApiAccessMode(mode: ApiAccessMode): Promise<void> {
-    const update = await this.profileController.setApiAccessMode(mode);
-    await this.postProfileData();
-    if (update.kind === 'rejected') {
-      await this.options.notifications.showInfoMessage(
-        'Included access is unavailable because this month’s quota is exhausted.',
-      );
-      return;
-    }
-    await this.postModelSelectionData();
-    await this.options.onCredentialChanged();
-  }
-
   private async setProviderSetting(
     key: string,
     value: boolean | number,
@@ -442,10 +415,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
 
   private async signOut(): Promise<void> {
     await this.options.auth.signOut();
-    const relayNotice = relayTokenSignOutNotice();
-    if (relayNotice) {
-      await this.options.notifications.showInfoMessage(relayNotice);
-    }
   }
 
   private async signOutChatGpt(): Promise<void> {

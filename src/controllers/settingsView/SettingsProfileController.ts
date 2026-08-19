@@ -1,26 +1,22 @@
-import { createLog } from '@logger/logUtils';
 import { API_PROVIDERS } from '@model/apiProviders';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import {
-  type ApiAccessMode,
   DEFAULT_CORE_SETTINGS,
+  modelsTabSettings,
   type NumberSetting,
   type ProviderKeyStatus,
   type ProviderSetting,
-  type SpendingStatus,
+  type SettingHost,
+  type StateSettingEntry,
   type UpdateProfileMessage,
-  isSpendingQuotaExceeded,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
 } from '@shared/schemas';
-import { modelsTabSettings, type SettingHost } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
 } from '@shared/constants/providers';
-import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 import {
   getProviderDisplayName,
   getProviderEndpoint,
@@ -29,8 +25,6 @@ import {
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
 import { buildProfileMessage } from './ProfileMessageBuilder';
-
-const logger = createLog('SettingsProfileController');
 
 type SettingsReliabilitySetting = Omit<NumberSetting, 'value'> & {
   defaultValue: number;
@@ -67,18 +61,9 @@ export type SettingsProfileConfigValue = boolean | number;
 type ProviderSettingUpdateResult =
   { kind: 'updated' } | { kind: 'rejected'; key: string };
 
-type ApiAccessModeUpdate =
-  | {
-      readonly kind: 'updated';
-      readonly mode: ApiAccessMode;
-      readonly openRouterDisabled: boolean;
-    }
-  | { readonly kind: 'rejected'; readonly reason: 'quota_exhausted' };
-
 /**
  * Host-supplied storage/secrets wiring: `globalState`,
- * `loadProviderKeyStatuses`, `getConfig`/`updateConfig`,
- * `setUseIncludedModelAccess`, and `refreshSpendingStatus` all depend on
+ * `loadProviderKeyStatuses`, and `getConfig`/`updateConfig` all depend on
  * host-specific storage and secrets, so each host must supply them. Everything
  * else the controller needs — the provider catalog and the region-aware
  * lookups built on it — is host-agnostic and read straight from its modules.
@@ -92,8 +77,6 @@ interface SettingsProfileControllerDeps {
   >;
   getConfig<T>(key: string, defaultValue: T): T;
   updateConfig(key: string, value: SettingsProfileConfigValue): Promise<void>;
-  setUseIncludedModelAccess(enabled: boolean): Promise<void>;
-  refreshSpendingStatus(): Promise<SpendingStatus | null>;
 }
 
 export class SettingsProfileController {
@@ -136,39 +119,6 @@ export class SettingsProfileController {
   getProviderKeyUrl(provider: string): string | undefined {
     const defaultUrl = PROVIDER_URLS[provider];
     return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
-  }
-
-  async setApiAccessMode(mode: ApiAccessMode): Promise<ApiAccessModeUpdate> {
-    const includedAccess = mode === 'included';
-    let spendingStatus: SpendingStatus | null = null;
-    if (includedAccess) {
-      try {
-        spendingStatus = await this.deps.refreshSpendingStatus();
-      } catch (error) {
-        // The relay remains authoritative, so an unknown local result must not
-        // block the mutation. Preserve the refresh failure in the trace only.
-        logger.warn('Included Access quota refresh failed; proceeding', {
-          data: { error },
-        });
-      }
-    }
-    if (spendingStatus !== null && isSpendingQuotaExceeded(spendingStatus)) {
-      return { kind: 'rejected', reason: 'quota_exhausted' };
-    }
-    await this.deps.setUseIncludedModelAccess(includedAccess);
-
-    let openRouterDisabled = false;
-    if (
-      includedAccess &&
-      this.deps.globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER, false)
-    ) {
-      // Included Access routes through the TeXRA relay; OpenRouter bypasses it.
-      await this.deps.globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-      openRouterDisabled = true;
-    }
-
-    invalidateModelOptionsCache();
-    return { kind: 'updated', mode, openRouterDisabled };
   }
 
   /**
@@ -219,15 +169,28 @@ export class SettingsProfileController {
   private getProviderSettings(provider: string): ProviderSetting[] {
     return modelsTabSettings(provider).map(({ entry, surface }) => {
       const { provider: _provider, ...display } = surface;
-      const fallback = settingDefault(entry) === true;
-      return {
-        ...display,
-        key: entry.key,
-        value:
-          settingSlot(entry, this.deps.host) === 'globalState'
-            ? this.deps.globalState.get<boolean>(entry.key, fallback) === true
-            : this.deps.getConfig<boolean>(entry.key, fallback),
-      };
+      return { ...display, key: entry.key, value: this.readToggle(entry) };
     });
+  }
+
+  /**
+   * A Models-tab toggle's current value, read from the slot its row declares
+   * for this host. Exhaustive over `SettingStore`: a future row backed by
+   * `workspaceState` must fail loudly here rather than read the schema default
+   * out of the config tree forever while `writeSetting` persists it elsewhere.
+   */
+  private readToggle(entry: StateSettingEntry): boolean {
+    const fallback = settingDefault(entry) === true;
+    const slot = settingSlot(entry, this.deps.host);
+    switch (slot) {
+      case 'globalState':
+        return this.deps.globalState.get<boolean>(entry.key, fallback) === true;
+      case 'config':
+        return this.deps.getConfig<boolean>(entry.key, fallback);
+      case 'workspaceState':
+        throw new Error(
+          `Models tab row "${entry.key}" is workspaceState-backed, which this controller cannot read`,
+        );
+    }
   }
 }

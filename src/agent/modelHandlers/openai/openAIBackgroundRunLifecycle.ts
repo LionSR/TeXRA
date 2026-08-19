@@ -67,9 +67,9 @@ export function createOpenAIBackgroundRunLifecycle(deps: {
       // (4xx, notably 404 expired) — clear the ID and create a new request.
       //
       // classifyOpenAIBackgroundResumeError checks statusCode directly rather
-      // than providerError.userRetryable: the latter is force-true for relay
-      // errors, which would incorrectly retain the ID on a relay-wrapped 404
-      // and loop until retries are exhausted.
+      // than providerError.userRetryable, so a definitive 404 always clears
+      // the ID instead of being retained and looping until retries are
+      // exhausted.
       const { providerError, shouldRetainPendingResponse } =
         classifyOpenAIBackgroundResumeError(error, provider);
       if (shouldRetainPendingResponse) return { action: 'retain' };
@@ -101,8 +101,8 @@ export function createOpenAIBackgroundRunLifecycle(deps: {
         };
       }
       // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
-      // so downstream handlers (relay 401 token refresh, retryability checks,
-      // non-retryable classification) work correctly with full HTTP metadata.
+      // so downstream handlers (retryability checks, non-retryable
+      // classification) work correctly with full HTTP metadata.
       // The ID is intentionally NOT cleared — retry may resume the same response.
       return { action: 'retain' };
     },

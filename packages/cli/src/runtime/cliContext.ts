@@ -9,7 +9,6 @@ import {
   parseTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { ApiAccessMode } from '@shared/schemas';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
@@ -18,7 +17,6 @@ import {
   CLI_OUTPUT_FORMATS,
   type CliOutputFormat,
 } from '../schemas/cliSettings';
-import { CLI_API_MODE_INPUTS, parseCliApiMode } from './apiAccessMode';
 import {
   isCliSupportedModelId,
   loadWorkspaceCliConfig,
@@ -42,8 +40,6 @@ export interface CliContext {
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: TexraApprovalPolicy;
   readonly helperModel?: string;
-  /** Absent until the invocation or initialized platform selects a mode. */
-  readonly apiMode?: ApiAccessMode;
   readonly quietLogs: boolean;
   readonly renderRunProgress?: boolean;
   readonly stdoutIsTty: boolean;
@@ -266,7 +262,6 @@ export interface CliGlobalArgs {
   readonly cwd?: string;
   readonly outputFormat?: CliOutputFormat;
   readonly approvalPolicy?: TexraApprovalPolicy;
-  readonly apiMode?: string;
   /** `--no-color`: force-disable ANSI color on every stream. */
   readonly noColor?: boolean;
   /**
@@ -334,28 +329,6 @@ function pickEnvModel(
   return undefined;
 }
 
-function pickCliApiMode(
-  candidates: readonly {
-    readonly label: string;
-    readonly value?: string;
-    readonly strict?: boolean;
-  }[],
-  warnings: string[],
-): ApiAccessMode | undefined {
-  for (const candidate of candidates) {
-    if (!candidate.value) continue;
-    const apiMode = parseCliApiMode(candidate.value);
-    if (apiMode) return apiMode;
-    if (candidate.strict) {
-      throw new CliUsageError(
-        `Invalid value for argument: ${candidate.label} (${candidate.value}). Expected one of: ${CLI_API_MODE_INPUTS.join(', ')}.`,
-      );
-    }
-    warnings.push(`Ignoring invalid ${candidate.label} "${candidate.value}".`);
-  }
-  return undefined;
-}
-
 export async function resolveCliCwd(
   cwdFlag: string | undefined,
 ): Promise<string> {
@@ -394,13 +367,6 @@ export async function buildCliContext(
   const loadedConfig = await loadWorkspaceCliConfig(cwd);
   const configWarnings = [...loadedConfig.warnings];
   const envModel = pickEnvModel(env, configWarnings);
-  const apiMode = pickCliApiMode(
-    [
-      { label: '--api-mode', value: init.globalArgs.apiMode, strict: true },
-      { label: 'TEXRA_API_MODE', value: envValue(env, 'TEXRA_API_MODE') },
-    ],
-    configWarnings,
-  );
   // `--no-color` is an explicit force-disable: layer it onto the ambient
   // per-stream gates rather than recomputing them, so `NO_COLOR`/`FORCE_COLOR`/
   // TTY precedence stays in one place (`resolveStreamColor`).
@@ -445,7 +411,6 @@ export async function buildCliContext(
       'TEXRA_OUTPUT_FORMAT',
     ),
     approvalPolicy,
-    apiMode,
     quietLogs: init.globalArgs.quiet === true,
     stdoutIsTty: ambient.stdoutIsTty,
     termIsDumb: ambient.termIsDumb === true,
