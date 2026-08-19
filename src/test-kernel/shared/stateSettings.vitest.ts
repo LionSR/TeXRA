@@ -97,8 +97,8 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [WorkspaceStateKey.GIT_AUTHOR_NAME]: DEFAULT_GIT_AUTHOR_NAME,
   [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: DEFAULT_GIT_AUTHOR_EMAIL,
   [WorkspaceStateKey.GIT_WORKTREE_SUPPORT]: DEFAULT_GIT_WORKTREE_SUPPORT,
-  [WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL]: true,
-  [WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP]: false,
+  [GlobalStateKey.ALLOW_ORCHESTRATOR_KILL]: true,
+  [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: false,
   [WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED]:
     DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
   [WorkspaceStateKey.CODEX_SANDBOX_MODE]: CODEX_SANDBOX_MODE_DEFAULT,
@@ -399,19 +399,22 @@ describe('state settings catalog', () => {
     //    SessionHandle before bash/edit approval boundaries decide.
     //  - detach-subagents-on-stop is read by detachSubagentsOnStop() when the
     //    chat TUI stops the root run (Ctrl-C) or kills a subagent execution.
+    //  - allow-orchestrator-kill is read by ExecutionsTool when an
+    //    orchestrator asks to kill one of its own child executions.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `honoredBy.cli` or `surfaces.cliConfig`.
     assert.deepEqual(
       [...CLI_STATE_SETTINGS].map((entry) => entry.key).sort(),
       [
+        GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
         WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
         WorkspaceStateKey.CLAUDE_AGENT_MODEL,
         WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
         WorkspaceStateKey.CODEX_APPROVAL_POLICY,
         WorkspaceStateKey.CODEX_REASONING_EFFORT,
         WorkspaceStateKey.CODEX_SANDBOX_MODE,
-        WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+        GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
         WorkspaceStateKey.GIT_AUTHOR_EMAIL,
         WorkspaceStateKey.GIT_AUTHOR_NAME,
         WorkspaceStateKey.GIT_MARK_COMMITS,

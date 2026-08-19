@@ -38,7 +38,8 @@ import {
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { warnAbandonedSlotValue } from '@shared/config/settingsAccess';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { requireRunStream, requireStreamId } from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -527,9 +528,14 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     // Only block kills when the toggle is disabled (the guard above has
     // already narrowed `target` to an owned AgentExecutionHandle).
+    warnAbandonedSlotValue(
+      GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
+      'workspaceState',
+      platform().workspaceState,
+    );
     if (
-      !platform().workspaceState.get<boolean>(
-        WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+      !platform().globalState.get<boolean>(
+        GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
         true,
       )
     ) {

@@ -3,20 +3,17 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
 
 describe('resolveStateSettingWrite', () => {
   it('resolves state-backed and core-config rows through one boundary', () => {
     expect(
-      resolveStateSettingWrite(
-        WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-        true,
-      ),
+      resolveStateSettingWrite(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP, true),
     ).toMatchObject({
       kind: 'write',
       entry: {
-        key: WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+        key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
         surfaces: { settingsView: 'multi-agent' },
       },
       value: true,
