@@ -364,7 +364,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     };
 
     // Same availability gate as delegate_agent/delegate_workflow: a run model
-    // the active API mode cannot serve fails here, with the available list,
+    // the active credentials cannot serve fails here, with the available list,
     // instead of mid-run on the first provider call.
     const runModel = await runPhase(() =>
       selectAvailableDelegationModel({
