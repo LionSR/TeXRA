@@ -47,7 +47,7 @@ import {
 import { isChildStreamRemoved, streamMetadataFor } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
 import {
-  advanceFinalizedFrontier,
+  advanceSettledPrefixIndex,
   applyStreamChanges,
   compactWorkflowEntries,
   createTranscriptFoldState,
@@ -259,8 +259,9 @@ export function syncStreamLog(
     // next rebuild inherits promotion from the slice rows.
     if (options.forceFinal === true) {
       patchStream(streamId, (slice) => {
-        const finalizedFrontier = advanceFinalizedFrontier(
-          slice.entries,
+        const finalizedFrontier = advanceSettledPrefixIndex(
+          (index) => slice.entries[index]!,
+          slice.entries.length,
           slice.finalizedFrontier,
           true,
         );

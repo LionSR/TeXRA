@@ -54,7 +54,7 @@ import {
   visibleSubagentRows,
 } from '@cli/chat/tui/state/childExecutions';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
-import { advanceFinalizedFrontier } from '@cli/chat/tui/state/transcriptFold';
+import { advanceSettledPrefixIndex } from '@cli/chat/tui/state/transcriptFold';
 import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
@@ -1922,9 +1922,22 @@ describe('CLI TUI row allocation', () => {
   });
 });
 
-describe('advanceFinalizedFrontier', () => {
+describe('advanceSettledPrefixIndex', () => {
   function tool(id: string, status: 'in_progress' | 'completed') {
     return toolEntry(id, 'Bash', {}, { status });
+  }
+
+  function frontier(
+    rows: readonly TranscriptRow[],
+    start: number,
+    streamFinal: boolean,
+  ): number {
+    return advanceSettledPrefixIndex(
+      (index) => rows[index]!,
+      rows.length,
+      start,
+      streamFinal,
+    );
   }
 
   function assistant(
@@ -1946,7 +1959,7 @@ describe('advanceFinalizedFrontier', () => {
     // a1 settled (later entry exists), t1 settled (completed), a2 is the
     // live tail and stays pending.
     expect(
-      advanceFinalizedFrontier(
+      frontier(
         [assistant('a1'), tool('t1', 'completed'), assistant('a2')],
         0,
         false,
@@ -1955,12 +1968,12 @@ describe('advanceFinalizedFrontier', () => {
   });
 
   it('keeps the in-flight tail pending while the stream runs', () => {
-    expect(advanceFinalizedFrontier([assistant('a1')], 0, false)).toBe(0);
+    expect(frontier([assistant('a1')], 0, false)).toBe(0);
   });
 
   it('keeps assistant entries with incomplete subagent blocks pending', () => {
     expect(
-      advanceFinalizedFrontier(
+      frontier(
         [assistant('a1', true), tool('t1', 'completed'), assistant('a2')],
         0,
         false,
@@ -1972,7 +1985,7 @@ describe('advanceFinalizedFrontier', () => {
     // t1 is still running: t2 must wait behind it even though it completed,
     // or it would print above t1 in append-only scrollback.
     expect(
-      advanceFinalizedFrontier(
+      frontier(
         [assistant('a1'), tool('t1', 'in_progress'), tool('t2', 'completed')],
         0,
         false,
@@ -1982,7 +1995,7 @@ describe('advanceFinalizedFrontier', () => {
 
   it('finalizes every remaining entry once the stream reaches a final status', () => {
     expect(
-      advanceFinalizedFrontier(
+      frontier(
         [assistant('a1'), tool('t1', 'in_progress'), assistant('a2')],
         0,
         true,
