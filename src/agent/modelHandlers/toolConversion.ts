@@ -10,6 +10,7 @@ import type { ToolDefinition } from '@shared/schemas';
 
 // Local imports - shared
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
+import { isObject } from '@utils/core';
 
 // Type imports - third-party
 import type {
@@ -59,7 +60,7 @@ interface JSONSchemaObject {
 }
 
 function isSchemaObject(value: unknown): value is JSONSchemaObject {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return isObject(value);
 }
 
 function schemaLiteralValue(schema: JSONSchemaObject): unknown {

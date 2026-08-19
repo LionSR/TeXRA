@@ -1,5 +1,5 @@
 import type { SubscriptionUsageWindow } from '@shared/schemas';
-import { clamp } from '@utils/core';
+import { clamp, isObject } from '@utils/core';
 
 export type JsonObject = Record<string, unknown>;
 
@@ -24,9 +24,7 @@ export function assertSubscriptionUsageResponse(response: Response): void {
 }
 
 export function asObject(value: unknown): JsonObject | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as JsonObject)
-    : undefined;
+  return isObject(value) ? value : undefined;
 }
 
 function finiteNumber(value: unknown): number | undefined {
