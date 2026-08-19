@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
-import { buildHunks } from '@cli/runtime/diffHunks';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import {
   clampModalWidth,
@@ -10,6 +9,7 @@ import {
   MIN_MODAL_CONTENT_WIDTH,
 } from '@cli/tui/ui/theme';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { buildDiffHunks } from '@utils/text/unifiedDiff';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { ConfirmCard, CONFIRM_CARD_FEEDBACK_PLACEHOLDER } from './ConfirmCard';
@@ -97,8 +97,8 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
 
   // Single diff pass shared between the summary line and the inline view.
   const hunks = useMemo(
-    () => buildHunks(data.path, tui.originalContent, tui.proposedContent),
-    [data.path, tui.originalContent, tui.proposedContent],
+    () => buildDiffHunks(tui.originalContent, tui.proposedContent),
+    [tui.originalContent, tui.proposedContent],
   );
   const diffRows = useMemo(
     () => wrappedDiffDisplayLines(hunks, diffWidth).length,

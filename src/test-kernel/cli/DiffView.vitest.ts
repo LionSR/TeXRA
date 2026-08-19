@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildHunks } from '@cli/runtime/diffHunks';
 import {
   initialDiffScrollOffset,
   maxDiffScrollOffset,
@@ -8,6 +7,7 @@ import {
   wrappedDiffDisplayLines,
 } from '@cli/chat/tui/render/DiffView';
 import { fillRows } from '@cli/runtime/terminalText';
+import { buildDiffHunks } from '@utils/text/unifiedDiff';
 
 const SIX_LINE_HUNK_SOURCE = [
   'alpha',
@@ -21,11 +21,11 @@ const FOUR_LINE_HUNK_SOURCE = ['alpha', 'beta', 'gamma', 'delta'];
 
 // Builds hunks where every other line was upper-cased, giving an even mix of
 // context and changed rows for the display-budget tests below.
-function alternatingHunks(lines: string[]): ReturnType<typeof buildHunks> {
+function alternatingHunks(lines: string[]): ReturnType<typeof buildDiffHunks> {
   const revised = lines.map((line, index) =>
     index % 2 === 1 ? line.toUpperCase() : line,
   );
-  return buildHunks('draft.tex', lines.join('\n'), revised.join('\n'));
+  return buildDiffHunks(lines.join('\n'), revised.join('\n'));
 }
 
 describe('CLI diff display', () => {
@@ -97,8 +97,7 @@ describe('CLI diff display', () => {
       `Second context paragraph ${'beta '.repeat(18)}`,
       `Third context paragraph ${'gamma '.repeat(18)}`,
     ];
-    const hunks = buildHunks(
-      'acknowledgments.tex',
+    const hunks = buildDiffHunks(
       [...context, 'Old acknowledgment.'].join('\n'),
       [...context, 'Revised acknowledgment.'].join('\n'),
     );
@@ -132,8 +131,7 @@ describe('CLI diff display', () => {
   });
 
   it('keeps both rows of a replacement visible at the viewport boundary', () => {
-    const hunks = buildHunks(
-      'draft.tex',
+    const hunks = buildDiffHunks(
       ['alpha', 'beta', 'gamma', 'old result', 'epsilon', 'zeta', 'eta'].join(
         '\n',
       ),
@@ -157,8 +155,7 @@ describe('CLI diff display', () => {
   });
 
   it('anchors a wrapped replacement on its added side', () => {
-    const hunks = buildHunks(
-      'draft.tex',
+    const hunks = buildDiffHunks(
       [
         'alpha',
         'beta',
@@ -191,8 +188,7 @@ describe('CLI diff display', () => {
   });
 
   it('does not skip a standalone deletion to a later hunk addition', () => {
-    const hunks = buildHunks(
-      'draft.tex',
+    const hunks = buildDiffHunks(
       [
         'alpha',
         'beta',
@@ -242,7 +238,7 @@ describe('CLI diff display', () => {
   it('wraps long changed lines instead of replacing the tail with an ellipsis', () => {
     const proposed =
       'Here $2n+1$ is the $(n+1)$-st odd number, i.e., the next odd number after $2n-1$.';
-    const hunks = buildHunks('draft.tex', 'old sentence', proposed);
+    const hunks = buildDiffHunks('old sentence', proposed);
 
     const lines = wrappedDiffDisplayLines(hunks, 36);
     const rendered = lines.map((line) => line.text).join('\n');
@@ -255,8 +251,7 @@ describe('CLI diff display', () => {
   });
 
   it('applies the display budget to wrapped visual diff rows', () => {
-    const hunks = buildHunks(
-      'draft.tex',
+    const hunks = buildDiffHunks(
       'old sentence',
       'This is a deliberately long replacement sentence that needs multiple visual rows.',
     );
@@ -272,7 +267,7 @@ describe('CLI diff display', () => {
   });
 
   it('keeps wrapped overflow markers to one visual row at narrow widths', () => {
-    const hunks = buildHunks('draft.tex', 'old sentence', 'x'.repeat(220));
+    const hunks = buildDiffHunks('old sentence', 'x'.repeat(220));
 
     const lines = scrollBoundedDiffDisplayLines(hunks, 4, 0, 20);
     const marker = lines.at(-1);
