@@ -111,9 +111,9 @@ export class SettingsProfileKeyController {
     try {
       await this.deps.refreshAfterKeyChange(provider);
     } catch (error) {
-      const action = verb === 'set' ? 'setting' : 'removing';
+      const gerund = verb === 'set' ? 'setting' : 'removing';
       await this.deps.reportFailure(
-        `Failed to refresh after ${action} ${this.deps.getProviderDisplayName(provider)} API key`,
+        `Failed to refresh after ${gerund} ${this.deps.getProviderDisplayName(provider)} API key`,
         error,
       );
     }
