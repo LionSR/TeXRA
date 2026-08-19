@@ -10,10 +10,7 @@ import type {
   SessionRendererPort,
   SessionRenderSlice,
 } from '@controllers/session/SessionRendererPort';
-import type {
-  SessionState,
-  StreamBadgeSnapshot,
-} from '@controllers/session/SessionState';
+import type { SessionState } from '@controllers/session/SessionState';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
@@ -29,7 +26,6 @@ import type {
   StreamContentRenderPayload,
   StreamMetadata,
   StreamPhase,
-  StreamStage,
   StreamSubstate,
   StreamTabId,
   StreamTabInfo,
@@ -140,12 +136,8 @@ export class LitSessionRenderer implements SessionRendererPort {
     });
   }
 
-  onStreamDescriptionChanged(streamId: StreamTabId, description: string): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION,
-      stream: streamId,
-      description,
-    });
+  onStreamDescriptionChanged(streamId: StreamTabId): void {
+    this.updateStreamMetadata(streamId);
   }
 
   invalidate(streamId: StreamTabId, slice: SessionRenderSlice): void {
@@ -207,41 +199,12 @@ export class LitSessionRenderer implements SessionRendererPort {
     if (!this.progressDebounce.pending) this.progressDebounce.schedule();
   }
 
-  onStageChanged(streamId: StreamTabId, stage: StreamStage): void {
-    if (stage.kind === 'phase') {
-      // A workflow-script run's phase is read from its *parent's* viewport
-      // (the Background Tasks row for that run), so unlike round progress it
-      // cannot be pushed only for the active stream. It rides the existing
-      // per-stream metadata patch instead of the targeted message: phases
-      // advance a handful of times per run, so the extra fields on the wire
-      // cost nothing.
-      if (!this.isAvailable()) return;
-      this.updateStreamMetadata(streamId);
-      return;
-    }
-    this.sendIfActive(streamId, () =>
-      this.sendMessage({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_STAGE,
-        stream: streamId,
-        stage,
-      }),
-    );
+  onStageChanged(streamId: StreamTabId): void {
+    this.updateStreamMetadata(streamId);
   }
 
-  onBadgesChanged(streamId: StreamTabId, badges: StreamBadgeSnapshot): void {
-    // Badges are the child roster (`StreamBadgeSnapshot` = `subagents`), read
-    // from the parent's viewport in Background Tasks — so, like a phase and
-    // unlike round progress, they cannot be pushed only for the active
-    // stream. Gating them dropped the roster update that retires a finished
-    // child, leaving its row live ("Running") until the parent happened to be
-    // reactivated. The message is stream-addressed and stored per stream, and
-    // a child's lifecycle emits a handful of them, so sending always is cheap.
-    if (!this.isAvailable()) return;
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
-      stream: streamId,
-      ...badges,
-    });
+  onBadgesChanged(streamId: StreamTabId): void {
+    this.updateStreamMetadata(streamId);
   }
 
   onMissingOutputsChanged(
@@ -421,6 +384,7 @@ export class LitSessionRenderer implements SessionRendererPort {
     streamStates?: Map<StreamTabId, StreamPhaseState>,
     options?: { activeStream?: PresentedStreamId },
   ): void {
+    if (!this.isAvailable()) return;
     const streamInfo = buildStreamInfo(
       this.state,
       streamId,

@@ -93,22 +93,6 @@ export const UpdateConversationProgressMessageSchema =
     progress: pickProjection('conversationProgress'),
   });
 
-const UpdateStageMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STAGE),
-  stage: pickProjection('stage'),
-});
-
-const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES),
-  subagents: pickProjection('subagents'),
-});
-
-export const UpdateStreamDescriptionMessageSchema =
-  StreamScopedBaseSchema.extend({
-    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION),
-    description: z.string(),
-  });
-
 export const UpdateStreamStatusMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS),
   status: StreamPhaseSchema,
@@ -375,9 +359,6 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     SettleStreamSelectionMessageSchema,
     ReleaseStreamContentMessageSchema,
     UpdateConversationProgressMessageSchema,
-    UpdateStageMessageSchema,
-    UpdateStreamBadgesMessageSchema,
-    UpdateStreamDescriptionMessageSchema,
     UpdateStreamStatusMessageSchema,
     LogDeltaMessageSchema,
     UpdateFilesMessageSchema,

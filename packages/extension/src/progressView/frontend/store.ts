@@ -161,9 +161,8 @@ export function detachChildStreamTabs(
  *
  * Does not touch `streamById`, for the same reason `deleteStreamState`
  * doesn't: every call site that introduces a brand-new stream already holds
- * its full `StreamTabInfo` and writes it through its own logic (e.g. the
- * newest-first sorted upsert in `streamMetaSlice.ts`) — there is no
- * meaningful placeholder to synthesize here.
+ * its full `StreamTabInfo` and writes it through the lifecycle reducer — there
+ * is no meaningful placeholder to synthesize here.
  *
  * Returns the stream's (possibly just-created) `StreamState`.
  */
