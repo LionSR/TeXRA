@@ -419,10 +419,6 @@ export class LatexDiffManager {
     }
 
     const { executionId, runDirectory } = this.fileService;
-    const compiledPdfPath = path.join(
-      buildDir,
-      `${path.basename(diffLocation.absolutePath).replace(/\.tex$/i, '')}.pdf`,
-    );
     try {
       const artifact = await publishCompiledPdfArtifact({
         runDirectory,
@@ -430,7 +426,7 @@ export class LatexDiffManager {
         round,
         displayName: path.basename(diffLocation.absolutePath),
         source: sourceLocation,
-        compiledPdfPath,
+        compiledPdfPath: compiled.pdfPath,
         pdfStemSuffix,
       });
       return { diffLocation, artifact };
@@ -440,7 +436,7 @@ export class LatexDiffManager {
         {
           data: {
             diffFile: diffLocation.absolutePath,
-            compiledPdfPath,
+            compiledPdfPath: compiled.pdfPath,
             error,
           },
         },

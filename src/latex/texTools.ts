@@ -44,20 +44,11 @@ const LaTeXCompileOptionsSchema = z.object({
 type LaTeXCompileOptions = z.input<typeof LaTeXCompileOptionsSchema>;
 
 /**
- * Read the tail of the `.log` file a LaTeX engine drops next to its output
- * (`<basename-without-ext>.log` inside `outDir`). Shared by every
- * {@link compileLatex2Pdf} caller so a failed compile always comes with
- * enough context to act on, not just a boolean.
+ * Read the tail of the `.log` file a LaTeX engine drops next to its output.
+ * Shared by every {@link compileLatex2Pdf} caller so a failed compile always
+ * comes with enough context to act on, not just a boolean.
  */
-async function readCompileLogTail(
-  outDir: string,
-  latexFile: string,
-): Promise<string> {
-  // Strip whatever extension the source actually has (.tex/.ltx/.latex are
-  // all compilable, per isLatexFile) — the engine's .log file is always
-  // named after the source with its own extension removed, not just .tex.
-  const compiledBasename = path.basename(latexFile, path.extname(latexFile));
-  const logAbs = path.join(outDir, `${compiledBasename}.log`);
+async function readCompileLogTail(logAbs: string): Promise<string> {
   try {
     const full = await AbsoluteFS.read(logAbs);
     return splitContentLines(full).slice(-LOG_TAIL_LINES).join('\n');
@@ -142,19 +133,20 @@ export function buildLatexSearchParts(input: {
 /**
  * Result of a {@link compileLatex2Pdf} attempt. A discriminated union on `ok`
  * so the type system guarantees {@link LOG_TAIL_LINES}'s worth of the
- * engine's `.log` file tail is present whenever compilation fails, instead of
- * every caller needing a defensive fallback for a theoretically-missing
- * `logTail`.
+ * engine's `.log` file tail is present whenever compilation fails, and the
+ * path the engine wrote its PDF to whenever it succeeds — instead of every
+ * caller re-deriving that path from the source name with its own extension
+ * rule.
  */
 export type CompileLatex2PdfResult =
-  { ok: true } | { ok: false; logTail: string };
+  { ok: true; pdfPath: string } | { ok: false; logTail: string };
 
 /**
  * Compile a LaTeX file to PDF
  * @param latexLocation FileLocation for the LaTeX file
  * @param options Compilation options (channel defaults to module CHANNEL)
- * @returns `{ ok: true } | { ok: false, logTail }` -- `logTail` is always
- * populated on failure.
+ * @returns `{ ok: true, pdfPath } | { ok: false, logTail }` -- `pdfPath` is the
+ * absolute path the engine wrote to; `logTail` is always populated on failure.
  */
 export async function compileLatex2Pdf(
   latexLocation: FileLocation,
@@ -167,6 +159,13 @@ export async function compileLatex2Pdf(
   const { outputDirectory, compiler, timeout, extraInputDirs } = parsed;
   const latexFile = latexLocation.absolutePath;
   const outDir = outputDirectory ?? path.dirname(latexFile);
+  // Both engine outputs are named after the source with the source's own
+  // extension removed (.tex/.ltx/.latex are all compilable, per isLatexFile),
+  // so one stem owns both the `.log` we read back and the `.pdf` we report.
+  const outputStem = path.join(
+    outDir,
+    path.basename(latexFile, path.extname(latexFile)),
+  );
   try {
     await AbsoluteFS.ensureDir(outDir);
 
@@ -246,13 +245,16 @@ export async function compileLatex2Pdf(
 
     if (result && result.success) {
       log.debug(`Successfully compiled ${latexFile}`);
-      return { ok: true };
+      return { ok: true, pdfPath: `${outputStem}.pdf` };
     }
-    return { ok: false, logTail: await readCompileLogTail(outDir, latexFile) };
+    return {
+      ok: false,
+      logTail: await readCompileLogTail(`${outputStem}.log`),
+    };
   } catch (err) {
     const message = toErrorMessage(err);
     log.error(`Error compiling LaTeX: ${message}`);
-    const tail = await readCompileLogTail(outDir, latexFile);
+    const tail = await readCompileLogTail(`${outputStem}.log`);
     return {
       ok: false,
       logTail: `Error compiling LaTeX: ${message}\n\n${tail}`,

@@ -153,13 +153,19 @@ export class LatexMediaManager {
             return undefined;
           }
 
-          const pdfFile = path.join(
-            buildDir,
-            path.basename(file.absolutePath).replace(/\.tex$/, '.pdf'),
-          );
-          const pdfLocation = pathToLocation(pdfFile);
-          if (!(await AbsoluteFS.exists(pdfLocation.absolutePath)))
+          const pdfLocation = pathToLocation(compiled.pdfPath);
+          if (!(await AbsoluteFS.exists(pdfLocation.absolutePath))) {
+            this.logger.warn(
+              'LaTeX reported success but no PDF was written; skipping',
+              {
+                data: {
+                  sourceFile: file.absolutePath,
+                  pdfFile: pdfLocation.absolutePath,
+                },
+              },
+            );
             return undefined;
+          }
 
           // Stat failures are noisier than other compile failures because an
           // existing-but-unreadable PDF likely indicates a permissions/IO bug.
