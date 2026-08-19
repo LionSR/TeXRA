@@ -45,10 +45,12 @@ import {
   displayedActiveStreamId$,
   hasAnyStreams$,
   pendingApprovalIds$,
+  streamById$,
   streamStates$,
   streams$,
   topLevelStreams$,
 } from '@progressView/frontend/progressState';
+import { streamDisplayLabel } from '@progressView/frontend/utils';
 import { COMMON_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
@@ -600,9 +602,14 @@ function workbenchTemplate(
 }
 
 function currentTaskTitle(): string {
+  // The confirmed stream id, not `displayedActiveStreamId$`: the header names
+  // the content that is actually active while the rail highlights the pending
+  // switch (see `progressState.ts`). `streamDisplayLabel` reads the label
+  // `buildStreamTabInfo` already cleaned, so a source-prefixed agent id never
+  // reaches the header.
   const activeId = activeStreamId$.get();
-  const stream = streams$.get().find((entry) => entry.name === activeId);
-  return stream?.label || stream?.name || 'New task';
+  const stream = activeId ? streamById$.get().get(activeId) : undefined;
+  return streamDisplayLabel(stream) || 'New task';
 }
 
 function environmentPopoverTemplate(
