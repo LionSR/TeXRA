@@ -10,7 +10,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { extendEnvPath } from '@utils/system/platformPaths';
+import { makeMachineGitEnv } from '@utils/system/gitEnv';
 
 const mocks = vi.hoisted(() => ({
   deleteSecret: vi.fn(),
@@ -124,7 +124,8 @@ describe('CLI Overleaf clone command', () => {
       ],
       {
         cwd: workspacePath,
-        env: { GIT_TERMINAL_PROMPT: '0', PATH: extendEnvPath() },
+        env: makeMachineGitEnv(),
+        extendEnv: false,
       },
     );
     expect(JSON.parse(stdout)).toEqual({
@@ -159,7 +160,8 @@ describe('CLI Overleaf clone command', () => {
       ],
       {
         cwd: destination,
-        env: { GIT_TERMINAL_PROMPT: '0', PATH: extendEnvPath() },
+        env: makeMachineGitEnv(),
+        extendEnv: false,
       },
     );
     expect(JSON.parse(stdout)).toMatchObject({
