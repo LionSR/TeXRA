@@ -27,7 +27,6 @@ function createTokenProvider(
     getSessionTokens: async () => null,
     getStoredSessionState: async () => 'none',
     getStoredAccountLabel: async () => null,
-    isTokenExpiringSoon: () => false,
     getLastRefreshFailure: () => null,
     ...overrides,
   };
@@ -126,18 +125,6 @@ describe('SupabaseClient', () => {
       'SupabaseClient',
       expect.stringContaining('secret storage unavailable'),
     );
-  });
-
-  it('reports no expiry pressure when no token provider is registered', () => {
-    assert.equal(SupabaseClient.isTokenExpiringSoon(), false);
-  });
-
-  it('reports the token provider expiry verdict', () => {
-    SupabaseClient.setAuthProvider(
-      createTokenProvider({ isTokenExpiringSoon: () => true }),
-    );
-
-    assert.equal(SupabaseClient.isTokenExpiringSoon(), true);
   });
 });
 

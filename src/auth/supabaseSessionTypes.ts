@@ -72,16 +72,6 @@ interface SupabaseCallbackParseError {
 export type SupabaseCallbackResult =
   SupabaseCallbackParseResult | SupabaseCallbackParseError;
 
-function firstAccountLabel(
-  ...candidates: readonly (string | null | undefined)[]
-): string {
-  for (const candidate of candidates) {
-    const label = candidate?.trim();
-    if (label) return label;
-  }
-  return 'unknown';
-}
-
 /**
  * Parse and validate stored session data.
  * Returns null if session data is missing or invalid.
@@ -114,16 +104,13 @@ export function parseStoredSupabaseSession(
 
 export async function parseTokenExchangeResponse(
   response: Response,
-  log?: SupabaseSessionLog,
 ): Promise<GitHubTokenExchangeResponse> {
   const rawData = await response.json();
   const parsed = GitHubTokenExchangeSchema.safeParse(rawData);
   if (!parsed.success) {
-    log?.error?.(
-      'SupabaseSession',
-      `Token exchange response validation failed: ${z.prettifyError(parsed.error)}`,
+    throw new Error(
+      `Invalid response format from authentication server: ${z.prettifyError(parsed.error)}`,
     );
-    throw new Error('Invalid response format from authentication server');
   }
   return parsed.data;
 }
@@ -144,11 +131,10 @@ type StorableSessionInput = {
 function resolveExpiresAt(
   expiresAtSeconds: number | undefined,
   expiresInSeconds: number | undefined,
-  defaultExpiryMs: number,
 ): number {
   if (expiresAtSeconds) return expiresAtSeconds * 1000;
   if (expiresInSeconds) return Date.now() + expiresInSeconds * 1000;
-  return Date.now() + defaultExpiryMs;
+  return Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS;
 }
 
 /**
@@ -157,10 +143,6 @@ function resolveExpiresAt(
  */
 export function toStorableSupabaseSession(
   nativeSession: StorableSessionInput,
-  options?: {
-    fallbackLabel?: string;
-    defaultExpiryMs?: number;
-  },
 ): SupabaseSession {
   return {
     id: nativeSession.user.id,
@@ -168,16 +150,11 @@ export function toStorableSupabaseSession(
     refreshToken: nativeSession.refresh_token,
     account: {
       id: nativeSession.user.id,
-      label: firstAccountLabel(
-        nativeSession.user.email,
-        options?.fallbackLabel,
-        nativeSession.user.id,
-      ),
+      label: nativeSession.user.email?.trim() || nativeSession.user.id,
     },
     expiresAt: resolveExpiresAt(
       nativeSession.expires_at,
       nativeSession.expires_in,
-      options?.defaultExpiryMs ?? DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
     ),
   };
 }

@@ -139,16 +139,6 @@ export class SupabaseClient {
   }
 
   /**
-   * Check whether the stored session's token is close enough to expiry that
-   * the auth provider would refresh it. Synchronous and in-memory — safe to
-   * call before every model invocation. Returns false when no auth provider is
-   * registered or it has observed no session.
-   */
-  static isTokenExpiringSoon(): boolean {
-    return this.authProvider?.isTokenExpiringSoon() ?? false;
-  }
-
-  /**
    * Check if auth system is fully initialized and ready for use.
    */
   static async isReady(): Promise<boolean> {
