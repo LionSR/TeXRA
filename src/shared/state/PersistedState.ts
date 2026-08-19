@@ -1,40 +1,15 @@
 import { z } from 'zod';
 
-/**
- * Minimal storage interface for state persistence.
- * Works with both backend (Memento) and frontend (webview) storage.
- */
-interface StateStorage {
-  get(key: string): unknown;
-  set(key: string, value: unknown): void;
-  delete(key: string): void;
-}
+import type { StateStore } from '@platform/interfaces';
 
 /**
- * Create storage adapter for backend (vscode.Memento wrapper).
+ * Create a {@link StateStore} over webview host state. All keys share a single
+ * state object, cached in memory to avoid repeated getState() calls on rapid
+ * updates.
  *
- * @example
- * import { workspaceSM } from '@common/state';
- * const storage = createBackendStorage(workspaceSM);
- */
-export function createBackendStorage(memento: {
-  get(key: string): unknown;
-  update(key: string, value: unknown): PromiseLike<void>;
-}): StateStorage {
-  return {
-    get: (key) => memento.get(key),
-    set: (key, value) => void memento.update(key, value),
-    // A Memento key is removed by updating it to `undefined`; there is no
-    // separate delete API.
-    delete: (key) => void memento.update(key, undefined),
-  };
-}
-
-/**
- * Create storage adapter for webview host state.
- * All keys share a single state object.
- *
- * Caches state in memory to avoid repeated getState() calls on rapid updates.
+ * A key is removed by updating it to `undefined`, as with a Memento. `update`
+ * returns an already-resolved promise because `setState` is synchronous and
+ * cannot fail — that is not a dropped write.
  *
  * @example
  * import { hostBridge } from '@shared/hostBridge';
@@ -43,19 +18,23 @@ export function createBackendStorage(memento: {
 export function createWebviewStorage(hostBridge: {
   getState(): unknown;
   setState(state: unknown): void;
-}): StateStorage {
+}): StateStore {
   // Cache full state - read once, update in memory
   const cache = (hostBridge.getState() as Record<string, unknown>) ?? {};
 
   return {
-    get: (key) => cache[key],
-    set: (key, value) => {
-      cache[key] = value;
-      hostBridge.setState(cache);
+    get<T>(key: string, defaultValue?: T): T {
+      const value = cache[key];
+      return value === undefined ? (defaultValue as T) : (value as T);
     },
-    delete: (key) => {
-      delete cache[key];
+    update(key, value) {
+      if (value === undefined) {
+        delete cache[key];
+      } else {
+        cache[key] = value;
+      }
       hostBridge.setState(cache);
+      return Promise.resolve();
     },
   };
 }
@@ -63,8 +42,8 @@ export function createWebviewStorage(hostBridge: {
 /**
  * Unified state persistence with Zod schema validation.
  *
- * Works identically for both backend and frontend - only the storage differs:
- * - Backend: `createBackendStorage(workspaceSM)` → workspace-scoped, persists across sessions
+ * Takes the platform `StateStore` port directly; only the implementation differs:
+ * - Backend: the host's own store → workspace-scoped, persists across sessions
  * - Frontend: `createWebviewStorage(hostBridge)` → webview-scoped, transient UI state
  *
  * Schemas should use .prefault() for fields to provide defaults — never
@@ -75,7 +54,7 @@ export function createWebviewStorage(hostBridge: {
  * @example
  * // Backend (user preferences - persist across sessions)
  * const prefs = new PersistedState(
- *   createBackendStorage(workspaceSM),
+ *   platform().workspaceState,
  *   WorkspaceStateKey.VIEW_PREFS,
  *   z.object({ filter: z.string().prefault('all') }),
  * );
@@ -98,7 +77,7 @@ export class PersistedState<T extends Record<string, unknown>> {
   private state: T;
 
   constructor(
-    private readonly storage: StateStorage,
+    private readonly storage: StateStore,
     private readonly key: string,
     private readonly schema: z.ZodType<T>,
   ) {
@@ -127,8 +106,25 @@ export class PersistedState<T extends Record<string, unknown>> {
       },
     );
     const defaults = this.resolveDefaults();
-    this.storage.set(this.key, defaults);
+    this.persist(defaults);
     return defaults;
+  }
+
+  /**
+   * Write through to storage. The promise is deliberately not awaited — every
+   * caller is a synchronous UI path — but a rejection must not escape as an
+   * unhandled rejection, which on the desktop main process is an uncaught
+   * error with no attribution to the failing key. Warn loudly instead.
+   */
+  private persist(value: T): void {
+    void Promise.resolve(this.storage.update(this.key, value)).catch(
+      (error: unknown) => {
+        console.warn(
+          `[PersistedState] Failed to persist ${this.key}; the in-memory value is now ahead of storage.`,
+          error,
+        );
+      },
+    );
   }
 
   /**
@@ -161,7 +157,7 @@ export class PersistedState<T extends Record<string, unknown>> {
   /** Replace entire state */
   setState(state: T): void {
     this.state = { ...state };
-    this.storage.set(this.key, this.state);
+    this.persist(this.state);
   }
 
   /** Reload current state from the backing storage. */
@@ -177,7 +173,7 @@ export class PersistedState<T extends Record<string, unknown>> {
   /** Reset to schema defaults */
   reset(): void {
     this.state = this.resolveDefaults();
-    this.storage.set(this.key, this.state);
+    this.persist(this.state);
   }
 }
 
