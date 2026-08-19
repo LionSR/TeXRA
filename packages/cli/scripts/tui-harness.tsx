@@ -859,7 +859,7 @@ function seedLiveToolOnlyTranscript(): void {
     });
   }
   writer.close();
-  syncStreamLog(STREAM_ID);
+  syncStreamLog(defaultSession(), STREAM_ID);
 }
 
 function makeRejectedBashToolEntries(): TranscriptRow[] {
@@ -915,7 +915,7 @@ function seedSubagentFollowupTranscript(): void {
     });
   }
   writer.close();
-  syncStreamLog(STREAM_ID);
+  syncStreamLog(defaultSession(), STREAM_ID);
 }
 
 function makeChildEntries(agent: string, action: string): TranscriptRow[] {
@@ -1352,7 +1352,7 @@ function seedWorkflowTimeline(): void {
   });
   secondRoundStage.end('completed');
   runStage.end('completed');
-  syncStreamLog(childStreamId);
+  syncStreamLog(defaultSession(), childStreamId);
   transitionStreamTerminal(childStreamId);
   emitChildRoster(STREAM_ID, []);
   runTrace.dispose();
@@ -1452,7 +1452,7 @@ function seedRunningWorkflow(): void {
   // Focus before projection: background workflow streams intentionally keep
   // only operational rows, while the focused stream owns the task transcript.
   activeStreamIdSignal.set(childStreamId);
-  syncStreamLog(childStreamId);
+  syncStreamLog(defaultSession(), childStreamId);
 
   const workflowChildren = [
     {

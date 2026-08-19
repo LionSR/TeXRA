@@ -71,7 +71,7 @@ describe('collectResumeTargets', () => {
     ).toEqual([{ executionId: 'root', label: 'main', isRoot: true }]);
   });
 
-  it('lists resume-eligible subagents and excludes ineligible children', () => {
+  it('lists running and finished resume-eligible subagents', () => {
     const root = makeSlice({ streamId: 'main@m#root' });
     const reviewer = makeSlice({ streamId: 'reviewer@m#rev' });
     const builder = makeSlice({ streamId: 'builder@m#flow' });
@@ -83,6 +83,7 @@ describe('collectResumeTargets', () => {
           agentName: 'reviewer',
           identity: { kind: 'agent', agent: 'reviewer' },
           childStreamId: 'reviewer@m#rev' as StreamTabId,
+          finishedAt: undefined,
         }),
         child({
           executionId: 'flow',

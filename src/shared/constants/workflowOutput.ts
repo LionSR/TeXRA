@@ -61,11 +61,6 @@ export function workflowOutputPath(params: {
 // "Save as copy" action still consume this grammar — the last of those still
 // writes it.
 
-/** Normalize a model name to the filename-era form (dots stripped). */
-export function normalizeLegacyModel(model: string): string {
-  return model.replaceAll('.', '');
-}
-
 /** First-name chunk used in the `<base>_<chunk>_r{round}_<model>` grammar. */
 function getAgentFirstNameChunk(agent: string): string {
   const cleanAgent = getCleanAgentName(agent);
@@ -79,7 +74,7 @@ function getAgentFirstNameChunk(agent: string): string {
 }
 
 /**
- * The `<base>_<chunk>_r{round}_<normalizedModel>` stem: the name filename-era
+ * The `<base>_<chunk>_r{round}_<model>` stem: the name filename-era
  * runs wrote, and the one "Save as copy" still writes beside a base file
  * today. Every reader of that layout composes its names from here.
  */
@@ -89,7 +84,7 @@ export function workflowOutputCopyStem(params: {
   model: string;
   round: number;
 }): string {
-  return `${params.base}_${getAgentFirstNameChunk(params.agent)}_r${params.round}_${normalizeLegacyModel(params.model)}`;
+  return `${params.base}_${getAgentFirstNameChunk(params.agent)}_r${params.round}_${params.model}`;
 }
 
 /**
@@ -113,6 +108,6 @@ export function legacyWorkflowOutputRoundRegex(
   model: string,
 ): RegExp {
   return new RegExp(
-    `${escapeRegExp(base)}_${escapeRegExp(getAgentFirstNameChunk(agent))}_r(\\d+)_${escapeRegExp(normalizeLegacyModel(model))}`,
+    `${escapeRegExp(base)}_${escapeRegExp(getAgentFirstNameChunk(agent))}_r(\\d+)_${escapeRegExp(model)}`,
   );
 }

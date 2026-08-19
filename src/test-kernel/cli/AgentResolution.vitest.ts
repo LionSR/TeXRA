@@ -2,7 +2,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentCatalogMock } from '@test/support/agentCatalogMock';
-import type { AgentEntry, ResolvedAgent } from '@agent/index';
+import type { AgentEntry } from '@agent/index';
+import type { ResolvedAgent } from '@agent/index/agentEntry';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   assertCliAgentLaunch,

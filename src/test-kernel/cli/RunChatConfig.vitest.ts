@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  resolveAgentForLaunch,
-  type AgentEntry,
-  type ResolvedAgent,
-} from '@agent/index';
+import { resolveAgentForLaunch, type AgentEntry } from '@agent/index';
+import type { ResolvedAgent } from '@agent/index/agentEntry';
 import {
   applyInitialCliAgentSelection,
   chatToolUseAgentUsageError,

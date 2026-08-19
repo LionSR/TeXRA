@@ -2,8 +2,8 @@ import '@test/support/defaultSessionTestSetup';
 
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import type { FinalizeExecutionResult } from '@agent/storage';
 import { noopTrace, TraceEmitter, type StatusEvent } from '@agent/trace';
+import type { FinalizeExecutionResult } from '@agent/storage/executionLifecycle';
 import {
   acquireResumedExecutionLease,
   ExecutionLeaseLostError,

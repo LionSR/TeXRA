@@ -6,7 +6,6 @@
  */
 import * as vscode from 'vscode';
 
-import { workspaceSM } from '@common/state';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { platform } from '@platform/platform';
@@ -211,7 +210,7 @@ export class LatexSettingsHandlers {
   async sendLatexConfigValues(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
       this.configPersistenceController.buildConfigMessage(
-        (key) => workspaceSM.get(key),
+        (key) => platform().workspaceState.get(key),
         platform().config,
       ),
     );

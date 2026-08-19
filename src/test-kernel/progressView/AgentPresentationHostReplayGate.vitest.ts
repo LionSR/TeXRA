@@ -12,6 +12,7 @@ import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { ToolEditPermission } from '@shared/schemas';
 import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local file imports
 import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
@@ -49,18 +50,6 @@ vi.mock('@frontend/latex/openBuild', () => ({
   openBuildDisplayIfTex: mocks.openBuildDisplayIfTex,
 }));
 
-// An in-memory global state memento, so the "never remind again" suppression
-// path can be driven without a VS Code extension context.
-vi.mock('@common/state', async (importActual) => ({
-  ...(await importActual<typeof import('@common/state')>()),
-  globalSM: {
-    get: (key: string) => mocks.instructionMemento.get(key),
-    update: async (key: string, value: unknown) => {
-      mocks.instructionMemento.set(key, value);
-    },
-  },
-}));
-
 function toolEditPermission(requestId: string): ToolEditPermission {
   return {
     requestId,
@@ -80,6 +69,23 @@ const testSessions: SessionHandle[] = [];
 afterEach(() => {
   for (const session of testSessions.splice(0)) session.dispose();
 });
+
+// An in-memory global state store, so the "never remind again" suppression
+// path can be driven without a VS Code extension context.
+setupPlatform(
+  {},
+  {
+    globalState: {
+      get: <T>(key: string, defaultValue?: T) =>
+        (mocks.instructionMemento.has(key)
+          ? mocks.instructionMemento.get(key)
+          : defaultValue) as T,
+      update: async (key: string, value: unknown) => {
+        mocks.instructionMemento.set(key, value);
+      },
+    },
+  },
+);
 
 describe('extension presentation-event emit port (#9251 replay gate)', () => {
   it('redisplays a pending tool-edit approval exactly once per webview reload', () => {

@@ -628,7 +628,11 @@ describe('cliState stream, focus, and child-edge fields', () => {
   it('removes stale child rows when a stream is removed', () => {
     withRunFacts((hub, session) => {
       activeStreamId.set(root);
-      trackStreams(session, root, child1);
+      trackStreams(session, root, child1, child2);
+      emitChildRoster(hub, root, [
+        childRosterRow('critic', child1, STREAM_PHASE.RUNNING, 'agent-1'),
+        childRosterRow('reviewer', child2, STREAM_PHASE.COMPLETED, 'agent-2'),
+      ]);
       emitChildRoster(hub, root, [
         childRosterRow('critic', child1, STREAM_PHASE.RUNNING, 'agent-1'),
       ]);
@@ -637,15 +641,13 @@ describe('cliState stream, focus, and child-edge fields', () => {
 
       expect(orderedSessionDescendants(root)[0]).toBe(child1);
 
-      // Production ordering: the untrack path drops the child from the
-      // roster before the removal fact lands, so removal never has to scrub
-      // the roster itself.
-      emitChildRoster(hub, root, []);
+      // Removal owns roster cleanup even if no preceding activity snapshot
+      // dropped the child.
       emitRemoveStream(hub, child1);
 
       expect(isChildStreamRemoved(child1)).toBe(true);
       expect(activeRows(root)).toEqual([]);
-      expect(orderedSessionDescendants(root)[0]).toBeUndefined();
+      expect(orderedSessionDescendants(root)).not.toContain(child1);
 
       // A stale roster cannot resurrect the tombstoned child — not even as a
       // retained history row: the applier filters removed children at write
@@ -653,9 +655,13 @@ describe('cliState stream, focus, and child-edge fields', () => {
       emitChildRoster(hub, root, [
         childRosterRow('critic', child1, STREAM_PHASE.RUNNING, 'agent-1'),
       ]);
-      expect(retainedRows(root)).toEqual([]);
+      expect(retainedRows(root)).toEqual([
+        expect.objectContaining({ childStreamId: child2 }),
+      ]);
       expect(activeRows(root)).toEqual([]);
-      expect(visibleRows(root)).toEqual([]);
+      expect(visibleRows(root)).toEqual([
+        expect.objectContaining({ childStreamId: child2 }),
+      ]);
     });
   });
 
@@ -2056,8 +2062,8 @@ describe('CLI transcript state', () => {
       },
     });
 
-    syncStreamLog(root);
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
@@ -2093,7 +2099,7 @@ describe('CLI transcript state', () => {
       '<subagent-result id="abc" agent="review" category="toolUse" status="completed">\nDone.\n</subagent-result>',
     );
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     expect(entryTexts(root)).toEqual([
       'Please solve the problem.',
@@ -2114,7 +2120,7 @@ describe('CLI transcript state', () => {
       ].join('\n'),
     );
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entryTexts(root)).toEqual([
@@ -2135,7 +2141,7 @@ describe('CLI transcript state', () => {
       '<h3>Verification Report</h3>The proof is <b>fully verified</b>.',
     );
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entryTexts(root)).toEqual([
@@ -2164,7 +2170,7 @@ describe('CLI transcript state', () => {
       ].join('\n'),
     );
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
@@ -2182,7 +2188,7 @@ describe('CLI transcript state', () => {
     const logger = runTrace(root);
     logModelError(logger, 'Model request failed');
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
@@ -2200,7 +2206,7 @@ describe('CLI transcript state', () => {
       rawErrorBody: { apiKey: 'secret-must-not-render' },
     });
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
@@ -2230,7 +2236,7 @@ describe('CLI transcript state', () => {
       userRetryable: false,
     });
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const lines = transcriptEntryLayout(streamEntries(root)[0]!, {
       width: 200,
@@ -2261,7 +2267,7 @@ describe('CLI transcript state', () => {
       },
     );
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entry = streamEntries(root)[0]!;
     expect(transcriptRowHeadline(entry)).toContain(
@@ -2286,7 +2292,7 @@ describe('CLI transcript state', () => {
       },
     });
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
@@ -2309,7 +2315,7 @@ describe('CLI transcript state', () => {
 
     // Opening the stream alone marks the phase — hidden reasoning (e.g.
     // gpt-5 without summaries) may never produce a text delta.
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     let slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(true);
@@ -2318,7 +2324,7 @@ describe('CLI transcript state', () => {
 
     thinking.append('private reasoning summary');
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(true);
@@ -2327,7 +2333,7 @@ describe('CLI transcript state', () => {
     expect(entryTexts(root)).toEqual(['Thinking']);
 
     thinking.finalize();
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(false);
@@ -2335,7 +2341,7 @@ describe('CLI transcript state', () => {
     const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     output.append('Visible answer.');
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     slice = streams.get().get(root);
     expect(slice?.thinkingActive).toBe(false);
@@ -2382,7 +2388,7 @@ describe('CLI transcript state', () => {
       ],
     }));
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const slice = streams.get().get(root);
     expect(slice?.entries.map(({ kind }) => kind)).toEqual([
@@ -2411,7 +2417,7 @@ describe('CLI transcript state', () => {
     );
     logModelResponse(logger, 'raw workflow model response');
 
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
 
     let slice = streams.get().get(child1);
     expect(slice?.latestLine).toBe('Preparing proof audit API_KEY=[redacted]');
@@ -2435,7 +2441,7 @@ describe('CLI transcript state', () => {
       summary: `Checking with Bearer ${ansiSplitSecret}\u0085`,
       status: 'completed',
     });
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
     const toolDescription = streams.get().get(child1)?.latestLine;
     expect(toolDescription).toBe('Checking with Bearer [redacted]');
     expect(toolDescription).not.toContain(secret);
@@ -2449,7 +2455,7 @@ describe('CLI transcript state', () => {
       summary: '\u001b[31m\u001b[0m\u0007',
       status: 'completed',
     });
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
     expect(streams.get().get(child1)?.latestLine).toBe('read_file');
 
     logger.openStage('Review lemmas', {
@@ -2458,11 +2464,11 @@ describe('CLI transcript state', () => {
       index: 1,
       total: 2,
     });
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
     expect(streams.get().get(child1)?.latestLine).toBe('Review lemmas');
 
     logModelError(logger, 'Proof audit failed');
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
 
     slice = streams.get().get(child1);
     expect(slice?.latestLine).toBe('Proof audit failed');
@@ -2493,7 +2499,7 @@ describe('CLI transcript state', () => {
       messageType: MESSAGE_TYPES.DEFAULT,
     });
 
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
 
     expect(streams.get().get(child1)).toMatchObject({
       latestLine: 'Preparing dormant audit',
@@ -2507,7 +2513,7 @@ describe('CLI transcript state', () => {
       summary: 'Scanning proof obligations',
       status: 'completed',
     });
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
 
     expect(streams.get().get(child1)).toMatchObject({
       latestLine: 'Scanning proof obligations',
@@ -2518,7 +2524,7 @@ describe('CLI transcript state', () => {
       id: 'dormant-review-phase',
       kind: 'phase',
     });
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
 
     expect(streams.get().get(child1)).toMatchObject({
       latestLine: 'Checking dormant lemmas',
@@ -2532,7 +2538,7 @@ describe('CLI transcript state', () => {
     });
 
     logModelError(logger, 'Dormant audit failed');
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
 
     const slice = streams.get().get(child1);
     expect(slice).toMatchObject({
@@ -2600,7 +2606,7 @@ describe('CLI transcript state', () => {
       kind: 'phase',
     });
 
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
 
     const entries = streamEntries(child1);
     const dashboardEntries = entries.filter(
@@ -2652,7 +2658,7 @@ describe('CLI transcript state', () => {
       logUserMessage(logger, 'Check the second lemma.');
       logModelResponse(logger, 'The second lemma is valid.');
 
-      syncStreamLog(child1);
+      syncStreamLog(defaultSession(), child1);
 
       expect(streamMetadataFor(child1)?.description).toBe(
         'Audit the compactness lemma.',
@@ -2667,7 +2673,7 @@ describe('CLI transcript state', () => {
     const logger = runTrace(root);
     const activity = startCompactionActivity(logger);
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     let slice = streams.get().get(root);
     expect(slice?.compactingActive).toBe(true);
@@ -2681,7 +2687,7 @@ describe('CLI transcript state', () => {
     expect(entryFinalizedFlags(root)).toEqual([false]);
 
     activity.finish('completed');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     slice = streams.get().get(root);
     expect(slice?.compactingActive).toBe(false);
@@ -2701,7 +2707,7 @@ describe('CLI transcript state', () => {
     const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     output.append('Visible answer');
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     let entries = streamEntries(root);
     expect(entries).toMatchObject([
@@ -2716,7 +2722,7 @@ describe('CLI transcript state', () => {
     expect(entryFinalizedFlags(root)).toEqual([false, false]);
 
     activity.finish('completed');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     entries = streamEntries(root);
     expect(entries).toMatchObject([
@@ -2742,11 +2748,11 @@ describe('CLI transcript state', () => {
     const logger = runTrace(root);
 
     const activity = startCompactionActivity(logger);
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
     expect(streams.get().get(root)?.compactingActive).toBe(true);
 
     logUserMessage(logger, 'A later turn started.');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     let slice = streams.get().get(root);
     expect(slice?.compactingActive).toBe(false);
@@ -2762,7 +2768,7 @@ describe('CLI transcript state', () => {
     );
 
     activity.finish('completed');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     slice = streams.get().get(root);
     expect(slice?.entries).toContainEqual(
@@ -2780,10 +2786,10 @@ describe('CLI transcript state', () => {
   it('finalizes unmatched compaction when the transcript settles', () => {
     const logger = runTrace(root);
     const activity = startCompactionActivity(logger);
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     setStatus(root, STREAM_PHASE.WAITING);
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     expect(streams.get().get(root)?.entries).toContainEqual(
       expect.objectContaining({
@@ -2799,7 +2805,7 @@ describe('CLI transcript state', () => {
     );
 
     activity.finish('completed');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     expect(streams.get().get(root)?.entries).toContainEqual(
       expect.objectContaining({
@@ -2819,14 +2825,14 @@ describe('CLI transcript state', () => {
     const logger = runTrace(root);
     logModelResponse(logger, '');
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     let slice = streams.get().get(root);
     expect(slice?.entries ?? []).toEqual([]);
 
     logModelResponse(logger, 'Visible answer.');
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     slice = streams.get().get(root);
     expect(entryTexts(root)).toEqual(['Visible answer.']);
@@ -2837,7 +2843,7 @@ describe('CLI transcript state', () => {
     logUserMessage(logger, 'Why?');
     logModelResponse(logger, '\n\n  The answer starts here.');
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     expect(entryTexts(root)).toEqual(['Why?', '  The answer starts here.']);
   });
@@ -2853,15 +2859,15 @@ describe('CLI transcript state', () => {
     // only come from the frontier — the flag this regression is about.
     const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     output.append('streaming assistant chunk');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
     expect(entryFinalizedFlags(root)).toEqual([false]);
 
     // The turn-boundary finalize promotes the deferred-finalization entries.
-    syncStreamLog(root, { forceFinal: true });
+    syncStreamLog(defaultSession(), root, { forceFinal: true });
     expect(entryFinalizedFlags(root)).toEqual([true]);
 
     // A later ordinary sync must not regress the frontier behind them.
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
@@ -2886,7 +2892,7 @@ describe('CLI transcript state', () => {
     // The flow boundary's authoritative (replacement-cleaned) text.
     logger.responseFinalized('Done \\checkmark');
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
@@ -2899,7 +2905,7 @@ describe('CLI transcript state', () => {
     const logger = runTrace(root);
     logger.responseFinalized('The answer is 2.');
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
@@ -2915,7 +2921,7 @@ describe('CLI transcript state', () => {
     logModelResponse(logger, 'The second lemma is valid.');
     setStatus(child1, STREAM_PHASE.WAITING);
 
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
 
     expect(streams.get().get(child1)).toMatchObject({
       latestLine: 'The second lemma is valid.',
@@ -2930,12 +2936,12 @@ describe('CLI transcript state', () => {
     logUserMessage(logger, 'Check the second lemma.');
     logModelResponse(logger, 'The second lemma is valid.');
     setStatus(child1, STREAM_PHASE.WAITING);
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
 
     // Focusing the dormant stream is what requests the exact transcript:
     // the sync projects the full transcript for the active stream.
     activeStreamId.set(child1);
-    syncStreamLog(child1);
+    syncStreamLog(defaultSession(), child1);
 
     expect(
       streamEntries(child1).map((row) => [
@@ -2962,7 +2968,7 @@ describe('CLI transcript state', () => {
     logger.responseFinalized('Final answer.');
     round1.end();
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entryTexts(root)).toEqual(['Let me check that.', 'Final answer.']);
@@ -2974,7 +2980,7 @@ describe('CLI transcript state', () => {
     logUserMessage(logger, 'What is 1 + 1?');
     logModelResponse(logger, '2');
 
-    syncStreamLog(root, { forceFinal: true });
+    syncStreamLog(defaultSession(), root, { forceFinal: true });
 
     const entries = streamEntries(root);
     expect(entryTexts(root)).toEqual(['What is 1 + 1?', '2']);
@@ -3099,7 +3105,7 @@ describe('CLI transcript state', () => {
     const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     stream.append('A short final answer.');
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     expect(entryTexts(root)).toEqual(['A short final answer.']);
   });
@@ -3109,7 +3115,7 @@ describe('CLI transcript state', () => {
     logModelResponse(logger, 'A delayed final answer.');
     setStatus(root, STREAM_PHASE.WAITING);
 
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
@@ -3124,15 +3130,15 @@ describe('CLI transcript state', () => {
   it('keeps repeated local slash-command responses after stream-log syncs', () => {
     const logger = runTrace(root);
     logUserMessage(logger, 'prompt');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
     activeStreamId.set(root);
 
     appendLocalAssistantTranscript('Available commands: /help');
     logModelResponse(logger, 'partial response');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     appendLocalAssistantTranscript('Available commands: /help');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     expect(
       streamEntries(root)
@@ -3237,11 +3243,11 @@ describe('CLI transcript state', () => {
   it('preserves the finalized response across later log syncs', () => {
     const logger = runTrace(root);
     logUserMessage(logger, '1+1');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
     logger.responseFinalized('The answer is 2.');
 
     logUserMessage(logger, 'next prompt');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     expect(entryTexts(root)).toEqual([
       '1+1',
@@ -3253,15 +3259,15 @@ describe('CLI transcript state', () => {
   it('orders multiple finalized responses relative to the turns around them', () => {
     const logger = runTrace(root);
     logUserMessage(logger, 'first prompt');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
     logger.responseFinalized('first answer');
 
     logUserMessage(logger, 'second prompt');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
     logger.responseFinalized('second answer');
 
     logUserMessage(logger, 'third prompt');
-    syncStreamLog(root);
+    syncStreamLog(defaultSession(), root);
 
     const entries = streamEntries(root);
     expect(entryTexts(root)).toEqual([

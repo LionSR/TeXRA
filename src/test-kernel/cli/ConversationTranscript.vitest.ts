@@ -339,7 +339,7 @@ describe('CLI conversation transcript', () => {
       ],
     }));
 
-    syncStreamLog(STREAM_ID, { forceFinal: true });
+    syncStreamLog(defaultSession(), STREAM_ID, { forceFinal: true });
 
     expect(streams.get().get(STREAM_ID)?.finalizedFrontier).toBe(2);
     const split = splitSliceEntries(STREAM_ID, STREAM_PHASE.WAITING);
@@ -452,7 +452,7 @@ describe('CLI conversation transcript', () => {
     expect(split.finalized).toHaveLength(0);
     expect(split.pending.map((e) => e.id)).toEqual(['a1', 't1']);
 
-    syncStreamLog(streamId, { forceFinal: true });
+    syncStreamLog(defaultSession(), streamId, { forceFinal: true });
 
     split = splitSliceEntries(streamId, STREAM_PHASE.WAITING);
     expect(split.finalized.map((e) => e.id)).toEqual(['a1', 't1']);

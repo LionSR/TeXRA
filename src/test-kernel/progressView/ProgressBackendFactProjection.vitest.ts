@@ -1313,24 +1313,50 @@ describe('ProgressBackend', () => {
     ).toMatchObject({ name: stream, creationTimestamp: 100 });
   });
 
-  it('omits a provisionally removed stream from the selectable rail', () => {
-    const { backend } = createRecordingBackend();
-    const retained = 'retained-stream' as StreamTabId;
+  it('omits a provisionally removed stream from host projections', () => {
+    const { backend, messages } = createRecordingBackend();
+    const parent = 'retained-stream' as StreamTabId;
     const removing = 'removing-stream' as StreamTabId;
+    const child: ActiveChildInfo = {
+      executionId: 'exec:removing' as ExecutionId,
+      childStreamId: removing,
+      agentName: 'orchestrator',
+      identity: { kind: 'agent', agent: 'orchestrator' },
+      status: STREAM_PHASE.RUNNING,
+      startedAt: 1,
+    };
 
-    backend.state.streamLogs.ensureStream(retained);
+    backend.state.streamLogs.ensureStream(parent);
     backend.state.streamLogs.ensureStream(removing);
+    backend.state.updateStreamMetadata(parent, {
+      agentCategory: AgentCategory.ToolUse,
+    });
+    backend.state.getOrCreateStreamState(parent, AgentCategory.ToolUse);
+    backend.state.updateStreamState(parent, (state) => ({
+      ...state,
+      subagents: [child],
+    }));
     backend.state.beginStreamRemoval(removing);
+    backend.renderer.syncStreamContent(parent, { includeActiveState: true });
 
-    // The durable transcript stays resident until the guarded deletion
-    // commits, but the removal barrier is already the live membership
-    // authority for every stream-tab projection.
+    // The durable transcript and canonical parent roster stay resident until
+    // guarded deletion commits, but the removal barrier is already the live
+    // membership authority for every host-facing projection.
     expect(backend.state.streamLogs.has(removing)).toBe(true);
-    expect(backend.state.selectableStreamNames()).toContain(retained);
+    expect(backend.state.selectableStreamNames()).toContain(parent);
     expect(backend.state.selectableStreamNames()).not.toContain(removing);
     expect(
       buildStreamInfos(backend.state).map((stream) => stream.name),
     ).not.toContain(removing);
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+        stream: parent,
+        activeState: expect.objectContaining({
+          badges: { subagents: [] },
+        }),
+      }),
+    );
   });
 
   it('keeps a dated tab dated after its transcript is released', () => {

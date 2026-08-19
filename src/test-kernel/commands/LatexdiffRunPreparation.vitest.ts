@@ -30,7 +30,6 @@ const mocks = vi.hoisted(() => ({
   showWarningMessage: vi.fn(),
   withProgress: vi.fn(),
   registerCommandEntries: vi.fn(),
-  workspaceSMGet: vi.fn(),
   normalizeRunLatexdiffOutputsByRound: vi.fn(),
   runLatexdiffForExecution: vi.fn(),
   runLatexdiffHandler: undefined as
@@ -51,10 +50,6 @@ vi.mock('@commands/_shared/registerCommands', () => ({
       ({ id }) => id === 'texra.runLatexdiff',
     )?.handler;
   },
-}));
-
-vi.mock('@common/state', () => ({
-  workspaceSM: { get: mocks.workspaceSMGet },
 }));
 
 vi.mock('@frontend/latex/openBuild', () => ({
@@ -180,7 +175,6 @@ describe('texra.runLatexdiff result preparation and final viewer delivery', () =
     mocks.runLatexdiffForExecution.mockResolvedValue({
       outcome: { results: mixedResults },
     });
-    mocks.workspaceSMGet.mockReturnValue(false);
     mocks.showQuickPick.mockResolvedValue({ value: 'full' });
     mocks.showInformationMessage.mockResolvedValue(undefined);
     mocks.showWarningMessage.mockResolvedValue(undefined);

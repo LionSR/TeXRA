@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { assignByContentSimilarity } from '@agent/implementations/flows/reflection/output/extraction/contentSimilarity';
-import { OutputFileProcessor } from '@agent/implementations/flows/reflection/output/OutputFileProcessor';
+import { processMultipleOutputs } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
 import {
   createOutputState,
   ensureRoundData,
@@ -33,8 +33,8 @@ interface XmlManagerOptions {
 }
 
 /**
- * Minimal OutputDependencies for OutputFileProcessor tests: the processor
- * reads only `baseFiles`, `logger`, and `runScope.streamId`.
+ * Minimal OutputDependencies for the output-extraction tests: the code under
+ * test reads only `baseFiles`, `logger`, and `runScope.streamId`.
  */
 function processorDeps(overrides: {
   logger: AgentTrace;
@@ -913,13 +913,10 @@ Appendix.
     );
     const manager = createXmlManager();
     const state = createOutputState();
-    const processor = new OutputFileProcessor(
+    await processMultipleOutputs(
       state,
       processorDeps({ logger: spiedTrace() }),
       manager,
-    );
-
-    await processor.processMultipleOutputs(
       createExternalLocation('/tmp/run/output.xml'),
       0,
     );
@@ -1370,7 +1367,7 @@ Appendix.
         diff: null,
       },
     ];
-    const processor = new OutputFileProcessor(
+    await processMultipleOutputs(
       state,
       processorDeps({
         logger: spiedTrace(),
@@ -1380,9 +1377,6 @@ Appendix.
         ],
       }),
       manager,
-    );
-
-    await processor.processMultipleOutputs(
       createExternalLocation('/tmp/run/r1/output.xml'),
       1,
     );

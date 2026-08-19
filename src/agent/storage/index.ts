@@ -17,8 +17,6 @@ export {
   type ExecutionKVStore,
   type TodoEntry,
   type ChildRecord,
-  type ChildTurnRef,
-  type ChildTurnState,
   getExecutionStore,
   clearStoreCache,
   isReservedKvKeyName,
@@ -36,8 +34,6 @@ export {
   finalizeExecution,
   registerExecution,
   type FinalizeExecutionInput,
-  type FinalizeExecutionResult,
-  writeSessionDescription,
   writeWorkflowExecutionSnapshot,
 } from './executionLifecycle';
 export {
@@ -50,7 +46,6 @@ export {
   isUserVisibleExecution,
 } from './executionListing';
 export {
-  RESUMABILITY_CAUSE,
   deriveOfferableResumability,
   deriveResumability,
   type ResumabilityDecision,

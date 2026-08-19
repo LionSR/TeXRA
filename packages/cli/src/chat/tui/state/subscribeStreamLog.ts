@@ -20,7 +20,6 @@
 // remain only to cover rows persisted before that landed; they are idempotent
 // on already-redacted text.
 
-import { defaultSession } from '@agent/runtime';
 import {
   AgentCategory,
   MESSAGE_TYPES,
@@ -31,7 +30,7 @@ import {
   isActivePhase,
   isTranscriptSettlementPhase,
 } from '@shared/streams/streamStatus';
-import { StreamLogDeltaBuffer } from '@transcript';
+import { StreamLogDeltaBuffer, type StreamLogStore } from '@transcript';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { transcriptRowHeadline } from '../panes/transcriptEntries';
@@ -65,6 +64,11 @@ import {
 // can land before the first sync fires); one animation frame is enough
 // to batch chunks and keeps the transcript feeling live.
 const STREAM_SYNC_THROTTLE_MS = 16;
+
+interface StreamLogSession {
+  readonly transcripts: StreamLogStore;
+  flushPendingTraces(): void;
+}
 
 /**
  * Store-emitted deltas awaiting the next batched sync, coalesced per stream.
@@ -127,9 +131,12 @@ export function streamRenderCacheSizesForTest(): {
 // Subscription + sync entry points
 // ---------------------------------------------------------------------------
 
-function trySyncStreamLog(streamId: StreamTabId): void {
+function trySyncStreamLog(
+  session: StreamLogSession,
+  streamId: StreamTabId,
+): void {
   try {
-    syncStreamLog(streamId);
+    syncStreamLog(session, streamId);
   } catch (error) {
     setTransientNotice(
       `Could not update transcript: ${toErrorMessage(error)}`,
@@ -138,8 +145,8 @@ function trySyncStreamLog(streamId: StreamTabId): void {
   }
 }
 
-export function subscribeStreamLog(): () => void {
-  const store = defaultSession().transcripts;
+export function subscribeStreamLog(session: StreamLogSession): () => void {
+  const store = session.transcripts;
   let previousActiveStreamId = activeStreamId.get();
 
   // One trailing timer shared by every stream: during a multi-subagent burst
@@ -153,7 +160,7 @@ export function subscribeStreamLog(): () => void {
         PENDING_DELTAS.delete(streamId);
         continue;
       }
-      trySyncStreamLog(streamId);
+      trySyncStreamLog(session, streamId);
     }
   }, STREAM_SYNC_THROTTLE_MS);
 
@@ -183,10 +190,10 @@ export function subscribeStreamLog(): () => void {
     previousActiveStreamId = nextActiveStreamId;
 
     if (previous && previous !== nextActiveStreamId) {
-      trySyncStreamLog(previous);
+      trySyncStreamLog(session, previous);
       // Terminal status normally requests eviction immediately. This focus
       // boundary remains a backstop when that status event was not observed.
-      releaseInactiveStreamTranscript(previous);
+      releaseInactiveStreamTranscript(session.transcripts, previous);
     }
     if (!nextActiveStreamId || nextActiveStreamId === previous) return;
 
@@ -195,7 +202,7 @@ export function subscribeStreamLog(): () => void {
       .ensureLoaded(nextActiveStreamId)
       .then(() => {
         if (generation === getCliStateGeneration()) {
-          trySyncStreamLog(nextActiveStreamId);
+          trySyncStreamLog(session, nextActiveStreamId);
         }
       })
       .catch((error: unknown) => {
@@ -220,6 +227,7 @@ export function subscribeStreamLog(): () => void {
 }
 
 export function syncStreamLog(
+  session: StreamLogSession,
   streamId: StreamTabId,
   options: {
     /** Treat the stream as final for settled-prefix promotion, even when its
@@ -239,7 +247,6 @@ export function syncStreamLog(
   // an in-memory buffer and never reaches the transcript. Force any
   // pending flushers to materialize before we read — their emissions land
   // in this stream's pending buffer and are folded below.
-  const session = defaultSession();
   session.flushPendingTraces();
   const store = session.transcripts;
   const log = store.get(streamId);
@@ -493,7 +500,10 @@ export function syncStreamLog(
  * from scratch — through the shared resync path — the next time this
  * stream syncs (e.g. if it's reactivated).
  */
-export function releaseInactiveStreamTranscript(streamId: StreamTabId): void {
+export function releaseInactiveStreamTranscript(
+  store: StreamLogStore,
+  streamId: StreamTabId,
+): void {
   const currentActiveStreamId = activeStreamId.get();
   if (
     currentActiveStreamId === undefined ||
@@ -503,7 +513,7 @@ export function releaseInactiveStreamTranscript(streamId: StreamTabId): void {
   }
   const slice = streams.get().get(streamId);
   if (slice?.status === undefined || isActivePhase(slice.status)) return;
-  defaultSession().transcripts.requestEviction(streamId);
+  store.requestEviction(streamId);
   const fold = slice.transcriptFold;
   if (fold) {
     resetTranscriptFoldState(fold);
