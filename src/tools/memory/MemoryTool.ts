@@ -235,7 +235,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       getRunContextExecutionId(ctx),
       existingMeta,
     );
-    await StorageFS.write(resolvedPath, buildFile(content, meta));
+    await StorageFS.writeAtomic(resolvedPath, buildFile(content, meta));
   }
 
   private resolveMemoryPath(inputPath: string): string {
