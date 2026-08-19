@@ -34,6 +34,7 @@ import {
   TOOL_ICON_MAP,
   DIFF_DETECTION_LINE_LIMIT,
   DIFF_MARKER_THRESHOLD,
+  INLINE_DIFF_TIMEOUT_MS,
 } from './constants';
 
 /** Build a tool-use section template. Empty label omits the label element. */
@@ -424,9 +425,26 @@ export function buildExecutionsPathDisplay(
  * can scan, and they come from the same engine as every other diff in the
  * product. The webview highlights inline spans while the terminal renders
  * unified hunks — two correct paints of one payload for two media.
+ *
+ * Bounded because this runs inside Lit's render on the main thread: on
+ * timeout jsdiff returns `undefined`, and the fallback paints the edit as a
+ * whole replacement — "all of it changed" is true, if verbose, where an
+ * unbounded run would freeze the panel instead.
  */
 function generateInlineDiff(oldText: string, newText: string): TemplateResult {
-  const parts = diffWordsWithSpace(oldText, newText);
+  const parts = diffWordsWithSpace(oldText, newText, {
+    timeout: INLINE_DIFF_TIMEOUT_MS,
+  });
+
+  if (!parts) {
+    console.warn(
+      `[progressView] Inline diff exceeded ${INLINE_DIFF_TIMEOUT_MS}ms ` +
+        `(${oldText.length} → ${newText.length} chars); ` +
+        `painting it as a whole replacement.`,
+    );
+    // prettier-ignore
+    return html`<span class="diff-inline-del">${oldText}</span><span class="diff-inline-add">${newText}</span>`;
+  }
 
   return html`${parts.map((part) => {
     if (part.removed) {

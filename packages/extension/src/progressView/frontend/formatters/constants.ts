@@ -97,6 +97,16 @@ export const DIFF_DETECTION_LINE_LIMIT = 20;
 export const DIFF_MARKER_THRESHOLD = 2;
 
 /**
+ * Upper bound on the inline word diff, which runs synchronously inside Lit's
+ * render on the webview's main thread over LLM-authored edit text.
+ *
+ * Deliberately far below `unifiedDiff`'s 5s Node-side bound rather than shared
+ * with it: this budget is the frame the user is waiting on, so the two are
+ * different policies for different threads, not one value written twice.
+ */
+export const INLINE_DIFF_TIMEOUT_MS = 250;
+
+/**
  * Tool icon mapping for different tool types.
  * Maps tool names to wa-icon names (codicon-style aliases supported via the
  * shared TeXRA icon library).
