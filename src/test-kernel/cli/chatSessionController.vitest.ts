@@ -178,7 +178,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
@@ -567,9 +567,9 @@ describe('createChatSessionController', () => {
         return mocks.executeAgent(request.config, request.executionId, options);
       },
     );
-    // Return the caller-provided default (false for DETACH_SUBAGENTS_ON_STOP,
-    // undefined for roster keys) — a blanket `false` is not a valid persisted
-    // value for AGENT_ROSTER_SELECTION, which agent resolution now reads.
+    // Return the caller-provided default (undefined for roster keys) — a
+    // blanket `false` is not a valid persisted value for
+    // AGENT_ROSTER_SELECTION, which agent resolution now reads.
     mocks.workspaceGet.mockImplementation(
       (_key: unknown, defaultValue?: unknown) => defaultValue,
     );
@@ -700,11 +700,11 @@ describe('createChatSessionController', () => {
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    mocks.workspaceGet.mockReturnValue(true);
+    mocks.globalGet.mockReturnValue(true);
     ctrl.stop();
 
-    expect(mocks.workspaceGet).toHaveBeenCalledWith(
-      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+    expect(mocks.globalGet).toHaveBeenCalledWith(
+      GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
       false,
     );
     expect(mocks.stopAgentStream).toHaveBeenCalledWith('stream-1', {

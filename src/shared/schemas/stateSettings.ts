@@ -707,6 +707,12 @@ const DETACH_SUBAGENTS_RUNTIME_REACHABILITY = {
   through:
     'packages/cli/src/commands/chat.ts -> packages/cli/src/chat/tui/runChatTui.tsx -> packages/cli/src/chat/chatSessionController.ts -> src/agent/runtime/detachSubagentsOnStop.ts',
 } satisfies CliRuntimeReachability;
+const ORCHESTRATOR_KILL_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --instruction "delegate two tasks, then stop the slower subagent"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> src/agent/runtime/runAgent.ts -> src/tools/ExecutionsTool.ts',
+} satisfies CliRuntimeReachability;
 const WORKFLOW_COMPILE_RUNTIME_REACHABILITY = {
   command:
     'texra run <workflow-agent> --input paper.tex --instruction "revise the paper"',
@@ -973,25 +979,35 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
 
   // --- Multi-agent coordination --------------------------------------------
+  // Both child-work policy toggles live in `globalState` per the 2026-08-15
+  // maintainer ruling (docs/proposals/2026-08-15-shared-contracts-and-retirement.md
+  // §2.1): they describe how *this user* wants child runs handled, not anything
+  // about a particular checkout, so no worktree-scoping need is documented on
+  // either row. Before the move the extension smuggled that same intent past a
+  // `workspaceState` slot via `WORKTREE_SHARED_KEYS`, while the Node hosts
+  // scoped the value per workspace-path hash — one row, two meanings.
   surfacedSetting({
-    key: WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+    key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
     schema: z.boolean().prefault(true),
     title: 'Allow orchestrator cancellation',
     description:
       'Allow the orchestrator to stop subagents that are no longer needed.',
     category: 'multi-agent',
-    slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/tools/ExecutionsTool.ts'),
-    surfaces: { settingsView: 'multi-agent' },
+    slots: sameSlot('globalState'),
+    honoredBy: everyHost(
+      'src/tools/ExecutionsTool.ts',
+      ORCHESTRATOR_KILL_RUNTIME_REACHABILITY,
+    ),
+    surfaces: { settingsView: 'multi-agent', cliConfig: true },
   }),
   surfacedSetting({
-    key: WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+    key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
     schema: z.boolean().prefault(false),
     title: 'Keep subagents running',
     description:
       'Let active subagents continue when the orchestrator is stopped.',
     category: 'multi-agent',
-    slots: sameSlot('workspaceState'),
+    slots: sameSlot('globalState'),
     honoredBy: everyHost(
       'src/agent/runtime/detachSubagentsOnStop.ts',
       DETACH_SUBAGENTS_RUNTIME_REACHABILITY,
