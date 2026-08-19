@@ -1,4 +1,8 @@
 import {
+  shortCliModelAccessRoute,
+  type CliModelAccessRoute,
+} from '@cli/runtime/modelAccessRoute';
+import {
   defaultShortcutModifierLabel,
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
@@ -26,7 +30,6 @@ import {
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
-import { usageRouteBadge } from '@shared/copy/modelAccess';
 import {
   FOREGROUND_OWNERSHIP,
   RUNNING_SESSION,
@@ -69,18 +72,18 @@ export function subscriptionUsageProviderForStatus({
   prospectiveCodingPlan,
 }: {
   readonly usageRoute: UsageRoute | undefined;
-  readonly modelAccess: UsageRoute;
+  readonly modelAccess: CliModelAccessRoute;
   readonly prospectiveCodingPlan?: SubscriptionUsageProvider;
 }): SubscriptionUsageProvider | undefined {
   if (usageRoute === 'chatgpt-subscription') return 'chatgpt';
   const completedCodingPlan = codingPlanForUsageRoute(usageRoute);
   if (completedCodingPlan) return completedCodingPlan.usageProvider;
   if (usageRoute !== undefined) return undefined;
-  if (modelAccess === 'chatgpt-subscription') return 'chatgpt';
+  if (modelAccess === 'chatgpt') return 'chatgpt';
   return CODING_PLAN_SUBSCRIPTIONS.find(
     (plan) =>
       plan.usageProvider === prospectiveCodingPlan &&
-      plan.usageRoute === modelAccess,
+      plan.cliProvider === modelAccess,
   )?.usageProvider;
 }
 
@@ -128,7 +131,7 @@ export interface StatusBarDisplayInput {
   readonly runningSessions: number;
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
-  readonly modelAccess: UsageRoute;
+  readonly modelAccess: CliModelAccessRoute;
   /** Latest quota snapshot for the subscription serving this model. */
   readonly subscriptionQuota?: SubscriptionUsageSnapshot;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
@@ -197,21 +200,17 @@ interface StatusBarDisplay {
   readonly bindings: string;
 }
 
-function accessModeSegment(access: UsageRoute): StatusBarSegment {
-  // `usageRouteBadge` is undefined only for an unset route; the bar always
-  // resolves one through `resolveCliModelAccessRoute`.
-  const badge = usageRouteBadge(access)!;
-  // The bar names how the call is paid for, not which subscription; the /api
-  // form and /status name the subscription itself.
-  return badge.subscription
+function accessModeSegment(access: CliModelAccessRoute): StatusBarSegment {
+  const label = shortCliModelAccessRoute(access);
+  return label === 'subscription'
     ? {
-        text: 'subscription',
+        text: label,
         color: COLOR_HINT,
         compactText: 'sub',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
       }
     : {
-        text: badge.compactLabel,
+        text: label,
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
       };
