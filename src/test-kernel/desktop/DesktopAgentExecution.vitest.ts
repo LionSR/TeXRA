@@ -1377,20 +1377,22 @@ describe('DesktopProgressBridge', () => {
       items: [],
     });
 
-    const badgeUpdate = progressMessages(
+    const metadataUpdate = progressMessages(
       messages,
-      PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+      PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
     ).at(-1);
     // The roster keeps its finished child as a full row — a retained entry
     // is exactly the vanished one, stamped with `finishedAt`.
-    expect(badgeUpdate).toMatchObject({
-      subagents: [
-        {
-          executionId: 'agent-1',
-          agentName: 'reviewer',
-          finishedAt: 1_000,
-        },
-      ],
+    expect(metadataUpdate).toMatchObject({
+      streamState: {
+        subagents: [
+          {
+            executionId: 'agent-1',
+            agentName: 'reviewer',
+            finishedAt: 1_000,
+          },
+        ],
+      },
     });
   });
 

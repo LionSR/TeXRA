@@ -1,6 +1,6 @@
 /**
- * Stream lifecycle handlers: UPDATE_STREAMS, SET_ACTIVE_STREAM,
- * DELETE_STREAM, DELETE_ALL.
+ * Stream lifecycle handlers: stream registration, metadata, status, selection,
+ * content release, and deletion.
  *
  * Owns the updateStreamInfo helper.
  */
@@ -9,12 +9,16 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
+  isToolUseState,
+  STREAM_PHASE,
   type ProgressViewOutboundHandlerRegistry,
   type StreamMetadata,
   type StreamState,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
+import { isTranscriptSettlementPhase } from '@shared/streams/streamStatus';
 
 import {
   deleteStreamState,
@@ -26,8 +30,10 @@ import {
 import {
   appState,
   permissions$,
+  setStreamStateForId,
   unsupportedProgressCommands$,
 } from '../progressState';
+import { settleCompactionActivityLogs } from './logSlice';
 import { clearResolvedProposalIds } from './permissionSlice';
 import { mergeBackendOwnedState } from './streamStateMerge';
 import {
@@ -127,6 +133,37 @@ function assertKnownActiveStreamId(
 // `unsupported(...)`; exhaustiveness is enforced at the composed spread in
 // messageDispatcher.ts. This slice only owns a subset.
 export const streamLifecycleHandlers = {
+  [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA]: (data) => {
+    const { streamInfo: rawInfo, streamState, activeStream } = data;
+    const previous = appState.get();
+    const existingInfo = previous.streamById.get(rawInfo.name);
+    const description = rawInfo.description ?? existingInfo?.description;
+    const streamInfo =
+      description !== rawInfo.description
+        ? { ...rawInfo, description }
+        : rawInfo;
+    const streams = [
+      ...[...previous.streamById.values()].filter(
+        (stream) => stream.name !== streamInfo.name,
+      ),
+      streamInfo,
+    ].toSorted(compareByNewestCreationTime);
+    const updated = updateStreamInfo(previous, streams, {
+      [streamInfo.name]: streamState,
+    });
+
+    appState.set(
+      create(updated, (draft) => {
+        // Metadata registration is followed by bridge replay. LOG_DELTA
+        // settles only after applying that batch, so hydration cannot close
+        // a start before its already-recorded outcome arrives.
+        if (activeStream !== undefined) {
+          draft.activeStreamId = activeStream || null;
+        }
+      }),
+    );
+  },
+
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]: (data) => {
     if (data.unsupportedCommands) {
       unsupportedProgressCommands$.set(new Set(data.unsupportedCommands));
@@ -188,6 +225,59 @@ export const streamLifecycleHandlers = {
     appState.set(
       create(appState.get(), (draft) => {
         releaseStreamContent(draft, data.stream);
+      }),
+    );
+  },
+
+  [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data) => {
+    const { stream, status, logHead, lastTimestamp, substate } = data;
+    const previous = appState.get();
+    const wasSettled = isTranscriptSettlementPhase(
+      previous.streamStates.get(stream)?.status,
+    );
+    const shouldFocus =
+      stream === previous.activeStreamId && status === STREAM_PHASE.WAITING;
+
+    setStreamStateForId(stream, (current) =>
+      create(current, (draft) => {
+        draft.status = status;
+        if (substate) {
+          draft.substate = substate;
+        } else {
+          delete draft.substate;
+        }
+        draft.lastTimestamp = lastTimestamp ?? current.lastTimestamp;
+        if (isToolUseState(current) && shouldFocus) {
+          (draft as typeof current).ui.shouldFocusFollowUp = true;
+        }
+      }),
+    );
+
+    if (!wasSettled && isTranscriptSettlementPhase(status)) {
+      appState.set(
+        create(appState.get(), (draft) => {
+          const streamLogs = draft.streamLogs.get(stream);
+          if (!streamLogs) return;
+          const updatedRowIndices = settleCompactionActivityLogs(streamLogs, {
+            throughSeqNo: logHead,
+            finishedAt: lastTimestamp,
+          });
+          if (updatedRowIndices.length === 0) return;
+          draft.streamLogs.set(stream, {
+            ...streamLogs,
+            updatedRowIndices: [...updatedRowIndices],
+            updatedRowBaseGeneration: streamLogs.generation,
+            generation: streamLogs.generation + 1,
+          });
+        }),
+      );
+    }
+  },
+
+  [PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS]: (data) => {
+    setStreamStateForId(data.stream, (previous) =>
+      create(previous, (draft) => {
+        draft.conversationProgress = data.progress;
       }),
     );
   },
