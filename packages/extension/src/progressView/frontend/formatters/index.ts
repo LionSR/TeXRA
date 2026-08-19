@@ -61,8 +61,6 @@ const ROW_FORMATTERS: RowFormatters = {
   latexdiff: formatLatexdiffTemplate,
   statistics: formatStatisticsTemplate,
   contextManagement: formatContextManagementTemplate,
-  // Context utilization is folded into the usage panel, not the transcript.
-  contextState: () => null,
   progressStatus: formatProgressStatusTemplate,
   workflowTask: formatWorkflowCallTemplate,
   compactionActivity: formatCompactionActivityTemplate,
