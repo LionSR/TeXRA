@@ -283,23 +283,23 @@ export class ModelHandlerValidation extends ModelHandler<
     return responseObject.toolCalls ?? [];
   }
 
-  async createToolUseFollowUpMessages(
-    _client: unknown,
-    _call: SdkToolCall,
-    result: ToolResult,
-    _attachments: ToolFileAttachment[],
-    _workspaceState?: AgentWorkspaceState,
-    text?: string,
+  async createBatchedToolUseFollowUpMessages(
+    entries: Array<{
+      call: SdkToolCall;
+      result: ToolResult;
+      attachments: ToolFileAttachment[];
+    }>,
+    _workspaceState: AgentWorkspaceState | undefined,
+    text: string | undefined,
   ): Promise<ChatCompletionMessageParam[]> {
-    return [
-      {
-        role: 'tool',
-        tool_call_id: 'validation-tool-call',
-        content: text
+    return entries.map(({ result }, index) => ({
+      role: 'tool',
+      tool_call_id: 'validation-tool-call',
+      content:
+        index === 0 && text
           ? `${text}\n${JSON.stringify(result)}`
           : JSON.stringify(result),
-      },
-    ];
+    }));
   }
 
   async createUserFollowUpMessages(
