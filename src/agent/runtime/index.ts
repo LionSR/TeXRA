@@ -100,10 +100,7 @@ export { resumeQueuedToolUseFromResumeData } from './resumeQueuedToolUse';
 export type { ManualCompactionRequestResult } from './executionRegistry';
 
 // executeAgent
-export {
-  resumeToolUseFromResumeData,
-  ResumeSessionUnavailableError,
-} from './executeAgent';
+export { resumeToolUseFromResumeData } from './executeAgent';
 
 // textEnhancement
 export { polishTextWithAI } from './textEnhancement';
@@ -114,7 +111,6 @@ export { selectAutoOpenFinalOutput } from './selectAutoOpenFinalOutput';
 
 // modelHandlerCompatibilityKey
 export { ModelHandlerCompatibilityKeySchema } from './modelHandlerCompatibilityKey';
-export type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 // helperModelName
 export { getHelperModelName } from './helperModelName';

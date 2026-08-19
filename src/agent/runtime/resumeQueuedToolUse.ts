@@ -24,7 +24,6 @@ import type { ToolUseResumeData } from './SessionResumeRetrieval';
 export interface ResumeQueuedToolUseOptions extends Pick<
   SubagentRunOptions,
   | 'session'
-  | 'tools'
   | 'approvalPromptsUnavailable'
   | 'onApprovalPolicyDenial'
   | 'runtimeUnavailableTools'
@@ -139,7 +138,6 @@ export async function resumeQueuedToolUseFromResumeData(
     // cursor accepts either route; the handoff works for both.
     const result = await resumeToolUseFromResumeData(resume, {
       session: options.session,
-      tools: options.tools,
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
       onApprovalPolicyDenial: options.onApprovalPolicyDenial,
       runtimeUnavailableTools: options.runtimeUnavailableTools,

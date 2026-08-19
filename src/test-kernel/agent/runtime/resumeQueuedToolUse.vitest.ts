@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
 import type { StreamTabId } from '@shared/schemas';
@@ -69,15 +68,11 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
   it('claims recovery before draining and preserves ordered raced input', async () => {
     const session = createSession();
     seedRecoverable(session, 'first');
-    const tools = [
-      { definition: { name: 'run_scoped' }, call: vi.fn() },
-    ] as unknown as readonly ITool[];
 
     await expect(
       resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         session,
         isCancellationRequested,
-        tools,
         onFollowUpQueueReady: () => {
           expect(
             session.followUps.submit(STREAM, { text: 'second' }, 'recoverable'),
@@ -89,7 +84,6 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
 
     const options = resumeToolUseFromResumeDataMock.mock
       .calls[0]?.[1] as ResumeToolUseFromResumeDataOptions;
-    expect(options.tools).toBe(tools);
     expect(options.drainedFollowUps?.map((item) => item.text)).toEqual([
       'first',
       'second',

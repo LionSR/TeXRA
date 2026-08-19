@@ -27,7 +27,7 @@ vi.mock('@agent/runtime/helperModel', async (importActual) => ({
   createHelperModelKit: mocks.createHelperModelKit,
 }));
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage/executionLifecycle', () => ({
   writeSessionDescription: mocks.writeSessionDescription,
 }));
 

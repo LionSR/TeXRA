@@ -95,7 +95,6 @@ class ClientSideCompactionHandler extends ModelHandlerOpenAIResponse {
 
   protected override getActiveProviderCapabilities(): ProviderCapabilityProfile {
     return {
-      authMode: 'chatgpt-subscription',
       contextWindow: this.profileContextWindow,
       inputPrice: 0,
       outputPrice: 0,

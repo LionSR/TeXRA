@@ -22,12 +22,13 @@ vi.mock('@agent/runtime/ModelFactory', async (importActual) => ({
 }));
 
 // Local imports - agent runtime
-import { clearInlineAgents, registerInlineAgents } from '@agent/index';
+import { registerInlineAgents } from '@agent/index';
 import {
   clearStoreCache,
   getExecutionStore,
   registerExecution,
 } from '@agent/storage';
+import { clearInlineAgents } from '@agent/index/agentRegistry';
 import {
   captureOwnedExecutionLease,
   releaseOwnedExecutionLease,
