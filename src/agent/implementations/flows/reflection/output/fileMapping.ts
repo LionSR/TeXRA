@@ -1,11 +1,10 @@
 import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import type { FileLocation } from '@shared/schemas';
+import { fileLocationDisplayPath, type FileLocation } from '@shared/schemas';
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { getComparablePath } from '@utils/files/fileLocation';
 
 /**
  * Create a mapping between two file lists based on name similarity.
@@ -35,7 +34,7 @@ export function createFileMapping(
     : (name: string) => name;
 
   for (const target of targetFiles) {
-    const targetPath = getComparablePath(target);
+    const targetPath = fileLocationDisplayPath(target);
     const targetBaseName = path.basename(targetPath);
     const targetName = normalizeName(path.parse(targetBaseName).name);
 
@@ -43,7 +42,7 @@ export function createFileMapping(
     let bestMatchScore = 0;
 
     for (const sourceFile of sourceFiles) {
-      const sourcePath = getComparablePath(sourceFile);
+      const sourcePath = fileLocationDisplayPath(sourceFile);
       const sourceName = normalizeName(
         path.parse(path.basename(sourcePath)).name,
       );
@@ -101,7 +100,7 @@ export async function replaceInputCommands(
     `File mappings for input replacement: ${[...baseToOutputMap.entries()]
       .map(
         ([basePath, outputLoc]) =>
-          `${path.basename(basePath)} -> ${path.basename(getComparablePath(outputLoc))}`,
+          `${path.basename(basePath)} -> ${path.basename(fileLocationDisplayPath(outputLoc))}`,
       )
       .join(', ')}`,
   );
@@ -109,7 +108,7 @@ export async function replaceInputCommands(
   // Build replacement lookup: generates all path suffix variants for flexible matching
   const replacementLookup = new Map<string, string>();
   for (const [baseFile, outputLoc] of baseToOutputMap) {
-    const outputFile = getComparablePath(outputLoc);
+    const outputFile = fileLocationDisplayPath(outputLoc);
     const baseSegments = getPathSegments(baseFile);
     const outputSegments = getPathSegments(outputFile);
     const maxDepth = Math.min(baseSegments.length, outputSegments.length);
@@ -147,7 +146,7 @@ export async function replaceInputCommands(
   }
 
   for (const outputLocation of outputFiles) {
-    const outputPath = getComparablePath(outputLocation);
+    const outputPath = fileLocationDisplayPath(outputLocation);
 
     try {
       const content = await AbsoluteFS.read(outputLocation.absolutePath);

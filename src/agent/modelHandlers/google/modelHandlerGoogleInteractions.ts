@@ -43,15 +43,15 @@ import {
   takeTail,
 } from '@common/errors/sdkError/errorPatterns';
 import { composeLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
-import type {
-  FileLocation,
-  MediaAttachmentKind,
-  ToolDefinition,
-  ToolFileAttachment,
-  ToolResult,
+import {
+  fileLocationShortDisplayPath,
+  type FileLocation,
+  type MediaAttachmentKind,
+  type ToolDefinition,
+  type ToolFileAttachment,
+  type ToolResult,
 } from '@shared/schemas';
 import { filterNotNull, generateShortId, isNonEmptyString } from '@utils/core';
-import { getShortDisplayPath } from '@utils/files/fileLocation';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -740,7 +740,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       return [];
     }
 
-    const label = mediaFiles.map((loc) => getShortDisplayPath(loc)).join(', ');
+    const label = mediaFiles
+      .map((loc) => fileLocationShortDisplayPath(loc))
+      .join(', ');
     const verb = context === 'initial' ? 'Attached' : 'Processing';
     return [
       this.textMedia(

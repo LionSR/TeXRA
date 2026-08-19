@@ -4,16 +4,14 @@ import * as path from 'node:path';
 // Local imports
 import { isFileNotFoundError } from '@common/errors';
 import { platform } from '@platform/platform';
-import type {
-  ExecutionId,
-  FileLocation,
-  RunStorageFileLocation,
+import {
+  fileLocationDisplayPath,
+  type ExecutionId,
+  type FileLocation,
+  type RunStorageFileLocation,
 } from '@shared/schemas';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
-import {
-  createRunStorageLocation,
-  getComparablePath,
-} from '@utils/files/fileLocation';
+import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { isFile } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 
@@ -60,7 +58,10 @@ function toPdfRelativePath(options: PublishCompiledPdfOptions): string {
   const comparablePath =
     options.source.kind === 'external'
       ? path.basename(options.displayName)
-      : stripRoundPrefix(getComparablePath(options.source), options.round);
+      : stripRoundPrefix(
+          fileLocationDisplayPath(options.source),
+          options.round,
+        );
   const parsed = path.parse(comparablePath || options.displayName);
   const stem = parsed.name || path.basename(options.displayName, parsed.ext);
   const pdfStem = `${stem || 'output'}${options.pdfStemSuffix ?? ''}`;

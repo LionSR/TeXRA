@@ -17,9 +17,17 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
-import { getEffectiveDiffBase, roundIndexedEntries } from '@shared/schemas';
+import {
+  fileLocationDisplayPath,
+  getEffectiveDiffBase,
+  outputDiffCounts,
+  outputDisplayName,
+  roundIndexedEntries,
+  type CompileFailure,
+  type OutputFileInfo,
+} from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -233,7 +241,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
     return html`
       <wa-details
         class="round-collapsible panel-collapsible"
-        summary=${`r${round}`}
+        summary=${formatRoundStageLabel({ index: round })}
         open
       >
         ${rows}
@@ -252,16 +260,8 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
     const idPrefix = `file-action-r${round}-f${fileIndex}`;
 
     const location = file.location;
-    // Prefer: workspace original → source doc name → run-storage relative path.
-    // Use the compact variant so an external location (e.g. a run-storage file
-    // outside the workspace root) shows its basename instead of a long absolute
-    // path; the full path stays in the tooltip below.
-    const displayPath =
-      this.getCompactDisplayPath(file.lineage?.original) ||
-      this.getSourceDisplayPath(file.source) ||
-      this.getCompactDisplayPath(location);
-    const { dir, basename } = parsePath(displayPath);
-    const tooltipPath = this.getDisplayPath(location);
+    const { dir, basename } = parsePath(outputDisplayName(file));
+    const tooltipPath = fileLocationDisplayPath(location);
     const effectiveBase =
       getEffectiveDiffBase(file.lineage)?.absolutePath ?? '';
     const diffBase = file.lineage?.diffBase?.absolutePath;
@@ -377,68 +377,16 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
     this.dispatchEvent(ProgressEvents.compileFixerRun());
   }
 
-  private getDisplayPath(
-    loc: OutputFileInfo['location'] | null | undefined,
-  ): string {
-    if (!loc) return '';
-    return loc.kind === 'workspace' || loc.kind === 'runStorage'
-      ? loc.relativePath
-      : loc.absolutePath;
-  }
-
-  /**
-   * Like {@link getDisplayPath} but collapses an external location to its
-   * basename so a long absolute path (e.g. a run-storage file resolved as
-   * external because it sits outside the workspace root) doesn't dominate the
-   * row. The full path remains available via the row's tooltip.
-   */
-  private getCompactDisplayPath(
-    loc: OutputFileInfo['location'] | null | undefined,
-  ): string {
-    if (!loc) return '';
-    if (loc.kind === 'workspace' || loc.kind === 'runStorage') {
-      return loc.relativePath;
-    }
-    return parsePath(loc.absolutePath).basename;
-  }
-
-  /**
-   * Derive a display path from the source document name when lineage.original
-   * is absent (e.g. multi-doc extractions whose names don't match a base file).
-   * Returns empty string for generic names that shouldn't override the fallback.
-   */
-  private getSourceDisplayPath(source: string | undefined): string {
-    if (
-      !source ||
-      source === 'output' ||
-      source === 'output.xml' ||
-      source === 'output.tex'
-    )
-      return '';
-    // Treat a trailing all-alpha suffix as a real extension (.tex, .txt, .bib…).
-    // Suffixes containing digits (.v2, .r3) are version qualifiers, not
-    // extensions, so .tex is appended in those cases.
-    const hasExt = /\.[a-zA-Z]+$/.test(source);
-    return hasExt ? source : `${source}.tex`;
-  }
-
   private renderDiffStats(
     file: OutputFileInfo,
   ): TemplateResult | typeof nothing {
-    const diff = file.diff;
-    if (!diff || diff.added === undefined) {
-      return nothing;
-    }
-
-    const removed =
-      diff.removed !== undefined
-        ? html`<span class="removed">-${diff.removed}</span>`
-        : nothing;
+    const counts = outputDiffCounts(file.diff);
+    if (!counts) return nothing;
 
     return html`
       <span class="file-stats">
-        <span class="added">+${diff.added}</span>
-        ${removed}
+        <span class="added">+${counts.added}</span>
+        <span class="removed">-${counts.removed}</span>
       </span>
     `;
   }
