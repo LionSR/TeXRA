@@ -32,7 +32,6 @@
       "@agent/followUp",
       "@agent/implementations/agentCreator/agentCreatorFlow",
       "@agent/index",
-      "@agent/index/AgentDirectorySync",
       "@agent/index/platformAgentDirectories",
       "@agent/review/reviewDiff",
       "@agent/review/reviewIssues",
