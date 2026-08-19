@@ -55,22 +55,11 @@ function streamMap(
 describe('CLI child controls', () => {
   it('updates live elapsed time only for running children', () => {
     expect(
-      childElapsed(
-        {
-          startedAt: 1_000,
-          status: STREAM_PHASE.RUNNING,
-          elapsed: undefined,
-        },
-        63_000,
-      ),
+      childElapsed({ startedAt: 1_000, status: STREAM_PHASE.RUNNING }, 63_000),
     ).toBe('1m 2s');
     expect(
-      childElapsed({
-        startedAt: 1_000,
-        status: STREAM_PHASE.COMPLETED,
-        elapsed: '9s',
-      }),
-    ).toBe('9s');
+      childElapsed({ startedAt: 1_000, status: STREAM_PHASE.COMPLETED }),
+    ).toBeUndefined();
   });
 
   it('resolves one child-list target and falls back to its immediate ancestor', () => {

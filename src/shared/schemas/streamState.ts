@@ -48,8 +48,6 @@ export const ActiveChildInfoSchema = z.object({
    * drop, so it must never be used to decide list membership.
    */
   finishedAt: z.int().positive().optional(),
-  /** Formatted elapsed time (e.g. "1m 23s"). */
-  elapsed: z.string().nullish(),
   /**
    * Workflow-script phase that owns this child, when its parent is a
    * workflow-script run. This is the only join key between a grandchild's
@@ -129,6 +127,13 @@ export const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
 export const BackendOwnedFieldsSchema = z.object({
   status: StreamLifecycleStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
   substate: StreamSubstateSchema.optional(),
+  /**
+   * Epoch ms when the stream entered its current active phase, stamped once by
+   * the session status machine (`StreamPhaseState.runStartedAt`). Absent while
+   * the phase is not active. Every host renders elapsed time from this one
+   * value; the tick rate and duration format stay host modality.
+   */
+  runStartedAt: z.int().positive().optional(),
   /** Runtime behavior declared by the launch source, not UI visibility. */
   userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   lastTimestamp: z.number().optional(),

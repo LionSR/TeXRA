@@ -77,11 +77,16 @@ const WITHIN_CHORD_WINDOW_MS = Math.max(
 );
 const CHORD_WINDOW_EXPIRED_MS = ESC_META_CHORD_INTERRUPT_DELAY_MS + 100;
 
+// The status machine stamps a run window on every RUNNING transition and the
+// slice mirrors it verbatim, so a seeded RUNNING must state one too — the
+// status bar's live elapsed segment (and the 1 Hz repaint that drives these
+// layout assertions) exists only while it is set.
 function setRunning(...streamIds: StreamTabId[]): void {
   for (const streamId of streamIds) {
     setStreamStatusInCliState({
       streamId,
       status: STREAM_PHASE.RUNNING,
+      runStartedAt: Date.now(),
     });
   }
 }

@@ -39,6 +39,7 @@ export const ELEMENT_IDS = {
   STATUS_INDICATOR: 'statusIndicator',
   GOAL_CHIP: 'goalChip',
   PROGRESS_BADGE: 'progressBadge',
+  RUN_ELAPSED: 'runElapsed',
   RUN_SUMMARY: 'runSummary',
   CONTEXT_STATE: 'contextState',
   TODO_LIST_CONTAINER: 'todoListContainer',

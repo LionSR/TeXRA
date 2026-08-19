@@ -38,7 +38,7 @@ function subagentRow(overrides: {
   childStreamId?: string;
   agentName?: string;
   status?: ActiveChildInfo['status'];
-  elapsed?: string;
+  startedAt?: number;
   finishedAt?: number;
   processTool?: string;
 }): ActiveChildInfo {
@@ -51,7 +51,7 @@ function subagentRow(overrides: {
       ? { kind: 'process', tool: overrides.processTool }
       : { kind: 'agent', agent: agentName },
     status: overrides.status ?? 'running',
-    elapsed: overrides.elapsed,
+    startedAt: overrides.startedAt,
     finishedAt: overrides.finishedAt,
   };
 }
@@ -103,13 +103,13 @@ describe('background-tasks-panel', () => {
 
   it('lists a retained finished subagent as a named row, not a count', async () => {
     const element = await mountPanel([
-      subagentRow({ executionId: 'exec-1', elapsed: '12s' }),
+      subagentRow({ executionId: 'exec-1', startedAt: 1_000 }),
       subagentRow({
         executionId: 'exec-2',
         agentName: 'polisher',
         status: 'completed',
-        elapsed: '1m 4s',
-        finishedAt: 1_000,
+        startedAt: 1_000,
+        finishedAt: 65_000,
       }),
     ]);
 
