@@ -23,10 +23,9 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { AGENT_MODE_PRESETS, type AgentModePreset } from '@shared/schemas';
+import { AGENT_MODE_PRESETS } from '@shared/schemas';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { desktopCommandPaletteShortcut } from './desktopShortcutRegistry';
@@ -51,43 +50,39 @@ export interface DesktopStartupTeamPanelOptions {
  * The work-type question. Each choice maps to a built-in team id from
  * {@link AGENT_MODE_PRESETS} — this is a friendlier phrasing of the same
  * choice, not a second taxonomy. `presetId` values must exist there; the
- * lookup below drops any that don't rather than applying a bad id.
+ * resolution below drops any that don't rather than applying a bad id. The
+ * icon comes from the resolved preset, the same source the settings team
+ * grid renders, so the two surfaces cannot drift.
  */
 const WORK_TYPES: ReadonlyArray<{
   readonly presetId: string;
   readonly question: string;
   readonly detail: string;
-  readonly icon: TeXRAIconName;
 }> = [
   {
     presetId: 'physicist',
     question: 'Writing a physics paper',
     detail: 'Derivations, numerical checks, literature search, slides, review.',
-    icon: 'cube',
   },
   {
     presetId: 'mathematician',
     question: 'Doing mathematics',
     detail: 'Open problems, proofs, Lean formalization, LaTeX correction.',
-    icon: 'hashtag',
   },
   {
     presetId: 'cs-ml',
     question: 'Writing a CS or ML paper',
     detail: 'Algorithms, experiments and ablations, tests, review.',
-    icon: 'cube',
   },
   {
     presetId: 'lean-project',
     question: 'Formalizing in Lean 4',
     detail: 'Theorem search, tactic simplification, blueprints.',
-    icon: 'diagram-project',
   },
   {
     presetId: 'software-engineer',
     question: 'Building software',
     detail: 'Implementation, review, debugging, and tests across a team.',
-    icon: 'screwdriver-wrench',
   },
 ];
 
@@ -101,13 +96,12 @@ function nextPanelTitleId(): string {
   return `startup-team-title-${panelTitleCounter}`;
 }
 
-function presetById(presetId: string): AgentModePreset | undefined {
-  return AGENT_MODE_PRESETS.find((preset) => preset.id === presetId);
-}
-
-const VISIBLE_WORK_TYPES = WORK_TYPES.filter((entry) =>
-  presetById(entry.presetId),
-);
+const VISIBLE_WORK_TYPES = WORK_TYPES.flatMap((entry) => {
+  const preset = AGENT_MODE_PRESETS.find(
+    (preset) => preset.id === entry.presetId,
+  );
+  return preset ? [{ ...entry, preset }] : [];
+});
 
 export function createStartupTeamPanel({
   dismiss: postDismissed,
@@ -127,7 +121,7 @@ export function createStartupTeamPanel({
   let visible = false;
   let hideAtStartup = false;
   let step: TourStep = 'work';
-  let chosenPresetId: string | undefined;
+  let chosenWorkType: (typeof VISIBLE_WORK_TYPES)[number] | undefined;
 
   function closePanel(): void {
     visible = false;
@@ -140,11 +134,13 @@ export function createStartupTeamPanel({
     onVisibilityChanged();
   }
 
-  function chooseWorkType(presetId: string): void {
-    chosenPresetId = presetId;
+  function chooseWorkType(entry: (typeof VISIBLE_WORK_TYPES)[number]): void {
+    chosenWorkType = entry;
     // Apply immediately through the same command the Settings team picker
     // uses, so the roster is live even if the user dismisses the panel here.
-    postMessage(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET, { presetId });
+    postMessage(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET, {
+      presetId: entry.presetId,
+    });
     goTo('roster');
   }
 
@@ -169,13 +165,13 @@ export function createStartupTeamPanel({
               class="desktop-onboarding-choice"
               appearance="outlined"
               size="l"
-              @click=${() => chooseWorkType(entry.presetId)}
+              @click=${() => chooseWorkType(entry)}
             >
               <span
                 slot="start"
                 class="desktop-onboarding-choice-icon icon-surface is-size-l"
               >
-                ${waIcon(entry.icon)}
+                ${waIcon(entry.preset.icon)}
               </span>
               <span class="desktop-onboarding-choice-text">
                 <strong>${entry.question}</strong>
@@ -199,13 +195,13 @@ export function createStartupTeamPanel({
   }
 
   function rosterStepTemplate(): TemplateResult {
-    const preset = chosenPresetId ? presetById(chosenPresetId) : undefined;
-    if (!preset) {
-      // Defensive: chooseWorkType only advances for ids that resolve, so this
-      // is unreachable in practice. Bail to the work step rather than render an
-      // empty roster.
+    // Defensive: chooseWorkType only advances for entries whose preset
+    // resolved, so this is unreachable in practice. Bail to the work step
+    // rather than render an empty roster.
+    if (!chosenWorkType) {
       return workStepTemplate();
     }
+    const { preset } = chosenWorkType;
     const agentCount =
       preset.agents.workflow.length + preset.agents.toolUse.length;
     return html`
