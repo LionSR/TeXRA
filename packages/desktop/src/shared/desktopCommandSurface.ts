@@ -94,6 +94,19 @@ export const DESKTOP_FILE_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
 ] as const satisfies readonly DesktopLocalCommandId[];
 
+/**
+ * The desktop-local commands the renderer is allowed to post over IPC. Narrower
+ * than `DESKTOP_LOCAL_COMMANDS` on purpose: the main-process actions for
+ * `SAVE_FILE` and the three `TOGGLE_*` commands post *back* to the renderer, so
+ * accepting them here would let a renderer message bounce.
+ */
+export const DESKTOP_SHELL_IPC_COMMANDS = [
+  DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
+  DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+  DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
+  DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
+] as const satisfies readonly DesktopLocalCommandId[];
+
 export const DESKTOP_HELP_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,

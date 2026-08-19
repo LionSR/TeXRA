@@ -19,7 +19,8 @@ import {
 import {
   buildDesktopMainViewResetMessage,
   DESKTOP_DOCS_URL,
-  DESKTOP_LOCAL_COMMANDS,
+  DESKTOP_SHELL_IPC_COMMANDS,
+  dispatchDesktopCommand,
   postDesktopSettingsView,
   vsCodeOnlyGettingStartedMessage,
   type DesktopCommandActions,
@@ -234,28 +235,6 @@ function dispatchMainViewInboundOnShell(
   }
 }
 
-function dispatchDesktopLocalOnShell(
-  message: DesktopCommandMessage,
-  actions: DesktopShellActions,
-): boolean {
-  switch (message.command) {
-    case DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER:
-      actions.openLogFolder();
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
-      actions.openWorkspaceFolder();
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH:
-      actions.showFirstRunWalkthrough();
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS:
-      actions.openDesktopDocs();
-      return true;
-    default:
-      return false;
-  }
-}
-
 export function createDesktopShellIpc(
   actions: DesktopShellActions,
 ): DesktopMessageHandler {
@@ -268,11 +247,18 @@ export function createDesktopShellIpc(
       if (parsed.success) {
         return dispatchMainViewInboundOnShell(parsed.data, actions);
       }
-      // Desktop-local commands (open log folder, walkthrough, docs) are
-      // not part of the main-view inbound union — they originate from the
-      // native menu, not the renderer schema — so they are handled
-      // separately as a fallback after the union parse fails.
-      return dispatchDesktopLocalOnShell(message, actions);
+      // Desktop-local commands (open log folder, walkthrough, docs) are not
+      // part of the main-view inbound union — they originate from the native
+      // menu, not the renderer schema — so after the union parse fails they go
+      // to the one command registry the menu also dispatches through.
+      const id = DESKTOP_SHELL_IPC_COMMANDS.find(
+        (candidate) => candidate === message.command,
+      );
+      if (id == null) return false;
+      // Every registry handler runs its action synchronously and returns
+      // `true`; `boolean | Promise<boolean>` is the shared dispatcher
+      // signature, so narrow it here rather than widening this contract.
+      return dispatchDesktopCommand(id, actions) === true;
     },
   };
 }
