@@ -137,7 +137,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private readonly notifications: DefaultDesktopAgentSettingsControllerOptions['notifications'];
   private readonly resourcesPath: string;
   private readonly agentActions;
-  /** Path planners for custom-agent copy/delete/template writes. */
   private readonly remotePromptController;
 
   constructor(options: DefaultDesktopAgentSettingsControllerOptions) {
