@@ -17,6 +17,22 @@ import type {
 export type PresentedStreamId = StreamTabId | '';
 
 /**
+ * A projection slice whose new value the host re-reads from the shared state
+ * rather than receiving on the wire. Each key names the field the host reads
+ * (`outputs.files`, `outputs.compileFailures`, `workPlan.queuedFollowUps`,
+ * `SessionStreamMetadata.parentStreamId`) or the fact it reacts to
+ * (`goalPaused`); nothing here is new vocabulary. Slices whose notification
+ * carries real delta semantics — `onMissingOutputsChanged`'s `reset`,
+ * `onStageChanged`'s phase-vs-round split — keep their own method.
+ */
+export type SessionRenderSlice =
+  | 'files'
+  | 'compileFailures'
+  | 'queuedFollowUps'
+  | 'parentStreamId'
+  | 'goalPaused';
+
+/**
  * Host-renderer notifications from {@link SessionFactApplier}.
  *
  * The shared applier owns fact→state and calls these after mutations. Each host
@@ -27,6 +43,14 @@ export interface SessionRendererPort {
   isAvailable(): boolean;
 
   dispose(): void;
+
+  /**
+   * A payload-free change on one {@link SessionRenderSlice}: the applier has
+   * already landed it on `SessionState`, so the host re-reads the slice it
+   * projects. One method instead of a notification per field — the payload was
+   * never on the wire, only the field name was.
+   */
+  invalidate(streamId: StreamTabId, slice: SessionRenderSlice): void;
 
   onStreamMetadataChanged(
     streamId: StreamTabId,
@@ -48,12 +72,6 @@ export interface SessionRendererPort {
 
   onStreamDescriptionChanged(streamId: StreamTabId, description: string): void;
 
-  /** Explicit parent-edge fact (`setParentStream`). */
-  onParentStreamChanged(
-    childStreamId: StreamTabId,
-    parentStreamId: StreamTabId | null,
-  ): void;
-
   onConversationProgressChanged(
     streamId: StreamTabId,
     progress: ConversationProgress,
@@ -67,14 +85,13 @@ export interface SessionRendererPort {
 
   onBadgesChanged(streamId: StreamTabId, badges: StreamBadgeSnapshot): void;
 
-  onFilesChanged(streamId: StreamTabId): void;
-
+  /** Delta-semantic: `reset` clears the stream's rounds instead of replacing
+   *  them, so this one keeps its own envelope rather than folding into
+   *  {@link SessionRendererPort.invalidate}. */
   onMissingOutputsChanged(
     streamId: StreamTabId,
     options?: { reset?: boolean },
   ): void;
-
-  onCompileFailuresChanged(streamId: StreamTabId): void;
 
   onRunUsageChanged(
     streamId: StreamTabId,
@@ -86,8 +103,6 @@ export interface SessionRendererPort {
 
   onPlanChanged(streamId: StreamTabId, plan: Plan | null): void;
 
-  onQueuedFollowUpsChanged(streamId: StreamTabId): void;
-
   onInquiryThreadUpdated(thread: InquiryThreadUpdatedEvent): void;
 
   onGoalActiveChanged(
@@ -95,9 +110,6 @@ export interface SessionRendererPort {
     active: boolean,
     details?: { status?: GoalStatus; objective?: string },
   ): void;
-
-  /** Auto-paused goal — TUI surfaces a transcript notice; Lit no-ops. */
-  onGoalPaused(streamId: StreamTabId): void;
 
   /** Drop buffered conversation-progress pushes for a stream (new RUNNING). */
   clearPendingConversationProgress(streamId: StreamTabId): void;

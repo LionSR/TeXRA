@@ -3,29 +3,37 @@ import path from 'node:path';
 
 // Local imports
 import { getAgent } from '@agent/index';
-import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
+import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
+import type { AgentConfig, SessionHandle } from '@agent/runtime';
+import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
 import type {
-  AgentConfig,
-  SessionEvent,
-  SessionEventHub,
-  SessionFact,
-} from '@agent/runtime';
+  PresentedStreamId,
+  SessionRendererPort,
+  SessionRenderSlice,
+} from '@controllers/session/SessionRendererPort';
+import {
+  SessionState,
+  type StreamBadgeSnapshot,
+} from '@controllers/session/SessionState';
 import { redactSecrets } from '@logger/redaction';
 import type {
   ActiveChildInfo,
   ConversationProgress,
-  RoundStage,
+  GoalStatus,
+  InquiryThreadUpdatedEvent,
+  Plan,
   StreamPhase,
+  StreamStage,
   StreamTabId,
+  TodoItem,
+  TokenUsageStats,
 } from '@shared/schemas';
 import { AgentCategory, STREAM_PHASE } from '@shared/schemas';
-import { roundStageFromStageStart } from '@shared/streams/stage';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   formatRoundStageLabel,
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
-import { assertNever } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -37,44 +45,17 @@ import {
 import { getStderrColumns, writeRawStderr } from './logSinks';
 import type { CliContext } from './cliContext';
 
-// A deliberate sub-vocabulary of the canonical CLI-projection run-fact list
-// (`RUN_FACT_EVENT_TYPES`): only the facts that feed the live status line are
-// admitted, and the `satisfies` check pins the subset against that single
-// source so it cannot drift to a fact the canonical list does not project.
-const RUN_PROGRESS_RUN_FACT_TYPES = [
-  'conversation.progress',
-  'run.config',
-  'stage.start',
-  'child.activity',
-] as const satisfies ReadonlyArray<(typeof RUN_FACT_EVENT_TYPES)[number]>;
-
-/** The run-fact vocabulary this renderer's subscription filter admits. */
-type RunProgressRunFactEvent = Extract<
-  AgentEvent,
-  { type: (typeof RUN_PROGRESS_RUN_FACT_TYPES)[number] }
->;
-
 // Carriage return + erase-line (CSI 2K): rewind to column 0 and clear the row
 // so the single live status line can be repainted in place.
 const CLEAR_LINE = '\r\x1b[2K';
 const ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH = 48;
 
-interface RenderState {
-  round?: number;
-  plannedRounds?: number;
-  toolCallCount?: number;
-  agent?: string;
-  inputLabel?: string;
-  phase?: string;
-}
-
 export interface RunProgressRenderer {
   /**
-   * Takes session facts and the run facts named by
-   * `RUN_PROGRESS_RUN_FACT_TYPES` only; any other run fact is out of contract
-   * and throws rather than being dropped.
+   * Fold this session's facts into the shared `SessionState` and repaint from
+   * it. Returns the detach handle.
    */
-  handleSessionEvent(event: SessionEvent): void;
+  attach(session: SessionHandle): () => void;
   clear(): void;
   preserve(): void;
 }
@@ -121,29 +102,28 @@ export function createRunProgressRenderer(
 }
 
 export function attachRunProgressRenderer(
-  events: SessionEventHub,
+  session: SessionHandle,
   renderer: RunProgressRenderer | undefined,
 ): () => void {
-  if (!renderer) return () => undefined;
+  return renderer ? renderer.attach(session) : () => undefined;
+}
 
-  const handleEvent = (event: SessionEvent): void =>
-    renderer.handleSessionEvent(event);
-  const detachSessionFacts = events.subscribe(handleEvent, {
-    scope: 'session',
-  });
-  const detachRunFacts = events.subscribe(handleEvent, {
-    scope: 'run',
-    types: RUN_PROGRESS_RUN_FACT_TYPES,
-  });
-
-  return () => {
-    detachRunFacts();
-    detachSessionFacts();
-  };
+/**
+ * Everything the live line needs that no shared record carries: the run's
+ * `AgentConfig` never lands on `SessionState` (the summary mirror keeps only
+ * model / working directory / command), so the agent name, the input-file
+ * label and the workflow's declared round count are read from the fact and
+ * held here. Round index, tool calls, child roster and child descriptions all
+ * come from `SessionState` at paint time instead.
+ */
+interface RootRunConfigState {
+  plannedRounds?: number;
+  agent?: string;
+  inputLabel?: string;
 }
 
 class DefaultRunProgressRenderer implements RunProgressRenderer {
-  private readonly state: RenderState = {};
+  private readonly config: RootRunConfigState = {};
   private readonly startedAt: number;
   private readonly write: (text: string) => void;
   private readonly nowMs: () => number;
@@ -156,11 +136,17 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private lastRenderAt = 0;
   private lastLine = '';
   private liveLine = false;
+  private state: SessionState | undefined;
   private rootStreamId: StreamTabId | undefined;
   private rootStreamStatus: StreamPhase | undefined;
-  private activeChildren: readonly ActiveChildInfo[] = [];
-  private readonly childDescriptions = new Map<StreamTabId, string>();
-  private readonly closedChildStreamIds = new Set<StreamTabId>();
+  /**
+   * Last-write-wins subject line for the root stream: a status transition
+   * writes its label, a description fact replaces it with the run's own
+   * one-liner, and the next transition takes it back. Ordering is the whole
+   * semantic, so it stays a written field rather than a read of the two
+   * shared sources.
+   */
+  private rootPhaseText: string | undefined;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
   /** Derived from the one status field, never mirrored into a second flag. */
@@ -180,14 +166,35 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.startedAt = this.nowMs();
   }
 
-  handleSessionEvent(event: SessionEvent): void {
-    if (event.scope === 'session') {
-      this.handleSessionFact(event.event);
-      return;
-    }
-    // Narrowed by `attachRunProgressRenderer`'s filter, which admits only
-    // `RUN_PROGRESS_RUN_FACT_TYPES`.
-    this.handleRunFact(event.streamId, event.event as RunProgressRunFactEvent);
+  attach(session: SessionHandle): () => void {
+    const state = new SessionState(session);
+    this.state = state;
+    const applier = new SessionFactApplier(state, new HeadlessPort(this), {
+      // Headless owns no durable deletion: reporting nothing keeps the
+      // removal barrier, which is exactly what the live line wants — a
+      // removed child drops out of the roster it reads.
+      deleteStream: () => undefined,
+    });
+    const detachSessionFacts = session.events.subscribeSessionFacts((fact) =>
+      applier.handleSessionFact(fact),
+    );
+    const detachRunFacts = session.events.subscribeRunFacts(
+      (runFact) => {
+        // The run's `AgentConfig` is the one payload the shared state does not
+        // retain; take it before handing the fact to the applier.
+        if (runFact.event.type === 'run.config') {
+          this.applyRunConfig(runFact.event.streamId, runFact.event.config);
+        }
+        applier.handleRunFact(runFact.streamId, runFact.event);
+      },
+      { types: RUN_FACT_EVENT_TYPES },
+    );
+    return () => {
+      detachRunFacts();
+      detachSessionFacts();
+      applier.dispose();
+      this.state = undefined;
+    };
   }
 
   clear(): void {
@@ -206,188 +213,51 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     }
   }
 
-  private handleSessionFact(event: SessionFact): void {
-    switch (event.type) {
-      case 'status':
-        this.applyStatus(event.streamId, event.phase);
-        return;
-      case 'updateStreamDescription':
-        if (!this.rootStreamTerminal) {
-          this.applyStreamDescription(
-            event.payload.streamId,
-            event.payload.description,
-          );
-        }
-        return;
-      case 'goalStateChanged':
-      case 'inquiryThreadUpdated':
-      case 'clearMissingOutputs':
-      case 'updateQueuedFollowUps':
-      case 'setActiveStream':
-      case 'setParentStream':
-        return;
-      case 'followUpSent':
-        if (this.rootStreamTerminal) return;
-        if (!this.isRootStream(event.payload.streamId)) {
-          // The session fact is the first authoritative boundary between child
-          // turns. Clear before a status-driven roster repaint can reuse the
-          // previous turn's task label.
-          this.deleteChildDescription(event.payload.streamId);
-        }
-        return;
-      case 'removeStream':
-        if (this.rootStreamTerminal) return;
-        this.closedChildStreamIds.add(event.payload.streamId);
-        this.deleteChildDescription(event.payload.streamId);
-        return;
-    }
-    assertNever(event, 'Unhandled run-progress renderer session fact');
+  /**
+   * Repaint after a fact the applier has already landed on `SessionState`.
+   * The first stream to report progress claims the root slot, exactly as the
+   * first `run.config` does — a headless run renders one stream's line.
+   */
+  refreshFor(streamId: StreamTabId, force = false): void {
+    if (!this.claimRootStream(streamId) || this.rootStreamTerminal) return;
+    this.updateHeartbeat();
+    this.render(force);
   }
 
-  private handleRunFact(
-    streamId: StreamTabId,
-    event: RunProgressRunFactEvent,
-  ): void {
-    switch (event.type) {
-      case 'run.config':
-        if (this.rootStreamId && !this.isRootStream(event.streamId)) {
-          // Only a closed deterministic child ID begins a new incarnation.
-          // Active children also emit run.config when switching models.
-          if (this.closedChildStreamIds.delete(event.streamId)) {
-            this.childDescriptions.delete(event.streamId);
-          }
-          return;
-        }
-        if (this.applyRunConfig(event.streamId, event.config)) {
-          this.updateHeartbeat();
-          this.render(true);
-        }
-        return;
-      case 'conversation.progress':
-        if (this.rootStreamTerminal) return;
-        if (this.applyConversationProgress(streamId, event.progress)) {
-          this.updateHeartbeat();
-          this.render();
-        }
-        return;
-      case 'stage.start': {
-        if (this.rootStreamTerminal) return;
-        const roundStage = roundStageFromStageStart(event);
-        if (roundStage && this.applyRoundStage(streamId, roundStage)) {
-          this.updateHeartbeat();
-          this.render();
-        }
-        return;
-      }
-      case 'child.activity':
-        if (this.rootStreamTerminal) return;
-        this.applyActiveSubagents(event.parentStreamId, event.items);
-        this.updateHeartbeat();
-        this.render(true);
-        return;
-    }
-    assertNever(event, 'Unhandled run-progress renderer run fact');
-  }
-
-  private applyRunConfig(streamId: StreamTabId, config: AgentConfig): boolean {
-    if (!this.claimRootStream(streamId)) return false;
-
-    this.state.agent = config.agent;
-    this.state.inputLabel = formatInputLabel(config.inputFiles);
-    this.state.plannedRounds =
-      config.agentCategory === AgentCategory.Workflow
-        ? getAgent(config.agent, AgentCategory.Workflow)?.rounds
-        : undefined;
-    this.state.phase ??= 'running';
-    return true;
-  }
-
-  private applyConversationProgress(
-    streamId: StreamTabId,
-    progress: ConversationProgress,
-  ): boolean {
-    if (!this.claimRootStream(streamId)) return false;
-
-    this.state.toolCallCount = progress.toolCallCount || undefined;
-    this.state.phase ??= 'running';
-    return true;
-  }
-
-  private applyRoundStage(
-    streamId: StreamTabId,
-    roundStage: RoundStage,
-  ): boolean {
-    if (!this.claimRootStream(streamId)) return false;
-
-    this.state.round = roundStage.index + 1;
-    if (roundStage.total !== undefined) {
-      this.state.plannedRounds = roundStage.total;
-    }
-    this.state.phase ??= 'running';
-    return true;
-  }
-
-  private applyActiveSubagents(
-    parentStreamId: StreamTabId,
-    children: readonly ActiveChildInfo[],
-  ): void {
-    if (!this.claimRootStream(parentStreamId)) return;
-
-    this.activeChildren = children;
-  }
-
-  private applyStatus(streamId: StreamTabId, status: StreamPhase): void {
-    if (!this.isRootStream(streamId)) {
-      if (this.rootStreamTerminal) return;
-      if (isTerminalOutcomePhase(status)) {
-        this.closedChildStreamIds.add(streamId);
-        this.deleteChildDescription(streamId);
-      }
-      return;
-    }
+  applyStatus(streamId: StreamTabId, status: StreamPhase | undefined): void {
+    if (status === undefined || !this.isRootStream(streamId)) return;
     if (this.rootStreamStatus === status) return;
 
     this.rootStreamStatus = status;
-    this.state.phase = formatStreamStatusLabel(status, { style: 'cli' });
-    if (this.rootStreamTerminal) {
-      this.activeChildren = [];
-      this.childDescriptions.clear();
-      this.closedChildStreamIds.clear();
-    }
+    this.rootPhaseText = formatStreamStatusLabel(status, { style: 'cli' });
     this.updateHeartbeat();
     this.render(true);
   }
 
-  private deleteChildDescription(streamId: StreamTabId): void {
-    if (!this.childDescriptions.delete(streamId)) return;
+  applyStreamDescription(streamId: StreamTabId, description: string): void {
     if (this.rootStreamTerminal) return;
-    if (
-      !this.activeChildren.some((child) => child.childStreamId === streamId)
+    if (this.isRootStream(streamId)) {
+      this.rootPhaseText = description;
+    } else if (
+      !this.liveChildren().some((child) => child.childStreamId === streamId)
     ) {
+      // A stream the live line does not name has nothing to repaint for.
       return;
     }
     this.updateHeartbeat();
     this.render(true);
   }
 
-  private applyStreamDescription(
-    streamId: StreamTabId,
-    description: string,
-  ): void {
-    if (!this.isRootStream(streamId)) {
-      if (this.closedChildStreamIds.has(streamId)) return;
-      this.childDescriptions.set(streamId, description);
-      if (
-        !this.activeChildren.some((child) => child.childStreamId === streamId)
-      ) {
-        return;
-      }
-      this.updateHeartbeat();
-      this.render(true);
-      return;
-    }
+  private applyRunConfig(streamId: StreamTabId, config: AgentConfig): void {
+    if (!this.claimRootStream(streamId)) return;
 
-    this.state.phase = description;
+    this.config.agent = config.agent;
+    this.config.inputLabel = formatInputLabel(config.inputFiles);
+    this.config.plannedRounds =
+      config.agentCategory === AgentCategory.Workflow
+        ? getAgent(config.agent, AgentCategory.Workflow)?.rounds
+        : undefined;
+    this.rootPhaseText ??= 'running';
     this.updateHeartbeat();
     this.render(true);
   }
@@ -397,8 +267,19 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     return this.rootStreamId === streamId;
   }
 
-  private isRootStream(streamId: StreamTabId): boolean {
+  isRootStream(streamId: StreamTabId): boolean {
     return this.rootStreamId === streamId;
+  }
+
+  /** Live (not yet retired) children of the root run, from the shared roster. */
+  private liveChildren(): readonly ActiveChildInfo[] {
+    if (this.rootStreamTerminal || !this.rootStreamId) return [];
+    const roster = this.state?.getStreamState(this.rootStreamId)?.subagents;
+    return roster?.filter((child) => child.finishedAt === undefined) ?? [];
+  }
+
+  private childDescription(streamId: StreamTabId): string | undefined {
+    return this.state?.getStreamMetadata(streamId).description;
   }
 
   private render(force = false): void {
@@ -438,49 +319,50 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private formatLine(now: number): string {
+    const rootStreamId = this.rootStreamId;
+    const execution = rootStreamId
+      ? this.state?.getStreamState(rootStreamId)
+      : undefined;
+    const roundStage =
+      execution?.stage?.kind === 'round' ? execution.stage : undefined;
+    const plannedRounds = roundStage?.total ?? this.config.plannedRounds;
+
     const parts: string[] = [];
-    if (this.state.round != null) {
-      const plannedRounds = this.state.plannedRounds;
+    if (roundStage) {
       parts.push(
         `[${formatRoundStageLabel({
-          index: this.state.round - 1,
+          index: roundStage.index,
           ...(isMultiRound(plannedRounds) ? { total: plannedRounds } : {}),
         })}]`,
       );
     }
 
-    const subject = [this.state.agent, this.state.inputLabel]
+    const subject = [this.config.agent, this.config.inputLabel]
       .filter(Boolean)
       .join(' ');
-    const phase = this.state.phase;
+    const phase = this.rootPhaseText;
     parts.push(subject || phase || 'running');
     if (subject && phase && phase !== 'running') parts.push(phase);
-    if (this.state.round == null && isMultiRound(this.state.plannedRounds)) {
-      parts.push(`${this.state.plannedRounds} rounds`);
+    if (!roundStage && isMultiRound(plannedRounds)) {
+      parts.push(`${plannedRounds} rounds`);
     }
 
     const elapsed = formatElapsed(now - this.startedAt);
-    const nameOnlySubagents = formatActiveChildren(
-      this.activeChildren,
-      this.childDescriptions,
-      0,
-    );
+    const children = this.liveChildren();
+    const describe = (child: ActiveChildInfo): string | undefined =>
+      this.childDescription(child.childStreamId);
+    const nameOnlySubagents = formatActiveChildren(children, describe, 0);
     if (nameOnlySubagents) {
       const descriptionColumns = this.descriptionColumnBudget(
         parts,
         nameOnlySubagents,
         elapsed,
       );
-      parts.push(
-        formatActiveChildren(
-          this.activeChildren,
-          this.childDescriptions,
-          descriptionColumns,
-        )!,
-      );
+      parts.push(formatActiveChildren(children, describe, descriptionColumns)!);
     }
-    if (this.state.toolCallCount != null && !nameOnlySubagents) {
-      parts.push(`tools: ${this.state.toolCallCount}`);
+    const toolCallCount = execution?.conversationProgress.toolCallCount;
+    if (toolCallCount && !nameOnlySubagents) {
+      parts.push(`tools: ${toolCallCount}`);
     }
     parts.push(elapsed);
     return parts.join(' · ');
@@ -512,6 +394,89 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 }
 
+/**
+ * The headless host's `SessionRendererPort`. Every fact is already folded into
+ * `SessionState` by the time these fire, so each one only decides whether the
+ * single live stderr line is worth repainting — the two exceptions are the
+ * root stream's phase and description, which are last-write-wins ordering the
+ * shared record does not encode.
+ */
+class HeadlessPort implements SessionRendererPort {
+  constructor(private readonly renderer: DefaultRunProgressRenderer) {}
+
+  isAvailable(): boolean {
+    return true;
+  }
+
+  dispose(): void {}
+
+  invalidate(_streamId: StreamTabId, _slice: SessionRenderSlice): void {}
+
+  onStreamMetadataChanged(
+    streamId: StreamTabId,
+    options?: Parameters<SessionRendererPort['onStreamMetadataChanged']>[1],
+  ): void {
+    // A new stream and a new RUNNING transition report their phase here
+    // instead of through `onStreamStatusChanged`.
+    this.renderer.applyStatus(
+      streamId,
+      options?.streamStates?.get(streamId)?.phase,
+    );
+  }
+
+  onStreamStatusChanged(streamId: StreamTabId, status: StreamPhase): void {
+    this.renderer.applyStatus(streamId, status);
+  }
+
+  onActiveStreamChanged(_streamId: PresentedStreamId): void {}
+
+  onStreamDescriptionChanged(streamId: StreamTabId, description: string): void {
+    this.renderer.applyStreamDescription(streamId, description);
+  }
+
+  onConversationProgressChanged(
+    streamId: StreamTabId,
+    _progress: ConversationProgress,
+  ): void {
+    this.renderer.refreshFor(streamId);
+  }
+
+  onStageChanged(streamId: StreamTabId, _stage: StreamStage): void {
+    this.renderer.refreshFor(streamId);
+  }
+
+  onBadgesChanged(streamId: StreamTabId, _badges: StreamBadgeSnapshot): void {
+    this.renderer.refreshFor(streamId, true);
+  }
+
+  onMissingOutputsChanged(_streamId: StreamTabId): void {}
+
+  onRunUsageChanged(
+    _streamId: StreamTabId,
+    _storageKey: string,
+    _usage: TokenUsageStats,
+  ): void {}
+
+  onTodosChanged(_streamId: StreamTabId, _todos: TodoItem[]): void {}
+
+  onPlanChanged(_streamId: StreamTabId, _plan: Plan | null): void {}
+
+  onInquiryThreadUpdated(_thread: InquiryThreadUpdatedEvent): void {}
+
+  onGoalActiveChanged(
+    _streamId: StreamTabId,
+    _active: boolean,
+    _details?: { status?: GoalStatus; objective?: string },
+  ): void {}
+
+  clearPendingConversationProgress(_streamId: StreamTabId): void {}
+
+  syncStreamContent(
+    _stream: PresentedStreamId,
+    _options?: { includeActiveState?: boolean },
+  ): void {}
+}
+
 function formatInputLabel(files: readonly string[]): string | undefined {
   const first = files.at(0);
   if (!first) return undefined;
@@ -522,7 +487,7 @@ function formatInputLabel(files: readonly string[]): string | undefined {
 
 function formatActiveChildren(
   children: readonly ActiveChildInfo[],
-  descriptions: ReadonlyMap<StreamTabId, string>,
+  describe: (child: ActiveChildInfo) => string | undefined,
   descriptionColumns: number,
 ): string | undefined {
   const namedChildren = children.filter((child) => child.agentName.length > 0);
@@ -534,7 +499,7 @@ function formatActiveChildren(
   const label = pluralize(namedChildren.length, 'subagent');
   const suffix =
     namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
-  const description = descriptions.get(first.childStreamId);
+  const description = describe(first);
   const safeDescription =
     description && descriptionColumns > 0
       ? truncateSummaryToWidth(
