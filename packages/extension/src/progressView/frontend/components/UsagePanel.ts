@@ -16,7 +16,7 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
-import { usageRouteBadge } from '@shared/copy/modelAccess';
+import { usageCostLabel, usageRouteBadge } from '@shared/copy/modelAccess';
 
 // Local imports - shared icons and utils
 import type { TeXRAIconName } from '@shared/wa/iconNames';
@@ -53,8 +53,9 @@ function fillColor(percent: number): string {
  * Single owner of the free-tier decision for a usage route: `null` when the
  * route has no badge (plain cost), otherwise `free` (subscription route with
  * zero cost) plus the two label forms the summary and the visible footer use.
- * Both {@link usageCostLabel} and {@link UsagePanel.renderCostRoute} consume
- * this, so changing a subscription route touches one place.
+ * Both the shared {@link usageCostLabel} and
+ * {@link UsagePanel.renderCostRoute} consume this, so changing a subscription
+ * route touches one place.
  */
 function usageRouteDecision(
   cost: number,
@@ -67,13 +68,6 @@ function usageRouteDecision(
     label: badge.label,
     compactLabel: badge.compactLabel,
   };
-}
-
-function usageCostLabel(cost: number, route: UsageRoute | undefined): string {
-  const decision = usageRouteDecision(cost, route);
-  if (!decision) return formatCostUsd(cost);
-  if (decision.free) return `Free via ${decision.label}`;
-  return `${formatCostUsd(cost)} via ${decision.label}`;
 }
 
 @customElement('usage-panel')
@@ -322,7 +316,10 @@ export class UsagePanel extends LitElement {
   private buildUsageLabel(): string {
     if (!this.usage) return '';
     const { inputTokens, outputTokens, cost } = this.usage;
-    const costLabel = usageCostLabel(cost, this.usage.usageRoute);
+    // The shared rule omits a zero-cost unknown route; the aria summary
+    // still states it as "$0.00".
+    const costLabel =
+      usageCostLabel(cost, this.usage.usageRoute) ?? formatCostUsd(cost);
     return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, ${costLabel}`;
   }
 }
