@@ -5,6 +5,7 @@ import {
   listGitHubSubscriptionEntries,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
+import { appSignals } from '@eventBus/AppSignals';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
@@ -26,6 +27,7 @@ import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/sett
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
+import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
   GITHUB_TOKEN_CREATE_URL,
   GITHUB_TOKEN_STORAGE_KEY,
@@ -95,6 +97,14 @@ export interface DesktopSettingsIpc extends DesktopMessageHandler {
     deferAgentCatalogRefresh?: boolean;
   }): Promise<void>;
   signInChatGpt(): Promise<void>;
+  /**
+   * Releases the goal and app-signal subscriptions. They are scoped to the
+   * window that built this IPC, not to the process: `createWindow` runs again
+   * on macOS dock reactivation, so an undisposed listener would post to a
+   * destroyed window's renderer — and, for `githubTokenInvalid`, raise a
+   * dialog against a `BrowserWindow` that no longer exists.
+   */
+  dispose(): void;
 }
 
 export function createDesktopSettingsIpc(
@@ -283,9 +293,11 @@ export function createDesktopSettingsIpc(
 
   // Agent runs execute in this same main process and the settings panel shares
   // the app window with run progress, so a Goals tab left open during a run
-  // needs the push. Lifetime == app, matching the extension's process-global
-  // stance, so there is no dispose to hold.
-  subscribeGoalStateChanges(options.session, () => runAsync(postGoalList()));
+  // needs the push. The session outlives the window, so the subscription is
+  // window-scoped and released in `dispose` below.
+  const subscriptions = [
+    subscribeGoalStateChanges(options.session, () => runAsync(postGoalList())),
+  ];
 
   // ── GitHub token + PR/repo/issue subscriptions (Git tab) ──
 
@@ -296,6 +308,14 @@ export function createDesktopSettingsIpc(
     });
   }
 
+  // Both writers below re-probe external tools: the GitHub token gates the
+  // `github_subscription` tool group, so without it the Tools tab keeps
+  // showing the group as unavailable until the user clicks Re-check. The
+  // extension gets this from `secrets.onDidChange`; the desktop has no
+  // secret-change event, but these two functions are the only places it
+  // writes the token, so the explicit calls cover the same ground.
+  // `refreshToolAvailability` emits `toolAvailabilityChanged`, which is what
+  // repaints the dashboard.
   async function setGitHubToken(): Promise<void> {
     const token = await options.ui.promptForSecret?.({
       title: 'GitHub token',
@@ -306,12 +326,14 @@ export function createDesktopSettingsIpc(
     await platform().secrets.set(GITHUB_TOKEN_STORAGE_KEY, token.trim());
     await options.ui.showInfoMessage('GitHub token saved.');
     await postGitHubTokenStatus();
+    await refreshToolAvailability();
   }
 
   async function removeGitHubToken(): Promise<void> {
     await platform().secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
     await options.ui.showInfoMessage('GitHub token removed.');
     await postGitHubTokenStatus();
+    await refreshToolAvailability();
   }
 
   async function postGitHubSubscriptions(): Promise<void> {
@@ -322,6 +344,25 @@ export function createDesktopSettingsIpc(
       ),
     });
   }
+
+  // The same stance as the goal subscription above: a run that binds or
+  // releases a PR, repo, or issue subscription changes the list the Git tab is
+  // showing, and until now the desktop only re-read it when the user asked.
+  subscriptions.push(
+    appSignals.on('githubSubscriptionsChanged', () =>
+      runAsync(postGitHubSubscriptions()),
+    ),
+    // Outside VS Code a rejected token left the pollers failing in silence.
+    // The dialog is the whole fix: `resolveGitHubTokenSource` reports only
+    // which store holds a token, and rejection leaves the secret in place, so
+    // re-posting the token status would repaint the same "token set" badge.
+    // Marking a stored token as rejected would need a new status on the wire.
+    appSignals.on('githubTokenInvalid', ({ message }) =>
+      runAsync(
+        options.ui.showErrorMessage(`GitHub token rejected: ${message}`),
+      ),
+    ),
+  );
 
   /**
    * Jump from a settings entry (a goal, a PR subscription) to the run that owns
@@ -411,6 +452,10 @@ export function createDesktopSettingsIpc(
   return {
     refreshAuthDependentData,
     signInChatGpt: () => options.credentialSettingsController.signInChatGpt(),
+
+    dispose() {
+      for (const unsubscribe of subscriptions.splice(0)) unsubscribe();
+    },
 
     handleMessage(message: DesktopCommandMessage) {
       // WEBVIEW_READY is a broadcast: act on it but return false so sibling

@@ -73,6 +73,10 @@ type CapturedSettingsFixtureOverrides = Omit<
 
 let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIpc'];
 
+const liveSettingsIpcs: ReturnType<
+  DesktopSettingsIpcModule['createDesktopSettingsIpc']
+>[] = [];
+
 function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   const {
     globalState = new FakeStateStore(),
@@ -108,6 +112,9 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     session: overrides.session ?? defaultSession(),
     postToRenderer,
   });
+  // The IPC subscribes to the process-global session and app-signal buses, so
+  // a fixture left undisposed would keep reacting to later tests' emits.
+  liveSettingsIpcs.push(settings);
   return { globalState, settings, workspaceState };
 }
 
@@ -157,6 +164,7 @@ describe('desktop settings IPC', () => {
   });
 
   afterEach(() => {
+    for (const settings of liveSettingsIpcs.splice(0)) settings.dispose();
     vi.clearAllMocks();
     setGitAuthorEnv({});
     setWorktreeSupportEnabled(false);
