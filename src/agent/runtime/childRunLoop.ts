@@ -11,14 +11,13 @@
 
 import PQueue from 'p-queue';
 
-import {
-  getExecutionStore,
-  type ChildTurnRef,
-  type ChildTurnState,
-  type ResultMeta,
-} from '@agent/storage';
+import { getExecutionStore, type ResultMeta } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
+import type {
+  ChildTurnRef,
+  ChildTurnState,
+} from '@agent/storage/ExecutionKVStore';
 import {
   onOwnedExecutionLeaseLost,
   captureOwnedExecutionLease,

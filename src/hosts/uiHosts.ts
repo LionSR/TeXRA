@@ -78,8 +78,6 @@ export interface PromptHost {
 
 export interface TerminalRunRequest {
   name: string;
-  cwd?: string;
-  env?: Record<string, string | undefined>;
   command: string;
   /** Hard cap on how long to wait for captured execution. */
   timeoutMs: number;

@@ -51,8 +51,6 @@ interface MainViewIpcModule {
       };
     },
     options: {
-      debugMode?: boolean;
-      getTheme?: () => 'dark' | 'light' | 'high-contrast';
       fileSelection: { handleMessage(message: { command: string }): boolean };
       prompt: {
         handleMessage(message: { command: string }): boolean;
@@ -310,7 +308,7 @@ describe('desktop main-view IPC', () => {
     const harness = await createMainViewHarness({
       shouldUseDarkColors: true,
     });
-    installMainView(harness, { debugMode: true });
+    installMainView(harness);
     const { sends, sendFromRenderer } = harness;
 
     sendFromRenderer({ command: MAIN_VIEW_COMMANDS.GET_THEME }, {});
@@ -341,7 +339,7 @@ describe('desktop main-view IPC', () => {
       },
       {
         channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: { command: COMMON_COMMANDS.DEBUG_MODE_SET, debugMode: true },
+        message: { command: COMMON_COMMANDS.DEBUG_MODE_SET, debugMode: false },
       },
     ]);
   });
@@ -430,9 +428,9 @@ describe('desktop main-view IPC', () => {
     ]);
   });
 
-  it('answers GET_DEBUG_MODE with the configured flag', async () => {
+  it('answers GET_DEBUG_MODE with debug mode disabled', async () => {
     const harness = await createMainViewHarness();
-    installMainView(harness, { debugMode: true });
+    installMainView(harness);
     const { sends, sendFromRenderer } = harness;
 
     sendFromRenderer({
@@ -445,7 +443,7 @@ describe('desktop main-view IPC', () => {
     expect(sends).toEqual([
       {
         channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
-        message: { command: COMMON_COMMANDS.DEBUG_MODE_SET, debugMode: true },
+        message: { command: COMMON_COMMANDS.DEBUG_MODE_SET, debugMode: false },
       },
     ]);
   });

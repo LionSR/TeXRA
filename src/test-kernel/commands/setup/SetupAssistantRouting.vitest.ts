@@ -93,7 +93,7 @@ vi.mock('@frontend/secretManager', () => ({
 // time (`SessionHandle.ts`) and later calls `debug`/`warn` on it, while this
 // suite's minimal `@logger/logUtils` mock gives `createLog` a warn-only
 // return. No other module in this test's import graph (all deps otherwise
-// mocked away, and `apiKeyCommands`/`codexSubscriptionSignIn` don't import
+// mocked away, and `apiKeyCommands`/`subscriptionSignIn` don't import
 // SessionHandle) touches this module's other exports.
 vi.mock('@agent/runtime/SessionHandle', () => ({
   defaultSession: () => ({

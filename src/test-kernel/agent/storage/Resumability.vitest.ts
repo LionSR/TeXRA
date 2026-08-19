@@ -5,8 +5,8 @@ import {
   deriveResumability,
   finalizeExecution,
   getExecutionStore,
-  RESUMABILITY_CAUSE,
 } from '@agent/storage';
+import { RESUMABILITY_CAUSE } from '@agent/storage/resumability';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   FLOW_RECORD_SCHEMA_VERSION,

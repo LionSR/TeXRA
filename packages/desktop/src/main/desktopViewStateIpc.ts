@@ -9,11 +9,6 @@ import {
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
 
-export interface DesktopViewStateIpcOptions {
-  debugMode?: boolean;
-  getTheme?: () => DesktopThemeKind;
-}
-
 export interface DesktopViewStateIpc extends DesktopMessageHandler {
   dispose(): void;
 }
@@ -29,22 +24,18 @@ function getNativeTheme(): DesktopThemeKind {
 
 export function createDesktopViewStateIpc(
   renderer: DesktopRenderer,
-  options: DesktopViewStateIpcOptions = {},
 ): DesktopViewStateIpc {
-  const getTheme = options.getTheme ?? getNativeTheme;
-  const debugMode = options.debugMode ?? false;
-
   function postTheme() {
     renderer.postToRenderer({
       command: COMMON_COMMANDS.THEME_SET,
-      theme: getTheme(),
+      theme: getNativeTheme(),
     });
   }
 
   function postDebugMode() {
     renderer.postToRenderer({
       command: COMMON_COMMANDS.DEBUG_MODE_SET,
-      debugMode,
+      debugMode: false,
     });
   }
 
