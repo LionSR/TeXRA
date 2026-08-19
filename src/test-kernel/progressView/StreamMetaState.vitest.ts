@@ -221,6 +221,7 @@ describe('stream meta frontend state', () => {
     state.activeStreamId = streamId;
     registerStream(state, siblingId, {
       label: 'old sibling',
+      description: 'existing description',
       agentCategory: AgentCategory.ToolUse,
       creationTimestamp: 2,
     });
@@ -268,6 +269,7 @@ describe('stream meta frontend state', () => {
     expect(getState().streamById.get(streamId)?.label).toBe('stream-a');
     expect(getState().streamById.get(siblingId)).toMatchObject({
       label: 'search',
+      description: 'existing description',
       model: 'deepseekproT',
     });
     expect(getState().streamStates.get(siblingId)).toMatchObject({
