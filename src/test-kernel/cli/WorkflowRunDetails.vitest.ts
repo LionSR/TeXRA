@@ -161,6 +161,35 @@ describe('selectWorkflowRunDetailLines', () => {
     ]);
   });
 
+  it('shows the full path for external generated files', () => {
+    const lines = selectWorkflowRunDetailLines(
+      {
+        taskGroups: [completedRound(0, 1, 0, 1)],
+        outputFilesByRound: {
+          0: [
+            {
+              source: 'paper.tex',
+              round: 0,
+              location: {
+                kind: 'external',
+                absolutePath: '/tmp/external-output/paper.tex',
+              },
+              lineage: null,
+              diff: null,
+            },
+          ],
+        },
+        missingOutputsByRound: {},
+        compileFailuresByRound: {},
+      },
+      100,
+    );
+
+    expect(lines.map((line) => line.text)).toContain(
+      '    • /tmp/external-output/paper.tex',
+    );
+  });
+
   it('renders a typed round and sanitizes terminal controls', () => {
     const lines = selectWorkflowRunDetailLines(
       {
