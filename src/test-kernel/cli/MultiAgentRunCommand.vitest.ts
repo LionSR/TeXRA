@@ -1,6 +1,5 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +17,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => ({
   executeCliToolUseConfig: vi.fn(),
@@ -214,6 +214,7 @@ function mockMaterializedStdin(inputFiles: string[]): void {
 }
 
 describe('CLI multi-agent run command', () => {
+  const tempDirs = useTempDirs();
   const approvalUnavailableWarning =
     'WARN preset mathematician may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
   const headlessAskError =
@@ -533,42 +534,38 @@ describe('CLI multi-agent run command', () => {
       inputFiles: [],
       contextFiles: [],
     });
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-agent-team-'));
-    try {
-      await fs.writeFile(
-        path.join(root, 'prompt.txt'),
-        'Read the prompt from disk.\n',
-      );
+    const root = await makeTempDir('texra-agent-team-', tempDirs);
+    await fs.writeFile(
+      path.join(root, 'prompt.txt'),
+      'Read the prompt from disk.\n',
+    );
 
-      const exitCode = await runPreset(
-        {
-          instruction: 'Then summarize the plan.',
-          instructionFile: 'prompt.txt',
-        },
-        createRunCommandCliContext({ cwd: root }),
-      );
+    const exitCode = await runPreset(
+      {
+        instruction: 'Then summarize the plan.',
+        instructionFile: 'prompt.txt',
+      },
+      createRunCommandCliContext({ cwd: root }),
+    );
 
-      expect(exitCode).toBe(0);
-      expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
-        [],
-        [],
-        root,
-        {
-          allowEmptyInput: true,
-          requireWorkspaceFiles: true,
-          readStdinText: expect.any(Function),
-        },
-        expect.any(Function),
-      );
-      const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
-      expect(config?.inputFiles).toEqual([]);
-      expect(config?.instruction).toContain('User instruction:');
-      expect(config?.instruction).toContain(
-        'Read the prompt from disk.\n\nThen summarize the plan.',
-      );
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    expect(exitCode).toBe(0);
+    expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
+      [],
+      [],
+      root,
+      {
+        allowEmptyInput: true,
+        requireWorkspaceFiles: true,
+        readStdinText: expect.any(Function),
+      },
+      expect.any(Function),
+    );
+    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
+    expect(config?.inputFiles).toEqual([]);
+    expect(config?.instruction).toContain('User instruction:');
+    expect(config?.instruction).toContain(
+      'Read the prompt from disk.\n\nThen summarize the plan.',
+    );
   });
 
   it('reports missing instruction files before expanding inputs', async () => {

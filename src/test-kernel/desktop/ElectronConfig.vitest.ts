@@ -1,26 +1,19 @@
 // Node imports
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - platform
 import type { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 
 // Local imports - test support
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { loadSourceModule } from './loadSourceModule.ts';
 
 describe('desktop JsonConfigProvider (dual-store)', () => {
-  let tempDir: string | undefined;
-
-  afterEach(async () => {
-    if (tempDir == null) return;
-    await rm(tempDir, { recursive: true, force: true });
-    tempDir = undefined;
-  });
+  const tempDirs = useTempDirs();
 
   async function createProvider(): Promise<{
     provider: JsonConfigProvider;
@@ -31,7 +24,7 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
       loadSourceModule('@platform/defaults/jsonStore'),
       loadSourceModule('@platform/defaults/jsonConfigProvider'),
     ]);
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-electron-config-'));
+    const tempDir = await makeTempDir('texra-electron-config-', tempDirs);
     const globalStore = await JsonStore.open(join(tempDir, 'global.json'));
     const workspaceStore = await JsonStore.open(
       join(tempDir, 'workspace.json'),

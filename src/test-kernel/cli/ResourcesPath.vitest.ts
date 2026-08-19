@@ -1,17 +1,16 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { resolveCliResourcesPath } from '@cli/runtime/resourcesPath';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-const tempRoots: string[] = [];
+const tempRoots = useTempDirs();
 
 async function makeCliPackage() {
-  const root = await mkdtemp(path.join(tmpdir(), 'texra-cli-resources-'));
-  tempRoots.push(root);
+  const root = await makeTempDir('texra-cli-resources-', tempRoots);
   const cliRoot = path.join(root, 'packages', 'cli');
   await mkdir(cliRoot, { recursive: true });
   await writeFile(path.join(cliRoot, 'package.json'), '{}\n');
@@ -21,14 +20,6 @@ async function makeCliPackage() {
 function anchorUrl(filePath: string) {
   return pathToFileURL(filePath).href;
 }
-
-afterEach(async () => {
-  await Promise.all(
-    tempRoots
-      .splice(0)
-      .map((root) => rm(root, { recursive: true, force: true })),
-  );
-});
 
 describe('resolveCliResourcesPath', () => {
   it('prefers resources next to the executing validation bundle', async () => {

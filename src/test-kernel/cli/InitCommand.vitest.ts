@@ -45,7 +45,7 @@ import {
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
 import { AgentCategory } from '@shared/schemas';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 function modelAccess(
   value: string,
@@ -74,7 +74,7 @@ function expectUnavailableDefaultRecovery(output: string): void {
   );
 }
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 describe('CLI init command', () => {
   let stdout = '';
@@ -103,10 +103,9 @@ describe('CLI init command', () => {
     });
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('accepts global CLI flags while keeping init-specific cwd help', () => {
@@ -244,7 +243,6 @@ describe('CLI init command', () => {
 
   it('emits valid NDJSON for non-interactive init', async () => {
     const root = await makeTempDir('texra-init-test-', tempDirs);
-    const workspaceRoot = await fs.realpath(root);
     const result = await runInitPrint(root, ['--output-format', 'ndjson']);
 
     expect(result.exitCode).toBe(0);
@@ -269,7 +267,7 @@ describe('CLI init command', () => {
     expect(record).toMatchObject({
       kind: 'init-config',
       init: {
-        path: path.join(workspaceRoot, '.texra', 'config.json'),
+        path: path.join(root, '.texra', 'config.json'),
         agent: 'assistant',
         model: 'deepseekproT',
         approvalPolicy: 'ask',
@@ -291,14 +289,13 @@ describe('CLI init command', () => {
 
   it('keeps the legacy text init summary for human output', async () => {
     const root = await makeTempDir('texra-init-test-', tempDirs);
-    const workspaceRoot = await fs.realpath(root);
     const result = await runInitPrint(root);
 
     expect(result.exitCode).toBe(0);
     expect(stderr).toBe('');
     expect(stdout).toContain('Created .gitignore (.texra/ ignored).');
     expect(stdout).toContain(
-      `Wrote ${path.join(workspaceRoot, '.texra', 'config.json')}`,
+      `Wrote ${path.join(root, '.texra', 'config.json')}`,
     );
     expect(stdout).toContain('  agent: assistant');
     expect(stdout).toContain('Next: run `texra` for the launcher');

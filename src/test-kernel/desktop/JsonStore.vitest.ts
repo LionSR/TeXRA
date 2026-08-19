@@ -1,24 +1,16 @@
 // Node imports
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import {
-  chmod,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 // Third-party imports
 import { build } from 'esbuild';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - test support
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { moduleFileUrl, repoPath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
 
@@ -43,19 +35,14 @@ async function readStoredJson(filePath: string): Promise<unknown> {
 }
 
 describe('shared JsonStore', () => {
+  const tempDirs = useTempDirs();
   let tempDir: string | undefined;
-
-  afterEach(async () => {
-    if (tempDir == null) return;
-    await rm(tempDir, { recursive: true, force: true });
-    tempDir = undefined;
-  });
 
   async function createTempFile(
     name: string,
     contents: string,
   ): Promise<string> {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-json-store-'));
+    tempDir = await makeTempDir('texra-json-store-', tempDirs);
     const filePath = join(tempDir, name);
     await writeFile(filePath, contents);
     return filePath;
@@ -148,7 +135,7 @@ describe('shared JsonStore', () => {
   });
 
   it('keeps the lock function callable in a split ESM bundle', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-json-store-bundle-'));
+    tempDir = await makeTempDir('texra-json-store-bundle-', tempDirs);
     const outdir = join(tempDir, 'bundle');
     await build({
       entryPoints: {
@@ -266,7 +253,7 @@ describe('shared JsonStore', () => {
   it('opens read-only on unwritable storage; only the first write prepares the directory', async () => {
     if (process.platform === 'win32') return; // POSIX modes don't apply.
     const JsonStore = await loadJsonStore();
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-json-store-'));
+    tempDir = await makeTempDir('texra-json-store-', tempDirs);
     const dir = join(tempDir, 'nested');
     const filePath = join(dir, 'secrets.json');
     // Unwritable parent: any open-time mkdir/chmod would throw (#8220).
@@ -293,7 +280,7 @@ describe('shared JsonStore', () => {
   it('restricts the store file and its directory to the owner when a mode is set', async () => {
     if (process.platform === 'win32') return; // POSIX modes don't apply.
     const JsonStore = await loadJsonStore();
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-json-store-'));
+    tempDir = await makeTempDir('texra-json-store-', tempDirs);
     const filePath = join(tempDir, 'nested', 'secrets.json');
 
     const store = await JsonStore.open(filePath, {

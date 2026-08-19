@@ -1,10 +1,10 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 import { loadSourceModule } from './loadSourceModule.ts';
 
@@ -43,10 +43,11 @@ function flushAsyncWork(): Promise<void> {
  * desktop main delegates to its native picker elsewhere.
  */
 describe('desktop file selection', () => {
+  const tempDirs = useTempDirs();
   let workspacePath: string;
 
   beforeEach(async () => {
-    workspacePath = await mkdtemp(join(tmpdir(), 'texra-files-'));
+    workspacePath = await makeTempDir('texra-files-', tempDirs);
     const entries = [
       'main.tex',
       'notes.md',
@@ -64,10 +65,6 @@ describe('desktop file selection', () => {
         await writeFile(join(workspacePath, entry), '');
       }),
     );
-  });
-
-  afterEach(async () => {
-    await rm(workspacePath, { recursive: true, force: true });
   });
 
   async function createFileSelection(

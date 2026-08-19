@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { listExecutions } from '@agent/storage';
@@ -15,7 +15,7 @@ import { BUILTIN_DEFAULT_CHAT_AGENT } from '@cli/runtime/defaultAgents';
 import * as logSinks from '@cli/runtime/logSinks';
 import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 /** A cwd with no `.texra` directory, so the workspace tier finds nothing. */
@@ -87,11 +87,7 @@ beforeEach(() => {
   mockedReadJson.mockRejectedValue(enoentError());
 });
 
-const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await cleanupTempDirs(tempDirs);
-});
+const tempDirs = useTempDirs();
 
 async function workspaceWithConfig(config: unknown): Promise<string> {
   const workspace = await makeTempDir('texra-chat-defaults-', tempDirs);
