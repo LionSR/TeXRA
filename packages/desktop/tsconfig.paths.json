@@ -10,7 +10,6 @@
         "./../../src/shared/*.ts",
         "./../../src/shared/*/index.ts"
       ],
-      "@common/state": ["./../../packages/extension/src/common/state/index.ts"],
       "@common/state/*": [
         "./../../packages/extension/src/common/state/*",
         "./../../packages/extension/src/common/state/*.ts",

@@ -22,7 +22,6 @@ import {
 } from '@agent/templates/agentTemplateRenderer';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { workspaceSM, globalSM } from '@common/state';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
@@ -35,6 +34,7 @@ import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalog
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { platform } from '@platform/platform';
 import {
   agentKey,
   SETTINGS_VIEW_CMD,
@@ -72,8 +72,8 @@ export class AgentHandlers {
     ) => Promise<void>,
   ) {
     const controllers = createSettingsAgentControllers({
-      workspaceState: workspaceSM,
-      globalState: globalSM,
+      workspaceState: platform().workspaceState,
+      globalState: platform().globalState,
       getCustomAgentDirectory: () => agentDirectories.custom(),
       getSourceDirectory: (source) => agentDirectories.getDirectory(source),
     });

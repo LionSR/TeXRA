@@ -37,7 +37,6 @@ vi.mock('@agent/remote/remoteAgentConfigClient', () => ({
 vi.mock('@auth/SupabaseClient', () => ({
   SupabaseClient: { getAccessToken: vi.fn(), getUserTier: vi.fn() },
 }));
-vi.mock('@common/state', () => ({ globalSM: {}, workspaceSM: {} }));
 vi.mock('@common/teams/TeamRosterApplication', () => ({
   applyTeamRosterWithPreflight: vi.fn(),
 }));

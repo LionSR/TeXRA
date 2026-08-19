@@ -12,7 +12,6 @@ import {
   getSharedLocalResourceRoots,
   SIDEBAR_VIEWS,
 } from '@common/webview';
-import { workspaceSM } from '@common/state';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { createAgentProposalTransport } from '@controllers/progressView/backend/agentProposalTransport';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
@@ -24,6 +23,7 @@ import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import type { ExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 import { DisposableStore } from '@platform/disposable';
+import { platform } from '@platform/platform';
 import type { WorkspaceProvider } from '@platform/interfaces';
 import type {
   AgentProposalPermission,
@@ -108,7 +108,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     const runtimeSession = defaultSession();
     this.backend = new ProgressBackend({
       session: runtimeSession,
-      storage: workspaceSM,
+      storage: platform().workspaceState,
       sendMessage: (message) => this.sendToActiveProgressWebview(message),
       hasTarget: () => this.getActiveWebview() !== undefined,
       getStreamControls: getProgressStreamControls,

@@ -608,7 +608,7 @@ const UpdateLatexSettingsStatusMessageSchema = z.object({
 /**
  * LaTeX/compile/diff configuration values, persisted in workspace storage. The
  * frontend tab edits these directly; the backend persists them via
- * `workspaceSM`.
+ * `platform().workspaceState`.
  *
  * Each property is optional so the UI can render either the user-set value
  * (when defined) or the documented default (when undefined). Numeric ranges
