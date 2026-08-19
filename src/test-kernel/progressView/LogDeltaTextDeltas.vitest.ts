@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { isStreamingTextLogMessage } from '@progressView/frontend/formatters/baseLogFormatter';
 import { logHandlers } from '@progressView/frontend/slices/logSlice';
 import {
   appState,
@@ -28,8 +27,14 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import type { TranscriptRow } from '@shared/transcript';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { assertSupported } from '@shared/utils/dispatcher';
+
+/** The painted text of any text-bearing row. */
+function rowText(row: TranscriptRow | undefined): string | undefined {
+  return row && 'text' in row ? row.text.full : undefined;
+}
 
 /** Test-local full replay through the production reducer (the resync path). */
 function projectTaskGroupsFromStreamLog(
@@ -113,7 +118,9 @@ describe('LOG_DELTA text deltas', () => {
       updates: [],
     } as unknown as ProgressViewOutboundMessage);
 
-    expect(getState().streamLogs.get(STREAM_ID)?.logs[0]?.text).toBe('hello');
+    expect(rowText(getState().streamLogs.get(STREAM_ID)?.rows[0])).toBe(
+      'hello',
+    );
   });
 
   it('recovers malformed rows without discarding their live delta batch', () => {
@@ -140,13 +147,10 @@ describe('LOG_DELTA text deltas', () => {
     const handler = handlers[parsed.command];
     assertSupported(handler!)(parsed as never);
 
-    const logs = getState().streamLogs.get(STREAM_ID)?.logs;
-    expect(logs).toHaveLength(2);
-    expect(logs?.map((entry) => entry.text)).toEqual([
-      'files',
-      'still delivered',
-    ]);
-    expect(logs?.[0]?.messageType).toBe(MESSAGE_TYPES.DEFAULT);
+    const rows = getState().streamLogs.get(STREAM_ID)?.rows;
+    expect(rows).toHaveLength(2);
+    expect(rows?.map(rowText)).toEqual(['files', 'still delivered']);
+    expect(rows?.[0]?.messageType).toBe(MESSAGE_TYPES.DEFAULT);
   });
 
   it('appends streamed text without whole-entry replacement and finalizes via full update', () => {
@@ -159,20 +163,20 @@ describe('LOG_DELTA text deltas', () => {
     });
 
     const streamedLogs = getState().streamLogs.get(STREAM_ID);
-    const streamed = streamedLogs?.logs[0];
-    expect(streamed?.text).toBe('hello world');
-    expect(streamedLogs?.updatedMessageIndices).toEqual([0]);
-    expect(streamed && isStreamingTextLogMessage(streamed)).toBe(true);
+    const streamed = streamedLogs?.rows[0];
+    expect(rowText(streamed)).toBe('hello world');
+    expect(streamedLogs?.updatedRowIndices).toEqual([0]);
+    expect(streamed?.kind === 'assistant' && streamed.streaming).toBe(true);
 
     dispatchLogDelta([], {
       updates: [modelResponseEntry('hello world', 'completed')],
     });
 
     const finalizedLogs = getState().streamLogs.get(STREAM_ID);
-    const finalized = finalizedLogs?.logs[0];
-    expect(finalized?.text).toBe('hello world');
-    expect(finalizedLogs?.updatedMessageIndices).toEqual([0]);
-    expect(finalized && isStreamingTextLogMessage(finalized)).toBe(false);
+    const finalized = finalizedLogs?.rows[0];
+    expect(rowText(finalized)).toBe('hello world');
+    expect(finalizedLogs?.updatedRowIndices).toEqual([0]);
+    expect(finalized?.kind === 'assistant' && finalized.streaming).toBe(false);
   });
 
   it('projects compaction start and terminal events into one stable row', () => {
@@ -196,10 +200,10 @@ describe('LOG_DELTA text deltas', () => {
     });
 
     dispatchLogDelta([activityEntry(1, 'started')]);
-    expect(getState().streamLogs.get(STREAM_ID)?.logs).toEqual([
+    expect(getState().streamLogs.get(STREAM_ID)?.rows).toEqual([
       expect.objectContaining({
         id: 'compaction:operation-1',
-        data: expect.objectContaining({ status: 'running' }),
+        block: expect.objectContaining({ status: 'running' }),
       }),
     ]);
 
@@ -214,23 +218,23 @@ describe('LOG_DELTA text deltas', () => {
         text: 'Continue',
       },
     ]);
-    expect(getState().streamLogs.get(STREAM_ID)?.logs[0]).toMatchObject({
+    expect(getState().streamLogs.get(STREAM_ID)?.rows[0]).toMatchObject({
       id: 'compaction:operation-1',
-      data: { status: 'interrupted', finalized: false },
+      block: { status: 'interrupted', finalized: false },
     });
 
     dispatchLogDelta([activityEntry(3, 'completed')]);
     const streamLogs = getState().streamLogs.get(STREAM_ID);
-    expect(streamLogs?.logs).toHaveLength(2);
-    expect(streamLogs?.logs[0]).toMatchObject({
+    expect(streamLogs?.rows).toHaveLength(2);
+    expect(streamLogs?.rows[0]).toMatchObject({
       id: 'compaction:operation-1',
-      data: {
+      block: {
         status: 'completed',
         finalized: true,
         operationId: 'operation-1',
       },
     });
-    expect(streamLogs?.updatedMessageIndices).toEqual([0]);
+    expect(streamLogs?.updatedRowIndices).toEqual([0]);
   });
 });
 
@@ -355,7 +359,7 @@ describe('LOG_DELTA active skill snapshots', () => {
     expect(current.streamStates.get(STREAM_ID)).toMatchObject({
       activeSkills: [],
     });
-    expect(current.streamLogs.get(STREAM_ID)?.logs).toEqual([]);
+    expect(current.streamLogs.get(STREAM_ID)?.rows).toEqual([]);
   });
 
   it('sanitizes adversarial persisted summaries during replay', () => {

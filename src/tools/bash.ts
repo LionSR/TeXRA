@@ -60,6 +60,7 @@ import { appendHead, appendTail } from '@utils/text/appendTail';
 
 // Local file imports
 import { defineTool } from './core/define';
+import { nullishWithDefault } from './core/inputSchema';
 import {
   childStreamDescription,
   createChildStream,
@@ -245,13 +246,9 @@ const BashInputSchema = z.strictObject({
     .describe(
       'Timeout in milliseconds (max 600,000 ms / 10 min, default 120,000 ms / 2 min).',
     ),
-  run_in_background: z
-    .boolean()
-    .nullish()
-    .transform((v) => v ?? false)
-    .describe(
-      'Run command in background. Returns immediately with execution ID and a background task tab. Result delivered as follow-up when complete.',
-    ),
+  run_in_background: nullishWithDefault(z.boolean(), false).describe(
+    'Run command in background. Returns immediately with execution ID and a background task tab. Result delivered as follow-up when complete.',
+  ),
 });
 
 type BashInput = z.infer<typeof BashInputSchema>;

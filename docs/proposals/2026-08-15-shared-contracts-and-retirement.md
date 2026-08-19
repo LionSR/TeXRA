@@ -22,6 +22,25 @@
 > present at `3122ace2bc`; the docs branch has been merged with main so
 > future reviews see the current tree.
 
+> **Reconciled against origin/main `e00b9317f7` (2026-08-19).** Most of this
+> doc has executed. Landed: §2.1 in one PR (#10925 — the six catalogs are one
+> `StateSettingEntry` row and every list is a filter over it), §2.2 items
+> 1/2/4/5 (#10715, #10738, #10741, #10908 — `requestId` was an atomic rename,
+> no compat alias), §2.3 (#10719, #10810, #10932), §2.4 (#10806, #10866),
+> §2.5's scalar writes (#10891), §2.6 defects 1–2 (#10907), §2.7 both defects
+> (#10688, #10811), §2.8 (#10891), and all three retirement tiers plus the
+> dated-horizon retirements (#10601, #10887, #10888, #10890). §2.9 was
+> **counter-ruled** — see the row. What remains genuinely open: §2.2 item 3
+> (the CLI's own `ApprovalPayload` union), `SettingsCredentialActions` (§2.5),
+> the desktop `UsageLogService` / `refreshModelListStateIfNeeded` bootstrap
+> gaps (§2.5 / audit V2 — and `refreshModelListStateIfNeeded` is now
+> production-dead on _every_ host, which is worse than this doc claimed), and
+> §4b projection-zero, still gated on two supersessions the maintainer has not
+> granted. One stray from the §2.5 sweep worth a follow-up:
+> `SET_CHATGPT_PREFER_SUBSCRIPTION` survived the literal collapse. Read §7.6's
+> arithmetic as superseded — Wave D is withdrawn (substrate doc §7) and Wave
+> A's per-file nets came in well short of the table.
+
 Method: four sweeps on a fresh origin/main worktree — contract-surface
 census, dead-code/retirement hunt, catalog-fragmentation study
 (settings/status/capability), and claim-by-claim re-verification of the
@@ -90,6 +109,16 @@ Ranked by contradiction count × drift risk. For each: the fragments, what
 each is doing, the single contract, and what deletes.
 
 ### 2.1 Settings capability catalogs — ~30 contradicting rows, 6 answer-sites
+
+**LANDED #10925 (2026-08-19), in one atomic PR** — the "watch: if any absorbed
+catalog survives temporarily, this becomes a seventh catalog" risk did not
+materialize. `StateSettingEntry` carries `slots` / `honoredBy` / `surfaces` /
+`onWrite` (`stateSettings.ts:219-227`); `CLI_CORE_SETTING_PATHS`,
+`EXTENSION_ONLY_CORE_SETTING_PATHS`, their `_AssertEveryCorePathClassified`
+guard, `PROVIDER_SETTINGS`, and `cliStore` are all absent. The live behavior
+split closed with them: the Models tab's raw `globalState.update` bypass is
+gone (zero `globalState.update` sites repo-wide), so schema validation and the
+Kimi/OpenRouter mutual exclusion now apply on every write path.
 
 Six places answer "does host H honor setting S, and where is it stored":
 the `STATE_SETTINGS` rows' `hosts` + `store`/`cliStore`
@@ -201,6 +230,24 @@ The CLI's payload union diverges from the wire union on 2 of 7 arms
 Deletes ≈ 20–25 declarations; kills the class of "approval kind added,
 one host silently misses a field" bugs.
 
+**Status at `e00b9317f7` (2026-08-19): items 1, 2, 4, 5 LANDED; item 3 OPEN.**
+Item 1 — `HostPlanApprovalRequest` (#10715) and `HostAgentProposalRequest`
+(#10738) are `Readonly<…Permission>` aliases; `HostBashApprovalRequest`
+remains the deliberate minimal request per the review carve-out;
+`ToolEditApprovalRequest.streamId: StreamTabId | null` landed and the cast is
+gone. Item 2 — **LANDED #10908 as an atomic rename**: `approvalId` and
+`proposalId` have zero live sites and no parse-side alias was introduced, so
+the compatibility-retirement condition never had to be exercised; the
+maintainer resolved the "confirm with owner" flag — payload field names are
+not in the item-6 freeze, which names message-type literals. Item 4 — LANDED
+#10741 (`{action}`, `toolEdit` in `HostInteractionResultByKind` and
+`cancellationResultFactories`). Item 5 — LANDED #10715 (`ApprovalDecisionSchema`
+absent). Item 3 — **OPEN**: the CLI still declares its own seven-arm
+`{kind,payload}` union at `approvalQueue.ts:43-56`. Its arms now reference the
+shared permission types, so a new wire arm is less likely to drift silently,
+but it is not `PermissionPayload` and no requestId-keyed adornment split
+exists.
+
 ### 2.3 Progress-view fact wire — 12 targeted commands are slices of one payload
 
 Verified precisely at this HEAD: 12 of the 30 outbound arms
@@ -233,6 +280,15 @@ of hand-written field declarations, 5 port methods × 2 implementations,
 between the snapshot and targeted paths that item 8's "intended end state"
 currently lacks.
 
+**LANDED #10719 / #10810 / #10932 (2026-08-19).** `pickProjection` derives the
+pure slices from one `projectionShape`; the delta-semantic arms kept their
+envelopes as this row prescribed. The port gained `invalidate(streamId, slice)`
+and lost five methods plus `onParentStreamChanged`'s dead second argument
+(22 → 18). The `progressEvents.ts` half landed **as amended**: the ~8
+interfaces survive — they are the `SessionFact` vocabulary upstream of the
+wire, which this doc's own §7.2 said does not delete — but their members are
+now `z.infer` of the message schemas, which is where the drift risk was.
+
 ### 2.4 Tool/capability gating — 6 tools answered in up to 4 places
 
 Eight fragments answer "can host H use tool T": the availability probe
@@ -261,6 +317,16 @@ unavailability derive it)_. Deserved and kept: the probe cache
 a run-context _parameter_ (subagent inheritance, test substitution),
 `SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES` (absorbed as three declarations).
 
+**LANDED #10806 / #10866 (2026-08-19).** `defineTool({hosts})` exists
+(`src/tools/core/define.ts:73`); `packages/cli/src/runtime/unavailableTools.ts`
+and `DESKTOP_UNAVAILABLE_TOOLS` are deleted; the dashboard filter takes the
+asking host and drops a group only when every tool in it declares itself
+unavailable there (#10924 completed that half, fixing a user-visible bug —
+the desktop Tools tab had been showing green cards for tools the host cannot
+run). `hideFromCli` survives on exactly the integration-only row the review
+carve-out named (`externalToolDefs.ts:109`, one writer: `texra-cli` with
+`tools: []`), which is the designed end state, not a miss.
+
 ### 2.5 Settings command surface — ~14 bespoke literals over one generic write
 
 The Zod contract and registry type are genuinely single; the fragmentation
@@ -280,6 +346,20 @@ placeholder-key rejection into the shared `commitProviderKey` (today only
 the CLI rejects `sk-xxxxxx`). Third: the two desktop bootstrap gaps
 (`refreshModelListStateIfNeeded`, `UsageLogService`) re-confirmed — the
 audit doc's V2, unchanged.
+
+**Status (2026-08-19): first item LANDED #10891; second and third OPEN.** Five
+scalar-write literals (`SET_PROVIDER_ENDPOINT`, `SET_PROVIDER_STREAMING`,
+`SET_GLOBAL_STREAMING`, `SET_HELPER_MODEL`, `SET_PREFER_SHORT_MODEL_NAMES`)
+route through `UPDATE_STATE_SETTING` and are gone with their inbound arms and
+both hosts' handler entries — but the sweep left
+`SET_CHATGPT_PREFER_SUBSCRIPTION` behind; finish it or fence it.
+`SettingsCredentialActions` was never written:
+`src/controllers/settingsView/backend/` still holds only `SettingsAgentActions`,
+so the ~140/~180/19 L credential wiring and the CLI-only `sk-xxxxxx` rejection
+stand. The two desktop bootstrap gaps are unchanged and one is now worse —
+`refreshModelListStateIfNeeded` has **no production caller on any host**, so
+retired-model sweeps and stale-route clears run nowhere, not just not on
+desktop.
 
 ### 2.6 "A stream" — 11 schemas, mostly disciplined, four defects
 
@@ -306,6 +386,14 @@ is the substrate doc's business, not this one). The defects:
 4. `HistoryItemSchema`'s config summary triple is parallel to the listing
    entry's projection rather than derived from it.
 
+**Status (2026-08-19): 1 and 2 LANDED #10907; 3 gated; 4 MOOT.** The snapshot
+write side types against `StreamPhaseSchema` with the review-caught
+legacy-inbound union on the parse side, so archived `trace.json` exports still
+parse; `StreamIdentityFieldsSchema` is declared once and `StreamTabInfoSchema`
+extends it. Defect 3 rides the gated §4b work. Defect 4 is **MOOT** —
+`HistoryItemSchema` no longer exists: #10811 retired the duplicate history
+surface outright, which is a better outcome than deriving the triple.
+
 ### 2.7 Status vocabularies — two defects, everything else fenced
 
 1. **`cardStatusFor` folds `CANCELLED` into `failed`**
@@ -328,6 +416,13 @@ is the substrate doc's business, not this one). The defects:
    shared display record (the `streamStatusDisplay` idiom); both hosts
    project.
 
+**LANDED (2026-08-19).** Defect 1 in #10688: `cardStatusFor` is gone, replaced
+by the compile-exhaustive `WORKFLOW_CALL_STATUS_PROJECTION` with a
+`satisfies` pin; `CANCELLED` maps to `'cancelled'` and the dead `waiting` key
+is deleted — so `WORKFLOW_TASK_STATUS_LABEL.cancelled` went live as §7.4 row 3
+predicted. Defect 2 in #10811: `HISTORY_RUN_STATUS_LABEL` is shared and the CLI
+consumes it; `HISTORY_STATUS_BADGES` is absent.
+
 ### 2.8 Main-view banners — 12 literals for one concept
 
 `SHOW_/HIDE_` × six banner kinds + two dismissals; 9 of 12 arms are
@@ -338,7 +433,25 @@ the item-6 freeze (verified: the freeze names progress-view); confirm no
 external consumer (none found) and land. The file-slot literals stay —
 factory-derived, zero drift risk.
 
+**LANDED #10891 (2026-08-19).** One `SET_BANNER {banner, visible, data?}`
+literal (`ipc.ts:54`) with a single schema arm over a banner-surface enum; zero
+`SHOW_*_BANNER` / `HIDE_*_BANNER` literals remain. The item-6 reading held —
+no external consumer surfaced.
+
 ### 2.9 Usage shapes — one naming split
+
+> **REJECTED — counter-ruled (2026-08-19).** The rename does not happen. #10796
+> moved usage normalization into `ModelHandler.extractNormalizedResponse`,
+> making `NormalizedUsage` the single carrier at the provider boundary rather
+> than a downstream re-shape, and the schema now declares the split
+> deliberate and authoritative in its own doc-comment
+> (`src/agent/types/NormalizedUsage.ts:15-23`): the base's
+> `cacheReadInputTokens` / `cacheCreationInputTokens` are never populated for a
+> `NormalizedUsage`, so `cachedInputTokens` / `cacheCreationTokens` are _the_
+> names, and `.extend()`-ing the full base — this row's proposal — would
+> inherit two dead fields and duplicate `cacheMissInputTokens`. The gate this
+> row set (check `UsageLogTypes` for external consumers) is therefore moot;
+> treat this as closed, not pending.
 
 `NormalizedUsage` deliberately renames two cache fields
 (`cachedInputTokens`, `cacheCreationTokens`) vs the canonical
@@ -352,6 +465,17 @@ sites. Rename to the canonical spellings and `.extend()` instead of
 Dead code to remove now, with two-direction grep evidence. knip's baseline
 is at **8 findings** (already burned down); everything here is in its blind
 spots.
+
+**LANDED in full (2026-08-19).** Tier 1: #10601 merged; `cleanupAllApprovals`
+and `DIAGNOSTICS_ADD_RUNTIME_CAPABILITY` are absent. Tier 2: all six
+zero-writer options are gone (`webAwesomeIcons`' `canvas` became a hardcoded
+attribute rather than an option). Tier 3: the house ruling went **test-kernel**
+— `withToolEnvironment` moved there, the other five seams are deleted, and
+`pathFix`'s injectable seam is gone in favour of calling the npm package
+directly. Scheduled retirements: `LEGACY_ICON_ALIASES` retired early under the
+2026-08-18 ruling (#10887); `midEraWorkflowOutputStem` correctly **kept** with
+its 2027-04-21 horizon and live readers; the owed checkpoint-ledger doc-drift
+fix landed (#10688) and now cites symbols that exist.
 
 ### Tier 1 — pure-dead, high confidence
 
@@ -418,7 +542,10 @@ sites but invoked dynamically via ``executeCommand(`texra.${command}`)``
 consumer each); all `SessionFact` arms (the empty handler arms are
 `assertNever`-mandated); all citty CLI flags; all 8 desktop
 `unsupported()` sites (they _are_ the capability SSOT);
-`spendCheckFailed` (external relay contract — keep pending relay check);
+`spendCheckFailed` (external relay contract — **the relay check resolved:
+the plane was retired by #10894/#10896, so this row and the whole
+included-access spend surface, `relayUsage.ts` included, are gone rather than
+consolidated**);
 zero `@deprecated` markers repo-wide; no `SessionRendererPort` method is a
 no-op in both hosts.
 
@@ -437,6 +564,18 @@ landed part of it (§5): the remaining Wave C is the §2.3 derivation
 **≈ −450..−550** rather than the previous ≈ −1,050.
 
 ## 4b. The projection-zero option (maintainer follow-up, 2026-08-15)
+
+> **STILL GATED (2026-08-19).** The safe first stage landed (§2.3), and every
+> line of it survives into this design as intended. The gate has not moved: the
+> two supersessions item 1 asks for — §0.1 item 8's dual-path clause and item
+> 6's progress-view literal freeze — have **not** been granted, and both
+> clauses stand unchanged in `2026-08-03-ssot-consolidation-plan.md:62-90`.
+> (Item 8's separate `StreamSlice` clause _was_ superseded and executed by the
+> substrate program's Wave A; that is a different clause and does not carry
+> this one.) At HEAD all 12 targeted literals remain in `src/shared/ipc.ts`
+> and `runTrackingSlice.ts` / `taskSlice.ts` still exist. The bandwidth
+> measurement in item 3 has not been taken either. Nothing below is stale —
+> it is unstarted, by design.
 
 The maintainer asked whether projections can be eliminated outright rather
 than derived. Honest inventory of what "projection" covers and how far the
@@ -530,31 +669,41 @@ it doesn't land). Rule applied: a new name is only legitimate if the PR
 that introduces it deletes ≥2 hand-rolled equivalents and the concept
 already exists in the code's own vocabulary or the ecosystem's.
 
-| Proposed name                                                                                                                             | Doc                           | Verdict                                                                                                                                                                                                                                                                        |
-| ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ChildStopPolicy` table                                                                                                                   | lifecycle §4                  | **REWORKED** — the SSOT function already exists; fixed to 3 call-site repairs + 1 doc paragraph. No table.                                                                                                                                                                     |
-| `DisposableStore`                                                                                                                         | lifecycle §2                  | REPLACEMENT — the ecosystem-standard shape; replaces ≥10 hand-rolled registries/arrays, each deleted as it migrates; vitest leak-assert makes it self-policing. Not a coordinator.                                                                                             |
-| five "lifetime roots"                                                                                                                     | lifecycle §1                  | REPLACEMENT — all five anchors pre-exist; the "roots" are documentation of them, zero new objects.                                                                                                                                                                             |
-| `invalidate(streamId, slice)`                                                                                                             | substrate §6 / contracts §2.3 | REPLACEMENT — deletes 5 port methods × 2 impls; port shrinks 22→17(→~5 under projection-zero). The `slice` key type reuses the projection shape's existing field names, no new vocabulary.                                                                                     |
-| `pickProjection`                                                                                                                          | contracts §2.3                | REPLACEMENT — declares once what 12 arms restate; every field name already exists on the wire.                                                                                                                                                                                 |
-| `StreamLogFeed`                                                                                                                           | substrate §7                  | REPLACEMENT — mechanical dedup of two identical drivers (~−180).                                                                                                                                                                                                               |
-| `projectTranscriptRow` / `TranscriptRow`                                                                                                  | substrate §5 B-2              | **FLAGGED** — genuinely a new model on the webview side; honestly +60 LoC; lands only under its drift-elimination justification and the six policy rulings. B-1 (ordering key) alone is REPLACEMENT (−49 + bug fix).                                                           |
-| `SettingEntry` expanded row (`slots`/`honoredBy`/`surfaces`/`onWrite`)                                                                    | contracts §2.1                | REPLACEMENT — one row absorbs six catalogs; every field renames an existing fact, and each absorbed catalog deletes in the same series. Watch: if any absorbed catalog survives "temporarily", this becomes a seventh catalog — the exact hack; land atomically per catalog.   |
-| `defineTool({hosts})`                                                                                                                     | contracts §2.4                | REPLACEMENT — a field on the existing per-tool row; three rosters + `hideFromCli` delete.                                                                                                                                                                                      |
-| `SUBSCRIPTION_PROVIDERS` registry                                                                                                         | audit C9                      | REPLACEMENT — registry-as-contract is an adjudicated KEEP species; 6 restatements → 2 rows.                                                                                                                                                                                    |
-| `SET_BANNER` message                                                                                                                      | contracts §2.8                | REPLACEMENT — 12 literals delete with it.                                                                                                                                                                                                                                      |
-| `HostInteractionRequestByKind` aliases                                                                                                    | contracts §2.2                | REPLACEMENT — the alias pattern already exists in-file for 3 of 7 kinds; this finishes it and deletes 4 interfaces.                                                                                                                                                            |
-| `resumeStreamWithRecovery`, `describeResumeStateResolution`, `withUnhandledFailureReporting`, `validateOrReport`, `describeResumeFailure` | audit C1–C21                  | **FLAGGED** — helper extractions; the repo's history says extract-shared net-ADDS. Each is only legitimate because it deletes byte-identical copies in ≥2 hosts in the same PR and closes a named correctness gap; any that can't show net-≤0 _plus_ the bug fix doesn't land. |
-| `JsonStoreSecrets` base + `withEnvOverride`                                                                                               | audit C6                      | **FLAGGED** — base-class extraction with 2 implementers; borderline under the LOC lesson. The non-negotiable part is the missing PQueue on Electron (a bug); the base class lands only if net-negative, else fix the bug alone.                                                |
-| `TuiApprovalAdornments`                                                                                                                   | contracts §2.2 item 3         | FLAGGED-minor — relocates 2 existing fields out of the payload union; only worth it as part of the union unification, never alone.                                                                                                                                             |
-| `TraceDocument → SessionState` hydrator                                                                                                   | substrate §6d                 | REPLACEMENT — deletes the hand-built payload duplication (~−100); the hydrator's target type exists.                                                                                                                                                                           |
-| headless `SessionRendererPort` impl                                                                                                       | substrate §3                  | REPLACEMENT — a port implementation (the port exists); deletes the hand-rolled `RenderState` fold (~−175).                                                                                                                                                                     |
+| Proposed name                                                                                                                             | Doc                           | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ChildStopPolicy` table                                                                                                                   | lifecycle §4                  | **REWORKED** — the SSOT function already exists; fixed to 3 call-site repairs + 1 doc paragraph. No table.                                                                                                                                                                                                                                                                                                                             |
+| `DisposableStore`                                                                                                                         | lifecycle §2                  | REPLACEMENT — the ecosystem-standard shape; replaces ≥10 hand-rolled registries/arrays, each deleted as it migrates; vitest leak-assert makes it self-policing. Not a coordinator.                                                                                                                                                                                                                                                     |
+| five "lifetime roots"                                                                                                                     | lifecycle §1                  | REPLACEMENT — all five anchors pre-exist; the "roots" are documentation of them, zero new objects.                                                                                                                                                                                                                                                                                                                                     |
+| `invalidate(streamId, slice)`                                                                                                             | substrate §6 / contracts §2.3 | REPLACEMENT — deletes 5 port methods × 2 impls; port shrinks 22→17(→~5 under projection-zero). The `slice` key type reuses the projection shape's existing field names, no new vocabulary.                                                                                                                                                                                                                                             |
+| `pickProjection`                                                                                                                          | contracts §2.3                | REPLACEMENT — declares once what 12 arms restate; every field name already exists on the wire.                                                                                                                                                                                                                                                                                                                                         |
+| `StreamLogFeed`                                                                                                                           | substrate §7                  | **WITHDRAWN 2026-08-19** (was REPLACEMENT) — premise stale: `StreamLogDeltaBuffer` and `createFlushableDebounce` already own the shared halves and the residue is divergent host policy, not one algorithm written twice. Issue #10673 closed NOT_PLANNED; the −180 leaves the program total.                                                                                                                                          |
+| `projectTranscriptRow` / `TranscriptRow`                                                                                                  | substrate §5 B-2              | **FLAGGED** — genuinely a new model on the webview side; honestly +60 LoC; lands only under its drift-elimination justification and the six policy rulings. B-1 (ordering key) alone is REPLACEMENT (−49 + bug fix). **2026-08-19: rulings granted** by the maintainer's parity directive; in flight on `track/transcript-parity`, so the +60 is now a claim the landing PR must account for. B-1 landed as `compareBySeqNo` (#10717). |
+| `SettingEntry` expanded row (`slots`/`honoredBy`/`surfaces`/`onWrite`)                                                                    | contracts §2.1                | REPLACEMENT — one row absorbs six catalogs; every field renames an existing fact, and each absorbed catalog deletes in the same series. Watch: if any absorbed catalog survives "temporarily", this becomes a seventh catalog — the exact hack; land atomically per catalog.                                                                                                                                                           |
+| `defineTool({hosts})`                                                                                                                     | contracts §2.4                | REPLACEMENT — a field on the existing per-tool row; three rosters + `hideFromCli` delete.                                                                                                                                                                                                                                                                                                                                              |
+| `SUBSCRIPTION_PROVIDERS` registry                                                                                                         | audit C9                      | REPLACEMENT — registry-as-contract is an adjudicated KEEP species; 6 restatements → 2 rows.                                                                                                                                                                                                                                                                                                                                            |
+| `SET_BANNER` message                                                                                                                      | contracts §2.8                | REPLACEMENT — 12 literals delete with it.                                                                                                                                                                                                                                                                                                                                                                                              |
+| `HostInteractionRequestByKind` aliases                                                                                                    | contracts §2.2                | REPLACEMENT — the alias pattern already exists in-file for 3 of 7 kinds; this finishes it and deletes 4 interfaces.                                                                                                                                                                                                                                                                                                                    |
+| `resumeStreamWithRecovery`, `describeResumeStateResolution`, `withUnhandledFailureReporting`, `validateOrReport`, `describeResumeFailure` | audit C1–C21                  | **FLAGGED** — helper extractions; the repo's history says extract-shared net-ADDS. Each is only legitimate because it deletes byte-identical copies in ≥2 hosts in the same PR and closes a named correctness gap; any that can't show net-≤0 _plus_ the bug fix doesn't land.                                                                                                                                                         |
+| `JsonStoreSecrets` base + `withEnvOverride`                                                                                               | audit C6                      | **FLAGGED** — base-class extraction with 2 implementers; borderline under the LOC lesson. The non-negotiable part is the missing PQueue on Electron (a bug); the base class lands only if net-negative, else fix the bug alone.                                                                                                                                                                                                        |
+| `TuiApprovalAdornments`                                                                                                                   | contracts §2.2 item 3         | FLAGGED-minor — relocates 2 existing fields out of the payload union; only worth it as part of the union unification, never alone.                                                                                                                                                                                                                                                                                                     |
+| `TraceDocument → SessionState` hydrator                                                                                                   | substrate §6d                 | REPLACEMENT — deletes the hand-built payload duplication (~−100); the hydrator's target type exists.                                                                                                                                                                                                                                                                                                                                   |
+| headless `SessionRendererPort` impl                                                                                                       | substrate §3                  | REPLACEMENT — a port implementation (the port exists); deletes the hand-rolled `RenderState` fold (~−175).                                                                                                                                                                                                                                                                                                                             |
 
 Standing guard for execution agents: any PR whose "consolidation" adds a
 name not on this ledger, or lands a ledger name without its paired
 deletions, is the flagged failure mode — reject in review.
 
 ## 6. Execution shape
+
+**Status at `e00b9317f7` (2026-08-19):** step 1 landed in full; step 2 landed
+(#10719/#10810/#10932 for §2.3, #10715/#10738/#10741/#10908 for the approval
+plane); step 3 landed for §2.1 (#10925), §2.4 (#10806/#10866), §2.6 (#10907),
+§2.8 (#10891) and the scalar-write half of §2.5 (#10891), while
+`SettingsCredentialActions` never started and §2.9 was counter-ruled out of
+existence; step 4's ruling went **test-kernel** and its mechanical PR landed;
+step 5's Wave A landed and Wave C landed in its revised form. The N1 baseline
+prune obligation held — no PR in the series was blocked by stale ratchet
+headroom.
 
 1. **Now, no ruling needed:** land #10601; the `cleanupAllApprovals` +
    orphaned-options + `DIAGNOSTICS_ADD` removals (one or two PRs); the two
@@ -724,6 +873,18 @@ Every revival row is a §5b ledger entry: the PR introducing it must name its pa
 - **Stale sub-claim narrowed:** the audit's "approvalQueue recomputes relativePath/line counts" did not reproduce outside `DiffView.statsFromHunks:52-63` — only that ~15 L dies (C17); `diffHunks.ts` keeps (3 consumers).
 
 ### 7.6 Honest totals and reconciliation against the first-order estimate
+
+> **Superseded by outcome (2026-08-19).** Two of the table's rows are void:
+> **Wave D's −180 is withdrawn** (the extraction was cancelled, substrate doc
+> §7 / issue #10673), and **Wave A's production net did not reach
+> −983..−1,058** — the containers collapsed but landed short per file
+> (`sessionSignalsAdapter` 372 → 312 against a ~90 target,
+> `runProgressRenderer` 573 → 535 against ~395, `cliState` 929 → 876 against
+> ~490, and `subscribeStreamArtifacts` survives at 222 L rather than deleting).
+> The contracts and lifecycle nets landed closer to plan. The pattern is the
+> one the repo's LOC lesson already predicted: the drift-elimination compile
+> links — this section's stated "real deliverable" — arrived; the line counts
+> did not. Do not quote the totals below without this note.
 
 Production LOC, net, by wave (adversarial corrections applied):
 

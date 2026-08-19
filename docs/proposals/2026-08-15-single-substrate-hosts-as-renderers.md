@@ -31,6 +31,26 @@
 > canonical), the 6d hydrator re-targeted to a browser-safe DTO, and three
 > §4 promotion rows corrected (`compactingActive` withdrawn, `resumable` →
 > `resumeEligible`, root-run identity → execution-keyed query).
+>
+> **Reconciled against origin/main `e00b9317f7` (2026-08-19).** Wave A's three
+> steps landed — #10892 (child state + the status rail onto `SessionState`),
+> #10895 (`StreamSlice` retyped, adapter mirrors deleted), #10932 (port
+> `invalidate` narrowing, a headless `SessionRendererPort`, shared stream
+> labels). Wave C landed in its revised form (#10719 derivation, #10889
+> builder fold + the 6d replay hydrator, #10932 port collapse). B-1 landed as
+> a shared `compareBySeqNo` (#10717) — the wire field is `seqNo`, not the
+> `sourceSeqNo` this doc named. **Wave D is withdrawn** (§7). What remains
+> genuinely open is most of the §4 promotion list — `contextState` (still the
+> live CLI gauge bug), `runStartedAt`, `thinkingActive`, root-run stream
+> identity, run input files + `plannedRounds` — plus B-2, whose five policy
+> rulings the maintainer's 2026-08-19 directive supplied and which is in
+> flight on `track/transcript-parity`, and the two §6-item-4 stragglers
+> (`contentStore`, `streamMetaSlice`), both gated behind projection-zero.
+> The LoC arithmetic did not survive contact: the CLI containers deleted
+> real duplication but landed well short of the per-file targets
+> (`sessionSignalsAdapter` 372 → 312 against ~90, `runProgressRenderer`
+> 573 → 535 against ~395, `cliState` 929 → 876 against ~490) — read the §3
+> table as a direction, not a budget.
 
 ## 0. The directive as a ruling, and what it does to prior rulings
 
@@ -170,6 +190,12 @@ without pruning the baseline in the same commit **fails** the set-based
 ratchet. Two structural unlocks carry
 ~70% of it:
 
+**LANDED.** U1 shipped in #10693; U2 in #10805 (stable-identity read cache on
+`SessionState`) and #10932 (the port narrowed to `invalidate(streamId, slice)`).
+The container rows below landed across #10892 / #10895 / #10932 with the
+per-file nets stated in the reconciliation header; two rows did not land and
+are marked in place.
+
 - **U1 — stop dropping retained children.** One line:
   `sessionSignalsAdapter.ts:208` filters `finishedAt === undefined` out of
   the roster the shared applier just computed (retention, phase-merge,
@@ -196,6 +222,37 @@ Then, container by container:
 | `streamViews.ts`                    | 262   | ~140                               | **−120**       | label/parentLabel re-derivation replaced by `buildStreamTabInfo` output (this also fixes the drift where ext and CLI print different names for the same run — `getCleanAgentName(runIdentityName(…))` vs `runIdentityDisplayName`).                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `statusBarDisplay.ts` context gauge | ~35   | ~8                                 | **−27**        | needs the `contextState` promotion (§4); until then the CLI's context window is _wrong_ on subscription/compaction routes — this is a correctness fix wearing a refactor.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `resumeHint.ts` targets             | ~42   | ~27                                | **−15**        | needs the `resumable` promotion (§4).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+
+**Row-by-row status at `e00b9317f7` (2026-08-19):**
+
+- `childExecutions.ts` — **LANDED #10892**, 585 → 241; the module is now a
+  bound `SessionState` + revision signal with no state of its own. The
+  tombstone rider landed separately (#10805) as `SessionState._removedStreams`.
+- `cliState.ts` `StreamSlice` — **LANDED #10895** as a retype, not a
+  composition: 30 fields → 15, every mirror deleted, but the slice is still a
+  standalone interface rather than the `StreamState & CliOnlyFields` shape this
+  row named, and the file is 876 L against the ~490 target. The §0.1-item-8
+  supersession is executed.
+- `sessionSignalsAdapter.ts` — **LANDED #10892/#10895/#10932** for the
+  mechanism (the per-field patch forwarders and the dual status path are gone;
+  `subscribeStreamStatus.ts` is deleted), **not** for the arithmetic: 372 →
+  312 against a ~90 target.
+- `runProgressRenderer.ts` — **LANDED #10932**: a real headless
+  `SessionRendererPort` implementation over the shared applier, `RenderState`'s
+  six fields down to a three-field `RootRunConfigState`. Net −38, not −175.
+- `subscribeStreamArtifacts.ts` — **PARTIAL #10718/#10735/#10895.** The
+  slice-copying is gone (renderers read the canonical projection), but the file
+  survives at 222 L holding the async disk-preload edge and its invalidation.
+  The "−135 to zero" line was wrong: there was a real asynchronous concern
+  underneath the copying.
+- `streamViews.ts` — **LANDED #10932**; the CLI calls `buildStreamTabInfo`, so
+  the ext/CLI name drift this row named is closed.
+- `statusBarDisplay.ts` context gauge — **OPEN.** Still
+  `MODEL_CONFIGS[model]?.contextWindow`; the correctness bug this row called
+  "a correctness fix wearing a refactor" is live, gated on the `contextState`
+  promotion (§4).
+- `resumeHint.ts` targets — **LANDED #10754** via the `resumeEligible` roster
+  field.
 
 Ratchet note for the whole wave: anything relocated lands in
 `src/controllers/session/` (the CLAUDE.md-sanctioned home for host-neutral
@@ -224,6 +281,35 @@ is noted).
 | `cumulativeUsage` sum rule                 | CLI eager-sums, webview lazy-sums                                                           | one owner; if it must be the snapshot store, the +1 surface unit is declared in the PR                                                                          | two summing sites, one rule                                                                                                                                                                                                                                                         |
 | display-label rule                         | `buildStreamTabInfo` vs `runIdentityDisplayName`                                            | one of them (ruling)                                                                                                                                            | same run, two names                                                                                                                                                                                                                                                                 |
 
+**Promotion status at `e00b9317f7` (2026-08-19)** — this is where the program's
+remaining work concentrates:
+
+- `contextState` — **OPEN.** Not on `StreamExecutionState`; the webview still
+  folds it out of the log rail and `statusBarDisplay.ts:221` still reads
+  `MODEL_CONFIGS[model]?.contextWindow`. The §7.4 revival note explains why it
+  is the hard one: it has no fact-rail writer today.
+- removal tombstone / resurrection guard — **LANDED #10805**, as
+  `SessionState._removedStreams` + `isStreamRemoved`, documented as the single
+  owner of the rejection; the shared applier honors it for every host, which
+  is the cross-host bug this row predicted.
+- `runStartedAt` — **OPEN.** Still CLI-only (`cliState.ts`).
+- `thinkingActive` — **OPEN.** Still derived CLI-side from the log rail.
+- `resumeEligible` — **LANDED #10754** on the roster row
+  (`streamState.ts:34`), produced by `executionRegistry.ts`.
+- root-run stream identity — **OPEN.** Three copies survive (two in
+  `cliState.ts`, one in `runProgressRenderer.ts`); no execution-keyed query
+  exists.
+- run input files + `plannedRounds` — **OPEN.** Still headless-only, now in
+  `RootRunConfigState`, whose own comment concedes no shared record carries
+  them.
+- `cumulativeUsage` sum rule — **LANDED.** One owner,
+  `StreamArtifactProjection.sumUsageStats`; the CLI reads it rather than
+  eager-summing.
+- display-label rule — **LANDED #10932** for the ruling
+  (`buildStreamTabInfo` wins, the CLI adopted it); residual direct
+  `runIdentityDisplayName` calls survive in `childExecutions.ts` and three
+  webview components, which is projection, not a second rule.
+
 ## 5. Wave B — transcript: collapse the rules, keep the containers
 
 The deep study's reframe: there are not two row models — there is **one
@@ -235,6 +321,11 @@ ambition: ~700 LoC of `transcriptFold` is Ink-specific incremental
 machinery with no webview consumer, and moving it to `src/shared/` for one
 caller is the banned extraction. What is shared is the **policy**:
 
+- **B-1 — LANDED #10717.** The shared comparator is `compareBySeqNo`
+  (`src/shared/streams/streamOrdering.ts`), consumed by the webview's
+  `messageIndex`; the wire field is spelled `seqNo`, not the `sourceSeqNo`
+  this row named (`sourceSeqNo` is a CLI-side name). One timestamp comparator
+  survives on the timeline path and is deliberate.
 - **B-1 (do first, pays in LoC): the ordering slice — REVISED on review.**
   _(The original form shared the settlement key with the webview; review
   correctly objected that a mutable in-place-updating timeline ordered by
@@ -249,6 +340,16 @@ caller is the banned extraction. What is shared is the **policy**:
   `compareBySourceSeq` helper, two consumers. Net still ≈ −40..−49; the
   "webview ordering bug" claim narrows to ties/skew rather than
   settlement-vs-start.
+- **B-2 — RULINGS GRANTED, IN FLIGHT.** The five policy rulings this row
+  waited on were supplied by the maintainer's 2026-08-19 directive — _"the TUI
+  should render the same state extension/desktop have"_ — which settles
+  membership, error-detail shape, tool-output suppression, header assembly, and
+  the settlement predicate in favour of parity rather than per-host editorial
+  lines. The shared `src/shared/transcript/` row model implementing it
+  (`projectTranscriptRow`, `toolRowModel`, `transcriptText`) is in flight on
+  branch `track/transcript-parity`; it is **not** on main at
+  `e00b9317f7`. The declared +60 LoC is the one estimate to re-check against
+  the landing PR.
 - **B-2: one row model, projected per entry.** A pure
   `projectTranscriptRow(entry, ctx): TranscriptRow | undefined` in
   `src/shared/transcript/` (~350–420 LoC, the `workflowCall.ts` register:
@@ -279,7 +380,9 @@ caller is the banned extraction. What is shared is the **policy**:
   (~1,400), all width/ANSI code. The transcript rail stays separate from the
   fact rail (trap #7, still binding).
 
-Policy rulings needed before B-2 (each one sentence from the maintainer):
+Policy rulings needed before B-2 — **granted 2026-08-19** by the directive
+above; the parity answer applies to all five (each one sentence from the
+maintainer):
 membership set (CLI's 5-type allowlist vs webview's 15 formatters, or one
 allowlist + per-host mode), error-detail shape (1 capped field vs 11
 uncapped), quota-hint canon (CLI API-switch hint vs webview relay label),
@@ -295,6 +398,20 @@ superseding §0.1 item 6 — and item 8 explicitly blesses the
 snapshot+targeted dual path as the intended end state. The census found a
 strictly better, ruling-clean path; the supersession request is withdrawn.
 Full detail: `2026-08-15-shared-contracts-and-retirement.md` §2.3._
+
+**LANDED (2026-08-19).** Item 1 in #10719 (`pickProjection` over a
+`projectionShape` declared once, 10 arms derived; #10810 deleted the dead
+shape bundle it left behind), item 2 in #10932 (`invalidate(streamId, slice)`;
+`onParentStreamChanged` has zero occurrences repo-wide; port 22 → 18 methods),
+item 3 **as amended** — `progressEvents.ts` keeps its interfaces (they are the
+`SessionFact` vocabulary, upstream of the wire, and the doc said they do not
+delete) but their members are now `z.infer` of the message schemas — item 4
+and 6d in #10889 (`ProgressStreamProjectionBuilder` deleted with no shim,
+`replayTrace` hydrating through `buildStreamContentRender` /
+`buildStreamMetadata` on the browser-safe DTO path). Two item-4 stragglers
+remain **OPEN and gated**: `contentStore.ts` (127 L — the upheld
+Lit-DOM-modality dispute, deletable only under B-2) and `streamMetaSlice.ts`
+(169 L — whole-module death only under projection-zero).
 
 The verified fact stands, sharper than before: **12 of the 30 outbound
 arms are single-field projections of the `SYNC_STREAM_CONTENT` render
@@ -334,6 +451,22 @@ ProgressBridge suite as the parity harness.
   keep (~90, fenced).
 
 ## 7. Wave D — one delta pump
+
+> **WITHDRAWN — premise stale (2026-08-19, issue #10673 closed NOT_PLANNED).**
+> A re-audit before execution found the shared pieces already extracted: the
+> buffer/gap-detect/resync half is one implementation, `StreamLogDeltaBuffer`
+> (`src/transcript/StreamLog.ts:64`), consumed by both `WebviewBridge` and
+> `subscribeStreamLog`; and the coalescing half is `createFlushableDebounce`
+> (`@utils/core`), which already has twelve consumers including both sites.
+> What is left in each file is not the same algorithm written twice — it is
+> divergent host policy over one shared substrate: the bridge's 16 ms frame
+> interval and postMessage resync handshake versus the TUI's mode-flip
+> invalidation, generation guards, non-restarting scheduler, and residency
+> lease. Extracting a `StreamLogFeed` over that would be a single shared
+> abstraction with two consumers that each need to override it — the shape the
+> repo's own LOC lesson says net-adds. The `transcriptResidencyLeaseSites`
+> allowlist row therefore stays on `subscribeStreamLog.ts`; the claimed
+> −180 LoC is withdrawn from the program total.
 
 `WebviewBridge` and `subscribeStreamLog` implement the same
 subscribe/buffer/16 ms/gap-detect/resync algorithm over
@@ -413,6 +546,19 @@ Order chosen so each wave is independently shippable and the risky ruling
 5. **D:** `StreamLogFeed`. ≈ −180.
 6. **Promotions (§4)** ride whichever wave first needs them; each fixes a
    named cross-host gap and cites it.
+
+**Execution status at `e00b9317f7` (2026-08-19):** steps 1–2 landed (#10693,
+#10805, #10892, #10895, #10932 — the §0.1-item-8 `StreamSlice` supersession is
+executed, and it remains the program's only one); step 3's B-1 landed
+(#10717) and B-2 is in flight on `track/transcript-parity` with its rulings
+granted; step 4 landed (#10719, #10810, #10889, #10932); **step 5 is
+withdrawn** (§7); step 6's promotions are where the residual work sits — two
+of eight landed (#10754, #10805), one was already single-owner
+(`cumulativeUsage`), one was ruled (`buildStreamTabInfo`), and four remain
+open. The LoC total below is stale in both directions: Wave A's deletions
+were real but smaller per file than projected, Wave D's −180 is withdrawn,
+and the honest reading is that the deliverable landed (one substrate, hosts
+reading it) while the arithmetic did not.
 
 Rough program total (post-verification, and adding the contracts +
 retirement doc's own waves): **≈ −2,100..−2,500 LoC net**, four per-stream

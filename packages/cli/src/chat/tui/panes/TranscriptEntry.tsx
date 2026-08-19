@@ -116,7 +116,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
     return (
       <ToolUseRow
         subagentExecutionLabels={subagentExecutionLabels}
-        toolUse={entry.toolUse}
+        toolRow={entry.row}
         width={width}
       />
     );
@@ -188,7 +188,7 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
       <ToolUseRow
         maxRows={maxRows}
         subagentExecutionLabels={subagentExecutionLabels}
-        toolUse={entry.toolUse}
+        toolRow={entry.row}
         width={width}
       />
     );

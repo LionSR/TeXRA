@@ -10,6 +10,7 @@ import {
   keyboardEventToAccelerator,
 } from '@shared/commands/shortcutPreferences';
 
+import type { DesktopPlatform } from '@shared/commands/accelerators';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
@@ -27,7 +28,7 @@ export const DESKTOP_COMMAND_PALETTE_ID = 'texra.desktop.showCommands';
  * exists (a bootstrap failure leaves no registry at all).
  */
 export function desktopCommandPaletteShortcut(
-  platform: NodeJS.Platform,
+  platform: DesktopPlatform,
 ): DesktopShortcutEntry {
   return {
     id: DESKTOP_COMMAND_PALETTE_ID,
@@ -41,7 +42,7 @@ interface DesktopShortcutRegistryOptions {
   readonly document: Document;
   readonly actions: DesktopCommandActions;
   readonly openCommands: () => void;
-  readonly platform?: NodeJS.Platform;
+  readonly platform?: DesktopPlatform;
 }
 
 export interface DesktopShortcutRegistry extends DesktopShortcutService {

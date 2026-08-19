@@ -9,16 +9,16 @@ import { createContext } from '@lit/context';
 
 // Local imports - progress view
 import type {
-  LogMessageData,
   InquiryThreadUpdatedEvent,
   PhaseStage,
   StreamLifecycleStatus,
+  StreamLogEntry,
   StreamState,
   StreamTabId,
   StreamTabInfo,
   TaskGroup,
 } from '@shared/schemas';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import type { TranscriptRow } from '@shared/transcript';
 
 // Local imports - progress view components
 import type { PermissionState } from './permissionState';
@@ -60,13 +60,15 @@ export const streamStateContext = createContext<StreamContextValue>(
  * Only consumed by LogList, so content components avoid re-rendering during streaming.
  */
 export interface StreamLogContextValue {
-  logs: LogMessageData[];
-  /** Existing log-message indices updated by the most recent backend delta. */
-  updatedMessageIndices: readonly number[];
-  /** Generation immediately before `updatedMessageIndices` was collected. */
-  updatedMessageBaseGeneration: number;
+  /** Source entries, rendered raw by a process stream's terminal view. */
+  entries: StreamLogEntry[];
+  rows: TranscriptRow[];
+  /** Existing row indices updated by the most recent backend delta. */
+  updatedRowIndices: readonly number[];
+  /** Generation immediately before `updatedRowIndices` was collected. */
+  updatedRowBaseGeneration: number;
   /** Current log generation. */
-  messageGeneration: number;
+  rowGeneration: number;
   taskGroups: TaskGroup[];
   isToolUse: boolean;
   hasStreams: boolean;
@@ -76,15 +78,14 @@ export interface StreamLogContextValue {
   streamStatus: StreamLifecycleStatus | null;
   /** Render log output in terminal style (monospace, no timestamps, etc). */
   terminalMode: boolean;
-  /** Retained subagent identities for executions tool summaries. */
-  subagentExecutionLabels?: ExecutionLabels;
 }
 
 export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
-  logs: [],
-  updatedMessageIndices: [],
-  updatedMessageBaseGeneration: 0,
-  messageGeneration: 0,
+  entries: [],
+  rows: [],
+  updatedRowIndices: [],
+  updatedRowBaseGeneration: 0,
+  rowGeneration: 0,
   taskGroups: [],
   isToolUse: false,
   hasStreams: false,

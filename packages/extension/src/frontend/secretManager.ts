@@ -1,7 +1,6 @@
 // Local imports
 import {
   API_PROVIDERS,
-  apiKeySecretName,
   hasUsableApiKey as resolvedHasUsableApiKey,
   type ApiProvider,
 } from '@model/apiProviders';
@@ -31,10 +30,6 @@ export class SecretManager {
   public static readonly API_PROVIDERS = API_PROVIDERS;
 
   public static readonly GITHUB_TOKEN_KEY = GITHUB_TOKEN_STORAGE_KEY;
-
-  public static getApiKeySecretName(provider: ApiProvider): string {
-    return apiKeySecretName(provider);
-  }
 
   public static async gitHubTokenExists(): Promise<'secret' | 'env' | 'none'> {
     return resolveGitHubTokenSource(platform().secrets);

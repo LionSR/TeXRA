@@ -392,6 +392,8 @@ describe('state settings catalog', () => {
     //    tool-use agent prompts, skipping skill discovery when disabled.
     //  - texra.approvalPolicy is read by cliConfig / cliContext and seeded onto
     //    SessionHandle before bash/edit approval boundaries decide.
+    //  - detach-subagents-on-stop is read by detachSubagentsOnStop() when the
+    //    chat TUI stops the root run (Ctrl-C) or kills a subagent execution.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `honoredBy.cli` or `surfaces.cliConfig`.
@@ -404,6 +406,7 @@ describe('state settings catalog', () => {
         WorkspaceStateKey.CODEX_APPROVAL_POLICY,
         WorkspaceStateKey.CODEX_REASONING_EFFORT,
         WorkspaceStateKey.CODEX_SANDBOX_MODE,
+        WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
         WorkspaceStateKey.GIT_AUTHOR_EMAIL,
         WorkspaceStateKey.GIT_AUTHOR_NAME,
         WorkspaceStateKey.GIT_MARK_COMMITS,

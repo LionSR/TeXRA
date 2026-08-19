@@ -1,64 +1,67 @@
 // Local imports - hosts
 import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
+// Local imports - model
+import { apiKeySecretName, isApiProvider } from '@model/apiProviders';
+// Local imports - platform
+import { platform } from '@platform/platform';
+// Local imports - utilities
+import { looksLikeCredentialPlaceholder } from '@utils/text/credentialPlaceholder';
 
 interface SettingsProfileKeyControllerDeps {
   prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>;
   externalOpener: Pick<ExternalOpener, 'openExternal'>;
   getProviderDisplayName(provider: string): string;
   getProviderKeyUrl(provider: string): string | undefined;
-  getApiKeySecretName(provider: string): string;
-  setSecret(key: string, value: string): Promise<void>;
-  deleteSecret(key: string): Promise<void>;
   refreshAfterKeyChange(provider: string): Promise<void>;
+  /**
+   * Show a failed key action to the user. Required: a rejected placeholder or
+   * an unknown provider must never fail silently on any host.
+   */
+  reportFailure(message: string, error: unknown): Promise<void>;
 }
 
 /**
  * Canonical "commit/remove a provider key" logic, shared by every surface
  * that lets a user set or remove an API key (settingsView's Profile tab and
  * the main webview's API key banner). Each surface injects its own prompt
- * flow and refresh behavior; the write/delete/confirm/notify sequence lives
- * here once so it can't drift between surfaces.
+ * flow, refresh behavior, and failure presentation; validation, the
+ * write/delete/confirm/notify sequence, and the secret-store naming live here
+ * once so they can't drift between surfaces.
  */
 export class SettingsProfileKeyController {
   constructor(private readonly deps: SettingsProfileKeyControllerDeps) {}
 
   async setProviderKey(provider: string): Promise<void> {
-    const displayName = this.deps.getProviderDisplayName(provider);
-    const apiKey = await this.deps.prompt.input({
-      prompt: `Enter ${displayName} API key`,
-      password: true,
-      placeHolder: '************************************',
+    await this.run(provider, 'set', async () => {
+      const apiKey = await this.deps.prompt.input({
+        prompt: `Enter ${this.deps.getProviderDisplayName(provider)} API key`,
+        password: true,
+        placeHolder: '************************************',
+      });
+      if (apiKey == null) return;
+      await this.storeProviderKey(provider, apiKey);
     });
-
-    if (apiKey == null) return;
-
-    await this.commitProviderKey(provider, apiKey);
   }
 
   async commitProviderKey(provider: string, apiKey: string): Promise<void> {
-    const normalizedApiKey = apiKey.trim();
-    if (!normalizedApiKey) return;
-
-    const displayName = this.deps.getProviderDisplayName(provider);
-    await this.deps.setSecret(
-      this.deps.getApiKeySecretName(provider),
-      normalizedApiKey,
+    await this.run(provider, 'set', () =>
+      this.storeProviderKey(provider, apiKey),
     );
-    void this.deps.prompt.info(`${displayName} API key has been set`);
-    await this.deps.refreshAfterKeyChange(provider);
   }
 
   async removeProviderKey(provider: string): Promise<void> {
-    const displayName = this.deps.getProviderDisplayName(provider);
-    const confirmed = await this.deps.prompt.confirm(
-      `Remove the ${displayName} API key? This cannot be undone.`,
-      { confirmLabel: 'Remove', cancelLabel: 'Cancel', modal: false },
-    );
-    if (!confirmed) return;
+    await this.run(provider, 'remove', async () => {
+      const displayName = this.deps.getProviderDisplayName(provider);
+      const confirmed = await this.deps.prompt.confirm(
+        `Remove the ${displayName} API key? This cannot be undone.`,
+        { confirmLabel: 'Remove', cancelLabel: 'Cancel', modal: false },
+      );
+      if (!confirmed) return;
 
-    await this.deps.deleteSecret(this.deps.getApiKeySecretName(provider));
-    void this.deps.prompt.info(`${displayName} API key has been removed`);
-    await this.deps.refreshAfterKeyChange(provider);
+      await platform().secrets.delete(secretNameFor(provider));
+      void this.deps.prompt.info(`${displayName} API key has been removed`);
+      await this.deps.refreshAfterKeyChange(provider);
+    });
   }
 
   async openProviderKeyUrl(provider: string): Promise<void> {
@@ -67,4 +70,45 @@ export class SettingsProfileKeyController {
       await this.deps.externalOpener.openExternal(url);
     }
   }
+
+  private async storeProviderKey(
+    provider: string,
+    apiKey: string,
+  ): Promise<void> {
+    const normalizedApiKey = apiKey.trim();
+    if (!normalizedApiKey) return;
+
+    const displayName = this.deps.getProviderDisplayName(provider);
+    if (looksLikeCredentialPlaceholder(normalizedApiKey)) {
+      throw new Error(
+        `This looks like a placeholder rather than a ${displayName} API key. Enter the key issued by the provider.`,
+      );
+    }
+
+    await platform().secrets.set(secretNameFor(provider), normalizedApiKey);
+    void this.deps.prompt.info(`${displayName} API key has been set`);
+    await this.deps.refreshAfterKeyChange(provider);
+  }
+
+  private async run(
+    provider: string,
+    verb: 'set' | 'remove',
+    action: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await action();
+    } catch (error) {
+      await this.deps.reportFailure(
+        `Failed to ${verb} ${this.deps.getProviderDisplayName(provider)} API key`,
+        error,
+      );
+    }
+  }
+}
+
+function secretNameFor(provider: string): string {
+  if (!isApiProvider(provider)) {
+    throw new Error(`Unknown API provider: ${provider}`);
+  }
+  return apiKeySecretName(provider);
 }
