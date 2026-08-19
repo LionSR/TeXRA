@@ -53,3 +53,17 @@ export async function findTranscriptSpillFile(
   if (!resolved || !(await StorageFS.isFile(resolved))) return undefined;
   return StorageFS.fullPath(resolved);
 }
+
+/**
+ * What the two native hosts say when {@link findTranscriptSpillFile} finds
+ * nothing. Both the progress view's "open full output" action and the desktop
+ * task shell's run the same lookup against the same store; a run whose
+ * artifacts were reaped is one fact, so it gets one sentence.
+ */
+export const SPILL_ARTIFACT_DELETED_MESSAGE =
+  'Full output is unavailable because this run artifact was deleted.';
+
+/** Companion for the failure path — the lookup or the open itself threw. */
+export function spillArtifactOpenFailedMessage(reason: string): string {
+  return `Full output could not be opened: ${reason}`;
+}

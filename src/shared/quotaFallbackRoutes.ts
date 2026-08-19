@@ -1,3 +1,4 @@
+import { CHATGPT_AUTH, GROK_AUTH } from './copy/accountAuth';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscriptionId,
@@ -41,14 +42,14 @@ const OAUTH_QUOTA_FALLBACK_ROUTES = Object.freeze([
     exhaustionReason: 'chatgpt-subscription',
     fallbackApiProvider: 'openai',
     retryFallbackName: 'your own OpenAI API key',
-    retrySourceName: 'ChatGPT subscription',
+    retrySourceName: CHATGPT_AUTH.subscriptionLabel,
   }),
   Object.freeze({
     id: 'grok',
     exhaustionReason: 'xai-subscription',
     fallbackApiProvider: 'xai',
     retryFallbackName: 'your own xAI API key',
-    retrySourceName: 'Grok subscription',
+    retrySourceName: GROK_AUTH.subscriptionLabel,
   }),
 ] as const satisfies readonly QuotaFallbackRoute[]);
 

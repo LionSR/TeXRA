@@ -23,6 +23,7 @@ import type {
   GrokAuthStatus,
   SubscriptionUsageSnapshot,
 } from '@shared/schemas';
+import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import {
   renderSettingsSectionHeading,
@@ -169,16 +170,16 @@ export class SubscriptionSection extends LitElement {
 export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
   Object.freeze({
     sectionId: 'chatgpt-subscription',
-    title: 'ChatGPT subscription',
+    title: CHATGPT_AUTH.subscriptionLabel,
     description:
       'Use OpenAI models through your ChatGPT Plus, Pro, or Team subscription. No OpenAI API key is needed.',
     note: 'The subscription currently uses a 272,000-token Codex context cap, not the full 1,000,000-token API context.',
-    preferLabel: 'Prefer ChatGPT subscription',
+    preferLabel: CHATGPT_AUTH.preferLabel,
     preferDescription: 'Use the subscription for eligible Codex models.',
     accountTitle: 'ChatGPT account',
     connectDescription:
       'Connect the ChatGPT account that owns your subscription.',
-    signInText: 'Sign in with ChatGPT',
+    signInText: CHATGPT_AUTH.signInLabel,
     commands: Object.freeze({
       setPreferSubscription:
         SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
@@ -196,16 +197,16 @@ export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
 export const GROK_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
   Object.freeze({
     sectionId: 'grok-subscription',
-    title: 'Grok subscription',
+    title: GROK_AUTH.subscriptionLabel,
     description:
       'Use xAI Grok models through your SuperGrok / xAI account. No xAI API key is needed.',
     note: 'Uses the public Grok CLI OAuth client. xAI may change or revoke that registration without notice.',
-    preferLabel: 'Prefer Grok subscription',
+    preferLabel: GROK_AUTH.preferLabel,
     preferDescription: 'Use the subscription instead of an xAI API key.',
     accountTitle: 'Grok account',
     connectDescription:
       'Connect the xAI account that owns your SuperGrok plan.',
-    signInText: 'Sign in with Grok',
+    signInText: GROK_AUTH.signInLabel,
     commands: Object.freeze({
       setPreferSubscription:
         SETTINGS_VIEW_COMMANDS.SET_GROK_PREFER_SUBSCRIPTION,

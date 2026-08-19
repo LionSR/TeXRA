@@ -9,7 +9,7 @@ import {
 } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
+import { formatInstructionActionHint } from '@shared/copy/instructionActionHint';
 
 // Local imports - CLI runtime
 import {
@@ -42,22 +42,6 @@ const ApprovalBypassNdjsonEvent = {
   toolEdit: 'updateToolEditApprovalBypassState',
   superYolo: 'updateSuperYoloBypassState',
 } as const satisfies Record<ApprovalBypassKind, string>;
-
-/**
- * Human-readable phrasing for {@link InstructionAction} tokens printed to
- * stderr in text mode. Mirrors what the VS Code extension's
- * `INSTRUCTION_ACTION_VIEW` (packages/extension/src/frontend/events/
- * agentEventListeners.ts) conveys via its button titles, translated to CLI
- * phrasing since there's no button to click here. The `satisfies` clause keeps
- * the table exhaustive at compile time, but the lookup type stays partial: an
- * action token can arrive from a newer producer over the wire, and those fall
- * back to the raw token rather than printing an empty hint.
- */
-const INSTRUCTION_ACTION_HINT: Partial<Record<InstructionAction, string>> = {
-  [INSTRUCTION_ACTION.SET_API_KEY]: 'set your API key (texra setup)',
-  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'see the configuration guide',
-  [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'see the model documentation',
-} satisfies Record<InstructionAction, string>;
 
 /**
  * Builds the NDJSON-mode handler map. `requestOpenFile` and
@@ -134,11 +118,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         // an actionable instruction (e.g. missing API key), not routine
         // progress noise.
         runProgress?.preserve();
-        const hint = payload.actions?.length
-          ? ` (${payload.actions
-              .map((action) => INSTRUCTION_ACTION_HINT[action] ?? action)
-              .join(', ')})`
-          : '';
+        const hint = formatInstructionActionHint(payload.actions, 'cli');
         ensureLogger().info(`${payload.message}${hint}`);
         return true;
       },

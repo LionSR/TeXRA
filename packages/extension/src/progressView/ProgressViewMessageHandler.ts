@@ -52,12 +52,20 @@ import {
   GETTING_STARTED_COMMANDS,
 } from '@shared/schemas';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  ALL_STREAMS_DELETED_CAUSE,
+  RETRY_REQUEST_CLEARED_CAUSE,
+} from '@shared/copy/interactionCancellation';
 import { unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   cleanupUnscopedApprovals,
   releaseStreamResources,
 } from '@tools/approval';
-import { findTranscriptSpillFile } from '@transcript';
+import {
+  findTranscriptSpillFile,
+  spillArtifactOpenFailedMessage,
+  SPILL_ARTIFACT_DELETED_MESSAGE,
+} from '@transcript';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -165,7 +173,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       this.interactions.cancel({
         streamId: stream,
         kind: 'retry',
-        cause: 'Retry request cleared.',
+        cause: RETRY_REQUEST_CLEARED_CAUSE,
       });
     }
     // Deletion must stop if the command fails; safeExecuteCommand intentionally
@@ -181,7 +189,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   public cleanupDeletedStreams(options: { allDeleted: boolean }): void {
     if (!options.allDeleted) return;
     cleanupUnscopedApprovals();
-    this.interactions.cancel({ cause: 'All streams deleted.' });
+    this.interactions.cancel({ cause: ALL_STREAMS_DELETED_CAUSE });
   }
 
   /** Execute a VS Code command, routing failures through this view's error channel. */
@@ -546,9 +554,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             await defaultSession().flushArtifacts();
             const file = await findTranscriptSpillFile(spillPath);
             if (!file) {
-              await this.host.error(
-                'Full output is unavailable because this run artifact was deleted.',
-              );
+              await this.host.error(SPILL_ARTIFACT_DELETED_MESSAGE);
               return;
             }
             const document = await vscode.workspace.openTextDocument(
@@ -557,7 +563,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             await vscode.window.showTextDocument(document, { preview: true });
           } catch (error) {
             await this.host.error(
-              `Full output could not be opened: ${toErrorMessage(error)}`,
+              spillArtifactOpenFailedMessage(toErrorMessage(error)),
             );
           }
         },
