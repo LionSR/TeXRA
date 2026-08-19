@@ -6,6 +6,7 @@ import {
   getRunContextWorkingDirectory,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
+import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { normalizeFilePath } from '@utils/core';
@@ -16,11 +17,7 @@ import {
 } from '@utils/files/externalRoots';
 import { locatePathInRoot } from '@utils/files/workspaceRoot';
 import { readPlatformSetting } from '@utils/config/platformSettings';
-import {
-  getPathSegments,
-  isPathWithin,
-  toPosixPath,
-} from '@utils/core/pathCore';
+import { getPathSegments, toPosixPath } from '@utils/core/pathCore';
 
 export interface WorkspacePathResolution {
   relative: string;
@@ -131,16 +128,20 @@ export function resolveWorkspaceRelativePath(
   if (root) {
     // Absolute paths need special handling — locatePathInRoot only works with relative paths.
     if (input && path.isAbsolute(input)) {
-      if (!isPathWithin(root, input)) {
+      // `relativeToRoot` owns containment for the whole repo: a lexical pass
+      // first, then a realpath comparison, so a root and a path that name the
+      // same directory through different symlink spellings resolve rather than
+      // being rejected. Re-deriving it here with a bare `isPathWithin` made
+      // this branch the only containment check in the repo that answers on
+      // spelling instead of identity.
+      const relative = relativeToRoot(root, input);
+      if (relative === undefined) {
         return resolveOutsideRoot(
           input,
           findExternalRoot(input),
           'Path must stay within the working directory.',
         );
       }
-      // Normalize to POSIX separators so .relative is consistent across platforms
-      // (locatePathInRoot and WorkspaceFS.locatePath already do this).
-      const relative = path.relative(root, input).replaceAll('\\', '/');
       return annotateExternalPermission({
         relative: relative || '.',
         absolute: input,
