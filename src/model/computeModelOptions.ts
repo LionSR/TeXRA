@@ -8,6 +8,7 @@ import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
+import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import {
   DEFAULT_HELPER_MODEL,
   providerDisplayName,
@@ -107,7 +108,7 @@ const AVAILABILITY_STATUS_FIELDS = {
     requiresKey: true,
   },
   'subscription-access': {
-    label: 'ChatGPT subscription',
+    label: CHATGPT_AUTH.subscriptionLabel,
     available: true,
     requiresKey: false,
   },
@@ -348,7 +349,7 @@ async function resolveModelAvailability(
     if (subscriptionCapabilities) {
       return {
         ...availabilityStatus('subscription-access'),
-        label: 'Grok subscription',
+        label: GROK_AUTH.subscriptionLabel,
         providerCapabilities: subscriptionCapabilities,
       };
     }

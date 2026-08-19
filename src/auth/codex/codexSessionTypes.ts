@@ -7,6 +7,8 @@
  */
 import { z } from 'zod';
 
+import { CHATGPT_AUTH } from '@shared/copy/accountAuth';
+
 import {
   SubscriptionOAuthError,
   type SubscriptionOAuthErrorKind,
@@ -93,8 +95,9 @@ export class CodexAuthError extends SubscriptionOAuthError {
 export function formatCodexAuthUnavailableMessage(
   error: CodexAuthError,
 ): string {
+  const turnOff = `turn off "${CHATGPT_AUTH.preferLabel}".`;
   const action = error.needsReauth
-    ? 'Sign in with ChatGPT again, or turn off "Prefer ChatGPT subscription".'
-    : 'Try again in a moment, or turn off "Prefer ChatGPT subscription".';
-  return `ChatGPT subscription unavailable: ${error.message} ${action}`;
+    ? `${CHATGPT_AUTH.signInLabel} again, or ${turnOff}`
+    : `Try again in a moment, or ${turnOff}`;
+  return `${CHATGPT_AUTH.subscriptionLabel} unavailable: ${error.message} ${action}`;
 }
