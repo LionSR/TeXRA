@@ -20,7 +20,7 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import { executeCommandSync } from '@utils/system/execUtils';
-import { extendEnvPath } from '@utils/system/platformPaths';
+import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - runtime
@@ -117,7 +117,10 @@ function buildOverleafClonePorts(
       canonicalWorkspacePath = await realpath(workspacePath);
       await execa('git', ['clone', remoteUrl, '.'], {
         cwd: canonicalWorkspacePath,
-        env: { GIT_TERMINAL_PROMPT: '0', PATH: extendEnvPath() },
+        // extendEnv: false is required — makeMachineGitEnv omits the
+        // helper-invoking keys, and execa's default merge re-adds them.
+        env: makeMachineGitEnv(),
+        extendEnv: false,
       });
     },
     showCloneSucceeded: (label) => {
