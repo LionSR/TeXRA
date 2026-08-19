@@ -35,7 +35,6 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { FileStat } from '@platform/interfaces';
 import { platform } from '@platform/platform';
@@ -71,7 +70,7 @@ import {
   readCompletedRunConversation,
   readCompletedRunTodos,
 } from '@transcript';
-import { assertNever, clamp, normalizeFilePath, unique } from '@utils/core';
+import { assertNever, clamp, unique } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -103,7 +102,7 @@ import {
   ViewRangeSchema,
 } from './formatting';
 import { formatConversation } from './executions/conversationFormat';
-import { isKVFile } from './executions/executionKvFiles';
+import { listRunGeneratedFiles } from './executions/runGeneratedFiles';
 import {
   listenForFollowUp,
   shouldSkipWait,
@@ -236,66 +235,6 @@ function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
     const sizeStr = entry.isDir ? '<dir>' : formatBytes(entry.size);
     return `${sizeStr.padStart(8)}  ${entry.path}`;
   });
-}
-
-async function walkRunDirectory(
-  basePath: string,
-  relativePath: string,
-  maxDepth: number,
-): Promise<SizedEntry[]> {
-  const results: SizedEntry[] = [];
-  const fullPath = relativePath ? path.join(basePath, relativePath) : basePath;
-
-  let entries: [string, number][];
-  try {
-    entries = await StorageFS.readDir(fullPath);
-  } catch (error) {
-    // A missing directory is the expected "nothing persisted for this run"
-    // case. Any other read failure (permissions, corrupt storage) still
-    // degrades to the empty listing, but loudly: the warn is the
-    // (diagnostic-only) surfacing mechanism, matching the
-    // outputDiscovery/externalInquiryStorage fallback precedent (#10630).
-    if (!isFileNotFoundError(error)) {
-      log.warn(`Unreadable run directory '${fullPath}'; listing it as empty`, {
-        data: error,
-      });
-    }
-    return results;
-  }
-
-  for (const [name, type] of entries) {
-    // Build raw path for filesystem access (preserves platform separators),
-    // then normalize to forward slashes only for display output.
-    const entryRaw = path.join(relativePath, name);
-    const entryRelative = normalizeFilePath(entryRaw);
-    const entryFull = path.join(basePath, entryRaw);
-    const isDir = isDirectory(type);
-
-    try {
-      const stats = await StorageFS.stat(entryFull);
-      results.push({ path: entryRelative, size: stats.size, isDir });
-
-      if (isDir && maxDepth > 1) {
-        results.push(
-          ...(await walkRunDirectory(basePath, entryRaw, maxDepth - 1)),
-        );
-      }
-    } catch {
-      // Skip entries we can't stat
-    }
-  }
-
-  return results;
-}
-
-/**
- * List the generated (non-KV) files under a run directory, recursing up to
- * two levels deep — the internal KV metadata blobs live alongside generated
- * output and are filtered out.
- */
-async function listRunDirectoryFiles(runDir: string): Promise<SizedEntry[]> {
-  const entries = await walkRunDirectory(runDir, '', 2);
-  return entries.filter((entry) => !isKVFile(path.basename(entry.path)));
 }
 
 /**
@@ -1437,13 +1376,18 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   }
 
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
-    const runDir = await findExistingRunStoragePath(executionId);
-    const entries = runDir ? await listRunDirectoryFiles(runDir) : [];
-    if (entries.length === 0) {
+    const files = await listRunGeneratedFiles(executionId);
+    if (files.length === 0) {
       return executed('No files generated for this execution.');
     }
 
-    const lines = formatSizedEntryLines(entries);
+    const lines = formatSizedEntryLines(
+      files.map((file) => ({
+        path: file.path,
+        size: file.size,
+        isDir: file.isDirectory,
+      })),
+    );
 
     return executed(
       `Files in /executions/${executionId}/files:\n\n${lines.join('\n')}`,
