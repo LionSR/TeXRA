@@ -407,7 +407,6 @@ export class StreamTabs extends LitElement {
   protected override willUpdate(changed: PropertyValues): void {
     if (
       !changed.has('childStreamsByParent') &&
-      !changed.has('streamStates') &&
       !changed.has('pendingApprovalStreamIds') &&
       !changed.has('activeStreamId')
     ) {
