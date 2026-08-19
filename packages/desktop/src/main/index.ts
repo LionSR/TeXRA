@@ -28,7 +28,6 @@ import {
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   formatUnavailableTeamMembersMessage,
@@ -789,16 +788,7 @@ function createWindow(options: {
         signIn,
         signOut: () => desktopAuth.signOut(),
       },
-      setUseIncludedModelAccess: (enabled) =>
-        getServerSideKeyService().setUseIncludedModelAccess(enabled),
-      refreshSpendingStatus: () =>
-        getServerSideKeyService().refreshSpendingStatus(),
       subscriptionUsage,
-      modelSelectionExtras: {
-        useIncludedAccess: () =>
-          getServerSideKeyService().getUseIncludedModelAccess(),
-        getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
-      },
       onCredentialChanged: async () => {
         await onboardingIpcRef.current?.refreshOnboardingFunnel();
       },
@@ -816,7 +806,7 @@ function createWindow(options: {
         buildItems: async (cachedResults) => {
           const { buildToolDashboardItems } =
             await import('@controllers/settingsView/ToolDashboardData');
-          return buildToolDashboardItems(cachedResults);
+          return buildToolDashboardItems('desktop', cachedResults);
         },
         getCachedCheckResults: async () => {
           const { getLastCheckResults } =

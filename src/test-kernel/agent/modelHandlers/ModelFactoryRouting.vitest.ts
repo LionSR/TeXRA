@@ -607,9 +607,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('falls back when subscription re-authentication is required', async () => {
-    await installSignedInCodexPlatform({
-      'texra.useIncludedModelAccess': true,
-    });
+    await installSignedInCodexPlatform();
     const coordinator = codexCoordinator();
     vi.spyOn(coordinator, 'getFreshAccessToken').mockImplementation(
       async () => {
@@ -626,9 +624,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('propagates a superseded re-auth failure without falling back', async () => {
-    await installSignedInCodexPlatform({
-      'texra.useIncludedModelAccess': true,
-    });
+    await installSignedInCodexPlatform();
     const error = new CodexAuthError('session changed', 'expired');
     vi.spyOn(codexCoordinator(), 'getFreshAccessToken').mockRejectedValue(
       error,
@@ -644,9 +640,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('propagates session verification read failures without falling back', async () => {
-    await installSignedInCodexPlatform({
-      'texra.useIncludedModelAccess': true,
-    });
+    await installSignedInCodexPlatform();
     const coordinator = codexCoordinator();
     const readError = new Error('keychain unavailable');
     vi.spyOn(coordinator, 'getFreshAccessToken').mockRejectedValue(
@@ -663,9 +657,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('wraps raw token verification failures as transient auth errors', async () => {
-    await installSignedInCodexPlatform({
-      'texra.useIncludedModelAccess': true,
-    });
+    await installSignedInCodexPlatform();
     const rawError = new Error('keychain unavailable');
     vi.spyOn(codexCoordinator(), 'getFreshAccessToken').mockRejectedValue(
       rawError,
@@ -679,10 +671,8 @@ describe('OpenAI model handler routing', () => {
     );
   });
 
-  it('uses the Codex endpoint for a signed-in preferred subscription even when relay access is selected', async () => {
-    await installSignedInCodexPlatform({
-      'texra.useIncludedModelAccess': true,
-    });
+  it('uses the Codex endpoint for a signed-in preferred subscription', async () => {
+    await installSignedInCodexPlatform();
 
     await inspectHandler(createModelHandler(codexEligibleConfig), (handler) => {
       expect(handler.constructor.name).toBe('ModelHandlerCodex');
@@ -693,22 +683,20 @@ describe('OpenAI model handler routing', () => {
     });
   });
 
-  it('treats Codex and relay Responses handlers with the shared key as compatible', async () => {
-    await installSignedInCodexPlatform({
-      'texra.useIncludedModelAccess': true,
-    });
+  it('treats Codex and signed-out Responses handlers with the shared key as compatible', async () => {
+    await installSignedInCodexPlatform();
     const codex = await createModelHandler(codexEligibleConfig);
     await codexCoordinator().signOut();
-    const relay = await createModelHandler(codexEligibleConfig);
+    const signedOut = await createModelHandler(codexEligibleConfig);
     try {
-      expect(codex.constructor).not.toBe(relay.constructor);
+      expect(codex.constructor).not.toBe(signedOut.constructor);
       expect(activeModelHandlerCompatibilityKey(codex)).toBe(
-        activeModelHandlerCompatibilityKey(relay),
+        activeModelHandlerCompatibilityKey(signedOut),
       );
-      expect(modelHandlersShareConversationFormat(codex, relay)).toBe(true);
+      expect(modelHandlersShareConversationFormat(codex, signedOut)).toBe(true);
     } finally {
       codex.dispose();
-      relay.dispose();
+      signedOut.dispose();
     }
   });
 
@@ -731,7 +719,6 @@ describe('OpenAI model handler routing', () => {
 
   it('keeps Responses-compatible resumes on the Codex endpoint when subscription access is preferred', async () => {
     await installSignedInCodexPlatform({
-      'texra.useIncludedModelAccess': true,
       'texra.useOpenRouter': true,
     });
 
@@ -1020,17 +1007,11 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
       createModelHandler: create,
       activeModelHandlerCompatibilityKey: activeKey,
     } = await import('@agent/runtime/ModelFactory');
-    // Stub the relay service on the same fresh module instance the re-imported
-    // factory reads.
-    const { setServerSideKeyService: setService } =
-      await import('@auth/serverKeys');
-    setService({
-      getUseIncludedModelAccess: () => false,
-      canUseServerSideKeys: async () => false,
-    } as never);
-    const { installTexraModelAccess } =
-      await import('@controllers/modelAccess/installTexraModelAccess');
-    installTexraModelAccess();
+    // Install the account probes on the same fresh module instance the
+    // re-imported factory reads.
+    const { installTexraAccountProbes } =
+      await import('@controllers/modelAccess/installTexraAccountProbes');
+    installTexraAccountProbes();
 
     const mismatches: string[] = [];
     for (const [name, config] of Object.entries(MODEL_CONFIGS)) {
@@ -1053,15 +1034,13 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
   });
 });
 
-describe('Kimi Code reroute under included access', () => {
+describe('Kimi Code reroute', () => {
   const dualBackendKimi = {
     ...modelConfig(ModelProvider.MOONSHOT),
     kimiSubscription: true,
   } as ModelConfig;
 
-  async function createKimiHandler(options: {
-    readonly includedAccess: boolean;
-  }): Promise<ModelConfig> {
+  it('reroutes dual-backend Kimi models to the coding endpoint', async () => {
     // Re-import alongside a freshly-initialized platform (see the
     // module-header note).
     await installPlatform({
@@ -1070,32 +1049,13 @@ describe('Kimi Code reroute under included access', () => {
     });
     const { createModelHandler: create } =
       await import('@agent/runtime/ModelFactory');
-    const { setServerSideKeyService: setService } =
-      await import('@auth/serverKeys');
     const { invalidateApiKeyCache } = await import('@model/apiProviders');
-    setService({
-      getUseIncludedModelAccess: () => options.includedAccess,
-      canUseServerSideKeys: async () => options.includedAccess,
-    } as never);
-    const { installTexraModelAccess } =
-      await import('@controllers/modelAccess/installTexraModelAccess');
-    installTexraModelAccess();
     invalidateApiKeyCache();
 
-    return inspectHandler(create(dualBackendKimi), (handler) => handler.config);
-  }
-
-  it('does not reroute dual-backend Kimi models while the relay serves requests', async () => {
-    // The rerouted config pins the coding baseUrl, which outranks the relay
-    // URL in resolveBaseUrl while the credential layer resolves a relay
-    // token — under serving included access the config must stay untouched.
-    const config = await createKimiHandler({ includedAccess: true });
-    expect(config.baseUrl).toBeUndefined();
-    expect(config.fullName).toBe(dualBackendKimi.fullName);
-  });
-
-  it('reroutes to the coding endpoint when the relay cannot serve', async () => {
-    const config = await createKimiHandler({ includedAccess: false });
+    const config = await inspectHandler(
+      create(dualBackendKimi),
+      (handler) => handler.config,
+    );
     expect(config.baseUrl).toBe('https://api.kimi.com/coding/v1');
   });
 });
@@ -1141,7 +1101,7 @@ describe('createKimiCodeFallbackHandler', () => {
   });
 
   it('rebuilds nothing when the live config is not on the coding route', async () => {
-    // A plain direct/relay kimi3 handler re-resolves fine with a rebind.
+    // A plain direct kimi3 handler re-resolves fine with a rebind.
     await expect(
       createKimiCodeFallbackHandler(MODEL_CONFIGS.kimi3, 'kimi3'),
     ).resolves.toBeUndefined();

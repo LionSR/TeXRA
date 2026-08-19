@@ -116,7 +116,7 @@ const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
  * provider this handler serves (DeepSeek, Kimi, GLM, MiniMax, xAI, DashScope,
  * …). Most return a strict `ChatCompletion`, but the reasoning stream
  * aggregator finalizes to a streaming-style `{ role, content }` object with
- * no `choices`, and some relays return a bare `{ error }` payload.
+ * no `choices`, and some proxies return a bare `{ error }` payload.
  */
 type OpenAIClassifiedResponse =
   | { kind: 'chat'; choice: ChatCompletion.Choice }

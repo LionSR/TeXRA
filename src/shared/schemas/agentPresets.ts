@@ -88,7 +88,7 @@ export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
  * as a team card in the settings UI — only `apply_team` and default-team
  * seeding resolve it.
  *
- * `orchestrator` is relay-served and only resolves after sign-in; listing it
+ * `orchestrator` is account-served and only resolves after sign-in; listing it
  * here is harmless because roster application intersects preset names with
  * the live registry.
  */

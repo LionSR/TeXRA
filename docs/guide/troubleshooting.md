@@ -145,7 +145,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 1. **Verify API keys**:
    - VS Code extension: open the **Dashboard → Models** tab and re-enter the key for the affected provider
-   - CLI: set the provider's API-key environment variable (or run `texra auth login` for hosted access)
+   - CLI: set the provider's API-key environment variable (or connect a provider subscription with `texra auth chatgpt login`)
 
 2. **Check API key validity**:
    - Verify your API keys are active in the provider dashboards

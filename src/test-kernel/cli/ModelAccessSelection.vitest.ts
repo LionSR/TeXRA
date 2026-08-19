@@ -1,13 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  contextForCliModelAccess,
   readCliModelAccessStatus,
   updateCliModelAccess,
 } from '@cli/runtime/modelAccessSelection';
 import {
   buildCliModelAccessItems,
-  cliApiFallbackSelection,
   formatCliModelAccessRoute,
   formatCliModelAccessRouteInline,
   parseCliModelAccessSelection,
@@ -25,7 +23,6 @@ const mocks = vi.hoisted(() => ({
   isPreferXaiSubscription: vi.fn(),
   setPreferXaiSubscription: vi.fn(),
   invalidateModelOptionsCache: vi.fn(),
-  setCliApiMode: vi.fn(),
   shouldUseSubscriptionDeviceCode: vi.fn(),
   signInCliChatGpt: vi.fn(),
   signInCliGrok: vi.fn(),
@@ -107,17 +104,6 @@ vi.mock('@model/computeModelOptions', () => ({
   invalidateModelOptionsCache: mocks.invalidateModelOptionsCache,
 }));
 
-vi.mock('@cli/runtime/apiAccessMode', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@cli/runtime/apiAccessMode')>();
-  return {
-    ...actual,
-    effectiveCliApiMode: (source: { apiMode?: 'included' | 'personal' }) =>
-      source.apiMode ?? 'included',
-    setCliApiMode: mocks.setCliApiMode,
-  };
-});
-
 vi.mock('@cli/runtime/chatgptLogin', () => ({
   signInCliChatGpt: mocks.signInCliChatGpt,
 }));
@@ -135,7 +121,7 @@ vi.mock('@cli/runtime/subscriptionLogin', async (importOriginal) => {
   };
 });
 
-const context = createTestCliContext({ apiMode: 'personal' });
+const context = createTestCliContext();
 
 type AccessRoute = Parameters<typeof formatCliModelAccessRoute>[0];
 
@@ -193,10 +179,6 @@ beforeEach(() => {
     effective: false,
     target: 'global',
   });
-  mocks.setCliApiMode.mockImplementation(async (mode: string) => ({
-    mode,
-    openRouterDisabled: false,
-  }));
   mocks.shouldUseSubscriptionDeviceCode.mockReturnValue(false);
   mocks.hasUsableApiKey.mockResolvedValue(false);
   mocks.lookupApiKeyOrigin.mockResolvedValue('none');
@@ -220,42 +202,25 @@ describe('CLI model access routes', () => {
     ['glm-code', subscriptionPreference('glm-code', 'on')],
     ['glm-coding', subscriptionPreference('glm-code', 'on')],
     ['glm-coding-plan', subscriptionPreference('glm-code', 'on')],
-    ['included', cliApiFallbackSelection('included')],
-    ['relay', cliApiFallbackSelection('included')],
-    ['personal', cliApiFallbackSelection('personal')],
-    ['byok', cliApiFallbackSelection('personal')],
     ['direct', undefined],
   ])('parses the route or compatibility spelling %s', (input, expected) => {
     expect(parseCliModelAccessSelection(input)).toEqual(expected);
   });
 
-  it('keeps canonical API fallback selections stable and immutable', () => {
-    const included = cliApiFallbackSelection('included');
-    const personal = cliApiFallbackSelection('personal');
-
-    expect(cliApiFallbackSelection('included')).toBe(included);
-    expect(cliApiFallbackSelection('personal')).toBe(personal);
-    expect(Object.isFrozen(included)).toBe(true);
-    expect(Object.isFrozen(personal)).toBe(true);
-  });
-
   it('uses observed access before prospective access preferences', () => {
     expect(
       resolveCliModelAccessRoute({
-        apiMode: 'personal',
         subscriptionActive: true,
         usageRoute: 'relay',
       }),
     ).toBe('included');
     expect(
       resolveCliModelAccessRoute({
-        apiMode: 'included',
         subscriptionActive: true,
       }),
     ).toBe('chatgpt');
     expect(
       resolveCliModelAccessRoute({
-        apiMode: 'personal',
         subscriptionActive: false,
       }),
     ).toBe('personal');
@@ -266,7 +231,6 @@ describe('CLI model access routes', () => {
     // stays personal even while the Kimi Code route is currently active.
     expect(
       resolveCliModelAccessRoute({
-        apiMode: 'personal',
         subscriptionActive: false,
         kimiCodeActive: true,
         usageRoute: 'api-key',
@@ -277,34 +241,24 @@ describe('CLI model access routes', () => {
   it('recognizes observed Kimi Code subscription usage', () => {
     expect(
       resolveCliModelAccessRoute({
-        apiMode: 'personal',
         subscriptionActive: false,
         usageRoute: 'kimi-code-subscription',
       }),
     ).toBe('kimi-code');
   });
 
-  it('describes a prospective exclusive Kimi Code route in either mode', () => {
+  it('describes a prospective exclusive Kimi Code route', () => {
     expect(
       resolveCliModelAccessRoute({
-        apiMode: 'personal',
-        subscriptionActive: false,
-        kimiCodeActive: true,
-      }),
-    ).toBe('kimi-code');
-    expect(
-      resolveCliModelAccessRoute({
-        apiMode: 'included',
         subscriptionActive: false,
         kimiCodeActive: true,
       }),
     ).toBe('kimi-code');
   });
 
-  it('reports an active GLM plan after included access falls back', () => {
+  it('reports an active GLM plan', () => {
     expect(
       resolveCliModelAccessRoute({
-        apiMode: 'included',
         subscriptionActive: false,
         glmCodingPlanActive: true,
       }),
@@ -344,18 +298,6 @@ describe('CLI model access routes', () => {
     }
   });
 
-  it('applies a launcher access choice to the launched session', () => {
-    const explicitIncluded = { ...context, apiMode: 'included' as const };
-
-    expect(contextForCliModelAccess(explicitIncluded, 'personal')).toEqual({
-      ...explicitIncluded,
-      apiMode: 'personal',
-    });
-    expect(contextForCliModelAccess(explicitIncluded, undefined)).toBe(
-      explicitIncluded,
-    );
-  });
-
   it('reports the ChatGPT preference independently of sign-in', async () => {
     mocks.getCodexStatus.mockResolvedValue({
       signedIn: true,
@@ -363,9 +305,8 @@ describe('CLI model access routes', () => {
     });
     mocks.isPreferCodexSubscription.mockReturnValue(true);
 
-    await expect(readCliModelAccessStatus('included')).resolves.toEqual(
+    await expect(readCliModelAccessStatus()).resolves.toEqual(
       expectedAccessStatus({
-        apiFallback: 'included',
         preferences: {
           chatGpt: 'on',
           grok: 'off',
@@ -376,9 +317,8 @@ describe('CLI model access routes', () => {
     );
 
     mocks.getCodexStatus.mockResolvedValue({ signedIn: false });
-    await expect(readCliModelAccessStatus('included')).resolves.toEqual(
+    await expect(readCliModelAccessStatus()).resolves.toEqual(
       expectedAccessStatus({
-        apiFallback: 'included',
         preferences: {
           chatGpt: 'on',
           grok: 'off',
@@ -387,16 +327,15 @@ describe('CLI model access routes', () => {
     );
   });
 
-  it('reports the Kimi preference independently of key and fallback', async () => {
+  it('reports the Kimi preference independently of key', async () => {
     mocks.hasUsableApiKey.mockImplementation(
       async (_secrets, provider) => provider === 'kimiCode',
     );
     mocks.getPreferKimiCode.mockReturnValue(true);
 
-    await expect(readCliModelAccessStatus('personal')).resolves.toEqual(
+    await expect(readCliModelAccessStatus()).resolves.toEqual(
       expectedAccessStatus(
         {
-          apiFallback: 'personal',
           preferences: {
             chatGpt: 'off',
             grok: 'off',
@@ -406,14 +345,8 @@ describe('CLI model access routes', () => {
       ),
     );
 
-    await expect(readCliModelAccessStatus('included')).resolves.toMatchObject({
-      apiFallback: 'included',
-      codingPlans: { kimiCode: { preferred: true, keySet: true } },
-    });
-
     mocks.hasUsableApiKey.mockResolvedValue(false);
-    await expect(readCliModelAccessStatus('personal')).resolves.toMatchObject({
-      apiFallback: 'personal',
+    await expect(readCliModelAccessStatus()).resolves.toMatchObject({
       codingPlans: { kimiCode: { preferred: true, keySet: false } },
     });
   });
@@ -426,29 +359,9 @@ describe('CLI model access routes', () => {
       return 'none';
     });
 
-    await expect(readCliModelAccessStatus('personal')).resolves.toMatchObject({
-      apiFallback: 'personal',
+    await expect(readCliModelAccessStatus()).resolves.toMatchObject({
       personalKeyProviders: ['DeepSeek', 'Moonshot', 'Kimi Code'],
     });
-  });
-
-  it('renders configured provider keys in the personal item description', async () => {
-    mocks.lookupApiKeyOrigin.mockImplementation(async (_secrets, provider) => {
-      if (provider === 'deepseek') return 'secret';
-      if (provider === 'moonshot') return 'env';
-      if (provider === 'kimiCode') return 'secret';
-      return 'none';
-    });
-    const status = await readCliModelAccessStatus('personal');
-
-    const items = buildCliModelAccessItems({ kind: 'loaded', access: status });
-    const personalItem = items.find(
-      (item) =>
-        item.value.kind === 'api-fallback' && item.value.apiMode === 'personal',
-    );
-    expect(personalItem?.description).toBe(
-      'Configured: DeepSeek, Moonshot, Kimi Code',
-    );
   });
 
   it('enables Kimi Code routing on a personal fallback when a key exists', async () => {
@@ -465,10 +378,8 @@ describe('CLI model access routes', () => {
       GlobalStateKey.KIMI_CODE_PREFER,
       true,
     );
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
-      apiMode: 'personal',
       message:
         'Prefer Kimi Code subscription enabled for Kimi models · other models still use your own API keys.',
     });
@@ -482,22 +393,19 @@ describe('CLI model access routes', () => {
     );
 
     expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-    expect(result.apiMode).toBe('personal');
     expect(result.message).toContain('No Kimi Code API key configured');
     expect(result.message).toContain('https://www.kimi.com/code/console');
   });
 
-  it('reports the GLM Coding Plan preference independently of key and fallback', async () => {
+  it('reports the GLM Coding Plan preference independently of key', async () => {
     mocks.hasUsableApiKey.mockImplementation(
       async (_secrets, provider) => provider === 'glm',
     );
     mocks.getGLMCodingPlan.mockReturnValue(true);
 
-    await expect(readCliModelAccessStatus('personal')).resolves.toEqual(
+    await expect(readCliModelAccessStatus()).resolves.toEqual(
       expectedAccessStatus(
         {
-          apiFallback: 'personal',
           preferences: {
             chatGpt: 'off',
             grok: 'off',
@@ -506,11 +414,6 @@ describe('CLI model access routes', () => {
         { glmPreferred: true, glmKeySet: true },
       ),
     );
-
-    await expect(readCliModelAccessStatus('included')).resolves.toMatchObject({
-      apiFallback: 'included',
-      codingPlans: { glmCodingPlan: { preferred: true, keySet: true } },
-    });
   });
 
   it('enables GLM Coding Plan routing on a personal fallback when a key exists', async () => {
@@ -527,10 +430,8 @@ describe('CLI model access routes', () => {
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
     expect(mocks.updateGlobalState).not.toHaveBeenCalled();
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
-      apiMode: 'personal',
       message:
         'Prefer GLM Coding Plan enabled for GLM models · other models still use your own API keys.',
     });
@@ -544,8 +445,6 @@ describe('CLI model access routes', () => {
     );
 
     expect(mocks.setGLMCodingPlan).not.toHaveBeenCalled();
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-    expect(result.apiMode).toBe('personal');
     expect(result.message).toContain('No GLM API key configured');
     expect(result.message).toContain('https://open.bigmodel.cn');
   });
@@ -563,56 +462,8 @@ describe('CLI model access routes', () => {
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
-      apiMode: 'personal',
       message: 'Prefer GLM Coding Plan disabled for GLM models.',
     });
-  });
-
-  it('switches API-based routes through one policy boundary', async () => {
-    const result = await updateCliModelAccess(
-      context,
-      cliApiFallbackSelection('personal'),
-    );
-
-    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
-    expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-    expect(result).toEqual({
-      apiMode: 'personal',
-      message: 'Now using your own API keys.',
-    });
-  });
-
-  it('preserves both enabled preferences while changing the API fallback', async () => {
-    await updateCliModelAccess(context, cliApiFallbackSelection('included'));
-
-    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
-    expect(mocks.setCliApiMode).toHaveBeenCalledWith('included');
-  });
-
-  it('announces the OpenRouter routing that included access turned off', async () => {
-    mocks.setCliApiMode.mockResolvedValue({
-      mode: 'included',
-      openRouterDisabled: true,
-    });
-
-    const result = await updateCliModelAccess(
-      context,
-      cliApiFallbackSelection('included'),
-    );
-
-    expect(result.message).toContain('OpenRouter has been turned off');
-  });
-
-  it('does not report an API route as selected when persistence fails', async () => {
-    mocks.setCliApiMode.mockRejectedValue(new Error('Config write failed'));
-
-    await expect(
-      updateCliModelAccess(context, cliApiFallbackSelection('included')),
-    ).rejects.toThrow('Config write failed');
-    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
   });
 
   it('signs in when needed and enables ChatGPT without an API key', async () => {
@@ -643,7 +494,6 @@ describe('CLI model access routes', () => {
     expect(result.message).toBe(
       'Prefer ChatGPT subscription enabled for Codex models (user@example.com).',
     );
-    expect(result.apiMode).toBe('personal');
   });
 
   it('turns off ChatGPT without changing the Kimi preference', async () => {
@@ -668,7 +518,6 @@ describe('CLI model access routes', () => {
     expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
-      apiMode: 'personal',
       message: 'Prefer ChatGPT subscription disabled for Codex models.',
     });
   });
@@ -682,7 +531,7 @@ describe('CLI model access routes', () => {
     mocks.getPreferKimiCode.mockReturnValue(true);
     mocks.hasUsableApiKey.mockResolvedValue(true);
 
-    const status = await readCliModelAccessStatus('personal');
+    const status = await readCliModelAccessStatus();
     expect(status.preferences).toEqual({
       chatGpt: 'on',
       grok: 'off',
@@ -743,7 +592,7 @@ describe('CLI model access routes', () => {
       target: 'global',
     });
 
-    const status = await readCliModelAccessStatus('personal');
+    const status = await readCliModelAccessStatus();
     const selection = buildCliModelAccessItems({
       kind: 'loaded',
       access: status,
@@ -764,7 +613,7 @@ describe('CLI model access routes', () => {
 
   it('turns off a stale Kimi preference without requiring a key', async () => {
     mocks.getPreferKimiCode.mockReturnValue(true);
-    const status = await readCliModelAccessStatus('personal');
+    const status = await readCliModelAccessStatus();
     const selection = buildCliModelAccessItems({
       kind: 'loaded',
       access: status,

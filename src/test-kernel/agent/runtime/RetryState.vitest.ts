@@ -4,15 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { APIError as OpenAIAPIError } from 'openai';
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-  type Mock,
-} from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports
 import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
@@ -41,21 +33,13 @@ import type {
   ModelCredentialRoute,
   ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
-import {
-  RELAY_CI_TOKEN_PREFIX,
-  RELAY_TOKEN_ENV_VAR,
-  resetRelayTokenTierCacheForTests,
-} from '@auth/relayToken';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import type { AuthTokenProvider } from '@auth/TokenProvider';
 import {
   attachContextWindowError,
   attachManualRetryOnlyError,
   attachSdkErrorMetadata,
 } from '@common/errors/sdkError/errorMetadata';
-import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import type { ResolvedModelConfig } from '@model/openRouterRouting';
-import { setIncludedModelAccess } from '@model/includedModelAccess';
 import {
   AgentCategory,
   MESSAGE_TYPES,
@@ -178,18 +162,14 @@ class ExposedRetryNode extends ModelInvocationNode<BaseCycleFields> {
     return this.handleManualRetryPrompt(error);
   }
 
-  runWithRelayRecovery(
+  runWithRetryLifecycle(
     op: (signal: AbortSignal) => Promise<InvocationSuccess>,
   ): Promise<InvocationSuccess> {
-    return this.invokeWithRelayRecovery(op);
+    return this.invokeWithRetryLifecycle(op);
   }
 
   fallbackFor(error: Error): InvocationResult {
     return this.getFallbackResult(error);
-  }
-
-  seedTokenRefreshGuard(): void {
-    this._hasAttemptedTokenRefresh = true;
   }
 }
 
@@ -265,20 +245,14 @@ function createModelInvocationNode(): ModelInvocationNode<BaseCycleFields> {
 interface CapturedModelRetry {
   readonly wireRoute: string;
   readonly modelRetryRoute: string;
-  readonly relayRetryRoute?: string;
   readonly classifyFailure: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
   readonly classifyModelFailure: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
-  readonly classifyRelayFailure?: (
-    error: Error,
-  ) => { retryAfterMs?: number } | undefined;
   readonly isWireUnobservedFailure?: (error: Error) => boolean;
   readonly isModelUnobservedFailure?: (error: Error) => boolean;
-  readonly isRelayReachableFailure?: (error: Error) => boolean;
-  readonly isRelayUnobservedFailure?: (error: Error) => boolean;
   readonly gateCalls: number;
 }
 
@@ -336,38 +310,18 @@ async function captureModelRetry(
     if (!modelRoute) {
       throw new Error('Expected model-specific retry route');
     }
-    const relayRoute = modelOptions.trailingRoutes?.[0];
     return {
       wireRoute,
       modelRetryRoute: modelRoute.key,
-      relayRetryRoute: relayRoute?.key,
       classifyFailure: modelOptions.classifyFailure,
       classifyModelFailure: modelRoute.classifyFailure,
-      classifyRelayFailure: relayRoute?.classifyFailure,
       isWireUnobservedFailure: modelOptions.isUnobservedFailure,
       isModelUnobservedFailure: modelRoute.isUnobservedFailure,
-      isRelayReachableFailure: relayRoute?.isReachableFailure,
-      isRelayUnobservedFailure: relayRoute?.isUnobservedFailure,
       gateCalls: run.mock.calls.length,
     };
   } finally {
     session.dispose();
   }
-}
-
-function createAuthTokenProvider(
-  overrides: Partial<AuthTokenProvider> = {},
-): AuthTokenProvider {
-  return {
-    whenReady: async () => {},
-    ensureFreshToken: async () => 'access-token',
-    getSessionTokens: async () => null,
-    getStoredSessionState: async () => 'none',
-    getStoredAccountLabel: async () => null,
-    isTokenExpiringSoon: () => false,
-    getLastRefreshFailure: () => null,
-    ...overrides,
-  };
 }
 
 /** An Error carrying the HTTP status/body shape the retry classifiers read. */
@@ -405,15 +359,8 @@ function collectRetryLifecycleEvents(
 }
 
 describe('ModelInvocationNode retry', () => {
-  beforeEach(() => {
-    vi.stubEnv(RELAY_TOKEN_ENV_VAR, '');
-    installTexraModelAccess();
-  });
-
   afterEach(async () => {
     vi.unstubAllEnvs();
-    resetRelayTokenTierCacheForTests();
-    setIncludedModelAccess(null);
     SupabaseClient.resetForTests();
     await installPlatform();
   });
@@ -526,7 +473,7 @@ describe('ModelInvocationNode retry', () => {
       attempts = 0;
 
       override async exec(): Promise<InvocationSuccess> {
-        return this.runWithRelayRecovery(async () => {
+        return this.runWithRetryLifecycle(async () => {
           this.attempts += 1;
           if (this.attempts === 1) {
             throw new Error('temporary provider failure');
@@ -662,7 +609,7 @@ describe('ModelInvocationNode retry', () => {
 
     class ClientPreparationRetryNode extends ExposedRetryNode {
       override async exec(): Promise<InvocationSuccess> {
-        return this.runWithRelayRecovery(async () => ATTEMPT_SUCCESS);
+        return this.runWithRetryLifecycle(async () => ATTEMPT_SUCCESS);
       }
     }
 
@@ -717,7 +664,7 @@ describe('ModelInvocationNode retry', () => {
 
     class InvalidResultNode extends ExposedRetryNode {
       override async exec(): Promise<InvocationSuccess> {
-        return this.runWithRelayRecovery(async () => EMPTY_ATTEMPT);
+        return this.runWithRetryLifecycle(async () => EMPTY_ATTEMPT);
       }
     }
 
@@ -880,94 +827,6 @@ describe('ModelInvocationNode retry', () => {
     expect(requestRetry).not.toHaveBeenCalled();
   });
 
-  it('passes the active abort signal to relay recovery client refresh', async () => {
-    const streamId = 'retry-relay-refresh-abort' as StreamTabId;
-    const rebind = vi.fn(
-      async (_selection?: unknown, _signal?: AbortSignal) => undefined,
-    );
-    const { node } = createRetryNode(streamId, rebind, 'relay');
-    SupabaseClient.setAuthProvider(createAuthTokenProvider());
-    const unauthorized = httpError('relay token expired', 401);
-    const operation = vi
-      .fn<(signal: AbortSignal) => Promise<InvocationSuccess>>()
-      .mockRejectedValueOnce(unauthorized)
-      .mockResolvedValueOnce(ATTEMPT_SUCCESS);
-
-    await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-      ATTEMPT_SUCCESS,
-    );
-
-    const refreshSignal = rebind.mock.calls[0]?.[1];
-    expect(refreshSignal).toBeInstanceOf(AbortSignal);
-    expect(refreshSignal?.aborted).toBe(false);
-  });
-
-  it('records the relay 401 before a successful reactive recovery', async () => {
-    const streamId = 'retry-relay-refresh-diagnostics' as StreamTabId;
-    const logger = new TraceEmitter();
-    const events = collectRetryLifecycleEvents(logger);
-    const session = createTestSession();
-    const rebind = vi.fn(async () => undefined);
-    SupabaseClient.setAuthProvider(createAuthTokenProvider());
-    const unauthorized = httpError('relay token expired', 401);
-    const operation = vi
-      .fn<() => Promise<InvocationSuccess>>()
-      .mockRejectedValueOnce(unauthorized)
-      .mockResolvedValueOnce(ATTEMPT_SUCCESS);
-
-    class ReactiveRecoveryNode extends ExposedRetryNode {
-      override async exec(): Promise<InvocationSuccess> {
-        return this.runWithRelayRecovery(operation);
-      }
-    }
-
-    const node = new ReactiveRecoveryNode().setServices(
-      retryServices(streamId, {
-        session,
-        logger,
-        modelCell: testRetryModelCell(rebind, 'relay'),
-      }) as never,
-    );
-
-    try {
-      await expect(node._exec(undefined)).resolves.toBe(ATTEMPT_SUCCESS);
-      expect(
-        events.map((event) => ({
-          event: event.event,
-          attemptOrdinal: event.attemptOrdinal,
-          statusCode: event.statusCode,
-          recoveryPending: event.recoveryPending,
-          credentialRefresh: event.credentialRefresh,
-        })),
-      ).toEqual([
-        {
-          event: 'attempt_started',
-          attemptOrdinal: 1,
-          statusCode: undefined,
-          recoveryPending: undefined,
-          credentialRefresh: undefined,
-        },
-        {
-          event: 'attempt_failed',
-          attemptOrdinal: 1,
-          statusCode: 401,
-          recoveryPending: true,
-          credentialRefresh: true,
-        },
-        {
-          event: 'attempt_succeeded',
-          attemptOrdinal: 1,
-          statusCode: undefined,
-          recoveryPending: undefined,
-          credentialRefresh: true,
-        },
-      ]);
-      expect(operation).toHaveBeenCalledTimes(2);
-    } finally {
-      session.dispose();
-    }
-  });
-
   it('keeps node-level auto-retry for transient stream failures', () => {
     const node = createModelInvocationNode();
     const streamError = new Error('stream closed after response started');
@@ -1120,99 +979,6 @@ describe('ModelInvocationNode retry', () => {
     expect(first.classifyModelFailure(exhausted)).toBeUndefined();
   });
 
-  it('coordinates relay request limits across providers for one user', async () => {
-    const first = await captureModelRetry(
-      'https://api.example/v1',
-      'relay',
-      'openai:model-a',
-    );
-    const limited = httpError('relay request rate limit reached', 429, {
-      error: {
-        _relay: '1',
-        type: 'relay_error',
-        requestLimitReached: true,
-        reason: 'rate',
-        retryAfterSeconds: 60,
-      },
-    });
-
-    const second = await captureModelRetry(
-      'https://other.example/v1',
-      'relay',
-      'anthropic:model-b',
-    );
-    const modelLimited = httpError('provider model rate limit', 429, {
-      error: { type: 'rate_limit_error', scope: 'model' },
-    });
-
-    expect(first.classifyFailure(limited)).toBeUndefined();
-    expect(first.classifyModelFailure(limited)).toBeUndefined();
-    expect(first.relayRetryRoute).toBe(second.relayRetryRoute);
-    expect(first.classifyRelayFailure?.(limited)).toEqual({
-      retryAfterMs: 60_000,
-      releaseProbeBeforeOperation: true,
-    });
-    expect(first.isWireUnobservedFailure?.(limited)).toBe(true);
-    expect(first.isModelUnobservedFailure?.(limited)).toBe(true);
-    expect(first.isRelayReachableFailure?.(modelLimited)).toBe(true);
-
-    const compatibleLimited = httpError(
-      'compatible endpoint request limit',
-      429,
-      {
-        error: {
-          requestLimitReached: true,
-          retryAfterSeconds: 60,
-        },
-      },
-    );
-
-    expect(first.classifyFailure(compatibleLimited)).toEqual({});
-    expect(first.classifyRelayFailure?.(compatibleLimited)).toBeUndefined();
-    expect(first.isRelayReachableFailure?.(compatibleLimited)).toBe(true);
-
-    const concurrencyLimited = httpError(
-      'relay concurrency limit reached',
-      429,
-      {
-        error: {
-          _relay: '1',
-          type: 'relay_error',
-          requestLimitReached: true,
-          reason: 'concurrency',
-          retryAfterSeconds: 5,
-        },
-      },
-    );
-
-    expect(first.classifyRelayFailure?.(concurrencyLimited)).toEqual({
-      retryAfterMs: 5_000,
-    });
-  });
-
-  it('keeps relay monthly limits outside every recovery route', async () => {
-    const retry = await captureModelRetry(
-      'https://api.example/v1',
-      'relay',
-      'openai:model-a',
-    );
-    const monthlyLimited = httpError('monthly spending limit reached', 429, {
-      error: {
-        _relay: '1',
-        type: 'relay_error',
-        limitReached: true,
-      },
-    });
-
-    expect(retry.classifyFailure(monthlyLimited)).toBeUndefined();
-    expect(retry.classifyModelFailure(monthlyLimited)).toBeUndefined();
-    expect(retry.classifyRelayFailure?.(monthlyLimited)).toBeUndefined();
-    expect(retry.isWireUnobservedFailure?.(monthlyLimited)).toBe(true);
-    expect(retry.isModelUnobservedFailure?.(monthlyLimited)).toBe(true);
-    expect(retry.isRelayReachableFailure?.(monthlyLimited)).toBe(false);
-    expect(retry.isRelayUnobservedFailure?.(monthlyLimited)).toBe(true);
-  });
-
   it('isolates rate-limit recovery by stable credential identity', async () => {
     const first = await captureModelRetry(
       'https://api.example/v1',
@@ -1314,22 +1080,6 @@ describe('ModelInvocationNode retry', () => {
     expect(classifyFailure(error)).toEqual(expected);
   });
 
-  it('keeps relay 401s out of route cooling and out of auto-retry', async () => {
-    // Token refresh is single-flighted at the auth boundary and repaired by
-    // invokeWithRelayRecovery's reactive recovery inside the same node attempt;
-    // cooling the shared route on a 401 would only serialize healthy peers.
-    const { classifyFailure } = await captureModelRetry(
-      'https://api.example/v1',
-      'relay',
-    );
-    const unauthorized = httpError('relay token expired', 401);
-
-    expect(createModelInvocationNode().shouldAutoRetry(unauthorized)).toBe(
-      false,
-    );
-    expect(classifyFailure(unauthorized)).toBeUndefined();
-  });
-
   it('does not gate unrelated calls after a 401 on the api-key route', async () => {
     const { classifyFailure } = await captureModelRetry(
       'https://api.example/v1',
@@ -1340,10 +1090,10 @@ describe('ModelInvocationNode retry', () => {
     expect(classifyFailure(unauthorized)).toBeUndefined();
   });
 
-  it('does not share model-specific permission failures across relay calls', async () => {
+  it('does not share model-specific permission failures across calls', async () => {
     const { classifyFailure } = await captureModelRetry(
       'https://api.example/v1',
-      'relay',
+      'api-key',
     );
 
     expect(
@@ -1468,52 +1218,6 @@ describe('ModelInvocationNode retry', () => {
     }
   });
 
-  it('clears the token refresh guard after the host prepares a replacement client', async () => {
-    const streamId = 'retry-state-prepared-client' as StreamTabId;
-    const rebind = vi.fn(async () => undefined);
-    const { node, session, streamStatus, requestRetry } = createRetryNode(
-      streamId,
-      rebind,
-      'relay',
-    );
-    requestRetry.mockImplementationOnce(async (_request, options) => {
-      await options?.prepareRetry?.('configured');
-      return { action: 'retry' };
-    });
-    node.seedTokenRefreshGuard();
-    const ensureFreshToken = vi.fn(async () => 'replacement-token');
-    SupabaseClient.setAuthProvider(
-      createAuthTokenProvider({ ensureFreshToken }),
-    );
-
-    try {
-      seedStreamStatusForTest(streamStatus, streamId, {
-        phase: STREAM_PHASE.RUNNING,
-      });
-
-      await expect(
-        withRetryRunContext(streamId, session, () =>
-          node.retryPrompt(undefined, new Error('temporary provider failure')),
-        ),
-      ).resolves.toBe(true);
-
-      const unauthorized = httpError('new relay 401', 401);
-      const operation = vi
-        .fn<(signal: AbortSignal) => Promise<InvocationSuccess>>()
-        .mockRejectedValueOnce(unauthorized)
-        .mockResolvedValueOnce(ATTEMPT_SUCCESS);
-
-      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-        ATTEMPT_SUCCESS,
-      );
-      expect(operation).toHaveBeenCalledTimes(2);
-      expect(ensureFreshToken).toHaveBeenCalledOnce();
-      expect(rebind).toHaveBeenCalledTimes(2);
-    } finally {
-      clearStreamStatusForTest(streamStatus, streamId);
-    }
-  });
-
   it('resolves manual retries through the session host interactions', async () => {
     const streamId = 'retry-state-session-bridge' as StreamTabId;
     const session = createTestSession();
@@ -1607,132 +1311,6 @@ describe('ModelInvocationNode retry', () => {
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
     }
-  });
-
-  describe('proactive relay token refresh', () => {
-    // A CI relay token exported in the shell would satisfy the non-forced
-    // getRelayAccessToken() read cache-only and skip the session refresh
-    // these cases exercise; the outer beforeEach pins it unset for every
-    // test in this file unless a case opts in.
-    it('never rebuilds a client on a non-relay route for an expiring session token', async () => {
-      const streamId = 'retry-state-proactive-api-key' as StreamTabId;
-      const rebind = vi.fn(async () => undefined);
-      const { node } = createRetryNode(streamId, rebind, 'api-key');
-      SupabaseClient.setAuthProvider(
-        createAuthTokenProvider({ isTokenExpiringSoon: () => true }),
-      );
-
-      const operation = vi.fn(async () => ATTEMPT_SUCCESS);
-      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-        ATTEMPT_SUCCESS,
-      );
-
-      expect(operation).toHaveBeenCalledOnce();
-      expect(rebind).not.toHaveBeenCalled();
-    });
-
-    it('rebuilds the relay client once when the session token rotates', async () => {
-      const streamId = 'retry-state-proactive-relay-rotation' as StreamTabId;
-      const rebind = vi.fn(async () => undefined);
-      const { node } = createRetryNode(streamId, rebind, 'relay');
-      let expiringSoon = true;
-      const ensureFreshToken = vi.fn(async () => {
-        // Simulate rotation: the refresh pushes the session expiry out.
-        expiringSoon = false;
-        return 'fresh-session-token';
-      });
-      SupabaseClient.setAuthProvider(
-        createAuthTokenProvider({
-          ensureFreshToken,
-          isTokenExpiringSoon: () => expiringSoon,
-        }),
-      );
-
-      const operation = vi.fn(async () => ATTEMPT_SUCCESS);
-      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-        ATTEMPT_SUCCESS,
-      );
-
-      expect(ensureFreshToken).toHaveBeenCalledOnce();
-      expect(rebind).toHaveBeenCalledOnce();
-      expect(operation).toHaveBeenCalledOnce();
-    });
-
-    // No rebuild without an observed rotation — the reactive 401 path remains
-    // the net. A null refresh (failed refresh or no session) likewise leaves
-    // the expiry clock inside the threshold, so no rotation is observed.
-    it.each([
-      {
-        name: 'the token did not rotate',
-        refreshed: 'stale-session-token' as string | null,
-      },
-      { name: 'the session refresh returns null', refreshed: null },
-    ])('skips the relay client rebuild when $name', async ({ refreshed }) => {
-      const streamId = 'retry-state-proactive-relay-stale' as StreamTabId;
-      const rebind = vi.fn(async () => undefined);
-      const { node } = createRetryNode(streamId, rebind, 'relay');
-      const ensureFreshToken = vi.fn(async () => refreshed);
-      SupabaseClient.setAuthProvider(
-        createAuthTokenProvider({
-          ensureFreshToken,
-          isTokenExpiringSoon: () => true,
-        }),
-      );
-
-      const operation = vi.fn(async () => ATTEMPT_SUCCESS);
-      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-        ATTEMPT_SUCCESS,
-      );
-
-      expect(ensureFreshToken).toHaveBeenCalledOnce();
-      expect(rebind).not.toHaveBeenCalled();
-      expect(operation).toHaveBeenCalledOnce();
-    });
-
-    it('does no auth work for a relay client whose token is fresh', async () => {
-      const streamId = 'retry-state-proactive-relay-fresh' as StreamTabId;
-      const rebind = vi.fn(async () => undefined);
-      const { node } = createRetryNode(streamId, rebind, 'relay');
-      const ensureFreshToken = vi.fn(async () => 'session-token');
-      SupabaseClient.setAuthProvider(
-        createAuthTokenProvider({ ensureFreshToken }),
-      );
-
-      const operation = vi.fn(async () => ATTEMPT_SUCCESS);
-      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-        ATTEMPT_SUCCESS,
-      );
-
-      expect(ensureFreshToken).not.toHaveBeenCalled();
-      expect(rebind).not.toHaveBeenCalled();
-      expect(operation).toHaveBeenCalledOnce();
-    });
-
-    it('makes no auth or rebuild calls for a CI-token relay client', async () => {
-      const streamId = 'retry-state-proactive-relay-ci-token' as StreamTabId;
-      const rebind = vi.fn(async () => undefined);
-      const { node } = createRetryNode(streamId, rebind, 'relay');
-      vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}fakeci123`);
-      const ensureFreshToken = vi.fn(async () => 'session-token');
-      SupabaseClient.setAuthProvider(
-        createAuthTokenProvider({
-          ensureFreshToken,
-          isTokenExpiringSoon: () => true,
-        }),
-      );
-
-      const operation = vi.fn(async () => ATTEMPT_SUCCESS);
-      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-        ATTEMPT_SUCCESS,
-      );
-
-      // The configured CI token satisfies the non-forced read cache-only: the
-      // session is never consulted and the expiry clock stays stale, so the
-      // rebuild is skipped too.
-      expect(ensureFreshToken).not.toHaveBeenCalled();
-      expect(rebind).not.toHaveBeenCalled();
-      expect(operation).toHaveBeenCalledOnce();
-    });
   });
 
   describe('Kimi Code fallback for personal retries', () => {

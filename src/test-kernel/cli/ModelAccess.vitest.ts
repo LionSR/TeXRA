@@ -1,16 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  emptyModelListMessageForCliMode,
+  emptyModelListMessage,
   findCliModelAccessEntry,
   formatCliModelDetails,
   formatCliNoAvailableModelsRecovery,
   formatCliNoRunnableModelsMessage,
-  formatModelStatusForCliMode,
+  formatModelStatusForCli,
   getCliModelAccessList,
-  modelAccessLaunchBlockDescriptionForCliMode,
-  modelSelectItemsForCliMode,
-  noRunnableModelAccessReason,
+  modelAccessLaunchBlockDescription,
+  modelSelectItemsForCli,
   runnableCliModelAccessEntries,
   loadCliModelAccessEntry,
   selectCliRunnableModel,
@@ -81,14 +80,6 @@ function missingKeyModel(value: string): CliModelAccess {
   });
 }
 
-function notIncludedModel(value: string): CliModelAccess {
-  return model(value, {
-    available: false,
-    status: 'not included',
-    model: modelOption(value, { availability: 'not-included', disabled: true }),
-  });
-}
-
 type ResolveCliRunnableModelOptions = Parameters<
   typeof selectCliRunnableModel
 >[1];
@@ -102,24 +93,8 @@ function resolveModelFromAccessList(
 }
 
 const INTERACTIVE_RECOVERY = {
-  includedModeAction: 'switch with /api included',
-  loginAction: 'run /login',
-  personalModeAction: 'switch with /api personal',
   configureKeyAction: 'configure a provider API key',
 } as const;
-
-// One included-access model and one provider-key model, so a resolution is
-// runnable in exactly one API mode.
-const API_MODE_SPLIT_ENTRIES: CliModelAccess[] = [
-  model('sonnet46T', {
-    model: modelOption('sonnet46T', { availability: 'included-access' }),
-    status: 'included access',
-  }),
-  model('deepseekT', {
-    model: modelOption('deepseekT', { availability: 'provider-key' }),
-    status: 'api key set',
-  }),
-];
 
 const MISSING_KEY_ONLY_ENTRIES: CliModelAccess[] = [
   missingKeyModel('gemini31p'),
@@ -131,17 +106,6 @@ const RETIRED_HAIKU3_OPTION = modelOption('haiku3', {
   availabilityLabel: 'Retired',
   disabled: true,
   requiresKey: false,
-});
-
-const GLM52_NOT_INCLUDED_ENTRY = model('glm52', {
-  available: false,
-  status: 'not included',
-  model: modelOption('glm52', {
-    label: 'GLM-5.2',
-    availability: 'not-included',
-    availabilityLabel: 'Not included',
-    disabled: true,
-  }),
 });
 
 const GLM52_MISSING_KEY_ENTRY = model('glm52', {
@@ -183,14 +147,14 @@ describe('CLI model access resolution', () => {
         fallbackReason: 'explicit-override',
       }),
     ).rejects.toThrow(
-      'Model "missingModel" is not available in the active API mode (missing api key). Available models: deepseekT.',
+      'Model "missingModel" is not available (missing api key). Available models: deepseekT.',
     );
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
         fallbackReason: 'environment',
       }),
     ).rejects.toThrow(
-      'Model "missingModel" is not available in the active API mode (missing api key). Available models: deepseekT.',
+      'Model "missingModel" is not available (missing api key). Available models: deepseekT.',
     );
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
@@ -199,7 +163,7 @@ describe('CLI model access resolution', () => {
     ).resolves.toEqual({
       model: 'deepseekT',
       notice:
-        'Model "missingModel" is not available in the active API mode (missing api key). Available models: deepseekT. Using "deepseekT" instead.',
+        'Model "missingModel" is not available (missing api key). Available models: deepseekT. Using "deepseekT" instead.',
     });
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
@@ -208,7 +172,7 @@ describe('CLI model access resolution', () => {
     ).resolves.toEqual({
       model: 'deepseekT',
       notice:
-        'Model "missingModel" is not available in the active API mode (missing api key). Available models: deepseekT. Using "deepseekT" instead.',
+        'Model "missingModel" is not available (missing api key). Available models: deepseekT. Using "deepseekT" instead.',
     });
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
@@ -217,29 +181,17 @@ describe('CLI model access resolution', () => {
     ).resolves.toEqual({ model: 'deepseekT' });
   });
 
-  it('rejects an explicit model that is unavailable in the active API mode', async () => {
-    await expect(
-      resolveModelFromAccessList(
-        [model('sonnet46T'), notIncludedModel('opus48T')],
-        'opus48T',
-        { fallbackReason: 'explicit-override' },
-      ),
-    ).rejects.toThrow(
-      'Model "opus48T" is not available in the active API mode (not included). Available models: sonnet46T.',
-    );
-  });
-
   it('falls back from stale defaults to the first currently runnable model', async () => {
     await expect(
       resolveModelFromAccessList(
-        [notIncludedModel('opus48T'), model('deepseekT'), model('sonnet46T')],
+        [missingKeyModel('opus48T'), model('deepseekT'), model('sonnet46T')],
         'opus48T',
         { fallbackReason: 'command-config' },
       ),
     ).resolves.toEqual({
       model: 'deepseekT',
       notice:
-        'Model "opus48T" is not available in the active API mode (not included). Available models: deepseekT, sonnet46T. Using "deepseekT" instead.',
+        'Model "opus48T" is not available (missing api key). Available models: deepseekT, sonnet46T. Using "deepseekT" instead.',
     });
   });
 
@@ -257,7 +209,7 @@ describe('CLI model access resolution', () => {
     const entries = [
       model('sonnet46T', {
         model: modelOption('sonnet46T', {
-          availability: 'included-access',
+          availability: 'provider-key',
         }),
       }),
       model('deepseekT', {
@@ -296,37 +248,6 @@ describe('CLI model access resolution', () => {
     expect(findCliModelAccessEntry(entries, 'missing')).toBeUndefined();
   });
 
-  it('filters runnable models by active API mode when requested', () => {
-    const entries = [
-      model('sonnet46T', {
-        model: modelOption('sonnet46T', {
-          availability: 'included-access',
-        }),
-      }),
-      model('deepseekT', {
-        model: modelOption('deepseekT', {
-          availability: 'provider-key',
-        }),
-      }),
-      model('openrouterOnlyT', {
-        model: modelOption('openrouterOnlyT', {
-          availability: 'openrouter-key',
-        }),
-      }),
-    ];
-
-    expect(
-      runnableCliModelAccessEntries(entries, 'included').map(
-        (entry) => entry.model.value,
-      ),
-    ).toEqual(['sonnet46T']);
-    expect(
-      runnableCliModelAccessEntries(entries, 'personal').map(
-        (entry) => entry.model.value,
-      ),
-    ).toEqual(['deepseekT', 'openrouterOnlyT']);
-  });
-
   const DEEPSEEK_PROVIDER_KEY_ENTRY = model('deepseekT', {
     model: modelOption('deepseekT', { availability: 'provider-key' }),
     status: 'api key set',
@@ -334,76 +255,9 @@ describe('CLI model access resolution', () => {
 
   it.each([
     {
-      name: 'prefixes a provider-key status with the api label in personal mode',
+      name: 'prefixes a provider-key status with the api label',
       entry: DEEPSEEK_PROVIDER_KEY_ENTRY,
-      apiMode: 'personal' as const,
       expected: 'api: api key set',
-    },
-    {
-      name: 'marks included-access models available in included mode',
-      entry: model('sonnet46T', {
-        model: modelOption('sonnet46T', { availability: 'included-access' }),
-        status: 'included access',
-      }),
-      apiMode: 'included' as const,
-      expected: 'included access: available',
-    },
-    {
-      name: 'marks provider-key models unavailable in included mode',
-      entry: DEEPSEEK_PROVIDER_KEY_ENTRY,
-      apiMode: 'included' as const,
-      expected: 'included access: unavailable; API key set',
-    },
-    {
-      name: 'summarizes relay quota exhaustion in included mode',
-      entry: model('deepseekT', {
-        model: modelOption('deepseekT', {
-          availability: 'relay-quota-exhausted',
-          availabilityLabel: 'Relay quota exhausted',
-          disabled: true,
-        }),
-        status: 'relay quota exhausted',
-      }),
-      apiMode: 'included' as const,
-      expected: 'included access: usage limit reached',
-    },
-    {
-      name: 'summarizes the login requirement in included mode',
-      entry: model('sonnet46T', {
-        model: modelOption('sonnet46T', {
-          availability: 'included-login-required',
-          availabilityLabel: 'Login required',
-          disabled: true,
-        }),
-        status: 'login required',
-      }),
-      apiMode: 'included' as const,
-      expected: 'included access: sign-in required',
-    },
-    {
-      name: 'passes ChatGPT subscription status through',
-      entry: model('gpt56', {
-        model: modelOption('gpt56', {
-          availability: 'subscription-access',
-          availabilityLabel: 'ChatGPT subscription',
-        }),
-        status: 'chatgpt subscription',
-      }),
-      apiMode: 'included' as const,
-      expected: 'chatgpt subscription',
-    },
-    {
-      name: 'passes Grok subscription status through',
-      entry: model('grok45', {
-        model: modelOption('grok45', {
-          availability: 'subscription-access',
-          availabilityLabel: 'Grok subscription',
-          provider: 'xai',
-        }),
-        status: 'grok subscription',
-      }),
-      apiMode: 'included' as const,
-      expected: 'grok subscription',
     },
     {
       name: 'labels a GLM provider-key row as GLM Coding Plan when the toggle is on',
@@ -414,7 +268,6 @@ describe('CLI model access resolution', () => {
         }),
         status: 'api key set',
       }),
-      apiMode: 'personal' as const,
       codingPlan: true,
       expected: 'api: GLM Coding Plan',
     },
@@ -427,7 +280,6 @@ describe('CLI model access resolution', () => {
         }),
         status: 'api key set',
       }),
-      apiMode: 'personal' as const,
       codingPlan: false,
       expected: 'api: api key set',
     },
@@ -440,103 +292,44 @@ describe('CLI model access resolution', () => {
         }),
         status: 'openrouter key',
       }),
-      apiMode: 'personal' as const,
       codingPlan: true,
       expected: 'api: openrouter key',
     },
   ])(
     'formats model picker status: $name',
-    ({ entry, apiMode, expected, codingPlan }) => {
+    ({ entry, expected, codingPlan }) => {
       if (codingPlan !== undefined)
         getGLMCodingPlanMock.mockReturnValue(codingPlan);
-      expect(formatModelStatusForCliMode(entry, apiMode)).toBe(expected);
+      expect(formatModelStatusForCli(entry)).toBe(expected);
     },
   );
 
   it('builds model picker rows from the access-list source of truth', () => {
-    const rows = modelSelectItemsForCliMode(
-      [
-        model('sonnet46T', {
-          model: modelOption('sonnet46T', {
-            label: 'Sonnet',
-            availability: 'included-access',
-          }),
+    const rows = modelSelectItemsForCli([
+      model('deepseekT', {
+        model: modelOption('deepseekT', {
+          label: 'DeepSeek',
+          availability: 'provider-key',
         }),
-        model('deepseekT', {
-          model: modelOption('deepseekT', {
-            label: 'DeepSeek',
-            availability: 'provider-key',
-          }),
+        status: 'api key set',
+      }),
+      model('openrouterOnlyT', {
+        model: modelOption('openrouterOnlyT', {
+          label: 'OpenRouter Only',
+          availability: 'openrouter-key',
         }),
-        model('openrouterOnlyT', {
-          model: modelOption('openrouterOnlyT', {
-            label: 'OpenRouter Only',
-            availability: 'openrouter-key',
-          }),
-          status: 'openrouter key',
+        status: 'openrouter key',
+      }),
+      model('gemini31p', {
+        available: false,
+        model: modelOption('gemini31p', {
+          label: 'Gemini',
+          availability: 'missing-key',
+          requiresKey: true,
         }),
-        model('opus48T', {
-          available: false,
-          model: modelOption('opus48T', {
-            label: 'Opus',
-            availability: 'not-included',
-            disabled: true,
-          }),
-          status: 'not included',
-        }),
-        model('gpt54', {
-          model: modelOption('gpt54', {
-            label: 'GPT-5.4',
-            availability: 'included-access',
-          }),
-        }),
-      ],
-      'included',
-    );
-
-    expect(rows.map((row) => row.value)).toEqual(['sonnet46T', 'gpt54']);
-    expect(rows.map((row) => row.description)).toEqual([
-      'included access: available',
-      'included access: available',
+        status: 'missing api key',
+      }),
     ]);
-  });
-
-  it('shows personal-key model picker rows for personal API mode', () => {
-    const rows = modelSelectItemsForCliMode(
-      [
-        model('sonnet46T', {
-          model: modelOption('sonnet46T', {
-            label: 'Sonnet',
-            availability: 'included-access',
-          }),
-          status: 'included access',
-        }),
-        model('deepseekT', {
-          model: modelOption('deepseekT', {
-            label: 'DeepSeek',
-            availability: 'provider-key',
-          }),
-          status: 'api key set',
-        }),
-        model('openrouterOnlyT', {
-          model: modelOption('openrouterOnlyT', {
-            label: 'OpenRouter Only',
-            availability: 'openrouter-key',
-          }),
-          status: 'openrouter key',
-        }),
-        model('gemini31p', {
-          available: false,
-          model: modelOption('gemini31p', {
-            label: 'Gemini',
-            availability: 'missing-key',
-            requiresKey: true,
-          }),
-          status: 'missing api key',
-        }),
-      ],
-      'personal',
-    );
 
     expect(rows.map((row) => row.value)).toEqual([
       'deepseekT',
@@ -550,7 +343,7 @@ describe('CLI model access resolution', () => {
 
   it('marks runnable model picker rows disabled when a live chat cannot switch formats', () => {
     expect(
-      modelSelectItemsForCliMode(
+      modelSelectItemsForCli(
         [
           model('sonnet46T', {
             model: modelOption('sonnet46T', {
@@ -567,7 +360,6 @@ describe('CLI model access resolution', () => {
             status: 'api key set',
           }),
         ],
-        'personal',
         (candidate) =>
           candidate === 'sonnet46T'
             ? 'different conversation format; start new chat'
@@ -592,231 +384,59 @@ describe('CLI model access resolution', () => {
 
   it('treats filtered-empty model picker rows as non-actionable', () => {
     expect(
-      modelSelectItemsForCliMode(
-        [
-          model('deepseekT', {
-            available: false,
-            model: modelOption('deepseekT', {
-              availability: 'provider-key',
-            }),
-            status: 'api key set',
+      modelSelectItemsForCli([
+        model('deepseekT', {
+          available: false,
+          model: modelOption('deepseekT', {
+            availability: 'provider-key',
           }),
-          model('gemini31p', {
-            available: false,
-            model: modelOption('gemini31p', {
-              availability: 'missing-key',
-              requiresKey: true,
-            }),
-            status: 'missing api key',
+          status: 'api key set',
+        }),
+        model('gemini31p', {
+          available: false,
+          model: modelOption('gemini31p', {
+            availability: 'missing-key',
+            requiresKey: true,
           }),
-          notIncludedModel('opus48T'),
-        ],
-        'included',
-      ),
+          status: 'missing api key',
+        }),
+        missingKeyModel('opus48T'),
+      ]),
     ).toEqual([]);
   });
 
-  it('classifies signed-out included access separately from other included outages', () => {
-    expect(
-      noRunnableModelAccessReason(
-        [
-          model('sonnet46T', {
-            available: false,
-            status: 'login required',
-            model: modelOption('sonnet46T', {
-              availability: 'included-login-required',
-              disabled: true,
-            }),
-          }),
-        ],
-        'included',
-      ),
-    ).toBe('includedLoginRequired');
-  });
-
-  it('classifies personal and non-login included empty states by API mode', () => {
-    expect(
-      noRunnableModelAccessReason(
-        [
-          model('gemini31p', {
-            available: false,
-            status: 'missing api key',
-            model: modelOption('gemini31p', {
-              availability: 'missing-key',
-              requiresKey: true,
-            }),
-          }),
-        ],
-        'personal',
-      ),
-    ).toBe('personal');
-    expect(
-      noRunnableModelAccessReason(
-        [
-          model('deepseekT', {
-            available: false,
-            status: 'relay quota exhausted',
-            model: modelOption('deepseekT', {
-              availability: 'relay-quota-exhausted',
-              disabled: true,
-            }),
-          }),
-        ],
-        'included',
-      ),
-    ).toBe('included');
-  });
-
   it('formats no-runnable model reasons for launch and model picker views', () => {
-    expect(
-      modelAccessLaunchBlockDescriptionForCliMode(
-        [
-          model('gpt54', {
-            available: false,
-            status: 'sign in required',
-            model: modelOption('gpt54', {
-              availability: 'included-login-required',
-            }),
-          }),
-        ],
-        'included',
-      ),
-    ).toBe('Sign in to use included access');
-    expect(modelAccessLaunchBlockDescriptionForCliMode([], 'included')).toBe(
-      'No models are available with included access',
+    expect(modelAccessLaunchBlockDescription()).toBe('No models are available');
+    expect(formatCliNoRunnableModelsMessage(INTERACTIVE_RECOVERY)).toBe(
+      'No models are available. Configure a provider API key.',
     );
-    expect(modelAccessLaunchBlockDescriptionForCliMode([], 'personal')).toBe(
-      'No models are available with your own API keys',
-    );
-    expect(
-      formatCliNoRunnableModelsMessage(
-        'includedLoginRequired',
-        INTERACTIVE_RECOVERY,
-      ),
-    ).toBe(
-      'Sign in to use included access. Run /login or switch with /api personal.',
-    );
-    expect(
-      formatCliNoRunnableModelsMessage('included', INTERACTIVE_RECOVERY),
-    ).toBe(
-      'No models are available with included access. Switch with /api personal or try again later.',
-    );
-    expect(
-      formatCliNoRunnableModelsMessage('personal', INTERACTIVE_RECOVERY),
-    ).toBe(
-      'No models are available with your own API keys. Configure a provider API key or switch with /api included.',
-    );
-    expect(
-      formatCliNoAvailableModelsRecovery('included', INTERACTIVE_RECOVERY),
-    ).toBe(
-      'Run /login for included access, or switch with /api personal after configuring a provider API key.',
-    );
-    expect(
-      formatCliNoAvailableModelsRecovery('personal', INTERACTIVE_RECOVERY),
-    ).toBe(
-      'Configure a provider API key, or switch with /api included and run /login.',
+    expect(formatCliNoAvailableModelsRecovery(INTERACTIVE_RECOVERY)).toBe(
+      'Configure a provider API key.',
     );
   });
 
   it('keeps defaults for omitted and nullish recovery actions', () => {
-    expect(
-      formatCliNoAvailableModelsRecovery('included', {
-        personalModeAction: 'choose personal access',
-      }),
-    ).toBe(
-      'Run `texra login` for included access, or choose personal access after configuring a provider API key.',
+    expect(formatCliNoAvailableModelsRecovery()).toBe(
+      'Add a provider API key with `texra setup`.',
     );
 
-    const runtimeNullishActions = {
-      includedModeAction: null,
-      loginAction: undefined,
-      personalModeAction: null,
-      configureKeyAction: undefined,
-    };
+    const runtimeNullishActions = { configureKeyAction: null };
     expect(
       // @ts-expect-error JavaScript callers can supply null at this boundary.
-      formatCliNoAvailableModelsRecovery(undefined, runtimeNullishActions),
-    ).toBe(
-      'Run `texra login`, retry with `--api-mode included`, or add a provider API key with `texra setup`.',
-    );
+      formatCliNoAvailableModelsRecovery(runtimeNullishActions),
+    ).toBe('Add a provider API key with `texra setup`.');
     expect(
       // @ts-expect-error JavaScript callers can supply null at this boundary.
-      formatCliNoRunnableModelsMessage('included', runtimeNullishActions),
+      formatCliNoRunnableModelsMessage(runtimeNullishActions),
     ).toBe(
-      'No models are available with included access. Retry with `--api-mode personal` or try again later.',
+      'No models are available. Add a provider API key with `texra setup`.',
     );
   });
 
   it('formats empty model picker messages with caller-owned recovery actions', () => {
-    expect(
-      emptyModelListMessageForCliMode(
-        [
-          model('sonnet46T', {
-            available: false,
-            model: modelOption('sonnet46T', {
-              availability: 'included-login-required',
-              disabled: true,
-            }),
-            status: 'login required',
-          }),
-        ],
-        'included',
-        INTERACTIVE_RECOVERY,
-      ),
-    ).toBe(
-      'Sign in to use included access. Run /login or switch with /api personal.',
+    expect(emptyModelListMessage(INTERACTIVE_RECOVERY)).toBe(
+      'No models are available. Configure a provider API key.',
     );
-    expect(
-      emptyModelListMessageForCliMode(
-        [notIncludedModel('opus48T')],
-        'included',
-        INTERACTIVE_RECOVERY,
-      ),
-    ).toBe(
-      'No models are available with included access. Switch with /api personal or try again later.',
-    );
-    expect(
-      emptyModelListMessageForCliMode(
-        [
-          model('gemini31p', {
-            available: false,
-            model: modelOption('gemini31p', {
-              availability: 'missing-key',
-              requiresKey: true,
-            }),
-            status: 'missing api key',
-          }),
-        ],
-        'personal',
-        INTERACTIVE_RECOVERY,
-      ),
-    ).toBe(
-      'No models are available with your own API keys. Configure a provider API key or switch with /api included.',
-    );
-  });
-
-  it('rejects personal-key models in included TeXRA mode', async () => {
-    await expect(
-      resolveModelFromAccessList(API_MODE_SPLIT_ENTRIES, 'deepseekT', {
-        fallbackReason: 'explicit-override',
-        apiMode: 'included',
-      }),
-    ).rejects.toThrow(
-      'Model "deepseekT" is not available in the active API mode (api key set). Available models: sonnet46T.',
-    );
-  });
-
-  it('falls back from included TeXRA models in personal API mode', async () => {
-    await expect(
-      resolveModelFromAccessList(API_MODE_SPLIT_ENTRIES, 'sonnet46T', {
-        fallbackReason: 'command-config',
-        apiMode: 'personal',
-      }),
-    ).resolves.toEqual({
-      model: 'deepseekT',
-      notice:
-        'Model "sonnet46T" is not available in the active API mode (included access). Available models: deepseekT. Using "deepseekT" instead.',
-    });
   });
 
   it('reports when no fallback model is runnable', async () => {
@@ -825,21 +445,7 @@ describe('CLI model access resolution', () => {
         fallbackReason: 'command-config',
       }),
     ).rejects.toThrow(
-      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login`, retry with `--api-mode included`, or add a provider API key with `texra setup`.',
-    );
-  });
-
-  it('keeps personal-mode recovery scoped to provider keys or included mode', async () => {
-    expect(formatCliNoAvailableModelsRecovery('personal')).toBe(
-      'Add a provider API key with `texra setup`, or retry with `--api-mode included` and run `texra login`.',
-    );
-    await expect(
-      resolveModelFromAccessList(MISSING_KEY_ONLY_ENTRIES, 'gemini31p', {
-        fallbackReason: 'command-config',
-        apiMode: 'personal',
-      }),
-    ).rejects.toThrow(
-      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Add a provider API key with `texra setup`, or retry with `--api-mode included` and run `texra login`.',
+      'Model "gemini31p" is not available (missing api key). No models are currently available. Add a provider API key with `texra setup`.',
     );
   });
 
@@ -847,10 +453,10 @@ describe('CLI model access resolution', () => {
     await expect(
       resolveModelFromAccessList(MISSING_KEY_ONLY_ENTRIES, 'gemini31p', {
         fallbackReason: 'command-config',
-        noAvailableModelsMessage: 'Run `texra login` for included access.',
+        noAvailableModelsMessage: 'Run /key to add a provider API key.',
       }),
     ).rejects.toThrow(
-      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login` for included access.',
+      'Model "gemini31p" is not available (missing api key). No models are currently available. Run /key to add a provider API key.',
     );
   });
 
@@ -860,32 +466,12 @@ describe('CLI model access resolution', () => {
     await expect(
       selectCliRunnableModel('haiku3', {
         fallbackReason: 'explicit-override',
-        apiMode: 'included',
         accessList: [],
       }),
-    ).rejects.toThrow(
-      'Model "haiku3" is not available in the active API mode (retired).',
-    );
+    ).rejects.toThrow('Model "haiku3" is not available (retired).');
   });
 
   it.each([
-    {
-      name: 'shows a recovery hint for not-included models in model details',
-      entry: GLM52_NOT_INCLUDED_ENTRY,
-      apiMode: 'included' as const,
-      contains: [
-        'status: not included',
-        'recovery: Add a provider API key with `texra setup`, then retry with `--api-mode personal`.',
-      ],
-      excludes: [],
-    },
-    {
-      name: 'does not suggest included mode for not-included models in personal mode',
-      entry: GLM52_NOT_INCLUDED_ENTRY,
-      apiMode: 'personal' as const,
-      contains: ['recovery: Add a provider API key with `texra setup`.'],
-      excludes: ['`--api-mode included`'],
-    },
     {
       name: 'shows terminal recovery text for retired models in model details',
       entry: model('haiku3', {
@@ -898,7 +484,6 @@ describe('CLI model access resolution', () => {
           disabled: true,
         }),
       }),
-      apiMode: 'included' as const,
       contains: [
         'status: retired',
         'availability: Retired',
@@ -909,114 +494,17 @@ describe('CLI model access resolution', () => {
     {
       name: 'shows a recovery hint for missing provider-key models in model details',
       entry: GLM52_MISSING_KEY_ENTRY,
-      apiMode: 'personal' as const,
       contains: [
         'status: missing api key',
-        'recovery: Add a provider API key with `texra setup`, or run `texra login` and retry with `--api-mode included` if your plan covers this model.',
+        'recovery: Add a provider API key with `texra setup`.',
       ],
       excludes: [],
     },
-    {
-      name: 'tells included-mode users to switch modes after adding a missing key',
-      entry: GLM52_MISSING_KEY_ENTRY,
-      apiMode: 'included' as const,
-      contains: [
-        'recovery: Add a provider API key with `texra setup`, then retry with `--api-mode personal`.',
-      ],
-      excludes: [],
-    },
-    {
-      name: 'does not ask users to configure a key that is already present',
-      entry: model('deepseekT', {
-        available: false,
-        status: 'api key set',
-        model: modelOption('deepseekT', {
-          availability: 'provider-key',
-          availabilityLabel: 'API key set',
-        }),
-      }),
-      apiMode: 'included' as const,
-      contains: ['recovery: Retry with `--api-mode personal`.'],
-      excludes: ['configuring a provider API key'],
-    },
-    {
-      name: 'shows the included-mode recovery hint for included models in personal mode',
-      entry: model('sonnet46T', {
-        available: false,
-        status: 'included access: available',
-        model: modelOption('sonnet46T', {
-          availability: 'included-access',
-          availabilityLabel: 'Included access',
-        }),
-      }),
-      apiMode: 'personal' as const,
-      contains: ['recovery: Retry with `--api-mode included`.'],
-      excludes: ['texra login'],
-    },
-    {
-      name: 'does not repeat personal-mode advice when showing login-required models',
-      entry: model('sonnet46T', {
-        available: false,
-        status: 'login required',
-        model: modelOption('sonnet46T', {
-          availability: 'included-login-required',
-          availabilityLabel: 'Login required',
-          disabled: true,
-        }),
-      }),
-      apiMode: 'personal' as const,
-      contains: [
-        'recovery: Run `texra login` for included access, then retry with `--api-mode included`.',
-      ],
-      excludes: ['retry with `--api-mode personal`'],
-    },
-    {
-      name: 'does not repeat personal-mode advice for quota-exhausted models',
-      entry: model('sonnet46T', {
-        available: false,
-        status: 'relay quota exhausted',
-        model: modelOption('sonnet46T', {
-          availability: 'relay-quota-exhausted',
-          availabilityLabel: 'Relay quota exhausted',
-          disabled: true,
-        }),
-      }),
-      apiMode: 'personal' as const,
-      contains: ['recovery: Retry later.'],
-      excludes: ['use `--api-mode personal`'],
-    },
-  ])('$name', ({ entry, apiMode, contains, excludes }) => {
-    const text = formatCliModelDetails(entry, apiMode);
+  ])('$name', ({ entry, contains, excludes }) => {
+    const text = formatCliModelDetails(entry);
 
     for (const expected of contains) expect(text).toContain(expected);
     for (const absent of excludes) expect(text).not.toContain(absent);
-  });
-
-  it('carries the login-required verdict resolved by the model layer', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([
-      modelOption('deepseekT', {
-        availability: 'included-login-required',
-        availabilityLabel: 'Login required',
-        requiresKey: false,
-        disabled: true,
-      }),
-    ]);
-
-    await expect(
-      getCliModelAccessList({ apiMode: 'included' }),
-    ).resolves.toMatchObject([
-      {
-        available: false,
-        status: 'login required',
-        model: {
-          value: 'deepseekT',
-          availability: 'included-login-required',
-          availabilityLabel: 'Login required',
-          requiresKey: false,
-          disabled: true,
-        },
-      },
-    ]);
   });
 
   it('keeps ChatGPT models available without TeXRA sign-in or API keys', async () => {
@@ -1029,9 +517,7 @@ describe('CLI model access resolution', () => {
       }),
     ]);
 
-    await expect(
-      getCliModelAccessList({ apiMode: 'included' }),
-    ).resolves.toMatchObject([
+    await expect(getCliModelAccessList()).resolves.toMatchObject([
       {
         available: true,
         model: {
@@ -1044,109 +530,26 @@ describe('CLI model access resolution', () => {
     ]);
   });
 
-  it('preserves relay quota status for signed-in included-mode users', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([
-      modelOption('deepseekT', {
-        availability: 'relay-quota-exhausted',
-        availabilityLabel: 'Relay quota exhausted',
-        requiresKey: false,
-        disabled: true,
-      }),
-    ]);
-
-    await expect(
-      getCliModelAccessList({ apiMode: 'included' }),
-    ).resolves.toMatchObject([
-      {
-        available: false,
-        status: 'relay quota exhausted',
-        model: {
-          value: 'deepseekT',
-          availability: 'relay-quota-exhausted',
-          availabilityLabel: 'Relay quota exhausted',
-        },
-      },
-    ]);
-  });
-
-  it('marks only included-access models runnable in included TeXRA mode', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([
-      modelOption('gemini35f', {
-        availability: 'included-access',
-        availabilityLabel: 'Included access',
-      }),
-      modelOption('sonnet46T', {
-        availability: 'included-access',
-        availabilityLabel: 'Included access',
-      }),
-      modelOption('deepseekT', {
-        availability: 'provider-key',
-        availabilityLabel: 'API key set',
-      }),
-      modelOption('openrouterOnlyT', {
-        availability: 'openrouter-key',
-        availabilityLabel: 'OpenRouter key',
-      }),
-    ]);
-
-    await expect(
-      getCliModelAccessList({ apiMode: 'included' }),
-    ).resolves.toMatchObject([
-      { model: { value: 'gemini35f' }, available: true },
-      { model: { value: 'sonnet46T' }, available: true },
-      { model: { value: 'deepseekT' }, available: false },
-      { model: { value: 'openrouterOnlyT' }, available: false },
-    ]);
-  });
-
-  it('marks only API-key models runnable in personal API mode', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([
-      modelOption('sonnet46T', {
-        availability: 'included-access',
-        availabilityLabel: 'Included access',
-      }),
-      modelOption('deepseekT', {
-        availability: 'provider-key',
-        availabilityLabel: 'API key set',
-      }),
-      modelOption('openrouterOnlyT', {
-        availability: 'openrouter-key',
-        availabilityLabel: 'OpenRouter key',
-      }),
-    ]);
-
-    await expect(
-      getCliModelAccessList({ apiMode: 'personal' }),
-    ).resolves.toMatchObject([
-      { model: { value: 'sonnet46T' }, available: false },
-      { model: { value: 'deepseekT' }, available: true },
-      { model: { value: 'openrouterOnlyT' }, available: true },
-    ]);
-  });
-
   it('loads explicit model ids for diagnostic lists', async () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('hiddenFixtureModel', {
-        availability: 'not-included',
-        availabilityLabel: 'Not included',
+        availability: 'missing-key',
+        availabilityLabel: 'Missing API key',
         disabled: true,
-        requiresKey: false,
+        requiresKey: true,
       }),
     ]);
 
     await expect(
-      getCliModelAccessList({
-        apiMode: 'included',
-        models: ['hiddenFixtureModel'],
-      }),
+      getCliModelAccessList({ models: ['hiddenFixtureModel'] }),
     ).resolves.toMatchObject([
       {
         available: false,
-        status: 'not included',
+        status: 'missing api key',
         model: {
           value: 'hiddenFixtureModel',
-          availability: 'not-included',
-          availabilityLabel: 'Not included',
+          availability: 'missing-key',
+          availabilityLabel: 'Missing API key',
         },
       },
     ]);
@@ -1156,38 +559,34 @@ describe('CLI model access resolution', () => {
   it('uses the loaded access list as the availability source of truth', async () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('sonnet46T', {
-        availability: 'included-access',
-        availabilityLabel: 'Included access',
-        disabled: false,
-        requiresKey: false,
-      }),
-      modelOption('deepseekT', {
         availability: 'provider-key',
         availabilityLabel: 'API key set',
         disabled: false,
         requiresKey: false,
       }),
+      modelOption('deepseekT', {
+        availability: 'missing-key',
+        availabilityLabel: 'Missing API key',
+        disabled: true,
+        requiresKey: true,
+      }),
     ]);
 
-    const includedModeEntries = await getCliModelAccessList({
-      apiMode: 'included',
-    });
+    const entries = await getCliModelAccessList();
 
-    expect(includedModeEntries).toMatchObject([
+    expect(entries).toMatchObject([
       { model: { value: 'sonnet46T' }, available: true },
       { model: { value: 'deepseekT' }, available: false },
     ]);
     expect(
-      runnableCliModelAccessEntries(includedModeEntries, 'included').map(
-        (entry) => entry.model.value,
-      ),
+      runnableCliModelAccessEntries(entries).map((entry) => entry.model.value),
     ).toEqual(['sonnet46T']);
   });
 
   it('checks access for explicit models hidden from the visible model list', async () => {
     computeModelOptionsDataMock
       .mockResolvedValueOnce([
-        modelOption('sonnet46T', { availabilityLabel: 'Included access' }),
+        modelOption('sonnet46T', { availabilityLabel: 'API key set' }),
       ])
       .mockResolvedValueOnce([
         modelOption('hiddenFixtureModel', { availabilityLabel: 'API key set' }),
@@ -1214,7 +613,6 @@ describe('CLI model access resolution', () => {
     await expect(
       selectCliRunnableModel('hiddenFixtureModel', {
         fallbackReason: 'explicit-override',
-        apiMode: 'personal',
         accessList: [missingKeyModel('deepseekT')],
       }),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
@@ -1249,7 +647,6 @@ describe('CLI model access resolution', () => {
 
     await expect(
       loadCliModelAccessEntry('HIDDENFIXTUREMODEL', {
-        apiMode: 'personal',
         accessList: [model('sonnet46T')],
       }),
     ).resolves.toMatchObject({
@@ -1284,7 +681,6 @@ describe('CLI model access resolution', () => {
 
     await expect(
       loadCliModelAccessEntry('User Facing Fixture', {
-        apiMode: 'personal',
         accessList: [model('sonnet46T')],
       }),
     ).resolves.toMatchObject({
@@ -1300,7 +696,7 @@ describe('CLI model access resolution', () => {
   it('reports stale hidden model configuration directly', async () => {
     computeModelOptionsDataMock
       .mockResolvedValueOnce([
-        modelOption('sonnet46T', { availabilityLabel: 'Included access' }),
+        modelOption('sonnet46T', { availabilityLabel: 'API key set' }),
       ])
       .mockResolvedValueOnce([]);
 

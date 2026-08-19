@@ -23,7 +23,7 @@ describe('delegation model availability', () => {
     expect(
       availableModelNamesFromOptions([
         model('sonnet46T'),
-        model('opus48T', { disabled: true, availability: 'not-included' }),
+        model('opus48T', { disabled: true }),
         model('gemini31p', { requiresKey: true, availability: 'missing-key' }),
         model('deepseekT', { disabled: false, requiresKey: false }),
       ]),

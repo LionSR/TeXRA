@@ -43,7 +43,6 @@ export interface CliConfigFormProps {
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
   readonly openExternalForm?: (formName: string) => void;
-  readonly onApiModePersonal?: () => void | Promise<void>;
 }
 
 export interface CreateCliConfigFormPropsInput extends CliConfigFormProps {
@@ -159,9 +158,6 @@ export function createCliConfigFormProps(
       if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
       if (entry.onWrite?.invalidatesModelOptions) {
         refreshSubscriptionPreferenceViews();
-        if (entry.key === GlobalStateKey.USE_OPENROUTER && value === true) {
-          await props.onApiModePersonal?.();
-        }
       }
     },
     resetValue: async (entry) => {
@@ -204,7 +200,6 @@ export function createCliConfigFormProps(
             await saveProviderApiKey(provider, key);
             props.markProviderApiKeySet?.(provider);
             await props.refreshApiKeyStatuses?.();
-            await props.onApiModePersonal?.();
           }}
           onDone={onBack}
           onCancel={onBack}

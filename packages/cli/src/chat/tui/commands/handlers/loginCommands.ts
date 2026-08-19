@@ -5,7 +5,6 @@ import {
   setCliCodexSubscription,
 } from '@cli/chat/tui/state/codexSubscription';
 import { setCliXaiSubscription } from '@cli/chat/tui/state/xaiSubscription';
-import { sessionMeta } from '@cli/chat/tui/state/cliState';
 import {
   chatGptSignOutPreferenceMessage,
   signInCliChatGpt,
@@ -34,7 +33,6 @@ import {
 } from '@cli/runtime/loginOptions';
 import {
   formatCliManualAuthUrlMessage,
-  relayTokenStillActiveNotice,
   signInCliSupabase,
   signInCliSupabaseDeviceCode,
   signOutCliSupabase,
@@ -50,7 +48,6 @@ import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { setCliSessionApiMode } from './apiModeCommands';
 import {
   abortableSlashCommand,
   type SlashCommandOutput,
@@ -156,7 +153,7 @@ async function loginToGrokSubscription(
   });
 }
 
-async function loginToTexraIncludedAccess(
+async function loginToTexraAccount(
   args: CliTexraLoginSlashArgs,
   output: SlashCommandOutput,
   signal: AbortSignal,
@@ -188,7 +185,6 @@ async function loginToTexraIncludedAccess(
         },
         signal,
       });
-  setCliSessionApiMode('included');
   output.appendOutcome(RESEARCHER_ACCESS_AUTH.signedIn(session.account.label));
 }
 
@@ -228,7 +224,7 @@ export function loginFromChat(
       await loginToGrokSubscription(loginArgs, output, signal);
       return;
     }
-    await loginToTexraIncludedAccess(loginArgs, output, signal);
+    await loginToTexraAccount(loginArgs, output, signal);
   });
 }
 
@@ -243,12 +239,10 @@ export async function logoutFromChat(
   }
 
   const lines: string[] = [];
-  let texraSignedOut = false;
 
   if (target === 'texra' || target === 'all') {
     try {
       await signOutCliSupabase();
-      texraSignedOut = true;
       lines.push(`Signed out of ${RESEARCHER_ACCESS.label}.`);
     } catch (error: unknown) {
       lines.push(
@@ -288,20 +282,8 @@ export async function logoutFromChat(
     );
   }
 
-  if (texraSignedOut) {
-    // Sign-out only clears the stored session; a configured TEXRA_RELAY_TOKEN
-    // keeps authenticating relay calls, so report it — and keep the session
-    // in included mode so the notice matches what actually happens.
-    const relayNotice = relayTokenStillActiveNotice();
-    const apiMode = relayNotice ? 'included' : 'personal';
-    setCliSessionApiMode(apiMode);
-    if (relayNotice) lines.push(relayNotice);
-  }
-
   try {
-    const overview = await loadCliModelAccessOverview({
-      apiMode: sessionMeta.get().apiMode,
-    });
+    const overview = await loadCliModelAccessOverview();
     lines.push(...overview.lines);
   } catch (error: unknown) {
     lines.push(toErrorMessage(error));

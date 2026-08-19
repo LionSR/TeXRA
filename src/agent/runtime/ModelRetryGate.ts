@@ -15,7 +15,6 @@ interface RouteState {
   version: number;
   phase: RoutePhase;
   failures: number;
-  releaseProbeBeforeOperation: boolean;
   retryAt: number;
   timer: ReturnType<typeof setTimeout> | undefined;
   readonly waiters: WaitingAttempt[];
@@ -28,7 +27,6 @@ interface RetryPermit {
 
 interface RouteFailure {
   readonly retryAfterMs?: number;
-  readonly releaseProbeBeforeOperation?: boolean;
 }
 
 interface RoutePolicy {
@@ -36,7 +34,6 @@ interface RoutePolicy {
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
   readonly isReachableFailure?: (error: Error) => boolean;
   readonly isUnobservedFailure?: (error: Error) => boolean;
-  readonly releaseEarlierProbesBeforeWait?: boolean;
 }
 
 interface RunOptions {
@@ -46,7 +43,6 @@ interface RunOptions {
   readonly isReachableFailure?: (error: Error) => boolean;
   readonly isUnobservedFailure?: (error: Error) => boolean;
   readonly additionalRoutes?: readonly RoutePolicy[];
-  readonly trailingRoutes?: readonly RoutePolicy[];
   readonly onWait?: (delayMs: number) => void;
 }
 
@@ -66,9 +62,6 @@ function abortReason(signal: AbortSignal): unknown {
  * becomes the recovery probe. A successful probe releases the other calls;
  * another route failure increases the shared backoff. The gate does not decide
  * how many times a node retries—that remains the node retry loop's concern.
- * Relay-authentication recovery is likewise not the gate's concern: the token
- * refresh is single-flighted at the auth boundary, and each call's own
- * reactive 401 recovery repairs its client within the same node attempt.
  */
 export class ModelRetryGate {
   private readonly routes = new Map<string, RouteState>();
@@ -87,7 +80,6 @@ export class ModelRetryGate {
         isReachableFailure: options.isReachableFailure,
         isUnobservedFailure: options.isUnobservedFailure,
       },
-      ...(options.trailingRoutes ?? []),
     ];
     const acquired = await this.acquireAll(policies, options);
     try {
@@ -136,69 +128,19 @@ export class ModelRetryGate {
   }
 
   /**
-   * Acquires narrower additional scopes before the primary route and broader
-   * trailing scopes after it. A model-specific probe may wait for its shared
-   * wire route without blocking healthy sibling models, while a provider wire
-   * probe may wait for the shared relay-user gate without reserving that
-   * broader probe. A later wait can also make an earlier permit stale, so
-   * validate the complete set before sending.
+   * Acquires narrower additional scopes before the primary route. A
+   * model-specific probe may wait for its shared wire route without blocking
+   * healthy sibling models. A later wait can also make an earlier permit
+   * stale, so validate the complete set before sending.
    */
   private async acquireAll(
     routes: readonly RoutePolicy[],
     options: Pick<RunOptions, 'signal' | 'onWait'>,
   ): Promise<AcquiredRoute[]> {
-    acquireRoutes: while (true) {
+    while (true) {
       const acquired: AcquiredRoute[] = [];
       try {
-        for (const [routeIndex, route] of routes.entries()) {
-          const state = this.routes.get(route.key);
-          if (
-            route.releaseEarlierProbesBeforeWait &&
-            state &&
-            state.phase !== 'healthy'
-          ) {
-            // Wait for an admission route without retaining narrower recovery
-            // probes. Hand those probes to their own queued cohorts, then
-            // restart from one current set of route states.
-            for (const entry of acquired) {
-              this.abandon(entry.key, entry.permit);
-            }
-            acquired.length = 0;
-            const permit = await this.acquire(route.key, options);
-            const currentState = this.routes.get(route.key);
-            if (permit.probe && currentState?.releaseProbeBeforeOperation) {
-              this.releaseProbe(route.key, permit);
-              continue acquireRoutes;
-            }
-
-            // A concurrency probe stays closed until its operation observes a
-            // free slot. Reacquire narrower scopes only when all are healthy;
-            // otherwise hand off this probe and recover those scopes first.
-            const narrower: AcquiredRoute[] = [];
-            for (const earlier of routes.slice(0, routeIndex)) {
-              const earlierPermit = this.acquireHealthy(earlier.key);
-              if (!earlierPermit) {
-                for (const entry of narrower) {
-                  this.abandon(entry.key, entry.permit);
-                }
-                this.abandon(route.key, permit);
-                continue acquireRoutes;
-              }
-              narrower.push({ ...earlier, permit: earlierPermit });
-            }
-            acquired.push(...narrower, { ...route, permit });
-            if (
-              acquired.every((entry) =>
-                this.isCurrentPermit(entry.key, entry.permit),
-              )
-            ) {
-              return acquired;
-            }
-            for (const entry of acquired) {
-              this.abandon(entry.key, entry.permit);
-            }
-            continue acquireRoutes;
-          }
+        for (const route of routes) {
           acquired.push({
             ...route,
             permit: await this.acquire(route.key, options),
@@ -293,7 +235,6 @@ export class ModelRetryGate {
       version: 0,
       phase: 'healthy' as const,
       failures: 0,
-      releaseProbeBeforeOperation: false,
       retryAt: 0,
       timer: undefined,
       waiters: [],
@@ -318,8 +259,6 @@ export class ModelRetryGate {
     state.version += 1;
     state.phase = 'cooling';
     state.failures += 1;
-    state.releaseProbeBeforeOperation =
-      failure.releaseProbeBeforeOperation ?? false;
     state.retryAt =
       Date.now() +
       Math.max(
@@ -344,7 +283,6 @@ export class ModelRetryGate {
       // the shared backoff at its base forever in exactly that cycle.
       if (permit.version === state.version) {
         state.failures = 0;
-        state.releaseProbeBeforeOperation = false;
       }
       return;
     }
@@ -353,7 +291,6 @@ export class ModelRetryGate {
 
     state.version += 1;
     state.phase = 'healthy';
-    state.releaseProbeBeforeOperation = false;
     state.retryAt = 0;
     if (state.timer) clearTimeout(state.timer);
     state.timer = undefined;
@@ -364,15 +301,6 @@ export class ModelRetryGate {
         probe: false,
       });
     }
-  }
-
-  /**
-   * Opens a request-admission route as soon as its server-provided cooldown
-   * admits the recovery attempt. Unlike a transport route, it must not hold
-   * the queued cohort until a potentially long-lived model response finishes.
-   */
-  private releaseProbe(route: string, permit: RetryPermit): void {
-    this.markReachable(route, permit);
   }
 
   private abandon(route: string, permit: RetryPermit): void {

@@ -28,7 +28,6 @@ import '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Local imports - profile view styles and events
 import { createEvent } from '@shared/utils/events';
-import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import { postStateSetting } from '../shared/stateSettingRows';
 import { providerKeyListStyles } from './ProviderKeyList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';
@@ -45,8 +44,6 @@ export class ProviderKeyList extends LitElement {
   ];
 
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
-  @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
-    'personal';
   @property({ attribute: false }) globalStreamingDefault =
     DEFAULT_GLOBAL_STREAMING;
 
@@ -229,9 +226,7 @@ export class ProviderKeyList extends LitElement {
     const rows = resolveProviderKeyRows(this.providerKeyStatuses);
 
     const description =
-      this.apiAccessMode === 'included'
-        ? `You are using ${INCLUDED_ACCESS.inline}. The keys below are optional overrides.`
-        : "Except for Codex models through the ChatGPT subscription section above, chat subscriptions do not include API access. Use a key from the provider's developer console.";
+      "Except for Codex models through the ChatGPT subscription section above, chat subscriptions do not include API access. Use a key from the provider's developer console.";
 
     return html`
       <div class="provider-keys-section">

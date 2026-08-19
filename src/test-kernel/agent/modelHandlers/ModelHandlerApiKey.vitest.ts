@@ -11,10 +11,7 @@ import type {
   ModelCredentialSelection,
   ResolvedClientCredential,
 } from '@agent/types/ModelHandlerContracts';
-import { SupabaseClient } from '@auth/SupabaseClient';
-import * as serverKeysModule from '@auth/serverKeys';
 import { classifyAgentError } from '@common/errors';
-import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -42,30 +39,6 @@ const API_KEY_TEST_CONFIG = Object.freeze({
   openrouterFullName: 'openai/gpt-5.5',
 });
 
-function stubServerSideKeyService(
-  options: {
-    readonly useIncludedAccess?: boolean;
-    readonly hasServerAccess?: boolean;
-    readonly shouldUseServerSideKeys?: boolean;
-    readonly quotaAutoSwitched?: boolean;
-  } = {},
-): { readonly canUseServerSideKeys: ReturnType<typeof vi.fn> } {
-  const canUseServerSideKeys = vi.fn(
-    async () => options.hasServerAccess ?? false,
-  );
-
-  vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
-    getUseIncludedModelAccess: () => options.useIncludedAccess ?? false,
-    canUseServerSideKeys,
-    wasQuotaAutoSwitched: () => options.quotaAutoSwitched ?? false,
-    shouldUseServerSideKeysSync: () => options.shouldUseServerSideKeys ?? false,
-    getRelayBaseUrl: () => 'https://relay.example.test/openai',
-  } as unknown as ReturnType<typeof serverKeysModule.getServerSideKeyService>);
-  installTexraModelAccess();
-
-  return { canUseServerSideKeys };
-}
-
 async function initFakePlatform(
   secrets: Record<string, string> = {},
 ): Promise<void> {
@@ -81,12 +54,6 @@ function newHandler(
   );
 }
 
-function stubRelayToken(): ReturnType<typeof vi.spyOn> {
-  return vi
-    .spyOn(SupabaseClient, 'getRelayAccessToken')
-    .mockResolvedValue('relay-token');
-}
-
 describe('ModelHandler.getApiKey resolution', () => {
   beforeEach(async () => {
     await initFakePlatform();
@@ -99,48 +66,10 @@ describe('ModelHandler.getApiKey resolution', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns the relay token after priming included-access state', async () => {
-    const { canUseServerSideKeys } = stubServerSideKeyService({
-      useIncludedAccess: true,
-      hasServerAccess: true,
-      shouldUseServerSideKeys: true,
-    });
-    const relayToken = stubRelayToken();
-
-    const handler = newHandler();
-
-    assert.equal(await handler.exposeGetApiKey(), 'relay-token');
-    assert.equal(canUseServerSideKeys.mock.calls.length, 1);
-    assert.equal(relayToken.mock.calls.length, 1);
-  });
-
-  it('blocks relay quota exhaustion before reading any key', async () => {
-    stubServerSideKeyService({
-      useIncludedAccess: true,
-      hasServerAccess: true,
-      shouldUseServerSideKeys: true,
-      quotaAutoSwitched: true,
-    });
-    const relayToken = stubRelayToken();
-
-    const handler = newHandler();
-
-    await assert.rejects(
-      handler.exposeGetApiKey(),
-      /used all of this month's included access/,
-    );
-    assert.equal(relayToken.mock.calls.length, 0);
-  });
-
-  it('uses the OpenRouter key before included-access tier mismatch handling', async () => {
+  it('uses the OpenRouter key for an OpenRouter-only model', async () => {
     await initFakePlatform({
       [apiKeySecretName('openRouter')]: 'openrouter-key',
       [apiKeySecretName('openai')]: 'personal-key',
-    });
-    stubServerSideKeyService({
-      useIncludedAccess: true,
-      hasServerAccess: true,
-      shouldUseServerSideKeys: false,
     });
 
     const handler = newHandler({ openRouterOnly: true });
@@ -148,18 +77,11 @@ describe('ModelHandler.getApiKey resolution', () => {
     assert.equal(await handler.exposeGetApiKey(), 'openrouter-key');
   });
 
-  it('uses a managed direct key without consulting relay state', async () => {
+  it('uses a managed direct key even while OpenRouter is on', async () => {
     await initFakePlatform({
       [apiKeySecretName('kimiCode')]: 'kimi-code-key',
     });
     vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(true);
-    const { canUseServerSideKeys } = stubServerSideKeyService({
-      useIncludedAccess: true,
-      hasServerAccess: true,
-      shouldUseServerSideKeys: true,
-      quotaAutoSwitched: true,
-    });
-    const relayToken = stubRelayToken();
     const handler = newHandler({
       provider: ModelProvider.MOONSHOT,
       kimiSubscription: true,
@@ -169,59 +91,16 @@ describe('ModelHandler.getApiKey resolution', () => {
 
     assert.equal(handler.getBaseUrl(), 'https://api.kimi.com/coding/v1');
     assert.equal(await handler.exposeGetApiKey(), 'kimi-code-key');
-    assert.equal(canUseServerSideKeys.mock.calls.length, 0);
-    assert.equal(relayToken.mock.calls.length, 0);
   });
 
-  it('rejects tier-mismatched included access instead of falling back to personal keys', async () => {
-    stubServerSideKeyService({
-      useIncludedAccess: true,
-      hasServerAccess: true,
-      shouldUseServerSideKeys: false,
-    });
-
-    const handler = newHandler();
-
-    await assert.rejects(
-      handler.exposeGetApiKey(),
-      /not available with your current subscription tier/,
-    );
-  });
-
-  it('uses the personal provider key when included access is not authenticated', async () => {
+  it('uses the personal provider key', async () => {
     await initFakePlatform({
       [apiKeySecretName('openai')]: 'personal-key',
-    });
-    const { canUseServerSideKeys } = stubServerSideKeyService({
-      useIncludedAccess: true,
-      hasServerAccess: false,
-      shouldUseServerSideKeys: false,
     });
 
     const handler = newHandler();
 
     assert.equal(await handler.exposeGetApiKey(), 'personal-key');
-    assert.equal(canUseServerSideKeys.mock.calls.length, 1);
-  });
-
-  it('can reject a personal candidate without disturbing the configured relay route', async () => {
-    const { canUseServerSideKeys } = stubServerSideKeyService({
-      useIncludedAccess: true,
-      hasServerAccess: true,
-      shouldUseServerSideKeys: true,
-    });
-    stubRelayToken();
-    const handler = newHandler();
-
-    await assert.rejects(
-      handler.exposeResolveClientCredential('personal'),
-      /Missing API key for openai/,
-    );
-    const configured = await handler.exposeResolveClientCredential();
-
-    assert.equal(configured.route, 'relay');
-    assert.equal(configured.apiKey, 'relay-token');
-    assert.equal(canUseServerSideKeys.mock.calls.length, 1);
   });
 
   it('tags its missing-key throw so the run classifies it without reading the message', async () => {
@@ -231,7 +110,6 @@ describe('ModelHandler.getApiKey resolution', () => {
     // as `unexpected` (which is what the deleted substring predicates did to
     // the OpenRouter variant, whose wording they never matched).
     vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(true);
-    stubServerSideKeyService();
     const handler = newHandler();
 
     const error = await handler.exposeResolveClientCredential().then(

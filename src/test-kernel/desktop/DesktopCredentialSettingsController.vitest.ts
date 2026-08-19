@@ -2,9 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { MAX_TIER } from '@auth/config';
-import { RELAY_CI_TOKEN_PREFIX, RELAY_TOKEN_ENV_VAR } from '@auth/relayToken';
-import * as serverKeysModule from '@auth/serverKeys';
 import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
 import { apiKeySecretName } from '@model/apiProviders';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -92,10 +89,6 @@ async function createFixture({
   const errors: string[] = [];
   const signIn = vi.fn(async () => undefined);
   const signOut = vi.fn(async () => undefined);
-  const setUseIncludedModelAccess = vi.fn(async (enabled: boolean) => {
-    events.push(`access:${enabled}`);
-  });
-  const refreshSpendingStatus = vi.fn(async () => null);
   const onCredentialChanged = vi.fn(async () => {
     events.push('credential');
   });
@@ -116,15 +109,6 @@ async function createFixture({
     { workspacePath: '/workspace' },
     { globalState, workspaceState, secrets },
   );
-  vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
-    canUseServerSideKeys: async () => false,
-    refreshSpendingStatus: async () => null,
-    getUseIncludedModelAccess: () => false,
-    wasQuotaAutoSwitched: () => false,
-    isRelayQuotaExceeded: () => false,
-    isProviderOnServer: () => false,
-    canUseModelSync: () => false,
-  } as unknown as ReturnType<typeof serverKeysModule.getServerSideKeyService>);
 
   const controller = new DefaultDesktopCredentialSettingsController({
     workspaceState,
@@ -163,13 +147,7 @@ async function createFixture({
       signIn,
       signOut,
     },
-    setUseIncludedModelAccess,
-    refreshSpendingStatus,
     subscriptionUsage,
-    modelSelectionExtras: {
-      useIncludedAccess: () => false,
-      getUserTier: () => undefined,
-    },
     onCredentialChanged,
     onError: () => undefined,
     ...overrides,
@@ -188,8 +166,6 @@ async function createFixture({
     signIn,
     signOut,
     onCredentialChanged,
-    setUseIncludedModelAccess,
-    refreshSpendingStatus,
     subscriptionUsage,
   };
 }
@@ -210,7 +186,6 @@ describe('DefaultDesktopCredentialSettingsController', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
-    vi.unstubAllEnvs();
   });
 
   it('preserves a provider key when removal is cancelled', async () => {
@@ -318,73 +293,6 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       expect(JSON.stringify(fixture.posted)).not.toContain('new-secret');
     },
   );
-
-  it('persists included access and clears OpenRouter before refreshing', async () => {
-    const globalState = new FakeStateStore({
-      [GlobalStateKey.USE_OPENROUTER]: true,
-    });
-    const fixture = await createFixture({ globalState });
-
-    await assertSupported(fixture.controller.profileHandlers.setApiAccessMode)({
-      command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
-      mode: 'included',
-    });
-
-    expect(fixture.setUseIncludedModelAccess).toHaveBeenCalledWith(true);
-    expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
-    expect(fixture.events).toEqual([
-      'access:true',
-      `render:${SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE}`,
-      `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
-      'credential',
-    ]);
-
-    await assertSupported(fixture.controller.profileHandlers.setApiAccessMode)({
-      command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
-      mode: 'personal',
-    });
-    expect(fixture.setUseIncludedModelAccess).toHaveBeenLastCalledWith(false);
-    expect(fixture.onCredentialChanged).toHaveBeenCalledTimes(2);
-  });
-
-  it('rejects exhausted included access and accepts it after refreshed headroom', async () => {
-    const globalState = new FakeStateStore({
-      [GlobalStateKey.USE_OPENROUTER]: true,
-    });
-    let remaining = 0;
-    const fixture = await createFixture({
-      globalState,
-      refreshSpendingStatus: async () => ({
-        currentSpend: 100 - remaining,
-        limit: 100,
-        remaining,
-        percentUsed: 100 - remaining,
-      }),
-    });
-    const setMode = assertSupported(
-      fixture.controller.profileHandlers.setApiAccessMode,
-    );
-
-    await setMode({
-      command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
-      mode: 'included',
-    });
-    expect(fixture.setUseIncludedModelAccess).not.toHaveBeenCalled();
-    expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
-    expect(fixture.onCredentialChanged).not.toHaveBeenCalled();
-    expect(fixture.infos).toContain(
-      'Included access is unavailable because this month’s quota is exhausted.',
-    );
-
-    remaining = 25;
-    await setMode({
-      command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
-      mode: 'included',
-    });
-    expect(fixture.setUseIncludedModelAccess).toHaveBeenCalledOnce();
-    expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
-    expect(fixture.onCredentialChanged).toHaveBeenCalledOnce();
-  });
 
   // Provider toggles are written by the shared catalog path
   // (`UPDATE_STATE_SETTING`); this pins the desktop refresh that path triggers.
@@ -529,45 +437,5 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
     expect(codexMocks.login).toHaveBeenCalledOnce();
     expect(codexMocks.setPreferSubscription).toHaveBeenCalledWith(true);
-  });
-
-  it.each([
-    {
-      name: 'reports after sign-out that a configured relay token still authenticates',
-      relayToken: `${RELAY_CI_TOKEN_PREFIX}ci-token`,
-      expectedInfos: [expect.stringContaining(RELAY_TOKEN_ENV_VAR)],
-    },
-    {
-      name: 'stays silent after sign-out when no relay token is configured',
-      relayToken: '',
-      expectedInfos: [],
-    },
-  ])('$name', async ({ relayToken, expectedInfos }) => {
-    vi.stubEnv(RELAY_TOKEN_ENV_VAR, relayToken);
-    const fixture = await createFixture();
-
-    await assertSupported(fixture.controller.profileHandlers.signOut)({
-      command: SETTINGS_VIEW_COMMANDS.SIGN_OUT,
-    });
-
-    expect(fixture.signOut).toHaveBeenCalledOnce();
-    expect(fixture.infos).toEqual(expectedInfos);
-  });
-
-  it('applies the Included-Access reasoning cap to the model list', async () => {
-    const fixture = await createFixture({
-      modelSelectionExtras: {
-        useIncludedAccess: () => true,
-        getUserTier: () => MAX_TIER,
-      },
-    });
-
-    const { models } =
-      await fixture.controller.modelSelectionController.buildSelectionData();
-
-    expect(models.find((model) => model.name === 'gpt55')).toMatchObject({
-      supportsReasoningLevel: true,
-      includedAccessReasoningCap: 'high',
-    });
   });
 });

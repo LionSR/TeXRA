@@ -7,7 +7,6 @@ import {
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
-import type { SpendingStatus } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
@@ -31,14 +30,11 @@ function createController(
   options: {
     state?: StateStore;
     config?: Record<string, SettingsProfileConfigValue>;
-    refreshSpendingStatus?: () => Promise<SpendingStatus | null>;
   } = {},
 ): {
   controller: SettingsProfileController;
-  includedAccessUpdates: boolean[];
   config: Record<string, SettingsProfileConfigValue>;
 } {
-  const includedAccessUpdates: boolean[] = [];
   const config = options.config ?? {};
   const state = options.state ?? new FakeStateStore();
 
@@ -56,110 +52,12 @@ function createController(
       updateConfig: async (key, value) => {
         config[key] = value;
       },
-      setUseIncludedModelAccess: async (enabled) => {
-        includedAccessUpdates.push(enabled);
-      },
-      refreshSpendingStatus:
-        options.refreshSpendingStatus ?? (async () => null),
     }),
-    includedAccessUpdates,
     config,
   };
 }
 
 describe('SettingsProfileController', () => {
-  it.each([
-    ['resolved null', async () => null],
-    [
-      'rejected refresh',
-      async () => Promise.reject(new Error('quota refresh failed')),
-    ],
-  ])(
-    'fails open and mutates included access for a %s quota result',
-    async (_result, refreshSpendingStatus) => {
-      const state = new FakeStateStore({
-        [GlobalStateKey.USE_OPENROUTER]: true,
-      });
-      const refresh = vi.fn(refreshSpendingStatus);
-      const { controller, includedAccessUpdates } = createController({
-        state,
-        refreshSpendingStatus: refresh,
-      });
-
-      const update = await controller.setApiAccessMode('included');
-
-      expect(refresh).toHaveBeenCalledOnce();
-      expect(includedAccessUpdates).toEqual([true]);
-      expect(state.get(GlobalStateKey.USE_OPENROUTER, true)).toBe(false);
-      expect(invalidations).toHaveBeenCalledTimes(1);
-      expect(update).toEqual({
-        kind: 'updated',
-        mode: 'included',
-        openRouterDisabled: true,
-      });
-    },
-  );
-
-  it('keeps OpenRouter unchanged when switching to personal keys', async () => {
-    const state = new FakeStateStore({ [GlobalStateKey.USE_OPENROUTER]: true });
-    const { controller, includedAccessUpdates } = createController({ state });
-
-    const update = await controller.setApiAccessMode('personal');
-
-    expect(includedAccessUpdates).toEqual([false]);
-    expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
-    expect(invalidations).toHaveBeenCalledTimes(1);
-    expect(update).toEqual({
-      kind: 'updated',
-      mode: 'personal',
-      openRouterDisabled: false,
-    });
-  });
-
-  it('rejects exhausted included access after refreshing quota', async () => {
-    const state = new FakeStateStore({ [GlobalStateKey.USE_OPENROUTER]: true });
-    const refreshSpendingStatus = vi.fn(async () => ({
-      currentSpend: 100,
-      limit: 100,
-      remaining: 0,
-      percentUsed: 100,
-    }));
-    const { controller, includedAccessUpdates } = createController({
-      state,
-      refreshSpendingStatus,
-    });
-
-    await expect(controller.setApiAccessMode('included')).resolves.toEqual({
-      kind: 'rejected',
-      reason: 'quota_exhausted',
-    });
-    expect(refreshSpendingStatus).toHaveBeenCalledOnce();
-    expect(includedAccessUpdates).toEqual([]);
-    expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
-    expect(invalidations).toHaveBeenCalledTimes(0);
-  });
-
-  it('accepts included access when a fresh quota check has headroom', async () => {
-    const refreshSpendingStatus = vi.fn(async () => ({
-      currentSpend: 0,
-      limit: 100,
-      remaining: 100,
-      percentUsed: 0,
-    }));
-    const { controller, includedAccessUpdates } = createController({
-      refreshSpendingStatus,
-    });
-
-    await expect(
-      controller.setApiAccessMode('included'),
-    ).resolves.toMatchObject({
-      kind: 'updated',
-      mode: 'included',
-    });
-    expect(refreshSpendingStatus).toHaveBeenCalledOnce();
-    expect(includedAccessUpdates).toEqual([true]);
-  });
-
   it('rejects keys it does not own', async () => {
     // Per-provider toggles moved to the generic catalog write path, so this
     // controller owns only the numeric reliability rows.

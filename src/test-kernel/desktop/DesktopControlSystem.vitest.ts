@@ -178,7 +178,6 @@ describe('desktop control system', () => {
     expect(welcome).toContain('class="welcome-icon icon-surface is-size-l"');
     expect(welcome.match(/class="icon-surface is-size-s"/g)).toHaveLength(3);
     expect(welcome).toContain("waIcon('comments', { slot: 'start' })");
-    expect(welcome).toContain("waIcon('right-to-bracket', { slot: 'start' })");
     expect(welcome).not.toContain('size="small"');
   });
 

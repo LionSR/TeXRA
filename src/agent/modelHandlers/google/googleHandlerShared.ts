@@ -41,8 +41,7 @@ interface ResolveGoogleClientParams {
 }
 
 /**
- * Resolve a `GoogleGenAI` client, refreshing on every call for server-side relay
- * keys (auth tokens expire ~30 mins) and caching for non-expiring personal keys.
+ * Resolve a `GoogleGenAI` client, cached per credential.
  *
  * The client is built without `retryOptions` so that only the flow-level retry
  * loop (`RetryState`'s `getNodeMaxRetries`/`RETRY_BACKOFF_MS`) governs the
@@ -56,9 +55,9 @@ export async function resolveGoogleClient(
   const { sdkLabel, credential, logger, cached, setCached, rememberRoute } =
     params;
 
-  const createClient = (relayAuth: boolean): GoogleGenAI => {
+  const createClient = (): GoogleGenAI => {
     logger.debug(
-      `Using Google GenAI ${sdkLabel} SDK${relayAuth ? ' with relay auth' : ''}. Base URL: ${credential.baseUrl}`,
+      `Using Google GenAI ${sdkLabel} SDK. Base URL: ${credential.baseUrl}`,
     );
     // No `retryOptions`: absent, the SDK's apiCall does a single plain fetch
     // (zero SDK retries — the node loop owns retries) and failures surface as
@@ -75,10 +74,6 @@ export async function resolveGoogleClient(
     return rememberRoute(client, credential.route, credential.apiKey);
   };
 
-  if (credential.route === 'relay') {
-    return createClient(true);
-  }
-
   if (
     cached?.credential.apiKey === credential.apiKey &&
     cached.credential.baseUrl === credential.baseUrl &&
@@ -87,7 +82,7 @@ export async function resolveGoogleClient(
     return cached.client;
   }
 
-  const client = createClient(false);
+  const client = createClient();
   setCached({ client, credential });
   return client;
 }

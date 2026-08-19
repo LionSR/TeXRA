@@ -14,7 +14,6 @@ export * from './toolConfig';
 export * from './errors';
 export * from './usage';
 export * from './contextManagement';
-export * from './spendingStatus';
 export * from './onboarding';
 export * from './toolDefinition';
 

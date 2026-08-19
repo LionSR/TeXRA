@@ -6,13 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // branches we stub stdout.isTTY = true and mock the gate's collaborators.
 
 const mocks = vi.hoisted(() => ({
-  hasCliCredentialForApiMode: vi.fn(),
+  hasCliRunCredential: vi.fn(),
   listExecutions: vi.fn(),
   state: new Map<string, unknown>(),
 }));
 
 vi.mock('@cli/runtime/credentialStatus', () => ({
-  hasCliCredentialForApiMode: mocks.hasCliCredentialForApiMode,
+  hasCliRunCredential: mocks.hasCliRunCredential,
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -50,7 +50,7 @@ describe('maybeRunCliOnboarding gate', () => {
   let originalIsTty: unknown;
 
   beforeEach(() => {
-    mocks.hasCliCredentialForApiMode.mockReset().mockResolvedValue(false);
+    mocks.hasCliRunCredential.mockReset().mockResolvedValue(false);
     mocks.listExecutions.mockReset().mockResolvedValue([]);
     mocks.state.clear();
     originalIsTty = process.stdout.isTTY;
@@ -68,14 +68,14 @@ describe('maybeRunCliOnboarding gate', () => {
   });
 
   it('skips (configured:false) when the user already has a credential', async () => {
-    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
+    mocks.hasCliRunCredential.mockResolvedValue(true);
     await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual(SKIPPED);
-    expect(mocks.hasCliCredentialForApiMode).toHaveBeenCalledWith(undefined);
+    expect(mocks.hasCliRunCredential).toHaveBeenCalled();
   });
 
   it('marks prior installs with credentials as first-run done', async () => {
     mocks.state.set(GlobalStateKey.LAST_KNOWN_VERSION, '1.2.3');
-    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
+    mocks.hasCliRunCredential.mockResolvedValue(true);
 
     await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual(SKIPPED);
     expect(mocks.state.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE)).toBe(
@@ -83,46 +83,26 @@ describe('maybeRunCliOnboarding gate', () => {
     );
   });
 
-  it('does not treat the API-mode preference as a prior-install signal', async () => {
-    // initCliPlatform writes this key during startup, including first launch,
-    // so its presence cannot distinguish veterans from fresh installs.
-    mocks.state.set('texra.useIncludedModelAccess', true);
-    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
-
-    await maybeRunCliOnboarding(INTERACTIVE);
-    expect(mocks.state.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE)).toBe(
-      false,
-    );
-  });
-
   it('backfills a credentialed fresh install as NOT done (env keys)', async () => {
     // Credential alone proves nothing — fresh installs can inherit env keys.
-    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
+    mocks.hasCliRunCredential.mockResolvedValue(true);
 
     await maybeRunCliOnboarding(INTERACTIVE);
     expect(mocks.state.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE)).toBe(
       false,
     );
-  });
-
-  it('checks credentials for the explicitly requested API mode', async () => {
-    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
-    await expect(
-      maybeRunCliOnboarding({ ...INTERACTIVE, apiMode: 'included' }),
-    ).resolves.toEqual(SKIPPED);
-    expect(mocks.hasCliCredentialForApiMode).toHaveBeenCalledWith('included');
   });
 
   it('skips when onboarding was previously declined', async () => {
     mocks.state.set(GlobalStateKey.ONBOARDING_DECLINED, true);
     await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual(SKIPPED);
-    expect(mocks.hasCliCredentialForApiMode).toHaveBeenCalledWith(undefined);
+    expect(mocks.hasCliRunCredential).toHaveBeenCalled();
   });
 
   it('clears a stale declined flag when credentials now exist', async () => {
     mocks.state.set(GlobalStateKey.ONBOARDING_DECLINED, true);
     mocks.state.set(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, false);
-    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
+    mocks.hasCliRunCredential.mockResolvedValue(true);
 
     // `configured` stays false: only the picker actually configuring a
     // credential in this process is a post-picker continuation. A pre-existing
@@ -151,7 +131,7 @@ describe('maybeRunCliOnboarding gate', () => {
     },
   ])('skips $scenario before checking credentials', async ({ options }) => {
     await expect(maybeRunCliOnboarding(options)).resolves.toEqual(SKIPPED);
-    expect(mocks.hasCliCredentialForApiMode).not.toHaveBeenCalled();
+    expect(mocks.hasCliRunCredential).not.toHaveBeenCalled();
   });
 });
 

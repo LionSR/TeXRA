@@ -208,18 +208,6 @@ describe('formatProviderHttpError', () => {
     expect(formatted.requestId).toBe('req-anthropic');
   });
 
-  it('prefers relay correlation ids over provider request ids', () => {
-    const err = withHeaders(new UnknownSdkApiError('relay timed out'), {
-      'request-id': 'req-anthropic',
-      'x-relay-request-id': 'relay-123',
-    });
-    Object.assign(err, { request_id: 'req-anthropic' });
-
-    const formatted = formatProviderHttpError(err);
-
-    expect(formatted.requestId).toBe('relay-123');
-  });
-
   it('does not infer OpenAI from generic x-request-id headers', () => {
     const err = withHeaders(
       new UnknownSdkApiError('openai-compatible gateway failed'),
@@ -327,24 +315,6 @@ describe('formatProviderHttpError', () => {
       exhaustionReason: 'copilot-subscription',
       userRetryable: true,
     });
-  });
-
-  it('classifies relay monthly-limit messages as credential exhaustion', () => {
-    const error = new Error(
-      '429 Monthly spending limit reached ($300). Current usage: $623.16.',
-    );
-    attachSdkErrorMetadata(error, {
-      provider: 'fixture',
-      kind: 'rate_limit',
-      statusCode: 429,
-    });
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.statusCode).toBe(429);
-    expect(formatted.isRelayError).toBe(true);
-    expect(formatted.exhaustionReason).toBe('relay-limit');
-    expect(formatted.userRetryable).toBe(true);
   });
 
   it('formats tagged OpenAI connection errors with existing retry behavior', () => {
@@ -956,7 +926,6 @@ describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
   const fullProviderError: ProviderError = {
     message: 'HTTP 429 Too Many Requests – rate limited',
     userRetryable: true,
-    isRelayError: true,
     statusCode: 429,
     statusText: 'Too Many Requests',
     provider: 'anthropic',
@@ -980,12 +949,11 @@ describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
     partialText: 'Here is the analysis of the',
   };
 
-  it('preserves statusCode, provider, and relay flags through the round-trip', () => {
+  it('preserves statusCode, provider, and exhaustion reason through the round-trip', () => {
     const reconstructed: ProviderError = toRetryErrorInfo(fullProviderError);
 
     expect(reconstructed.statusCode).toBe(429);
     expect(reconstructed.provider).toBe('anthropic');
-    expect(reconstructed.isRelayError).toBe(true);
     expect(reconstructed.exhaustionReason).toBe('relay-limit');
     expect(reconstructed.requestId).toBe('req_abc123');
     expect(reconstructed.userRetryable).toBe(true);
@@ -1020,7 +988,6 @@ describe('attachProviderError end-to-end', () => {
       userRetryable: true,
       statusCode: 429,
       provider: 'anthropic',
-      isRelayError: true,
     };
 
     const err = new Error(retryInfo.message);
@@ -1030,7 +997,6 @@ describe('attachProviderError end-to-end', () => {
 
     expect(recovered.statusCode).toBe(429);
     expect(recovered.provider).toBe('anthropic');
-    expect(recovered.isRelayError).toBe(true);
     expect(recovered.userRetryable).toBe(true);
     expect(normalizeProviderError(err)).toBe(recovered);
   });

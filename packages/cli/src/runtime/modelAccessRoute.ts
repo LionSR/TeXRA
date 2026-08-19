@@ -1,12 +1,10 @@
-import type { ApiAccessMode, UsageRoute } from '@shared/schemas';
+import type { UsageRoute } from '@shared/schemas';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
   type CodingPlanSubscriptionId,
 } from '@shared/codingPlanSubscriptions';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
-
-import { parseCliApiMode } from './apiAccessMode';
+import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 
 // Kept to one rendered row: the /api form and the orchestration header both
 // budget a single line for this description.
@@ -14,7 +12,14 @@ export const CLI_MODEL_ACCESS_DESCRIPTION =
   'Set subscription preferences and how the rest is paid for.';
 
 export type CliModelAccessRoute =
-  'chatgpt' | 'grok' | 'kimi-code' | 'glm-code' | 'included' | 'personal';
+  | 'chatgpt'
+  | 'grok'
+  | 'kimi-code'
+  | 'glm-code'
+  // LEGACY: renders historical usage recorded on the retired relay route
+  // (removed 2026-08; see docs/proposals/2026-08-18-relay-removal-and-recovery.md).
+  | 'included'
+  | 'personal';
 
 type CliSubscriptionPreferenceState = 'off' | 'on';
 type CliSubscriptionProvider =
@@ -30,35 +35,13 @@ interface CliSubscriptionPreferences {
   readonly grok: CliSubscriptionPreferenceState;
 }
 
-export type CliModelAccessSelection =
-  | {
-      readonly kind: 'subscription-preference';
-      readonly provider: CliSubscriptionProvider;
-      readonly state: CliSubscriptionPreferenceState;
-    }
-  | {
-      readonly kind: 'api-fallback';
-      readonly apiMode: ApiAccessMode;
-    };
-
-type CliApiFallbackSelection = Extract<
-  CliModelAccessSelection,
-  { readonly kind: 'api-fallback' }
->;
-
-const cliApiFallbackSelections = Object.freeze({
-  included: Object.freeze({
-    kind: 'api-fallback',
-    apiMode: 'included',
-  }),
-  personal: Object.freeze({
-    kind: 'api-fallback',
-    apiMode: 'personal',
-  }),
-} as const satisfies Record<ApiAccessMode, CliApiFallbackSelection>);
+export type CliModelAccessSelection = {
+  readonly kind: 'subscription-preference';
+  readonly provider: CliSubscriptionProvider;
+  readonly state: CliSubscriptionPreferenceState;
+};
 
 export interface CliModelAccessStatus {
-  readonly apiFallback: ApiAccessMode;
   /** Independent provider preferences; either, both, or neither may be on. */
   readonly preferences: CliSubscriptionPreferences;
   readonly chatGptSignedIn: boolean;
@@ -90,19 +73,9 @@ type CliModelAccessItemsInput =
       readonly state: 'failed' | 'loading';
     };
 
-/** Return the stable selection object for one API fallback. */
-export function cliApiFallbackSelection(
-  apiMode: ApiAccessMode,
-): CliApiFallbackSelection {
-  return cliApiFallbackSelections[apiMode];
-}
-
 export function parseCliModelAccessSelection(
   input: string,
 ): CliModelAccessSelection | undefined {
-  const apiMode = parseCliApiMode(input);
-  if (apiMode) return cliApiFallbackSelection(apiMode);
-
   const normalized = input.trim().toLowerCase();
   const codingPlan = CODING_PLAN_SUBSCRIPTIONS.find((plan) =>
     plan.cliAliases.includes(normalized),
@@ -138,14 +111,12 @@ export function parseCliModelAccessSelection(
 
 /** Prefer the route that produced usage; otherwise describe the next request. */
 export function resolveCliModelAccessRoute({
-  apiMode,
   subscriptionActive,
   grokSubscriptionActive,
   kimiCodeActive,
   glmCodingPlanActive,
   usageRoute,
 }: {
-  readonly apiMode: ApiAccessMode;
   /** Whether the current model would route through ChatGPT/Codex. */
   readonly subscriptionActive: boolean;
   /** Whether the current model would route through Grok/xAI OAuth. */
@@ -176,13 +147,9 @@ export function resolveCliModelAccessRoute({
   }
   if (subscriptionActive) return 'chatgpt';
   if (grokSubscriptionActive === true) return 'grok';
-  // Exclusive Kimi Code models bypass relay access even when the session's
-  // fallback mode remains `included`.
   if (kimiCodeActive === true) return 'kimi-code';
-  // The active predicate already excludes relay-owned requests. It therefore
-  // wins over a stale session apiMode left at `included` after quota fallback.
   if (glmCodingPlanActive === true) return 'glm-code';
-  return apiMode;
+  return 'personal';
 }
 
 /** Status-bar form of the access route. Width-critical, so every arm is a
@@ -197,7 +164,7 @@ export function shortCliModelAccessRoute(route: CliModelAccessRoute): string {
       // form and /status name the subscription itself.
       return 'subscription';
     case 'included':
-      return INCLUDED_ACCESS.compactLabel;
+      return 'Included';
     case 'personal':
       return OWN_API_KEYS.compactLabel;
     default:
@@ -216,7 +183,7 @@ export function formatCliModelAccessRoute(route: CliModelAccessRoute): string {
     case 'glm-code':
       return 'GLM Coding Plan';
     case 'included':
-      return INCLUDED_ACCESS.label;
+      return 'Included access';
     case 'personal':
       return OWN_API_KEYS.label;
     default:
@@ -365,25 +332,7 @@ export function buildCliModelAccessItems(
       ...(status === undefined ? { disabled: true } : {}),
     };
   });
-  return [
-    ...oauthPreferenceItems,
-    ...codingPlanItems,
-    {
-      value: cliApiFallbackSelection('included'),
-      label: formatCliModelAccessRoute('included'),
-      description:
-        status?.texraSignedIn === false
-          ? 'Sign in from Account first'
-          : 'Covered by your TeXRA plan',
-    },
-    {
-      value: cliApiFallbackSelection('personal'),
-      label: formatCliModelAccessRoute('personal'),
-      description: status?.personalKeyProviders?.length
-        ? `Configured: ${status.personalKeyProviders.join(', ')}`
-        : 'Use keys configured on this computer',
-    },
-  ];
+  return [...oauthPreferenceItems, ...codingPlanItems];
 }
 
 /** Compact configuration summary; observed per-request routes use UsageRoute. */
@@ -396,5 +345,5 @@ export function formatCliModelAccessSummary(
     const label = plan.displayName.split(' ')[0];
     return `${label} ${cliCodingPlanStatus(status, plan).preferred ? 'On' : 'Off'}`;
   });
-  return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${formatCliModelAccessRouteInline(status.apiFallback)}`;
+  return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${formatCliModelAccessRouteInline('personal')}`;
 }

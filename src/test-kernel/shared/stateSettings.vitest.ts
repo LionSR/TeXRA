@@ -25,7 +25,6 @@ import {
   settingEnumOptions,
   settingsViewSettingByKey,
   stateSettingByKey,
-  API_ACCESS_MODE_OPTIONS,
   REASONING_LEVEL_OPTIONS,
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
@@ -165,6 +164,10 @@ describe('state settings catalog', () => {
         assert.ok(
           !honor.reader.startsWith('packages/cli/') || host === 'cli',
           `${entry.key} ${host} reader lives inside the CLI host: ${honor.reader}`,
+        );
+        assert.ok(
+          !honor.reader.startsWith('packages/desktop/') || host === 'desktop',
+          `${entry.key} ${host} reader lives inside the desktop host: ${honor.reader}`,
         );
       }
     }
@@ -363,15 +366,6 @@ describe('state settings catalog', () => {
         'high — High',
         'xhigh — Extra High',
         'max — Max',
-      ],
-    );
-    assert.deepEqual(
-      API_ACCESS_MODE_OPTIONS.map(
-        (option) => `${option.value} — ${option.label} — ${option.description}`,
-      ),
-      [
-        'included — Use included access — Model calls are covered by your TeXRA plan, with no setup needed. OpenRouter is the exception: those models always use your OpenRouter key.',
-        'personal — Use your own API keys — Model calls are billed to your own accounts at OpenAI, Anthropic, and other providers. You get higher limits, plus the models your plan does not cover.',
       ],
     );
   });

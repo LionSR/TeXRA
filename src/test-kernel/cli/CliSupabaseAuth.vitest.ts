@@ -11,14 +11,10 @@ const mocks = vi.hoisted(() => {
       ...authCoordinator,
       secrets: init.secrets,
     })),
-    clearServerKeyCaches: vi.fn(),
-    getConfiguredRelayToken: vi.fn(),
     getStoredSessionState: vi.fn(),
-    getUserTier: vi.fn(),
     openBrowser: vi.fn(),
     pollForDeviceSession: vi.fn(),
     requestDeviceAuthorization: vi.fn(),
-    setUseIncludedModelAccess: vi.fn(),
     signInWithOAuth: vi.fn(),
     startLoopbackCallbackServer: vi.fn(),
     toStorableSupabaseSession: vi.fn((session) => session),
@@ -46,9 +42,7 @@ vi.mock('@auth/SupabaseClient', () => ({
         signInWithOAuth: mocks.signInWithOAuth,
       },
     }),
-    getRelayAccessToken: vi.fn(),
     getStoredSessionState: mocks.getStoredSessionState,
-    getUserTier: mocks.getUserTier,
   },
 }));
 
@@ -57,25 +51,8 @@ vi.mock('@auth/SupabaseSession', () => ({
   toStorableSupabaseSession: mocks.toStorableSupabaseSession,
 }));
 
-vi.mock('@auth/relayToken', () => ({
-  RELAY_TOKEN_ENV_VAR: 'TEXRA_RELAY_TOKEN',
-  fetchRelayTokenStatus: vi.fn(),
-  getConfiguredRelayToken: mocks.getConfiguredRelayToken,
-}));
-
-vi.mock('@auth/serverKeys', () => ({
-  getServerSideKeyService: () => ({
-    clearAllCaches: mocks.clearServerKeyCaches,
-    setUseIncludedModelAccess: mocks.setUseIncludedModelAccess,
-  }),
-}));
-
 vi.mock('@platform/platform', () => ({
   platform: mocks.platform,
-}));
-
-vi.mock('@cli/runtime/cliContext', () => ({
-  readCliEnv: () => ({}),
 }));
 
 vi.mock('@cli/runtime/browser', () => ({
@@ -143,7 +120,6 @@ describe('CLI Supabase auth', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.platform.mockReturnValue({ secrets: { kind: 'platform-secrets' } });
-    mocks.setUseIncludedModelAccess.mockResolvedValue(undefined);
     mocks.invalidateRemoteAgentsAfterSignOut.mockResolvedValue(undefined);
   });
 
@@ -251,31 +227,6 @@ describe('CLI Supabase auth', () => {
 
     expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
     expect(mocks.invalidateRemoteAgentsAfterSignOut).toHaveBeenCalledOnce();
-  });
-
-  it('leaves the included-access preference to the user on sign-in', async () => {
-    stubSuccessfulSignIns({ access_token: 'token' });
-    const { signInCliSupabase, signInCliSupabaseDeviceCode } =
-      await loadSupabaseAuth();
-
-    await signInCliSupabase({ openBrowser: false });
-    await signInCliSupabaseDeviceCode();
-
-    // Both transports drop the caches derived from the previous credential and
-    // let the next request resolve access against the new one.
-    expect(mocks.clearServerKeyCaches).toHaveBeenCalledTimes(2);
-    expect(mocks.setUseIncludedModelAccess).not.toHaveBeenCalled();
-  });
-
-  it('leaves the included-access preference to the user on sign-out', async () => {
-    const { signOutCliSupabase } = await loadSupabaseAuth();
-
-    await signOutCliSupabase();
-
-    expect(mocks.clearServerKeyCaches).toHaveBeenCalledWith({
-      resetQuotaFlip: true,
-    });
-    expect(mocks.setUseIncludedModelAccess).not.toHaveBeenCalled();
   });
 
   it.each([

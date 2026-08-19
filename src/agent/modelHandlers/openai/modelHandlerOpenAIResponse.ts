@@ -504,7 +504,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
    *
    * WebSocket transport connects directly to the OpenAI Responses API via the
    * official SDK and is incompatible with any non-default base URL, including:
-   * - Server-side keys relay (Supabase Edge Function)
    * - OpenRouter routing
    * - Custom per-provider or per-model endpoints
    *
@@ -2035,7 +2034,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
    *
    * All three transport paths can land on a pending response — background mode
    * by design, the streaming and WebSocket paths when the stream ends before
-   * the response finishes (e.g. a relay timeout on a slow request). The
+   * the response finishes (e.g. a proxy timeout on a slow request). The
    * retrieve-and-wait handling is identical; only the diagnostic differs, so
    * the caller supplies that via `onPending`.
    */
@@ -2198,9 +2197,9 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
         }
       }
 
-      // If the stream ended before the response completed (e.g., relay timeout
-      // during slow GPT-5 requests), poll until it finishes instead of silently
-      // returning an incomplete response.
+      // If the stream ended before the response completed (e.g., a proxy
+      // timeout during slow GPT-5 requests), poll until it finishes instead of
+      // silently returning an incomplete response.
       const streamed = response;
       response = await this.awaitPendingResponse(
         streamed,
@@ -2315,7 +2314,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
     compactedThisCall: boolean,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
-    // Extract error details for diagnostics (useful for relay errors)
     const providerError = normalizeOpenAIResponseError(
       error,
       this.config.provider,
@@ -2397,7 +2395,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
    * Extract plain text and usage information from the Responses API result.
    *
    * Note: OpenAI's Responses API streaming can sometimes return missing or null
-   * usage data, especially with thinking models through relay proxies. We handle
+   * usage data, especially with thinking models through proxies. We handle
    * this gracefully by using zero defaults rather than failing.
    * See: https://github.com/openai/openai-agents-python/issues/1179
    */

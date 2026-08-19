@@ -7,7 +7,6 @@ import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   TexraApprovalPolicySchema,
 } from '@shared/approvalPolicy';
-import { INCLUDED_ACCESS } from '@shared/copy/modelAccess';
 import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
@@ -1281,7 +1280,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     key: GlobalStateKey.USE_OPENROUTER,
     schema: z.boolean().prefault(false),
     title: 'Use OpenRouter for all models',
-    description: `Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key. OpenRouter does not use ${INCLUDED_ACCESS.inline}: your OpenRouter key is always used directly.`,
+    description:
+      'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
     category: 'model',
     slots: sameSlot('globalState'),
     honoredBy: everyHost(
@@ -1296,7 +1296,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
         {
           provider: 'openRouter',
           label: 'Use OpenRouter for all models',
-          description: `Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key. OpenRouter does not use ${INCLUDED_ACCESS.inline}: your OpenRouter key is always used directly.`,
+          description:
+            'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
         },
       ],
     },

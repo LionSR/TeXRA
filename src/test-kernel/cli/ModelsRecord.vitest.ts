@@ -16,8 +16,8 @@ function model(overrides: Partial<ModelOptionData> = {}): ModelOptionData {
     context: '1.0M',
     cost: '$3.000/$15.000',
     hint: '1M context',
-    availability: 'included-access',
-    availabilityLabel: 'Included access',
+    availability: 'provider-key',
+    availabilityLabel: 'API key set',
     requiresKey: false,
     disabled: false,
     ...overrides,
@@ -31,22 +31,23 @@ function access(
   return {
     model: model({ value, label: value }),
     available: true,
-    status: 'included access',
+    status: 'api key set',
     ...overrides,
   };
 }
 
-/** A model excluded from the current access tier. */
+/** A model that cannot run with the configured credentials. */
 function unavailableAccess(value: string): CliModelAccess {
   return access(value, {
     available: false,
-    status: 'not included',
+    status: 'missing api key',
     model: model({
       value,
       label: value,
-      availability: 'not-included',
-      availabilityLabel: 'Not included',
+      availability: 'missing-key',
+      availabilityLabel: 'Missing API key',
       disabled: true,
+      requiresKey: true,
     }),
   });
 }
@@ -110,7 +111,7 @@ describe('CLI model list filtering', () => {
   it('lists only models marked runnable by the loaded access list', () => {
     const includedModeEntries = [
       access('sonnet46T', {
-        model: model({ value: 'sonnet46T', availability: 'included-access' }),
+        model: model({ value: 'sonnet46T', availability: 'provider-key' }),
       }),
       access('deepseekT', {
         available: false,
@@ -136,7 +137,7 @@ describe('CLI model list filtering', () => {
     const personalModeEntries = [
       access('sonnet46T', {
         available: false,
-        model: model({ value: 'sonnet46T', availability: 'included-access' }),
+        model: model({ value: 'sonnet46T', availability: 'provider-key' }),
       }),
       access('deepseekT', {
         model: model({ value: 'deepseekT', availability: 'provider-key' }),
@@ -168,34 +169,18 @@ describe('CLI model list filtering', () => {
 });
 
 describe('CLI model list empty-state text', () => {
-  it('points personal-key users at included access and model status diagnostics', () => {
-    expect(formatNoListableModelsMessage('personal')).toBe(
+  it('points users at model status diagnostics and provider-key setup', () => {
+    expect(formatNoListableModelsMessage()).toBe(
       [
         'No models are currently available.',
         'Run `texra models list --all` to see unavailable models and access status.',
-        'Add a provider API key with `texra setup`, or retry with `--api-mode included` and run `texra login`.',
-      ].join('\n'),
-    );
-  });
-
-  it('points included-mode users at login or personal API key setup', () => {
-    expect(formatNoListableModelsMessage('included')).toContain(
-      'Run `texra login` for included access, or retry with `--api-mode personal` after configuring a provider API key.',
-    );
-  });
-
-  it('uses a combined hint when no API mode was explicitly selected', () => {
-    expect(formatNoListableModelsMessage(undefined)).toBe(
-      [
-        'No models are currently available.',
-        'Run `texra models list --all` to see unavailable models and access status.',
-        'Run `texra login`, retry with `--api-mode included`, or add a provider API key with `texra setup`.',
+        'Add a provider API key with `texra setup`.',
       ].join('\n'),
     );
   });
 
   it('does not suggest --all when unavailable models were already requested', () => {
-    const text = formatNoListableModelsMessage('personal', {
+    const text = formatNoListableModelsMessage({
       includeUnavailable: true,
     });
 

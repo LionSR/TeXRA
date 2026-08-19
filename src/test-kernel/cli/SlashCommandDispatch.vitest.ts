@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
-import { applyCliModelAccessSelection } from '@cli/chat/tui/commands/handlers/apiModeCommands';
+import { applyCliModelAccessSelection } from '@cli/chat/tui/commands/handlers/modelAccessCommands';
 import {
   showCliMemoryList,
   showCliMemoryPreview,
@@ -29,7 +29,6 @@ import {
   activeStreamId,
   closeForegroundReader,
   closeInfoPane,
-  codexPreferenceVersion,
   foregroundReader,
   infoPane,
   patchSessionMeta,
@@ -114,7 +113,6 @@ function createSession(): TuiSession {
 function mockModelAccessOverview(): void {
   vi.spyOn(apiStatus, 'loadCliModelAccessOverview').mockResolvedValue({
     access: {
-      apiFallback: 'personal',
       preferences: {
         chatGpt: 'off',
         grok: 'off',
@@ -271,9 +269,8 @@ function mockSignOuts(): {
 function expectAccessStatusText(text: string | undefined): void {
   expect(text).toContain('ChatGPT: preferred');
   expect(text).toContain('Kimi Code: not preferred');
-  expect(text).toContain('Otherwise: Included access');
-  expect(text).toContain('Researcher');
-  expect(text).toContain('included usage this month: 25% used, 75% remaining');
+  expect(text).toContain('Otherwise: Your own API keys');
+  expect(text).toContain('Other API keys: DeepSeek');
 }
 
 describe('handleTuiSlashCommand', () => {
@@ -715,8 +712,8 @@ describe('handleTuiSlashCommand', () => {
       .mockResolvedValue([
         'ChatGPT: preferred · signed in as chatgpt@example.com',
         'Kimi Code: not preferred · key not configured',
-        'Otherwise: Included access · signed in as texra@example.com · Researcher · included usage this month: 25% used, 75% remaining',
-        'Other personal keys: DeepSeek',
+        'Otherwise: Your own API keys',
+        'Other API keys: DeepSeek',
       ]);
     const context = createContext();
 
@@ -729,39 +726,6 @@ describe('handleTuiSlashCommand', () => {
     expectAccessStatusText(apiStatusText);
     expect(apiStatusText).toBe(authStatusText);
     expect(overview).toHaveBeenCalledTimes(2);
-  });
-
-  it('preserves the current chat fallback when selecting ChatGPT', async () => {
-    registerBuiltinSlashCommands();
-    patchSessionMeta({ apiMode: 'personal' });
-    const selection = vi
-      .spyOn(modelAccessSelection, 'updateCliModelAccess')
-      .mockResolvedValue({
-        apiMode: 'personal',
-        message: 'Model access: ChatGPT subscription.',
-      });
-    const session = createSession();
-    session.markRunPending(new Promise(() => undefined));
-    const context = createContext(session, {
-      cliContext: createCliContext({ apiMode: 'included' }),
-    });
-    const previousPreferenceVersion = codexPreferenceVersion.get();
-
-    await handleTuiSlashCommand('/api chatgpt', context);
-
-    expect(selection).toHaveBeenCalledWith(
-      expect.objectContaining({ apiMode: 'personal' }),
-      {
-        kind: 'subscription-preference',
-        provider: 'chatgpt',
-        state: 'on',
-      },
-      expect.any(Object),
-    );
-    expect(lastEntryText()).toBe(
-      'Model access: ChatGPT subscription. · This model access setting applies to new chats. The current chat keeps its existing model connection.',
-    );
-    expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
   });
 
   it('exposes cancellation while model access is signing in to ChatGPT', async () => {
@@ -816,12 +780,10 @@ describe('handleTuiSlashCommand', () => {
   it('signs out of only the requested account', async () => {
     registerBuiltinSlashCommands();
     const { signOutSupabase, signOutChatGpt } = mockSignOuts();
-    const previousPreferenceVersion = codexPreferenceVersion.get();
 
     await handleTuiSlashCommand('/logout texra', createContext());
     expect(signOutSupabase).toHaveBeenCalledOnce();
     expect(signOutChatGpt).not.toHaveBeenCalled();
-    expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
 
     await handleTuiSlashCommand('/logout chatgpt', createContext());
     expect(signOutSupabase).toHaveBeenCalledOnce();
@@ -1164,7 +1126,7 @@ describe('handleTuiSlashCommand', () => {
     const session = createSession();
     const streamId = 'stream-access' as StreamTabId;
     activeStreamId.set(streamId);
-    patchSessionMeta({ apiMode: 'personal', model: 'gpt55' });
+    patchSessionMeta({ model: 'gpt55' });
     patchStream(streamId, (slice) => ({
       ...slice,
       usage: {

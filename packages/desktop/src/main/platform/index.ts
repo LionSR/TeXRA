@@ -4,7 +4,7 @@ import { app } from 'electron';
 import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { isFileNotFoundError } from '@common/errors';
-import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
+import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/shared/workspacePath.js';
 import { initPlatform } from '@platform/platform';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
@@ -148,9 +148,9 @@ export async function initializeElectronPlatform(
       getWorkspacePath: () => workspacePath,
     }),
   );
-  // TeXRA's account plane (subscription relay + ChatGPT sign-in). Without this
-  // the model layer is bring-your-own-key. See installTexraModelAccess.
-  installTexraModelAccess();
+  // TeXRA's account plane (ChatGPT / Grok sign-in). Without this
+  // the model layer is bring-your-own-key. See installTexraAccountProbes.
+  installTexraAccountProbes();
 
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected. Mirrors the

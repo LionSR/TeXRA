@@ -4,7 +4,6 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { PROMO_NOTICE_SHORT } from '@shared/copy/promoNotice';
 
 import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { MainViewEvents } from '../events';
@@ -78,7 +77,7 @@ export class LoginBanner extends LitElement {
       icon: 'wand-magic-sparkles',
       body: html`
         <div class="banner-row">
-          <span class="banner-title">Researcher Access Program</span>
+          <span class="banner-title">TeXRA account</span>
           <div class="actions">
             <wa-button
               id="loginBannerButton"
@@ -101,8 +100,9 @@ export class LoginBanner extends LitElement {
             </wa-button>
           </div>
         </div>
-        <span class="banner-lead">${PROMO_NOTICE_SHORT.lead}</span>
-        <span class="banner-fineprint">${PROMO_NOTICE_SHORT.fineprint}</span>
+        <span class="banner-lead">
+          Sign in to use the hosted research-agent catalog.
+        </span>
       `,
     });
   }
