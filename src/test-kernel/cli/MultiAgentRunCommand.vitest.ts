@@ -88,10 +88,6 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
 }));
 
 const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
-const canAccessRemoteAgentCatalogSpy = vi.spyOn(
-  SupabaseClient,
-  'canAccessRemoteAgentCatalog',
-);
 
 const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
 const { loadCliMultiAgentPresetPlanSet, loadCliMultiAgentRunPlan } =
@@ -251,7 +247,6 @@ describe('CLI multi-agent run command', () => {
     );
     mocks.planTeamRun.mockReturnValue(teamPlan());
     isAuthenticatedSpy.mockResolvedValue(false);
-    canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
     mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,
       result: {
@@ -342,7 +337,7 @@ describe('CLI multi-agent run command', () => {
 
   it('marks run-plan resolution when authenticated gaps triggered a remote load', async () => {
     mocks.teamPlanHasGaps.mockReturnValueOnce(true);
-    canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(true);
+    isAuthenticatedSpy.mockResolvedValueOnce(true);
 
     const result = await loadCliMultiAgentRunPlan({
       preset: 'mathematician',
@@ -363,7 +358,7 @@ describe('CLI multi-agent run command', () => {
 
   it('marks preset-list resolution when authenticated gaps triggered a remote load', async () => {
     mocks.teamPlanHasGaps.mockReturnValueOnce(true);
-    canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(true);
+    isAuthenticatedSpy.mockResolvedValueOnce(true);
 
     const result = await loadCliMultiAgentPresetPlanSet([
       {
@@ -393,7 +388,7 @@ describe('CLI multi-agent run command', () => {
     const remoteLoadMessage =
       'Preset mathematician loaded remote agents before launch. Run `texra multi-agent show mathematician` to view the resolved team.';
     mocks.teamPlanHasGaps.mockReturnValueOnce(true).mockReturnValueOnce(false);
-    canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(true);
+    isAuthenticatedSpy.mockResolvedValueOnce(true);
 
     const exitCode = await runPreset({
       inputFiles: ['problem.tex'],

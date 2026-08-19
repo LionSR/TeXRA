@@ -1202,7 +1202,7 @@ describe('App approval surface ownership', () => {
     focusStream(ROOT);
     void enqueueApproval({
       kind: 'externalInquiry',
-      payload: {
+      data: {
         requestId: 'external-other-new-scope',
         mode: 'followUp',
         question: 'Wait outside the new scope.',
@@ -1213,7 +1213,7 @@ describe('App approval surface ownership', () => {
     });
     void enqueueApproval({
       kind: 'externalInquiry',
-      payload: {
+      data: {
         requestId: 'external-session-new-scope',
         mode: 'followUp',
         question: 'Verify the newly scoped child.',
@@ -1239,7 +1239,7 @@ describe('App approval surface ownership', () => {
         const pending = currentApproval.get()?.payload;
         return (
           pending?.kind === 'externalInquiry' &&
-          pending.payload.requestId === 'external-session-new-scope'
+          pending.data.requestId === 'external-session-new-scope'
         );
       });
       await waitFor(() =>
@@ -1279,7 +1279,7 @@ describe('App approval surface ownership', () => {
     focusStream(CHILD);
     void enqueueApproval({
       kind: 'externalInquiry',
-      payload: {
+      data: {
         requestId: 'external-other-dashboard',
         mode: 'followUp',
         question: 'Wait outside the dashboard root.',
@@ -1290,7 +1290,7 @@ describe('App approval surface ownership', () => {
     });
     void enqueueApproval({
       kind: 'planApproval',
-      payload: {
+      data: {
         requestId: 'plan-dashboard-root',
         streamId: ROOT,
         plan: { objective: 'Verify the dashboard root.' },
@@ -1306,7 +1306,7 @@ describe('App approval surface ownership', () => {
         const pending = currentApproval.get()?.payload;
         return (
           pending?.kind === 'planApproval' &&
-          pending.payload.requestId === 'plan-dashboard-root'
+          pending.data.requestId === 'plan-dashboard-root'
         );
       });
       await waitFor(() => stdout.output.includes('Approve plan?'));
@@ -1321,7 +1321,7 @@ describe('App approval surface ownership', () => {
     focusStream(CHILD);
     void enqueueApproval({
       kind: 'externalInquiry',
-      payload: {
+      data: {
         requestId: 'external-other-after-escape',
         mode: 'followUp',
         question: 'Wait outside the destination root.',
@@ -1332,7 +1332,7 @@ describe('App approval surface ownership', () => {
     });
     void enqueueApproval({
       kind: 'externalInquiry',
-      payload: {
+      data: {
         requestId: 'external-session-after-escape',
         mode: 'followUp',
         question: 'Verify the destination root.',
@@ -1350,7 +1350,7 @@ describe('App approval surface ownership', () => {
         const pending = currentApproval.get()?.payload;
         return (
           pending?.kind === 'externalInquiry' &&
-          pending.payload.requestId === 'external-session-after-escape'
+          pending.data.requestId === 'external-session-after-escape'
         );
       });
       await waitFor(() =>
@@ -1367,7 +1367,7 @@ describe('App approval surface ownership', () => {
     focusStream(GRANDCHILD);
     void enqueueApproval({
       kind: 'externalInquiry',
-      payload: {
+      data: {
         requestId: 'external-other-scoped',
         mode: 'followUp',
         question: 'Wait outside the scoped list.',
@@ -1378,7 +1378,7 @@ describe('App approval surface ownership', () => {
     });
     void enqueueApproval({
       kind: 'externalInquiry',
-      payload: {
+      data: {
         requestId: 'external-session-scoped',
         mode: 'followUp',
         question: 'Verify the scoped child session.',
@@ -1398,7 +1398,7 @@ describe('App approval surface ownership', () => {
         const pending = currentApproval.get()?.payload;
         return (
           pending?.kind === 'externalInquiry' &&
-          pending.payload.requestId === 'external-session-scoped'
+          pending.data.requestId === 'external-session-scoped'
         );
       });
       await waitFor(() =>
@@ -1422,7 +1422,7 @@ describe('App approval surface ownership', () => {
     patchStream(ROOT, (slice) => ({ ...slice, entries: [] }));
     void enqueueApproval({
       kind: 'externalInquiry',
-      payload: {
+      data: {
         requestId: 'external-other',
         mode: 'followUp',
         question: 'Wait outside the active stream.',
@@ -1433,7 +1433,7 @@ describe('App approval surface ownership', () => {
     });
     void enqueueApproval({
       kind: 'externalInquiry',
-      payload: {
+      data: {
         requestId: 'external-session',
         mode: 'followUp',
         question: 'Verify the workflow before it emits rows.',
@@ -1450,7 +1450,7 @@ describe('App approval surface ownership', () => {
         const pending = currentApproval.get()?.payload;
         return (
           pending?.kind === 'externalInquiry' &&
-          pending.payload.requestId === 'external-session'
+          pending.data.requestId === 'external-session'
         );
       });
       await waitFor(() =>

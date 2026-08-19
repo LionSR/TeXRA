@@ -206,10 +206,12 @@ describe('desktop settings IPC', () => {
       findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS),
     ).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-      markCommits: DEFAULT_GIT_MARK_COMMITS,
-      authorName: 'TeXRA Bot',
-      authorEmail: 'bot@example.com',
-      worktreeSupport: false,
+      values: {
+        [WorkspaceStateKey.GIT_MARK_COMMITS]: DEFAULT_GIT_MARK_COMMITS,
+        [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'TeXRA Bot',
+        [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: 'bot@example.com',
+        [WorkspaceStateKey.GIT_WORKTREE_SUPPORT]: false,
+      },
     });
   }, 15_000);
 
@@ -339,7 +341,7 @@ describe('desktop settings IPC', () => {
     );
     expect(posted.at(-1)).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-      authorName: 'Desktop TeXRA',
+      values: { [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'Desktop TeXRA' },
     });
 
     expect(
@@ -387,7 +389,9 @@ describe('desktop settings IPC', () => {
     ).toBe(false);
     expect(posted.at(-1)).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-      toolPathProtectionEnabled: false,
+      values: {
+        [WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED]: false,
+      },
     });
   });
 
@@ -411,7 +415,7 @@ describe('desktop settings IPC', () => {
     );
     expect(posted.at(-1)).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
-      detachSubagentsOnStop: true,
+      values: { [WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
     });
   });
 
@@ -830,8 +834,10 @@ describe('desktop settings IPC', () => {
       findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-      bashApprovalEnabled: false,
-      codexSandboxMode: 'danger-full-access',
+      values: {
+        [BASH_APPROVAL_CONFIG_KEY]: false,
+        [WorkspaceStateKey.CODEX_SANDBOX_MODE]: 'danger-full-access',
+      },
     });
     // Without these the Git tab renders a permanently "Not set" token status
     // and an empty subscription list until the user mutates either one.
@@ -876,7 +882,7 @@ describe('desktop settings IPC', () => {
       findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-      bashApprovalEnabled: false,
+      values: { [BASH_APPROVAL_CONFIG_KEY]: false },
     });
   });
 
@@ -951,7 +957,7 @@ describe('desktop settings IPC', () => {
       findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS),
     ).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS,
-      enabled: false,
+      values: { [AGENT_SKILLS_CONFIG_KEY]: false },
     });
   });
 

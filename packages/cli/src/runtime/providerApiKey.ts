@@ -7,7 +7,7 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import { platform } from '@platform/platform';
-import { looksLikeCredentialPlaceholder } from './credentialInput';
+import { looksLikeCredentialPlaceholder } from '@utils/text/credentialPlaceholder';
 
 export function loadProviderApiKeyStatuses(): Promise<
   Record<ApiProvider, ApiKeyStatus>

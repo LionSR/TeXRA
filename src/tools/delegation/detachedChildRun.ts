@@ -5,23 +5,73 @@
  * starts with the same lifecycle: hold the owned-execution lease launch guard
  * while starting the child run loop, and attach a completion error trace so a
  * late loop failure is diagnosed. Callers keep their own execution-id
- * derivation, registration, approval wiring, and result shaping; this module
- * owns only the guard-and-trace skeleton so its invariant (a throw inside the
- * guard releases the lease; a late loop failure is surfaced) lives in one
- * place.
+ * derivation, approval wiring, and result shaping; this module owns the
+ * guard-and-trace skeleton so its invariant (a throw inside the guard releases
+ * the lease; a late loop failure is surfaced) lives in one place, plus the
+ * native-agent registration that mints the child's stream id.
  */
 
 // Local imports
-import { runWithOwnedExecutionLeaseLaunchGuard } from '@agent/storage/executionLease';
+import {
+  runWithOwnedExecutionLeaseLaunchGuard,
+  type OwnedExecutionLeaseScope,
+} from '@agent/storage/executionLease';
+import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   startChildRunLoop,
   type ChildRunLoopParams,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { getStreamTabId } from '@agent/runtime/streamTab';
+import type {
+  ExecutionId,
+  StreamTabId,
+  UserFollowUpSupport,
+} from '@shared/schemas';
 
 // Local file imports
 import type { ChildStream } from './childStream';
+
+/**
+ * Register a native agent child and take its owned-execution lease, minting
+ * the one stream id the child is addressed by.
+ *
+ * That id must match the one `buildAgentLaunchContext` reserves for this
+ * executionId (AgentLaunchContext.ts's `reservedStreamId`), or the loop
+ * acquires the wrong follow-up queue/interrupt slot. The reservation derives
+ * from the canonical config's `agent` — never from `agentName`, which callers
+ * resolve differently (an approved override's display name vs. its registry
+ * name) and which reaches only the durable child row. Minting it here is what
+ * keeps the two in step: while each launch site derived its own, the
+ * invariant could only be stated as a comment asking the copies to agree.
+ */
+export async function registerChildExecution(input: {
+  readonly executionId: ExecutionId;
+  /** Canonical config, already parsed by the launch site. */
+  readonly config: AgentConfig;
+  readonly agentName: string;
+  readonly userFollowUpSupport: UserFollowUpSupport;
+  readonly parentExecutionId?: ExecutionId;
+}): Promise<{
+  readonly childStreamId: StreamTabId;
+  readonly runWithOwnership: OwnedExecutionLeaseScope;
+}> {
+  const { executionId, config } = input;
+  const childStreamId = getStreamTabId(config.agent, { executionId });
+  const runWithOwnership = await registerOwnedExecution(
+    executionId,
+    config,
+    input.agentName,
+    {
+      streamId: childStreamId,
+      identity: { kind: 'agent', agent: config.agent },
+      userFollowUpSupport: input.userFollowUpSupport,
+      parentExecutionId: input.parentExecutionId,
+    },
+  );
+  return { childStreamId, runWithOwnership };
+}
 
 /** The strategy + stream wiring a launch site supplies inside the guard. */
 interface DetachedChildRunLaunch<TTurn> {

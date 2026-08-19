@@ -45,7 +45,7 @@ import {
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
 import * as apiStatus from '@cli/runtime/apiStatus';
-import * as chatGptLogin from '@cli/runtime/chatgptLogin';
+import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
@@ -257,13 +257,13 @@ function abortRejection(): {
 
 function mockSignOuts(): {
   signOutSupabase: MockInstance<typeof supabaseAuth.signOutCliSupabase>;
-  signOutChatGpt: MockInstance<typeof chatGptLogin.signOutCliChatGpt>;
+  signOutChatGpt: MockInstance<typeof subscriptionLogin.signOutCliSubscription>;
 } {
   const signOutSupabase = vi
     .spyOn(supabaseAuth, 'signOutCliSupabase')
     .mockResolvedValue(undefined);
   const signOutChatGpt = vi
-    .spyOn(chatGptLogin, 'signOutCliChatGpt')
+    .spyOn(subscriptionLogin, 'signOutCliSubscription')
     .mockResolvedValue({
       preferenceUpdate: { effective: false, target: 'global' },
     });
@@ -667,11 +667,10 @@ describe('handleTuiSlashCommand', () => {
   it('uses ChatGPT device-code login from a likely remote shell', async () => {
     registerBuiltinSlashCommands();
     vi.stubEnv('SSH_TTY', '/dev/pts/3');
-    vi.spyOn(chatGptLogin, 'signInCliChatGpt').mockResolvedValue({
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      expiresAtMs: Date.now() + 60_000,
+    vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockResolvedValue({
+      signedIn: true,
       email: 'person@example.com',
+      label: 'person@example.com',
     });
     vi.spyOn(codexPreference, 'setPreferCodexSubscription').mockResolvedValue({
       effective: true,
@@ -684,7 +683,8 @@ describe('handleTuiSlashCommand', () => {
     );
 
     expect(handled).toBe(true);
-    expect(chatGptLogin.signInCliChatGpt).toHaveBeenCalledWith(
+    expect(subscriptionLogin.signInCliSubscription).toHaveBeenCalledWith(
+      'chatgpt',
       expect.objectContaining({ device: true, noBrowser: false }),
       expect.any(Object),
     );
@@ -692,8 +692,8 @@ describe('handleTuiSlashCommand', () => {
 
   it('exposes cancellation for an interactive sign-in', async () => {
     const abort = abortRejection();
-    vi.spyOn(chatGptLogin, 'signInCliChatGpt').mockImplementation(
-      (_args, options) => abort.mock(options),
+    vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockImplementation(
+      (_provider, _args, options) => abort.mock(options),
     );
 
     const completion = loginFromChat(
@@ -768,7 +768,7 @@ describe('handleTuiSlashCommand', () => {
 
     expect(handled).toBe(true);
     expect(signOutSupabase).toHaveBeenCalledOnce();
-    expect(signOutChatGpt).toHaveBeenCalledOnce();
+    expect(signOutChatGpt.mock.calls).toEqual([['chatgpt'], ['grok']]);
     const entry = lastEntryText();
     expect(entry).toContain(`Signed out of ${RESEARCHER_ACCESS.label}.`);
     expect(entry).toContain('Signed out of ChatGPT.');
@@ -798,7 +798,7 @@ describe('handleTuiSlashCommand', () => {
   it('reports successful TeXRA sign-out when ChatGPT logout fails', async () => {
     registerBuiltinSlashCommands();
     vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockResolvedValue(undefined);
-    vi.spyOn(chatGptLogin, 'signOutCliChatGpt').mockRejectedValue(
+    vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockRejectedValue(
       new Error('Codex logout failed'),
     );
     mockModelAccessOverview();
@@ -814,7 +814,7 @@ describe('handleTuiSlashCommand', () => {
   it('reports ChatGPT sign-out success when only preference cleanup fails', async () => {
     registerBuiltinSlashCommands();
     vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockResolvedValue(undefined);
-    vi.spyOn(chatGptLogin, 'signOutCliChatGpt').mockResolvedValue({
+    vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockResolvedValue({
       preferenceError: 'Config write failed',
     });
     mockModelAccessOverview();

@@ -202,8 +202,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       followUpPolish: this.followUpPolishController,
       host: { showInfo: this.showInfo },
       session: defaultSession(),
-      getRunConfig: (stream) =>
-        this.provider.state.snapshots.getRunMetadata(stream).config,
       restoreRunConfig: async (config) => {
         await this.runViewCommand('texra.restoreState', [config]);
       },

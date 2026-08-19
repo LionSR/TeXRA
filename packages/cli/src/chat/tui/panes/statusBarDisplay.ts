@@ -1,6 +1,3 @@
-import { MODEL_CONFIGS } from 'llm-zoo';
-
-import { roundedUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import {
   shortCliModelAccessRoute,
   type CliModelAccessRoute,
@@ -17,14 +14,13 @@ import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
 import { STATUS_BAR_HORIZONTAL_PADDING } from '@cli/tui/ui/theme';
-import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import { resolveCodexSubscriptionProfile } from '@model/providerCapabilities';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   codingPlanForUsageRoute,
   CODING_PLAN_SUBSCRIPTIONS,
 } from '@shared/codingPlanSubscriptions';
 import {
+  type ContextStateData,
   type SubscriptionUsageSnapshot,
   type SubscriptionUsageProvider,
   type StreamPhase,
@@ -122,7 +118,12 @@ export interface StatusBarDisplayInput {
   readonly thinkingActive?: boolean;
   readonly compactingActive?: boolean;
   readonly queuedFollowUpMessages: readonly string[];
+  /** Latest usage snapshot — read for `usageRoute` (which subscription quota
+   *  to show), never for context occupancy: that is `contextState`. */
   readonly usage: TokenUsageStats | undefined;
+  /** Model-handler-authoritative context occupancy for the displayed stream
+   *  (`StreamExecutionState.contextState`). */
+  readonly contextState: ContextStateData | undefined;
   readonly stage: StreamStage | undefined;
   /** Retained and active direct subagents owned by the displayed stream. */
   readonly subagents: number;
@@ -130,7 +131,6 @@ export interface StatusBarDisplayInput {
   readonly runningSessions: number;
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
-  readonly model: string;
   readonly modelAccess: CliModelAccessRoute;
   /** Latest quota snapshot for the subscription serving this model. */
   readonly subscriptionQuota?: SubscriptionUsageSnapshot;
@@ -200,27 +200,6 @@ interface StatusBarDisplay {
   readonly bindings: string;
 }
 
-// ChatGPT/Codex-subscription turns run under a smaller enforced context
-// window than the model's raw API contextWindow (see providerCapabilities.ts).
-// `usage.usageRoute` is stamped by the handler that produced this specific
-// snapshot, so it's ground truth for *this* usage regardless of what the CLI
-// is currently configured to use — and resolveCodexSubscriptionProfile() only
-// ever stamps 'chatgpt-subscription' when useOpenRouter was false for that
-// turn, so passing `false` here isn't an assumption, it's already implied.
-function effectiveContextWindow(
-  usage: TokenUsageStats,
-  model: string,
-): number | undefined {
-  if (usage.usageRoute === 'chatgpt-subscription') {
-    const config = getRuntimeModelConfig(model);
-    return config
-      ? resolveCodexSubscriptionProfile({ model: config, useOpenRouter: false })
-          ?.contextWindow
-      : undefined;
-  }
-  return MODEL_CONFIGS[model]?.contextWindow;
-}
-
 function accessModeSegment(access: CliModelAccessRoute): StatusBarSegment {
   const label = shortCliModelAccessRoute(access);
   return label === 'subscription'
@@ -257,30 +236,29 @@ function subscriptionQuotaSegment(
   };
 }
 
+// The gauge renders `StreamExecutionState.contextState` — the model handler's
+// own reading of the window it served the last response under, which is the
+// only value that stays right across subscription caps and compaction. The
+// `usage` fallback covers the pre-first-response window, where the handler has
+// reported no occupancy yet: show the input-token count bare rather than
+// substituting a registry window the run may never have used.
 function formatUsage(
+  contextState: ContextStateData | undefined,
   usage: TokenUsageStats | undefined,
-  model: string,
 ): StatusBarSegment | undefined {
-  if (!usage) return undefined;
-  // Context-window occupancy is input tokens only — the prompt that fills the
-  // window. Output tokens are the generated response, not part of the context,
-  // so they must not inflate the gauge. This matches every other surface
-  // (ModelHandler utilizationPercent, trace, transcript recorder, the extension
-  // UsagePanel), which all compute inputTokens / contextWindow.
-  const used = usage.inputTokens;
-  if (used <= 0) return undefined;
-
   const base = { compactPriority: STATUS_BAR_COMPACT_PRIORITY.usage };
-  const contextWindow = effectiveContextWindow(usage, model);
-  if (!contextWindow || contextWindow <= 0) {
-    return { ...base, text: formatCompactTokenCount(used), color: 'dim' };
+  if (!contextState) {
+    const reported = usage?.inputTokens ?? 0;
+    if (reported <= 0) return undefined;
+    return { ...base, text: formatCompactTokenCount(reported), color: 'dim' };
   }
 
+  // Occupancy is input tokens only — the prompt that fills the window. Output
+  // tokens are the generated response, not part of the context, which is why
+  // the handler reports `inputTokens` here.
+  const { inputTokens: used, contextWindow, utilizationPercent } = contextState;
   const ratio = used / contextWindow;
-  const percent = Math.max(
-    1,
-    roundedUtilizationPercent(used, contextWindow, 0),
-  );
+  const percent = Math.max(1, Math.round(utilizationPercent));
   let color: StatusBarColor;
   if (ratio >= 0.9) color = COLOR_ERROR;
   else if (ratio >= 0.6) color = COLOR_WARNING;
@@ -1072,7 +1050,7 @@ export function buildStatusBarDisplay(
       approvalPolicySegment(input.approvalPolicy),
       locationSegment(input.location),
       stageSegment(input.stage),
-      formatUsage(input.usage, input.model),
+      formatUsage(input.contextState, input.usage),
       queuedFollowUpsCountSegment(input.queuedFollowUpMessages),
       subagentsSegment(input.subagents),
       runningSessionsSegment(input.runningSessions),

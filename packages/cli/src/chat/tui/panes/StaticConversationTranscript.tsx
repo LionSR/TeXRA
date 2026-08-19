@@ -120,7 +120,7 @@ function shortenCwd(cwd: string): string {
 export function sessionHeaderIdentityLine(
   meta: SessionMeta,
   context: {
-    readonly childStreamEntries?: ChildRosters;
+    readonly childRosters?: ChildRosters;
     readonly parentStream?: ReadonlyMap<StreamTabId, StreamTabId>;
     readonly streamId?: StreamTabId;
     readonly streams?: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -132,7 +132,7 @@ export function sessionHeaderIdentityLine(
   if (context.streamId && parentStreamId && parentStream && context.streams) {
     const view = streamViewForId({
       activeStreamId: context.streamId,
-      childRosters: context.childStreamEntries ?? new Map(),
+      childRosters: context.childRosters ?? new Map(),
       parentStream,
       streamId: context.streamId,
       streams: context.streams,
@@ -643,7 +643,7 @@ function shouldWaitForChildIdentity({
 
 function ensureStaticSessionHeader({
   byteCount,
-  childStreamEntries,
+  childRosters,
   executionLabels,
   items,
   maxRows,
@@ -655,7 +655,7 @@ function ensureStaticSessionHeader({
   width,
 }: {
   readonly byteCount: number;
-  readonly childStreamEntries: ChildRosters;
+  readonly childRosters: ChildRosters;
   readonly executionLabels?: ExecutionLabels;
   readonly items: readonly StaticTranscriptItem[];
   readonly maxRows?: number;
@@ -690,7 +690,7 @@ function ensureStaticSessionHeader({
     kind: 'header',
     compact,
     identityLine: sessionHeaderIdentityLine(meta, {
-      childStreamEntries,
+      childRosters,
       parentStream,
       streamId: scrollbackStreamId,
       streams,
@@ -754,7 +754,7 @@ function ensureStaticSessionHeader({
 interface BuildStaticTranscriptItemsOptions {
   readonly currentItems: readonly StaticTranscriptItem[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-  readonly childStreamEntries?: ChildRosters;
+  readonly childRosters?: ChildRosters;
   readonly executionLabels?: ExecutionLabels;
   readonly meta: SessionMeta;
   readonly maxRows?: number;
@@ -780,7 +780,7 @@ export function buildStaticTranscriptItems(
   const {
     currentItems,
     streams,
-    childStreamEntries = new Map(),
+    childRosters = new Map(),
     executionLabels,
     meta,
     maxRows,
@@ -825,7 +825,7 @@ export function buildStaticTranscriptItems(
       kind: 'header',
       compact: maxRows !== undefined && maxRows < FULL_SESSION_HEADER_ROWS,
       identityLine: sessionHeaderIdentityLine(meta, {
-        childStreamEntries,
+        childRosters,
         parentStream,
         streamId: scrollbackStreamId,
         streams,
@@ -959,7 +959,7 @@ function scanStaticTranscriptFromStart(
 }
 
 export function buildStaticTranscriptState({
-  childStreamEntries,
+  childRosters,
   executionLabels,
   eraseRequest,
   maxRows,
@@ -972,7 +972,7 @@ export function buildStaticTranscriptState({
   streams,
   width,
 }: {
-  readonly childStreamEntries: ChildRosters;
+  readonly childRosters: ChildRosters;
   readonly executionLabels?: ExecutionLabels;
   readonly maxRows?: number;
   readonly meta: SessionMeta;
@@ -988,7 +988,7 @@ export function buildStaticTranscriptState({
   const built = buildStaticTranscriptItems({
     currentItems: [],
     streams,
-    childStreamEntries,
+    childRosters,
     executionLabels,
     meta,
     maxRows,
@@ -1038,7 +1038,7 @@ export function buildStaticTranscriptState({
 export function advanceStaticTranscriptState(
   current: StaticTranscriptState,
   {
-    childStreamEntries,
+    childRosters,
     executionLabels,
     eraseRequest = current.eraseRequest,
     maxRows,
@@ -1050,7 +1050,7 @@ export function advanceStaticTranscriptState(
     streams,
     width,
   }: {
-    readonly childStreamEntries: ChildRosters;
+    readonly childRosters: ChildRosters;
     readonly executionLabels?: ExecutionLabels;
     readonly eraseRequest?: number;
     readonly maxRows?: number;
@@ -1081,7 +1081,7 @@ export function advanceStaticTranscriptState(
   // stale rows.
   if (eraseRequest !== current.eraseRequest) {
     return buildStaticTranscriptState({
-      childStreamEntries,
+      childRosters,
       eraseRequest,
       executionLabels,
       maxRows,
@@ -1098,7 +1098,7 @@ export function advanceStaticTranscriptState(
 
   if (isHardReset) {
     const rebuilt = buildStaticTranscriptState({
-      childStreamEntries,
+      childRosters,
       eraseRequest,
       executionLabels,
       maxRows,
@@ -1134,7 +1134,7 @@ export function advanceStaticTranscriptState(
 
   if (current.ownerKey !== ownerKey) {
     return buildStaticTranscriptState({
-      childStreamEntries,
+      childRosters,
       eraseRequest,
       executionLabels,
       maxRows,
@@ -1196,7 +1196,7 @@ export function advanceStaticTranscriptState(
   );
   if (plan.rebuild) {
     return buildStaticTranscriptState({
-      childStreamEntries,
+      childRosters,
       eraseRequest,
       executionLabels,
       maxRows,
@@ -1213,7 +1213,7 @@ export function advanceStaticTranscriptState(
 
   const header = ensureStaticSessionHeader({
     byteCount: nextByteCount,
-    childStreamEntries,
+    childRosters,
     executionLabels,
     items: nextItems,
     maxRows,
@@ -1315,7 +1315,7 @@ export function StaticConversationTranscript({
   const streams = useSignal(streamsSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const parentStream = useSignal(parentStreamSignal);
-  const childStreamEntries = useSignal(childRostersSignal);
+  const childRosters = useSignal(childRostersSignal);
   const eraseRequest = useSignal(staticTranscriptEraseEpoch);
   // Header identity and the child-identity latch read stream metadata from the
   // bound SessionState; the revision drives the advance effect when metadata
@@ -1326,7 +1326,7 @@ export function StaticConversationTranscript({
     buildStaticTranscriptItems({
       currentItems: [],
       streams,
-      childStreamEntries,
+      childRosters,
       executionLabels: subagentExecutionLabels,
       meta: sessionMeta,
       maxRows,
@@ -1337,7 +1337,7 @@ export function StaticConversationTranscript({
 
   const [state, setState] = useState<StaticTranscriptState>(() =>
     buildStaticTranscriptState({
-      childStreamEntries,
+      childRosters,
       eraseRequest,
       executionLabels: subagentExecutionLabels,
       maxRows,
@@ -1356,7 +1356,7 @@ export function StaticConversationTranscript({
   useEffect(() => {
     setState((current) =>
       advanceStaticTranscriptState(current, {
-        childStreamEntries,
+        childRosters,
         eraseRequest,
         executionLabels: subagentExecutionLabels,
         maxRows,
@@ -1369,7 +1369,7 @@ export function StaticConversationTranscript({
       }),
     );
   }, [
-    childStreamEntries,
+    childRosters,
     eraseRequest,
     maxRows,
     ownerKey,

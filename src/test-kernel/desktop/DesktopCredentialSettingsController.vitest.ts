@@ -131,6 +131,7 @@ async function createFixture({
     externalOpener: {
       openExternal: async () => undefined,
       presentSubscriptionSignInUrl: () => undefined,
+      presentSubscriptionDeviceCode: () => undefined,
     },
     notifications: {
       showInfoMessage: async (message) => {
@@ -215,10 +216,10 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
       command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
       provider: 'google',
-      apiKey: '  sk-test  ',
+      apiKey: '  sk-google-secret  ',
     });
 
-    expect(await fixture.secrets.get('apiKey.google')).toBe('sk-test');
+    expect(await fixture.secrets.get('apiKey.google')).toBe('sk-google-secret');
     expect(fixture.infos).toEqual(['Google API key has been set']);
     expect(
       fixture.posted.findLast(

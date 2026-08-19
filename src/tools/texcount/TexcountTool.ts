@@ -6,6 +6,7 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { getTeXCount } from '@latex/texcount';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { ensureArray } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -14,11 +15,10 @@ const TexcountInputSchema = z.strictObject({
   files: z
     .union([z.string(), z.array(z.string()).min(1)])
     .describe('LaTeX file path or non-empty list of LaTeX files to count.'),
-  mode: z
-    .enum(['separate', 'include', 'sum'])
-    .nullish()
-    .transform((v) => v ?? 'separate')
-    .describe('How texcount should combine files: separate, include, or sum.'),
+  mode: nullishWithDefault(
+    z.enum(['separate', 'include', 'sum']),
+    'separate',
+  ).describe('How texcount should combine files: separate, include, or sum.'),
   format: z
     .enum(['raw', 'stats'])
     .nullish()
