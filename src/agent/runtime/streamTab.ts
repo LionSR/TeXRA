@@ -4,16 +4,24 @@ import { getCleanAgentName } from '@shared/schemas';
 /**
  * Mint the opaque stream tab id for a new run: `${name}#${executionId}`.
  *
- * The id is an opaque handle — nothing parses it back. Uniqueness comes from
- * the executionId suffix; the name prefix is human-orienting only. Existing
- * runs are addressed by the `streamId` stamped on their execution metadata
- * at registration, never by re-deriving this format.
+ * Single owner of the format for every run that gets a tab: a native run
+ * passes its agent identifier, a child run launched by a tool passes that
+ * tool's stream prefix (e.g. {@link BASH_CHILD_STREAM_PREFIX}). Disjoint
+ * namespaces, one wire format — the one {@link getStreamTabDisplayName} below
+ * reads back. `getCleanAgentName` normalizes an `<source>:<agent>` identifier
+ * and returns anything else, tool prefixes included, unchanged.
+ *
+ * The id is an opaque handle — nothing parses it back to address a run.
+ * Uniqueness comes from the executionId suffix; the name prefix is
+ * human-orienting only. Existing runs are addressed by the `streamId` stamped
+ * on their execution metadata at registration, never by re-deriving this
+ * format.
  */
 export function getStreamTabId(
-  agent: string,
+  name: string,
   options: { executionId: ExecutionId },
 ): StreamTabId {
-  return `${getCleanAgentName(agent)}#${options.executionId}`;
+  return `${getCleanAgentName(name)}#${options.executionId}`;
 }
 
 /**

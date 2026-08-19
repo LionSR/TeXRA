@@ -192,9 +192,9 @@ describe('assembleTrace', () => {
 
   it('resolves a tool-format child stream through its stamped metadata, not name derivation', async () => {
     // Background child streams (bash/codex/claude subagents, see
-    // @tools/delegation/childStream.createChildStream) use a tool-specific
-    // "${streamPrefix}#executionId" id, not getStreamTabId's format — the
-    // stamped meta.streamId is the only mapping that reaches them.
+    // @tools/delegation/childStream.createChildStream) share getStreamTabId's
+    // format but carry a tool-specific prefix, disjoint from any agent name —
+    // the stamped meta.streamId is the only mapping that reaches them.
     const executionId = 'exec-child-1' as ExecutionId;
     const executionConfig = config({
       agent: 'orchestrator',
