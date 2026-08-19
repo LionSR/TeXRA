@@ -290,7 +290,7 @@ export const streamLifecycleHandlers = {
     clearCopyContentStore();
     clearProposalInputStore();
     deleteFollowUpInputTransientState(streamId);
-    webviewStorage.delete(logListStateKey(streamId));
+    void webviewStorage.update(logListStateKey(streamId), undefined);
 
     // Remove permissions for the deleted stream to prevent orphaned entries
     permissions$.set(removePermissionsForStream(permissions$.get(), streamId));
@@ -322,7 +322,7 @@ export const streamLifecycleHandlers = {
     // consumer here (the stream itself is about to disappear from
     // streamById below) — read the ids before the reset wipes them.
     for (const streamId of appState.get().streamById.keys()) {
-      webviewStorage.delete(logListStateKey(streamId));
+      void webviewStorage.update(logListStateKey(streamId), undefined);
     }
 
     appState.set(

@@ -5,10 +5,7 @@ import type { StateStore } from '@platform/interfaces';
 // Local imports - shared
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  PersistedState,
-  createBackendStorage,
-} from '@shared/state/PersistedState';
+import { PersistedState } from '@shared/state/PersistedState';
 
 /** Selected progress-view stream, or an empty string when none is selected. */
 type ActiveProgressStream = StreamTabId | '';
@@ -36,7 +33,7 @@ export class ProgressPresentationState {
 
   constructor(storage: StateStore) {
     this.prefs = new PersistedState(
-      createBackendStorage(storage),
+      storage,
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
       ProgressPresentationPrefsSchema,
     );

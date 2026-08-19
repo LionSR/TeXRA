@@ -157,7 +157,7 @@ function seedStreamWithLogListToggle(streamId: StreamTabId): void {
     agentCategory: AgentCategory.Workflow,
     creationTimestamp: 1,
   });
-  webviewStorage.set(logListStateKey(streamId), {
+  void webviewStorage.update(logListStateKey(streamId), {
     groupToggleStates: [['group-1', true]],
   });
 }
