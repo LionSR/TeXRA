@@ -91,7 +91,9 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       runToolCommand: (message) => this.runToolCommand(message),
     };
     this.latexHandlers = {
-      applyLatexSettings: () => this.postLatexSettingsStatus(),
+      applyLatexSettings: unsupported(
+        'Recommended VS Code settings can only be applied from the TeXRA VS Code extension.',
+      ),
       installLatexWorkshop: unsupported(NO_EXTENSION_HOSTING),
       runInstallCommand: (message) =>
         this.runLatexInstallCommand(message.installCommand),
