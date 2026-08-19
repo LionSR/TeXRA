@@ -329,7 +329,7 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
   // of diff sections by the most recent `file` section above them, so this is
   // the state that keeps a multi-file edit honest. `edit` preserves the CLI's
   // fallback label when neither the candidate nor the call names a file.
-  let labelledPath = ctx.filePath ?? 'edit';
+  let labelledPath = ctx.filePath || 'edit';
   if (ctx.filePath) {
     sections.push({
       kind: 'file',
@@ -344,7 +344,7 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
     // fallback independently for every candidate so a pathless edit after a
     // named one returns to the call-level label instead of inheriting its
     // predecessor's file.
-    const effectivePath = candidate.path ?? ctx.filePath ?? 'edit';
+    const effectivePath = candidate.path ?? (ctx.filePath || 'edit');
     if (effectivePath !== labelledPath) {
       labelledPath = effectivePath;
       sections.push({
