@@ -7,7 +7,6 @@
  */
 
 import { readFile, rm } from 'node:fs/promises';
-import path from 'node:path';
 
 import type {
   ToolEditApprovalHost,
@@ -17,7 +16,6 @@ import type {
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { createTexraTempDir } from '@utils/files/tempDir';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -60,14 +58,6 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
       originalPath,
       proposedPath,
     });
-  }
-
-  relativeDisplayPath(filePath: string): string {
-    try {
-      return WorkspaceFS.relativePath(filePath);
-    } catch {
-      return path.basename(filePath);
-    }
   }
 
   /**
