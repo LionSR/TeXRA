@@ -340,8 +340,11 @@ export class LitSessionRenderer implements SessionRendererPort {
       state.getStreamMetadata(stream).agentCategory ?? existingState?.category;
     if (category === undefined) return undefined;
 
+    if (includeActiveState) {
+      state.getOrCreateStreamState(stream, category);
+    }
     const executionState = includeActiveState
-      ? state.getOrCreateStreamState(stream, category)
+      ? state.getStreamState(stream)
       : undefined;
     return buildStreamContentRender(stream, category, {
       runUsage: mapToRecord(state.snapshots.getRunUsage(stream)),

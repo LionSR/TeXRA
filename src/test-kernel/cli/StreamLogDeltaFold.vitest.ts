@@ -384,10 +384,10 @@ function syncBothAndCompare(
   // whichever mirrored stream synced first — restore the entering focus
   // around each sync (unset ⇒ both project the full transcript).
   const active = activeStreamId.get();
-  syncStreamLog(FOLD_STREAM, options);
+  syncStreamLog(defaultSession(), FOLD_STREAM, options);
   activeStreamId.set(active);
   invalidateTranscriptFoldForTest(ORACLE_STREAM);
-  syncStreamLog(ORACLE_STREAM, options);
+  syncStreamLog(defaultSession(), ORACLE_STREAM, options);
   activeStreamId.set(active);
   const fold = projectedView(streams.get().get(FOLD_STREAM));
   const oracle = projectedView(streams.get().get(ORACLE_STREAM));
@@ -410,7 +410,7 @@ function configureStreams(config: StreamConfig): void {
 
 /** Subscribe for the duration of `fn`, disposing even if an assertion throws. */
 function withStreamSubscription(fn: () => void): void {
-  const dispose = subscribeStreamLog();
+  const dispose = subscribeStreamLog(defaultSession());
   try {
     fn();
   } finally {
@@ -519,7 +519,7 @@ describe('transcript fold vs from-scratch oracle', () => {
         data: { kind: 'workflowAttempt', attemptId: 'current-attempt' },
       });
 
-      syncStreamLog(FOLD_STREAM);
+      syncStreamLog(defaultSession(), FOLD_STREAM);
 
       const slice = streams.get().get(FOLD_STREAM);
       expect(slice?.workflowAttemptId).toBe('current-attempt');
@@ -535,7 +535,7 @@ describe('transcript fold vs from-scratch oracle', () => {
         text: '',
         data: { kind: 'otherInternalRecord' },
       });
-      syncStreamLog(FOLD_STREAM);
+      syncStreamLog(defaultSession(), FOLD_STREAM);
       expect(streams.get().get(FOLD_STREAM)?.workflowAttemptId).toBe(
         'current-attempt',
       );
@@ -549,7 +549,7 @@ describe('transcript fold vs from-scratch oracle', () => {
         text: '',
         data: { kind: 'workflowAttempt', attemptId: '' },
       });
-      syncStreamLog(FOLD_STREAM);
+      syncStreamLog(defaultSession(), FOLD_STREAM);
       const invalidSlice = streams.get().get(FOLD_STREAM);
       expect(invalidSlice?.workflowAttemptId).toBeUndefined();
       expect(invalidSlice?.workflowAttemptBoundaryDeclared).toBe(true);
@@ -592,7 +592,7 @@ describe('transcript fold vs from-scratch oracle', () => {
         messageType: MESSAGE_TYPES.DEFAULT,
         text: 'Survey complete: 0/32 areas reported, 0 raw candidates',
       });
-      syncStreamLog(FOLD_STREAM);
+      syncStreamLog(defaultSession(), FOLD_STREAM);
       expect(
         streams
           .get()
@@ -623,7 +623,7 @@ describe('transcript fold vs from-scratch oracle', () => {
           attemptId: 'attempt-new',
         },
       });
-      syncStreamLog(FOLD_STREAM);
+      syncStreamLog(defaultSession(), FOLD_STREAM);
 
       const ids =
         streams
@@ -721,7 +721,7 @@ describe('transcript fold vs from-scratch oracle', () => {
 
   it('recovers from a delta gap by rebuilding through the oracle path', () => {
     const store = defaultSession().transcripts;
-    const first = subscribeStreamLog();
+    const first = subscribeStreamLog(defaultSession());
     appendTranscriptEntry(store, FOLD_STREAM, {
       id: 'u1',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -730,7 +730,7 @@ describe('transcript fold vs from-scratch oracle', () => {
       messageType: MESSAGE_TYPES.USER_MESSAGE,
       text: 'first',
     });
-    syncStreamLog(FOLD_STREAM);
+    syncStreamLog(defaultSession(), FOLD_STREAM);
     expect(
       streams
         .get()
@@ -751,7 +751,7 @@ describe('transcript fold vs from-scratch oracle', () => {
       });
     }
 
-    const second = subscribeStreamLog();
+    const second = subscribeStreamLog(defaultSession());
     appendTranscriptEntry(store, FOLD_STREAM, {
       id: 'u4',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -761,7 +761,7 @@ describe('transcript fold vs from-scratch oracle', () => {
       text: 'fourth',
     });
     const before = transcriptFoldCountersForTest();
-    syncStreamLog(FOLD_STREAM);
+    syncStreamLog(defaultSession(), FOLD_STREAM);
     const after = transcriptFoldCountersForTest();
 
     // The buffered delta's base does not match the fold state: the sync must
