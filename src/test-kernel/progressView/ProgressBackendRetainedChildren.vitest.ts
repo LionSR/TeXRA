@@ -67,12 +67,12 @@ describe('retained finished children', () => {
     return backend.state.getStreamState(PARENT)?.subagents ?? [];
   }
 
-  function badgePushes(
+  function metadataPushes(
     messages: ProgressViewOutboundMessage[],
   ): ProgressViewOutboundMessage[] {
     return messages.filter(
       (message) =>
-        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
     );
   }
 
@@ -110,9 +110,11 @@ describe('retained finished children', () => {
 
     applyRoster(backend, PARENT, []);
 
-    const badgeMessages = badgePushes(messages);
-    expect(badgeMessages).toHaveLength(1);
-    expect(badgeMessages[0]).toMatchObject({ stream: PARENT });
+    const metadataMessages = metadataPushes(messages);
+    expect(metadataMessages).toHaveLength(1);
+    expect(metadataMessages[0]).toMatchObject({
+      streamInfo: { name: PARENT },
+    });
   });
 
   it('promotes a retained child back to one live row when it reappears', () => {
@@ -200,15 +202,17 @@ describe('retained finished children', () => {
     );
     await backend.applyStreamStatus(childStreamId, STREAM_PHASE.COMPLETED);
 
-    const badges = badgePushes(messages);
+    const badges = metadataPushes(messages);
     expect(badges.at(-1)).toMatchObject({
-      stream: PARENT,
-      subagents: [
-        expect.objectContaining({
-          executionId: 'late',
-          status: STREAM_PHASE.COMPLETED,
-        }),
-      ],
+      streamInfo: { name: PARENT },
+      streamState: {
+        subagents: [
+          expect.objectContaining({
+            executionId: 'late',
+            status: STREAM_PHASE.COMPLETED,
+          }),
+        ],
+      },
     });
   });
 
@@ -293,16 +297,18 @@ describe('retained finished children', () => {
       }),
     ]);
     expect(roster[0]?.finishedAt).toBeUndefined();
-    // No further status fact arrives for a terminal child, so the badge push
+    // No further status fact arrives for a terminal child, so the metadata push
     // driven by the stale roster is the last word on the wire.
-    expect(badgePushes(messages).at(-1)).toMatchObject({
-      stream: PARENT,
-      subagents: [
-        expect.objectContaining({
-          executionId: 'stale',
-          status: STREAM_PHASE.FAILED,
-        }),
-      ],
+    expect(metadataPushes(messages).at(-1)).toMatchObject({
+      streamInfo: { name: PARENT },
+      streamState: {
+        subagents: [
+          expect.objectContaining({
+            executionId: 'stale',
+            status: STREAM_PHASE.FAILED,
+          }),
+        ],
+      },
     });
   });
 
