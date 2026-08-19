@@ -363,7 +363,6 @@ function emitUsage(
   streamId: StreamTabId,
   storageKey: StorageKey,
   usage: ExtendedTokenUsageStats,
-  executionId?: ExecutionId,
 ): void {
   hub.emit({
     scope: 'run',
@@ -373,7 +372,6 @@ function emitUsage(
       payload: {
         streamId,
         storageKey,
-        ...(executionId === undefined ? {} : { executionId }),
         usage,
       },
     },
@@ -3626,7 +3624,7 @@ describe('sessionSignalsAdapter run facts', () => {
         reasoningTokens: 7,
       };
 
-      emitUsage(hub, root, storageKey, usage, 'exec-direct');
+      emitUsage(hub, root, storageKey, usage);
 
       expect(streams.get().get(root)?.usage).toEqual(usage);
       // Cumulative usage is the snapshot store's per-run accumulator summed;
@@ -3901,8 +3899,8 @@ describe('sessionSignalsAdapter run facts', () => {
         reasoningTokens: 3,
       };
 
-      emitUsage(hub, root, storageKey, firstUsage, 'exec-direct-sequence');
-      emitUsage(hub, root, storageKey, secondUsage, 'exec-direct-sequence');
+      emitUsage(hub, root, storageKey, firstUsage);
+      emitUsage(hub, root, storageKey, secondUsage);
 
       expect(streams.get().get(root)?.usage).toEqual(secondUsage);
       // Summed from the store's per-run map — the one accumulator, which
