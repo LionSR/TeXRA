@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - IPC contracts
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 // Type imports
 import type * as vscode from 'vscode';
@@ -95,10 +96,6 @@ vi.mock('@utils/config/configUtils', () => ({
   getConfig: vi.fn(),
   updateConfig: vi.fn(),
 }));
-vi.mock('@common/state', async () => {
-  const keys = await import('@shared/state/stateKeys');
-  return { ...keys, globalSM: { update: mocks.globalStateUpdate } };
-});
 vi.mock('@utils/config/providerConfig', () => ({
   getProviderKeyUrl: mocks.getProviderKeyUrl,
 }));
@@ -125,6 +122,16 @@ vi.mock('@webview/managers/executionHandlers', () => ({
 
 const { MainViewMessageHandler } =
   await import('@webview/MainViewMessageHandler');
+
+setupPlatform(
+  {},
+  {
+    globalState: {
+      get: <T>(_key: string, defaultValue?: T) => defaultValue as T,
+      update: mocks.globalStateUpdate,
+    },
+  },
+);
 
 describe('MainViewMessageHandler interaction mappings', () => {
   const postMessage = vi.fn();

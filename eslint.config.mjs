@@ -75,11 +75,6 @@ const VSCODE_FREE_ZONE_DIRS = [
 
 const HOST_LAYER_RESTRICTED_IMPORT_PATHS = [
   {
-    name: '@common/state',
-    message:
-      'Production src code must not import host-owned state helpers; route host access through platform or host adapters.',
-  },
-  {
     name: '@common/webview',
     message:
       'Production src code must not import host-owned webview helpers; route host access through platform or host adapters.',

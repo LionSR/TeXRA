@@ -142,7 +142,7 @@ function resolveDirectEndpoint(config: {
 
   if (useOpenRouter) return { baseUrl: OPENROUTER_BASE_URL };
 
-  // Per-provider custom endpoint from dashboard settings (globalSM)
+  // Per-provider custom endpoint from dashboard settings (global state)
   const customUrl = getProviderEndpoint(provider);
   if (customUrl) {
     logger?.debug(`Using custom base URL for ${provider}: ${customUrl}`);

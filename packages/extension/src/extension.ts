@@ -31,7 +31,6 @@ import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantComma
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
-import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { appSignals } from '@eventBus/AppSignals';
@@ -83,6 +82,7 @@ import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import {
   formatTexraApprovalPolicy,
   readPersistedTexraApprovalPolicy,
@@ -207,7 +207,13 @@ export async function activate(context: vscode.ExtensionContext) {
   agentDirectories.initialize(context);
   setOutputChannelFactory((name) => vscode.window.createOutputChannel(name));
   initializeBundledPrompts(path.join(context.extensionPath, 'resources'));
-  initializeStateManagers(context, gitRepoRoot);
+  const workspaceState = gitRepoRoot
+    ? new WorktreeStateStore(
+        context.workspaceState,
+        context.globalState,
+        gitRepoRoot,
+      )
+    : context.workspaceState;
   const lifecycle = createLifecycleHost({
     onError: (phase, error) =>
       log.error(`Lifecycle ${phase} handler failed`, {
@@ -233,7 +239,7 @@ export async function activate(context: vscode.ExtensionContext) {
     createNodePlatform({
       config,
       globalState: context.globalState,
-      workspaceState: workspaceSM,
+      workspaceState,
       getWorkspacePath: rawWorkspacePath,
       storage,
       secrets: new VscodeSecrets(context),
@@ -397,7 +403,7 @@ export async function activate(context: vscode.ExtensionContext) {
           reordered,
           routePreferencesCleared,
           skipped,
-        } = await refreshModelListStateIfNeeded(globalSM);
+        } = await refreshModelListStateIfNeeded(context.globalState);
         if (!skipped) {
           if (previousVersion !== currentVersion) {
             log.info(

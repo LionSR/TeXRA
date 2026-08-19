@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 // Local imports
 import { refresh, computeAgentOptionsData, getAgent } from '@agent/index';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
-import { consumePendingState } from '@common/state';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -14,6 +13,7 @@ import {
   setActiveSidebarView,
   type SidebarView,
 } from '@common/webview';
+import { consumePendingState } from '@common/state/pendingStateManager';
 import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
