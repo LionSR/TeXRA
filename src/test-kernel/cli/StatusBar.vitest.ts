@@ -16,7 +16,7 @@ import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import { STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
 
-// The bar renders the access route, not the raw `ApiAccessMode` enum.
+// The bar renders the short access-route label.
 const INCLUDED_ACCESS_LABEL = shortCliModelAccessRoute('included');
 const PERSONAL_API_MODE_LABEL = shortCliModelAccessRoute('personal');
 
@@ -93,18 +93,6 @@ const UNKNOWN_COMMAND_NOTICE = {
   text: 'Unknown command: /wat',
   expiresAt: 1,
 } as const;
-
-type RelayQuota = NonNullable<StatusBarDisplayInput['relayQuota']>;
-
-// Quota fixtures share a $10 limit; only the percentage varies per test.
-function relayQuota(percentUsed: number): RelayQuota {
-  return {
-    currentSpend: percentUsed / 10,
-    limit: 10,
-    remaining: (100 - percentUsed) / 10,
-    percentUsed,
-  };
-}
 
 type TokenUsage = NonNullable<StatusBarDisplayInput['usage']>;
 type UsageRoute = NonNullable<TokenUsage['usageRoute']>;
@@ -791,7 +779,6 @@ describe('CLI StatusBar display model', () => {
         buildStatusBarDisplay(
           statusInput({
             modelAccess: resolveCliModelAccessRoute({
-              apiMode: 'personal',
               subscriptionActive: true,
               usageRoute,
             }),
@@ -1698,50 +1685,6 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Esc p tasks');
     expect(display.bindings).not.toContain('Esc s subagents');
     expect(display.bindings).not.toContain('Option-p tasks');
-  });
-
-  it('warns once the included-access relay quota crosses 80 percent', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        modelAccess: 'included',
-        relayQuota: relayQuota(84),
-      }),
-    );
-
-    expect(leftTexts(display)).toContain('included access 16% left');
-  });
-
-  it('keeps the quota silent below the warning threshold', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        modelAccess: 'included',
-        relayQuota: relayQuota(79),
-      }),
-    );
-
-    expect(leftTexts(display)).toEqual(['◆', 'idle', INCLUDED_ACCESS_LABEL]);
-  });
-
-  it('reports an exhausted relay quota rather than dropping the warning', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        modelAccess: 'included',
-        relayQuota: relayQuota(100),
-      }),
-    );
-
-    expect(leftTexts(display)).toContain('included access used up');
-  });
-
-  it('hides the relay quota when the route does not spend it', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        modelAccess: 'personal',
-        relayQuota: relayQuota(95),
-      }),
-    );
-
-    expect(leftTexts(display)).toEqual(['◆', 'idle', PERSONAL_API_MODE_LABEL]);
   });
 
   it('shows the limiting coding-plan quota in the persistent status row', () => {

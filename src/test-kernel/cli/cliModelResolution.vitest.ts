@@ -14,19 +14,12 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
-  getCliApiMode: vi.fn(),
   selectCliRunnableModel: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
-}));
-
-vi.mock('@cli/runtime/apiAccessMode', () => ({
-  effectiveCliApiMode: (source: { readonly apiMode?: string }) =>
-    source.apiMode ?? mocks.getCliApiMode(),
-  getCliApiMode: mocks.getCliApiMode,
 }));
 
 vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
@@ -60,7 +53,6 @@ describe('selectCliRunModel precedence', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.initCliPlatform.mockResolvedValue(undefined);
-    mocks.getCliApiMode.mockReturnValue('personal');
     selectCliRunnableModelMock.mockImplementation(async (request) => ({
       model: Array.isArray(request)
         ? (request.find((candidate) => candidate.model)?.model ??
@@ -84,9 +76,7 @@ describe('selectCliRunModel precedence', () => {
         { model: 'deepseekR', reason: 'command-config' },
         { model: CLI_BUILTIN_DEFAULT_MODEL, reason: 'builtin-default' },
       ],
-      {
-        apiMode: 'personal',
-      },
+      {},
     );
   });
 
@@ -103,18 +93,18 @@ describe('selectCliRunModel precedence', () => {
       expect.arrayContaining([
         { model: OTHER_MODEL, reason: 'command-config' },
       ]),
-      expect.objectContaining({ apiMode: 'personal' }),
+      {},
     );
     expect(selectCliRunnableModelMock).toHaveBeenNthCalledWith(
       2,
       expect.arrayContaining([
         { model: 'deepseekR', reason: 'command-config' },
       ]),
-      expect.objectContaining({ apiMode: 'personal' }),
+      {},
     );
   });
 
-  it('checks active API-mode access before returning the model', async () => {
+  it('checks model access before returning the model', async () => {
     const context = makeContext({
       cliConfig: runConfig('staleConfiguredModel'),
     });
@@ -130,7 +120,7 @@ describe('selectCliRunModel precedence', () => {
       expect.arrayContaining([
         { model: 'staleConfiguredModel', reason: 'command-config' },
       ]),
-      expect.objectContaining({ apiMode: 'personal' }),
+      {},
     );
     expect(mocks.initCliPlatform).toHaveBeenCalledWith({
       ...context,
@@ -147,7 +137,7 @@ describe('selectCliRunModel precedence', () => {
     });
     selectCliRunnableModelMock.mockRejectedValueOnce(
       new Error(
-        'Model "opus48T" is not available in the active API mode (not included). Available models: deepseekT.',
+        'Model "opus48T" is not available (missing key). Available models: deepseekT.',
       ),
     );
 
@@ -158,9 +148,7 @@ describe('selectCliRunModel precedence', () => {
       expect.arrayContaining([
         { model: 'opus48T', reason: 'explicit-override' },
       ]),
-      {
-        apiMode: 'personal',
-      },
+      {},
     );
   });
 });

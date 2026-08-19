@@ -1,4 +1,4 @@
-/** Account identity, authentication, usage, and account connections. */
+/** Account identity, authentication, and account connections. */
 
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -14,23 +14,14 @@ import {
   designTokens,
   settingsBannerStyles,
 } from '@shared/styles';
-import type {
-  SessionProblem,
-  SpendingStatus,
-  SpendingStatusError,
-} from '@shared/schemas';
+import type { SessionProblem } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { createEvent } from '@shared/utils/events';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 
 // Local imports - catalog-driven settings rows
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
-
-// Local imports - settings view components
-import '../components/profile/RelayQuotaMeter';
 
 @customElement('account-tab')
 export class AccountTab extends LitElement {
@@ -51,12 +42,7 @@ export class AccountTab extends LitElement {
 
   @property({ type: Boolean }) authenticated = false;
   @property({ attribute: false }) userEmail = '';
-  @property({ attribute: false }) tier = 'free';
   @property({ attribute: false }) sessionProblem: SessionProblem | null = null;
-  @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
-  @property({ attribute: false })
-  spendingStatusError: SpendingStatusError | null = null;
-  @property({ type: Boolean }) quotaAutoSwitched = false;
   @property({ type: Boolean }) telemetryEnabled = true;
 
   private readonly handleSignIn = (): void => {
@@ -71,59 +57,6 @@ export class AccountTab extends LitElement {
     this.dispatchEvent(createEvent('manage-provider-keys'));
   }
 
-  private renderUsageNotice(id: string, body: string): TemplateResult {
-    return renderBannerFrame({
-      id,
-      variant: 'neutral',
-      appearance: 'outlined',
-      size: 's',
-      // Session/spend-check notices appear after initial render; the live
-      // region makes them announce rather than materialize silently.
-      role: 'status',
-      body: html`${body}`,
-    });
-  }
-
-  private renderUsage(): TemplateResult {
-    // Session and spend-check failures take priority over stale usage data.
-    if (this.sessionProblem === 'expired') {
-      return this.renderUsageNotice(
-        'account-usage-session-expired',
-        "Usage data can't load because your session has expired. Sign in again to reconnect.",
-      );
-    }
-    if (this.sessionProblem === 'unavailable') {
-      return this.renderUsageNotice(
-        'account-usage-auth-unavailable',
-        "Usage data can't load because the authentication service is temporarily unavailable. Try again later.",
-      );
-    }
-    if (this.spendingStatusError != null) {
-      return this.renderUsageNotice(
-        'account-usage-spend-check-failed',
-        `TeXRA could not check your usage right now. ${INCLUDED_ACCESS.label} is temporarily unavailable. Switch to ${OWN_API_KEYS.inline} or try again later.`,
-      );
-    }
-    if (!this.authenticated) {
-      return this.renderUsageNotice(
-        'account-usage-sign-in',
-        'Sign in to see your usage.',
-      );
-    }
-    if (this.spendingStatus == null) {
-      return this.renderUsageNotice(
-        'account-usage-unavailable',
-        'Usage data is not available for this account. Sign out and sign in again to refresh it.',
-      );
-    }
-    return html`
-      <relay-quota-meter
-        .status=${this.spendingStatus}
-        .autoSwitched=${this.quotaAutoSwitched}
-      ></relay-quota-meter>
-    `;
-  }
-
   private renderIdentityBanner(): TemplateResult {
     const expired = this.sessionProblem === 'expired';
     const unavailable = this.sessionProblem === 'unavailable';
@@ -132,17 +65,15 @@ export class AccountTab extends LitElement {
     const title =
       hasStoredAccount && this.userEmail ? this.userEmail : 'TeXRA account';
     let description: TemplateResult | string =
-      `Sign in to use ${INCLUDED_ACCESS.inline} and track your usage.`;
+      'Sign in to use the hosted research-agent catalog.';
     if (expired) {
-      description = `Your session has expired. Sign in again to restore ${INCLUDED_ACCESS.inline} and usage data.`;
+      description =
+        'Your session has expired. Sign in again to restore your account connection.';
     } else if (unavailable) {
       description =
         'The authentication service is temporarily unavailable. Your stored session has not been removed.';
     } else if (this.authenticated) {
-      // Cased in the source string, not via CSS text-transform, so tiers
-      // like "pro+" or multi-word names keep their intended casing.
-      const tierLabel = this.tier.charAt(0).toUpperCase() + this.tier.slice(1);
-      description = html`${tierLabel} plan`;
+      description = 'Signed in.';
     }
     // An expired session offers explicit recovery and cleanup. A transient
     // outage offers neither action, because the stored credential is retained.
@@ -203,14 +134,6 @@ export class AccountTab extends LitElement {
 
         <section>
           ${renderSettingsSectionHeading({
-            title: `${INCLUDED_ACCESS.label} usage`,
-            icon: 'chart-line',
-          })}
-          ${this.renderUsage()}
-        </section>
-
-        <section>
-          ${renderSettingsSectionHeading({
             title: 'Credentials',
             description:
               'Provider API keys remain in Providers & Models, alongside the models that use them.',
@@ -247,7 +170,8 @@ export class AccountTab extends LitElement {
             ${renderStateSettingToggleRow({
               key: 'texra.telemetry.enabled',
               label: 'Share usage telemetry',
-              description: `Sends model, token, cost, timing, and host metadata. Prompt text, document content, and file names are never sent. Turning this off stops reporting for rounds billed to ${OWN_API_KEYS.inline}; rounds covered by ${INCLUDED_ACCESS.inline} or a subscription are still recorded, because they meter your usage against your plan.`,
+              description:
+                'Sends model, token, cost, timing, and host metadata. Prompt text, document content, and file names are never sent. Turning this off stops reporting for rounds billed to your own API keys; rounds covered by a subscription are still recorded, because they meter your usage against your plan.',
               checked: this.telemetryEnabled,
             })}
           </div>

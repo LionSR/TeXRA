@@ -63,12 +63,8 @@ function modelAccess(
 }
 
 function expectUnavailableDefaultRecovery(output: string): void {
-  expect(output).toContain(
-    'Note: "deepseekproT" is not usable in the current access mode.',
-  );
-  expect(output).toContain(
-    'Next: Add a provider API key with `texra setup`, or retry with `--api-mode included` and run `texra login`.',
-  );
+  expect(output).toContain('Note: "deepseekproT" is not currently usable.');
+  expect(output).toContain('Next: Add a provider API key with `texra setup`.');
   expect(output).toContain('Run `texra models list --all` to inspect access.');
   expect(output).toContain(
     'After a model is available, run `texra` for the launcher or `texra chat` to start.',
@@ -123,7 +119,6 @@ describe('CLI init command', () => {
       }
     >;
 
-    expect(args).toHaveProperty('api-mode');
     expect(args).toHaveProperty('approval-policy');
     expect(args).toHaveProperty('color');
     expect(args).toHaveProperty('no-input');
@@ -171,12 +166,12 @@ describe('CLI init command', () => {
 
   it.each([
     {
-      name: 'disables init model rows unavailable in the active API mode',
+      name: 'disables init model rows without a usable credential',
       models: [
         modelAccess('sonnet46T', {
           label: 'Sonnet',
           available: true,
-          status: 'included access',
+          status: 'subscription',
         }),
         modelAccess('deepseekT', {
           label: 'DeepSeek',
@@ -188,7 +183,7 @@ describe('CLI init command', () => {
         {
           value: 'sonnet46T',
           label: 'Sonnet',
-          description: 'included access',
+          description: 'subscription',
           disabled: false,
         },
         {
@@ -241,8 +236,6 @@ describe('CLI init command', () => {
       root,
       'init',
       '--print',
-      '--api-mode',
-      'personal',
       ...extraArgs,
       '--gitignore',
       '--no-color',
@@ -332,12 +325,13 @@ describe('CLI init command', () => {
       accessList: [
         modelAccess('sonnet46T', {
           available: false,
-          status: 'login required',
+          status: 'missing api key',
           model: {
             value: 'sonnet46T',
             label: 'Sonnet',
-            availability: 'included-login-required',
+            availability: 'missing-key',
             disabled: true,
+            requiresKey: true,
           },
         }),
       ],

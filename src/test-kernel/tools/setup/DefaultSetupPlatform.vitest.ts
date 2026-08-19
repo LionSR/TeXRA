@@ -2,11 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  RELAY_CI_TOKEN_PREFIX,
-  RELAY_TOKEN_ENV_VAR,
-  resetRelayTokenTierCacheForTests,
-} from '@auth/relayToken';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as codexAuth from '@auth/codex';
 import * as providerCapabilities from '@model/providerCapabilities';
@@ -31,7 +26,6 @@ setupPlatform({
 afterEach(() => {
   vi.restoreAllMocks();
   SupabaseClient.resetForTests();
-  resetRelayTokenTierCacheForTests();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -80,63 +74,17 @@ describe('shared setup capabilities', () => {
     await expect(setupSecrets.storedApiKeyExists('openai')).resolves.toBe(true);
   });
 
-  it('does not report a rejected relay token as authenticated', async () => {
-    vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}revoked`);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(new Response(null, { status: 401 })),
-    );
-
-    await expect(getSetupAuthStatus()).resolves.toEqual({
-      authenticated: false,
-      remoteAgentCatalogAvailable: false,
-    });
-  });
-
-  it('falls back to an authenticated session after relay rejection', async () => {
-    vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}expired`);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(new Response(null, { status: 403 })),
-    );
-    SupabaseClient.setAuthProvider({
-      whenReady: async () => {},
-      ensureFreshToken: async () => 'session-token',
-      getSessionTokens: async () => ({
-        accessToken: 'session-token',
-        refreshToken: 'refresh-token',
-      }),
-      getStoredSessionState: async () => 'authenticated',
-      getStoredAccountLabel: async () => null,
-      isTokenExpiringSoon: () => false,
-      getLastRefreshFailure: () => null,
-    });
-    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
-      email: 'researcher@example.com',
-    } as Awaited<ReturnType<typeof SupabaseClient.getUser>>);
-    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('Max');
-
-    await expect(getSetupAuthStatus()).resolves.toEqual({
-      authenticated: true,
-      remoteAgentCatalogAvailable: true,
-      email: 'researcher@example.com',
-      tier: 'Max',
-    });
-  });
-
-  it('reports relay-only model auth without remote-catalog access', async () => {
+  it('reports a signed-in account without remote-catalog access', async () => {
     vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
     vi.spyOn(SupabaseClient, 'canAccessRemoteAgentCatalog').mockResolvedValue(
       false,
     );
     vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
-    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('Max');
 
     await expect(getSetupAuthStatus()).resolves.toEqual({
       authenticated: true,
       remoteAgentCatalogAvailable: false,
       email: undefined,
-      tier: 'Max',
     });
   });
 

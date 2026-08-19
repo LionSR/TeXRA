@@ -228,7 +228,6 @@ function makeSessionContext(): CliContext {
     quietLogs: true,
     helperModel: 'test-model',
     commandName: 'chat',
-    apiMode: 'included',
   });
 }
 

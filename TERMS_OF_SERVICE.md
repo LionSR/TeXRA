@@ -35,8 +35,8 @@ We reserve all rights not expressly granted in these Terms.
 ## 5. User Accounts and API Keys
 
 - **API Keys**: Certain features require you to provide your own API keys for third-party AI providers. You are solely responsible for obtaining, maintaining, and securing your API keys. API keys are stored locally using VS Code's built-in Secret Storage and are never transmitted to TeXRA servers. See Section 9 for details on how data is handled in this mode.
-- **Researcher Access Program**: TeXRA may offer access programs that provide limited access to AI models without requiring personal API keys. When using this program, requests are routed through a TeXRA-operated relay server (see Section 9 for details). Participation is limited to personal research and academic use, is subject to fair-use limits, and may be modified or discontinued at any time.
-- **Account Integrity**: You may only create and operate one account for your own personal use. To prevent abuse of free and Researcher Access tier resources, sign-up may be restricted by automated checks on the email address and the underlying identity provider account. In particular, we may reject sign-ups that:
+- **TeXRA Accounts**: A TeXRA account is optional and unlocks account-backed features such as the hosted research-agent catalog. Signing in does not route your model requests through TeXRA servers; model calls continue to use your own API keys or provider subscriptions. Account-backed features are subject to fair-use limits and may be modified or discontinued at any time.
+- **Account Integrity**: You may only create and operate one account for your own personal use. To prevent abuse of account-backed resources, sign-up may be restricted by automated checks on the email address and the underlying identity provider account. In particular, we may reject sign-ups that:
   1. use a disposable, temporary, or throwaway email provider;
   2. use a privacy / forwarding-only email provider that has been disproportionately associated with abuse;
   3. authenticate through a third-party identity provider account (e.g., a GitHub account) that was created very recently (typically within the last 30 days) or that otherwise has no meaningful prior history.
@@ -55,7 +55,7 @@ You agree not to use the Service to:
 6. Circumvent any access controls, rate limits, or usage restrictions.
 7. Use the Service for automated bulk processing in a manner that abuses third-party API services.
 8. Misrepresent AI-generated content as solely human-authored in contexts where disclosure is required.
-9. Create more than one account, or use disposable, temporary, throwaway, privacy-relay, or other newly-created or pseudonymous email or identity-provider accounts in order to obtain additional free or Researcher Access Program resources, or otherwise to circumvent per-user fair-use limits ("multi-accounting"). Accounts found to engage in such conduct, together with any other accounts we reasonably believe to be operated by the same person, may be suspended or terminated without notice and without refund. Quotas and credits associated with such accounts are forfeit.
+9. Create more than one account, or use disposable, temporary, throwaway, privacy-relay, or other newly-created or pseudonymous email or identity-provider accounts in order to obtain additional free or account-backed resources, or otherwise to circumvent per-user fair-use limits ("multi-accounting"). Accounts found to engage in such conduct, together with any other accounts we reasonably believe to be operated by the same person, may be suspended or terminated without notice and without refund. Quotas and credits associated with such accounts are forfeit.
 
 ## 7. Intellectual Property
 
@@ -68,10 +68,9 @@ If you voluntarily provide suggestions, ideas, enhancement requests, or other fe
 
 ## 9. Privacy and Data Handling
 
-- **Personal API Keys (Local Processing)**: When you use your own API keys, all calls to AI providers are made directly from your local device to the provider's endpoints. In this mode, your document content is not sent to or routed through TeXRA servers. Your API keys are stored locally (e.g., via VS Code's built-in Secret Storage or equivalent platform-specific secure storage) and are never transmitted to us.
-- **Researcher Access Program (Relay Processing)**: When you use the Researcher Access Program (server-side keys), your requests are routed through a TeXRA-operated relay server (`remote.texra.ai`) before being forwarded to the AI provider. In this mode, your document content temporarily passes through our relay infrastructure in order to authenticate the request. We do not read, analyze, or permanently store Your Content on the relay — it transits our servers solely for the purpose of forwarding the request to the AI provider.
-- **Third-Party Providers**: In both modes, your content is ultimately transmitted to the respective AI provider's API endpoints. You are responsible for reviewing and accepting the privacy policies and terms of service of your chosen AI provider(s).
-- **Telemetry**: When you are signed in to TeXRA (e.g., through the Researcher Access Program), the Service collects anonymized usage metadata — such as model name, token counts, estimated cost, and response time — to monitor service health and improve the product. Telemetry does not include Your Content. If you are not signed in, no telemetry data is collected or transmitted.
+- **Personal API Keys and Provider Subscriptions (Local Processing)**: All calls to AI providers are made directly from your local device to the provider's endpoints, using your own API keys or provider subscription credentials. Your document content is not sent to or routed through TeXRA servers. Your API keys are stored locally (e.g., via VS Code's built-in Secret Storage or equivalent platform-specific secure storage) and are never transmitted to us.
+- **Third-Party Providers**: Your content is transmitted to the respective AI provider's API endpoints. You are responsible for reviewing and accepting the privacy policies and terms of service of your chosen AI provider(s).
+- **Telemetry**: When you are signed in to TeXRA, the Service collects anonymized usage metadata — such as model name, token counts, estimated cost, and response time — to monitor service health and improve the product. Telemetry does not include Your Content. If you are not signed in, no telemetry data is collected or transmitted.
 
 ## 10. AI and Machine Learning
 
@@ -96,7 +95,7 @@ A current list of supported providers and their operating jurisdictions is avail
 
 ## 13. Free and Beta Services
 
-Certain features of the Service, including the Researcher Access Program, may be offered free of charge or in beta. These features are provided without any service level commitments and may be modified, suspended, or discontinued at any time without notice. We make no guarantees regarding availability, uptime, or continued support for free or beta features.
+Certain features of the Service, including the hosted research-agent catalog, may be offered free of charge or in beta. These features are provided without any service level commitments and may be modified, suspended, or discontinued at any time without notice. We make no guarantees regarding availability, uptime, or continued support for free or beta features.
 
 ## 14. Assumption of Risk
 

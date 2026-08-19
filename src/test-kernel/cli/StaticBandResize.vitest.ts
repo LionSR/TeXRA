@@ -46,7 +46,6 @@ const TRANSCRIPT_SESSION: Omit<SessionMeta, 'cwd'> = {
   category: AgentCategory.ToolUse,
   model: 'test-model',
   modelSource: 'builtin-default',
-  apiMode: 'personal',
   approvalPolicy: 'ask',
   canDelegate: false,
   transcriptMode: 'persistent',

@@ -92,7 +92,7 @@ const SETTINGS_TAB_METADATA: Record<
   ACCOUNT: {
     icon: 'circle-user',
     label: 'Account & Usage',
-    description: 'Manage sign-in, included access, and current model usage.',
+    description: 'Manage sign-in and current model usage.',
   },
   SUBSCRIPTIONS: {
     icon: 'gem',

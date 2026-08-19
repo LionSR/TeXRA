@@ -8,13 +8,8 @@ import { z } from 'zod';
 
 import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
 import { ProviderSettingDefSchema } from '@shared/constants/providers';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 
 import { commandOnly } from './messageFactories';
-import {
-  SpendingStatusErrorSchema,
-  SpendingStatusSchema,
-} from './spendingStatus';
 
 // ============================================================
 // Data schemas
@@ -25,25 +20,14 @@ import {
  * frontend's pre-hydration state can share them instead of restating the
  * literals.
  */
-export const DEFAULT_QUOTA_AUTO_SWITCHED = false;
 export const DEFAULT_GLOBAL_STREAMING = true;
 
 const ProfileUserSchema = z.object({
   email: z.string(),
 });
 
-const ApiAccessModeSchema = z.enum(['included', 'personal']);
-export type ApiAccessMode = z.infer<typeof ApiAccessModeSchema>;
 const SessionProblemSchema = z.enum(['expired', 'unavailable']);
 export type SessionProblem = z.infer<typeof SessionProblemSchema>;
-export const API_ACCESS_MODE_OPTIONS: readonly {
-  readonly value: ApiAccessMode;
-  readonly label: string;
-  readonly description: string;
-}[] = [
-  { value: 'included', ...INCLUDED_ACCESS.option },
-  { value: 'personal', ...OWN_API_KEYS.option },
-] as const;
 
 /**
  * A native configuration toggle surfaced in a provider's expanded settings.
@@ -87,16 +71,11 @@ export const UpdateProfileMessageSchema = z.object({
   command: z.literal(PROFILE_VIEW_COMMANDS.UPDATE_PROFILE),
   authenticated: z.boolean(),
   user: ProfileUserSchema.nullable(),
-  tier: z.string(),
-  apiAccessMode: ApiAccessModeSchema,
   /**
    * Why a stored session could not provide a fresh token. Invalid credentials
    * require reconnection; transient failures should instead invite a retry.
    */
   sessionProblem: SessionProblemSchema.nullable().prefault(null),
-  spendingStatus: SpendingStatusSchema.nullish(),
-  spendingStatusError: SpendingStatusErrorSchema.nullish(),
-  quotaAutoSwitched: z.boolean().prefault(DEFAULT_QUOTA_AUTO_SWITCHED),
   providerKeyStatuses: z.array(ProviderKeyStatusSchema).prefault([]),
   globalStreamingDefault: z.boolean().prefault(DEFAULT_GLOBAL_STREAMING),
 });
@@ -110,8 +89,3 @@ export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
 export const SignInMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_IN);
 
 export const SignOutMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_OUT);
-
-export const SetApiAccessModeInboundMessageSchema = z.object({
-  command: z.literal(PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE),
-  mode: ApiAccessModeSchema,
-});

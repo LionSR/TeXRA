@@ -114,7 +114,7 @@ describe('model client route publication', () => {
     const initial = { route: 'configured' } as const;
     const candidate = { route: 'personal' } as const;
     const routes = new Map<TestClient, ModelCredentialRoute>([
-      [initial, 'relay'],
+      [initial, 'openrouter'],
       [candidate, 'api-key'],
     ]);
     const cell = testModelCell<TestClient>({
@@ -126,7 +126,7 @@ describe('model client route publication', () => {
     });
 
     await cell.getClient();
-    expect(cell.route).toBe('relay');
+    expect(cell.route).toBe('openrouter');
 
     await cell.rebind('personal');
     await expect(cell.getClient()).resolves.toBe(candidate);
@@ -140,13 +140,9 @@ describe('model client route publication', () => {
     const first = {} as GoogleGenAI;
     const sameCredential = {} as GoogleGenAI;
     const replacement = {} as GoogleGenAI;
-    const relayBeforeRefresh = {} as GoogleGenAI;
-    const relayAfterRefresh = {} as GoogleGenAI;
     probe.tag(first, 'api-key', 'secret-a');
     probe.tag(sameCredential, 'api-key', 'secret-a');
     probe.tag(replacement, 'api-key', 'secret-b');
-    probe.tag(relayBeforeRefresh, 'relay', 'relay-token');
-    probe.tag(relayAfterRefresh, 'relay', 'rotated-relay-token');
 
     expect(probe.getCredentialRouteForClient(first)).toBe('api-key');
     // Same credential ⇒ same wire route; a replaced key splits the route.
@@ -157,11 +153,6 @@ describe('model client route publication', () => {
       probe.getWireRouteKey(replacement),
     );
     expect(probe.getWireRouteKey(first)).not.toContain('secret-a');
-    // Relay identity is the route itself, so ordinary token rotation does not
-    // split recovery coordination.
-    expect(probe.getWireRouteKey(relayAfterRefresh)).toBe(
-      probe.getWireRouteKey(relayBeforeRefresh),
-    );
     expect(
       probe.getCredentialRouteForClient({} as GoogleGenAI),
     ).toBeUndefined();

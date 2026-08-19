@@ -1,21 +1,19 @@
 // First-run authentication onboarding for the interactive `texra` CLI.
 //
-// A credential picker with three first-class paths (ChatGPT subscription,
-// Researcher Access, bring-your-own provider key) plus an explicit skip. After
+// A credential picker with two first-class paths (ChatGPT subscription,
+// bring-your-own provider key) plus an explicit skip. After
 // credentials are set the caller re-reads availability in the SAME process
-// (the included/ChatGPT/personal paths invalidate the relevant caches), so the
+// (the ChatGPT/key paths invalidate the relevant caches), so the
 // launcher/chat continues with real models, with no restart.
 //
 // TTY-only: the gate returns immediately in headless / non-TTY / dumb-terminal
 // runs, and both entry points already reject those before calling it, so
 // `texra run` / `--print` / piped output stay byte-identical (headless parity).
 
-import { Box, Text, useApp, useInput } from 'ink';
+import { Box, Text, useApp } from 'ink';
 import { useState } from 'react';
 
 import { listExecutions } from '@agent/storage';
-import type { SupabaseSession } from '@auth/SupabaseSession';
-import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import type { CodexSession } from '@auth/codex';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
@@ -32,7 +30,6 @@ import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
-import type { ApiAccessMode } from '@shared/schemas';
 import {
   backfillFirstRunDone,
   readOnboardingFlags,
@@ -45,32 +42,16 @@ import {
   ONBOARDING_CARD_TITLE,
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
-  ONBOARDING_CHOICE_SIGN_IN,
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
-import { INCLUDED_ACCESS, OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
-import { setCliApiMode } from '../runtime/apiAccessMode';
 import { signInCliChatGpt } from '../runtime/chatgptLogin';
-import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
-import { cliApiFallbackSelection } from '../runtime/modelAccessRoute';
-import { updateCliModelAccess } from '../runtime/modelAccessSelection';
+import { hasCliRunCredential } from '../runtime/credentialStatus';
 import { saveProviderApiKey } from '../runtime/providerApiKey';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
-import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
-import {
-  CLI_MANUAL_AUTH_REMOTE_HINT,
-  CLI_MANUAL_AUTH_URL_PROMPT,
-  signInCliSupabase,
-  signInCliSupabaseDeviceCode,
-} from '../runtime/supabaseAuth';
-import {
-  CLI_DEVICE_AUTH_URL_PROMPT,
-  type DeviceAuthorization,
-} from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { formatSavedKeySummary } from './onboardingState';
@@ -95,7 +76,6 @@ interface OnboardingGateContext {
   readonly stdoutIsTty?: boolean;
   readonly termIsDumb?: boolean;
   readonly stdoutColorEnabled?: boolean;
-  readonly apiMode?: ApiAccessMode;
 }
 
 const LOG_CHANNEL = 'CLI Onboarding';
@@ -144,7 +124,7 @@ export async function maybeRunCliOnboarding(
     return NO_ONBOARDING_RESULT;
   }
   const globalState = platform().globalState;
-  const hasCredential = await hasCliCredentialForApiMode(context.apiMode);
+  const hasCredential = await hasCliRunCredential();
   // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI user
   // with execution history never enters State 0/1. Credential presence alone
   // does not prove this is an upgrader: fresh installs can inherit env keys.
@@ -202,7 +182,6 @@ export async function maybeRunCliOnboarding(
   }
   return runOnboardingFlow({
     firstRun: true,
-    apiMode: context.apiMode,
     colorEnabled: context.stdoutColorEnabled,
   });
 }
@@ -223,7 +202,6 @@ export async function runCliOnboarding(
 
 async function runOnboardingFlow(options: {
   readonly firstRun: boolean;
-  readonly apiMode?: ApiAccessMode;
   readonly colorEnabled?: boolean;
 }): Promise<CliOnboardingResult> {
   const picker = onboardingPicker(options);
@@ -277,14 +255,7 @@ async function runOnboardingFlow(options: {
   return { configured: resolution.configured, declined: resolution.declined };
 }
 
-type Screen =
-  | 'picker'
-  | 'relay-provider'
-  | 'relay-progress'
-  | 'relay-device-progress'
-  | 'chatgpt-progress'
-  | 'key-provider'
-  | 'key-entry';
+type Screen = 'picker' | 'chatgpt-progress' | 'key-provider' | 'key-entry';
 
 interface OnboardingAppProps {
   readonly pickerSubtitle: string;
@@ -295,10 +266,6 @@ interface OnboardingAppProps {
 function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
   const app = useApp();
   const [screen, setScreen] = useState<Screen>('picker');
-  const [relayProvider, setRelayProvider] = useState<OAuthProvider>(
-    DEFAULT_OAUTH_PROVIDER,
-  );
-  const [noBrowser, setNoBrowser] = useState(false);
   const [keyProvider, setKeyProvider] = useState<ApiProvider>('anthropic');
   const [error, setError] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
@@ -324,50 +291,6 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
           setError(undefined);
           setScreen(PICKER_CHOICE_SCREENS[choice]);
         }}
-      />
-    );
-  }
-
-  if (screen === 'relay-provider') {
-    return (
-      <RelayProviderStep
-        activeProvider={relayProvider}
-        noBrowser={noBrowser}
-        error={error}
-        onToggleNoBrowser={() => setNoBrowser((v) => !v)}
-        onSelect={(provider) => {
-          setError(undefined);
-          setRelayProvider(provider);
-          setScreen('relay-progress');
-        }}
-        onDeviceCode={() => {
-          setError(undefined);
-          setScreen('relay-device-progress');
-        }}
-        onCancel={() => setScreen('picker')}
-      />
-    );
-  }
-
-  if (screen === 'relay-progress' || screen === 'relay-device-progress') {
-    const onSuccess = (label: string): void =>
-      finish({
-        configured: true,
-        declined: false,
-        summary: `Signed in as ${label}. ${INCLUDED_ACCESS.label} is active.`,
-      });
-    const onError = (message: string): void => {
-      setError(message);
-      setScreen('relay-provider');
-    };
-    return screen === 'relay-device-progress' ? (
-      <RelayDeviceProgressStep onSuccess={onSuccess} onError={onError} />
-    ) : (
-      <RelayProgressStep
-        provider={relayProvider}
-        noBrowser={noBrowser}
-        onSuccess={onSuccess}
-        onError={onError}
       />
     );
   }
@@ -423,14 +346,11 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
           void (async () => {
             try {
               await saveProviderApiKey(keyProvider, key);
-              const selection = await updateCliModelAccess(
-                undefined,
-                cliApiFallbackSelection('personal'),
-              );
+              invalidateModelOptionsCache();
               finish({
                 configured: true,
                 declined: false,
-                summary: formatSavedKeySummary(keyProvider, selection),
+                summary: formatSavedKeySummary(keyProvider),
               });
             } catch (saveError: unknown) {
               setSaving(false);
@@ -469,7 +389,7 @@ function OnboardingFrame(props: {
   );
 }
 
-type OnboardingChoice = 'relay' | 'chatgpt' | 'key' | 'skip';
+type OnboardingChoice = 'chatgpt' | 'key' | 'skip';
 type OnboardingSetupPath = Exclude<OnboardingChoice, 'skip'>;
 type OnboardingPickerItem = SelectItem<OnboardingChoice>;
 
@@ -477,11 +397,6 @@ const SETUP_PATH_PICKER_ITEMS: Record<
   OnboardingSetupPath,
   OnboardingPickerItem
 > = {
-  relay: {
-    value: 'relay',
-    label: ONBOARDING_CHOICE_SIGN_IN.label,
-    description: ONBOARDING_CHOICE_SIGN_IN.description,
-  },
   chatgpt: {
     value: 'chatgpt',
     label: ONBOARDING_CHOICE_CHATGPT.label,
@@ -508,7 +423,6 @@ interface OnboardingPicker {
 /** Picker copy and the credential paths offered, for one entry point. */
 function onboardingPicker(props: {
   readonly firstRun: boolean;
-  readonly apiMode?: ApiAccessMode;
 }): OnboardingPicker {
   const picker = (
     subtitle: string,
@@ -522,33 +436,16 @@ function onboardingPicker(props: {
   });
 
   if (!props.firstRun) {
-    return picker('Choose how to power model calls:', [
-      'chatgpt',
-      'relay',
-      'key',
-    ]);
-  }
-  if (props.apiMode === 'included') {
-    return picker(
-      `Sign in to use a subscription or ${INCLUDED_ACCESS.inline} for this run:`,
-      ['chatgpt', 'relay'],
-    );
-  }
-  if (props.apiMode === 'personal') {
-    return picker(
-      `To use ${OWN_API_KEYS.inline} for this run, sign in to ChatGPT or add a provider key:`,
-      ['chatgpt', 'key'],
-    );
+    return picker('Choose how to power model calls:', ['chatgpt', 'key']);
   }
   return picker(
-    'Not signed in, and no provider API key is configured. Choose how to power model calls:',
-    ['chatgpt', 'relay', 'key'],
+    'No provider API key is configured. Choose how to power model calls:',
+    ['chatgpt', 'key'],
   );
 }
 
 /** Screen each non-skip picker choice opens (skip resolves the gate instead). */
 const PICKER_CHOICE_SCREENS: Record<OnboardingSetupPath, Screen> = {
-  relay: 'relay-provider',
   chatgpt: 'chatgpt-progress',
   key: 'key-provider',
 };
@@ -580,186 +477,21 @@ function PickerStep(props: {
   );
 }
 
-function RelayProviderStep(props: {
-  readonly activeProvider: OAuthProvider;
-  readonly noBrowser: boolean;
-  readonly error?: string;
-  readonly onToggleNoBrowser: () => void;
-  readonly onSelect: (provider: OAuthProvider) => void;
-  readonly onDeviceCode: () => void;
-  readonly onCancel: () => void;
-}): React.JSX.Element {
-  // `n` toggles no-browser and `d` starts device-code sign-in. The Select
-  // child ignores both letters, so the two active useInput handlers never
-  // collide on them.
-  useInput((input, key) => {
-    if (key.ctrl || key.meta) return;
-    if (input.toLowerCase() === 'n') props.onToggleNoBrowser();
-    if (input.toLowerCase() === 'd') props.onDeviceCode();
-  });
-
-  let subtitle: string;
-  if (props.noBrowser) {
-    subtitle =
-      'No-browser mode: we print the sign-in URL instead of opening it.';
-  } else if (isLikelyRemoteSession()) {
-    subtitle =
-      'Remote session detected — press d for device-code sign-in (no callback port needed).';
-  } else {
-    subtitle = 'Choose a provider to sign in with:';
-  }
-
-  return (
-    <OnboardingFrame
-      title="Sign in · Researcher Access"
-      subtitle={subtitle}
-      error={props.error}
-      hints={[
-        { key: '↑/↓', action: 'navigate' },
-        { key: `1-${CLI_OAUTH_PROVIDER_ITEMS.length}/Enter`, action: 'select' },
-        { key: 'n', action: 'no-browser' },
-        { key: 'd', action: 'device code' },
-        { key: 'Esc', action: 'back' },
-      ]}
-    >
-      <Select<OAuthProvider>
-        items={CLI_OAUTH_PROVIDER_ITEMS}
-        activeValue={props.activeProvider}
-        onSelect={props.onSelect}
-        onCancel={props.onCancel}
-      />
-    </OnboardingFrame>
-  );
-}
-
-interface RelayProgressCallbacks {
-  readonly onSuccess: (accountLabel: string) => void;
-  readonly onError: (message: string) => void;
-}
-
-/**
- * Run a sign-in exactly once on mount. Empty deps is deliberate (not the
- * captured props): re-running would open a second browser + loopback server
- * (or request a second device code), and a deps-triggered cleanup would flip
- * `isCancelled()` and orphan the in-flight login (eternal spinner). The
- * captured callbacks only invoke stable state setters / app.exit, so the
- * mount-time closure stays correct. `isCancelled()` guards against the real
- * unmount (the user navigating away); progress callbacks receive it to drop
- * late updates.
- */
-function useSignInOnMount(
-  signIn: (isCancelled: () => boolean) => Promise<SupabaseSession>,
-  callbacks: RelayProgressCallbacks,
-): void {
-  useCancellableEffect(async (isCancelled) => {
-    try {
-      const session = await signIn(isCancelled);
-      // Picking Researcher Access in the funnel is the mode choice itself, so
-      // record it here. Signing in does not touch the preference on its own:
-      // a credential says who you are, not which route you want.
-      await setCliApiMode('included');
-      if (!isCancelled()) callbacks.onSuccess(session.account.label);
-    } catch (loginError: unknown) {
-      if (!isCancelled()) callbacks.onError(toErrorMessage(loginError));
-    }
-  }, []);
-}
-
-function RelayProgressFrame(props: {
-  readonly title?: string;
+function ProgressFrame(props: {
+  readonly title: string;
   readonly spinnerLabel: string;
   readonly children: React.ReactNode;
 }): React.JSX.Element {
   return (
     <BorderedPanel
       color={COLOR_HINT}
-      title={props.title ?? 'Sign in · Researcher Access'}
+      title={props.title}
       footer={<LoadingIndicator label={props.spinnerLabel} />}
     >
       <Box marginTop={1} flexDirection="column">
         {props.children}
       </Box>
     </BorderedPanel>
-  );
-}
-
-function RelayProgressStep(
-  props: RelayProgressCallbacks & {
-    readonly provider: OAuthProvider;
-    readonly noBrowser: boolean;
-  },
-): React.JSX.Element {
-  const { provider, noBrowser } = props;
-  const [url, setUrl] = useState<string | undefined>(undefined);
-
-  useSignInOnMount(
-    (isCancelled) =>
-      signInCliSupabase({
-        provider,
-        openBrowser: !noBrowser,
-        manualBrowserHint: 'texra login --no-browser',
-        onAuthUrl: (authUrl) => {
-          if (!isCancelled()) setUrl(authUrl);
-        },
-      }),
-    props,
-  );
-
-  return (
-    <RelayProgressFrame spinnerLabel="Waiting for you to finish in the browser… (Ctrl-C cancels)">
-      <Text>
-        {noBrowser
-          ? CLI_MANUAL_AUTH_URL_PROMPT
-          : `Opening your browser to sign in with ${provider}…`}
-      </Text>
-      {url ? (
-        <Text color={COLOR_HINT}>{url}</Text>
-      ) : (
-        <Text dimColor>
-          {noBrowser
-            ? 'Preparing the sign-in URL…'
-            : "If it doesn't open, the URL will appear here."}
-        </Text>
-      )}
-      {noBrowser ? <Text dimColor>{CLI_MANUAL_AUTH_REMOTE_HINT}</Text> : null}
-    </RelayProgressFrame>
-  );
-}
-
-function RelayDeviceProgressStep(
-  props: RelayProgressCallbacks,
-): React.JSX.Element {
-  const [deviceAuth, setDeviceAuth] = useState<DeviceAuthorization | undefined>(
-    undefined,
-  );
-
-  useSignInOnMount(
-    (isCancelled) =>
-      signInCliSupabaseDeviceCode({
-        onDeviceCode: (authorization) => {
-          if (!isCancelled()) setDeviceAuth(authorization);
-        },
-      }),
-    props,
-  );
-
-  return (
-    <RelayProgressFrame spinnerLabel="Waiting for you to approve in the browser… (Ctrl-C cancels)">
-      <Text>{CLI_DEVICE_AUTH_URL_PROMPT}</Text>
-      {deviceAuth ? (
-        <>
-          <Text color={COLOR_HINT}>{deviceAuth.verification_uri}</Text>
-          <Text>
-            and enter this code:{' '}
-            <Text bold color={COLOR_HINT}>
-              {deviceAuth.user_code}
-            </Text>
-          </Text>
-        </>
-      ) : (
-        <Text dimColor>Requesting a sign-in code…</Text>
-      )}
-    </RelayProgressFrame>
   );
 }
 
@@ -794,7 +526,7 @@ function ChatGptProgressStep(
       if (!update.effective) {
         if (!isCancelled()) {
           props.onError(
-            'Signed in with ChatGPT, but a more specific setting keeps the subscription disabled. Choose Researcher Access or a provider API key instead.',
+            'Signed in with ChatGPT, but a more specific setting keeps the subscription disabled. Add a provider API key instead.',
           );
         }
         return;
@@ -807,14 +539,14 @@ function ChatGptProgressStep(
   }, []);
 
   return (
-    <RelayProgressFrame
+    <ProgressFrame
       title={ONBOARDING_CHOICE_CHATGPT.label}
       spinnerLabel="Waiting for ChatGPT sign-in… (Ctrl-C cancels)"
     >
       {message.split('\n').map((line, index) => (
         <Text key={`${index}:${line}`}>{line}</Text>
       ))}
-    </RelayProgressFrame>
+    </ProgressFrame>
   );
 }
 

@@ -134,7 +134,6 @@ export async function showCliSessionStatus(
       model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        apiMode: meta.apiMode,
         subscriptionActive,
         grokSubscriptionActive,
         kimiCodeActive,

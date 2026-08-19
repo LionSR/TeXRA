@@ -9,7 +9,6 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import { providerDisplayName } from '@shared/constants/providers';
-import type { CliModelAccessSelectionResult } from '../runtime/modelAccessSelection';
 
 /**
  * Human-facing "we stored your key here" line. Naming the exact secret entry
@@ -20,11 +19,8 @@ export function describeSavedKeyLocation(provider: ApiProvider): string {
   return `Stored in TeXRA secrets as \`${apiKeySecretName(provider)}\` (or set ${apiKeyEnvName(provider)} in your environment).`;
 }
 
-export function formatSavedKeySummary(
-  provider: ApiProvider,
-  selection: CliModelAccessSelectionResult,
-): string {
+export function formatSavedKeySummary(provider: ApiProvider): string {
   return `Saved your ${providerDisplayName(
     provider,
-  )} API key. ${describeSavedKeyLocation(provider)} ${selection.message}`;
+  )} API key. ${describeSavedKeyLocation(provider)}`;
 }

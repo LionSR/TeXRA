@@ -8,9 +8,8 @@ import {
   tryDefaultSession,
 } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
+import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
@@ -65,12 +64,7 @@ const installedShutdownHandlers: Partial<
 
 type CliPlatformInitOptions = Pick<
   CliContext,
-  | 'apiMode'
-  | 'cwd'
-  | 'helperModel'
-  | 'resourcesPath'
-  | 'skillSourceOptions'
-  | 'version'
+  'cwd' | 'helperModel' | 'resourcesPath' | 'skillSourceOptions' | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
   readonly storageRoot?: string;
@@ -188,7 +182,6 @@ export async function initLocalCliPlatform(
   await initCliPlatform({
     ...context,
     quietLogs: true,
-    skipIncludedModelAccess: true,
   });
 }
 
@@ -217,14 +210,13 @@ export async function initLocalCliPlatform(
  */
 export async function initInteractiveCliPlatform(
   context: Omit<CliPlatformInitOptions, 'installSignalHandlers'> &
-    Pick<CliContext, 'quietLogs'> & { skipIncludedModelAccess?: boolean },
+    Pick<CliContext, 'quietLogs'>,
 ): Promise<void> {
   await initCliPlatform(context);
 }
 
 export async function initCliPlatform(
-  context: CliPlatformInitOptions &
-    Pick<CliContext, 'quietLogs'> & { skipIncludedModelAccess?: boolean },
+  context: CliPlatformInitOptions & Pick<CliContext, 'quietLogs'>,
 ): Promise<void> {
   cliWorkspaceCwd = context.cwd;
   quietPlatformLogs = context.quietLogs;
@@ -285,9 +277,9 @@ export async function initCliPlatform(
         },
       }),
     );
-    // TeXRA's account plane (subscription relay + ChatGPT sign-in). Without
-    // this the model layer is bring-your-own-key. See installTexraModelAccess.
-    installTexraModelAccess();
+    // TeXRA's account plane (ChatGPT / Grok sign-in). Without
+    // this the model layer is bring-your-own-key. See installTexraAccountProbes.
+    installTexraAccountProbes();
 
     // Reconcile the persisted enabled-models list against the current curated
     // defaults, as the extension and desktop hosts do at startup. The list
@@ -364,8 +356,8 @@ export async function initCliPlatform(
     applyCliGitAuthorConfig(platform().config);
 
     // Route CLI model traffic to the same Supabase usage log the extension
-    // writes to, tagged with editorType 'cli' and the CLI version so relay
-    // pricing stays version-aware. dispose() flushes any queued entries; it
+    // writes to, tagged with editorType 'cli' and the CLI version.
+    // dispose() flushes any queued entries; it
     // runs on normal exit (bin/texra.ts finally) and on signals, both of
     // which call lifecycle.runShutdown().
     UsageLogService.initialize({}, context.version, 'cli');
@@ -387,29 +379,6 @@ export async function initCliPlatform(
     },
   });
 
-  const useOpenRouter = getUseOpenRouter();
-  if (context.apiMode === 'included' && useOpenRouter) {
-    await tryPlatform()?.globalState.update(
-      GlobalStateKey.USE_OPENROUTER,
-      false,
-    );
-    invalidateModelOptionsCache();
-  }
-
-  // Only an explicit launch selection writes the preference. Whether a session
-  // actually exists is resolved per request by the model layer, which reports
-  // the sign-in requirement itself; deriving the stored preference from the
-  // current auth state here would clobber a choice the user made in another
-  // host, since the setting lives in shared `~/.texra` state.
-  const forcePersonalApiKeys =
-    context.skipIncludedModelAccess === true ||
-    context.apiMode === 'personal' ||
-    (context.apiMode !== 'included' && useOpenRouter);
-  if (forcePersonalApiKeys) {
-    await getServerSideKeyService().setUseIncludedModelAccess(false);
-  } else if (context.apiMode === 'included') {
-    await getServerSideKeyService().setUseIncludedModelAccess(true);
-  }
   await setCliHelperModel(context.helperModel);
   initializeBundledPrompts(context.resourcesPath);
 

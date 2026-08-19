@@ -1,5 +1,4 @@
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import type { ApiAccessMode } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import type { CliOutputFormat } from '../schemas/cliSettings';
@@ -18,7 +17,6 @@ export interface ParsedGlobalArgs {
   readonly cwd?: string;
   readonly 'output-format'?: CliOutputFormat;
   readonly 'approval-policy'?: TexraApprovalPolicy;
-  readonly 'api-mode'?: ApiAccessMode | string;
   // Positively-named boolean (default `true`); citty sets this to `false`
   // when the user passes `--no-color`.
   readonly color?: boolean;
@@ -51,9 +49,6 @@ export function pickGlobalArgs(
     cwd: isNonEmptyString(args.cwd) ? args.cwd : undefined,
     outputFormat: args['output-format'],
     approvalPolicy: args['approval-policy'],
-    apiMode: isNonEmptyString(args['api-mode'])
-      ? args['api-mode'].trim()
-      : undefined,
     // `--no-input` is intentionally not registered as `input` so it does not
     // become a leading global `--input <file>` flag. citty still parses the
     // negative spelling as `input: false`, which is safe to recognize here

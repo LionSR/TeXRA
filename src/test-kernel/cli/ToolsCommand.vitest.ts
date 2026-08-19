@@ -32,14 +32,7 @@ const { runCli } = await import('@cli/commands/root');
 /** Run `texra tools <args>` with the shared headless flag tail every
  *  structured-output invocation in this suite carries. */
 function runToolsCli(args: readonly string[]): ReturnType<typeof runCli> {
-  return runCli([
-    'tools',
-    ...args,
-    '--print',
-    '--api-mode',
-    'personal',
-    '--no-color',
-  ]);
+  return runCli(['tools', ...args, '--print', '--no-color']);
 }
 
 describe('CLI tools command', () => {

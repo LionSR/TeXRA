@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as agentRegistry from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSession } from '@auth/SupabaseSession';
-import { setServerSideKeyService } from '@auth/serverKeys';
 import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
 import {
   createDesktopProtocolCallbackRouter,
@@ -219,7 +218,6 @@ function installAuthenticatedSupabaseProvider() {
     id: 'user-1',
     email: 'user@example.com',
   } as never);
-  vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('free');
   return { ensureFreshToken, getSessionTokens, getStoredSessionState };
 }
 
@@ -852,20 +850,6 @@ describe('desktop Supabase auth', () => {
     expect(coordinator.storeSession).not.toHaveBeenCalled();
   });
 
-  it('clears included-access caches on sign-out', async () => {
-    const clearAllCaches = vi.fn();
-    setServerSideKeyService({ clearAllCaches } as never);
-    const { coordinator, auth } = createAuthSetup();
-
-    await auth.signOut();
-
-    expect(coordinator.clearSession).toHaveBeenCalled();
-    expect(clearAllCaches).toHaveBeenCalledOnce();
-    expect(
-      agentRegistry.invalidateRemoteAgentsAfterSignOut,
-    ).toHaveBeenCalledOnce();
-  });
-
   it('still publishes sign-out when the local catalog rebuild fails', async () => {
     vi.mocked(
       agentRegistry.invalidateRemoteAgentsAfterSignOut,
@@ -897,7 +881,6 @@ describe('desktop Supabase auth', () => {
     expect(message).toMatchObject({
       authenticated: true,
       user: { email: 'user@example.com' },
-      tier: 'free',
     });
   });
 });

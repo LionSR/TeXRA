@@ -22,7 +22,6 @@ import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
-  ONBOARDING_CHOICE_SIGN_IN,
 } from '@shared/copy/onboarding';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -94,11 +93,6 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
       id: 'chatgpt' as const,
     },
     {
-      label: `$(sign-in) ${ONBOARDING_CHOICE_SIGN_IN.label}`,
-      description: ONBOARDING_CHOICE_SIGN_IN.description,
-      id: 'signIn' as const,
-    },
-    {
       label: `$(key) ${ONBOARDING_CHOICE_API_KEY.label}`,
       description: ONBOARDING_CHOICE_API_KEY.description,
       id: 'apiKey' as const,
@@ -126,9 +120,6 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
   switch (picked.id) {
     case 'chatgpt':
       await signInWithChatGptSubscription(CHANNEL);
-      break;
-    case 'signIn':
-      await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
       break;
     case 'apiKey':
       await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
@@ -222,11 +213,11 @@ export async function launchSetupAssistant(): Promise<
 
     const resolution = await selectLaunchModel();
     if (!resolution) {
-      // Edge case: signed in with Included Access but tier excludes every
-      // setup-model candidate, and no direct/OR keys to fall back on.
-      // Refuse launch rather than pick a model that crashes at runtime.
+      // Edge case: no setup-model candidate is usable with the current
+      // credentials. Refuse launch rather than pick a model that crashes at
+      // runtime.
       const choice = await vscode.window.showWarningMessage(
-        'No model is available with your current keys and Researcher Access tier. Add a provider API key, sign in with your ChatGPT subscription, or upgrade your tier, then try again.',
+        'No model is available with your current keys. Add a provider API key or sign in with your ChatGPT subscription, then try again.',
         { modal: true },
         'Open Models tab',
         'Set API key',
