@@ -332,6 +332,7 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
   // the state that keeps a multi-file edit honest. `edit` preserves the CLI's
   // fallback label when neither the candidate nor the call names a file.
   let labelledPath = ctx.filePath || 'edit';
+  let labelledFallback = !ctx.filePath;
   if (ctx.filePath) {
     sections.push({
       kind: 'file',
@@ -346,10 +347,10 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
     // fallback independently for every candidate so a pathless edit after a
     // named one returns to the call-level label instead of inheriting its
     // predecessor's file.
+    const usesFallback = candidate.path === undefined && !ctx.filePath;
     const effectivePath = candidate.path ?? (ctx.filePath || 'edit');
-    const switchedToFallback =
-      effectivePath === 'edit' && effectivePath !== labelledPath;
-    if (effectivePath !== 'edit' && effectivePath !== labelledPath) {
+    const switchedToFallback = usesFallback && !labelledFallback;
+    if (!usesFallback && (effectivePath !== labelledPath || labelledFallback)) {
       sections.push({
         kind: 'file',
         label: 'File:',
@@ -358,10 +359,11 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
       });
     }
     labelledPath = effectivePath;
+    labelledFallback = usesFallback;
     sections.push({
       kind: 'diff',
       label: switchedToFallback ? 'File: edit' : '',
-      ...(switchedToFallback ? { fileLabel: 'edit' } : {}),
+      ...(usesFallback ? { fileLabel: 'edit' } : {}),
       oldText: candidate.oldText,
       newText: candidate.newText,
     });
