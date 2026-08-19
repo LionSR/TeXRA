@@ -162,9 +162,6 @@ importers:
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
-      mark.js:
-        specifier: ^8.11.1
-        version: 8.11.1
       markdown-it:
         specifier: ^15.0.0
         version: 15.0.0
@@ -886,9 +883,6 @@ importers:
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
-      mark.js:
-        specifier: ^8.11.1
-        version: 8.11.1
       markdown-it:
         specifier: ^15.0.0
         version: 15.0.0
@@ -5135,9 +5129,6 @@ packages:
   make-asynchronous@1.1.0:
     resolution: {integrity: sha512-ayF7iT+44LXdxJLTrTd3TLQpFDDvPCBxXxbv+pMUSuHA5Q8zyAfwkRP6aHHwNVFBUFWtxAHqwNJxF8vMZLAbVg==}
     engines: {node: '>=18'}
-
-  mark.js@8.11.1:
-    resolution: {integrity: sha512-1I+1qpDt4idfgLQG+BNWmrqku+7/2bi5nLf4YwF8y8zXvmfiTBY3PV3ZibfrjBueCByROpuBjLLFCajqkgYoLQ==}
 
   markdown-it-texmath@1.0.0:
     resolution: {integrity: sha512-4hhkiX8/gus+6e53PLCUmUrsa6ZWGgJW2XCW6O0ASvZUiezIK900ZicinTDtG3kAO2kon7oUA/ReWmpW2FByxg==}
@@ -11006,8 +10997,6 @@ snapshots:
       p-event: 6.0.1
       type-fest: 4.41.0
       web-worker: 1.5.0
-
-  mark.js@8.11.1: {}
 
   markdown-it-texmath@1.0.0: {}
 
