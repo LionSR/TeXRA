@@ -1,6 +1,3 @@
-// Standard library imports
-import * as path from 'node:path';
-
 // Third-party imports
 import pMap from 'p-map';
 
@@ -16,6 +13,7 @@ import {
 
 // Local imports - utils
 import { ensureArray } from '@utils/core';
+import { getPromptFileName } from '@utils/prompt';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { getMimeType } from '@utils/files/mimeUtils';
 import { getExtensionLowercase } from '@utils/core/pathCore';
@@ -296,7 +294,10 @@ export class MediaAttachmentProcessor {
     fileExtension: string,
     processed: ProcessedMediaResult,
   ): MediaEntry | MediaEntry[] {
-    const baseName = path.basename(mediaFile);
+    // Same rule as a text document's <document name="…">: workspace-relative,
+    // so figures/setup/panel.pdf and figures/results/panel.pdf stay distinct to
+    // the model. Provider filename fields basename it at their own call site.
+    const baseName = getPromptFileName(absolutePath);
     const isPdf = processed.kind === 'image' && fileExtension === '.pdf';
 
     if (
