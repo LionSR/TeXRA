@@ -80,6 +80,12 @@ app.getVersion(), 'desktop')` with a BEFORE-phase `dispose()`, and
 > compliance map. Where the two docs disagree on an estimate, the companion
 > doc's per-field accounting supersedes this doc's sweep-level estimate.
 
+> **Composition-root plane executed (2026-08-19, #10991, merge `df86f1989f`).**
+> The "§2c is untouched" claim in the `e00b9317f7` reconciliation above is
+> superseded: C4/V10, C5, C7, C8 and C15 landed in one PR (one composition
+> root for all three hosts — see §2c's status note), and C6 is struck as
+> refuted rather than re-queued. C9/V11a remains open on this plane.
+
 The question this audit answers, as the maintainer posed it: after the
 substrate campaign, **is there tech debt that can actually be consolidated
 between desktop/CLI/extension — rather than doing different layering or
@@ -193,7 +199,7 @@ longer exists; the live owner is `src/shared/streams/streamContentSync.ts`.
   survive re-audit: the buffer/gap-detect/resync half was already one
   implementation (`StreamLogDeltaBuffer`, `src/transcript/StreamLog.ts:64`) and
   the coalescing half already had a shared owner (`createFlushableDebounce`,
-  twelve consumers) — both imported by both sites. What is left is divergent
+  ten consumers) — both imported by both sites. What is left is divergent
   host policy, and it has diverged _further_ since this row was written: the
   CLI copy gained `logInstanceId`, `hasUndrainedChanges`, and mode-flip
   invalidation the webview has no use for. A single feed with two overriding
@@ -384,6 +390,27 @@ hostPorts)` on the existing `MainViewExecutionController`. **Net:** −1 copy
   - 1 restored affordance.
 
 ### 2c. Composition-root / platform plane
+
+**LANDED #10991 (2026-08-19), one composition root for all three hosts.**
+C4/V10 (the lead fix), C5, C7, C8 and C15 landed together:
+`openTexraConfigStores` / `openNodeWorkspaceStateStore`
+(`src/platform/defaults/nodeStores.ts`) own project-config selection and the
+workspace-state path once each — the CLI now degrades a malformed or
+unreadable `.texra/config.json` with a stderr warning instead of
+hard-failing every `texra` command, and desktop's hard-coded `'config.json'`
+became `TEXRA_CONFIG_FILE_NAME`. `JsonConfigProvider` reads through a
+three-method `ConfigStore` surface, and `MemoryConfigProvider` _is_ that
+provider over in-memory stores. `createNodePlatform`
+(`src/platform/defaults/nodeHost.ts`) assembles the `Platform` skeleton for
+all three hosts, and the shared agent-directory bootstrap catches
+reconciliation failures the way the deleted extension copy did. **C6 is
+struck — refuted, not deferred**: the genuinely shared code between
+`CliSecrets` and `ElectronSecrets` is four trivial lines, and both candidate
+extractions come out net-positive. C14's "remains open on this plane" in the
+#10991 body names the proposed `registerCoreShutdownHandlers` extraction
+only — #10716's self-registration already closed the leak class (residue:
+`clearStoreCache` is still extension-only), so the extraction is moot, not
+re-queued. The pinned paragraph below is the pre-#10991 record.
 
 **This plane is where the program did not go.** At `e00b9317f7` (2026-08-19)
 **none of C4, C5, C6, C7, C8 or C15 has a landing PR**, and two of them moved
@@ -600,7 +627,17 @@ lifecycle doc owed it. **V9/DR13 substantially resolved** — see below. **V12
 PARTIAL**, and this entry was stale when written: `'never'` was already a
 named shared constant at the reproduction pin; what is still true is that the
 settings catalog records only the `'ask'` prefault, so the fence exists in code
-and not in the catalog. Everything else — V1, V2, V5, V6, V7, V10, V11 — is
+and not in the catalog. **V7 LANDED #10997** — 4 signals wired on desktop
+(tool availability, GitHub subscriptions, invalid-token notice, workspace-file
+writes), 2 fenced extension-only (`languageModelsChanged`,
+`approvalPolicyChanged`), 6/6 annotated with per-host consumption at the
+declaration; CLI fenced on all six. Two of the entry's claims were refuted at
+landing: the declaration list was down to **6** signals, not 13
+(`includedModelAccessChanged`, the six subscription signals, and
+`extensionDeactivating` (#10924) were already gone), and the
+`refreshModelListStateIfNeeded` "no production caller on any host" escalation
+was false (two live callers, extension + CLI — the gap was desktop-only
+bootstrap, V2's row). Everything else — V1, V2, V5, V6, V10, V11 — is
 **still true at HEAD**, three of them with the harm restated below.
 
 **V2 is worse than written.** `UsageLogService` has zero references in
@@ -779,7 +816,21 @@ login` does not sign in the GUI hosts and vice-versa. Ruling: is
   or CLI. Overlaps DR10 for the subscriptions half; the
   tool-availability/token/model-access half is **new**. → Wire desktop (and
   where sensible CLI TUI) subscriptions; where a host deliberately won't
-  react, fence it at the signal declaration.
+  react, fence it at the signal declaration. **LANDED #10997 (2026-08-19)** —
+  every declared signal now has one recorded answer at its declaration in
+  `AppSignals.ts`: 4 wired on desktop (the tools dashboard, the Git tab
+  subscription list, a previously nonexistent invalid-token notice, and the
+  files tree after a run writes into the workspace), 2 fenced extension-only
+  (`languageModelsChanged` by construction, `approvalPolicyChanged` as a
+  duplicate repaint), 6/6 annotated; the CLI is fenced on all six with
+  per-signal reasons. Two of this entry's premises were **refuted at
+  landing**: the declaration list was down to **6** signals, not 13 —
+  `includedModelAccessChanged`, the six subscription signals, and
+  `extensionDeactivating` (#10924) were already gone — and the
+  `refreshModelListStateIfNeeded` "no production caller on any host"
+  escalation was false (two live callers, `extension.ts` and CLI
+  `initPlatform.ts`); the real gap was desktop-only bootstrap, tracked under
+  V2 (contracts doc §7.4 row 5).
 - **V8. `detachActiveChildren` "SSOT bypass" — ruled deliberate divergence;
   2 shutdown sites documented.** `detachSubagentsOnStop.ts:17` documents
   itself as "shared by every host" and is honored at 4 sites;
@@ -1061,6 +1112,12 @@ V3 was settled by the catalog collapse; V9/DR13 resolved to one owner plus a
 display-side gate. Still awaiting a ruling: settings-store unification (V1),
 lease-at-quit (V5, whose design the lifecycle doc owns), `enforceCategory`
 (V6), AppSignals wiring scope (V7), and the callback-binding bar (V11b).
+**Updated 2026-08-19 (#10991, #10997):** step 2's C4 landed (closing V10)
+and step 3's core landed — C5, C7, C8 and C15 in one composition-root PR,
+with C6 struck as refuted; C9, C13, C17, C18, C20 and C22 remain open on
+that plane. Step 4's V7 is also off the ruling list: the AppSignals wiring
+landed as #10997 (4 signals wired on desktop, 2 fenced extension-only, the
+CLI fenced on all six).
 
 Everything here was found by scoped sweeps, not adjudicated line-by-line the
 way the 2026-07-09 audit was; treat each row as _verified-at-citation_ but

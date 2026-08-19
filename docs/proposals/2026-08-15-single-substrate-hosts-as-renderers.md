@@ -457,7 +457,7 @@ ProgressBridge suite as the parity harness.
 > buffer/gap-detect/resync half is one implementation, `StreamLogDeltaBuffer`
 > (`src/transcript/StreamLog.ts:64`), consumed by both `WebviewBridge` and
 > `subscribeStreamLog`; and the coalescing half is `createFlushableDebounce`
-> (`@utils/core`), which already has twelve consumers including both sites.
+> (`@utils/core`), which already has ten consumers including both sites.
 > What is left in each file is not the same algorithm written twice — it is
 > divergent host policy over one shared substrate: the bridge's 16 ms frame
 > interval and postMessage resync handshake versus the TUI's mode-flip

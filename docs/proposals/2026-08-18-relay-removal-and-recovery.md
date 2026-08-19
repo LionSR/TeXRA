@@ -365,10 +365,13 @@ malformed tier = validation failure, i.e. accounting corruption stays loud).
 
 ## 7. Telemetry coupling
 
-`log-usage` (kept) accepted the CI relay token as an auth credential (removed
-with the tokens; unauthenticated CI runs simply don't log usage) and its
-validation still **tolerates** `route: 'relay'` / `usedRelay` from old
-clients. Client `UsageLogService` (kept) stamped `usedRelay` and the `'relay'`
+`log-usage` (kept) accepted the CI relay token as an auth credential. The
+two removals did **not** happen together: the auth branch was removed at this
+PR's merge (2026-08-19), ahead of the tokens' actual death at §11 step 3 —
+until then the deployed relay still serves `TEXRA_RELAY_TOKEN` clients while
+their `log-usage` calls 401 (see the §11 step 2 note). Its validation still
+**tolerates** `route: 'relay'` / `usedRelay` from old clients. Client
+`UsageLogService` (kept) stamped `usedRelay` and the `'relay'`
 usage route on relay-served requests — production removed, wire tolerance
 retained until old clients age out.
 
@@ -430,6 +433,15 @@ and pinned by `RelaySharedConfigParity.vitest.ts` (attic copy):
    (`ServerSideKeyService` requires `providers.length > 0`) and fall back to
    own API keys within the 5-minute cache TTL. Left in place permanently.
 2. ☐ Relay traffic monitored to ~0 (date: ______).
+   **Unlogged-window caveat (open since #10894's merge, 2026-08-19):** the
+   relay functions and the `relay_ci_tokens` table stay deployed until step
+   3, so a client carrying `TEXRA_RELAY_TOKEN` is still served by the relay —
+   but its `log-usage` calls now 401, because the CI-token auth branch was
+   removed at merge, before the tokens themselves die here. That spend never
+   reaches `usage_logs`, so the relay's `get_user_monthly_relay_spend` gate
+   is blind for those users during this window. Keep the window short: treat
+   step 1's client-side denial (empty tier-config `providers`) as the
+   primary cutoff, and step 3's deletion as what ends server-side service.
 3. ☐ `supabase functions delete relay` / `relay-tokens` (date: ______).
 4. ☐ Server-held provider API keys revoked at each provider console and
    `supabase secrets unset` (date: ______).
