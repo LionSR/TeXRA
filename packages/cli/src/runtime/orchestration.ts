@@ -6,6 +6,7 @@ import {
 import type { ExecutionId } from '@shared/schemas';
 import { agentKeyOf, agentName } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
+import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
@@ -244,8 +245,8 @@ export function buildCliAccountItems(
         provider: 'chatgpt',
         operation: 'sign-out',
       },
-      label: 'Sign out of ChatGPT',
-      description: status.chatGptAccountLabel ?? 'ChatGPT subscription',
+      label: CHATGPT_AUTH.signOutLabel,
+      description: status.chatGptAccountLabel ?? CHATGPT_AUTH.subscriptionLabel,
     });
   } else {
     items.push({
@@ -254,7 +255,7 @@ export function buildCliAccountItems(
         provider: 'chatgpt',
         operation: 'sign-in',
       },
-      label: 'Sign in with ChatGPT',
+      label: CHATGPT_AUTH.signInLabel,
       description: 'Use a ChatGPT subscription',
     });
   }
@@ -266,8 +267,8 @@ export function buildCliAccountItems(
         provider: 'grok',
         operation: 'sign-out',
       },
-      label: 'Sign out of Grok',
-      description: status.grokAccountLabel ?? 'Grok subscription',
+      label: GROK_AUTH.signOutLabel,
+      description: status.grokAccountLabel ?? GROK_AUTH.subscriptionLabel,
     });
   } else {
     items.push({
@@ -276,7 +277,7 @@ export function buildCliAccountItems(
         provider: 'grok',
         operation: 'sign-in',
       },
-      label: 'Sign in with Grok',
+      label: GROK_AUTH.signInLabel,
       description: 'Use a Grok / SuperGrok subscription',
     });
   }

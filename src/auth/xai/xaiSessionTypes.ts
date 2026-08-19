@@ -4,6 +4,8 @@
  */
 import { z } from 'zod';
 
+import { GROK_AUTH } from '@shared/copy/accountAuth';
+
 import { XAI_DEFAULT_EXPIRES_IN_SEC } from './xaiConstants';
 import {
   SubscriptionOAuthError,
@@ -70,8 +72,9 @@ export class XaiAuthError extends SubscriptionOAuthError {
 }
 
 export function formatXaiAuthUnavailableMessage(error: XaiAuthError): string {
+  const turnOff = `turn off "${GROK_AUTH.preferLabel}".`;
   const action = error.needsReauth
-    ? 'Sign in with Grok again, or turn off "Prefer Grok subscription".'
-    : 'Try again in a moment, or turn off "Prefer Grok subscription".';
-  return `Grok subscription unavailable: ${error.message} ${action}`;
+    ? `${GROK_AUTH.signInLabel} again, or ${turnOff}`
+    : `Try again in a moment, or ${turnOff}`;
+  return `${GROK_AUTH.subscriptionLabel} unavailable: ${error.message} ${action}`;
 }

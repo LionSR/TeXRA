@@ -4,6 +4,7 @@ import {
   type CodingPlanSubscription,
   type CodingPlanSubscriptionId,
 } from '@shared/codingPlanSubscriptions';
+import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 
 // Kept to one rendered row: the /api form and the orchestration header both
@@ -168,9 +169,9 @@ export function shortCliModelAccessRoute(route: CliModelAccessRoute): string {
 export function formatCliModelAccessRoute(route: CliModelAccessRoute): string {
   switch (route) {
     case 'chatgpt':
-      return 'ChatGPT subscription';
+      return CHATGPT_AUTH.subscriptionLabel;
     case 'grok':
-      return 'Grok subscription';
+      return GROK_AUTH.subscriptionLabel;
     case 'kimi-code':
       return 'Kimi Code subscription';
     case 'glm-code':
@@ -263,13 +264,13 @@ const oauthSubscriptionAccessItems = [
   {
     provider: 'chatgpt',
     preference: 'chatGpt',
-    label: 'Prefer ChatGPT subscription',
+    label: CHATGPT_AUTH.preferLabel,
     formatDescription: formatCliChatGptPreference,
   },
   {
     provider: 'grok',
     preference: 'grok',
-    label: 'Prefer Grok subscription',
+    label: GROK_AUTH.preferLabel,
     formatDescription: formatCliGrokPreference,
   },
 ] as const satisfies ReadonlyArray<{

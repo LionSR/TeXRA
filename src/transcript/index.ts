@@ -22,7 +22,12 @@ export {
   type StreamLogDelta,
 } from './StreamLog';
 export { createRunTrace, type RunTrace } from './runTrace';
-export { findTranscriptSpillFile, readTranscriptSpill } from './spillArtifacts';
+export {
+  findTranscriptSpillFile,
+  readTranscriptSpill,
+  spillArtifactOpenFailedMessage,
+  SPILL_ARTIFACT_DELETED_MESSAGE,
+} from './spillArtifacts';
 export { streamDataDir } from './streamDataPaths';
 export { StreamSnapshotStore } from './StreamSnapshotStore';
 export { assembleTrace, type AssembleTraceResult } from './traceAssembler';
