@@ -323,6 +323,6 @@ export async function setMemoryPinned(
   }
 
   const updatedMeta = setPinnedMeta(meta, pinned);
-  await StorageFS.write(storagePath, buildFile(content, updatedMeta));
+  await StorageFS.writeAtomic(storagePath, buildFile(content, updatedMeta));
   return { status: 'changed', pinnedCount };
 }
