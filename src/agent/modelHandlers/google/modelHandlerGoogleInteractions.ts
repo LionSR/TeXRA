@@ -752,29 +752,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     ];
   }
 
-  /**
-   * Follow-up for a SINGLE tool call, built by delegating to the batched
-   * path with a one-entry array so both call sites share one assembly.
-   */
-  async createToolUseFollowUpMessages(
-    _client: GoogleGenAI | undefined,
-    call: GoogleToolCall,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<Step[]> {
-    if (!call.callId) {
-      throw new Error('Function call id is required for follow-up messages');
-    }
-
-    return this.createBatchedToolUseFollowUpMessages(
-      [{ call, result, attachments }],
-      workspaceState,
-      text,
-    );
-  }
-
   // ===========================================================================
   // Capability getters / auth (REUSE / PORT from the chat handler)
   // ===========================================================================

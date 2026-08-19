@@ -1639,34 +1639,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return content;
   }
 
-  async createToolUseFollowUpMessages(
-    client: Anthropic,
-    call: AnthropicToolCall,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<MessageParam[]> {
-    const content = this.buildToolCallAssistantContent(workspaceState, text);
-    content.push({
-      type: 'tool_use',
-      id: call.callId,
-      name: call.name,
-      input: call.raw.input ?? {},
-    });
-
-    const resultBlock = await this.buildToolResultBlock(
-      client,
-      call,
-      result,
-      attachments,
-    );
-    return [
-      { role: 'assistant', content },
-      { role: 'user', content: [resultBlock] },
-    ];
-  }
-
   /**
    * Batched variant for parallel tool calls: one assistant message carrying
    * the original response content plus ALL tool_use blocks, then ONE user

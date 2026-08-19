@@ -596,8 +596,7 @@ export class ToolUseDispatchNode<C> extends Node<
     }));
     if (
       toolResults.length > 1 &&
-      modelHandler.requiresBatchedParallelToolResults &&
-      modelHandler.createBatchedToolUseFollowUpMessages
+      modelHandler.requiresBatchedParallelToolResults
     ) {
       const followUpMsgs =
         await modelHandler.createBatchedToolUseFollowUpMessages(
