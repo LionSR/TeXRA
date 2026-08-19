@@ -11,33 +11,12 @@ import {
   WebFetchPayloadSchema,
   WebSearchPayloadSchema,
   planSummaryLine,
-  parseClaudeAgentModel,
-  parseCodexApprovalPolicy,
   MainViewInboundMessageSchema,
 } from '@shared/schemas';
 
 describe('work plan schema helpers', () => {
   it('returns a stable placeholder for whitespace-only objectives', () => {
     expect(planSummaryLine(' \n\t')).toBe('(empty plan)');
-  });
-});
-
-describe('parseCodexApprovalPolicy', () => {
-  it.each(['never', 'on-request', 'on-failure', 'untrusted'])(
-    'accepts the SDK approval policy %s',
-    (policy) => {
-      expect(parseCodexApprovalPolicy(policy)).toBe(policy);
-    },
-  );
-
-  it('defaults to automatic approval for invalid persisted values', () => {
-    expect(parseCodexApprovalPolicy('ask')).toBe('never');
-  });
-});
-
-describe('parseClaudeAgentModel', () => {
-  it('defaults invalid persisted selections to Sonnet', () => {
-    expect(parseClaudeAgentModel('claude-opus-3')).toBe('claude-sonnet-5');
   });
 });
 

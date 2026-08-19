@@ -25,7 +25,6 @@ import {
   ClaudeAgentEffortSchema,
   ClaudeAgentModelSchema,
   ClaudeAgentPermissionModeSchema,
-  parseClaudeAgentModel,
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
@@ -1067,7 +1066,6 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: WorkspaceStateKey.CLAUDE_AGENT_MODEL,
     schema: ClaudeAgentModelSchema.prefault(CLAUDE_AGENT_DEFAULT_MODEL),
-    normalizePersisted: parseClaudeAgentModel,
     title: 'Claude Code model',
     description: 'Claude model selected for Claude Code agent sessions.',
     category: 'ai-agents',

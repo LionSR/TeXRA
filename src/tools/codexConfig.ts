@@ -3,18 +3,14 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type { CodexReasoningEffort } from '@shared/schemas';
-import {
-  AgentCategory,
-  CODEX_APPROVAL_POLICY_DEFAULT,
-  CODEX_REASONING_EFFORT_DEFAULT,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  parseCodexApprovalPolicy,
-  parseCodexReasoningEffort,
-  parseCodexSandboxMode,
+import type {
+  CodexApprovalPolicy,
+  CodexReasoningEffort,
+  CodexSandboxMode,
 } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { createEnumStateGetter } from './support/enumConfig';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { CODEX_AGENT_NAME } from './codexShared';
 
 // Type-only imports
@@ -35,11 +31,10 @@ export const CODEX_CLI_MODEL = 'gpt-5.5';
 // Reasoning effort
 // ============================================================================
 
-const getCodexReasoningEffort = createEnumStateGetter(
-  WorkspaceStateKey.CODEX_REASONING_EFFORT,
-  CODEX_REASONING_EFFORT_DEFAULT,
-  parseCodexReasoningEffort,
-);
+const getCodexReasoningEffort = (): CodexReasoningEffort =>
+  readPlatformSetting<CodexReasoningEffort>(
+    WorkspaceStateKey.CODEX_REASONING_EFFORT,
+  );
 
 /**
  * Codex CLI's Rust-side config deserializer only accepts a subset of the
@@ -69,11 +64,10 @@ export function getCodexCliReasoningEffort(): CodexCliReasoningEffort {
 // The schema in `@shared` is the single source of truth for the persisted
 // values; the SDK-typed return annotation is what keeps those values aligned
 // with the Codex union — a schema value the SDK doesn't accept fails here.
-export const getCodexApprovalPolicy: () => ApprovalMode = createEnumStateGetter(
-  WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-  CODEX_APPROVAL_POLICY_DEFAULT,
-  parseCodexApprovalPolicy,
-);
+export const getCodexApprovalPolicy = (): ApprovalMode =>
+  readPlatformSetting<CodexApprovalPolicy>(
+    WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+  );
 
 // ============================================================================
 // Sandbox mode
@@ -81,11 +75,8 @@ export const getCodexApprovalPolicy: () => ApprovalMode = createEnumStateGetter(
 
 // As above: the SDK-typed return annotation is the alignment guard between the
 // persisted schema values and the Codex sandbox union.
-export const getCodexSandboxMode: () => SandboxMode = createEnumStateGetter(
-  WorkspaceStateKey.CODEX_SANDBOX_MODE,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  parseCodexSandboxMode,
-);
+export const getCodexSandboxMode = (): SandboxMode =>
+  readPlatformSetting<CodexSandboxMode>(WorkspaceStateKey.CODEX_SANDBOX_MODE);
 
 /**
  * Build synthetic execution metadata for Codex child streams.

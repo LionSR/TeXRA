@@ -19,21 +19,13 @@ import type {
   ClaudeAgentModel,
   ClaudeAgentPermissionMode,
 } from '@shared/schemas';
-import {
-  AgentCategory,
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  parseClaudeAgentEffort,
-  parseClaudeAgentModel,
-  parseClaudeAgentPermissionMode,
-} from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports
-import { createEnumStateGetter } from './support/enumConfig';
 import { CLAUDE_AGENT_NAME } from './claudeAgentShared';
 
 const log = createLog('claudeAgent');
@@ -42,34 +34,24 @@ const log = createLog('claudeAgent');
 // Model — defaults to Sonnet 5; users can override per-call or via workspace state
 // ============================================================================
 
-export const getClaudeAgentModel: () => ClaudeAgentModel =
-  createEnumStateGetter(
-    WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-    CLAUDE_AGENT_DEFAULT_MODEL,
-    parseClaudeAgentModel,
-  );
+export const getClaudeAgentModel = (): ClaudeAgentModel =>
+  readPlatformSetting<ClaudeAgentModel>(WorkspaceStateKey.CLAUDE_AGENT_MODEL);
 
 // ============================================================================
 // Permission mode
 // ============================================================================
 
-export const getClaudeAgentPermissionMode: () => ClaudeAgentPermissionMode =
-  createEnumStateGetter(
+export const getClaudeAgentPermissionMode = (): ClaudeAgentPermissionMode =>
+  readPlatformSetting<ClaudeAgentPermissionMode>(
     WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-    CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-    parseClaudeAgentPermissionMode,
   );
 
 // ============================================================================
 // Effort — adaptive thinking depth hint passed via `effort` SDK option
 // ============================================================================
 
-export const getClaudeAgentEffort: () => ClaudeAgentEffort =
-  createEnumStateGetter(
-    WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-    CLAUDE_AGENT_DEFAULT_EFFORT,
-    parseClaudeAgentEffort,
-  );
+export const getClaudeAgentEffort = (): ClaudeAgentEffort =>
+  readPlatformSetting<ClaudeAgentEffort>(WorkspaceStateKey.CLAUDE_AGENT_EFFORT);
 
 // ============================================================================
 // Auth env — pulls ANTHROPIC_API_KEY from secrets if set
