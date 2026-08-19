@@ -14,6 +14,7 @@ async function createController(options?: {
   urls?: Record<string, string | undefined>;
   setError?: Error;
   deleteError?: Error;
+  refreshError?: Error;
 }): Promise<{
   controller: SettingsProfileKeyController;
   hosts: ReturnType<typeof createFakeUIHosts>;
@@ -53,6 +54,7 @@ async function createController(options?: {
       getProviderKeyUrl: (provider) => options?.urls?.[provider],
       refreshAfterKeyChange: async () => {
         refreshCount += 1;
+        if (options?.refreshError) throw options.refreshError;
       },
       reportFailure: async (message, error) => {
         failures.push(`${message}: ${String(error)}`);
@@ -219,5 +221,33 @@ describe('SettingsProfileKeyController', () => {
     assert.match(failures[0] ?? '', /Failed to remove OpenAI API key/);
     assert.deepEqual(deleted, []);
     assert.equal(refreshCount(), 0);
+  });
+
+  it('reports a refresh failure after storing the provider key', async () => {
+    const error = new Error('refresh failed');
+    const { controller, secrets, failures } = await createController({
+      refreshError: error,
+    });
+
+    await controller.commitProviderKey('openai', 'sk-real-openai-key');
+
+    assert.equal(await secrets.get('apiKey.openai'), 'sk-real-openai-key');
+    assert.deepEqual(failures, [
+      'Failed to refresh after setting OpenAI API key: Error: refresh failed',
+    ]);
+  });
+
+  it('reports a refresh failure after removing the provider key', async () => {
+    const error = new Error('refresh failed');
+    const { controller, deleted, failures } = await createController({
+      refreshError: error,
+    });
+
+    await controller.removeProviderKey('openai');
+
+    assert.deepEqual(deleted, ['apiKey.openai']);
+    assert.deepEqual(failures, [
+      'Failed to refresh after removing OpenAI API key: Error: refresh failed',
+    ]);
   });
 });
