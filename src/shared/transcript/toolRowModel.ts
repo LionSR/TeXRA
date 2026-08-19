@@ -327,8 +327,9 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
     ?.startLine;
   // Tracks which file the diffs emitted so far belong to. Painters label a run
   // of diff sections by the most recent `file` section above them, so this is
-  // the state that keeps a multi-file edit honest.
-  let labelledPath = ctx.filePath;
+  // the state that keeps a multi-file edit honest. `edit` preserves the CLI's
+  // fallback label when neither the candidate nor the call names a file.
+  let labelledPath = ctx.filePath ?? 'edit';
   if (ctx.filePath) {
     sections.push({
       kind: 'file',
@@ -339,16 +340,17 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
     });
   }
   for (const candidate of candidates) {
-    // A `MultiEdit` spanning several files carries a path per edit. Emitting a
-    // heading whenever it changes restores the per-file attribution the CLI
-    // rendered before the shared row model, and costs nothing for the common
-    // single-file call, where every candidate repeats `ctx.filePath`.
-    if (candidate.path && candidate.path !== labelledPath) {
-      labelledPath = candidate.path;
+    // A `MultiEdit` spanning several files carries a path per edit. Resolve the
+    // fallback independently for every candidate so a pathless edit after a
+    // named one returns to the call-level label instead of inheriting its
+    // predecessor's file.
+    const effectivePath = candidate.path ?? ctx.filePath ?? 'edit';
+    if (effectivePath !== labelledPath) {
+      labelledPath = effectivePath;
       sections.push({
         kind: 'file',
         label: 'File:',
-        path: candidate.path,
+        path: effectivePath,
         namespace: 'workspace',
       });
     }
