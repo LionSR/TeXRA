@@ -4,7 +4,6 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import { minimatch } from 'minimatch';
 import PQueue from 'p-queue';
 
 // Local imports
@@ -26,29 +25,12 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 const CHANNEL = 'AgentLoad';
 const log = createLog(CHANNEL);
 
-type AgentDirectoryEventType = 'create' | 'change' | 'delete';
-
-interface AgentDirectoryWatcherEvent extends AgentDirectoryEntry {
-  type: AgentDirectoryEventType;
-  uri: vscode.Uri;
-  relativePath: string;
-}
-
-interface AgentDirectoryWatcherOptions {
-  pattern?: string;
-  onEvent: (event: AgentDirectoryWatcherEvent) => void;
-}
-
-interface AgentDirectoryWatcherSubscription {
-  pattern: string;
-  handleEvent: (event: AgentDirectoryWatcherEvent) => void;
-}
-
 class AgentDirectoryManager {
   private context: vscode.ExtensionContext | undefined;
   private directoryService: AgentDirectoryService | undefined;
   private watcherDisposables: vscode.Disposable[] = [];
-  private watcherSubscriptions = new Set<AgentDirectoryWatcherSubscription>();
+  /** The single watcher subscriber; `undefined` means nobody is listening. */
+  private onAgentYamlChange: (() => void) | undefined;
   private externalWatcherDirectoryPaths = new Set<string>();
   private watcherDirectories: AgentDirectoryEntry[] | null = null;
   private readonly watcherRebuilds = new PQueue({ concurrency: 1 });
@@ -117,30 +99,20 @@ class AgentDirectoryManager {
     return selectedPath;
   }
 
-  watchAgentDirectories(
-    options: AgentDirectoryWatcherOptions,
-  ): vscode.Disposable {
+  /**
+   * Watch every local agent directory and call `onChange` whenever an agent
+   * YAML file is created, changed or deleted. One subscriber at a time —
+   * re-subscribing replaces the previous callback.
+   */
+  watchAgentDirectories(onChange: () => void): vscode.Disposable {
     this.getDirectoryService();
-    const pattern = options.pattern ?? '**/*';
-    const subscription: AgentDirectoryWatcherSubscription = {
-      pattern,
-      handleEvent: (event) => {
-        // relativePath is already normalized to forward slashes in dispatchAgentEvent
-        if (minimatch(event.relativePath, pattern, { dot: true })) {
-          options.onEvent(event);
-        }
-      },
-    };
-
-    this.watcherSubscriptions.add(subscription);
+    this.onAgentYamlChange = onChange;
     this.scheduleAgentWatcherSetup();
 
     return {
       dispose: () => {
-        this.watcherSubscriptions.delete(subscription);
-        if (this.watcherSubscriptions.size === 0) {
-          this.disposeAgentWatchers();
-        }
+        this.onAgentYamlChange = undefined;
+        this.disposeAgentWatchers();
       },
     };
   }
@@ -150,7 +122,7 @@ class AgentDirectoryManager {
    * Called by the settings view after updating CUSTOM_AGENT_DIR in globalSM.
    */
   async refreshAfterDirChange(): Promise<void> {
-    if (this.watcherSubscriptions.size > 0) {
+    if (this.onAgentYamlChange) {
       await this.ensureAgentWatchers();
     }
   }
@@ -175,7 +147,7 @@ class AgentDirectoryManager {
    * it: a request arriving while a rebuild runs is answered by the waiting
    * one, which reads the directory list after the running rebuild has settled.
    * Disposal never discards queued rebuilds, so every caller awaiting one
-   * settles; a rebuild that starts with no subscriptions left has nothing to
+   * settles; a rebuild that starts with no subscriber left has nothing to
    * watch and returns.
    */
   private async ensureAgentWatchers(): Promise<void> {
@@ -185,12 +157,12 @@ class AgentDirectoryManager {
     }
 
     await this.watcherRebuilds.add(async () => {
-      if (this.watcherSubscriptions.size === 0) {
+      if (!this.onAgentYamlChange) {
         return;
       }
 
       const directories = await this.getAllLocal();
-      if (this.watcherSubscriptions.size === 0) {
+      if (!this.onAgentYamlChange) {
         return;
       }
       const cached = this.watcherDirectories;
@@ -200,7 +172,7 @@ class AgentDirectoryManager {
       }
 
       await this.buildAgentWatchers(directories);
-      if (this.watcherSubscriptions.size === 0) {
+      if (!this.onAgentYamlChange) {
         this.disposeAgentWatchers();
       }
     });
@@ -225,7 +197,7 @@ class AgentDirectoryManager {
       const workspaceFolder = vscode.workspace.getWorkspaceFolder(directoryUri);
 
       if (workspaceFolder) {
-        this.watchDirectoryTree(entry, directoryUri, '**/*');
+        this.watchDirectoryTree(directoryUri, '**/*');
         watchedDirectories.push(entry.directory);
         continue;
       }
@@ -236,7 +208,6 @@ class AgentDirectoryManager {
       }
 
       await this.watchExternalCustomDirectory(
-        entry,
         directoryUri,
         previousExternalWatcherDirectoryPaths,
       );
@@ -254,8 +225,12 @@ class AgentDirectoryManager {
     }
   }
 
+  /**
+   * The watcher pattern stays unfiltered: directory create/delete events must
+   * keep reaching `onCreateOrDelete`, which is what drives the rebuild. The
+   * `.yaml` filter belongs at the subscriber edge, in `notifyAgentYamlChange`.
+   */
   private watchDirectoryTree(
-    entry: AgentDirectoryEntry,
     directoryUri: vscode.Uri,
     pattern: string,
     onCreateOrDelete?: (
@@ -272,18 +247,17 @@ class AgentDirectoryManager {
     this.watcherDisposables.push(watcher);
 
     watcher.onDidCreate((uri) => {
-      this.dispatchAgentEvent(entry, 'create', uri);
+      this.notifyAgentYamlChange(uri);
       void onCreateOrDelete?.('create', uri);
     });
-    watcher.onDidChange((uri) => this.dispatchAgentEvent(entry, 'change', uri));
+    watcher.onDidChange((uri) => this.notifyAgentYamlChange(uri));
     watcher.onDidDelete((uri) => {
-      this.dispatchAgentEvent(entry, 'delete', uri);
+      this.notifyAgentYamlChange(uri);
       void onCreateOrDelete?.('delete', uri);
     });
   }
 
   private async watchExternalCustomDirectory(
-    entry: AgentDirectoryEntry,
     directoryUri: vscode.Uri,
     previousDirectoryPaths: ReadonlySet<string>,
   ): Promise<void> {
@@ -299,12 +273,12 @@ class AgentDirectoryManager {
         newlyWatchedDirectories.push(dirUri);
       }
       this.externalWatcherDirectoryPaths.add(normalizedDirectoryPath);
-      this.watchDirectoryTree(entry, dirUri, '*', (type, uri) =>
+      this.watchDirectoryTree(dirUri, '*', (type, uri) =>
         this.handleExternalDirectoryTreeChange(type, uri),
       );
     }
 
-    await this.dispatchExistingYamlFiles(entry, newlyWatchedDirectories);
+    await this.dispatchExistingYamlFiles(newlyWatchedDirectories);
   }
 
   private async collectDirectoryUris(root: vscode.Uri): Promise<vscode.Uri[]> {
@@ -372,7 +346,6 @@ class AgentDirectoryManager {
   }
 
   private async dispatchExistingYamlFiles(
-    entry: AgentDirectoryEntry,
     directories: readonly vscode.Uri[],
   ): Promise<void> {
     for (const directory of directories) {
@@ -388,11 +361,7 @@ class AgentDirectoryManager {
 
       for (const [name, type] of files) {
         if ((type & vscode.FileType.File) !== 0 && name.endsWith('.yaml')) {
-          this.dispatchAgentEvent(
-            entry,
-            'create',
-            vscode.Uri.joinPath(directory, name),
-          );
+          this.onAgentYamlChange?.();
         }
       }
     }
@@ -427,33 +396,15 @@ class AgentDirectoryManager {
     return path.resolve(fsPath);
   }
 
-  private dispatchAgentEvent(
-    entry: AgentDirectoryEntry,
-    type: AgentDirectoryEventType,
-    uri: vscode.Uri,
-  ): void {
-    // Normalize to forward slashes for cross-platform consistency.
-    // path.relative() returns backslashes on Windows, but minimatch
-    // and downstream consumers expect forward slashes.
-    const relativePath = path
-      .relative(entry.directory, uri.fsPath)
-      .replaceAll('\\', '/');
-    const event: AgentDirectoryWatcherEvent = {
-      type,
-      uri,
-      relativePath,
-      directory: entry.directory,
-      source: entry.source,
-    };
-
-    for (const subscription of this.watcherSubscriptions) {
-      subscription.handleEvent(event);
+  private notifyAgentYamlChange(uri: vscode.Uri): void {
+    if (uri.fsPath.endsWith('.yaml')) {
+      this.onAgentYamlChange?.();
     }
   }
 
   /**
    * Dispose all file system watchers.
-   * Used when all subscriptions are removed.
+   * Used when the subscription is removed.
    */
   private disposeAgentWatchers(): void {
     this.watcherDisposables.forEach((watcher) => watcher.dispose());

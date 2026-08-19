@@ -365,7 +365,7 @@ describe('App foreground Escape ownership', () => {
         },
       });
     }
-    syncStreamLog(ROOT);
+    syncStreamLog(defaultSession(), ROOT);
     seedChildRoster(ROOT, [
       runningChild('workflow-child-execution', 'duplicate', CHILD),
       runningChild('workflow-review-execution', 'duplicate', GRANDCHILD),
@@ -384,7 +384,7 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => stdout.output.includes('Inspect · Running'));
       stdin.write('\r');
       await waitFor(() => activeStreamId.get() === CHILD);
-      syncStreamLog(ROOT);
+      syncStreamLog(defaultSession(), ROOT);
       expect(
         streams
           .get()

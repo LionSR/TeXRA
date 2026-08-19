@@ -141,7 +141,7 @@ describe('StreamSnapshotSchema.status — legacy-inbound normalization', () => {
     { legacy: STREAM_STATUS.RESUMING, expected: STREAM_PHASE.RUNNING },
     { legacy: STREAM_STATUS.ERROR, expected: STREAM_PHASE.FAILED },
     { legacy: STREAM_STATUS.STOPPED, expected: STREAM_PHASE.COMPLETED },
-    // `ready` has no phase equivalent ("no run recorded") → absent.
+    // `ready` has no phase equivalent ("no run recorded") → `undefined`.
     { legacy: STREAM_STATUS.READY, expected: undefined },
   ])('normalizes legacy "$legacy" to "$expected"', ({ legacy, expected }) => {
     const result = StreamSnapshotSchema.parse({

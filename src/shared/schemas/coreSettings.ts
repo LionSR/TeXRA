@@ -52,14 +52,14 @@ export type LatexdiffTempFileLocation =
  * {@link ModelRetryMaxAttemptsSchema} and the settings-view reliability row so
  * the schema and the UI cannot disagree about the range.
  */
-export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = {
+export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = Object.freeze({
   configKey: 'texra.model.retry.maxAttempts',
   defaultValue: 2,
   min: 0,
   max: 5,
   description:
     'Additional automatic retries after the initial model request (0–5). Long-running background requests retain at least two recovery retries.',
-} as const;
+} as const);
 
 /**
  * Bounds, default, and copy for `model.compactionThresholdPercent`. The value
@@ -67,14 +67,14 @@ export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = {
  * compaction, and `0` disables it. Shared by the schema leaf below and the
  * settings-view reliability row.
  */
-export const MODEL_COMPACTION_THRESHOLD_SETTING = {
+export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
   configKey: 'texra.model.compactionThresholdPercent',
   defaultValue: 75,
   min: 0,
   max: 100,
   description:
     "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
-} as const;
+} as const);
 
 /**
  * Bounds, default, and copy for `childRunConcurrencyBudget`. The value caps the
@@ -83,13 +83,13 @@ export const MODEL_COMPACTION_THRESHOLD_SETTING = {
  * settings-view Multi-Agent tab so the schema, runtime, and UI cannot disagree
  * about the range.
  */
-export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = {
+export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
   defaultValue: 16,
   min: 1,
   max: 100,
   description:
     'Maximum number of live native child model conversations one session may run at once. Detached subagents beyond this wait for a slot to free.',
-} as const;
+} as const);
 
 export const DEFAULT_CORE_SETTINGS = {
   agentOutputs: {

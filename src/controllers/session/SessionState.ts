@@ -28,7 +28,7 @@ import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
  * Config-derived display fields: undefined until the stream's `RunConfig`
  * resolves in the summary mirror, then always populated together from that
  * one `AgentConfig`. Display data only — what the run IS travels as the
- * parsed {@link RunIdentity} beside it. `instruction` carries only a process
+ * parsed `RunIdentity` beside it. `instruction` carries only a process
  * run's command line (the one config field tab rendering consumes); agent
  * runs' full instruction text stays on the sidecar/config authority.
  */
@@ -380,8 +380,20 @@ export class SessionState {
     }
   }
 
+  /**
+   * Read host-facing execution state. Parent rosters remain canonical while a
+   * child deletion is provisional; this shared projection hides tombstoned
+   * children from every host until that deletion settles.
+   */
   getStreamState(stream: StreamTabId): StreamExecutionState | undefined {
-    return this._streamStates.get(stream);
+    const state = this._streamStates.get(stream);
+    if (!state) return undefined;
+    const subagents = state.subagents.filter(
+      (child) => !this.isStreamRemoved(child.childStreamId),
+    );
+    return subagents.length === state.subagents.length
+      ? state
+      : { ...state, subagents };
   }
 
   /**
@@ -428,19 +440,32 @@ export class SessionState {
    * incarnation is returned with `created === false`, so a caller that finds
    * one can avoid starting a second deletion or touching/retiring a barrier
    * it does not own.
+   *
+   * Canonical parent rosters remain untouched while deletion is provisional.
+   * The shared read projection hides matching rows from every host.
    */
   beginStreamRemoval(stream: StreamTabId): {
     incarnation: number;
     created: boolean;
+    changedRosterParents: StreamTabId[];
   } {
     const existing = this._removedStreams.get(stream);
     if (existing !== undefined) {
-      return { incarnation: existing, created: false };
+      return {
+        incarnation: existing,
+        created: false,
+        changedRosterParents: [],
+      };
     }
     const incarnation = this.incarnationOf(stream);
     this._removedStreams.set(stream, incarnation);
     this._streamMetadataCache.delete(stream);
-    return { incarnation, created: true };
+
+    return {
+      incarnation,
+      created: true,
+      changedRosterParents: this.rosterParentsContaining(stream),
+    };
   }
 
   /**
@@ -451,9 +476,15 @@ export class SessionState {
    * claim — never from a bare `run.start`, which a delayed stale event could
    * replay after the deletion committed.
    */
-  claimStreamIdentity(stream: StreamTabId): number {
-    const next = this.incarnationOf(stream) + 1;
-    this._streamIncarnations.set(stream, next);
+  claimStreamIdentity(stream: StreamTabId): {
+    incarnation: number;
+    changedRosterParents: StreamTabId[];
+  } {
+    const incarnation = this.incarnationOf(stream) + 1;
+    this._streamIncarnations.set(stream, incarnation);
+    // Rows from the prior incarnation must not become visible when dropping its
+    // tombstone. A fresh authoritative roster can add the new identity back.
+    const changedRosterParents = this.scrubStreamFromRosters(stream);
     this._removedStreams.delete(stream);
     // A re-claimed identity starts a fresh run: drop any ephemeral session and
     // execution state the previous incarnation left behind (a provisional
@@ -462,7 +493,7 @@ export class SessionState {
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
     this._streamMetadataCache.delete(stream);
-    return next;
+    return { incarnation, changedRosterParents };
   }
 
   /** Whether `stream` was removed this session and must not be resurrected. */
@@ -483,25 +514,62 @@ export class SessionState {
 
   /**
    * Drop the tombstone only if it still belongs to `expectedIncarnation`.
-   * Used when a removal's durable delete ended in retention
-   * (`active`/`failed`/`superseded`): the stream still lives, so its facts
-   * must flow again. A fresh deletion B may already have installed its own
-   * barrier for a newer incarnation; this retirement must never remove that.
-   * Returns whether it actually removed the barrier: callers that buffer facts
-   * across a provisional deletion must replay them only when this returns
-   * true, so a superseded deletion A can never replay through deletion B's
-   * newer barrier.
+   * Canonical rosters already contain the newest authoritative rows, so retiring
+   * the projection barrier reveals them in their original order. A fresh claim
+   * or newer deletion invalidates this settlement through the incarnation check.
    */
   retireStreamTombstone(
     stream: StreamTabId,
     expectedIncarnation: number,
-  ): boolean {
-    if (this._removedStreams.get(stream) === expectedIncarnation) {
-      this._removedStreams.delete(stream);
-      this._streamMetadataCache.delete(stream);
-      return true;
+  ): { retired: boolean; changedRosterParents: StreamTabId[] } {
+    if (this._removedStreams.get(stream) !== expectedIncarnation) {
+      return { retired: false, changedRosterParents: [] };
     }
-    return false;
+
+    const changedRosterParents = this.rosterParentsContaining(stream);
+    this._removedStreams.delete(stream);
+    this._streamMetadataCache.delete(stream);
+    return { retired: true, changedRosterParents };
+  }
+
+  /**
+   * Finalize this incarnation's tombstone and scrub its canonical roster rows.
+   * Returns the parents whose host-facing projection must be refreshed.
+   */
+  commitStreamTombstone(
+    stream: StreamTabId,
+    expectedIncarnation: number,
+  ): { committed: boolean; changedRosterParents: StreamTabId[] } {
+    if (this._removedStreams.get(stream) !== expectedIncarnation) {
+      return { committed: false, changedRosterParents: [] };
+    }
+    return {
+      committed: true,
+      changedRosterParents: this.scrubStreamFromRosters(stream),
+    };
+  }
+
+  private rosterParentsContaining(stream: StreamTabId): StreamTabId[] {
+    const parents: StreamTabId[] = [];
+    for (const [parent, state] of this._streamStates) {
+      if (state.subagents.some((child) => child.childStreamId === stream)) {
+        parents.push(parent);
+      }
+    }
+    return parents;
+  }
+
+  private scrubStreamFromRosters(stream: StreamTabId): StreamTabId[] {
+    const changedParents: StreamTabId[] = [];
+    for (const [parent, state] of this._streamStates) {
+      const subagents = state.subagents.filter(
+        (child) => child.childStreamId !== stream,
+      );
+      if (subagents.length === state.subagents.length) continue;
+      this._streamStates.set(parent, { ...state, subagents });
+      changedParents.push(parent);
+    }
+    return changedParents;
   }
 
   private incarnationOf(stream: StreamTabId): number {
@@ -589,6 +657,7 @@ export class SessionState {
       this._sessionState.delete(stream);
       this._streamStates.delete(stream);
       this._streamMetadataCache.delete(stream);
+      this.scrubStreamFromRosters(stream);
       this._removedStreams.set(stream, this.incarnationOf(stream));
     };
     for (const stream of deletion.deleted) clearIdentity(stream);

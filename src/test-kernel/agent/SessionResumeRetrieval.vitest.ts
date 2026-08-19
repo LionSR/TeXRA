@@ -16,6 +16,7 @@ import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   FLOW_RECORD_SCHEMA_VERSION,
+  PersistedFlow,
   PersistedFlowStateError,
   flowKey,
   type FlowRecord,
@@ -1047,6 +1048,96 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       readSpy.mockRestore();
       deleteSpy.mockRestore();
       session.followUps.terminalize(streamId);
+    }
+  });
+
+  it('preserves a resumed record when its first in-flow read fails', async () => {
+    const executionId = 'abc-flow-read-failure-resumed' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-read-failure-resumed' as StreamTabId;
+    const snapshot = buildToolUseResumeData(executionId, streamId);
+    const store = getExecutionStore(executionId);
+    await writeFlowRecord(executionId, snapshot.shared);
+    const readFailure = new Error('flow storage unavailable');
+    const readSpy = vi.spyOn(store, 'read').mockRejectedValueOnce(readFailure);
+    const dispositions: Array<'preserve' | 'delete'> = [];
+
+    try {
+      await expect(
+        runPersistedFlow(executionId, streamId, snapshot, {
+          onFlowRecordDisposition: (value) => dispositions.push(value),
+        }),
+      ).rejects.toMatchObject({
+        name: PersistedFlowStateError.name,
+        reason: 'read-failed',
+        cause: readFailure,
+      });
+      expect(dispositions).toEqual(['preserve']);
+    } finally {
+      readSpy.mockRestore();
+    }
+    expect(await readFlowRecord(executionId)).toMatchObject({
+      shared: snapshot.shared,
+    });
+  });
+
+  it('does not preserve a read failure from a later in-flow cycle', async () => {
+    const executionId = 'abc-flow-later-read-failure' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-later-read-failure' as StreamTabId;
+    const snapshot = buildToolUseResumeData(executionId, streamId);
+    const store = getExecutionStore(executionId);
+    await writeFlowRecord(executionId, snapshot.shared, WAITING_AT_START);
+    const readFailure = new Error('flow storage unavailable');
+    const realRead = store.read.bind(store);
+    let flowReads = 0;
+    const readSpy = vi.spyOn(store, 'read').mockImplementation(async (key) => {
+      if (key === flowKey(executionId) && ++flowReads === 2) {
+        throw readFailure;
+      }
+      return realRead(key);
+    });
+    const takePendingFollowUps = vi
+      .fn<NonNullable<RunToolUseFlowInput['takePendingFollowUps']>>()
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([{ text: 'Continue.', origin: 'user' }]);
+    const dispositions: Array<'preserve' | 'delete'> = [];
+
+    try {
+      await expect(
+        runPersistedFlow(executionId, streamId, snapshot, {
+          takePendingFollowUps,
+          onFlowRecordDisposition: (value) => dispositions.push(value),
+        }),
+      ).rejects.toMatchObject({
+        name: PersistedFlowStateError.name,
+        reason: 'read-failed',
+        cause: readFailure,
+      });
+      expect(dispositions).toEqual(['delete']);
+    } finally {
+      readSpy.mockRestore();
+    }
+  });
+
+  it('does not preserve an unrelated read-failed flow error', async () => {
+    const executionId = 'abc-flow-unrelated-read-failure' as ExecutionId;
+    const streamId =
+      'chat@gpt54#abc-flow-unrelated-read-failure' as StreamTabId;
+    const snapshot = buildToolUseResumeData(executionId, streamId);
+    const runFailure = new PersistedFlowStateError(executionId, 'read-failed');
+    const runSpy = vi
+      .spyOn(PersistedFlow.prototype, 'run')
+      .mockRejectedValueOnce(runFailure);
+    const dispositions: Array<'preserve' | 'delete'> = [];
+
+    try {
+      await expect(
+        runPersistedFlow(executionId, streamId, snapshot, {
+          onFlowRecordDisposition: (value) => dispositions.push(value),
+        }),
+      ).rejects.toBe(runFailure);
+      expect(dispositions).toEqual(['delete']);
+    } finally {
+      runSpy.mockRestore();
     }
   });
 

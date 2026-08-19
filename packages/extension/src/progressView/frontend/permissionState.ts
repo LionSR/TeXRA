@@ -43,9 +43,9 @@ export type PermissionState =
     };
 
 /**
- * Every permission kind's wire schema carries `requestId`, except retry,
- * which is keyed by `streamId` (one pending retry per stream, a new request
- * replaces the old one).
+ * Every permission kind's wire schema carries `requestId`; retry is the one
+ * kind not *keyed* by it — retry is keyed by `streamId` instead (one pending
+ * retry per stream, a new request replaces the old one).
  */
 export function permissionId(permission: PermissionState): string {
   return permission.kind === PERMISSION_KIND.RETRY

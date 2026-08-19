@@ -214,7 +214,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       id: 'sdk-session',
       kind: 'session',
     });
-    syncStreamLog(sdkStreamId);
+    syncStreamLog(defaultSession(), sdkStreamId);
 
     expect(
       streams.get().get(sdkStreamId)?.entries.map(transcriptRowHeadline),
@@ -233,7 +233,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         call: { id, label, status: 'planned' },
       });
     }
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     const plannedEntries = streamEntries();
     expect(plannedEntries).toMatchObject([
@@ -263,7 +263,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         model: 'deepseekT',
       },
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     const updatedEntries = streamEntries();
     expect(updatedEntries).toMatchObject([
@@ -307,7 +307,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     // This exercises both terminal-status finalization entry points:
     // syncStreamLog's settled-prefix promotion and the explicit
     // end-of-stream projection used by the controller.
-    syncStreamLog(STREAM_ID, { forceFinal: true });
+    syncStreamLog(defaultSession(), STREAM_ID, { forceFinal: true });
 
     const runningEntries = streamEntries();
     expect(runningEntries.at(0)).toMatchObject({
@@ -328,7 +328,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         error: 'The workflow ended before this call completed.',
       },
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     const settledEntries = streamEntries();
     expect(settledEntries).toHaveLength(1);
@@ -343,8 +343,8 @@ describe('CLI workflow-script child-stream transcript', () => {
     ]);
     expect(finalizedFlags(settledEntries)).toEqual([true]);
     staticItems = appendItems(staticItems);
-    syncStreamLog(STREAM_ID, { forceFinal: true });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID, { forceFinal: true });
+    syncStreamLog(defaultSession(), STREAM_ID);
     staticItems = appendItems(staticItems);
     expect(entryTexts(staticItems)).toEqual([
       'Failed: Audit cancellation — The workflow ended before this call completed.',
@@ -377,7 +377,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       streamId: STREAM_ID,
       status: STREAM_PHASE.CANCELLED,
     });
-    syncStreamLog(STREAM_ID, { forceFinal: true });
+    syncStreamLog(defaultSession(), STREAM_ID, { forceFinal: true });
 
     const plannedEntries = streamEntries();
     expect(plannedEntries.at(0)).toMatchObject({
@@ -398,7 +398,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         reason: 'not-reached',
       },
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     const settledEntries = streamEntries();
     expect(settledEntries).toHaveLength(1);
@@ -414,8 +414,8 @@ describe('CLI workflow-script child-stream transcript', () => {
     ]);
     expect(finalizedFlags(settledEntries)).toEqual([true]);
     staticItems = appendItems(staticItems);
-    syncStreamLog(STREAM_ID, { forceFinal: true });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID, { forceFinal: true });
+    syncStreamLog(defaultSession(), STREAM_ID);
     staticItems = appendItems(staticItems);
     expect(entryTexts(staticItems)).toEqual([
       'Skipped: Audit later — The workflow ended before this call was reached.',
@@ -435,7 +435,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       kind: 'phase',
     });
     appendLocalAssistantTranscript('Local cancellation checkpoint', STREAM_ID);
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
     let liveItems = appendItems();
     expect(entryIds(liveItems)).toEqual([
       'cancel-phase',
@@ -476,7 +476,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       streamId: STREAM_ID,
       status: STREAM_PHASE.CANCELLED,
     });
-    syncStreamLog(STREAM_ID, { forceFinal: true });
+    syncStreamLog(defaultSession(), STREAM_ID, { forceFinal: true });
 
     liveItems = appendItems(liveItems);
     expect(entryIds(liveItems)).toEqual([
@@ -526,7 +526,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       },
     });
     phase.end('cancelled');
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     liveItems = appendItems(liveItems);
     expect(entryIds(liveItems)).toEqual([
@@ -548,7 +548,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       streamId: STREAM_ID,
       status: STREAM_PHASE.CANCELLED,
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
     const coldItems = appendItems();
 
     expect(entryIds(coldItems)).toEqual(entryIds(liveItems));
@@ -583,7 +583,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         },
       });
     }
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     runTrace.trace.info('Preparing repository audit', {
       messageType: MESSAGE_TYPES.DEFAULT,
@@ -593,7 +593,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       id: 'audit-phase',
       kind: 'phase',
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     const buildState = (repaintEpoch = 0) =>
       buildStaticTranscriptState({
@@ -639,7 +639,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         model: 'deepseekT',
       },
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
     state = advance(state);
     expect(entryIds(state.items)).toEqual(['core-task']);
     const liveOutput = await renderStaticTranscript();
@@ -649,7 +649,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(liveOutput).not.toContain('Repository audit');
 
     phase.end('completed');
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
     state = advance(state);
     expect(entryIds(state.items)).toEqual(['core-task']);
 
@@ -666,7 +666,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         },
       });
     }
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
     state = advance(state);
 
     const settledSlice = streamSlice();
@@ -707,7 +707,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       id: 'dynamic-phase',
       kind: 'phase',
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     runTrace.trace.emit({
       type: 'workflow.call',
@@ -720,7 +720,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         status: 'running',
       },
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
     const runningOutput = await renderStaticTranscript();
     expect(runningOutput).toContain('◆ Dynamic audit');
     expect(runningOutput).not.toContain('Finished: Inspect generated target');
@@ -738,7 +738,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       },
     });
     phase.end('completed');
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     const output = await renderStaticTranscript();
     expect(output.indexOf('◆ Dynamic audit')).toBeLessThan(
@@ -846,7 +846,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     runTrace.trace.info('Tool checkpoint recorded', {
       messageType: MESSAGE_TYPES.DEFAULT,
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     let incrementalItems = appendItems();
     expect(entryIds(incrementalItems)).not.toContain('audit-tool');
@@ -860,7 +860,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         output: '/tmp/project',
       },
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
     incrementalItems = appendItems(incrementalItems);
     const coldItems = appendItems();
 
@@ -896,7 +896,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         ],
       },
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     const heldSplit = splitTranscriptEntries(
       streamEntries(),
@@ -923,7 +923,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         output: '/tmp/project',
       },
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
     incrementalItems = appendItems(incrementalItems);
     const coldItems = appendItems();
     expect(staticEntries(incrementalItems).map((entry) => entry.kind)).toEqual([
@@ -946,11 +946,11 @@ describe('CLI workflow-script child-stream transcript', () => {
     runTrace.trace.info('Round work completed', {
       messageType: MESSAGE_TYPES.DEFAULT,
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     const incrementalItems = appendItems();
     round.end('completed');
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
     const coldItems = appendItems();
     expect(entryTexts(incrementalItems)).toEqual(['Round work completed']);
     expect(entryTexts(coldItems)).toEqual(entryTexts(incrementalItems));
@@ -979,7 +979,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         status: 'planned',
       },
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
     expect(
       streamEntries()
         .filter((entry) => entry.id === 'introduction-task')
@@ -1017,7 +1017,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     phase.end('completed');
 
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     const entries = streamEntries();
     const texts = entries.map(transcriptRowHeadline);
@@ -1044,7 +1044,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       streamId: STREAM_ID,
       status: STREAM_PHASE.COMPLETED,
     });
-    syncStreamLog(STREAM_ID);
+    syncStreamLog(defaultSession(), STREAM_ID);
 
     const finalized = streamEntries();
     expect(

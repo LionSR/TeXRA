@@ -347,7 +347,7 @@ export async function runToolUseFlow<C = unknown>(
   // is attached, before the flow is interruptible. An async cancellation racing
   // in during the recovery read must not erase follow-ups appended to the
   // now-live session after attachment, so this window asks the lifecycle to
-  // preserve the queue, matching `preserveResumeRecord`'s finally guard.
+  // preserve the queue, matching the startup preservation guard below.
   // Cleared once the flow has passed both guards and moved into real work, so a
   // later mid-run cancellation asks for the normal destructive clear. Whether
   // that clear actually happens is the lifecycle's call: it alone knows whether
@@ -381,7 +381,8 @@ export async function runToolUseFlow<C = unknown>(
   let files: string[] | undefined;
   let totalCostUsd: number | undefined;
   let attachmentFollowUps: readonly FollowUpQueueBatchItem[] = [];
-  let preserveResumeRecord = false;
+  let resumeStartupPreservation:
+    'cancellation' | 'initial-read-failure' | undefined;
   let persistenceRecoveryPending = false;
   let flowRunStarted = false;
   let primaryFailure: { readonly error: unknown } | undefined;
@@ -435,7 +436,7 @@ export async function runToolUseFlow<C = unknown>(
     // A host can hand off a cancellation synchronously during setup. Observe
     // it before touching the persisted resume record.
     if (signal.aborted) {
-      preserveResumeRecord = input.resume !== undefined;
+      if (input.resume) resumeStartupPreservation = 'cancellation';
       earlyResult = { outcome };
       throw startupInterruption;
     }
@@ -504,10 +505,14 @@ export async function runToolUseFlow<C = unknown>(
           await store.writeWorkspaceFiles(currentTouchedFiles);
         }
       });
+      const firstFlowRun = !flowRunStarted;
       flowRunStarted = true;
       try {
         finalAction = await pf.run(shared);
       } catch (error: unknown) {
+        if (input.resume && firstFlowRun && pf.isInitialReadFailure(error)) {
+          resumeStartupPreservation = 'initial-read-failure';
+        }
         if (signal.aborted) {
           shared = (await pf.getShared()) ?? shared;
           await pf.prepareForFollowUp(shared);
@@ -578,9 +583,12 @@ export async function runToolUseFlow<C = unknown>(
     activePersistedFlow = undefined;
     attemptTeardown('detaching the live flow', () => liveAttachment.detach());
     let preservationReason: string | undefined;
-    if (preserveResumeRecord) {
+    if (resumeStartupPreservation === 'cancellation') {
       preservationReason =
         'Flow record preserved after resume startup cancellation';
+    } else if (resumeStartupPreservation === 'initial-read-failure') {
+      preservationReason =
+        'Flow record preserved after initial resumed flow read failure';
     } else if (persistenceRecoveryPending) {
       preservationReason =
         'Flow record preserved after persistence recovery failure';

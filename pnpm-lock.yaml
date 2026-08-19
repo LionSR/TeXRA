@@ -168,9 +168,6 @@ importers:
       mime-types:
         specifier: ^3.0.1
         version: 3.0.2
-      minimatch:
-        specifier: ^10.2.6
-        version: 10.2.6
       monaco-editor:
         specifier: ^0.56.0
         version: 0.56.0
@@ -886,9 +883,6 @@ importers:
       mime-types:
         specifier: ^3.0.1
         version: 3.0.2
-      minimatch:
-        specifier: ^10.2.6
-        version: 10.2.6
       mutative:
         specifier: ^1.3.0
         version: 1.3.0

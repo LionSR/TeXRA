@@ -59,7 +59,6 @@ function createTestHost() {
         await staging.promise;
         return preview;
       },
-      relativeDisplayPath: (filePath: string) => filePath,
       revealApprovalSurface: async () => {},
       openBuildDisplay: async () => {},
       reportError: vi.fn(),
