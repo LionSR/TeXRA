@@ -3,7 +3,6 @@ import type {
   UpdateConversationProgressMessageSchema,
   UpdateFilesMessageSchema,
   UpdateMissingOutputsMessageSchema,
-  UpdateStreamDescriptionMessageSchema,
   UpdateStreamStatusMessageSchema,
 } from './progressView/outbound';
 import type { z } from 'zod';
@@ -43,9 +42,7 @@ export interface SetActiveStreamPayload {
 
 export interface UpdateStreamDescriptionPayload {
   streamId: StreamTabId;
-  description: z.infer<
-    typeof UpdateStreamDescriptionMessageSchema
-  >['description'];
+  description: string;
 }
 
 export interface SetParentStreamPayload {

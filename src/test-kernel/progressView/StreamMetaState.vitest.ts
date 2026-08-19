@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { logHandlers } from '@progressView/frontend/slices/logSlice';
 import { streamLifecycleHandlers } from '@progressView/frontend/slices/streamLifecycleSlice';
-import { streamMetaHandlers } from '@progressView/frontend/slices/streamMetaSlice';
 import { syncHandlers } from '@progressView/frontend/slices/syncSlice';
 import {
   appState,
@@ -222,6 +221,7 @@ describe('stream meta frontend state', () => {
     state.activeStreamId = streamId;
     registerStream(state, siblingId, {
       label: 'old sibling',
+      description: 'existing description',
       agentCategory: AgentCategory.ToolUse,
       creationTimestamp: 2,
     });
@@ -243,7 +243,7 @@ describe('stream meta frontend state', () => {
     );
     const getState = seedState(state);
 
-    dispatch(streamMetaHandlers, {
+    dispatch(streamLifecycleHandlers, {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
       streamInfo: {
         name: siblingId,
@@ -269,6 +269,7 @@ describe('stream meta frontend state', () => {
     expect(getState().streamById.get(streamId)?.label).toBe('stream-a');
     expect(getState().streamById.get(siblingId)).toMatchObject({
       label: 'search',
+      description: 'existing description',
       model: 'deepseekproT',
     });
     expect(getState().streamStates.get(siblingId)).toMatchObject({
@@ -289,7 +290,7 @@ describe('stream meta frontend state', () => {
     const getState = seedStream(streamId, { status: STREAM_PHASE.RUNNING });
     startCompaction(streamId);
 
-    dispatch(streamMetaHandlers, {
+    dispatch(streamLifecycleHandlers, {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
       streamInfo: {
         name: streamId,
@@ -326,7 +327,7 @@ describe('stream meta frontend state', () => {
     const getState = seedStream(streamId, { status: STREAM_PHASE.RUNNING });
     startCompaction(streamId);
 
-    dispatch(streamMetaHandlers, {
+    dispatch(streamLifecycleHandlers, {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status: STREAM_PHASE.WAITING,
@@ -347,7 +348,7 @@ describe('stream meta frontend state', () => {
     startCompaction(streamId);
     const outcome = compactionOutcomeEntry();
 
-    dispatch(streamMetaHandlers, {
+    dispatch(streamLifecycleHandlers, {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status: STREAM_PHASE.WAITING,
@@ -377,7 +378,7 @@ describe('stream meta frontend state', () => {
     const streamId = 'stream-a' as StreamTabId;
     const getState = seedStream(streamId, { status: STREAM_PHASE.RUNNING });
 
-    dispatch(streamMetaHandlers, {
+    dispatch(streamLifecycleHandlers, {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status: STREAM_PHASE.RUNNING,
@@ -389,7 +390,7 @@ describe('stream meta frontend state', () => {
       STREAM_SUBSTATE.STARTING,
     );
 
-    dispatch(streamMetaHandlers, {
+    dispatch(streamLifecycleHandlers, {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
       stream: streamId,
       status: STREAM_PHASE.COMPLETED,
@@ -452,7 +453,7 @@ describe('stream meta frontend state', () => {
       stage: { kind: 'round', index: 2 },
     });
 
-    dispatch(streamMetaHandlers, metadataPatchMessage(streamId, null));
+    dispatch(streamLifecycleHandlers, metadataPatchMessage(streamId, null));
 
     expect(getState().streamStates.get(streamId)?.stage).toBeUndefined();
   });
@@ -462,7 +463,7 @@ describe('stream meta frontend state', () => {
     const getState = seedStream(streamId);
 
     dispatch(
-      streamMetaHandlers,
+      streamLifecycleHandlers,
       metadataPatchMessage(streamId, {
         kind: 'phase',
         label: 'Reduce',
@@ -477,7 +478,7 @@ describe('stream meta frontend state', () => {
       total: 3,
     });
 
-    dispatch(streamMetaHandlers, metadataPatchMessage(streamId, null));
+    dispatch(streamLifecycleHandlers, metadataPatchMessage(streamId, null));
     expect(getState().streamStates.get(streamId)?.stage).toBeUndefined();
   });
 

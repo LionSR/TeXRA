@@ -17,7 +17,6 @@ import {
 } from '@shared/schemas';
 import { streamLifecycleHandlers } from './slices/streamLifecycleSlice';
 import { logHandlers } from './slices/logSlice';
-import { streamMetaHandlers } from './slices/streamMetaSlice';
 import { taskHandlers } from './slices/taskSlice';
 import { runTrackingHandlers } from './slices/runTrackingSlice';
 import { permissionHandlers } from './slices/permissionSlice';
@@ -38,7 +37,6 @@ import { uiHandlers } from './slices/uiSlice';
 const handlers: ProgressViewOutboundHandlerRegistry = {
   ...streamLifecycleHandlers,
   ...logHandlers,
-  ...streamMetaHandlers,
   ...taskHandlers,
   ...runTrackingHandlers,
   ...permissionHandlers,

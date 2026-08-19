@@ -514,7 +514,7 @@ travel through the flows are described in `docs/architecture/pocketflow-state.md
 
 **Progress view**
 
-- Extend the existing Lit components in `packages/extension/src/progressView/frontend/components/` (`StreamTabs`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.) and the frontend state slices in `packages/extension/src/progressView/frontend/slices/` (`logSlice`, `taskSlice`, `streamMetaSlice`, etc., mirroring the `settingsView/frontend/slices/` pattern) — augment them rather than manipulating the DOM directly.
+- Extend the existing Lit components in `packages/extension/src/progressView/frontend/components/` (`StreamTabs`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.) and the frontend state slices in `packages/extension/src/progressView/frontend/slices/` (`logSlice`, `taskSlice`, `streamLifecycleSlice`, etc., mirroring the `settingsView/frontend/slices/` pattern) — augment them rather than manipulating the DOM directly.
 - Tool-use and workflow sessions surface in separate filters; continue emitting usage, status, and log events through the established progress event commands so filters, counts, and badges update automatically.
 
 **Error handling and types**
