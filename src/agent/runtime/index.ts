@@ -23,6 +23,7 @@ export {
   currentSession,
   defaultSession,
   initializeDefaultSession,
+  settleLiveSessionExecutions,
   teardownDefaultSession,
   tryDefaultSession,
 } from './SessionHandle';

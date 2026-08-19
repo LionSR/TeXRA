@@ -38,11 +38,14 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   abandonOwnedExecutionLease,
+  captureOwnedExecutionLeaseIfPresent,
   completeOwnedExecutionLease,
   isOwnedExecutionLeaseDurable,
+  type OwnedExecutionLeaseScope,
   runWithOwnedExecutionLeaseQuiescence,
   validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
+import { finalizeExecution } from '@agent/storage/executionLifecycle';
 import { watchInstanceExit } from '@agent/storage/instancePresence';
 import { deriveResumability } from '@agent/storage/resumability';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
@@ -54,6 +57,7 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
+  RUN_OUTCOME,
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
@@ -1155,6 +1159,99 @@ export function forEachLiveSession(
   callback: (session: SessionHandle) => void,
 ): void {
   for (const session of liveSessions) callback(session);
+}
+
+/**
+ * Settle the executions live sessions still own, so a host exit leaves no
+ * execution recorded as neither running nor finished.
+ *
+ * Run drivers settle their own executions as they unwind, through
+ * {@link SessionHandle.releaseExecutionLease}. Hosts register this drain as
+ * their **first ON-phase handler** so that every driver a BEFORE handler
+ * *does* reach has already had its turn — on the CLI that is the whole
+ * headless path, whose handler kills the run and awaits its unwind — and so
+ * that nothing has been disposed yet.
+ *
+ * On desktop and the extension no BEFORE handler aborts or awaits an
+ * in-process run: `registerAgentShutdownHandlers` interrupts background OS
+ * processes and the agent-CLI registries only. A run in flight there is still
+ * being driven when this runs, which is precisely why the drain exists — its
+ * driver's promise would otherwise never settle — and why the terminal write
+ * below yields to a driver that did reach its own outcome first. What is left
+ * for the drain is a run the process is exiting out from under (quitting the
+ * desktop app or VS Code mid-run) or a tool-use flow parked at its WAIT node.
+ *
+ * Each such execution gets the same durable settlement the CLI has always
+ * given its own: the CANCELLED outcome, its flow record preserved so
+ * `deriveResumability` can still offer the checkpoint, and its lease record
+ * deleted rather than left for a later launch to reclaim.
+ *
+ * Bounded by the caller's phase deadline — a host that cannot exit because a
+ * release is slow would be worse than the unsettled record. Once `signal`
+ * fires, every remaining execution is named in the log instead of being
+ * silently skipped: what is left behind is recoverable (the next launch
+ * proves this process dead through its presence socket) but not free.
+ */
+export async function settleLiveSessionExecutions(
+  signal: AbortSignal,
+): Promise<void> {
+  const pending: { session: SessionHandle; executionId: ExecutionId }[] = [];
+  forEachLiveSession((session) => {
+    for (const executionId of session.executions.getActiveIds()) {
+      pending.push({ session, executionId });
+    }
+  });
+  for (const { session, executionId } of pending) {
+    if (signal.aborted) {
+      logger.warn(
+        `Host exit deadline passed before execution ${executionId} was settled; its lease record survives until a later launch proves this process gone`,
+      );
+      continue;
+    }
+    let runWithOwnership: OwnedExecutionLeaseScope | undefined;
+    try {
+      // Skips both a run whose driver already settled it and one this
+      // process never owned (an adopted or foreign execution).
+      runWithOwnership = captureOwnedExecutionLeaseIfPresent(executionId);
+    } catch (error) {
+      // Ownership moved between the registry read and this turn — a release
+      // in flight, or a later generation of the same id. Nothing to settle.
+      logger.debug(
+        `Execution ${executionId} is no longer settleable at host exit: ${String(error)}`,
+      );
+      continue;
+    }
+    if (!runWithOwnership) continue;
+    try {
+      await runWithOwnership(() =>
+        session.releaseExecutionLease(executionId, async () => {
+          const finalization = await finalizeExecution({
+            executionId,
+            outcome: RUN_OUTCOME.CANCELLED,
+            flowRecord: 'preserve',
+            // A driver that reached its own terminal write between the
+            // registry read above and this one owns the result: this drain
+            // records what the exit interrupted, never what already finished.
+            keepExistingOutcome: true,
+          });
+          if (finalization.status === 'failed') {
+            // Rejecting here is what keeps the lease record: an execution
+            // whose terminal outcome never reached disk must not look
+            // settled to the next launch.
+            throw new Error(
+              `Failed to persist the CANCELLED outcome for execution ${executionId}`,
+              { cause: finalization.error },
+            );
+          }
+        }),
+      );
+    } catch (error) {
+      logger.warn(
+        `Failed to settle execution ${executionId} at host exit; its record is repaired on a later launch`,
+        { data: error },
+      );
+    }
+  }
 }
 
 let cachedDefaultSession: SessionHandle | undefined;

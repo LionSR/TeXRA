@@ -15,6 +15,7 @@ import {
   defaultSession,
   initializeBundledPrompts,
   initializeDefaultSession,
+  settleLiveSessionExecutions,
   teardownDefaultSession,
 } from '@agent/runtime';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
@@ -310,6 +311,13 @@ export async function activate(context: vscode.ExtensionContext) {
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     runtimeSession.flushArtifacts(),
+  );
+  // First ON handler: every BEFORE handler above has had its turn at the runs
+  // it owns, so this settles what closing the window left mid-run — a durable
+  // CANCELLED outcome and a released lease instead of a record the next
+  // activation has to repair.
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
+    settleLiveSessionExecutions(signal),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
