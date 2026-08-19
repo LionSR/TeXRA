@@ -406,7 +406,7 @@ configs, and `electron-builder.yml`'s `afterPack` respectively.
 **Dependency declarations, not dead code.** `knip.json` sets
 `"ignoreDependencies": [".*"]`, so unused dependencies are ungated. Lifting it
 surfaces 113 "unused" deps, but they are workspace-hoisting artifacts:
-`dotenv`, `fs-extra`, `mark.js`, and `minimatch` are declared in the root
+`dotenv`, `fs-extra`, and `minimatch` are declared in the root
 `package.json` but imported only from `packages/extension`, and most of
 `packages/agent`'s list is re-exported core that knip cannot trace across the
 alias boundary. Nothing to delete; worth tidying if a `@texra/core` package ever
