@@ -105,7 +105,9 @@ export function createStubDesktopToolingSettingsController(
       runToolCommand: noOp,
     },
     latexHandlers: {
-      applyLatexSettings: noOp,
+      applyLatexSettings: unsupported(
+        'Desktop cannot apply recommended VS Code settings.',
+      ),
       installLatexWorkshop: unsupported(
         'Desktop cannot host VS Code extensions.',
       ),

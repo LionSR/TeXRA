@@ -163,7 +163,7 @@ describe('desktop settings capability markers', () => {
     expect(unsupportedCommands(stub)).toEqual(unsupportedCommands(real));
   });
 
-  it('matches the real tooling controller, which excludes VS Code extension installs', () => {
+  it('matches the real tooling controller, which excludes VS Code-only actions', () => {
     const real = realToolingController();
     const stub = createStubDesktopToolingSettingsController();
 
@@ -171,6 +171,7 @@ describe('desktop settings capability markers', () => {
       'installToolExtension',
     ]);
     expectStubMirrorsReal(real.latexHandlers, stub.latexHandlers, [
+      'applyLatexSettings',
       'installLatexWorkshop',
     ]);
   });
