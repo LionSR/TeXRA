@@ -165,8 +165,6 @@ export interface LoadedMediaRef {
 
 export interface FileListRow extends TranscriptRowBase {
   readonly kind: 'fileList';
-  /** Which category of attachment this load reported (`input`, `media`, …). */
-  readonly category: string;
   /** Every entry the loader reported, loaded and failed alike. */
   readonly files: readonly FileListEntry[];
   readonly counts: {

@@ -52,7 +52,6 @@ import {
   stringifyPayload,
   transcriptText,
   type PayloadLanguage,
-  type TextMetrics,
   type TranscriptText,
 } from './transcriptText';
 
@@ -173,14 +172,6 @@ type ToolOutputSuppression =
   | 'file-link'
   | 'trivial-write';
 
-interface ToolRowElision {
-  /** Length of the untruncated single-line header preview. */
-  readonly headerPreview: TextMetrics;
-  readonly output?: TextMetrics;
-  readonly error?: TextMetrics;
-  readonly userInstruction?: TextMetrics;
-}
-
 export interface ToolRowModel {
   /** Tool name as a user reads it (`MCP fs/read`, `Multi-agent workflow`). */
   readonly headerLabel: string;
@@ -202,7 +193,6 @@ export interface ToolRowModel {
   readonly isInProgress: boolean;
   readonly exitCode?: number;
   readonly spillPath?: string;
-  readonly elision: ToolRowElision;
 }
 
 export interface ToolRowModelContext {
@@ -914,10 +904,6 @@ function outputSuppression(
 // Fold
 // ---------------------------------------------------------------------------
 
-function metricsOf(text: TranscriptText): TextMetrics {
-  return { lineCount: text.lineCount, charCount: text.charCount };
-}
-
 export function toolRowModel(
   normalized: NormalizedToolUse,
   ctx: ToolRowModelContext = {},
@@ -949,7 +935,6 @@ export function toolRowModel(
   const userInstruction = normalized.userInstructionText
     ? transcriptText(normalized.userInstructionText)
     : undefined;
-  const previewText = transcriptText(headerPreview);
 
   return {
     headerLabel: displayToolName(normalized.toolName),
@@ -968,13 +953,5 @@ export function toolRowModel(
       ? { exitCode: normalized.exitCode }
       : {}),
     ...(normalized.spillPath ? { spillPath: normalized.spillPath } : {}),
-    elision: {
-      headerPreview: metricsOf(previewText),
-      ...(output ? { output: metricsOf(output) } : {}),
-      ...(errorPreview ? { error: metricsOf(errorPreview) } : {}),
-      ...(userInstruction
-        ? { userInstruction: metricsOf(userInstruction) }
-        : {}),
-    },
   };
 }
