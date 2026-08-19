@@ -75,7 +75,7 @@ function createDiffCompiler(executionId: ExecutionId, logger: AgentTrace) {
 
   return manager as unknown as {
     compileDiffIfSuccessful(
-      result: { success: boolean; diffFileName?: string },
+      result: { success: boolean; diffPath?: string },
       referenceLocation: FileLocation,
       diffDirectory: {
         absolutePath: string;
@@ -97,11 +97,12 @@ async function compileDiff(
   sourceLocation: FileLocation,
   trace: AgentTrace = spiedTrace(),
 ): Promise<unknown> {
+  const diffAbsoluteDir = path.join(runDir(executionId), 'diff', `r${round}`);
   return createDiffCompiler(executionId, trace).compileDiffIfSuccessful(
-    { success: true, diffFileName: 'main-diff.tex' },
+    { success: true, diffPath: path.join(diffAbsoluteDir, 'main-diff.tex') },
     referenceLocation,
     {
-      absolutePath: path.join(runDir(executionId), 'diff', `r${round}`),
+      absolutePath: diffAbsoluteDir,
       relativePath: path.join('diff', `r${round}`),
       executionId,
     },
