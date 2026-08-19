@@ -37,7 +37,6 @@ describe('diffOperations logger seam', () => {
     const runDiffForRound = vi.fn(async () => ({
       success: true,
       message: 'diff written',
-      diffFileName: 'paper_diff.tex',
     }));
     const base = createWorkspaceLocation('/workspace/paper.tex', 'paper.tex');
     const revised = createWorkspaceLocation(

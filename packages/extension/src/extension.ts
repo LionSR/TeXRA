@@ -150,14 +150,15 @@ async function refreshApiKeyStatus() {
   }
 
   // Use the same credential predicate as the setup assistant and onboarding
-  // funnel. This keeps ChatGPT subscription, Researcher Access, and direct API
-  // keys in agreement about whether the first-run CTA should remain visible.
+  // funnel, so ChatGPT subscription and direct API keys agree about whether the
+  // first-run CTA should remain visible. Account sign-in is deliberately not in
+  // that set: it serves the remote-agent catalog, not model access.
   const exists = await hasAnyUsableSetupCredential();
   if (!exists) {
     statusBarItem?.hide();
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
     apiKeyStatusBarItem.tooltip =
-      'Click to run the setup assistant — sign in, use ChatGPT, or add an API key';
+      'Click to run the setup assistant — use ChatGPT or add a provider key';
     apiKeyStatusBarItem.command = EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT;
     apiKeyStatusBarItem.accessibilityInformation = {
       label: 'TeXRA setup, get started',

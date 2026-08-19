@@ -24,28 +24,9 @@ import {
 import type { RoundFileMapping } from './types';
 
 export interface RoundSummary {
-  storageKey: StorageKey;
-  currRound: number;
   fileInfos: OutputFileInfo[];
   filesToOpen: FileLocation[];
-  outputFile: FileLocation;
-  endTurn: boolean;
   stage?: StageHandle;
-}
-
-/**
- * Constructs a round summary with no file info — the double-fault fallback
- * used when summarizing has itself thrown. Built here rather than as a bare
- * literal at the call site so a new {@link RoundSummary} field is surfaced
- * by the factory instead of silently omitted.
- */
-export function blankRoundSummary(options: {
-  storageKey: StorageKey;
-  currRound: number;
-  outputFile: FileLocation;
-  endTurn: boolean;
-}): RoundSummary {
-  return { ...options, fileInfos: [], filesToOpen: [] };
 }
 
 export async function summarizeRound(
@@ -98,15 +79,7 @@ export async function summarizeRound(
         messageType: MESSAGE_TYPES.INTERNAL,
       });
 
-      return {
-        storageKey,
-        currRound,
-        fileInfos,
-        filesToOpen,
-        outputFile,
-        endTurn: options.endTurn,
-        stage: scope,
-      };
+      return { fileInfos, filesToOpen, stage: scope };
     },
   );
 }
