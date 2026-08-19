@@ -175,7 +175,7 @@ export async function extractScratchpad(
 
 export interface MultipleExtractionResult {
   documents: { content: string; name: string }[] | null;
-  method: 'simple' | 'latex_document' | 'markdown' | 'latex' | 'none';
+  method: 'simple' | 'latex_document' | 'latex' | 'none';
 }
 
 /**
@@ -184,10 +184,18 @@ export interface MultipleExtractionResult {
  * Primary path looks for <document name="..."> children inside the unified
  * <documents> container. When that finds nothing and a single-file recovery
  * hint is supplied, the extractor falls back through the legacy single-doc
- * shapes (<latex_document>, fenced ```latex block, bare \documentclass) and
- * synthesizes a one-document result named after the hint. Without a hint,
- * recovery is skipped because a synthesized document with no name has no
- * unambiguous destination.
+ * shapes (<latex_document>, bare \documentclass) and synthesizes a
+ * one-document result named after the hint. Without a hint, recovery is
+ * skipped because a synthesized document with no name has no unambiguous
+ * destination.
+ *
+ * Fenced ```latex/```tex blocks are deliberately NOT recovered here: this
+ * function reads the whole response including the model's thinking tag, so a
+ * fence inside the scratchpad would win over the real answer. Fence recovery
+ * belongs to `collectLatexFencedBlocks`, which strips the thinking tag first
+ * and parses fences per CommonMark. `XmlOutputManager` runs that tier ahead of
+ * this one, except when the response carries an explicit <latex_document>:
+ * a tagged final answer outranks an untagged fence, so this tier keeps it.
  *
  * @param outputContent The raw output content to extract from
  * @param containerTag The container tag to look for documents within
@@ -211,14 +219,6 @@ export function extractDocuments(
       return {
         documents: [{ content: tagged, name: preferredName }],
         method: 'latex_document',
-      };
-    }
-
-    const fenced = outputContent.match(/```(?:latex|tex)\n([\s\S]*?)\n```/i);
-    if (fenced?.[1]) {
-      return {
-        documents: [{ content: fenced[1], name: preferredName }],
-        method: 'markdown',
       };
     }
 

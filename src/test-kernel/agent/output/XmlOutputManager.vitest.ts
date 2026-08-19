@@ -1198,6 +1198,61 @@ Appendix.
     await expectWritten('paper.tex', 'Revised paper body.\n');
   });
 
+  it('ignores scratchpad fenced blocks when recovering a single-input edit', async () => {
+    const outputs = await writeAndSplitDocuments(
+      [
+        '<scratchpad>',
+        'Draft attempt before I settled on the real revision:',
+        '```latex',
+        '\\section{Scratch}',
+        'Rejected draft.',
+        '```',
+        '</scratchpad>',
+        '```latex',
+        '\\section{Final}',
+        'Accepted revision.',
+        '```',
+      ],
+      ['paper.tex'],
+    );
+
+    expectSources(outputs, ['paper.tex']);
+    await expectWritten('paper.tex', '\\section{Final}\nAccepted revision.\n');
+  });
+
+  // A tagged <latex_document> is the model's declared final answer; an
+  // untagged fence before it is an example or a draft. Both agent shapes must
+  // prefer the tag, or fence recovery would overwrite the answer with a draft.
+  it.each([
+    ['single-input edit agents', ['paper.tex'], {} satisfies XmlManagerOptions],
+    [
+      'single-artifact agents',
+      ['page1.png'],
+      { outputFiles: ['paper.tex'] } satisfies XmlManagerOptions,
+    ],
+  ] satisfies readonly (readonly [
+    string,
+    readonly string[],
+    XmlManagerOptions,
+  ])[])(
+    'prefers a tagged <latex_document> over an earlier untagged fence for %s',
+    async (_name, inputFiles, options) => {
+      const outputs = await writeAndSplitDocuments(
+        [
+          '```latex',
+          '\\section{Draft}',
+          '```',
+          '<latex_document>\\section{Final}\\end{document}</latex_document>',
+        ],
+        [...inputFiles],
+        options,
+      );
+
+      expectSources(outputs, ['paper.tex']);
+      await expectWritten('paper.tex', '\\section{Final}\n');
+    },
+  );
+
   it('leaves an unlabeled block unmatched when identical base files make the match ambiguous', async () => {
     const stub = '\\section{Stub}\nShared template content.\n';
     await AbsoluteFS.write('/tmp/run/a.tex', stub);

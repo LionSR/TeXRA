@@ -33,23 +33,6 @@ describe('extractDocuments legacy fallback', () => {
     ]);
   });
 
-  it('recovers a single doc from a ```latex fenced block', () => {
-    const xml =
-      'Looking at this...\n```latex\n\\documentclass{article}\n' +
-      '\\begin{document}Body\\end{document}\n```\n';
-
-    const result = extractDocuments(xml, 'documents', 'Draft1.tex');
-
-    expect(result.method).toBe('markdown');
-    expect(result.documents).toEqual([
-      {
-        name: 'Draft1.tex',
-        content:
-          '\\documentclass{article}\n\\begin{document}Body\\end{document}',
-      },
-    ]);
-  });
-
   it('recovers a single doc from a bare \\documentclass block', () => {
     const xml =
       'No wrapper at all. \\documentclass[prl]{revtex4-2}\n' +
