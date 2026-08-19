@@ -19,6 +19,7 @@ import { KeyHints, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import type { StreamTabId } from '@shared/schemas';
+import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { readTranscriptSpill } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -29,14 +30,13 @@ import {
   scrollableModalTextRowsBudget,
 } from '../modals/ScrollableModalText';
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
-import {
-  streams as streamsSignal,
-  type ConversationEntry,
-  type StreamSlice,
-} from '../state/cliState';
+import { streams as streamsSignal, type StreamSlice } from '../state/cliState';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
-import { trimAssistantTranscriptLead } from './transcriptEntries';
+import {
+  transcriptRowHeadline,
+  trimAssistantTranscriptLead,
+} from './transcriptEntries';
 
 const EMPTY_TRANSCRIPT_TEXT = '(no output yet)';
 const MISSING_SPILL_TEXT =
@@ -76,42 +76,63 @@ export function hydratedTranscript(
   spills: ReadonlyMap<string, SpillHydration>,
 ): StreamSlice | undefined {
   if (!slice) return slice;
-  const entries = slice.entries.map((entry): ConversationEntry => {
-    if (!entry.spillPath) return entry;
-    const spill = spills.get(entry.spillPath);
-    if (spill === undefined) return { ...entry, spillPath: undefined };
-    if (entry.role === 'tool') {
-      const toolUse = {
-        ...entry.toolUse,
-        outputText:
-          spill.kind === 'loaded'
-            ? spill.text
-            : withSpillNotice(entry.toolUse.outputText, spill.notice),
-      };
-      // The row carries the same payload the renderer paints from, so the
-      // recovered text has to land on both. The row's `model` is untouched:
-      // it owns the display *policy* (which blocks show, and why), which the
-      // recovery does not change.
+  const entries = slice.entries.map((row): TranscriptRow => {
+    if (!row.spillPath) return row;
+    const spill = spills.get(row.spillPath);
+    if (spill === undefined) return { ...row, spillPath: undefined };
+    if (row.kind === 'tool') {
+      // The row's `model` is untouched: it owns the display *policy* (which
+      // blocks show, and why), which the recovery does not change.
       return {
-        ...entry,
+        ...row,
         ...(spill.kind === 'failed' ? { spillFailed: true } : {}),
-        toolUse,
-        row: { ...entry.row, toolUse },
+        toolUse: {
+          ...row.toolUse,
+          outputText:
+            spill.kind === 'loaded'
+              ? spill.text
+              : withSpillNotice(row.toolUse.outputText, spill.notice),
+        },
       };
     }
-    return {
-      ...entry,
-      text:
-        spill.kind === 'loaded'
-          ? safeTerminalText(
-              normalizeKnownHtmlForCliMarkdown(
-                trimAssistantTranscriptLead(spill.text),
-              ),
-            )
-          : withSpillNotice(entry.text, spill.notice),
-    };
+    const recovered =
+      spill.kind === 'loaded'
+        ? safeTerminalText(
+            normalizeKnownHtmlForCliMarkdown(
+              trimAssistantTranscriptLead(spill.text),
+            ),
+          )
+        : withSpillNotice(transcriptRowHeadline(row), spill.notice);
+    return hydrateRowHeadline(row, recovered, spill.kind === 'failed');
   });
   return { ...slice, entries };
+}
+
+/**
+ * Substitute a row's headline text with the recovered artifact. Only the
+ * text-bearing kinds can carry a spill artifact in the first place; anything
+ * else keeps its own payload and only records that the read failed.
+ */
+function hydrateRowHeadline(
+  row: TranscriptRow,
+  text: string,
+  failed: boolean,
+): TranscriptRow {
+  const spillFailed = failed ? { spillFailed: true } : {};
+  const body = transcriptText(text);
+  switch (row.kind) {
+    case 'assistant':
+    case 'thinking':
+    case 'scratchpad':
+    case 'log':
+      return { ...row, ...spillFailed, text: body };
+    case 'user':
+      return { ...row, ...spillFailed, text: body, summary: body };
+    case 'error':
+      return { ...row, ...spillFailed, summary: body };
+    default:
+      return { ...row, ...spillFailed };
+  }
 }
 
 export function transcriptReaderTitle(label: string | undefined): string {

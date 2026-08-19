@@ -294,7 +294,7 @@ function WorkflowTaskRow({
   readonly streamId: StreamTabId | undefined;
 }): React.JSX.Element {
   useSignal(sessionStateRevision);
-  const style = WORKFLOW_TASK_STATUS_STYLE[entry.task.status];
+  const style = WORKFLOW_TASK_STATUS_STYLE[entry.call.status];
   // The resolved model rides the task's stream metadata, not the slice; a
   // terminal call's own recorded model still wins inside the formatter.
   const configModel =
@@ -302,7 +302,7 @@ function WorkflowTaskRow({
       ? undefined
       : streamMetadataFor(streamId)?.config?.model;
   const metadata = workflowTaskMetadata(
-    entry.task,
+    entry.call,
     child,
     configModel,
     streamId,
@@ -317,7 +317,7 @@ function WorkflowTaskRow({
       <Text aria-hidden color={style.color}>{` ${style.marker} `}</Text>
       <Box minWidth={0} flexShrink={1}>
         <Text wrap="truncate-end">
-          {entry.task.label} · {WORKFLOW_TASK_STATUS_LABEL[entry.task.status]}
+          {entry.call.label} · {WORKFLOW_TASK_STATUS_LABEL[entry.call.status]}
         </Text>
       </Box>
       {approval ? (
@@ -384,7 +384,7 @@ function WorkflowDashboard({
   const taskItems: SelectItem<ChildListValue>[] = (
     activeGroup?.tasks ?? []
   ).map((entry) => ({
-    label: entry.task.label,
+    label: entry.call.label,
     value: workflowTaskListValue(entry.id),
   }));
   const narrowItems: SelectItem<ChildListValue>[] = groups.flatMap((group) => [
@@ -394,11 +394,11 @@ function WorkflowDashboard({
       disabled: group.tasks.length > 0,
     },
     ...group.tasks.map((entry) => ({
-      label: entry.task.label,
+      label: entry.call.label,
       value: workflowTaskListValue(entry.id),
     })),
   ]);
-  const calls = tasks.map((entry) => entry.task);
+  const calls = tasks.map((entry) => entry.call);
   const { done, total } = workflowPhaseCallProgress(calls);
   const contentRows =
     maxRows === undefined ? undefined : Math.max(0, maxRows - 2);
@@ -487,7 +487,7 @@ function WorkflowDashboard({
   };
   const groupDetails = (group: WorkflowPhaseGroup): PhaseHeaderDetails => {
     const progress = workflowPhaseCallProgress(
-      group.tasks.map((entry) => entry.task),
+      group.tasks.map((entry) => entry.call),
     );
     return {
       phaseLabel: group.label,

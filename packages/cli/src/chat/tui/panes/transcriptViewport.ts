@@ -1,6 +1,7 @@
 // Pure viewport math for bounded pending transcript panes.
 
 import { createLog } from '@logger/logUtils';
+import type { TranscriptRow } from '@shared/transcript';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -8,7 +9,6 @@ import {
   transcriptEntryLayoutRows,
 } from './transcriptEntryLayout';
 import { isRenderableTranscriptEntry } from './transcriptEntries';
-import type { ConversationEntry } from '../state/cliState';
 
 const FAILED_ENTRY_ESTIMATE_ROWS = 1;
 const log = createLog('transcriptViewport');
@@ -17,7 +17,7 @@ const log = createLog('transcriptViewport');
 const brokenEntryIdsReported = new Set<string>();
 
 function estimateEntryRows(
-  entry: ConversationEntry,
+  entry: TranscriptRow,
   mode: 'live' | undefined,
   width: number | undefined,
   executionLabels: ExecutionLabels | undefined,
@@ -30,7 +30,7 @@ function estimateEntryRows(
     if (!brokenEntryIdsReported.has(entry.id)) {
       brokenEntryIdsReported.add(entry.id);
       log.warn(
-        `Failed to estimate rows for ${entry.role} entry ${entry.id}; assuming ${FAILED_ENTRY_ESTIMATE_ROWS}: ${toErrorMessage(error)}`,
+        `Failed to estimate rows for ${entry.kind} row ${entry.id}; assuming ${FAILED_ENTRY_ESTIMATE_ROWS}: ${toErrorMessage(error)}`,
       );
     }
     return FAILED_ENTRY_ESTIMATE_ROWS;
@@ -38,7 +38,7 @@ function estimateEntryRows(
 }
 
 export function estimateTranscriptEntryRows(
-  entry: ConversationEntry,
+  entry: TranscriptRow,
   width?: number,
   executionLabels?: ExecutionLabels,
 ): number {
@@ -49,7 +49,7 @@ export function estimateTranscriptEntryRows(
 // capped raw tail, while rich tool rows keep one descriptor line per terminal
 // row instead of being reflowed like plain projections.
 export function estimateLiveTranscriptEntryRows(
-  entry: ConversationEntry,
+  entry: TranscriptRow,
   width?: number,
   executionLabels?: ExecutionLabels,
 ): number {
@@ -57,7 +57,7 @@ export function estimateLiveTranscriptEntryRows(
 }
 
 export interface TranscriptEntrySelection {
-  readonly entries: readonly ConversationEntry[];
+  readonly entries: readonly TranscriptRow[];
   readonly rowLimits: ReadonlyMap<string, number>;
   readonly usedRows: number;
 }
@@ -65,7 +65,7 @@ export interface TranscriptEntrySelection {
 // Pick the newest entries that fit in `maxRows`. Conversation live mode passes
 // pending rows; finalized history is owned by Static/native scrollback.
 export function selectTranscriptEntriesForViewport(
-  entries: readonly ConversationEntry[],
+  entries: readonly TranscriptRow[],
   maxRows: number,
   width?: number,
   executionLabels?: ExecutionLabels,
@@ -74,7 +74,7 @@ export function selectTranscriptEntriesForViewport(
     return { entries: [], rowLimits: new Map(), usedRows: 0 };
   }
 
-  const selected: ConversationEntry[] = [];
+  const selected: TranscriptRow[] = [];
   const rowLimits = new Map<string, number>();
   let usedRows = 0;
   for (let index = entries.length - 1; index >= 0; index -= 1) {

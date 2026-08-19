@@ -14,7 +14,8 @@ import {
   uniqueWorkflowChildStreamId,
   workflowDashboardModel,
 } from '@cli/chat/tui/state/workflowDashboardModel';
-import { type StreamTabId } from '@shared/schemas';
+import { type StreamTabId, type WorkflowCallProgress } from '@shared/schemas';
+import type { TranscriptRow, TranscriptRowOf } from '@shared/transcript';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import {
   pollForCondition,
@@ -33,6 +34,45 @@ interface TaskSpec {
   readonly childStreamId?: StreamTabId;
 }
 
+function phaseRow(
+  phaseLabel: string,
+  phaseIndex: number,
+  phaseTotal: number,
+): TranscriptRowOf<'phase'> {
+  return {
+    kind: 'phase',
+    id: `phase-${phaseLabel}`,
+    timestamp: 0,
+    level: 'info',
+    heading: phaseLabel,
+    phaseLabel,
+    phaseIndex,
+    phaseTotal,
+  };
+}
+
+function taskRow(task: TaskSpec): TranscriptRowOf<'workflowTask'> {
+  const call: WorkflowCallProgress = {
+    id: task.id,
+    label: task.id,
+    status: 'running',
+    ...(task.phase === undefined ? {} : { phase: task.phase }),
+    ...(task.childStreamId === undefined
+      ? {}
+      : { childStreamId: task.childStreamId }),
+  };
+  return {
+    kind: 'workflowTask',
+    id: `task-${task.id}`,
+    timestamp: 0,
+    level: 'info',
+    call,
+    line: `Running: ${task.id}`,
+    statusLabel: 'Running',
+    metadataParts: [],
+  };
+}
+
 function workflowRoot(
   phases: readonly string[],
   tasks: readonly TaskSpec[],
@@ -40,41 +80,23 @@ function workflowRoot(
   return {
     ...emptySlice(ROOT),
     entries: [
-      ...phases.map((phaseLabel, phaseIndex) => ({
-        id: `phase-${phaseLabel}`,
-        role: 'phase' as const,
-        text: phaseLabel,
-        finalized: true,
-        phaseLabel,
-        phaseIndex,
-        phaseTotal: phases.length,
-      })),
-      ...tasks.map((task) => ({
-        id: `task-${task.id}`,
-        role: 'workflowTask' as const,
-        text: `Running: ${task.id}`,
-        finalized: false,
-        task: {
-          id: task.id,
-          label: task.id,
-          status: 'running' as const,
-          ...(task.phase === undefined ? {} : { phase: task.phase }),
-          ...(task.childStreamId === undefined
-            ? {}
-            : { childStreamId: task.childStreamId }),
-        },
-      })),
+      ...phases.map((phaseLabel, phaseIndex) =>
+        phaseRow(phaseLabel, phaseIndex, phases.length),
+      ),
+      ...tasks.map(taskRow),
     ],
   };
 }
 
-/** Mark every task and phase of a slice as belonging to a prior attempt. */
-function markPriorAttempt(entries: StreamSlice['entries']) {
+/** Mark every task and phase row of a slice as belonging to a prior attempt. */
+function markPriorAttempt(
+  entries: StreamSlice['entries'],
+): readonly TranscriptRow[] {
   return entries.map((entry) => {
-    if (entry.role === 'workflowTask') {
-      return { ...entry, task: { ...entry.task, attemptId: 'prior' } };
+    if (entry.kind === 'workflowTask') {
+      return { ...entry, call: { ...entry.call, attemptId: 'prior' } };
     }
-    if (entry.role === 'phase') return { ...entry, attemptId: 'prior' };
+    if (entry.kind === 'phase') return { ...entry, attemptId: 'prior' };
     return entry;
   });
 }
@@ -180,7 +202,7 @@ describe('workflow dashboard model', () => {
       'Map',
       'Reduce',
     ]);
-    expect(model.tasks.map((entry) => entry.task.label)).toStrictEqual([
+    expect(model.tasks.map((entry) => entry.call.label)).toStrictEqual([
       'inspect',
       'extract',
       'merge',
@@ -235,15 +257,15 @@ describe('workflow dashboard model', () => {
       [{ id: 'verification', phase: 'Verify' }],
     );
     const original = root.entries.find(
-      (entry) => entry.role === 'workflowTask',
+      (entry) => entry.kind === 'workflowTask',
     );
-    expect(original?.role).toBe('workflowTask');
-    if (original?.role !== 'workflowTask') return;
+    expect(original?.kind).toBe('workflowTask');
+    if (original?.kind !== 'workflowTask') return;
     const current = {
       ...original,
       id: 'task-verification-current',
-      text: 'Running: verification again',
-      task: { ...original.task },
+      line: 'Running: verification again',
+      call: { ...original.call },
     };
 
     const model = workflowDashboardModel(
@@ -269,14 +291,14 @@ describe('workflow dashboard model', () => {
     );
     const priorEntries = markPriorAttempt(prior.entries);
     const currentEntries = current.entries.map((entry) => {
-      if (entry.role === 'workflowTask') {
+      if (entry.kind === 'workflowTask') {
         return {
           ...entry,
           id: `current-${entry.id}`,
-          task: { ...entry.task, attemptId: 'current' },
+          call: { ...entry.call, attemptId: 'current' },
         };
       }
-      if (entry.role === 'phase') {
+      if (entry.kind === 'phase') {
         return { ...entry, id: `current-${entry.id}`, attemptId: 'current' };
       }
       return { ...entry, id: `current-${entry.id}` };
@@ -287,7 +309,7 @@ describe('workflow dashboard model', () => {
       WIDE_COLUMNS,
     );
 
-    expect(model.tasks.map((entry) => entry.task.id)).toStrictEqual([
+    expect(model.tasks.map((entry) => entry.call.id)).toStrictEqual([
       'verification',
     ]);
     expect(model.groups.map((group) => group.label)).toStrictEqual(['Verify']);
@@ -298,11 +320,12 @@ describe('workflow dashboard model', () => {
       ['Verify'],
       [{ id: 'verification', phase: 'Verify' }],
     );
-    const currentHeading = {
+    const currentHeading: TranscriptRowOf<'phase'> = {
+      kind: 'phase',
       id: 'phase-verify-current',
-      role: 'phase' as const,
-      text: 'Verify',
-      finalized: true,
+      timestamp: 0,
+      level: 'info',
+      heading: 'Verify',
       phaseLabel: 'Verify',
       phaseIndex: 2,
       phaseTotal: 3,
@@ -322,11 +345,12 @@ describe('workflow dashboard model', () => {
       ['Verify'],
       [{ id: 'verification', phase: 'Verify' }],
     );
-    const currentHeading = {
+    const currentHeading: TranscriptRowOf<'phase'> = {
+      kind: 'phase',
       id: 'phase-verify-partial',
-      role: 'phase' as const,
-      text: 'Verify',
-      finalized: true,
+      timestamp: 0,
+      level: 'info',
+      heading: 'Verify',
       phaseLabel: 'Verify',
       phaseIndex: 2,
     };
@@ -345,11 +369,12 @@ describe('workflow dashboard model', () => {
   it('renders a current empty dynamic phase while dropping prior attempts', async () => {
     const root = workflowRoot(['Prior'], [{ id: 'old', phase: 'Prior' }]);
     const entries = markPriorAttempt(root.entries);
-    const currentPhase = {
+    const currentPhase: TranscriptRowOf<'phase'> = {
+      kind: 'phase',
       id: 'phase-current',
-      role: 'phase' as const,
-      text: 'Explore',
-      finalized: true,
+      timestamp: 0,
+      level: 'info',
+      heading: 'Explore',
       phaseLabel: 'Explore',
       attemptId: 'current',
     };

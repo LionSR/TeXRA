@@ -1,16 +1,13 @@
 // Current workflow-script phase for orientation chrome (header, status bar).
 
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import type { TranscriptRowOf } from '@shared/transcript';
 import {
   formatWorkflowPhaseHeading,
   type WorkflowPhaseHeading,
 } from '@shared/copy/workflowCall';
 
-import {
-  currentWorkflowAttemptId,
-  type ConversationEntry,
-  type StreamSlice,
-} from './cliState';
+import { currentWorkflowAttemptId, type StreamSlice } from './cliState';
 
 /**
  * The open phase of one workflow-script stream, if it has emitted one.
@@ -28,10 +25,10 @@ export function currentWorkflowPhaseHeading(
     slice.workflowAttemptBoundaryDeclared,
   );
   const phase = slice.entries.findLast(
-    (entry): entry is Extract<ConversationEntry, { readonly role: 'phase' }> =>
-      entry.role === 'phase' &&
+    (row): row is TranscriptRowOf<'phase'> =>
+      row.kind === 'phase' &&
       (currentAttemptId === undefined ||
-        (currentAttemptId !== null && entry.attemptId === currentAttemptId)),
+        (currentAttemptId !== null && row.attemptId === currentAttemptId)),
   );
   if (!phase) return undefined;
   return {

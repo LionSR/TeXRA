@@ -1,4 +1,4 @@
-// Yoga does not collapse adjacent margins, so a boundary where both entries
+// Yoga does not collapse adjacent margins, so a boundary where both rows
 // declare a separator costs two blank rows unless the layout collapses them.
 // These pin the collapse at the geometry SSOT, where every render path and
 // every row budget reads it.
@@ -6,36 +6,30 @@
 import { describe, expect, it } from 'vitest';
 
 import { transcriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
-import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
+import type { TranscriptRow } from '@shared/transcript';
+import { textRowFixture } from '@test/support/transcriptRowFixtures';
 
-const user = (id: string, text = 'a user turn'): ConversationEntry =>
-  ({ id, role: 'user', text, finalized: true }) as ConversationEntry;
+const user = (id: string, text = 'a user turn'): TranscriptRow =>
+  textRowFixture(id, 'user', text);
 
-const assistant = (id: string): ConversationEntry =>
-  ({
-    id,
-    role: 'assistant',
-    text: 'a reply',
-    finalized: true,
-  }) as ConversationEntry;
+const assistant = (id: string): TranscriptRow =>
+  textRowFixture(id, 'assistant', 'a reply');
 
-const phase = (id: string): ConversationEntry =>
-  ({
-    id,
-    role: 'phase',
-    phaseLabel: 'Scan',
-    finalized: true,
-  }) as ConversationEntry;
+const phase = (id: string): TranscriptRow => ({
+  id,
+  kind: 'phase',
+  timestamp: 0,
+  level: 'info',
+  heading: 'Scan',
+  phaseLabel: 'Scan',
+});
 
-const topRows = (
-  entry: ConversationEntry,
-  previousEntry?: ConversationEntry,
-): number =>
-  transcriptEntryLayout(entry, { previousEntry, width: 60 }).marginTopRows;
+const topRows = (row: TranscriptRow, previousEntry?: TranscriptRow): number =>
+  transcriptEntryLayout(row, { previousEntry, width: 60 }).marginTopRows;
 
 describe('transcript entry margin collapse', () => {
   it('keeps the declared top margin when no previous entry is known', () => {
-    // Callers that cannot identify the entry above (the live pane's first row,
+    // Callers that cannot identify the row above (the live pane's first row,
     // the row-budget estimators) must keep reserving the full separator.
     expect(topRows(user('u1'))).toBe(1);
     expect(topRows(phase('p1'))).toBe(1);
