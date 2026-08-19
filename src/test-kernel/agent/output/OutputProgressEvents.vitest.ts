@@ -10,7 +10,7 @@ import {
   createOutputState,
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
-import { OutputFileProcessor } from '@agent/implementations/flows/reflection/output/OutputFileProcessor';
+import { processMultipleOutputs } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
 import type { OutputDependencies } from '@agent/implementations/flows/reflection/output/outputState';
 import type { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -50,8 +50,8 @@ const defaultWorkflowOutputPolicy = {
 };
 
 /**
- * Minimal OutputDependencies for OutputFileProcessor tests: the processor
- * reads only `baseFiles`, `logger`, and `runScope.streamId`.
+ * Minimal OutputDependencies for the output-extraction tests: the code under
+ * test reads only `baseFiles`, `logger`, and `runScope.streamId`.
  */
 function processorDeps(logger: AgentTrace): OutputDependencies {
   return {
@@ -330,11 +330,13 @@ describe('output progress events', () => {
     } as unknown as XmlOutputManager;
 
     try {
-      await new OutputFileProcessor(
+      await processMultipleOutputs(
         state,
         processorDeps(logger),
         xmlManager,
-      ).processMultipleOutputs(createLocation(outputPath), round);
+        createLocation(outputPath),
+        round,
+      );
 
       expect(runEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
@@ -369,11 +371,13 @@ describe('output progress events', () => {
         splitScratchpadMultipleOutputXml: async () => [],
       } as unknown as XmlOutputManager;
 
-      await new OutputFileProcessor(
+      await processMultipleOutputs(
         createOutputState(),
         processorDeps(logger),
         xmlManager,
-      ).processMultipleOutputs(createLocation('/tmp/output.xml'), 5);
+        createLocation('/tmp/output.xml'),
+        5,
+      );
 
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('no files could be extracted');
