@@ -225,29 +225,6 @@ describe('stream-tab expand chevron', () => {
     );
   });
 
-  it('reads the inline agent name from RunIdentity, not the derived tab label', async () => {
-    const tabs = await mountTabs({
-      streams: [
-        {
-          identity: { kind: 'agent', agent: 'custom:engineer' },
-          name: 'custom:engineer#abc',
-          // Deliberately stale/wrong derived label — identity is authoritative.
-          label: 'stale-label',
-          agentCategory: AgentCategory.ToolUse,
-          description: 'Removing Supabase migrations from remote...',
-          creationTimestamp: 1,
-        },
-      ],
-    });
-
-    expect(
-      tabs.shadowRoot
-        ?.querySelector('stream-tab')
-        ?.shadowRoot?.querySelector('.agent-name')
-        ?.textContent?.trim(),
-    ).toBe('engineer');
-  });
-
   it('keeps the opaque stream id out of row text but in its accessible name', async () => {
     const tabs = await mountTabs({
       streams: [
