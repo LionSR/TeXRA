@@ -104,7 +104,6 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const copyButton = buildCopyButton('Copy error details', {
     hidden: !hasDetails,
     content: rawContent,
-    contentId: id ? `error:${id}` : undefined,
   });
   // Toggle chevron now comes from <wa-details>'s built-in disclosure icon
   // (::part(icon)); banner-details--no-toggle hides that part when there's
