@@ -17,6 +17,7 @@ import { requireNonEmptyString } from '@tools/utils';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { rateLimitedApiCall } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import {
   type ArxivSearchResult,
   createArxivClient,
@@ -35,28 +36,20 @@ const ArxivSearchInputSchema = z.strictObject({
   query: z
     .string()
     .describe('Search query terms, title text, or author names.'),
-  field: SearchFieldSchema.nullish()
-    .transform((v) => v ?? 'all')
-    .describe(
-      'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
-    ),
+  field: nullishWithDefault(SearchFieldSchema, 'all').describe(
+    'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
+  ),
   categories: z
     .array(z.string())
     .nullish()
     .describe('Optional arXiv category filters such as "math.NT" or "cs.AI".'),
-  maxResults: z
-    .int()
-    .positive()
-    .max(ARXIV_CONSTANTS.MAX_RESULTS)
-    .nullish()
-    .transform((v) => v ?? ARXIV_CONSTANTS.DEFAULT_RESULTS)
-    .describe('Maximum number of papers to return.'),
-  start: z
-    .int()
-    .min(0)
-    .nullish()
-    .transform((v) => v ?? 0)
-    .describe('Zero-based result offset for pagination.'),
+  maxResults: nullishWithDefault(
+    z.int().positive().max(ARXIV_CONSTANTS.MAX_RESULTS),
+    ARXIV_CONSTANTS.DEFAULT_RESULTS,
+  ).describe('Maximum number of papers to return.'),
+  start: nullishWithDefault(z.int().min(0), 0).describe(
+    'Zero-based result offset for pagination.',
+  ),
   sortBy: SortBySchema.nullish().describe('arXiv sort field to use.'),
   sortOrder: SortOrderSchema.nullish().describe('Sort direction for results.'),
 });

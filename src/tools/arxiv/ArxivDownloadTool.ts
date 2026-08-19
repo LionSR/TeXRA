@@ -8,6 +8,7 @@ import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import { wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -42,16 +43,13 @@ async function listExtractedEntries(dirFsPath: string): Promise<string> {
 
 const ArxivDownloadInputSchema = z.strictObject({
   id: z.string().describe('arXiv identifier or URL for the source archive.'),
-  autoIndent: z
-    .boolean()
-    .nullish()
-    .transform((v) => v ?? true)
-    .describe('Auto-indent extracted TeX files after downloading source.'),
-  destination: z
-    .enum(['root', 'references'])
-    .nullish()
-    .transform((v) => v ?? ('references' as const))
-    .describe('Where to extract the source: workspace root or References/.'),
+  autoIndent: nullishWithDefault(z.boolean(), true).describe(
+    'Auto-indent extracted TeX files after downloading source.',
+  ),
+  destination: nullishWithDefault(
+    z.enum(['root', 'references']),
+    'references',
+  ).describe('Where to extract the source: workspace root or References/.'),
 });
 
 export type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
