@@ -760,8 +760,9 @@ function environmentSyncTemplate(
       </span>
     `;
   }
-  // role="img" gives the aria-label a host so screen readers announce words
-  // ("3 ahead, 2 behind") instead of the raw ↑/↓ glyphs.
+  // The arrow icons are aria-hidden (decorative, see waIcon()), so role="img"
+  // gives this aria-label a host to announce words ("3 ahead, 2 behind")
+  // instead of the bare counts next to them.
   const syncLabel = [
     summary.ahead > 0 ? `${summary.ahead} ahead` : '',
     summary.behind > 0 ? `${summary.behind} behind` : '',
@@ -770,8 +771,16 @@ function environmentSyncTemplate(
     .join(', ');
   return html`
     <span class="task-environment-trailing" role="img" aria-label=${syncLabel}>
-      ${summary.ahead > 0 ? `↑${summary.ahead}` : nothing}
-      ${summary.behind > 0 ? `↓${summary.behind}` : nothing}
+      ${
+        summary.ahead > 0
+          ? html`${waIcon('arrow-up')}${summary.ahead}`
+          : nothing
+      }
+      ${
+        summary.behind > 0
+          ? html`${waIcon('arrow-down')}${summary.behind}`
+          : nothing
+      }
     </span>
   `;
 }
