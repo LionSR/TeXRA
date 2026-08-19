@@ -109,7 +109,7 @@ async function reloadRemoteAgentsForGaps<T>(
   readonly remoteCatalogRefreshAttempted: boolean;
 }> {
   return refreshRemoteCatalogForGaps(value, hasGaps, replan, {
-    canAccessRemoteCatalog: () => SupabaseClient.canAccessRemoteAgentCatalog(),
+    canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
     refreshRemote: () => refresh({ includeRemote: true }),
   });
 }

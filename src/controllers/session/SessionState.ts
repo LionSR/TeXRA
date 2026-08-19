@@ -13,6 +13,7 @@ import { createSessionStores } from '@controllers/session/sessionStores';
 import { createLog } from '@logger/logUtils';
 import {
   type ActiveChildInfo,
+  type ContextStateData,
   type ConversationProgress,
   type StreamStage,
   type StreamIdentityFields,
@@ -75,6 +76,15 @@ export interface StreamExecutionState {
   category: (typeof AgentCategory)[keyof typeof AgentCategory];
   conversationProgress: ConversationProgress;
   stage?: StreamStage;
+  /**
+   * Latest context-window occupancy reported by the model handler that served
+   * this stream's last response — the only authority on the window actually
+   * used, which a static model-registry lookup cannot reproduce for
+   * subscription-capped or compacted turns. Absent until a response reports
+   * input tokens against a known window; carried across runs on the same
+   * stream, like the latest usage gauge it sits beside.
+   */
+  contextState?: ContextStateData;
   /** Live children plus the finished ones retained for display (`finishedAt`
    *  set). */
   subagents: ActiveChildInfo[];

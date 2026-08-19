@@ -10,21 +10,12 @@ import {
 } from '@shared/approvalPolicy';
 import type {
   AgentDelegationScope,
-  CompileFailure,
-  ConversationProgress,
-  OutputFileInfo,
-  Plan,
-  RoundIndexed,
-  RunIdentity,
   StreamLogEntry,
   StreamPhase,
-  StreamStage,
   StreamSubstate,
   StreamTabId,
   TaskGroup,
-  TodoItem,
   TokenUsageStats,
-  UserFollowUpSupport,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';

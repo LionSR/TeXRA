@@ -13,6 +13,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
+  type DerivedSettingsSnapshot,
   type SettingsViewInboundHandlerRegistry,
 } from '@shared/schemas';
 import {
@@ -21,10 +22,8 @@ import {
   type SettingsSnapshotPosters,
 } from '@shared/settingsView/handlers/stateSettingWrite';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
-import { buildApprovalSettingsMessage } from '@shared/settingsView/handlers/approvalHandlers';
-import { buildAgentSkillsSettingsMessage } from '@shared/settingsView/handlers/agentSkillsHandlers';
-import { buildTelemetrySettingsMessage } from '@shared/settingsView/handlers/telemetrySettingsHandlers';
-import { buildReliabilityAndOrchestrationMessage } from '@shared/settingsView/handlers/superYoloHandlers';
+import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import {
@@ -35,7 +34,6 @@ import {
 import { StorageFS } from '@utils/files/storageFS';
 import {
   applyGitAuthorSettings,
-  buildGitAuthorSettingsMessage,
   readGitAuthorSettingsFromState,
 } from '@utils/system/gitAuthorSettings';
 import {
@@ -132,10 +130,27 @@ export function createDesktopSettingsIpc(
     return applyGitAuthorSettings(readCurrentGitAuthorSettings());
   }
 
-  function postGitAuthorSettings(
-    settings = readCurrentGitAuthorSettings(),
-  ): void {
-    options.postToRenderer(buildGitAuthorSettingsMessage(settings));
+  const settingsStores: SettingsStores = {
+    config: options.config,
+    workspaceState,
+    globalState,
+  };
+
+  /**
+   * Post one catalog-derived snapshot. The desktop build has no reliability
+   * tuning of its own, so the multi-agent arm carries an empty list.
+   */
+  function postSettingsSnapshot(snapshot: DerivedSettingsSnapshot): void {
+    const message = buildSettingsSnapshotMessage(
+      snapshot,
+      settingsStores,
+      'desktop',
+    );
+    options.postToRenderer(
+      snapshot === 'multi-agent'
+        ? { ...message, reliabilitySettings: [] }
+        : message,
+    );
   }
 
   async function openMemoryFile(input: { storagePath: string }): Promise<void> {
@@ -147,35 +162,6 @@ export function createDesktopSettingsIpc(
     const memoryPath = resolveMemoryStoragePath();
     await StorageFS.ensureDir(memoryPath);
     await options.ui.openPath(StorageFS.fullPath(memoryPath));
-  }
-
-  function postReliabilityAndOrchestrationSettings(): void {
-    options.postToRenderer(
-      buildReliabilityAndOrchestrationMessage({
-        workspaceState,
-        globalState,
-        config: options.config,
-        getReliabilitySettings: () => [],
-      }),
-    );
-  }
-
-  function postApprovalSettings(): void {
-    options.postToRenderer(
-      buildApprovalSettingsMessage({
-        workspaceState,
-        globalState,
-        config: options.config,
-      }),
-    );
-  }
-
-  function postAgentSkillsSettings(): void {
-    options.postToRenderer(buildAgentSkillsSettingsMessage(options.config));
-  }
-
-  function postTelemetrySettings(): void {
-    options.postToRenderer(buildTelemetrySettingsMessage(options.config));
   }
 
   async function postGoalList(): Promise<void> {
@@ -196,15 +182,15 @@ export function createDesktopSettingsIpc(
     // Model availability can change without a session event (a server-side
     // tier or subscription flip), so the panel must not paint a stale list.
     invalidateModelOptionsCache();
-    postGitAuthorSettings();
+    postSettingsSnapshot('git-author');
     options.toolingSettingsController.postLatexConfigValues();
     const goalListPosted = postGoalList();
     const memoryEnabledPosted = settingsHost.sendMemoryEnabled();
     const modelSelectionDataPosted = settingsHost.sendModelSelectionData();
-    postReliabilityAndOrchestrationSettings();
-    postApprovalSettings();
-    postAgentSkillsSettings();
-    postTelemetrySettings();
+    postSettingsSnapshot('multi-agent');
+    postSettingsSnapshot('approval');
+    postSettingsSnapshot('agent-skills');
+    postSettingsSnapshot('telemetry');
     await Promise.all([
       goalListPosted,
       memoryEnabledPosted,
@@ -238,14 +224,19 @@ export function createDesktopSettingsIpc(
   }
 
   const stateSettingSnapshotPosters: SettingsSnapshotPosters = {
-    'agent-skills': postAgentSkillsSettings,
-    approval: postApprovalSettings,
-    'git-author': () => postGitAuthorSettings(applyCurrentGitAuthorSettings()),
+    'agent-skills': () => postSettingsSnapshot('agent-skills'),
+    approval: () => postSettingsSnapshot('approval'),
+    'git-author': () => {
+      // Git identity is also process env, so the write must reach `git` before
+      // the renderer is told the new value stuck.
+      applyCurrentGitAuthorSettings();
+      postSettingsSnapshot('git-author');
+    },
     latex: () => options.toolingSettingsController.postLatexConfigValues(),
     models: () => settingsHost.sendModelSelectionData(),
-    'multi-agent': postReliabilityAndOrchestrationSettings,
+    'multi-agent': () => postSettingsSnapshot('multi-agent'),
     profile: () => options.credentialSettingsController.postProfileData(),
-    telemetry: postTelemetrySettings,
+    telemetry: () => postSettingsSnapshot('telemetry'),
   };
 
   /**
@@ -257,7 +248,7 @@ export function createDesktopSettingsIpc(
   ): Promise<void> {
     const result = await applyStateSettingUpdate(key, value, {
       host: 'desktop',
-      stores: { config: options.config, workspaceState, globalState },
+      stores: settingsStores,
       onApprovalPolicyChanged: (policy) =>
         options.session.setApprovalPolicy(policy),
     });

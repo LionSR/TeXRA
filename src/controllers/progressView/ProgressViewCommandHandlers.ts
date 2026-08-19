@@ -370,8 +370,6 @@ export interface ProgressViewSecondTierActions {
   readonly session: SessionHandle;
   /** Look up one coherent run record for operations that need several facts. */
   readonly getRunMetadata: (stream: StreamTabId) => RunMetadata;
-  /** Single-field lookup used only by follow-up polishing. */
-  readonly getRunConfig: (stream: StreamTabId) => AgentConfig | undefined;
   /**
    * Warm a webview-selected stream before the synchronous metadata and
    * artifact readers above run. Production hosts always provide it.
@@ -548,7 +546,7 @@ export function createProgressViewSecondTierHandlers(
     // ── Follow-up polish ──
     [CMD.POLISH_FOLLOW_UP]: async (data) => {
       await deps.preload?.(data.stream);
-      const config = deps.getRunConfig(data.stream);
+      const config = deps.getRunMetadata(data.stream).config;
       if (!config) return;
       try {
         deps.onPolishProgress?.('Sending to AI for polishing...');

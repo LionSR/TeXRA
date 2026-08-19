@@ -18,39 +18,59 @@ import { computed, signal, type Signal } from '@lit-labs/signals';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { QuotaFallbackRouteId } from '@shared/quotaFallbackRoutes';
 import type {
-  AgentProposalPermission,
   ApprovalDecision as SharedApprovalDecision,
-  BashPermission,
-  ExternalInquiryPermission,
+  PermissionPayload,
   PlanApprovalAction,
-  PlanApprovalPermission,
   ProgressPermissionKind,
-  RetryPermission,
   StreamTabId,
-  UserQuestionPermission,
 } from '@shared/schemas';
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { assertNever } from '@utils/core';
 
 export type { ApprovalBypassKind };
 export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
-export type TuiRetryRequest = RetryPermission & {
-  readonly personalApiKeyAvailable?: boolean;
-  readonly missingPersonalApiKeyMessage?: string;
-};
+/**
+ * What the in-process TUI renderer needs on top of the wire payload, per kind.
+ *
+ * The wire arm is authoritative for everything a host displays. These are the
+ * two facts a webview cannot receive over IPC and the TUI can read directly:
+ * the edit's file contents (the inline diff renders them; the webview opens a
+ * diff editor instead) and the keychain answer the retry card asks for before
+ * it offers the "use your own API key" action. A kind absent from this map has
+ * no TUI-only state at all.
+ */
+interface TuiApprovalAdornments {
+  readonly toolEdit: {
+    readonly originalContent: string;
+    readonly proposedContent: string;
+  };
+  readonly retry: {
+    readonly personalApiKeyAvailable?: boolean;
+    readonly missingPersonalApiKeyMessage?: string;
+  };
+}
 
-export type ApprovalPayload =
-  | { kind: 'bash'; payload: BashPermission }
-  | { kind: 'toolEdit'; payload: ToolEditApprovalRequest }
-  | { kind: 'planApproval'; payload: PlanApprovalPermission }
-  | { kind: 'proposal'; payload: AgentProposalPermission }
-  | {
-      kind: 'retry';
-      payload: TuiRetryRequest;
-    }
-  | { kind: 'externalInquiry'; payload: ExternalInquiryPermission }
-  | { kind: 'userQuestion'; payload: UserQuestionPermission };
+/**
+ * The queued payload IS the wire {@link PermissionPayload}, with the TUI-only
+ * adornments above carried beside its `data` rather than merged into it.
+ * Derivation is the point: a kind added to the wire union appears here without
+ * an edit, so every `switch` below and in the modal dispatcher stops compiling
+ * until the TUI handles it — the silent-gap class of bug this queue used to
+ * have (issue #9021 register) cannot recur.
+ */
+export type ApprovalPayload = {
+  [K in ProgressPermissionKind]: Extract<PermissionPayload, { kind: K }> &
+    (K extends keyof TuiApprovalAdornments
+      ? { readonly tui: TuiApprovalAdornments[K] }
+      : { readonly tui?: never });
+}[ProgressPermissionKind];
+
+/** The two arms modals read adornments from. */
+export type ToolEditApprovalPayload = Extract<
+  ApprovalPayload,
+  { kind: 'toolEdit' }
+>;
+export type RetryApprovalPayload = Extract<ApprovalPayload, { kind: 'retry' }>;
 
 /**
  * The TUI decision = the host-neutral {@link SharedApprovalDecision}
@@ -307,7 +327,7 @@ export function approvalPayloadStreamId(
   payload: ApprovalPayload,
 ): StreamTabId | undefined {
   // Every payload variant carries a `streamId` field; all resolve the same way.
-  return payload.payload.streamId || undefined;
+  return payload.data.streamId || undefined;
 }
 
 /**
@@ -456,7 +476,7 @@ export function clearRetryApprovalsForStream(
     (item) =>
       item.owner === owner &&
       item.payload.kind === 'retry' &&
-      item.payload.payload.streamId === streamId,
+      item.payload.data.streamId === streamId,
     INTERRUPT,
     { cancelled: true },
   );

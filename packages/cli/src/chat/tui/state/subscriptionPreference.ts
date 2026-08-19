@@ -1,9 +1,10 @@
+import {
+  subscriptionProvider,
+  type SubscriptionProviderId,
+} from '@controllers/modelAccess/subscriptionProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
-import {
-  setPreferCodexSubscription,
-  type CodexSubscriptionPreferenceUpdate,
-} from '@model/codex/codexPreference';
+import type { SubscriptionPreferenceUpdate } from '@model/subscriptionPreference';
 import type { CodingPlanSubscriptionId } from '@shared/codingPlanSubscriptions';
 
 import { bumpCodexPreferenceVersion } from './cliState';
@@ -20,14 +21,16 @@ export function refreshSubscriptionPreferenceViews(): void {
 }
 
 /**
- * Flip the "prefer ChatGPT subscription" preference and refresh the TUI views.
- * Shared by ChatGPT login and the retry "switch to your own API key" path so
- * the persist-then-refresh sequence lives in one place.
+ * Flip an OAuth subscription preference (ChatGPT, Grok) and refresh the TUI
+ * views. Shared by the login commands and the retry "switch to your own API
+ * key" path so the persist-then-refresh sequence lives in one place.
  */
-export async function setCliCodexSubscription(
+export async function setCliSubscriptionPreference(
+  providerId: SubscriptionProviderId,
   enabled: boolean,
-): Promise<CodexSubscriptionPreferenceUpdate> {
-  const update = await setPreferCodexSubscription(enabled);
+): Promise<SubscriptionPreferenceUpdate> {
+  const update =
+    await subscriptionProvider(providerId).setPreferSubscription(enabled);
   refreshSubscriptionPreferenceViews();
   return update;
 }

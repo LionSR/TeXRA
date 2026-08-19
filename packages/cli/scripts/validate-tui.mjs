@@ -2472,8 +2472,11 @@ const SCENARIOS = [
   },
   // PTY ordering tests (issue #7972): the harness drives one child stream's
   // attachment/roster/edge/status/removal facts through the real
-  // `attachSessionSignalsAdapter`/`subscribeStreamStatus` subscription path,
-  // not the CHILD_STREAMS map mutators directly. After each fact, the harness
+  // `attachSessionSignalsAdapter` rail (`sessionSignalsAdapter.ts`) — the same
+  // wiring `chatSessionController.ts` installs for a real run — which lands
+  // them on the shared `SessionState`; the CLI's `childRosters`/`parentStream`
+  // computed signals (`childExecutions.ts`) re-derive from there, and the
+  // harness keeps no side channel into either. After each fact, the harness
   // awaits the Ink render flush and emits an out-of-band marker. The validator
   // snapshots xterm at that exact byte-stream boundary, so a transiently-wrong
   // frame fails the scenario even when the next fact has already arrived.

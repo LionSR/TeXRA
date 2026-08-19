@@ -5,9 +5,15 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import {
   shouldUseSubscriptionDeviceCode,
-  type CliSubscriptionLoginTransportInit,
-  type CliSubscriptionSignOutResult,
+  signInCliSubscription,
+  signOutCliSubscription,
+  subscriptionSignOutOutcomeMessage,
 } from '@cli/runtime/subscriptionLogin';
+import {
+  subscriptionProvider,
+  type SubscriptionAccount,
+  type SubscriptionProviderId,
+} from '@controllers/modelAccess/subscriptionProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 import { withCliAuthError } from './cliAuthError';
@@ -15,65 +21,23 @@ import { defineCliCommand } from './defineCliCommand';
 import { booleanArg, GLOBAL_ARGS } from './globalArgs';
 import { cliProgressWriter, emitCliResult } from './output';
 
-/** Session fields the login payload reads; providers may carry more. */
-interface SubscriptionAuthSession {
-  readonly email?: string;
-}
-
-/** Coordinator status shape both subscription providers report. */
-interface SubscriptionAuthStatus {
-  readonly signedIn: boolean;
-  readonly email?: string;
-  readonly accountId?: string;
-}
-
-type SubscriptionAccountLabel = (
-  account:
-    | {
-        readonly email?: string | null;
-        readonly accountId?: string | null;
-      }
-    | null
-    | undefined,
-) => string;
-
-export interface DefineSubscriptionAuthCommandOptions<
-  Session extends SubscriptionAuthSession,
-> {
+export interface DefineSubscriptionAuthCommandOptions {
+  readonly providerId: SubscriptionProviderId;
   readonly commandName: string;
-  readonly displayName: string;
   readonly rootDescription: string;
   readonly loginDescription: string;
   readonly logoutDescription: string;
   readonly statusDescription: string;
-  /** Models the subscription unlocks, e.g. 'Codex models'. */
-  readonly enabledFor: string;
   /** Registered ndjson discriminator; the status record appends '-status'. */
   readonly ndjsonKind: 'chatgpt-auth' | 'grok-auth';
-  readonly accountLabel: SubscriptionAccountLabel;
   /**
    * Provider-specific login payload fields (Codex carries `accountId`; Grok
    * does not). Kept as explicit configuration so the difference stays visible
    * instead of drifting inside two copied payload builders.
    */
-  readonly loginPayloadExtras?: (session: Session) => Record<string, unknown>;
-  readonly signIn: (
-    init: CliSubscriptionLoginTransportInit,
-    options: { readonly writeProgress: (message: string) => void },
-  ) => Promise<Session>;
-  readonly signOut: () => Promise<CliSubscriptionSignOutResult>;
-  /**
-   * Full sign-out outcome text (`Signed out of …` plus the preference
-   * caveat), owned by the provider's runtime login module so the launcher
-   * account action reports the same lines.
-   */
-  readonly signOutOutcomeMessage: (
-    result: CliSubscriptionSignOutResult,
-  ) => string;
-  readonly setPreferSubscription: (
-    enabled: boolean,
-  ) => Promise<{ readonly effective: boolean }>;
-  readonly getStatus: () => Promise<SubscriptionAuthStatus>;
+  readonly loginPayloadExtras?: (
+    account: SubscriptionAccount,
+  ) => Record<string, unknown>;
 }
 
 /**
@@ -82,29 +46,29 @@ export interface DefineSubscriptionAuthCommandOptions<
  * its runtime bindings and user-facing nouns; the control flow, output
  * payloads, and exit codes live here exactly once.
  */
-export function defineSubscriptionAuthCommand<
-  Session extends SubscriptionAuthSession,
->(
-  options: DefineSubscriptionAuthCommandOptions<Session>,
+export function defineSubscriptionAuthCommand(
+  options: DefineSubscriptionAuthCommandOptions,
 ): CommandDef<typeof GLOBAL_ARGS> {
+  const provider = subscriptionProvider(options.providerId);
+
   function emitLogin(
     context: CliContext,
-    session: Session,
+    account: SubscriptionAccount,
     preferenceEffective: boolean,
   ): void {
     const payload = {
       authenticated: true,
-      email: session.email ?? null,
-      ...options.loginPayloadExtras?.(session),
+      email: account.email ?? null,
+      ...options.loginPayloadExtras?.(account),
       preferSubscription: preferenceEffective,
     };
-    const signedIn = `Signed in with ${options.displayName} as ${options.accountLabel(session)}.`;
+    const signedIn = `Signed in with ${provider.displayName} as ${account.label}.`;
     emitCliResult(context, {
       json: payload,
       ndjson: { kind: options.ndjsonKind, ...payload },
       text: preferenceEffective
-        ? `${signedIn}\n${options.displayName} subscription enabled for ${options.enabledFor}.`
-        : `${signedIn}\n${options.displayName} subscription preference could not be enabled because a more specific setting overrides the config.`,
+        ? `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`
+        : `${signedIn}\n${provider.displayName} subscription preference could not be enabled because a more specific setting overrides the config.`,
     });
   }
 
@@ -116,17 +80,15 @@ export function defineSubscriptionAuthCommand<
     const writeProgress = cliProgressWriter(context);
 
     const signInResult = await withCliAuthError(() =>
-      options.signIn(
-        {
-          ...init,
-          device: shouldUseSubscriptionDeviceCode(context, init),
-        },
+      signInCliSubscription(
+        options.providerId,
+        { ...init, device: shouldUseSubscriptionDeviceCode(context, init) },
         { writeProgress },
       ),
     );
     if (!signInResult.ok) return CliExitCode.ModelOrNetworkError;
 
-    const update = await options.setPreferSubscription(true);
+    const update = await provider.setPreferSubscription(true);
     emitLogin(context, signInResult.value, update.effective);
     invalidateModelOptionsCache();
     return CliExitCode.Success;
@@ -165,7 +127,9 @@ export function defineSubscriptionAuthCommand<
     args: { ...GLOBAL_ARGS },
     async run(context) {
       await initCliPlatform({ ...context, quietLogs: true });
-      const signOutResult = await withCliAuthError(() => options.signOut());
+      const signOutResult = await withCliAuthError(() =>
+        signOutCliSubscription(options.providerId),
+      );
       if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
       const update = signOutResult.value;
       invalidateModelOptionsCache();
@@ -179,7 +143,7 @@ export function defineSubscriptionAuthCommand<
       emitCliResult(context, {
         json: payload,
         ndjson: { kind: options.ndjsonKind, ...payload },
-        text: options.signOutOutcomeMessage(update),
+        text: subscriptionSignOutOutcomeMessage(options.providerId, update),
       });
       return CliExitCode.Success;
     },
@@ -193,15 +157,15 @@ export function defineSubscriptionAuthCommand<
     args: { ...GLOBAL_ARGS },
     async run(context) {
       await initCliPlatform({ ...context, quietLogs: true });
-      const statusResult = await withCliAuthError(() => options.getStatus());
+      const statusResult = await withCliAuthError(() => provider.getStatus());
       if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
-      const status = statusResult.value;
+      const { label, ...status } = statusResult.value;
       emitCliResult(context, {
         json: status,
         ndjson: { kind: `${options.ndjsonKind}-status`, ...status },
         text: status.signedIn
-          ? `Signed in with ${options.displayName} as ${options.accountLabel(status)}.`
-          : `Not signed in with ${options.displayName}.`,
+          ? `Signed in with ${provider.displayName} as ${label}.`
+          : `Not signed in with ${provider.displayName}.`,
       });
       return CliExitCode.Success;
     },

@@ -8,23 +8,17 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import {
+  applySettingsSnapshot,
   chatgptAuth,
-  gitAuthorEmail,
-  gitAuthorName,
   githubTokenStatus,
-  gitMarkCommits,
   gitSettingsLoaded,
-  gitWorktreeSupport,
   grokAuth,
   prSubscriptions,
 } from '../settingsState';
 
 export const gitHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS]: (data) => {
-    gitMarkCommits.set(data.markCommits);
-    gitAuthorName.set(data.authorName);
-    gitAuthorEmail.set(data.authorEmail);
-    gitWorktreeSupport.set(data.worktreeSupport);
+    applySettingsSnapshot(data.values);
     gitSettingsLoaded.set(true);
   },
 
