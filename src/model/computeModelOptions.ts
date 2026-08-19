@@ -400,9 +400,10 @@ async function buildAvailabilityContext(
  * The models the pickers show — the single reader of
  * `GlobalStateKey.ENABLED_MODELS` for every host.
  *
- * Normalizes an empty persisted list to {@link DEFAULT_MODELS}: `.get`'s
- * fallback only fires on `undefined`, so a stored `[]` would otherwise survive
- * all the way to an empty picker with no way back out from the UI.
+ * Normalizes an empty or `null` persisted list to {@link DEFAULT_MODELS}:
+ * `.get`'s fallback only fires on `undefined`, so a stored `[]` would
+ * otherwise survive all the way to an empty picker with no way back out from
+ * the UI, and a stored `null` would throw on `.length`.
  */
 export function getEnabledModels(
   state: Pick<StateStore, 'get'> = platform().globalState,
@@ -411,7 +412,7 @@ export function getEnabledModels(
     GlobalStateKey.ENABLED_MODELS,
     DEFAULT_MODELS,
   );
-  return enabled.length > 0 ? enabled : DEFAULT_MODELS;
+  return enabled != null && enabled.length > 0 ? enabled : DEFAULT_MODELS;
 }
 
 /**
