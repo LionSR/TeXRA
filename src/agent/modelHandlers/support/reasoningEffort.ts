@@ -1,4 +1,9 @@
-import { ReasoningEffort, type ModelCapabilities } from 'llm-zoo';
+import {
+  ModelProvider,
+  ReasoningEffort,
+  type ModelCapabilities,
+  type ModelConfig,
+} from 'llm-zoo';
 
 import type { ReasoningEffort as OpenAIReasoningEffort } from 'openai/resources/shared';
 
@@ -18,7 +23,7 @@ export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
 type NonNullOpenAIReasoningEffort = Exclude<OpenAIReasoningEffort, null>;
 
 /** Whether the model exposes a genuine user-selectable effort range. */
-export function hasConfigurableReasoningEffort(
+function hasConfigurableReasoningEffort(
   capabilities: ModelCapabilities,
 ): boolean {
   return (
@@ -27,6 +32,25 @@ export function hasConfigurableReasoningEffort(
       capabilities.reasoningEffort === ReasoningEffort.MAX &&
       capabilities.maxReasoningEffort === undefined
     )
+  );
+}
+
+/**
+ * Whether the model exposes a user-selectable reasoning level. This is the one
+ * definition behind both the handler getter (`ModelHandler
+ * .supportsReasoningLevelOverride`, read on every handler construction) and the
+ * Settings Models rows, so the control and the runtime can never disagree.
+ *
+ * DeepSeek is the extra term: its models declare `supportsReasoning` without a
+ * configurable effort range, yet still honour a level override.
+ */
+export function supportsReasoningLevel(
+  config: Pick<ModelConfig, 'provider' | 'capabilities'>,
+): boolean {
+  return (
+    hasConfigurableReasoningEffort(config.capabilities) ||
+    (config.provider === ModelProvider.DEEPSEEK &&
+      config.capabilities.supportsReasoning)
   );
 }
 
