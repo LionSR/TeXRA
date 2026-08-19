@@ -1,5 +1,5 @@
 import type { SelectItem } from '@cli/tui/ui/Select';
-import type { StateSettingEntry } from '@shared/schemas';
+import type { SurfacedSettingEntry } from '@shared/schemas';
 import { capitalize, formatResultCount } from '@utils/text/stringUtils';
 
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
@@ -20,7 +20,7 @@ export function configCategoryLabel(category: string): string {
 }
 
 export function buildConfigCategoryItems(
-  entries: readonly StateSettingEntry[],
+  entries: readonly SurfacedSettingEntry[],
 ): Array<SelectItem<string>> {
   const counts = new Map<string, number>();
   for (const entry of entries) {

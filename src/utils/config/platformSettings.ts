@@ -1,10 +1,18 @@
 import { platform } from '@platform/platform';
-import { stateSettingByKey } from '@shared/schemas';
-import { readSetting } from '@shared/config/settingsAccess';
+import { settingByKey } from '@shared/schemas';
+import { readSetting, writeSetting } from '@shared/config/settingsAccess';
+
+function requireEntry(key: string) {
+  const entry = settingByKey(key);
+  if (!entry) {
+    throw new Error(`No setting catalog entry for key: ${key}`);
+  }
+  return entry;
+}
 
 /**
- * Read a catalog-modeled state setting from the live platform, resolving its
- * default from the entry's schema `.prefault()` — the single default source.
+ * Read a catalog-modeled setting from the live platform, resolving its default
+ * from the entry's schema `.prefault()` — the single default source.
  *
  * Replaces the scattered `platform().<store>.get(key, handPassedDefault)` reads
  * whose second argument duplicated the catalog default: the value now comes from
@@ -13,18 +21,24 @@ import { readSetting } from '@shared/config/settingsAccess';
  * (`workspaceState` / `globalState` / `config`) is the one the catalog entry
  * declares, so the right backing store is picked without the caller naming it.
  *
- * Reads resolve to the `'extension'` host slot: the CLI-divergent
- * git-author keys (`cliStore: 'config'`) are read through the CLI's own
- * `readGitAuthorSettingsFromState`, and no current caller passes a host — the
- * CLI `settingSlot` branch had no consumer and was removed.
+ * Reads resolve to the `'vscode'` slot, which every row shares with `desktop`;
+ * the CLI-divergent git-author keys are read through the CLI's own
+ * `readGitAuthorSettingsFromState`.
  */
 export function readPlatformSetting<T>(key: string): T {
-  const entry = stateSettingByKey(key);
-  if (!entry) {
-    throw new Error(`No state-setting catalog entry for key: ${key}`);
-  }
   // `Platform` structurally supplies the `config`/`workspaceState`/`globalState`
   // slots `readSetting` reads from, so it passes as `SettingsStores` directly.
-  // `readSetting`'s `host` defaults to `'extension'`.
-  return readSetting(entry, platform()) as T;
+  return readSetting(requireEntry(key), platform()) as T;
+}
+
+/**
+ * Write a catalog-modeled setting through the shared write path, so the row's
+ * schema validation and its declared `onWrite` effects apply to runtime callers
+ * as well as to the settings UIs.
+ */
+export function writePlatformSetting(
+  key: string,
+  value: unknown,
+): Promise<void> {
+  return writeSetting(requireEntry(key), value, platform());
 }

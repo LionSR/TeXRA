@@ -14,6 +14,7 @@ import {
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
@@ -32,9 +33,9 @@ const mocks = vi.hoisted(() => ({
   hasUsableApiKey: vi.fn(),
   lookupApiKeyOrigin: vi.fn(),
   getPreferKimiCode: vi.fn(),
-  setPreferKimiCode: vi.fn(),
   getGLMCodingPlan: vi.fn(),
   setGLMCodingPlan: vi.fn(),
+  writePlatformSetting: vi.fn(),
 }));
 
 vi.mock('@platform/platform', () => ({
@@ -94,9 +95,12 @@ vi.mock('@model/apiProviders', () => {
 
 vi.mock('@utils/config/providerConfig', () => ({
   getPreferKimiCode: mocks.getPreferKimiCode,
-  setPreferKimiCode: mocks.setPreferKimiCode,
   getGLMCodingPlan: mocks.getGLMCodingPlan,
   setGLMCodingPlan: mocks.setGLMCodingPlan,
+}));
+
+vi.mock('@utils/config/platformSettings', () => ({
+  writePlatformSetting: mocks.writePlatformSetting,
 }));
 
 vi.mock('@model/computeModelOptions', () => ({
@@ -197,7 +201,7 @@ beforeEach(() => {
   mocks.hasUsableApiKey.mockResolvedValue(false);
   mocks.lookupApiKeyOrigin.mockResolvedValue('none');
   mocks.getPreferKimiCode.mockReturnValue(false);
-  mocks.setPreferKimiCode.mockResolvedValue(undefined);
+  mocks.writePlatformSetting.mockResolvedValue(undefined);
   mocks.getGLMCodingPlan.mockReturnValue(false);
   mocks.setGLMCodingPlan.mockResolvedValue(undefined);
 });
@@ -457,7 +461,10 @@ describe('CLI model access routes', () => {
     );
 
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true);
+    expect(mocks.writePlatformSetting).toHaveBeenCalledWith(
+      GlobalStateKey.KIMI_CODE_PREFER,
+      true,
+    );
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
@@ -474,7 +481,7 @@ describe('CLI model access routes', () => {
       { writeProgress: vi.fn() },
     );
 
-    expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
+    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
     expect(result.apiMode).toBe('personal');
     expect(result.message).toContain('No Kimi Code API key configured');
@@ -516,7 +523,7 @@ describe('CLI model access routes', () => {
     );
 
     expect(mocks.setGLMCodingPlan).toHaveBeenCalledWith(true);
-    expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
+    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
     expect(mocks.updateGlobalState).not.toHaveBeenCalled();
@@ -552,7 +559,7 @@ describe('CLI model access routes', () => {
 
     expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
     expect(mocks.setGLMCodingPlan).toHaveBeenCalledWith(false);
-    expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
+    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
@@ -568,7 +575,7 @@ describe('CLI model access routes', () => {
     );
 
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
+    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
     expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
     expect(result).toEqual({
       apiMode: 'personal',
@@ -580,7 +587,7 @@ describe('CLI model access routes', () => {
     await updateCliModelAccess(context, cliApiFallbackSelection('included'));
 
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
+    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
     expect(mocks.setCliApiMode).toHaveBeenCalledWith('included');
   });
 
@@ -605,7 +612,7 @@ describe('CLI model access routes', () => {
       updateCliModelAccess(context, cliApiFallbackSelection('included')),
     ).rejects.toThrow('Config write failed');
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
+    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
   });
 
   it('signs in when needed and enables ChatGPT without an API key', async () => {
@@ -658,7 +665,7 @@ describe('CLI model access routes', () => {
 
     expect(mocks.signInCliChatGpt).not.toHaveBeenCalled();
     expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
-    expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
+    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
       apiMode: 'personal',
@@ -702,7 +709,10 @@ describe('CLI model access routes', () => {
       subscriptionPreference('kimi-code', 'off'),
       { writeProgress: vi.fn() },
     );
-    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(false);
+    expect(mocks.writePlatformSetting).toHaveBeenCalledWith(
+      GlobalStateKey.KIMI_CODE_PREFER,
+      false,
+    );
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
 
@@ -722,7 +732,7 @@ describe('CLI model access routes', () => {
       { writeProgress: vi.fn() },
     );
     expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
-    expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
+    expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
     expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
   });
 
@@ -770,7 +780,10 @@ describe('CLI model access routes', () => {
     await updateCliModelAccess(context, selection.value);
 
     expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
-    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(false);
+    expect(mocks.writePlatformSetting).toHaveBeenCalledWith(
+      GlobalStateKey.KIMI_CODE_PREFER,
+      false,
+    );
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
   });
 });
