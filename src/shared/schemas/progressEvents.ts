@@ -102,7 +102,6 @@ export interface ClearMissingOutputsPayload {
 export interface UpdateStreamUsagePayload {
   streamId: StreamTabId;
   storageKey: StorageKey;
-  executionId?: ExecutionId;
   usage: ExtendedTokenUsageStats;
 }
 
