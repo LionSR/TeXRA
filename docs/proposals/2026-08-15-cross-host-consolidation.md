@@ -19,6 +19,39 @@
 > C19 (relocation withdrawn), §4i (webview fallback narrower than claimed),
 > §4k (example replaced with the narrower true claim).
 
+> **Reconciled against origin/main `e00b9317f7` (2026-08-19).** The lifecycle
+> plane largely executed — C2/C3/C21 landed in one resume-hardening PR
+> (#10699), V4b/c were ruled and landed (#10739), C10's silent branch is loud
+> (#10924), and §4a landed over-delivered (#10693 then the Wave A collapse).
+> §4i landed (#10713) and §4k's code landed by a better mechanism than
+> prescribed (#10704, a texmath-mirroring block probe rather than a
+> `MATH_SPAN_PATTERNS` addition) — though the `\begin…\end` test this doc
+> named as the missing piece is still missing. V3 is **fixed** by #10925, and
+> V9/DR13 is substantially resolved (see the row — the doc's "two truth
+> sources" framing was wrong at HEAD). **The composition-root plane
+> (§2c) is untouched: not one of C4/C5/C6/C7/C8/C15 has a landing PR**, and
+> C4/V10 is the live user-facing defect in the set — a malformed project
+> config still hard-fails every `texra` command on the one host with no
+> settings UI. Also genuinely open: C1 (whose framing is superseded — see the
+> row), C12, C13a/c, C16, C17, C9/V11a, V2 (worse than written), V5 (real
+> harm changed), V6, V7, V11b, and eight of the eleven #9021 rows.
+> Three rows landed by a _better_ mechanism than proposed (C14, §4k, V9) and
+> should be read down to their actual residue rather than whole; two rows
+> evaporated with the relay retirement (#10894 attic + recovery record, #10896
+> client plane) rather than being consolidated — C-minor(a)'s
+> `clearAllCaches` repetition and V2's relay-spend mitigation — and with them
+> the separately-tracked included-access spend consolidation, whose subject no
+> longer exists: `relayUsage.ts` is deleted and `apiStatus.ts` carries no
+> included-access line. (What survives is deliberate: one dated legacy copy
+> string at `src/shared/copy/modelAccess.ts:59-68`, marked "delete after
+> 2026-11" and backed by live tests — not leftover debt.) Three claims were
+> already stale at this
+> doc's own pin (C-minor(c), V12's "undocumented", and the `src/hosts/nodeHost.ts`
+> path in C7/C8/C14 — the file has been at `src/platform/defaults/nodeHost.ts`
+> since `3122ace2bc`). One regression to triage separately: C13b was resolved
+> by **deleting** the CLI's ACTIVE_SKILLS handling, so the CLI can no longer
+> observe active skills at all.
+
 > **Follow-up:** the maintainer subsequently ruled for maximal consolidation
 > ("same data structure, UI rendered differently, collapse
 > projectors/adapters/bridges, single source of truth"). The target
@@ -115,7 +148,39 @@ standing review criterion for the whole program.
 
 ### 2a. Projection plane
 
-- **C1. The delta-feed driver is written twice.** Ext/desktop
+**Row status at `e00b9317f7` (2026-08-19).** C1 **superseded — the extraction
+is withdrawn** (see the row). C20 **LANDED #10932** (the "zero CLI callers"
+claim is now false: `streamViews.ts:124` calls `buildStreamTabInfo`; residual
+ad-hoc `getRuntimeModelLabel` calls survive in four CLI files). C13a **OPEN**
+— three live copies, `isEmptyUsage` still with zero host importers. C13b
+**RESOLVED BY DELETION, flag it** — the CLI's two ACTIVE_SKILLS sites went with
+the Wave A slice retype (#10895) rather than converging on a shared
+`latestActiveSkills`, so the CLI cannot observe active skills at all; that is a
+capability regression to triage, not a consolidation. C13c **OPEN**. C17
+**OPEN** — the counts still are not on `ToolEditApprovalRequest` and
+`DiffView.statsFromHunks` still recomputes. C22 **PARTIAL #10892 — and now
+three representations, not two**: `startedAt` shipped and the CLI ticks from
+it, but the redundant `formatDuration` stamp survives on the wire and the
+webview still renders it. C18 **PARTIAL #10889** — the SYNC branch and
+`streamStates` go through the shared builders; the `StreamTabInfo` literal is
+still hand-built. Doc correction: `ProgressStreamProjectionBuilder.ts` no
+longer exists; the live owner is `src/shared/streams/streamContentSync.ts`.
+
+- **C1. The delta-feed driver is written twice.**
+  **SUPERSEDED 2026-08-19 — the `StreamLogFeed` extraction is withdrawn**
+  (issue #10673, closed NOT_PLANNED; substrate doc §7). The premise did not
+  survive re-audit: the buffer/gap-detect/resync half was already one
+  implementation (`StreamLogDeltaBuffer`, `src/transcript/StreamLog.ts:64`) and
+  the coalescing half already had a shared owner (`createFlushableDebounce`,
+  twelve consumers) — both imported by both sites. What is left is divergent
+  host policy, and it has diverged _further_ since this row was written: the
+  CLI copy gained `logInstanceId`, `hasUndrainedChanges`, and mode-flip
+  invalidation the webview has no use for. A single feed with two overriding
+  consumers is the shape the repo's own LOC lesson says net-adds. Read the
+  paragraph below as a description of a real duplication that was priced and
+  declined, not as pending work.
+
+  Ext/desktop
   (`src/controllers/progressView/backend/WebviewBridge.ts`, 189 L) and the CLI
   TUI (`packages/cli/src/chat/tui/state/subscribeStreamLog.ts`, 500 L)
   implement the identical algorithm over `StreamLogStore.onChange`: buffer
@@ -128,6 +193,7 @@ standing review criterion for the whole program.
   subscribe+buffer+coalesce+resync, calling back
   `(streamId, batch | 'resync')`; both sites become sinks. **Net:** ~−120 L
   and one class of resync bug. Highest-value item in this audit.
+
 - **C20. CLI display metadata bypasses `buildStreamTabInfo`.**
   `src/controllers/session/streamTabInfo.ts:32` +
   `streamInfoUtils.ts:19,48` serve ext+desktop; **zero CLI callers**. The CLI
@@ -192,6 +258,24 @@ standing review criterion for the whole program.
   fenced `legacyTraceIdentity` parser at `:140-156`.)
 
 ### 2b. Lifecycle plane
+
+**Row status at `e00b9317f7` (2026-08-19).** C2 **LANDED #10699**
+(`resumeStreamWithRecovery` in `resolveAndResumeStream.ts:75`, both GUI
+wrappers converted; the CLI kept its in-function claim as adjudicated). C3
+**LANDED #10699** — the discriminated `resolved | read-failed | incomplete`
+resolution goes through the port and one shared
+`describeResumeStateResolution`, closing V4a; the contract-change-first
+sequencing this row insisted on is what made it work. C21 **LANDED #10699**
+(`describeResumeFailure`, four call sites — one more than this row counted;
+the CLI pre-check stayed CLI-only as designed). C10 **PARTIAL #10924** — the
+_defect_ is fixed and is the more valuable half: the extension's silent branch
+now logs **and** surfaces, and the false "both callers own their own reporting"
+comment is replaced; the six-site `validateOrReport` dedup did not happen. C11
+**PARTIAL #10699** — the double-toast bug is dead, but it was fixed by making
+the extension a **fourth** `trackTerminalResultPresentation` caller, so the
+duplication this row wanted removed grew by 33% and the row is now pure dedup
+with no bug attached. C12 **OPEN** — the ladder is still duplicated and desktop
+still discards `docsCommand`, so desktop users still get the dead-end error.
 
 - **C2. Resume recovery claim/release triad — byte-identical, 2 hosts.**
   `packages/extension/src/commands/agent/resumeFromResumeData.ts:46-50,106-108`
@@ -272,6 +356,28 @@ hostPorts)` on the existing `MainViewExecutionController`. **Net:** −1 copy
   - 1 restored affordance.
 
 ### 2c. Composition-root / platform plane
+
+**This plane is where the program did not go.** At `e00b9317f7` (2026-08-19)
+**none of C4, C5, C6, C7, C8 or C15 has a landing PR**, and two of them moved
+the wrong way: C8's extension literal grew a member, and the factory still
+constructs `new JsonConfigProvider` unconditionally so the SDK's
+`MemoryConfigProvider` still cannot route through it. C5's scope shrank by one
+member for an unrelated reason — #10865 deleted `watch` from both providers —
+leaving `get`/`inspect`/`isExplicitlySet` still byte-equivalent. C4 is the
+**highest-priority live defect in this doc**: the CLI still opens the project
+config unguarded (`initPlatform.ts:229-231` over a `JsonStore.open` that
+rethrows non-ENOENT), so a malformed `.texra/config.json` hard-fails every
+`texra` command on the one host with no settings UI to fix it — and desktop
+hard-codes `'config.json'` at two sites, not one. C14 **LANDED by a better
+mechanism (#10716)**: rather than a three-caller `registerCoreShutdownHandlers`,
+`PollingSourceBase` self-registers its own `disposeAll` on `platform().lifecycle`,
+which fixes every host at once and matches the lifecycle doc's scoping note;
+desktop separately gained `killActiveRecording`. The residue is one line —
+`clearStoreCache` is still extension-only.
+
+**Path correction:** C7, C8 and C14 cite `src/hosts/nodeHost.ts`. The file has
+been at `src/platform/defaults/nodeHost.ts` since before this doc's own
+reproduction pin.
 
 - **C4. Project-config store selection + `canCreateOrWrite` — verbatim, 2
   hosts; 3rd host throws instead.**
@@ -395,7 +501,33 @@ resetQuotaFlip: true })` is repeated unconditionally at 6 sites across the
   `secretManager.ts:31-72` is a pass-through over `platform().secrets` (4 of
   6 members one-line delegations) — a deletion candidate, not an extraction.
 
+**Row status at `e00b9317f7` (2026-08-19).** C9 **OPEN** — all six descriptors
+live, and rider V11a is confirmed: desktop still imports only
+`loginWithLoopback`. C-minor(a) is **MOOT by deletion, not consolidation** —
+`getServerSideKeyService`/`clearAllCaches` went with the relay client plane
+(#10896), so the argument that the call belonged inside the shared coordinator
+was never tested. C-minor(b) **PARTIAL** — the harm is fixed (auth now reads
+`platform().secrets`, one derivation), but `getCliSecrets`' storageRoot
+memoization survives and is now pinned by a test. C-minor(c) **stale as
+written** — `secretManager.ts` was never a `platform().secrets` pass-through at
+this doc's own pin; it is presentation-only helpers, so "deletion candidate" is
+the wrong verdict.
+
 ### 2e. Rendering plane (needs one editorial ruling first)
+
+**Row status at `e00b9317f7` (2026-08-19).** C16 **OPEN**, unchanged — all four
+divergences intact (MCP inversion, truncation budgets, error-text collapse,
+output-suppression rulesets), and `buildDelegationSections` /
+`buildWorkflowScriptSections` still have no CLI counterpart. The editorial
+ruling this row was blocked on has since been granted (the 2026-08-19 parity
+directive), so C16 is now unblocked mechanics, and the shared
+`src/shared/transcript/toolRowModel.ts` in flight on `track/transcript-parity`
+is its execution. One correction: the shared normalizer this row builds on is
+`normalizeToolUseForRender` (`src/shared/toolUse.ts:205`) — the raw
+`normalizeToolUseData` has zero direct production callers now. C19 **OPEN** —
+the withdrawal of the `htmlMarkdownNormalize.ts` relocation was honored (it is
+still CLI-local), and the surviving half is unfixed: the header still claims
+both hosts render follow-up summaries while exactly one CLI caller exists.
 
 - **C16. Tool-row assembly: two folds over one `NormalizedToolUse`.** The
   normalizer is shared (`src/shared/toolUse.ts:81`, 2 callers); every display
@@ -427,6 +559,61 @@ headerPreview, sections[], errorPreview, elision}`; CLI paints spans,
 ## 3. Band 2 — divergence register (correctness; each needs a ruling or is a plain bug)
 
 Format: mechanism → consequence → convergence/ruling needed.
+
+**Register status at `e00b9317f7` (2026-08-19).** **V3 FIXED #10925** — the two
+contradicting SSOTs are one row shape; `CLI_CORE_SETTING_PATHS` and the
+overloaded `hosts:` field are both gone, and the specific rows this entry
+flagged are now consistent. **V4 confirmed ruled + landed** (#10699/#10739),
+exactly as the entry describes, desktop fence included. **V8 LANDED #10694**
+with two corrections: only one explicit-cascade kill site survives (#10800
+removed the second), and `detachSubagentsOnStop`'s own JSDoc still asserts an
+unqualified "shared by every host" without the quit-asymmetry paragraph the
+lifecycle doc owed it. **V9/DR13 substantially resolved** — see below. **V12
+PARTIAL**, and this entry was stale when written: `'never'` was already a
+named shared constant at the reproduction pin; what is still true is that the
+settings catalog records only the `'ask'` prefault, so the fence exists in code
+and not in the catalog. Everything else — V1, V2, V5, V6, V7, V10, V11 — is
+**still true at HEAD**, three of them with the harm restated below.
+
+**V2 is worse than written.** `UsageLogService` has zero references in
+`packages/desktop` — not just no `initialize`, but no `dispose()` either — and
+the relay retirement removed the mitigation this entry relied on: `UsageMonitor`
+no longer force-flushes per relay round, so on desktop any queue under ten
+entries is now silently dropped at quit, including plan accounting.
+`refreshModelListStateIfNeeded` is a stronger finding than the entry claims: it
+has **no production caller on any host**.
+
+**V5's harm changed, and the entry's framing with it.** The 120 s stale horizon
+this entry cites is gone — #10778 replaced heartbeat liveness with
+socket-presence proof (`executionLease.ts` version 2, verdicts
+`alive | dead | unprovable`), so quitting mid-run no longer blocks `texra
+resume` for two minutes. What survives is the real residue: no host except the
+CLI persists a terminal outcome at exit, and an `unprovable` verdict still
+fails closed. The lifecycle doc's §3 fix 2 (an awaited session-owned drain)
+remains unimplemented.
+
+**V9/DR13 — REFUTED as written; one owner exists.** The entry's "two truth
+sources" framing does not hold at HEAD. `deriveResumability`
+(`src/agent/storage/resumability.ts:95`) is the single durable-state authority,
+reached by `SessionHandle`, `ToolUseFollowUp`, `restartRepair`,
+`SessionResumeRetrieval`, `ExecutionsTool`, and three CLI call sites. What
+#10927 added (with #10940's follow-ups) is **not** a second derivation but a
+display-side wrapper, `deriveOfferableResumability`, which gates the shared
+decision on execution-lease liveness and fails closed loudly on an
+unclassifiable lease — because a run executing _right now_ has exactly the
+resumable durable shape, so every listing was advertising live work as
+resumable. **Admission semantics are deliberately unchanged**: `texra resume`
+and the in-process resume paths still call `deriveResumability` directly, and
+the rationale is written at the function's declaration. Both display surfaces
+are gated — the CLI listing (`toolUseResumeData.ts:56`) and the GUI WAITING
+badges (`detectWaitingStreams.ts:26`). The CLI's extra strictness — a stamped
+`meta.streamId` and a successful resume-state read — is a deliberate strict
+superset of _requirements_ over the one owner, not a rival derivation:
+deleting it would have `/resume` offer rows it then refuses. Two honest
+residues: a run with a valid flow record but no stamped `streamId` still shows
+WAITING in the GUI and non-resumable in the CLI, and the lease-gating behavior
+is **thinly pinned** — no test names `deriveOfferableResumability`, and
+`History.vitest.ts` mocks `readCliResumeDataForListing` wholesale.
 
 - **V1. Same setting key, three physical stores.**
   - Git-author keys (`texra.git.*`, catalog says
@@ -619,6 +806,26 @@ or a deliberately terser editorial line?" — after which each row is
 mechanical. Today the answer is undeclared, which is how the drift
 accumulated.
 
+**Register status at `e00b9317f7` (2026-08-19): 2 landed, 1 partial, 8 open —
+and the editorial ruling has been granted.** The maintainer's 2026-08-19
+directive — _"the TUI should render the same state extension/desktop have"_ —
+is the answer this section said was undeclared, and it settles the register in
+favour of parity. The shared `src/shared/transcript/` row model executing it is
+in flight on `track/transcript-parity`; rows (b), (d), (e), (g), (h) and (j)
+are its scope. **(a) LANDED** (#10693, then the Wave A collapse:
+`childExecutions.ts` 585 → 241 L, the duplicated cap gone, the shared roster
+the sole owner). **(i) LANDED #10713** — and by the route this row prescribed:
+a declared shared policy, `normalizeToolUseForRender`, keeping the row live
+with a bounded diagnostic, called by both hosts, so the CLI's parity comment is
+now true. **(k) PARTIAL #10704** — the code landed by a better mechanism than
+prescribed (a container/fence-aware markdown-it block probe mirroring texmath's
+`beg_end`, plus adjacency guards that fix the inverse false positive), but the
+`\begin…\end` test this row named as "the missing piece" is **still missing**,
+now guarding considerably more machinery. **(e) may be worse**: routing the CLI
+through the shared normalizer means a feedback row with no summary now renders
+blank rather than merely omitting the instruction. **(b)** shrank to 10 webview
+fields, not 11 — relay labeling went with the relay plane.
+
 - **(a) Retained finished subagent rows.**
   `sessionSignalsAdapter.ts:206-209` filters
   `badges.subagents.filter((c) => c.finishedAt === undefined)` — one line
@@ -713,7 +920,14 @@ CP4/CP5 + §2 territory (the projection sweep confirmed
 
 ## 5. Overlap with the 2026-07-09 drift register
 
-Re-checked at this HEAD during the sweep:
+Re-checked at this HEAD during the sweep, and again on 2026-08-19 — the
+changes since: **DR13's resumability facet is closed** (one owner plus a
+display-side lease gate; see V9 above), so the row below is stale in that half;
+its history-projection half stands. **CP2's stream-stop half stayed ruled**,
+and the CLI-setter half is now the settings-catalog's business (#10925 gave
+every row a `slots` map, so "the CLI reports these as unknown keys" needs
+re-checking against the new catalog before it is re-filed). **CP4/CP5** are
+unchanged. DR2, DR3, DR6 and DR8 are all still open exactly as written.
 
 - **DR2 (prompt replay):** half-converged since adjudication — both hosts now
   call `replayApprovalRequestHandlers` (`ProgressViewProvider.ts:334-340`,
@@ -795,6 +1009,21 @@ needing none). Suggested order:
    `enforceCategory` (V6), AppSignals wiring scope (V7), resumable truth
    source (V9/DR13), callback-binding bar (V11b), approval-policy default
    fence (V12). Resume admission (V4b/c) is no longer pending: ruled + landed.
+
+**Execution status at `e00b9317f7` (2026-08-19).** Step 1's plain bugs mostly
+landed (V2 is the exception, and it got worse); §4i and §4k's code shipped;
+V1a's "missing host argument" was corrected away on review rather than fixed,
+since no host argument was missing. Step 2 landed C2+C3+C11+C21 as the single
+resume-hardening PR this step proposed (#10699) and closed V4a/d with it, but
+C1 is withdrawn, C4 never started, C10 landed only its bug half, C14 landed by
+self-registration instead, and C12 is untouched. **Step 3 did not happen** —
+C5, C6, C7, C8, C15 and C9 are all open, which makes the composition-root plane
+the single largest untouched block in this doc. Step 4's rulings: the
+CLI-transcript parity charter was **granted** (2026-08-19) and is executing;
+V3 was settled by the catalog collapse; V9/DR13 resolved to one owner plus a
+display-side gate. Still awaiting a ruling: settings-store unification (V1),
+lease-at-quit (V5, whose design the lifecycle doc owns), `enforceCategory`
+(V6), AppSignals wiring scope (V7), and the callback-binding bar (V11b).
 
 Everything here was found by scoped sweeps, not adjudicated line-by-line the
 way the 2026-07-09 audit was; treat each row as _verified-at-citation_ but
