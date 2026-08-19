@@ -5,12 +5,6 @@
  * executions.
  */
 
-// Node imports
-import * as path from 'node:path';
-
-// Third-party imports
-import { z } from 'zod';
-
 // Local imports
 import {
   deriveResumability,
@@ -18,12 +12,10 @@ import {
   listExecutionWorkspaceFiles,
   unwrapResultMeta,
   type ChildRecord,
-  type ExecutionKVStore,
   type TodoEntry,
   listExecutions,
   resolveExecutionWorkspaceFilePath,
 } from '@agent/storage';
-import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
   currentSession,
   type SessionHandle,
@@ -39,28 +31,13 @@ import { createLog } from '@logger/logUtils';
 import type { FileStat } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import {
-  deriveWorkflowCounts,
   ExecutionIdSchema,
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  stageTitleFor,
-  STREAM_LOG_ENTRY_TYPES,
-  TERMINAL_WORKFLOW_CALL_STATUSES,
   ToolError,
   type ExecutionId,
-  type StreamLogEntry,
   type ToolResult,
   type WorkflowExecutionSnapshot,
-  WORKFLOW_CALL_STATUS,
 } from '@shared/schemas';
-import {
-  BASH_BACKGROUND_LOG_CAP_CHARS,
-  type BackgroundBashOutputSource,
-  EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
-  getBackgroundBashOutputSource,
-  EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
-  EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
-} from '@shared/toolUse';
+import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { requireRunStream, requireStreamId } from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
@@ -70,7 +47,7 @@ import {
   readCompletedRunConversation,
   readCompletedRunTodos,
 } from '@transcript';
-import { assertNever, clamp, unique } from '@utils/core';
+import { assertNever, unique } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -99,83 +76,28 @@ import {
   formatFileView,
   paginateToolListing,
   formatPaginationHint,
-  ViewRangeSchema,
 } from './formatting';
+import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
+import { EXECUTION_PATH_LIST } from './executions/pathCatalog';
+import {
+  OUTPUT_MAX_LINES,
+  OUTPUT_TAIL_LINES,
+  projectProcessOutput,
+} from './executions/processOutput';
 import { listRunGeneratedFiles } from './executions/runGeneratedFiles';
+import {
+  ExecutionsToolInputSchema,
+  type ExecutionsToolInput,
+} from './executions/toolInput';
+import { turnAttributionNote } from './executions/turnAttribution';
 import {
   listenForFollowUp,
   shouldSkipWait,
 } from './executions/waitCoordination';
+import { workflowExecutionView } from './executions/workflowSummaryView';
 
 const log = createLog('ExecutionsTool');
-
-// ============================================================================
-// Resource path catalog
-// ============================================================================
-
-/**
- * Single source of truth for the virtual resource paths this tool serves.
- * Both the tool `description` and the "Unknown path" error render from this
- * list, so the two cannot drift.
- */
-const EXECUTION_PATH_CATALOG: ReadonlyArray<{ path: string; summary: string }> =
-  [
-    {
-      path: '/executions',
-      summary: 'List executions (paginated; use offset/limit for pages)',
-    },
-    {
-      path: '/executions/{id}',
-      summary:
-        'Execution summary (agent, model, timestamp, status, children, todos)',
-    },
-    { path: '/executions/{id}/config', summary: 'Agent configuration JSON' },
-    {
-      path: '/executions/{id}/conversation',
-      summary: 'Full message history (subagents)',
-    },
-    {
-      path: '/executions/{id}/todos',
-      summary: 'Task list (tool-use subagents)',
-    },
-    {
-      path: '/executions/{id}/report',
-      summary: 'Result report (persists after context compaction)',
-    },
-    {
-      path: '/executions/{id}/result',
-      summary:
-        'Final result envelope (JSON) for chaining; process result for background commands',
-    },
-    {
-      path: '/executions/{id}/output',
-      summary:
-        'stdout/stderr of a background command, readable WHILE IT RUNS (report/result only exist once it finishes)',
-    },
-    { path: '/executions/{id}/children', summary: 'Child executions' },
-    {
-      path: '/executions/{id}/files',
-      summary: 'Generated files (workflows only)',
-    },
-    {
-      path: '/executions/{id}/files/{path}',
-      summary: 'Read specific generated file (workflows only)',
-    },
-    {
-      path: '/executions/{id}/workspace-files',
-      summary: 'Workspace files edited by tool-use runs',
-    },
-    {
-      path: '/executions/{id}/workspace-files/{path}',
-      summary: 'Read a workspace file edited by a tool-use run',
-    },
-  ];
-
-/** Renders the catalog as a bulleted `- <path> - <summary>` list. */
-const EXECUTION_PATH_LIST = EXECUTION_PATH_CATALOG.map(
-  ({ path: resourcePath, summary }) => `- ${resourcePath} - ${summary}`,
-).join('\n');
 
 function getRunningTodos(
   session: SessionHandle,
@@ -183,40 +105,6 @@ function getRunningTodos(
 ): TodoEntry[] {
   return session.snapshots.getWorkPlan(handle.childStreamId).todos;
 }
-
-/**
- * One-line attribution note for /report and /result when a newer turn was
- * accepted but never persisted a result (#9531): without it, the single
- * latest-value slots would silently present the previous turn as current.
- * Reads "still running" while the execution is live and "was interrupted"
- * once it has terminalized. Returns null when the slots reflect the latest
- * accepted turn (or the execution has no turn identity at all).
- */
-async function turnAttributionNote(
-  store: ExecutionKVStore,
-): Promise<string | null> {
-  const [turnState, meta] = await Promise.all([
-    store.readTurnState(),
-    store.readMeta(),
-  ]);
-  const active = turnState?.activeTurn;
-  const completed = turnState?.lastCompletedTurn?.token;
-  if (!active || active.token === completed) {
-    return null;
-  }
-  const fate =
-    meta?.outcome === undefined
-      ? `turn ${active.token} is still running`
-      : `turn ${active.token} was interrupted before producing a result`;
-  const showing = completed
-    ? `showing the latest completed turn (${completed}).`
-    : 'no turn has completed yet.';
-  return `[Note: ${fate}; ${showing}]`;
-}
-
-// ============================================================================
-// Run-directory listing and config serialization
-// ============================================================================
 
 interface SizedEntry {
   readonly path: string;
@@ -236,448 +124,6 @@ function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
     return `${sizeStr.padStart(8)}  ${entry.path}`;
   });
 }
-
-/**
- * Per-category config-field exclusions: `toolUse` hides the workflow-only
- * file fields, `workflow` hides the toolUse-only `toolConfig`. Unknown
- * categories get no filtering.
- */
-const HIDDEN_CONFIG_FIELDS_BY_CATEGORY: Readonly<
-  Record<string, ReadonlySet<string>>
-> = {
-  toolUse: new Set([
-    'inputFile',
-    'inputFiles',
-    'contextFile',
-    'contextFiles',
-    'mediaFile',
-    'mediaFiles',
-    'outputFiles',
-    'editedFile',
-    'editedFiles',
-  ]),
-  workflow: new Set(['toolConfig']),
-};
-
-/**
- * Serialize a run record to pretty JSON, dropping agent-config fields
- * irrelevant to the resolved display category so the serialized config the
- * orchestrator reads stays relevant. Records without an agent execution mode
- * are honest by construction and serialize unchanged.
- */
-function serializeFilteredConfig(
-  record: RunRecord,
-  category: string | undefined,
-): string {
-  const excludeSet = category
-    ? HIDDEN_CONFIG_FIELDS_BY_CATEGORY[category]
-    : undefined;
-  if (!excludeSet) {
-    return JSON.stringify(record, null, 2);
-  }
-  const filtered = Object.fromEntries(
-    Object.entries(record).filter(([key]) => !excludeSet.has(key)),
-  );
-  return JSON.stringify(filtered, null, 2);
-}
-
-// ============================================================================
-// Background command output
-// ============================================================================
-
-/** Lines returned by /executions/{id}/output when no view_range is given. */
-const OUTPUT_TAIL_LINES = 200;
-
-/** Hard ceiling on lines a single /output read returns, view_range included. */
-const OUTPUT_MAX_LINES = 1_000;
-
-/** Marks a projected line that the command wrote to stderr. */
-const OUTPUT_STDERR_PREFIX = 'err: ';
-
-const WORKFLOW_SUMMARY_MAX_ENTRIES = 8;
-const WORKFLOW_SUMMARY_MAX_ATTEMPTS = 2;
-const WORKFLOW_SUMMARY_MAX_FILES_PER_KIND = 3;
-const WORKFLOW_SUMMARY_TEXT_LENGTH = 160;
-
-function compactWorkflowText(value: string | undefined): string | undefined {
-  return value?.slice(0, WORKFLOW_SUMMARY_TEXT_LENGTH);
-}
-
-function workflowStageView(
-  stage: WorkflowExecutionSnapshot['stages'][number],
-): unknown {
-  return {
-    id: compactWorkflowText(stage.id),
-    title: compactWorkflowText(stage.title),
-    order: stage.order,
-    lifecycle: stage.lifecycle,
-    startedAt: stage.startedAt,
-    completedAt: stage.completedAt,
-  };
-}
-
-function workflowAttemptView(
-  attempt: WorkflowExecutionSnapshot['calls'][number]['attempts'][number],
-): unknown {
-  return {
-    number: attempt.number,
-    id: compactWorkflowText(attempt.id),
-    childStreamId: compactWorkflowText(attempt.childStreamId),
-    model: compactWorkflowText(attempt.model),
-    costUsd: attempt.costUsd,
-    startedAt: attempt.startedAt,
-    completedAt: attempt.completedAt,
-  };
-}
-
-function workflowCallFailurePriority(status: string): number {
-  // Within terminal calls, elevate failed/cancelled so the bounded projection
-  // keeps the outcomes that matter for debugging (matches stage ranking).
-  if (
-    status === WORKFLOW_CALL_STATUS.FAILED ||
-    status === WORKFLOW_CALL_STATUS.CANCELLED
-  ) {
-    return 0;
-  }
-  return 1;
-}
-
-function workflowExecutionView(snapshot: WorkflowExecutionSnapshot): unknown {
-  const byPriority = snapshot.calls.toSorted(
-    (left, right) =>
-      Number(TERMINAL_WORKFLOW_CALL_STATUSES.has(left.status)) -
-        Number(TERMINAL_WORKFLOW_CALL_STATUSES.has(right.status)) ||
-      workflowCallFailurePriority(left.status) -
-        workflowCallFailurePriority(right.status) ||
-      Number(left.stageId !== snapshot.currentStageId) -
-        Number(right.stageId !== snapshot.currentStageId) ||
-      right.timestamps.updatedAt.localeCompare(left.timestamps.updatedAt),
-  );
-  const stages = snapshot.stages
-    .toSorted((left, right) => {
-      const priority = (stage: (typeof snapshot.stages)[number]): number => {
-        if (stage.id === snapshot.currentStageId) return 0;
-        if (stage.lifecycle === 'failed' || stage.lifecycle === 'cancelled') {
-          return 1;
-        }
-        return 2;
-      };
-      return priority(left) - priority(right) || right.order - left.order;
-    })
-    .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES)
-    .map(workflowStageView);
-  const calls = byPriority
-    .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES)
-    .map((call) => {
-      const compactFiles = (files: readonly string[]) => ({
-        sample: files
-          .slice(0, WORKFLOW_SUMMARY_MAX_FILES_PER_KIND)
-          .map((file) => compactWorkflowText(file)!),
-        ...(files.length > WORKFLOW_SUMMARY_MAX_FILES_PER_KIND && {
-          omitted: files.length - WORKFLOW_SUMMARY_MAX_FILES_PER_KIND,
-        }),
-      });
-      return {
-        id: compactWorkflowText(call.id),
-        label: compactWorkflowText(call.label),
-        stageId: compactWorkflowText(call.stageId),
-        stageTitle: compactWorkflowText(stageTitleFor(snapshot, call)),
-        agent: compactWorkflowText(call.agent),
-        model: compactWorkflowText(call.model),
-        files: {
-          input: compactFiles(call.files.input),
-          context: compactFiles(call.files.context),
-          media: compactFiles(call.files.media),
-        },
-        childExecutionId: compactWorkflowText(call.childExecutionId),
-        childStreamId: compactWorkflowText(call.childStreamId),
-        attempts: call.attempts
-          .slice(-WORKFLOW_SUMMARY_MAX_ATTEMPTS)
-          .map(workflowAttemptView),
-        ...(call.attempts.length > WORKFLOW_SUMMARY_MAX_ATTEMPTS && {
-          omittedAttempts: call.attempts.length - WORKFLOW_SUMMARY_MAX_ATTEMPTS,
-        }),
-        status: call.status,
-        blockedReason: compactWorkflowText(call.blockedReason),
-        error: compactWorkflowText(call.error),
-        costUsd: call.costUsd,
-        timestamps: call.timestamps,
-      };
-    });
-  const currentStage = snapshot.stages.find(
-    (stage) => stage.id === snapshot.currentStageId,
-  );
-  return {
-    aggregate: {
-      lifecycle: snapshot.lifecycle,
-      error: compactWorkflowText(snapshot.error),
-      counts: deriveWorkflowCounts(snapshot.calls),
-      timestamps: snapshot.timestamps,
-      responseBounds: {
-        maxStages: WORKFLOW_SUMMARY_MAX_ENTRIES,
-        maxCalls: WORKFLOW_SUMMARY_MAX_ENTRIES,
-        maxAttemptsPerCall: WORKFLOW_SUMMARY_MAX_ATTEMPTS,
-        maxFilesPerKind: WORKFLOW_SUMMARY_MAX_FILES_PER_KIND,
-      },
-    },
-    currentStage: currentStage ? workflowStageView(currentStage) : null,
-    stages,
-    calls,
-    ...(snapshot.stages.length > stages.length && {
-      omittedStages: snapshot.stages.length - stages.length,
-    }),
-    ...(snapshot.calls.length > calls.length && {
-      omittedCalls: snapshot.calls.length - calls.length,
-    }),
-  };
-}
-
-/**
- * Line break in captured terminal output. A bare CR counts: progress bars
- * (curl, pip, docker) redraw with `\r` and no newline, so splitting on LF
- * alone would collapse a whole build's progress into one enormous "line" and
- * hand the caller the entire log however small the requested window was.
- */
-const OUTPUT_LINE_BREAK = /\r\n|\r|\n/;
-
-interface ProcessOutputProjection {
-  readonly lines: readonly string[];
-  readonly chars: number;
-}
-
-/**
- * Flatten a background command's transcript rows into display lines.
- *
- * Tagged stdout/stderr chunks stay in append order and concatenate only while
- * their source remains compatible, so chunk-split lines are reconstructed
- * without crossing a stream switch. Untagged lifecycle and legacy rows flush
- * any pending command fragment and render standalone. Structured rows (usage,
- * context state, tool frames) carry a non-default `messageType` and are
- * dropped: this endpoint projects command output, not run bookkeeping.
- */
-function projectProcessOutput(
-  entries: readonly StreamLogEntry[],
-): ProcessOutputProjection {
-  const lines: string[] = [];
-  let chars = 0;
-  let pendingText = '';
-  let pendingSource: BackgroundBashOutputSource | undefined;
-
-  const emitText = (text: string, stderr: boolean): void => {
-    // A trailing break terminates the last line rather than opening an empty
-    // one; blank lines inside the text still survive the split.
-    const normalized = text.replace(/\r\n$|[\r\n]$/, '');
-    for (const line of normalized.split(OUTPUT_LINE_BREAK)) {
-      lines.push(stderr ? `${OUTPUT_STDERR_PREFIX}${line}` : line);
-    }
-  };
-  const flushPending = (): void => {
-    if (pendingText && pendingSource) {
-      emitText(pendingText, pendingSource === 'stderr');
-    }
-    pendingText = '';
-    pendingSource = undefined;
-  };
-
-  for (const entry of entries) {
-    if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) continue;
-    if ((entry.messageType ?? MESSAGE_TYPES.DEFAULT) !== MESSAGE_TYPES.DEFAULT)
-      continue;
-    const text = entry.text;
-    if (!text) continue;
-
-    chars += text.length;
-    const source = getBackgroundBashOutputSource(entry.data);
-    if (!source) {
-      flushPending();
-      emitText(
-        text,
-        entry.level === LOG_LEVELS.WARN || entry.level === LOG_LEVELS.ERROR,
-      );
-      continue;
-    }
-
-    if (pendingSource && pendingSource !== source) flushPending();
-    pendingSource = source;
-    pendingText += text;
-  }
-  flushPending();
-
-  return { lines, chars };
-}
-
-// ============================================================================
-// Schema
-// ============================================================================
-
-/** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/workspace-files/{path} */
-const PathFieldSchema = z.string().describe('Path starting with /executions');
-
-const ViewActionSchema = z.strictObject({
-  path: PathFieldSchema,
-  // Optional + defaulted, NOT .nullish() (unlike every other nullish field in
-  // this file): 'view' is the common no-op-preamble call, so omitting
-  // `action` must both dispatch to this branch and keep `action` out of the
-  // JSON-schema `required` list, matching the pre-refactor `.prefault('view')`
-  // and AGENTS.md's "design for the model's first call" rule.
-  // `.optional().default('view')` keeps the emitted per-branch JSON schema a
-  // clean single-value `const` (not an `anyOf` with `null`) — required so
-  // `convertToolSchema`'s `flattenTopLevelUnion`/`schemaLiteralValue` (which
-  // only recognizes a bare `const`/one-item `enum` as a discriminator
-  // literal) still merges all five actions into one enum for the
-  // OpenAI/Anthropic/Google-facing schema. `.nullish()` here produces an
-  // `anyOf` that flattening can't read as a literal, silently dropping
-  // wait/kill/subscribe/unsubscribe from the advertised schema instead.
-  // The explicit-`null` case AGENTS.md's rule calls out (a structured-output
-  // provider representing an omitted optional field as `null` rather than
-  // absent) is handled separately below by ExecutionsToolInputSchema's
-  // preprocess, which strips a `null` action down to omitted before this
-  // branch's own default runs — so the type stays a plain optional literal.
-  action: z
-    .literal('view')
-    .optional()
-    .default('view')
-    .describe('Read execution data (returns immediately). Default action.'),
-
-  /** Optional line range [start, end] for large outputs. */
-  view_range: ViewRangeSchema.nullish().describe(
-    'Line range [start, end] for paginating file and background-command output. Conversation pagination uses offset and limit.',
-  ),
-
-  /** Zero-based offset for list or conversation pagination. */
-  offset: z
-    .int()
-    .min(0)
-    .nullish()
-    .describe(
-      'Zero-based offset into the executions list or conversation messages. Use with limit on /executions or /executions/{id}/conversation. Default: 0.',
-    ),
-
-  /** Maximum list entries or conversation messages to return. */
-  limit: z
-    .int()
-    .min(1)
-    .max(200)
-    .nullish()
-    .describe(
-      'Max entries or conversation messages to return. Use on /executions or /executions/{id}/conversation. Default: 100, max: 200.',
-    ),
-});
-
-const WaitActionSchema = z.strictObject({
-  path: PathFieldSchema,
-  action: z
-    .literal('wait')
-    .describe(
-      'Wait for a status change on /executions or /executions/{id}, then return the same data as view (avoids sleep-poll loops).',
-    ),
-
-  /** Execution IDs to wait on (with /executions only; ignored on /executions/{id}). */
-  ids: z
-    .array(ExecutionIdSchema)
-    .min(1)
-    .max(50)
-    .nullish()
-    .describe(
-      'List of execution IDs to wait on (with /executions only). ' +
-        'Waits for any of the listed executions to change status. ' +
-        'If omitted, waits for any active execution.',
-    ),
-
-  /** Max seconds to wait. Default: 300. */
-  timeout: z
-    .number()
-    .finite()
-    .nullish()
-    // Clamp in the schema so input.timeout is always a ready-to-use number:
-    // an out-of-range or missing value becomes a value inside the wait window.
-    .transform((v) =>
-      clamp(
-        v ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
-        EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
-        EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
-      ),
-    )
-    .describe(
-      `Max seconds to wait for a status change. Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
-    ),
-
-  /** Zero-based offset for the /executions listing returned once the wait resolves. */
-  offset: z
-    .int()
-    .min(0)
-    .nullish()
-    .describe(
-      'Zero-based offset into the executions list returned once the wait resolves (with /executions only). Default: 0.',
-    ),
-
-  /** Maximum list entries in the /executions listing returned once the wait resolves. */
-  limit: z
-    .int()
-    .min(1)
-    .max(200)
-    .nullish()
-    .describe(
-      'Max entries in the executions list returned once the wait resolves (with /executions only). Default: 100, max: 200.',
-    ),
-});
-
-const KillActionSchema = z.strictObject({
-  path: PathFieldSchema,
-  action: z
-    .literal('kill')
-    .describe('Terminate a running execution by ID (use on /executions/{id}).'),
-});
-
-const SubscribeActionSchema = z.strictObject({
-  path: PathFieldSchema,
-  action: z
-    .literal('subscribe')
-    .describe(
-      'Receive future status changes for /executions/{id} as <execution-activity> follow-ups; auto-disposes when the execution finishes or this stream is released.',
-    ),
-});
-
-const UnsubscribeActionSchema = z.strictObject({
-  path: PathFieldSchema,
-  action: z
-    .literal('unsubscribe')
-    .describe(
-      'Stop receiving <execution-activity> follow-ups for /executions/{id}.',
-    ),
-});
-
-const ExecutionsToolActionSchema = z.discriminatedUnion('action', [
-  ViewActionSchema,
-  WaitActionSchema,
-  KillActionSchema,
-  SubscribeActionSchema,
-  UnsubscribeActionSchema,
-]);
-
-// A structured-output provider represents an omitted optional field as an
-// explicit `action: null` rather than leaving the key absent (AGENTS.md's
-// tool-input-schema rule). z.discriminatedUnion reads the raw `action` value
-// to pick a branch before any field-level default runs, and `null` isn't one
-// of the branch literals, so strip it down to "key absent" here — the view
-// branch's own `.optional().default('view')` then takes over exactly as it
-// does for a truly omitted key. A genuinely absent key needs no help: Zod
-// already matches that against the one branch whose discriminator accepts
-// undefined.
-const ExecutionsToolInputSchema = z.preprocess((value) => {
-  if (
-    value &&
-    typeof value === 'object' &&
-    'action' in value &&
-    value.action === null
-  ) {
-    const { action: _null, ...rest } = value;
-    return rest;
-  }
-  return value;
-}, ExecutionsToolActionSchema);
-
-type ExecutionsToolInput = z.infer<typeof ExecutionsToolActionSchema>;
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
