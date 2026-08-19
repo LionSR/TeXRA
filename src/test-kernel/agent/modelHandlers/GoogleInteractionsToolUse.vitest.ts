@@ -336,7 +336,7 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       { type: 'thinking', thinking: 'plan', signature: 'sig_b' },
     ];
 
-    const followUp = await handler.createBatchedToolUseFollowUpMessages!(
+    const followUp = await handler.createBatchedToolUseFollowUpMessages(
       calls.map((call, index) => ({
         call,
         result: results[index],

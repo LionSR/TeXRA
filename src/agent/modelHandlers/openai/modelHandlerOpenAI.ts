@@ -1137,23 +1137,6 @@ export class ModelHandlerOpenAI<
     return callMsg;
   }
 
-  async createToolUseFollowUpMessages(
-    _client: OpenAI | undefined,
-    call: TCall,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<ChatCompletionMessageParam[]> {
-    // The single-call path is batched-of-one: identical assistant-turn
-    // construction, tool result formatting, and reasoning reset.
-    return this.createBatchedToolUseFollowUpMessages(
-      [{ call, result, attachments }],
-      workspaceState,
-      text,
-    );
-  }
-
   /**
    * Creates batched tool-use follow-up messages for multiple parallel tool calls.
    *

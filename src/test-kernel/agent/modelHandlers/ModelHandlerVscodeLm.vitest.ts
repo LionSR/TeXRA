@@ -372,7 +372,7 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
       ],
     });
 
-    const followUp = await handler.createBatchedToolUseFollowUpMessages!(
+    const followUp = await handler.createBatchedToolUseFollowUpMessages(
       [
         {
           call: calls[0],

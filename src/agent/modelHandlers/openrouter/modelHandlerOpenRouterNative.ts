@@ -634,23 +634,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       }));
   }
 
-  async createToolUseFollowUpMessages(
-    _client: OpenRouter | undefined,
-    call: OpenRouterToolCall,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<ChatMessages[]> {
-    // The single-call path is batched-of-one: identical assistant/tool
-    // message construction and tool result formatting.
-    return this.createBatchedToolUseFollowUpMessages(
-      [{ call, result, attachments }],
-      workspaceState,
-      text,
-    );
-  }
-
   async createBatchedToolUseFollowUpMessages(
     entries: Array<{
       call: OpenRouterToolCall;

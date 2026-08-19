@@ -421,20 +421,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     }));
   }
 
-  async createToolUseFollowUpMessages(
-    _client: LanguageModelPort | undefined,
-    call: VscodeLmToolCall,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
-    _workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<LanguageModelMessage[]> {
-    return this.buildToolUseFollowUpMessages(
-      [{ call, result, attachments }],
-      text,
-    );
-  }
-
   async createBatchedToolUseFollowUpMessages(
     entries: Array<{
       call: VscodeLmToolCall;
@@ -444,17 +430,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<LanguageModelMessage[]> {
-    return this.buildToolUseFollowUpMessages(entries, text);
-  }
-
-  private buildToolUseFollowUpMessages(
-    entries: Array<{
-      call: VscodeLmToolCall;
-      result: ToolResult;
-      attachments: ToolFileAttachment[];
-    }>,
-    text?: string,
-  ): LanguageModelMessage[] {
     if (entries.length === 0) return [];
 
     const assistantContent: Array<
