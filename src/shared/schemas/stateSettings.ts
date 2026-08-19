@@ -388,7 +388,16 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
   'goal.enabled': {
     honoredBy: everyHost('src/tools/goal/goalFeatureFlag.ts'),
   },
+  // The five Models-tab provider toggles below are `configTarget: 'global'`:
+  // they describe how you talk to a provider, not a property of one project,
+  // and that is the scope they were written at before the catalog collapse
+  // routed them through the shared write path. The target restores global
+  // writes and exempts them from the extension's open-workspace write guard,
+  // while Models-tab and runtime reads both keep merged-config semantics. A
+  // workspace override therefore remains visible and honored; cleanup of values
+  // stranded by the regression window is tracked separately in #11173.
   'model.gpt5ReasoningSummary': {
+    configTarget: 'global',
     title: 'GPT-5 reasoning summary',
     category: 'model',
     honoredBy: everyHost(
@@ -412,6 +421,7 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     },
   },
   'model.useOpenAIResponsesAPI': {
+    configTarget: 'global',
     title: 'Use the Responses API',
     category: 'model',
     honoredBy: everyHost('src/agent/runtime/ModelFactory.ts'),
@@ -428,6 +438,7 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     },
   },
   'model.useGoogleInteractionsServerState': {
+    configTarget: 'global',
     title: 'Server-side conversation state',
     category: 'model',
     honoredBy: everyHost(
@@ -446,6 +457,7 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     },
   },
   'model.useBackgroundResponses': {
+    configTarget: 'global',
     title: 'Background responses',
     category: 'model',
     honoredBy: everyHost(
@@ -470,6 +482,7 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     },
   },
   'model.openaiParallelToolCalls': {
+    configTarget: 'global',
     title: 'Parallel tool calls',
     category: 'model',
     honoredBy: everyHost(
