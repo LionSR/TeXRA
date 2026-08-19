@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   openRouter: false,
   retryCopyFailure: undefined as Error | undefined,
   secrets: {},
-  setCliCodexSubscription: vi.fn(),
+  setCliSubscriptionPreference: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
   refreshSubscriptionPreferenceViews: vi.fn(),
   setGLMCodingPlan: vi.fn(),
@@ -57,9 +57,9 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: mocks.notify,
 }));
 
-vi.mock('@cli/chat/tui/state/codexSubscription', () => ({
+vi.mock('@cli/chat/tui/state/subscriptionPreference', () => ({
   refreshSubscriptionPreferenceViews: mocks.refreshSubscriptionPreferenceViews,
-  setCliCodexSubscription: mocks.setCliCodexSubscription,
+  setCliSubscriptionPreference: mocks.setCliSubscriptionPreference,
   setCliCodingPlanSubscription: mocks.setCliCodingPlanSubscription,
 }));
 
@@ -260,7 +260,7 @@ function expectChatGptSubscriptionRoute(): void {
 }
 
 function expectNoPreferenceWrites(): void {
-  expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+  expect(mocks.setCliSubscriptionPreference).not.toHaveBeenCalled();
 }
 
 function expectNoCredentialChange(
@@ -352,10 +352,12 @@ beforeEach(() => {
       }
     },
   );
-  mocks.setCliCodexSubscription.mockImplementation(async (enabled) => {
-    mocks.preferSubscription = enabled;
-    return { effective: enabled, target: 'global' };
-  });
+  mocks.setCliSubscriptionPreference.mockImplementation(
+    async (_id, enabled) => {
+      mocks.preferSubscription = enabled;
+      return { effective: enabled, target: 'global' };
+    },
+  );
   mocks.setCliCodingPlanSubscription.mockImplementation(async (id, enabled) => {
     if (id === 'kimiCode') mocks.preferKimiCode = enabled;
     if (id === 'glmCodingPlan') mocks.glmCodingPlan = enabled;
@@ -376,7 +378,7 @@ afterEach(() => {
   mocks.handleExternalInquiryAction.mockReset();
   mocks.invalidateApiKeyCache.mockReset();
   mocks.notify.mockReset();
-  mocks.setCliCodexSubscription.mockReset();
+  mocks.setCliSubscriptionPreference.mockReset();
   mocks.setCliCodingPlanSubscription.mockReset();
   mocks.refreshSubscriptionPreferenceViews.mockReset();
   mocks.setGLMCodingPlan.mockReset();
@@ -783,7 +785,10 @@ describe('TUI retry approvals', () => {
       action: 'retry',
       feedback: undefined,
     });
-    expect(mocks.setCliCodexSubscription).toHaveBeenCalledWith(false);
+    expect(mocks.setCliSubscriptionPreference).toHaveBeenCalledWith(
+      'chatgpt',
+      false,
+    );
     expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
     expect(mocks.apiKeyExistsUncached).toHaveBeenCalledWith(
       mocks.secrets,
@@ -1216,8 +1221,8 @@ describe('TUI retry approvals', () => {
 
   it('reports any preference that cannot be restored after commit fails', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
-    mocks.setCliCodexSubscription
-      .mockImplementationOnce(async (enabled: boolean) => {
+    mocks.setCliSubscriptionPreference
+      .mockImplementationOnce(async (_id: string, enabled: boolean) => {
         mocks.preferSubscription = enabled;
         throw new Error('subscription write failed');
       })
