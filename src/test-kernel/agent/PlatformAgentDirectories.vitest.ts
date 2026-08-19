@@ -97,8 +97,9 @@ describe('bootstrapPlatformAgentDirectories', () => {
       },
     );
 
-    await Promise.all([bootstrap(), bootstrap(), bootstrap()]);
+    const results = await Promise.all([bootstrap(), bootstrap(), bootstrap()]);
 
+    expect(results).toEqual([true, true, true]);
     expect(maxActiveCopies).toBe(1);
     expect(copied).toEqual([
       'agents',
@@ -194,10 +195,10 @@ describe('bootstrapPlatformAgentDirectories', () => {
     expect(logs.error).not.toHaveBeenCalled();
   });
 
-  it('logs a copy failure instead of aborting host startup', async () => {
+  it('reports a copy failure without aborting host startup', async () => {
     vi.spyOn(platform().fs, 'copy').mockRejectedValue(new Error('copy failed'));
 
-    await expect(bootstrap()).resolves.toBeUndefined();
+    await expect(bootstrap()).resolves.toBe(false);
 
     expect(logs.error).toHaveBeenCalledWith(
       expect.stringContaining('copy failed'),

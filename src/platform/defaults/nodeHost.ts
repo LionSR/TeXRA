@@ -157,10 +157,10 @@ export function initializeNodeRuntimeSkills(
  * Reconcile packaged agent directories for a host after `initPlatform`.
  *
  * Hosts use different version-state keys, but the resources-path re-entry rule
- * is the same: a process only reconciles a given host channel again when its
- * active packaged resources path changes. Reconciliation failures are reported
- * and swallowed by `bootstrapPlatformAgentDirectories` — a broken agent
- * directory must not abort startup.
+ * is the same: after a successful reconcile, a process only reconciles a given
+ * host channel again when its active packaged resources path changes. Failures
+ * are reported and swallowed by `bootstrapPlatformAgentDirectories` so a broken
+ * agent directory does not abort startup, and a later call can retry.
  */
 export async function bootstrapNodeAgentDirectories(
   options: NodeAgentDirectoryBootstrapOptions,
@@ -172,6 +172,7 @@ export async function bootstrapNodeAgentDirectories(
     return;
   }
 
-  await bootstrapPlatformAgentDirectories(options);
-  bootstrappedAgentDirectoryResources.set(guardKey, options.resourcesPath);
+  if (await bootstrapPlatformAgentDirectories(options)) {
+    bootstrappedAgentDirectoryResources.set(guardKey, options.resourcesPath);
+  }
 }

@@ -220,15 +220,17 @@ async function reconcileBundledAgentDirectories(
  */
 export async function bootstrapPlatformAgentDirectories(
   options: BundledAgentReconcileOptions,
-): Promise<void> {
+): Promise<boolean> {
   const log = createLog(options.channel);
   try {
     await reconcileBundledAgentDirectories(options, log);
+    return true;
   } catch (error) {
     // An unreadable or partially written agent directory must not abort host
     // startup — VS Code activation in particular has to survive it. Loud, not
     // silent: the cause is logged at error and the host continues with
     // whatever bundled agents already reconciled.
     log.error(`Error copying default agents: ${toErrorMessage(error)}`);
+    return false;
   }
 }

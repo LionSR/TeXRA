@@ -187,6 +187,41 @@ describe('desktop agent directory bootstrap', () => {
     await expect(readFile(copiedAgent, 'utf8')).resolves.toBe('name: next\n');
   });
 
+  it('retries a failed reconcile and guards the resource path after success', async () => {
+    const { bootstrapNodeAgentDirectories, resourcesPath, storage } =
+      await createHarness();
+    const copy = vi
+      .spyOn(nodeFilesystem, 'copy')
+      .mockRejectedValueOnce(new Error('copy failed'));
+    const options = {
+      channel: 'desktop',
+      resourcesPath,
+      currentVersion: '1.2.3',
+      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+    };
+
+    await expect(
+      bootstrapNodeAgentDirectories(options),
+    ).resolves.toBeUndefined();
+    expect(copy).toHaveBeenCalledOnce();
+
+    await bootstrapNodeAgentDirectories(options);
+    expect(copy).toHaveBeenCalledTimes(3);
+
+    const copiedAgent = join(
+      storage.getGlobalStoragePath(),
+      'agents',
+      'writer.yaml',
+    );
+    await writeFile(copiedAgent, 'name: locally-edited\n');
+
+    await bootstrapNodeAgentDirectories(options);
+    expect(copy).toHaveBeenCalledTimes(3);
+    await expect(readFile(copiedAgent, 'utf8')).resolves.toBe(
+      'name: locally-edited\n',
+    );
+  });
+
   it('uses the configured version-state key', async () => {
     const { bootstrapNodeAgentDirectories, globalStateStore, resourcesPath } =
       await createHarness();
