@@ -119,6 +119,8 @@ interface ToolDiffSection extends ToolSectionBase {
   readonly kind: 'diff';
   readonly oldText: string;
   readonly newText: string;
+  /** Painter label for this hunk when no real file section can represent it. */
+  readonly fileLabel?: string;
 }
 
 interface ToolBadgesSection extends ToolSectionBase {
@@ -345,8 +347,9 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
     // named one returns to the call-level label instead of inheriting its
     // predecessor's file.
     const effectivePath = candidate.path ?? (ctx.filePath || 'edit');
-    if (effectivePath !== labelledPath) {
-      labelledPath = effectivePath;
+    const switchedToFallback =
+      effectivePath === 'edit' && effectivePath !== labelledPath;
+    if (effectivePath !== 'edit' && effectivePath !== labelledPath) {
       sections.push({
         kind: 'file',
         label: 'File:',
@@ -354,9 +357,11 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
         namespace: 'workspace',
       });
     }
+    labelledPath = effectivePath;
     sections.push({
       kind: 'diff',
-      label: '',
+      label: switchedToFallback ? 'File: edit' : '',
+      ...(switchedToFallback ? { fileLabel: 'edit' } : {}),
       oldText: candidate.oldText,
       newText: candidate.newText,
     });

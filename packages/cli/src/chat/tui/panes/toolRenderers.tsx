@@ -283,7 +283,9 @@ function patchGroupsFromSections(
     }
     if (section.kind !== 'diff') continue;
     const hunks = buildDiffHunks(section.oldText, section.newText);
-    if (hunks.length > 0) groups.push({ fileLabel, hunks });
+    if (hunks.length > 0) {
+      groups.push({ fileLabel: section.fileLabel ?? fileLabel, hunks });
+    }
   }
   return groups.length > 0 ? groups : undefined;
 }
