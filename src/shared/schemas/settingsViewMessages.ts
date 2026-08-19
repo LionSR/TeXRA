@@ -24,6 +24,7 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 import {
+  settingSchemaWithoutPrefault,
   settingsViewSnapshotEntries,
   type SettingsViewSnapshot,
 } from './stateSettings';
@@ -227,7 +228,7 @@ function snapshotMessage<S extends DerivedSettingsSnapshot>(snapshot: S) {
       Object.fromEntries(
         settingsViewSnapshotEntries(snapshot).map((entry) => [
           entry.key,
-          entry.schema,
+          settingSchemaWithoutPrefault(entry),
         ]),
       ),
     ),
