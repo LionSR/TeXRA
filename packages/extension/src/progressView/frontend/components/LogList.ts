@@ -279,9 +279,9 @@ export class LogList extends LitElement {
 
   /**
    * Dispatch a spill-artifact / file-link / latex-ref activation from a click
-   * or keydown event. Returns true when one was handled.
+   * or keydown event.
    */
-  private activateLinkFromEvent(event: Event): boolean {
+  private activateLinkFromEvent(event: Event): void {
     const spillLink = getComposedPathElement<HTMLElement>(
       event,
       '.spill-artifact-link',
@@ -291,7 +291,7 @@ export class LogList extends LitElement {
       postMessage(PROGRESS_VIEW_COMMANDS.OPEN_SPILL_ARTIFACT, {
         spillPath: spillLink.dataset.spillPath,
       });
-      return true;
+      return;
     }
 
     const fileLink = getComposedPathElement<HTMLElement>(event, '.file-link');
@@ -302,7 +302,7 @@ export class LogList extends LitElement {
           line: Number(fileLink.dataset.fileLine),
         }),
       });
-      return true;
+      return;
     }
 
     const latexRef = getComposedPathElement<HTMLElement>(event, '.latex-ref');
@@ -310,10 +310,7 @@ export class LogList extends LitElement {
       postMessage(PROGRESS_VIEW_COMMANDS.OPEN_LABEL, {
         label: latexRef.dataset.label,
       });
-      return true;
     }
-
-    return false;
   }
 
   /** Handle file-click events from Shadow DOM components. */
