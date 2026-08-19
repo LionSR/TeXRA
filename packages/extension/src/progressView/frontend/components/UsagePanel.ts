@@ -16,7 +16,6 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
-import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
 import { usageRouteBadge } from '@shared/copy/modelAccess';
 
 // Local imports - shared icons and utils
@@ -135,10 +134,7 @@ export class UsagePanel extends LitElement {
       }
 
       .context-gauge__track {
-        position: relative;
         width: 80px;
-        /* Pins the tick mark's height to the bar regardless of
-           wa-progress-bar's internal box model. */
         height: var(--gauge-height);
       }
 
@@ -146,16 +142,6 @@ export class UsagePanel extends LitElement {
         width: 100%;
         --track-height: var(--gauge-height);
         --track-color: var(--wa-color-surface-border);
-      }
-
-      /* Compaction threshold tick mark */
-      .context-gauge__tick {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: var(--border-thin);
-        background: var(--wa-color-text-normal);
-        opacity: var(--opacity-separator);
       }
 
       .run-summary {
@@ -317,14 +303,6 @@ export class UsagePanel extends LitElement {
             label="${clamped.toFixed(0)}% context used"
             style=${styleMap({ '--indicator-color': fillColor(clamped) })}
           ></wa-progress-bar>
-          <span
-            id="usage-compaction-tick"
-            class="context-gauge__tick"
-            style=${styleMap({ left: `${DEFAULT_COMPACTION_THRESHOLD_PERCENT}%` })}
-          ></span>
-          <wa-tooltip for="usage-compaction-tick"
-            >Compaction at ${DEFAULT_COMPACTION_THRESHOLD_PERCENT}%</wa-tooltip
-          >
         </span>
         <span class="context-state__value">
           ${formatCompactTokenCount(inputTokens)} /
