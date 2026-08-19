@@ -430,9 +430,16 @@ export class XmlOutputManager {
     const roundDir = getFileDirectory(outputLocation);
 
     for (const doc of latexDocuments) {
-      const source = doc.name.trim();
-      if (!source || doc.name === 'unknown' || !doc.content) {
+      if (!doc.name || doc.name === 'unknown' || !doc.content) {
         this.logger.debug(`Skipping document with empty name or content`);
+        continue;
+      }
+
+      const source = doc.name.trim();
+      if (!source) {
+        this.logger.debug(
+          `Skipping document with empty source name after trimming`,
+        );
         continue;
       }
 
