@@ -1222,6 +1222,10 @@ export async function settleLiveSessionExecutions(
             executionId,
             outcome: RUN_OUTCOME.CANCELLED,
             flowRecord: 'preserve',
+            // A driver that reached its own terminal write between the
+            // registry read above and this one owns the result: this drain
+            // records what the exit interrupted, never what already finished.
+            keepExistingOutcome: true,
           });
           if (finalization.status === 'failed') {
             // Rejecting here is what keeps the lease record: an execution
