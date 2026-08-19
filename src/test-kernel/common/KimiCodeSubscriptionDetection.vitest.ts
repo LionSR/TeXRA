@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  describeKimiCodeSubscriptionLimit,
-  parseKimiCodeSubscriptionLimit,
-} from '@common/errors/sdkError/kimiCodeSubscriptionDetection';
+import { parseKimiCodeSubscriptionLimit } from '@common/errors/sdkError/kimiCodeSubscriptionDetection';
 import { formatProviderHttpError } from '@common/errors/sdkError/providerErrorFormat';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 
@@ -81,12 +78,6 @@ describe('parseKimiCodeSubscriptionLimit', () => {
       ),
     ).toBeNull();
   });
-
-  it('formats a human-readable reset hint', () => {
-    const text = describeKimiCodeSubscriptionLimit({ resetsInSeconds: 3600 });
-    expect(text).toContain('Kimi Code subscription usage limit');
-    expect(text).toContain('Moonshot API key');
-  });
 });
 
 describe('formatProviderHttpError for Kimi Code subscription limits', () => {
@@ -100,8 +91,10 @@ describe('formatProviderHttpError for Kimi Code subscription limits', () => {
     // The stored Moonshot key is NOT the broken credential, so no key change
     // is forced (that reason is reserved for upstream credit depletion).
     expect(providerError.userRetryable).toBe(true);
+    // Copy comes from the quota-fallback catalog, so the sentence names the
+    // same fallback the preference switch offers ("Moonshot API keys").
     expect(providerError.message).toContain(
-      'Kimi Code subscription usage limit',
+      'Kimi Code subscription usage limit reached. Switch to your own Moonshot API keys',
     );
   });
 

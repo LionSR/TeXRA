@@ -17,7 +17,7 @@ type OauthQuotaFallbackRouteId = 'chatgpt' | 'grok';
 export type QuotaFallbackRouteId =
   OauthQuotaFallbackRouteId | CodingPlanSubscriptionId;
 
-type QuotaFallbackExhaustionReason = Extract<
+export type QuotaFallbackExhaustionReason = Extract<
   ExhaustionReason,
   | 'chatgpt-subscription'
   | 'xai-subscription'
