@@ -81,10 +81,25 @@ export class TerminalOutput extends LitElement {
       .terminal-container {
         overflow: hidden;
       }
+
+      :host([fill]),
+      :host([fill]) .terminal-container {
+        height: 100%;
+      }
     `,
   ];
 
   @property({ type: String }) text = '';
+
+  /**
+   * Fill the host box instead of sizing rows to the content.
+   *
+   * Tool cards embed a terminal inside a growing disclosure, so there the row
+   * count follows the content up to {@link MAX_VISIBLE_ROWS}. A stream pane
+   * gives the terminal a fixed-height box and expects it to fill it and scroll
+   * internally, which is what this selects.
+   */
+  @property({ type: Boolean, reflect: true }) fill = false;
 
   @query('.terminal-container')
   private terminalContainer!: HTMLDivElement;
@@ -169,25 +184,39 @@ export class TerminalOutput extends LitElement {
     this.resizeObserver.observe(this);
   }
 
-  private refitIfVisible(): void {
+  /**
+   * Re-measure against the current container box. Public because a host that
+   * keeps this element in the DOM while hidden (the stream-pane cache) has to
+   * say when it became visible — `offsetParent` is null until then, so every
+   * fit attempted while hidden is skipped.
+   */
+  refitIfVisible(): void {
     if (!this.terminal || !this.fitAddon) return;
     if (this.offsetParent === null) return;
 
     const { width } = this.getBoundingClientRect();
     if (width === 0) return;
 
-    // Get optimal column count from FitAddon (based on container width)
+    // Get optimal column and row count from FitAddon (based on container box)
     const dims = this.fitAddon.proposeDimensions();
     const cols = dims?.cols ?? this.terminal.cols;
 
-    // Size rows to content instead of filling the container
+    // Size rows to content instead of filling the container, unless the host
+    // asked for a fill.
     const buffer = this.terminal.buffer.active;
     const contentRows = buffer.baseY + buffer.cursorY + 1;
-    const rows = clamp(contentRows, 1, MAX_VISIBLE_ROWS);
+    const rows = this.fill
+      ? (dims?.rows ?? this.terminal.rows)
+      : clamp(contentRows, 1, MAX_VISIBLE_ROWS);
 
     if (cols !== this.terminal.cols || rows !== this.terminal.rows) {
       this.terminal.resize(cols, rows);
     }
+  }
+
+  /** Pin the viewport to the newest output. */
+  scrollToBottom(): void {
+    this.terminal?.scrollToBottom();
   }
 
   private renderTerminalText(): void {
