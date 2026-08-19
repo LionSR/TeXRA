@@ -6,6 +6,7 @@ import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { platform } from '@platform/platform';
 import {
+  fileLocationDisplayPath,
   type DiffResult,
   type ExecutionId,
   type FileLocation,
@@ -15,10 +16,7 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import {
-  createRunStorageLocation,
-  getComparablePath,
-} from '@utils/files/fileLocation';
+import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
@@ -145,7 +143,7 @@ export class LatexDiffManager {
       };
 
       const outputByPath = new Map(
-        outputFiles.map((f) => [getComparablePath(f.location), f]),
+        outputFiles.map((f) => [fileLocationDisplayPath(f.location), f]),
       );
 
       this.logger.debug('Base files', {
@@ -279,7 +277,7 @@ export class LatexDiffManager {
     this.logger.debug(`Matched ${description}`, {
       data: pairs.map(
         ([outputPath, loc]) =>
-          `${path.basename(getComparablePath(loc))} -> ${path.basename(outputPath)}`,
+          `${path.basename(fileLocationDisplayPath(loc))} -> ${path.basename(outputPath)}`,
       ),
     });
   }
