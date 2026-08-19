@@ -368,6 +368,15 @@ const FILE_VAR_CATEGORIES: readonly FileCategoryPrefix[] = [
   'EDITED',
 ];
 
+/**
+ * Files-loaded card label per category. `EDITED` is absent because prompt
+ * assembly has never emitted a card for it.
+ */
+const FILE_CATEGORY_CARD_LABEL: Partial<Record<FileCategoryPrefix, string>> = {
+  INPUT: 'Input Files',
+  CONTEXT: 'Context Files',
+};
+
 /** Variables contributed by the readable file categories. */
 type FileCategoryVars = {
   [P in FileCategoryPrefix as `${P}_FILE`]: string | null;
@@ -414,27 +423,48 @@ async function getFileVars(
     MEDIA_CONTENT: null,
   };
 
-  const contextFiles = getCategoryFiles(agentConfig, 'CONTEXT');
-
-  // Log file categories being loaded (skip for tool-use agents).
-  // Media files are excluded: they have no user vars (display-only in Init)
-  // and are already logged with full load results by MediaExtractionNode in r0.
-  if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
-    await logFileCategoriesWithExistence(logger, [
-      ['Input Files', getCategoryFiles(agentConfig, 'INPUT')],
-      ['Context Files', contextFiles],
-    ]);
-  }
-
   for (const prefix of FILE_VAR_CATEGORIES) {
     const allFiles = getCategoryFiles(agentConfig, prefix);
-    const { xml, readableFiles } =
+    const { xml, readableFiles, skipped } =
       allFiles.length > 0
         ? await getXmlFormatFromReadableFiles(allFiles)
-        : { xml: null, readableFiles: [] };
+        : { xml: null, readableFiles: [], skipped: [] };
     const primaryFile = readableFiles[0];
     if (primaryFile != null) {
       await setVarFromFile(primaryFile, prefix, userVars);
+    }
+
+    // A dropped file changes what the model sees, so report it on the run's own
+    // channel rather than leaving it on a module logger nobody reads.
+    for (const { file, reason } of skipped) {
+      logger.warn(
+        `Skipping unreadable file in prompt context: ${file} (${reason})`,
+      );
+    }
+
+    // The card is derived from the same read that fills the list vars
+    // (`ALL_*S`, `*_FILES`, `LIST_OF_ALL_*S`), so a row's `ok` and that file's
+    // presence in the prompt XML come from one probe and cannot disagree.
+    //
+    // NOT closed here: `setVarFromFile` above re-reads the primary file to fill
+    // `*_FILE`/`*_CONTENT`, and swallows its own failure on a module channel.
+    // A row can therefore still read `ok` while that one pair is null. Separate
+    // probe, separate call path — it needs its own change.
+    //
+    // Tool-use agents get no card. Media files are excluded: they have no user
+    // vars (display-only in Init) and MediaExtractionNode already logs them
+    // with full load results in r0.
+    const cardLabel = FILE_CATEGORY_CARD_LABEL[prefix];
+    if (
+      cardLabel != null &&
+      agentSetting.agentCategory !== AgentCategory.ToolUse
+    ) {
+      const readable = new Set(readableFiles);
+      logFileCategory(
+        logger,
+        cardLabel,
+        allFiles.map((file) => ({ path: file, ok: readable.has(file) })),
+      );
     }
 
     userVars[`ALL_${prefix}S`] = xml;
@@ -448,46 +478,6 @@ async function getFileVars(
   userVars.MEDIA_FILE = mediaFiles[0] ?? null;
 
   return userVars;
-}
-
-/**
- * Log file categories with existence checking.
- * Each category is logged separately with a VS Code native file list message.
- * Uses tuple array for explicit ordering guarantee.
- *
- * Processes all categories in parallel for better performance, but logs
- * them sequentially to preserve the expected UI display order.
- */
-async function logFileCategoriesWithExistence(
-  logger: AgentTrace,
-  categories: Array<[category: string, files: string[]]>,
-): Promise<void> {
-  // Process all categories in parallel for better performance
-  const results = await Promise.all(
-    categories.map(async ([category, files]) => {
-      if (files.length === 0) {
-        return { category, entries: [] };
-      }
-
-      const entries = await Promise.all(
-        files.map(async (filePath) => {
-          try {
-            return { path: filePath, ok: await WorkspaceFS.exists(filePath) };
-          } catch (_err) {
-            // Treat permission/access errors as non-existent
-            return { path: filePath, ok: false };
-          }
-        }),
-      );
-
-      return { category, entries };
-    }),
-  );
-
-  // Log sequentially to preserve UI display order
-  for (const { category, entries } of results) {
-    logFileCategory(logger, category, entries);
-  }
 }
 
 /**

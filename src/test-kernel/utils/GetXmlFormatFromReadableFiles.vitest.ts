@@ -64,6 +64,9 @@ describe('getXmlFormatFromReadableFiles', () => {
     expect(result).toEqual({
       xml: '<document name="present.tex">\nbody of present.tex\n</document>',
       readableFiles: ['present.tex'],
+      skipped: [
+        { file: 'missing.tex', reason: expect.stringContaining('ENOENT') },
+      ],
     });
   });
 

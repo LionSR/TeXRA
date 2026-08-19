@@ -1,14 +1,17 @@
 import * as path from 'node:path';
 
-import { createLog } from '@logger/logUtils';
 import { filterNotNull } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-
-const log = createLog('promptUtils');
 
 export interface XmlFormatFromFilesResult {
   readonly xml: string | null;
   readonly readableFiles: string[];
+  /**
+   * Files dropped from the prompt because they could not be read. Order is
+   * unspecified — the reads settle concurrently — so do not build on it; each
+   * entry names its own file.
+   */
+  readonly skipped: ReadonlyArray<{ file: string; reason: string }>;
 }
 
 /**
@@ -40,10 +43,12 @@ export function getPromptFileName(file: string): string {
  * Get XML formatted string from multiple files
  *
  * Best-effort: a file that cannot be read (moved, renamed, or deleted since the
- * config was saved) is skipped with a warning rather than rejecting the whole
- * batch. This mirrors {@link setVarFromFile}, which already tolerates missing
- * files, and keeps prompt-var assembly from hard-failing an agent launch/resume
- * when an input no longer exists on disk.
+ * config was saved) is skipped rather than rejecting the whole batch. This
+ * mirrors {@link setVarFromFile}, which already tolerates missing files, and
+ * keeps prompt-var assembly from hard-failing an agent launch/resume when an
+ * input no longer exists on disk. The skip is reported back in `skipped` so the
+ * caller can surface it on the run's own channel — a module logger here would
+ * drop the reason outside the run that lost the file.
  *
  * @param files List of file paths
  * @returns XML formatted string of the readable files, or null if none are readable
@@ -52,9 +57,10 @@ export async function getXmlFormatFromReadableFiles(
   files: string[],
 ): Promise<XmlFormatFromFilesResult> {
   if (files.length === 0) {
-    return { xml: null, readableFiles: [] };
+    return { xml: null, readableFiles: [], skipped: [] };
   }
 
+  const skipped: { file: string; reason: string }[] = [];
   const xmlContents = await Promise.all(
     files.map(async (file) => {
       try {
@@ -64,9 +70,7 @@ export async function getXmlFormatFromReadableFiles(
           xml: `<document name="${getPromptFileName(file)}">\n${content}\n</document>`,
         };
       } catch (err) {
-        log.warn(
-          `Skipping unreadable file in prompt context: ${file} (${String(err)})`,
-        );
+        skipped.push({ file, reason: String(err) });
         return null;
       }
     }),
@@ -75,6 +79,7 @@ export async function getXmlFormatFromReadableFiles(
   return {
     xml: readable.length > 0 ? readable.map((doc) => doc.xml).join('\n') : null,
     readableFiles: readable.map((doc) => doc.file),
+    skipped,
   };
 }
 
