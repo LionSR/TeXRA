@@ -1,6 +1,7 @@
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
+import { appSignals } from '@eventBus/AppSignals';
 import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
@@ -77,7 +78,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       openToolInstallUrl: (message) =>
         options.navigation.openExternal(message.url),
       installToolExtension: unsupported(NO_EXTENSION_HOSTING),
-      recheckToolStatus: () => this.refreshToolDashboard(),
+      recheckToolStatus: () => options.dashboard.refreshAvailability(),
       toggleTool: (message) => this.toggleTool(message.toolId, message.enabled),
       runToolCommand: (message) => this.runToolCommand(message),
     };
@@ -87,6 +88,15 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       runInstallCommand: (message) =>
         this.runLatexInstallCommand(message.installCommand),
     };
+    // Every re-probe repaints the Tools tab, whoever triggered it — the
+    // Re-check button, a GitHub token write, or any future core-side input
+    // change. Subscribing here rather than posting after each call site is
+    // what makes the dashboard follow availability instead of following the
+    // one path that remembered to re-post. Lifetime == app, matching the
+    // desktop's other process-global subscriptions, so there is no dispose.
+    appSignals.on('toolAvailabilityChanged', () => {
+      void this.postToolDashboardData().catch(options.onError);
+    });
   }
 
   postLatexConfigValues(): void {
@@ -103,7 +113,9 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       this.postToolDashboardData(),
       this.postLatexSettingsStatus(),
     ]);
-    void this.refreshToolDashboard().catch(this.options.onError);
+    void this.options.dashboard
+      .refreshAvailability()
+      .catch(this.options.onError);
   }
 
   private async postToolDashboardData(): Promise<void> {
@@ -125,11 +137,6 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
 
   private async toggleTool(toolId: string, enabled: boolean): Promise<void> {
     await setToolEnabled(toolId, enabled, this.options.globalState);
-    await this.postToolDashboardData();
-  }
-
-  private async refreshToolDashboard(): Promise<void> {
-    await this.options.dashboard.refreshAvailability();
     await this.postToolDashboardData();
   }
 
