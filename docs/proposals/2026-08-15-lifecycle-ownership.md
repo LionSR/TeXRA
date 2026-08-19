@@ -17,6 +17,26 @@
 > the shutdown deadline extended to an abort-then-advance contract, the
 > SDK's deliberate run-scoped cleanup recorded as a process-root
 > exception, and the §6 step-9 wording aligned with §4's no-table rework.
+>
+> **Reconciled against origin/main `e00b9317f7` (2026-08-19).** The idiom
+> question is settled and executed: the house `DisposableStore`
+> (`src/platform/disposable.ts`, 48 L) has nine production consumers, the
+> deferred surfaces stayed deferred (`[Symbol.dispose]` and leak assertions
+> absent; `move()` landed with the one consumer that deleted a mechanism), and
+> `lifecycle.onShutdown` now runs the abort-then-advance join-with-deadline the
+> review rider specified. Steps 1, 2, 3 and 7 landed in full (#10716, #10780,
+> #10723, #10755, #10893); steps 5, 8 and 9 landed in part. **The widest-impact
+> fix did not land: §3 fix 2, quit-time lease settlement at the session root,
+> is still open** — the CLI UI remains the sole implementation and is still
+> `isResumableIdle()`-gated, so the four-host resume-block gap this doc
+> identified is live exactly as written. Also open: the extension
+> activation-failure catch (fix 5), `resolveEmitSession`'s silent skip (fix 7),
+> the async-dispose split (step 6, all 8 sites), recording's view/window
+> re-rooting, the `childRunLoop` finally ladder, presentation-lease backstops,
+> LaTeX signal threading, and the toggle-store move — which #10925 did **not**
+> carry despite collapsing the settings catalogs (both toggles still resolve to
+> `workspaceState`). The stale `SessionHandle.ts:142` "process-output poller"
+> comment §7 flagged is still there.
 
 ## 0. The verdict, at two altitudes
 
@@ -159,6 +179,22 @@ closure sites — stores in new and touched code only.
    make, not a leak: either desktop installs a default session or the
    fallback logs at warn (silent-degradation rule).
 
+**Per-fix status at `e00b9317f7` (2026-08-19):** 1 **LANDED #10716/#10780**
+(`PollingSourceBase` unrefs its timer and self-registers `disposeAll`; the
+extension-only registrations deleted). 2 **OPEN** — no lease settlement is
+registered on any shutdown path; `sessionExitController.ts:183` is still the
+sole, idle-gated implementation. 3 **PARTIAL #10716** — the interim
+process-shutdown backstop landed on both recording-capable hosts; the
+view/window re-rooting did not (`src/tools/media/audio.ts:26` is still a module
+singleton). 4 **LANDED #10893** (`lifecycleHost.ts:45-102`, 5 s per-phase
+deadline, handlers receive the abort signal, laggard logged, phase advances).
+5 **OPEN** — `activate()` still has no top-level catch; the dual
+`UsageLogService` registration was **not** deleted but entrenched with a
+comment explaining it substitutes for this fix, which couples the two: landing
+fix 5 is what makes the second registration genuinely redundant. 6 **LANDED
+#10755**. 7 **OPEN** — neither branch of the ruling was taken; the skip is
+still silent and desktop is still the host with no default session.
+
 Non-fixes recorded so they aren't re-reported: lease heartbeat (correct),
 idle OpenAI WS (deliberate), detached-group crash orphan (documented
 tradeoff), `inlineAgents` (deliberate, name-bounded — but delete or wire
@@ -216,6 +252,21 @@ other two hosts already agree on, rather than the shared path bending to
 the Memento. `interactionOwnership` needs one ruling: promote to the
 shared registry contract or fence as CLI modality.
 
+**Status at `e00b9317f7` (2026-08-19):** repair 1 **LANDED #10694 then half
+regressed** — both headless `kill` sites gained the explicit
+`{detachActiveChildren: false}` and the deliberate-cascade comment, but #10800
+("simplify agent launch and CLI lifecycle") removed one of the two; only
+`runExecution.ts:406` carries it now. Repair 2 (the quit-asymmetry paragraph at
+`detachSubagentsOnStop`'s declaration) is **OPEN** — that JSDoc still covers
+only the SSOT-and-live-read rationale. Toggle-store unification is **OPEN**:
+#10925 collapsed the settings catalogs but did not move
+`DETACH_SUBAGENTS_ON_STOP` / `ALLOW_ORCHESTRATOR_KILL`, which still declare
+`slots: sameSlot('workspaceState')` and still route through the extension's
+`WorktreeMemento` — the 2026-08-15 ruling recorded above is unexecuted.
+`interactionOwnership` needed no new ruling: it was already promoted to the
+shared registry contract in `docs/design/execution-interaction-ownership.md`,
+and the code matches.
+
 Also verified in this sweep: **LaTeX compiles are uniformly signal-less**
 (`compileLatex2Pdf`/latexdiff take timeout only; the `executeCommand`
 substrate supports `signal` but no caller threads it — a user stop never
@@ -267,6 +318,28 @@ split avoids), `signal-exit` (Ink already embeds it; keep one exit matrix).
 
 PRs 1–5 independent except 4-after-3; 6–9 ride on 2. Every step leaves the
 tree with strictly fewer teardown mechanisms than it found.
+
+**Step status at `e00b9317f7` (2026-08-19):** 1 **LANDED** (#10716, #10780).
+2 **LANDED** (#10723 — `src/platform/disposable.ts`, nine production consumers;
+`RESET_HOOKS` stayed repeatable as prescribed). 3 **LANDED** (#10755 —
+`SessionHandle.teardown` is a store, `dispose()` is one line, the
+comment-enforced order and the hand-rolled aggregation are gone). 4 **OPEN**
+— the ordering constraint held it behind 3, and it never followed. 5
+**PARTIAL** (#10893 — the deadline landed and the bespoke CLI grace race is
+gone; the activation catch and the dual `UsageLogService` registration are
+not). 6 **OPEN** — all 8 async dispose sites remain, and the `void`-cast
+survives at `extension.ts:495`. 7 **LANDED** (#10893 — window-root store,
+`pendingDesktopDiffHostDispose` absent). 8 **PARTIAL** (#10893 for the
+session-keyed agent-CLI registries; #10805 collapsed the stream→execution
+resolver; `AgentLaunchResources.ts` deleted outright in favour of a store with
+`move()` — recording scoping and `clearInlineAgents` still open). 9
+**PARTIAL** — see §4.
+
+One claim did not reproduce at HEAD: §1's "Lean disposal from
+three-owners-in-three-modules". Only one shutdown registration is findable
+(`directLspAdapter.ts:88`) plus the extension's hand-called fourth path
+(`extension.ts:770`), so the row's real remaining content is that fourth path,
+not a three-way split.
 
 ## 7. Honest notes
 

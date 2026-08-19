@@ -12,7 +12,6 @@ import {
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { platform } from '@platform/platform';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
   getProviderDisplayName,
@@ -42,11 +41,10 @@ function createProfileKeyController(
         PROVIDER_DISPLAY_NAMES[provider] ?? provider,
       ),
     getProviderKeyUrl,
-    getApiKeySecretName: (provider) =>
-      SecretManager.getApiKeySecretName(provider as ApiProvider),
-    setSecret: (key, value) => platform().secrets.set(key, value),
-    deleteSecret: (key) => platform().secrets.delete(key),
     refreshAfterKeyChange,
+    reportFailure: async (message, error) => {
+      await showLoggedErrorMessage(CHANNEL, message, error);
+    },
   });
 }
 
@@ -116,18 +114,10 @@ export async function setApiKey(
   const apiKey = await promptForApiKey(target);
   if (!apiKey) return;
 
-  try {
-    await createProfileKeyController(refreshAfterKeyChange).commitProviderKey(
-      target,
-      apiKey,
-    );
-  } catch (err) {
-    await showLoggedErrorMessage(
-      CHANNEL,
-      `Failed to set ${target} API key`,
-      err,
-    );
-  }
+  await createProfileKeyController(refreshAfterKeyChange).commitProviderKey(
+    target,
+    apiKey,
+  );
 }
 
 /**
@@ -146,15 +136,7 @@ export async function removeApiKey(
     return;
   }
 
-  try {
-    await createProfileKeyController(refreshAfterKeyChange).removeProviderKey(
-      provider,
-    );
-  } catch (err) {
-    await showLoggedErrorMessage(
-      CHANNEL,
-      `Failed to remove ${provider} API key`,
-      err,
-    );
-  }
+  await createProfileKeyController(refreshAfterKeyChange).removeProviderKey(
+    provider,
+  );
 }

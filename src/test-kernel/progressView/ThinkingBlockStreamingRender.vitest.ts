@@ -2,10 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import {
   LOG_LEVELS,
-  LogMessageDataSchema,
   MESSAGE_TYPES,
-  type LogMessageData,
+  STREAM_LOG_ENTRY_TYPES,
+  StreamLogEntrySchema,
+  type StreamLogEntry,
 } from '@shared/schemas';
+import {
+  compactionActivityRow,
+  projectTranscriptRow,
+  type TranscriptRow,
+} from '@shared/transcript';
 
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
@@ -14,15 +20,17 @@ import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 let formatLogEntry: typeof import('@progressView/frontend/formatters').formatLogEntry;
 let render: typeof import('lit').render;
 
-function renderEntry(message: LogMessageData): Element {
+function renderRow(row: TranscriptRow | undefined): Element {
   const container = document.createElement('div');
-  render(formatLogEntry(message), container);
+  render(formatLogEntry(row!), container);
   return container;
 }
 
 /** A streaming thinking entry, overridable per test. */
-function logMessage(overrides: Partial<LogMessageData>): LogMessageData {
-  return LogMessageDataSchema.parse({
+function logEntry(overrides: Partial<StreamLogEntry>): StreamLogEntry {
+  return StreamLogEntrySchema.parse({
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    seqNo: 1,
     id: 'msg-1',
     text: 'text',
     level: LOG_LEVELS.INFO,
@@ -31,6 +39,11 @@ function logMessage(overrides: Partial<LogMessageData>): LogMessageData {
     data: { status: 'running' },
     ...overrides,
   });
+}
+
+/** The projected row for a streaming thinking entry. */
+function thinkingRow(overrides: Partial<StreamLogEntry>): TranscriptRow {
+  return projectTranscriptRow(logEntry(overrides))!;
 }
 
 /**
@@ -47,8 +60,8 @@ describe('progress view live activity rendering', () => {
   });
 
   it('renders a banner-details shell, not a plain log line, while the stream is running', () => {
-    const container = renderEntry(
-      logMessage({ id: 'think-1', text: '**bold** reasoning in progress' }),
+    const container = renderRow(
+      thinkingRow({ id: 'think-1', text: '**bold** reasoning in progress' }),
     );
 
     const details = container.querySelector('wa-details.banner-details');
@@ -67,18 +80,13 @@ describe('progress view live activity rendering', () => {
   });
 
   it('renders projected context compaction as a non-collapsible activity', async () => {
-    const container = renderEntry(
-      logMessage({
-        id: 'compaction:operation-1',
-        text: '',
-        messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
-        data: {
-          operationId: 'operation-1',
-          status: 'running',
-          finalized: false,
-          startPosition: 4,
-          startedAt: 10,
-        },
+    const container = renderRow(
+      compactionActivityRow({
+        operationId: 'operation-1',
+        status: 'running',
+        finalized: false,
+        startPosition: 4,
+        startedAt: 10,
       }),
     );
     const activity = container.querySelector('compaction-activity');
@@ -95,8 +103,8 @@ describe('progress view live activity rendering', () => {
   });
 
   it('preserves newlines in raw text while streaming', () => {
-    const container = renderEntry(
-      logMessage({ id: 'think-multiline', text: 'line one\nline two' }),
+    const container = renderRow(
+      thinkingRow({ id: 'think-multiline', text: 'line one\nline two' }),
     );
 
     const content = container.querySelector('.banner-content--streaming');
@@ -104,8 +112,8 @@ describe('progress view live activity rendering', () => {
   });
 
   it('upgrades to rendered markdown once the stream finalizes, inside the same banner shell', () => {
-    const container = renderEntry(
-      logMessage({
+    const container = renderRow(
+      thinkingRow({
         id: 'think-1',
         text: '**bold** reasoning done',
         data: { status: 'completed' },
@@ -121,8 +129,8 @@ describe('progress view live activity rendering', () => {
   });
 
   it('applies the same running/finalized behavior to model-response entries', () => {
-    const runningContainer = renderEntry(
-      logMessage({
+    const runningContainer = renderRow(
+      thinkingRow({
         id: 'resp-1',
         text: '**bold** answer in progress',
         messageType: MESSAGE_TYPES.MODEL_RESPONSE,
@@ -139,8 +147,8 @@ describe('progress view live activity rendering', () => {
   });
 
   it('resolves the scratchpad banner config (pencil icon, "Scratchpad" label), not the thinking default', () => {
-    const container = renderEntry(
-      logMessage({
+    const container = renderRow(
+      thinkingRow({
         id: 'scratch-1',
         text: 'jotting down a formula',
         messageType: MESSAGE_TYPES.SCRATCHPAD,

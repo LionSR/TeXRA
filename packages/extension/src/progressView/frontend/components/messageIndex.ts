@@ -1,33 +1,34 @@
-/** Group tree, ungrouped messages, and chronological timeline indices. */
+/** Group tree, ungrouped rows, and chronological timeline indices. */
 
-import type { LogMessageData, TaskGroup } from '@shared/schemas';
+import type { TaskGroup } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import { compareBySeqNo } from '@shared/streams/streamOrdering';
 
 export interface GroupTree {
   group: TaskGroup;
   children: GroupTree[];
-  messages: LogMessageData[];
+  rows: TranscriptRow[];
 }
 
 export type TimelineEntry =
-  | { key: string; time: number; msg: LogMessageData }
+  | { key: string; time: number; row: TranscriptRow }
   | { key: string; time: number; tree: GroupTree };
 
-type MessageTimelineEntry = Extract<TimelineEntry, { msg: LogMessageData }>;
+type RowTimelineEntry = Extract<TimelineEntry, { row: TranscriptRow }>;
 
-interface MessageLocation {
+interface RowLocation {
   ungroupedIndex?: number;
-  timelineEntry?: MessageTimelineEntry;
+  timelineEntry?: RowTimelineEntry;
 }
 
-/** The wall-clock fallback order key for a log message. */
-function messageTime(message: LogMessageData): number {
-  return message.timestamp ?? 0;
+/** The wall-clock fallback order key for a log row. */
+function rowTime(row: TranscriptRow): number {
+  return row.timestamp ?? 0;
 }
 
-/** Full-rebuild fallback: messages missing a timestamp sort last. */
-function messageTimeForRebuild(message: LogMessageData): number {
-  return message.timestamp ?? Number.MAX_SAFE_INTEGER;
+/** Full-rebuild fallback: rows missing a timestamp sort last. */
+function rowTimeForRebuild(row: TranscriptRow): number {
+  return row.timestamp ?? Number.MAX_SAFE_INTEGER;
 }
 
 /** The wall-clock fallback order key for a task-group child. */
@@ -40,20 +41,12 @@ function groupStartTimeForRebuild(group: TaskGroup): number {
   return group.startTime ?? Number.MAX_SAFE_INTEGER;
 }
 
-function compareMessages(a: LogMessageData, b: LogMessageData): number {
-  return compareBySeqNo(a, b, (message) => message.seqNo, messageTime);
+function compareRows(a: TranscriptRow, b: TranscriptRow): number {
+  return compareBySeqNo(a, b, (row) => row.seqNo, rowTime);
 }
 
-function compareMessagesForRebuild(
-  a: LogMessageData,
-  b: LogMessageData,
-): number {
-  return compareBySeqNo(
-    a,
-    b,
-    (message) => message.seqNo,
-    messageTimeForRebuild,
-  );
+function compareRowsForRebuild(a: TranscriptRow, b: TranscriptRow): number {
+  return compareBySeqNo(a, b, (row) => row.seqNo, rowTimeForRebuild);
 }
 
 function compareGroups(a: TaskGroup, b: TaskGroup): number {
@@ -92,8 +85,8 @@ function insertByOrder<T>(
   return idx;
 }
 
-/** One reactive update of `groups` / `messages` / `terminal`. */
-interface MessageIndexUpdate {
+/** One reactive update of `groups` / `rows` / `terminal`. */
+interface TranscriptIndexUpdate {
   /** Terminal render mode is active for this update. */
   terminal: boolean;
   /** Terminal render mode was active for the previous update. */
@@ -101,26 +94,26 @@ interface MessageIndexUpdate {
   groups: readonly TaskGroup[];
   previousGroups: readonly TaskGroup[] | undefined;
   groupsChanged: boolean;
-  messages: readonly LogMessageData[];
-  previousMessages: readonly LogMessageData[] | undefined;
-  messagesChanged: boolean;
+  rows: readonly TranscriptRow[];
+  previousRows: readonly TranscriptRow[] | undefined;
+  rowsChanged: boolean;
   /** Indices the delta touched, or null when the range must be scanned. */
   deltaIndices: readonly number[] | null;
 }
 
 /**
  * Owns the derived data structures for the non-terminal render path:
- * the hierarchical group tree, the ungrouped message list, the interleaved
+ * the hierarchical group tree, the ungrouped row list, the interleaved
  * timeline, and the lookup indices that keep incremental updates O(1) per
  * touched entry.
  */
-export class MessageIndex {
+export class TranscriptIndex {
   tree: GroupTree[] = [];
-  ungrouped: LogMessageData[] = [];
+  ungrouped: TranscriptRow[] = [];
   timeline: TimelineEntry[] = [];
 
-  /** Both derived locations for an ungrouped message, keyed once by ID. */
-  private messageLocations = new Map<string, MessageLocation>();
+  /** Both derived locations for an ungrouped row, keyed once by ID. */
+  private rowLocations = new Map<string, RowLocation>();
 
   /** O(1) lookup from groupId → tree node. */
   private groupNodeIndex = new Map<string, GroupTree>();
@@ -134,16 +127,16 @@ export class MessageIndex {
    * Returns true when the caller must reset its render windows, i.e. when the
    * timeline no longer lines up with the windows the previous render used.
    */
-  apply(update: MessageIndexUpdate): boolean {
+  apply(update: TranscriptIndexUpdate): boolean {
     const {
       terminal,
       wasTerminal,
       groups,
       previousGroups,
       groupsChanged,
-      messages,
-      previousMessages,
-      messagesChanged,
+      rows,
+      previousRows,
+      rowsChanged,
       deltaIndices,
     } = update;
 
@@ -153,12 +146,12 @@ export class MessageIndex {
 
     // Terminal mode just switched off: the caches went stale while it was on.
     if (wasTerminal) {
-      this.rebuildTree(groups, messages);
+      this.rebuildTree(groups, rows);
       this.rebuildTimeline();
       return true;
     }
 
-    const previousCount = previousMessages?.length ?? 0;
+    const previousCount = previousRows?.length ?? 0;
     const patchedGroupMetadata =
       groupsChanged &&
       previousGroups !== undefined &&
@@ -166,42 +159,42 @@ export class MessageIndex {
     let renderWindowsStale = false;
 
     if (groupsChanged && !patchedGroupMetadata) {
-      this.rebuildTree(groups, messages);
-    } else if (messagesChanged) {
-      if (messages.length === previousCount && previousMessages) {
-        this.updateCachedMessageRefs(messages, previousMessages, deltaIndices);
-      } else if (messages.length > previousCount) {
-        this.appendNewMessages(messages, previousCount);
+      this.rebuildTree(groups, rows);
+    } else if (rowsChanged) {
+      if (rows.length === previousCount && previousRows) {
+        this.updateCachedRowRefs(rows, previousRows, deltaIndices);
+      } else if (rows.length > previousCount) {
+        this.appendNewRows(rows, previousCount);
         // A LOG_DELTA batch may also contain updates to existing entries
         // (e.g. tool status → completed) alongside the appended entries.
-        if (previousMessages) {
-          this.updateCachedMessageRefs(
-            messages,
-            previousMessages,
+        if (previousRows) {
+          this.updateCachedRowRefs(
+            rows,
+            previousRows,
             deltaIndices,
             previousCount,
           );
         }
       } else {
-        this.rebuildTree(groups, messages);
+        this.rebuildTree(groups, rows);
         renderWindowsStale = true;
       }
     }
 
     // Recompute the interleaved timeline incrementally when possible so the
-    // earliest ungrouped message (the user's original instruction) stays at
+    // earliest ungrouped row (the user's original instruction) stays at
     // the top for both tool-use and workflow streams.
-    if (groupsChanged || messagesChanged) {
+    if (groupsChanged || rowsChanged) {
       if (
         (groupsChanged && !patchedGroupMetadata) ||
-        messages.length < previousCount
+        rows.length < previousCount
       ) {
         this.rebuildTimeline();
-      } else if (messagesChanged && messages.length > previousCount) {
-        this.appendToTimeline(messages, previousCount);
-        this.updateTimelineMessageRefs(messages, deltaIndices);
-      } else if (messagesChanged) {
-        this.updateTimelineMessageRefs(messages, deltaIndices);
+      } else if (rowsChanged && rows.length > previousCount) {
+        this.appendToTimeline(rows, previousCount);
+        this.updateTimelineRowRefs(rows, deltaIndices);
+      } else if (rowsChanged) {
+        this.updateTimelineRowRefs(rows, deltaIndices);
       }
     }
 
@@ -241,13 +234,13 @@ export class MessageIndex {
 
   /**
    * Build hierarchical tree from flat groups array.
-   * Messages are classified purely by groupId — initial user messages have
+   * Messages are classified purely by groupId — initial user rows have
    * no groupId (logged before the run stage via beginRunStage), while
    * follow-ups inherit their group.
    */
   rebuildTree(
     groups: readonly TaskGroup[],
-    messages: readonly LogMessageData[],
+    rows: readonly TranscriptRow[],
   ): void {
     const groupMap = new Map<string, TaskGroup>();
     const childrenMap = new Map<string, TaskGroup[]>();
@@ -261,24 +254,24 @@ export class MessageIndex {
       }
     }
 
-    // Sort messages by wire append sequence and classify by groupId. Rows
+    // Sort rows by wire append sequence and classify by groupId. Rows
     // without a usable sequence (archived/compat) fall back to timestamp.
     // JS engines use stable sort, so equal order keys preserve original order.
-    const sortedMessages = messages.toSorted(compareMessagesForRebuild);
-    const messagesByGroup = new Map<string, LogMessageData[]>();
-    const ungrouped: LogMessageData[] = [];
-    this.messageLocations.clear();
+    const sortedRows = rows.toSorted(compareRowsForRebuild);
+    const rowsByGroup = new Map<string, TranscriptRow[]>();
+    const ungrouped: TranscriptRow[] = [];
+    this.rowLocations.clear();
 
-    for (const msg of sortedMessages) {
-      if (msg.groupId && groupMap.has(msg.groupId)) {
-        const bucket = messagesByGroup.get(msg.groupId) ?? [];
-        bucket.push(msg);
-        messagesByGroup.set(msg.groupId, bucket);
+    for (const row of sortedRows) {
+      if (row.groupId && groupMap.has(row.groupId)) {
+        const bucket = rowsByGroup.get(row.groupId) ?? [];
+        bucket.push(row);
+        rowsByGroup.set(row.groupId, bucket);
       } else {
-        this.messageLocations.set(msg.id, {
+        this.rowLocations.set(row.id, {
           ungroupedIndex: ungrouped.length,
         });
-        ungrouped.push(msg);
+        ungrouped.push(row);
       }
     }
 
@@ -290,7 +283,7 @@ export class MessageIndex {
         children: (childrenMap.get(group.id) ?? [])
           .sort(compareGroups)
           .map(buildNode),
-        messages: messagesByGroup.get(group.id) ?? [],
+        rows: rowsByGroup.get(group.id) ?? [],
       };
       nodeIndex.set(group.id, node);
       return node;
@@ -300,7 +293,7 @@ export class MessageIndex {
     // has no parent OR its parent is absent from this set (a dangling parent —
     // e.g. a cross-trace id the stream never recorded). Re-rooting orphans here
     // makes them degrade gracefully (rendered un-nested at the timeline top)
-    // instead of vanishing silently along with their whole subtree and messages.
+    // instead of vanishing silently along with their whole subtree and rows.
     // See docs/proposals/2026-05-30-progress-grouping-refactor.md (R2).
     // Stable sort preserves original order for equal order keys.
     this.tree = groups
@@ -316,7 +309,7 @@ export class MessageIndex {
       ...this.ungrouped.map((m) => ({
         key: m.id,
         time: m.timestamp ?? 0,
-        msg: m,
+        row: m,
       })),
       ...this.tree.map((t) => ({
         key: t.group.id,
@@ -326,53 +319,47 @@ export class MessageIndex {
     ].sort(compareTimeline);
     this.timeline = timeline;
     for (const item of timeline) {
-      if ('msg' in item) {
+      if ('row' in item) {
         this.locationFor(item.key).timelineEntry = item;
       }
     }
   }
 
   /**
-   * Incrementally classify messages appended since `startIndex`.
-   * Avoids full tree rebuilds by classifying only new messages and inserting
+   * Incrementally classify rows appended since `startIndex`.
+   * Avoids full tree rebuilds by classifying only new rows and inserting
    * by append-sequence order (timestamp fallback).
    */
-  appendNewMessages(
-    messages: readonly LogMessageData[],
-    startIndex: number,
-  ): void {
-    for (let i = startIndex; i < messages.length; i++) {
-      const msg = messages[i];
-      const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
+  appendNewRows(rows: readonly TranscriptRow[], startIndex: number): void {
+    for (let i = startIndex; i < rows.length; i++) {
+      const row = rows[i];
+      const node = row.groupId ? this.groupNodeIndex.get(row.groupId) : null;
       if (node) {
-        this.removeUngroupedEntry(msg.id);
-        insertByOrder(node.messages, msg, compareMessages);
+        this.removeUngroupedEntry(row.id);
+        insertByOrder(node.rows, row, compareRows);
       } else {
-        const index = insertByOrder(this.ungrouped, msg, compareMessages);
+        const index = insertByOrder(this.ungrouped, row, compareRows);
         this.reindexUngroupedFrom(index);
       }
     }
   }
 
   /**
-   * Insert timeline entries for ungrouped messages appended since `startIndex`.
-   * Grouped messages are already referenced via their tree node in timeline,
-   * so we skip them here. Iterating the messages slice — rather than the
-   * ungrouped array — keeps this correct when a message with an earlier
+   * Insert timeline entries for ungrouped rows appended since `startIndex`.
+   * Grouped rows are already referenced via their tree node in timeline,
+   * so we skip them here. Iterating the rows slice — rather than the
+   * ungrouped array — keeps this correct when a row with an earlier
    * order key gets spliced into the middle of `ungrouped` by
-   * `appendNewMessages`.
+   * `appendNewRows`.
    */
-  appendToTimeline(
-    messages: readonly LogMessageData[],
-    startIndex: number,
-  ): void {
-    for (let i = startIndex; i < messages.length; i++) {
-      const m = messages[i];
+  appendToTimeline(rows: readonly TranscriptRow[], startIndex: number): void {
+    for (let i = startIndex; i < rows.length; i++) {
+      const m = rows[i];
       if (m.groupId && this.groupNodeIndex.has(m.groupId)) continue;
-      const entry: MessageTimelineEntry = {
+      const entry: RowTimelineEntry = {
         key: m.id,
-        time: messageTime(m),
-        msg: m,
+        time: rowTime(m),
+        row: m,
       };
       insertByOrder(this.timeline, entry, compareTimeline);
       this.locationFor(entry.key).timelineEntry = entry;
@@ -380,7 +367,7 @@ export class MessageIndex {
   }
 
   /**
-   * Replace stale message references in cached structures with fresh ones.
+   * Replace stale row references in cached structures with fresh ones.
    * Pass `upTo` to limit scanning to a prefix range (used when a LOG_DELTA
    * batch also appends new entries beyond `upTo`).
    *
@@ -390,34 +377,34 @@ export class MessageIndex {
    * A resync that renumbers entries (hydration merging disk history under
    * live appends) replays the whole log through this ordinary upsert path.
    * Replacing renumbered rows in place would leave the homogeneous arrays
-   * (`node.messages` / `ungrouped`) out of comparator order, so detect an
+   * (`node.rows` / `ungrouped`) out of comparator order, so detect an
    * ordering-key change up front and rebuild those arrays from the current
    * snapshot instead. The time-only timeline is deliberately untouched.
    */
-  updateCachedMessageRefs(
-    messages: readonly LogMessageData[],
-    prevMessages: readonly LogMessageData[],
+  updateCachedRowRefs(
+    rows: readonly TranscriptRow[],
+    prevRows: readonly TranscriptRow[],
     deltaIndices: readonly number[] | null,
-    upTo: number = messages.length,
+    upTo: number = rows.length,
   ): void {
-    if (this.orderingKeyChanged(messages, prevMessages, deltaIndices, upTo)) {
-      this.rebuildMessageArrays(messages);
+    if (this.orderingKeyChanged(rows, prevRows, deltaIndices, upTo)) {
+      this.rebuildRowArrays(rows);
       return;
     }
 
     if (deltaIndices) {
       for (const index of deltaIndices) {
-        if (index < 0 || index >= upTo || index >= messages.length) continue;
-        if (messages[index] !== prevMessages[index]) {
-          this.replaceSingleMessage(messages[index]);
+        if (index < 0 || index >= upTo || index >= rows.length) continue;
+        if (rows[index] !== prevRows[index]) {
+          this.replaceSingleRow(rows[index]);
         }
       }
       return;
     }
 
     for (let i = upTo - 1; i >= 0; i--) {
-      if (messages[i] !== prevMessages[i]) {
-        this.replaceSingleMessage(messages[i]);
+      if (rows[i] !== prevRows[i]) {
+        this.replaceSingleRow(rows[i]);
       }
     }
   }
@@ -425,70 +412,70 @@ export class MessageIndex {
   /**
    * Whether any replaced ref in this batch changed its order key. The
    * homogeneous arrays are ordered by `(usable seqNo, timestamp)`, so compare
-   * those two fields directly: `compareMessages(prev, next) !== 0` would
+   * those two fields directly: `compareRows(prev, next) !== 0` would
    * miss a seqNo presence/value change whenever the timestamp-fallback
    * tie-break reports equality.
    */
   private orderingKeyChanged(
-    messages: readonly LogMessageData[],
-    prevMessages: readonly LogMessageData[],
+    rows: readonly TranscriptRow[],
+    prevRows: readonly TranscriptRow[],
     deltaIndices: readonly number[] | null,
     upTo: number,
   ): boolean {
-    const changed = (prev: LogMessageData, next: LogMessageData): boolean =>
+    const changed = (prev: TranscriptRow, next: TranscriptRow): boolean =>
       next !== prev &&
       (prev.seqNo !== next.seqNo || prev.timestamp !== next.timestamp);
 
     if (deltaIndices) {
       for (const index of deltaIndices) {
-        if (index < 0 || index >= upTo || index >= messages.length) continue;
-        if (changed(prevMessages[index], messages[index])) return true;
+        if (index < 0 || index >= upTo || index >= rows.length) continue;
+        if (changed(prevRows[index], rows[index])) return true;
       }
       return false;
     }
 
     for (let i = upTo - 1; i >= 0; i--) {
-      if (changed(prevMessages[i], messages[i])) return true;
+      if (changed(prevRows[i], rows[i])) return true;
     }
     return false;
   }
 
   /**
-   * Re-derive the homogeneous message arrays (`node.messages` / `ungrouped`)
+   * Re-derive the homogeneous row arrays (`node.rows` / `ungrouped`)
    * from the current snapshot in rebuild order — the same
-   * `compareMessagesForRebuild` fallback `rebuildTree` uses. Used when a
+   * `compareRowsForRebuild` fallback `rebuildTree` uses. Used when a
    * delta batch changed ordering keys, where in-place replacement cannot
    * preserve the sorted invariant. The group tree shape and the time-only
-   * timeline are left untouched; the caller's `updateTimelineMessageRefs`
-   * pass refreshes timeline message refs.
+   * timeline are left untouched; the caller's `updateTimelineRowRefs`
+   * pass refreshes timeline row refs.
    */
-  private rebuildMessageArrays(messages: readonly LogMessageData[]): void {
-    const sorted = messages.toSorted(compareMessagesForRebuild);
-    const messagesByGroup = new Map<string, LogMessageData[]>();
-    const ungrouped: LogMessageData[] = [];
+  private rebuildRowArrays(rows: readonly TranscriptRow[]): void {
+    const sorted = rows.toSorted(compareRowsForRebuild);
+    const rowsByGroup = new Map<string, TranscriptRow[]>();
+    const ungrouped: TranscriptRow[] = [];
 
-    for (const msg of sorted) {
-      const node = msg.groupId
-        ? this.groupNodeIndex.get(msg.groupId)
+    for (const row of sorted) {
+      const node = row.groupId
+        ? this.groupNodeIndex.get(row.groupId)
         : undefined;
       if (node) {
-        const bucket = messagesByGroup.get(node.group.id) ?? [];
-        bucket.push(msg);
-        messagesByGroup.set(node.group.id, bucket);
+        const bucket = rowsByGroup.get(node.group.id) ?? [];
+        bucket.push(row);
+        rowsByGroup.set(node.group.id, bucket);
       } else {
-        ungrouped.push(msg);
+        ungrouped.push(row);
       }
     }
 
     for (const node of this.groupNodeIndex.values()) {
-      node.messages = messagesByGroup.get(node.group.id) ?? [];
+      node.rows = rowsByGroup.get(node.group.id) ?? [];
     }
     this.ungrouped = ungrouped;
 
     // Rebuild ungrouped indices without discarding timeline refs. Iterate the
     // location map (rather than only reindexing the new array) so stale
-    // indices on messages that left the ungrouped array are dropped too.
-    for (const location of this.messageLocations.values()) {
+    // indices on rows that left the ungrouped array are dropped too.
+    for (const location of this.rowLocations.values()) {
       delete location.ungroupedIndex;
     }
     for (let i = 0; i < ungrouped.length; i++) {
@@ -497,20 +484,20 @@ export class MessageIndex {
   }
 
   /**
-   * Update message refs on existing timeline entries.
+   * Update row refs on existing timeline entries.
    * Full scan — status updates can target any position, not just the tail.
    */
-  updateTimelineMessageRefs(
-    messages: readonly LogMessageData[],
+  updateTimelineRowRefs(
+    rows: readonly TranscriptRow[],
     deltaIndices: readonly number[] | null,
   ): void {
     if (deltaIndices) {
       for (const index of deltaIndices) {
-        const msg = messages[index];
-        if (!msg) continue;
-        const timelineEntry = this.messageLocations.get(msg.id)?.timelineEntry;
+        const row = rows[index];
+        if (!row) continue;
+        const timelineEntry = this.rowLocations.get(row.id)?.timelineEntry;
         if (timelineEntry) {
-          timelineEntry.msg = msg;
+          timelineEntry.row = row;
         }
       }
       return;
@@ -518,61 +505,59 @@ export class MessageIndex {
 
     for (let i = this.timeline.length - 1; i >= 0; i--) {
       const item = this.timeline[i];
-      if (!item || !('msg' in item)) continue;
-      const ungroupedIndex = this.messageLocations.get(
-        item.key,
-      )?.ungroupedIndex;
+      if (!item || !('row' in item)) continue;
+      const ungroupedIndex = this.rowLocations.get(item.key)?.ungroupedIndex;
       const fresh =
         ungroupedIndex === undefined
           ? undefined
           : this.ungrouped[ungroupedIndex];
-      if (fresh && fresh !== item.msg) {
-        item.msg = fresh;
+      if (fresh && fresh !== item.row) {
+        item.row = fresh;
       }
     }
   }
 
   /**
-   * Replace a single message ref in the cached tree. O(1) node lookup + O(k)
+   * Replace a single row ref in the cached tree. O(1) node lookup + O(k)
    * findIndex. Mutates arrays in-place — safe because caches are private
    * fields (not tracked by Lit), the render is already scheduled from the
-   * `messages` @property change, and guard([m]) detects updated refs.
+   * `rows` @property change, and guard([m]) detects updated refs.
    */
-  private replaceSingleMessage(msg: LogMessageData): void {
-    // Try group node first (O(1) lookup). A message with groupId may live in
+  private replaceSingleRow(row: TranscriptRow): void {
+    // Try group node first (O(1) lookup). A row with groupId may live in
     // ungrouped if the group didn't exist at classification time,
     // so fall through to ungrouped search on miss.
-    if (msg.groupId) {
-      const node = this.groupNodeIndex.get(msg.groupId);
+    if (row.groupId) {
+      const node = this.groupNodeIndex.get(row.groupId);
       if (node) {
-        this.removeUngroupedEntry(msg.id);
-        const idx = node.messages.findIndex((m) => m.id === msg.id);
+        this.removeUngroupedEntry(row.id);
+        const idx = node.rows.findIndex((m) => m.id === row.id);
         if (idx >= 0) {
-          node.messages[idx] = msg;
+          node.rows[idx] = row;
           return;
         }
       }
     }
 
-    const indexed = this.messageLocations.get(msg.id)?.ungroupedIndex;
-    if (indexed !== undefined && this.ungrouped[indexed]?.id === msg.id) {
-      this.ungrouped[indexed] = msg;
+    const indexed = this.rowLocations.get(row.id)?.ungroupedIndex;
+    if (indexed !== undefined && this.ungrouped[indexed]?.id === row.id) {
+      this.ungrouped[indexed] = row;
       return;
     }
 
-    const idx = this.ungrouped.findIndex((m) => m.id === msg.id);
+    const idx = this.ungrouped.findIndex((m) => m.id === row.id);
     if (idx >= 0) {
-      this.ungrouped[idx] = msg;
-      this.locationFor(msg.id).ungroupedIndex = idx;
+      this.ungrouped[idx] = row;
+      this.locationFor(row.id).ungroupedIndex = idx;
     }
   }
 
-  /** The mutable location record for a message, created on first use. */
-  private locationFor(id: string): MessageLocation {
-    const existing = this.messageLocations.get(id);
+  /** The mutable location record for a row, created on first use. */
+  private locationFor(id: string): RowLocation {
+    const existing = this.rowLocations.get(id);
     if (existing) return existing;
-    const created: MessageLocation = {};
-    this.messageLocations.set(id, created);
+    const created: RowLocation = {};
+    this.rowLocations.set(id, created);
     return created;
   }
 
@@ -583,12 +568,12 @@ export class MessageIndex {
   }
 
   private removeUngroupedEntry(id: string): void {
-    const location = this.messageLocations.get(id);
+    const location = this.rowLocations.get(id);
     if (!location) return;
     if (location.timelineEntry) {
       delete location.ungroupedIndex;
     } else {
-      this.messageLocations.delete(id);
+      this.rowLocations.delete(id);
     }
   }
 }

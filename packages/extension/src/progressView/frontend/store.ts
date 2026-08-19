@@ -1,20 +1,21 @@
 // Shared imports
+import { castDraft, type Draft } from 'mutative';
 import {
   createStreamState,
   isToolUseState,
   type AgentCategory,
-  type LogMessageData,
+  type StreamLogEntry,
   type StreamState,
   type StreamTabInfo,
   type StreamTabId,
   type InquiryThreadUpdatedEvent,
   type InquiryThreadId,
 } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import {
   createCompactionActivityProjection,
   type CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
-import type { Draft } from 'mutative';
 
 /**
  * Log data stored separately from stream meta state.
@@ -23,32 +24,48 @@ import type { Draft } from 'mutative';
  * only LogList/TaskGroupList re-render when logs change.
  */
 export interface StreamLogs {
-  logs: LogMessageData[];
-  /** O(1) lookup: log ID → array index. Maintained by mutation handlers. */
-  logIndex: Map<string, number>;
+  /**
+   * Source log entries in append order. Retained beside the rows because a
+   * text delta appends to the entry and re-projects it — a row is derived
+   * data and is never patched in place — and because a process stream renders
+   * its raw output text rather than transcript rows.
+   */
+  entries: StreamLogEntry[];
+  /** O(1) lookup: entry ID → `entries` index. */
+  entryIndex: Map<string, number>;
+  /**
+   * Transcript rows: one per entry that projects to something displayable,
+   * plus the compaction-activity rows correlated from several entries.
+   * Projected once here so renderers can compare rows by reference.
+   */
+  rows: TranscriptRow[];
+  /** O(1) lookup: row ID → `rows` index. */
+  rowIndex: Map<string, number>;
   /** O(1) lookup: task group ID → array index. Maintained by log handlers. */
   taskGroupIndex: Map<string, number>;
-  /** Correlated context-compaction lifecycle projected into stable log rows. */
+  /** Correlated context-compaction lifecycle projected into stable rows. */
   compactionProjection: CompactionActivityProjection;
   /**
-   * Existing log-message indices updated by the most recent backend delta.
+   * Existing row indices updated by the most recent backend delta.
    * Pure append batches leave this empty so renderers can skip whole-log scans.
    */
-  updatedMessageIndices: number[];
-  /** Generation immediately before `updatedMessageIndices` was collected. */
-  updatedMessageBaseGeneration: number;
+  updatedRowIndices: number[];
+  /** Generation immediately before `updatedRowIndices` was collected. */
+  updatedRowBaseGeneration: number;
   generation: number;
 }
 
 /** Fresh, unshared `StreamLogs` value for a stream with no log entries yet. */
 function createEmptyStreamLogs(): StreamLogs {
   return {
-    logs: [],
-    logIndex: new Map(),
+    entries: [],
+    entryIndex: new Map(),
+    rows: [],
+    rowIndex: new Map(),
     taskGroupIndex: new Map(),
     compactionProjection: createCompactionActivityProjection(),
-    updatedMessageIndices: [],
-    updatedMessageBaseGeneration: 0,
+    updatedRowIndices: [],
+    updatedRowBaseGeneration: 0,
     generation: 0,
   };
 }
@@ -161,7 +178,9 @@ export function ensureStreamState(
     draft.streamStates.set(streamId, state);
   }
   if (!draft.streamLogs.has(streamId)) {
-    draft.streamLogs.set(streamId, createEmptyStreamLogs());
+    // See `logSlice.ts`: transcript rows are immutable, so their drafted-object
+    // type has to be asserted rather than derived.
+    draft.streamLogs.set(streamId, castDraft(createEmptyStreamLogs()));
   }
   return state;
 }

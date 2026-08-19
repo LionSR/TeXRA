@@ -16,8 +16,8 @@ import { html } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
-// Local imports - shared schemas
-import { MESSAGE_TYPES, type LogMessageData } from '@shared/schemas';
+// Local imports - shared transcript model
+import type { StreamingTextRow } from '@shared/transcript';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 // Local imports - formatter helpers
@@ -40,8 +40,8 @@ type BannerConfig = {
   defaultOpen: boolean;
 };
 
-// Banner configuration by messageType
-const BANNER_CONFIG: Record<string, BannerConfig> = {
+// Banner configuration by streaming-text row kind
+const BANNER_CONFIG: Record<StreamingTextRow['kind'], BannerConfig> = {
   thinking: {
     iconName: 'lightbulb',
     labelText: 'Thinking',
@@ -62,7 +62,7 @@ const BANNER_CONFIG: Record<string, BannerConfig> = {
     showTimestamp: false,
     defaultOpen: false,
   },
-  modelResponse: {
+  assistant: {
     iconName: 'wand-magic-sparkles',
     labelText: 'Assistant',
     copyTitle: 'Copy model output',
@@ -79,14 +79,13 @@ const BANNER_CONFIG: Record<string, BannerConfig> = {
  * TemplateResult.
  */
 export function formatBannerContentTemplate(
-  message: LogMessageData,
-  options?: { isRunning?: boolean },
+  row: StreamingTextRow,
 ): FormatResult {
-  const { id, groupId, timestamp, verbose, text, level, messageType } = message;
-  const trimmedContent = (text ?? '').trim();
+  const { id, groupId, timestamp, verbose, level, kind, spillPath } = row;
+  const trimmedContent = row.text.full.trim();
   if (!trimmedContent) return null;
 
-  const config = BANNER_CONFIG[messageType ?? ''] ?? BANNER_CONFIG.thinking;
+  const config = BANNER_CONFIG[kind];
   const { fullTimestamp, timeDisplay, tooltipTimestamp } =
     formatDisplayTimestamp(new Date(timestamp));
   // Auto-expand while streaming in, so the block is visibly "live" instead
@@ -94,23 +93,18 @@ export function formatBannerContentTemplate(
   // once finalized (mirrors the "thought for Xs, tap to expand" pattern
   // other chat UIs use for reasoning output). Model responses stay open by
   // default once finalized.
-  const shouldOpen = options?.isRunning || config.defaultOpen;
+  const isRunning = row.streaming;
+  const shouldOpen = isRunning || config.defaultOpen;
   const contentClass = config.levelClass
     ? `${config.contentClass} message-${level}`
     : config.contentClass;
-  const spillPath =
-    messageType === MESSAGE_TYPES.THINKING ||
-    messageType === MESSAGE_TYPES.SCRATCHPAD ||
-    messageType === MESSAGE_TYPES.MODEL_RESPONSE
-      ? message.data?.spillPath
-      : undefined;
   // While still streaming in, skip the markdown parse on every chunk and
   // show the raw text — the banner shell (icon/label/chevron) stays the
   // same either way; only the content upgrades to rendered markdown once
   // the stream finalizes. banner-content--streaming preserves newlines
   // (raw text has no <p>/<br> tags to do it for us, unlike markdown HTML).
   // prettier-ignore
-  const contentTemplate = options?.isRunning
+  const contentTemplate = isRunning
     ? html`<div class="banner-content banner-content--streaming log-entry-content ${contentClass}">${trimmedContent}</div>`
     : html`<div class="banner-content markdown-content log-entry-content ${contentClass}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
 

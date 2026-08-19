@@ -15,6 +15,7 @@ import { splitOutputLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
+import { nullishWithDefault } from './core/inputSchema';
 
 const OUTPUT_MODES = ['content', 'files_with_matches', 'count'] as const;
 
@@ -27,13 +28,9 @@ const GrepInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe('Glob filter for file names (e.g. "*.tex").'),
-  output_mode: z
-    .enum(OUTPUT_MODES)
-    .nullish()
-    .transform((v) => v ?? 'content')
-    .describe(
-      'Must be "content", "files_with_matches", or "count". For context lines around matches, use -C instead.',
-    ),
+  output_mode: nullishWithDefault(z.enum(OUTPUT_MODES), 'content').describe(
+    'Must be "content", "files_with_matches", or "count". For context lines around matches, use -C instead.',
+  ),
   '-B': z
     .int()
     .min(0)

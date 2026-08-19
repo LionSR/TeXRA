@@ -81,16 +81,22 @@ export function hydratedTranscript(
     const spill = spills.get(entry.spillPath);
     if (spill === undefined) return { ...entry, spillPath: undefined };
     if (entry.role === 'tool') {
+      const toolUse = {
+        ...entry.toolUse,
+        outputText:
+          spill.kind === 'loaded'
+            ? spill.text
+            : withSpillNotice(entry.toolUse.outputText, spill.notice),
+      };
+      // The row carries the same payload the renderer paints from, so the
+      // recovered text has to land on both. The row's `model` is untouched:
+      // it owns the display *policy* (which blocks show, and why), which the
+      // recovery does not change.
       return {
         ...entry,
         ...(spill.kind === 'failed' ? { spillFailed: true } : {}),
-        toolUse: {
-          ...entry.toolUse,
-          outputText:
-            spill.kind === 'loaded'
-              ? spill.text
-              : withSpillNotice(entry.toolUse.outputText, spill.notice),
-        },
+        toolUse,
+        row: { ...entry.row, toolUse },
       };
     }
     return {

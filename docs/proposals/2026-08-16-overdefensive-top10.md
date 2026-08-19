@@ -12,6 +12,26 @@
 > and two inflated sub-claims (#5's flagship catch story, 2 of #10's four
 > FS sites) are rewritten to what the code actually does. R6 net-element
 > accounting applies to every PR; R8 consumer-greps are named per entry.
+>
+> **Reconciled against origin/main `e00b9317f7` (2026-08-19).** The plan
+> executed as sequenced: **the three gates landed first** (#10781, #10782,
+> #10783 — G1 surfaces desktop async failures to a real dialog and the
+> post-startup handler surfaces-then-quits rather than suppressing the crash;
+> G2 installs an ExtHost `unhandledRejection` and gives view-dispatch `onError`
+> a user surface; G3 installs the renderer listener on the normal path and the
+> `hostBridge` throw-at-boot followed), which unblocked everything else.
+> **Seven entries are fully landed** (1, 2, 3, 5, 7, 9, 10) and three are
+> partial (4, 6, 8). The re-counts are the honest measure of the sweep: entry
+> 1's 27 consumer `safeParse`+skip branches → 0, entry 2's 42 `try*` sites →
+> 12 (7 production, every one a documented KEEP), entry 6's 24 optional-logger
+> sites → 7, entry 7's 17 `?? ''` sites → 0 in production, entry 8's four
+> `provider.toLowerCase()` sites → 2. What remains genuinely open is small and
+> named: `terminalStatus.ts:60-78`'s second-owner read (4d), the
+> `SupabaseSessionLog` all-optional interface plus four desktop
+> optional-callback stragglers (6), and lowercase-provider-once-at-registry-load
+> (8) — which is self-documented in the code, at `providerConfig.ts:35`, as
+> waiting on this entry. `agentRoster.ts:59` is not open work: it is the
+> policy-gated KEEP this doc demoted it to.
 
 Scoreboard: **~230 defensive sites censused → ~180 removable across 10
 families (est. net −660..−710 LoC of pure defense — the sum of the
@@ -52,6 +72,54 @@ land in a log-only or silent row are sequenced behind §3's gates G1-G3
 a renderer throw kills the UI, not the run.
 
 ## 1. The top 10
+
+**Per-entry status at `e00b9317f7` (2026-08-19):**
+
+1. **LANDED #10799.** `data` is a `z.discriminatedUnion('messageType', …)`
+   validated at exactly the two boundaries named; **27 consumer branches → 0**.
+   The verifier's discriminant correction was right — the union keys on
+   `messageType`, and `z.unknown()` survives only for genuinely opaque payloads.
+2. **LANDED #10814.** **42 sites in 23 files → 12**, of which 7 are production
+   and every one is a documented KEEP (goalStore's pre-init reads, a fenced
+   `getConfigBeforePlatformInit`, the platformless-SDK guard, three bootstrap
+   callers). The `serverKeys` KEEP is moot — that module went with the relay
+   plane.
+3. **LANDED #10789 / #10864 / #10887 / #10888** for all four age-out
+   mechanisms, including the load-bearing precondition (`emptySnapshot()` now
+   constructs a canonical `{workPlan:{}}`). `withLegacyUsageRoute` has zero
+   hits repo-wide, so the `streamData.ts` strictification precondition became
+   moot rather than being executed. `agentRoster.ts:59` correctly **kept**, now
+   with an expanded permanent-reader rationale.
+4. **PARTIAL.** (a) **LANDED #10794/#10890** by the prescribed route — the
+   window is unrepresentable: the lease is acquired first and the record read
+   under it, so the second read and the `isDeepStrictEqual` compare are gone.
+   (b) **LANDED #10792.** (c) **LANDED #10793** — one parse, and the silent
+   filter is gone. (d) **OPEN** — `terminalStatus.ts` still prefers
+   `meta.outcome` over the `result.outcome` in hand; only the read failure
+   became loud.
+5. **LANDED #10791.** `streamSnapshot.ts` has zero `.catch(`; `schemaVersion`
+   is `.prefault` with the reason written down, and per-field recovery stayed
+   loud rather than becoming the more-destructive whole-object parse the review
+   warned about. `UsageMonitor`'s `.catch('unknown')` is gone and **both**
+   encompassing catches were loudened (`error` / `warn`) — the honest outcome
+   this entry predicted.
+6. **PARTIAL #10786.** **24 → 7**, and 2 of the 24 evaporated with the relay
+   plane. Residue: the all-optional `SupabaseSessionLog` interface itself
+   (`supabaseSessionTypes.ts:53-58`) driving three `?.` sites, plus the four
+   desktop optional-host-callback stragglers this entry said to "fold in or
+   exclude".
+7. **LANDED #10787.** `normalizeOutput` returns `string`; **17 → 0** production
+   `?? ''` sites, and both null-semantics consumers were rewritten in the same
+   PR as the precondition required.
+8. **PARTIAL #10790.** The double `safeParse`, the vars-bag laundering (now a
+   typed field, no `.catch([])`), and the retired-vocabulary comment all
+   landed. The `provider.toLowerCase()` half is **4 → 2** and self-documented
+   as deferred at `providerConfig.ts:35`, which names this entry as the PR that
+   closes it.
+9. **LANDED #10781/#10782/#10783** — see the gate table in §3.
+10. **LANDED #10788.** All three confirmed REMOVEs shipped (FNF-discriminate
+    then rethrow; both `assertNever` gaps; the engine clamp became a
+    constructor `RangeError`), and the three review demotions were honored.
 
 Format per entry: pattern → quantified extent → representatives →
 disposition → execution shape → est. net LoC.
@@ -404,6 +472,12 @@ remove), the exported-trace legacy boundary (`taskGroup.ts:62-68`,
 these lists stops and records it; it does not "fix" it.
 
 ## 3. Execution plan
+
+**ALL THREE GATES LANDED (2026-08-19)** — the sequencing worked exactly as
+designed, and the review-caught constraint on G1 was honored: the desktop's
+post-startup rejection handler surfaces then quits (`fatalStartupError.ts:21-39`)
+rather than converting Node's default crash into continued execution with
+inconsistent main-process state.
 
 **Land the gates first (entry #9; ~25 LoC total, one small PR per
 host):**

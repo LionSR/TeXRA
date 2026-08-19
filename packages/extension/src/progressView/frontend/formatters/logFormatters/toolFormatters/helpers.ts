@@ -17,7 +17,7 @@ import {
   buildCodeBlock,
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
-import type { LogMessageData } from '@shared/schemas';
+import type { TranscriptRowBase } from '@shared/transcript';
 import {
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
@@ -26,10 +26,6 @@ import {
 } from '@shared/toolUse';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { clamp, isObject } from '@utils/core';
-import {
-  collapseWhitespace,
-  truncateWithEllipsis,
-} from '@utils/text/stringUtils';
 
 // Side-effect import to register <tool-timer> custom element
 import '@progressView/frontend/components/ToolTimer';
@@ -54,7 +50,7 @@ const TIMEOUT_GATED_BY_ACTION: Record<string, string> = {
   executions: 'wait',
 };
 
-export function getExecutionsWaitTimeoutSeconds(timeout: unknown): number {
+function executionsWaitTimeoutSeconds(timeout: unknown): number {
   return typeof timeout === 'number' && Number.isFinite(timeout)
     ? clamp(
         timeout,
@@ -84,19 +80,10 @@ export function getToolTimeoutMs(
   if (input.run_in_background === true) return undefined;
 
   if (toolName === 'executions') {
-    return getExecutionsWaitTimeoutSeconds(input.timeout) * 1000;
+    return executionsWaitTimeoutSeconds(input.timeout) * 1000;
   }
 
   return typeof input.timeout === 'number' ? input.timeout : defaultTimeout;
-}
-
-/** Truncate tool header text without pulling streamed stdout/stderr into it. */
-export function truncateHeaderSummary(text: string, maxLength: number): string {
-  const oneLine = collapseWhitespace(text);
-  const outputMarker = oneLine.search(/\s+<(?:stdout|stderr)>/i);
-  const summary =
-    outputMarker >= 0 ? oneLine.slice(0, outputMarker).trim() : oneLine;
-  return truncateWithEllipsis(summary || oneLine, maxLength);
 }
 
 /**
@@ -105,7 +92,7 @@ export function truncateHeaderSummary(text: string, maxLength: number): string {
  * `extraContent` carry the tool-use-only state flags and summary-row controls.
  */
 export function buildToolUseDetails(opts: {
-  message: Pick<LogMessageData, 'id' | 'groupId' | 'timestamp'>;
+  row: Pick<TranscriptRowBase, 'id' | 'groupId' | 'timestamp'>;
   iconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
   label: string;
   isError: boolean;
@@ -114,7 +101,7 @@ export function buildToolUseDetails(opts: {
   extraClasses?: ClassInfo;
   extraContent?: TemplateResult;
 }): TemplateResult {
-  const fullTimestamp = new Date(opts.message.timestamp).toISOString();
+  const fullTimestamp = new Date(opts.row.timestamp).toISOString();
   const classes: ClassInfo = {
     'banner-details': true,
     'tool-use-details': true,
@@ -122,12 +109,7 @@ export function buildToolUseDetails(opts: {
     ...opts.extraClasses,
   };
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title', extraContent: opts.extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.message.id)} data-group-id=${ifDefined(opts.message.groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${opts.content}</div></wa-details>`;
-}
-
-/** Extract typed edits array from parsed tool output, if present. */
-export function getOutputEdits<T>(output: unknown): T[] | undefined {
-  return isObject(output) ? (output.edits as T[] | undefined) : undefined;
+  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title', extraContent: opts.extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)} data-group-id=${ifDefined(opts.row.groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${opts.content}</div></wa-details>`;
 }
 
 type ToolSectionOptions = {
@@ -181,13 +163,5 @@ export function buildTerminalSection(
       class="tool-output-terminal"
       .text=${toolDisplayText(text)}
     ></terminal-output>`,
-  );
-}
-
-export function isMcpTextBlock(
-  block: unknown,
-): block is { type: 'text'; text: string } {
-  return (
-    isObject(block) && block.type === 'text' && typeof block.text === 'string'
   );
 }

@@ -33,6 +33,7 @@ import {
   renderWithTerminalSize,
 } from '@test/support/inkTestHarness.ts';
 import { pollForCondition } from '@test/support/asyncTestUtils';
+import { toolConversationEntry } from '@test/support/transcriptRowFixtures';
 
 afterAll(() => {
   for (const [name, value] of Object.entries(ORIGINAL_COLOR_ENV)) {
@@ -123,23 +124,15 @@ function completedToolEntry(fields: {
   outputText: string;
   finalized: boolean;
 }): ConversationEntry {
-  return {
-    id: fields.id,
-    role: 'tool',
-    text: '',
-    finalized: fields.finalized,
-    toolUse: {
+  return toolConversationEntry(
+    fields.id,
+    {
       toolName: fields.toolName,
-      errorText: '',
-      outputText: fields.outputText,
-      userInstructionText: '',
       input: fields.input,
-      isError: false,
-      isUserFeedback: false,
-      headerSummary: '',
-      status: 'completed',
+      outputText: fields.outputText,
     },
-  };
+    fields.finalized,
+  );
 }
 
 describe('Static band resize', () => {
