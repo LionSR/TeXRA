@@ -15,9 +15,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { usageRouteBadge } from '@shared/copy/modelAccess';
-
-import { formatCostUsd } from '@utils/text/stringUtils';
+import { usageCostLabel } from '@shared/copy/modelAccess';
 
 import {
   childExecutionLabel,
@@ -95,18 +93,10 @@ function usageHasTokens(usage: TokenUsageStats): boolean {
   );
 }
 
-/** Session-level cost line — reuses the shared usage-route badge so the
- *  CLI and extension attribute payment the same way. Empty when there is no
- *  cost to report and no known route to attribute. */
+/** Session-level cost line. Empty when there is no cost to report and no
+ *  known route to attribute. */
 function formatSessionCost(usage: TokenUsageStats): string | undefined {
-  const badge = usageRouteBadge(usage.usageRoute);
-  if (badge) {
-    if (badge.subscription && usage.cost === 0) {
-      return `free via ${badge.label}`;
-    }
-    return `${formatCostUsd(usage.cost)} via ${badge.label}`;
-  }
-  return usage.cost > 0 ? formatCostUsd(usage.cost) : undefined;
+  return usageCostLabel(usage.cost, usage.usageRoute);
 }
 
 export function collectResumeUsage(

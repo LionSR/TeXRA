@@ -13,6 +13,7 @@
 import type { UsageRoute } from '@shared/schemas';
 import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import { assertNever } from '@utils/core';
+import { formatCostUsd } from '@utils/text/stringUtils';
 
 /** Model calls paid for by your own provider accounts. */
 export const OWN_API_KEYS = {
@@ -81,4 +82,22 @@ export function usageRouteBadge(
     default:
       return assertNever(route, 'Unhandled usage route');
   }
+}
+
+/**
+ * One sentence stating what a usage record cost and who paid for it.
+ *
+ * Three outcomes: subscription routes with zero cost are free, a known route
+ * is billed "via" its payment name, and an unknown route with no cost has
+ * nothing to say (`undefined`) so callers can omit the line entirely rather
+ * than print "$0.00" for a session that never reached a model.
+ */
+export function usageCostLabel(
+  cost: number,
+  route: UsageRoute | undefined,
+): string | undefined {
+  const badge = usageRouteBadge(route);
+  if (!badge) return cost > 0 ? formatCostUsd(cost) : undefined;
+  if (badge.subscription && cost === 0) return `Free via ${badge.label}`;
+  return `${formatCostUsd(cost)} via ${badge.label}`;
 }
