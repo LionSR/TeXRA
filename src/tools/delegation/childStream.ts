@@ -59,7 +59,7 @@ interface FinalizeChildStreamOptions {
   outcome?: ChildStreamOutcome;
   /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
   stage?: Pick<StageHandle, 'end'>;
-  /** Durable execution-state action; background bash owns its richer block. */
+  /** Durable execution-state action. */
   persistence?: RunTerminalPersistence;
   /** Remove the child stream tab from the progress view once finalized. */
   autoClose?: boolean;

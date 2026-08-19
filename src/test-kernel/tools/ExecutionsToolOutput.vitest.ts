@@ -224,8 +224,8 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     const result = await readOutput(run.executionId);
     const output = result.output ?? '';
 
-    assert.ok(output.includes('tail without newline\nCompleted in '));
-    assert.ok(!output.includes('tail without newlineCompleted in '));
+    assert.ok(output.includes('tail without newline\nTurn completed in '));
+    assert.ok(!output.includes('tail without newlineTurn completed in '));
   });
 
   it('joins chunks that split a line and pages the projection with view_range', async () => {

@@ -310,10 +310,10 @@ export class AgentExecutionHandle {
    * Interrupt this handle's attached background OS process, if any — the
    * case shutdown drain needs, distinct from `interrupt()`'s general stop
    * (which also covers a loop-level or in-flight-turn interrupt handler that
-   * must stay untouched on shutdown so restart recovery can find it). A
-   * background bash run (`BashBackgroundSession`, see `tools/bash.ts`) is the
-   * only handler that currently sets `ownsBackgroundProcess`. Returns whether
-   * a background-process interrupt handler was attached and interrupted.
+   * must stay untouched on shutdown so restart recovery can find it). Only a
+   * child-run loop whose strategy declares `ownsBackgroundProcess` sets this —
+   * background bash is the one that does. Returns whether a background-process
+   * interrupt handler was attached and interrupted.
    */
   interruptBackgroundProcess(): boolean {
     if (this.interruptHandler?.ownsBackgroundProcess !== true) return false;

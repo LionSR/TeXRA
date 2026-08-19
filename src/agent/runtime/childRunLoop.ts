@@ -1,7 +1,7 @@
 // One driver for every child-run type (agent-CLI codex/claude sessions, native
-// subagents of either category, workflow-script runs). Each turn source
-// supplies an AgentCliSessionStrategy-shaped ChildRunStrategy; this loop is the
-// single owner of everything a driver does NOT vary: follow-up queue
+// subagents of either category, workflow-script runs, background shells). Each
+// turn source supplies a ChildRunStrategy; this loop is the single owner of
+// everything a driver does NOT vary: follow-up queue
 // acquire/drain, one run-handle interrupt target for the child's whole
 // lifetime, per-turn delivery choreography (format → persist report → optional
 // manifest → deliver with wake), and the terminal call into the shared
@@ -21,6 +21,7 @@ import type {
 import {
   onOwnedExecutionLeaseLost,
   captureOwnedExecutionLease,
+  markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
 import {
   currentSession,
@@ -138,8 +139,10 @@ interface ChildStreamPort {
     outcome?: ChildRunOutcome;
     /** Session stage closed with the derived outcome (the loop's stage). */
     stage?: Pick<StageHandle, 'end'>;
-    /** Durable execution-state action; background bash owns its richer block. */
+    /** Durable execution-state action. */
     persistence?: RunTerminalPersistence;
+    /** Drop the child's tab once finalized (ephemeral process children). */
+    autoClose?: boolean;
   }): Promise<void>;
 }
 
@@ -165,6 +168,32 @@ interface ChildStreamPort {
 export interface ChildRunStrategy<TTurn> {
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   readonly stageLabel: string;
+
+  /**
+   * This child's turns drive a live OS process, so the loop's interrupt
+   * handler tears one down. Shutdown drain reads it off the handle to reach a
+   * leaked process (`ExecutionRegistry.killBackgroundProcesses`) without
+   * disturbing agent children that are deliberately left running for restart
+   * recovery — see `ExecutionInterruptHandler.ownsBackgroundProcess`.
+   */
+  readonly ownsBackgroundProcess?: boolean;
+
+  /**
+   * Drop the child's stream tab when the run finalizes. For a child whose tab
+   * is ephemeral by construction (a background shell), the tab exists only
+   * while the process does; every other child type keeps its tab for reading
+   * back.
+   */
+  readonly autoCloseChildStream?: boolean;
+
+  /**
+   * Deliver a settled turn to the parent even when the loop was interrupted.
+   * Default (and right for every agent child) is not to: an interrupted turn
+   * has no result to report. A killed OS process is the exception — it still
+   * reports a complete result (exit code plus the output it produced), and a
+   * parent suspended on that job would otherwise never be told it ended.
+   */
+  readonly deliverAfterInterrupt?: boolean;
 
   /**
    * `persistOnly` records the terminal report without routing it to a parent.
@@ -356,6 +385,12 @@ class ChildRunInterruptible implements ExecutionInterruptHandler {
   constructor(
     private readonly session: SessionHandle,
     private readonly childStreamId: StreamTabId,
+    /**
+     * Only a strategy that declares `ownsBackgroundProcess` sets this: a
+     * loop-level handler for an agent child must stay invisible to shutdown
+     * drain so restart recovery still finds it (#8155).
+     */
+    readonly ownsBackgroundProcess: boolean,
   ) {}
 
   interrupt(): void {
@@ -489,6 +524,12 @@ function resolveLoopTerminationCause(
  * logical identity, the follow-up queue owner/generation, and the interruption
  * cause into one event so a resumed/interrupted child's state is auditable.
  * Emitted at turn acceptance, delivery, and loop termination.
+ *
+ * Debug level: this is the loop's own bookkeeping, not the child's narrative.
+ * A child stream tab renders what its provider produced — for a background
+ * shell that tab IS the terminal, and `/executions/{id}/output` states that it
+ * projects command output rather than run bookkeeping. Debug mode keeps the
+ * audit trail for the case that motivated it.
  */
 function emitTurnDiagnostic(
   logger: AgentTrace,
@@ -501,7 +542,7 @@ function emitTurnDiagnostic(
   },
 ): void {
   const { executionId, turnRef, queueOwner, interruptionCause } = params;
-  logger.info(`childRunLoop ${event}`, {
+  logger.debug(`childRunLoop ${event}`, {
     data: {
       executionId,
       ...(turnRef
@@ -746,7 +787,11 @@ export function startChildRunLoop<TTurn>(
   // progress or results from this child must not enter the replacement queue.
   const parentDeliveryGenerationId =
     runSession.followUps.currentGenerationId(parentStreamId);
-  const loop = new ChildRunInterruptible(runSession, childStreamId);
+  const loop = new ChildRunInterruptible(
+    runSession,
+    childStreamId,
+    strategy.ownsBackgroundProcess === true,
+  );
   let activationDetached = false;
   const releaseChildActivation = childStream
     ? () => undefined
@@ -983,7 +1028,7 @@ export function startChildRunLoop<TTurn>(
             if (activationDetached) return false;
             if (loop.isInterrupted()) {
               releaseSessionOwnershipOnce();
-              return false;
+              return strategy.deliverAfterInterrupt === true;
             }
             if (turnFailed) {
               releaseSessionOwnershipOnce();
@@ -1038,6 +1083,16 @@ export function startChildRunLoop<TTurn>(
         runner = (ac) => nextRunTurn(batch.items, ports, ac);
         childStream?.beginTurn();
       }
+    } catch (error) {
+      // A throw from the loop body itself — delivery formatting, report
+      // persistence, the queue wait — is this run's failure. Without this the
+      // terminal block below would finalize a child that never delivered as
+      // COMPLETED, and the abandoned generation would still look durably
+      // released.
+      sawTurnFailure = true;
+      lastTurnErr ??= error;
+      markOwnedExecutionLeaseUndurable(executionId);
+      throw error;
     } finally {
       // A retry may reuse this execution ID as soon as its lease is released.
       // Drain the prior attempt's queued attribution writes first so an old
@@ -1086,6 +1141,7 @@ export function startChildRunLoop<TTurn>(
             outcome: loopOutcome,
             stage: sessionStage,
             persistence: { kind: 'finalize', flowRecord: 'delete' },
+            ...(strategy.autoCloseChildStream === true && { autoClose: true }),
           });
         } else {
           // Native: every GENUINE terminal turn already finalized its own
