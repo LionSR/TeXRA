@@ -73,6 +73,7 @@ function realCredentialController(): DefaultDesktopCredentialSettingsController 
     },
     externalOpener: {
       openExternal: noOp,
+      openSubscriptionSignInUrl: noOp,
       presentSubscriptionSignInUrl: () => undefined,
       presentSubscriptionDeviceCode: () => undefined,
     },
