@@ -12,7 +12,7 @@ import {
   resolveSetupLaunchModel,
   SETUP_INSTRUCTION,
 } from '@controllers/onboarding/setupLaunch';
-import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
+import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
@@ -119,7 +119,7 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
   // credential; only the walkthrough leaves setup un-launched.
   switch (picked.id) {
     case 'chatgpt':
-      await signInWithChatGptSubscription(CHANNEL);
+      await signInWithSubscription(CHANNEL, 'chatgpt');
       break;
     case 'apiKey':
       await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
