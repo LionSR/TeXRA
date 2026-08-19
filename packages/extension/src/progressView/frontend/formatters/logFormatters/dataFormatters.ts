@@ -64,7 +64,7 @@ export function formatFileListTemplate(row: FileListRow): FormatResult {
     logId: row.id,
     iconName: 'file',
     label: row.summary,
-    items: buildFileListRender(row.files),
+    items: buildFileListRender(row.files, row.media),
   });
 }
 
@@ -132,20 +132,19 @@ const STAT_ICONS: Record<string, TeXRAIconName> = {
   cost: 'rocket',
 };
 
-/** Fixed header config for the statistics panel rendered via <context-management>. */
-const STATISTICS_CONFIG = Object.freeze({
-  icon: 'chart-line',
-  label: 'Statistics',
-  color: 'var(--wa-color-text-normal)',
-});
-
-/** Format statistics entry as TemplateResult. */
+/** Format statistics entry as TemplateResult. The heading is the row's
+ *  (`StatisticsRow.label`); only the glyph and color are this host's. */
 export function formatStatisticsTemplate(row: StatisticsRow): FormatResult {
   const items = row.items.map((item) => ({
     icon: STAT_ICONS[item.key] ?? 'chart-line',
     label: item.label,
     value: item.value,
   }));
+  const config = {
+    icon: 'chart-line',
+    label: row.label,
+    color: 'var(--wa-color-text-normal)',
+  };
   // prettier-ignore
-  return html`<context-management .logId=${row.id} .items=${items} .config=${STATISTICS_CONFIG}></context-management>`;
+  return html`<context-management .logId=${row.id} .items=${items} .config=${config}></context-management>`;
 }

@@ -8,7 +8,6 @@ type PendingPresentation<T> = {
 type PendingInteraction<T, Result> = {
   readonly mode: 'interaction';
   readonly item: T;
-  readonly cancellationScope?: object;
   readonly cancellationResult: (cause?: string) => Result;
   readonly complete: (result: Result) => void;
 };
@@ -17,14 +16,8 @@ type PendingRequest<T, Result> =
   PendingPresentation<T> | PendingInteraction<T, Result>;
 
 interface ApprovalInteractionOptions<Result> {
-  cancellationScope?: object;
   cancellationResult: (cause?: string) => Result;
 }
-
-type InteractionPredicate<T> = (
-  item: T,
-  cancellationScope: object | undefined,
-) => boolean;
 
 /**
  * Owns the complete lifecycle of one progress-view request kind: payload,
@@ -68,7 +61,6 @@ export class ApprovalRequestHandler<
       this.register(id, {
         mode: 'interaction',
         item,
-        cancellationScope: options.cancellationScope,
         cancellationResult: options.cancellationResult,
         complete,
       });
@@ -115,12 +107,12 @@ export class ApprovalRequestHandler<
   }
 
   /** Cancel every matching response-bearing request. */
-  cancelWhere(predicate: InteractionPredicate<T>, cause?: string): number {
+  cancelWhere(predicate: (item: T) => boolean, cause?: string): number {
     let cancelled = 0;
     for (const [id, entry] of [...this.pending]) {
       if (
         entry.mode === 'interaction' &&
-        predicate(entry.item, entry.cancellationScope) &&
+        predicate(entry.item) &&
         this.completeEntry(id, entry, entry.cancellationResult(cause), true)
       ) {
         cancelled += 1;

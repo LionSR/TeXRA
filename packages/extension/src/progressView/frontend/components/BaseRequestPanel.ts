@@ -5,6 +5,9 @@ import { LitElement } from 'lit';
 import { consume } from '@lit/context';
 import { property } from 'lit/decorators.js';
 
+// Local imports - shared schemas
+import type { PermissionPayload } from '@shared/schemas';
+
 // Local imports - progress view events
 import {
   ProgressEvents,
@@ -16,13 +19,12 @@ import {
 import { archivedContext } from '../streamContexts';
 
 // Local imports - progress view component types
-import type { PermissionState } from '../permissionState';
 
 export abstract class BaseRequestPanel<
   K extends PermissionKind = PermissionKind,
 > extends LitElement {
   @property({ attribute: false }) permission!: Extract<
-    PermissionState,
+    PermissionPayload,
     { kind: K }
   >;
 
