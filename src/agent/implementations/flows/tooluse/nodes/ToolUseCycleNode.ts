@@ -1,4 +1,4 @@
-import { Node } from '@agent/node';
+import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -28,7 +28,7 @@ type ToolUseCycleOutcome =
   | { outcome: 'cancelled'; response?: string }
   | { outcome: 'failed'; lastError: RetryErrorInfo; response?: string };
 
-export class ToolUseCycleNode<C> extends Node<
+export class ToolUseCycleNode<C> extends BaseNode<
   ToolUseRunShared,
   ToolUseServices<C>
 > {

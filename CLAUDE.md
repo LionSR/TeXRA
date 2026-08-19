@@ -159,10 +159,13 @@ services/shared-store split: AGENTS.md "Patterns across the codebase"
 (PocketFlow architecture) and `docs/architecture/pocketflow-state.md`.
 
 **The flow engine is local, not upstream PocketFlow.** `src/agent/node/index.ts`
-(~250 lines, built on `p-retry`) is the only definition of `BaseNode`, `Node`,
-and `Flow`. Upstream's `BatchNode`/`BatchFlow`,
-`ParallelBatchNode`/`ParallelBatchFlow`, and the `params`/`setParams` channel do
-not exist here — read the file rather than upstream docs.
+(~150 lines) is the only definition of `BaseNode` and `Flow`. Upstream's
+`BatchNode`/`BatchFlow`, `ParallelBatchNode`/`ParallelBatchFlow`, and the
+`params`/`setParams` channel do not exist here — read the file rather than
+upstream docs. There is no retrying `Node` class: the manual-retry loop
+(automatic `p-retry` batch → `retryPrompt` → one approved attempt at a time →
+`execFallback`) lives on `ModelInvocationNode`, its only implementor. A node
+that just needs a failure hook overrides `BaseNode.execFallback`.
 
 ## Design guardrails
 

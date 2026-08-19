@@ -2,7 +2,7 @@
 import PQueue from 'p-queue';
 
 // Local imports
-import { Node } from '@agent/node';
+import { BaseNode } from '@agent/node';
 import {
   emitToolUseCard,
   endToolUseCard,
@@ -89,7 +89,7 @@ function endsToolUseTurn(result: ToolExecutionResult | null): boolean {
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
-export class ToolUseDispatchNode<C> extends Node<
+export class ToolUseDispatchNode<C> extends BaseNode<
   ToolUseRoundShared,
   ToolUseRoundServices<C>
 > {

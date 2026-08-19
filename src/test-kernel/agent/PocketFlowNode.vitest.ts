@@ -1,7 +1,12 @@
 import { AbortError } from 'p-retry';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BaseNode, Node } from '@agent/node';
+import { BaseNode } from '@agent/node';
+import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
+import {
+  ModelInvocationNode,
+  type InvocationResult,
+} from '@agent/core/flows/ModelInvocationNode';
 import * as logger from '@logger/logUtils';
 
 class TestNode extends BaseNode<Record<string, never>> {}
@@ -59,7 +64,18 @@ function failureSequence(count: number): Error[] {
   return Array.from({ length: count }, (_, i) => new Error(`failure ${i + 1}`));
 }
 
-class ScriptedRetryNode extends Node {
+/** The scripted node reports every result as an invocation success payload. */
+function scriptedResult(response: string): InvocationResult {
+  return { kind: 'success', response };
+}
+
+/**
+ * `ModelInvocationNode` is the flow kernel's only retrying node, so these
+ * scenarios script it directly. They drive `execWithRetries` rather than
+ * `_exec`, which would overwrite the scripted attempt budget and abort signal
+ * with the ones read from settings and the run scope.
+ */
+class ScriptedRetryNode extends ModelInvocationNode<BaseCycleFields> {
   calls = 0;
   prompts = 0;
   fallbackError?: Error;
@@ -74,18 +90,28 @@ class ScriptedRetryNode extends Node {
     private readonly onPrompt?: () => void,
     private readonly onExec?: (call: number) => void,
   ) {
-    super(maxRetries, 0);
+    super({
+      operationName: 'Scripted request',
+      streaming: false,
+      storeResponse: () => {},
+    });
+    this.maxRetries = maxRetries;
+    this.wait = 0;
   }
 
-  override async exec(): Promise<string> {
+  runRetries(): Promise<unknown> {
+    return this.execWithRetries(undefined);
+  }
+
+  override async exec(): Promise<InvocationResult> {
     this.calls += 1;
     this.events.push(`exec:${this.calls}`);
     this.onExec?.(this.calls);
     const outcome = this.outcomes[this.calls - 1];
     if (outcome instanceof Error) throw outcome;
-    if (typeof outcome === 'function') return await outcome();
+    if (typeof outcome === 'function') return scriptedResult(await outcome());
     if (typeof outcome === 'object') throw outcome.thrown;
-    return outcome;
+    return scriptedResult(outcome);
   }
 
   override shouldAutoRetry(): boolean {
@@ -106,23 +132,20 @@ class ScriptedRetryNode extends Node {
   override async execFallback(
     _prepRes: unknown,
     error: Error,
-  ): Promise<string> {
+  ): Promise<InvocationResult> {
     this.fallbackError = error;
     this.events.push(`fallback:${error.message}`);
-    return 'fallback';
+    return scriptedResult('fallback');
   }
 }
 
-describe('Node manual retry', () => {
-  it('rejects an invalid retry limit at construction', () => {
-    expect(() => new ScriptedRetryNode(0, [], [])).toThrow(RangeError);
-    expect(() => new ScriptedRetryNode(-1, [], [])).toThrow(RangeError);
-  });
-
+describe('ModelInvocationNode manual retry', () => {
   it('grants one attempt after an exhausted automatic retry batch', async () => {
     const node = new ScriptedRetryNode(3, failureSequence(4), [true, false]);
 
-    await expect(node._exec(undefined)).resolves.toBe('fallback');
+    await expect(node.runRetries()).resolves.toEqual(
+      scriptedResult('fallback'),
+    );
     expect(node.calls).toBe(4);
     expect(node.events).toEqual([
       'exec:1',
@@ -143,7 +166,9 @@ describe('Node manual retry', () => {
       false,
     ]);
 
-    await expect(node._exec(undefined)).resolves.toBe('fallback');
+    await expect(node.runRetries()).resolves.toEqual(
+      scriptedResult('fallback'),
+    );
     expect(node.calls).toBe(4);
     expect(node.prompts).toBe(3);
     expect(node.events).toEqual([
@@ -166,7 +191,9 @@ describe('Node manual retry', () => {
       false,
     );
 
-    await expect(node._exec(undefined)).resolves.toBe('completed');
+    await expect(node.runRetries()).resolves.toEqual(
+      scriptedResult('completed'),
+    );
     expect(node.events).toEqual(['exec:1', 'prompt:not automatic', 'exec:2']);
   });
 
@@ -177,7 +204,9 @@ describe('Node manual retry', () => {
       [true],
     );
 
-    await expect(node._exec(undefined)).resolves.toBe('completed');
+    await expect(node.runRetries()).resolves.toEqual(
+      scriptedResult('completed'),
+    );
     expect(node.calls).toBe(4);
     expect(node.prompts).toBe(1);
   });
@@ -193,7 +222,9 @@ describe('Node manual retry', () => {
     );
     node.signal = controller.signal;
 
-    await expect(node._exec(undefined)).resolves.toBe('fallback');
+    await expect(node.runRetries()).resolves.toEqual(
+      scriptedResult('fallback'),
+    );
     expect(node.events).toEqual([
       'exec:1',
       'prompt:original failure',
@@ -216,7 +247,9 @@ describe('Node manual retry', () => {
     );
     node.signal = controller.signal;
 
-    await expect(node._exec(undefined)).resolves.toBe('fallback');
+    await expect(node.runRetries()).resolves.toEqual(
+      scriptedResult('fallback'),
+    );
     expect(node.events).toEqual([
       'exec:1',
       'prompt:original failure',
@@ -240,12 +273,12 @@ describe('Node manual retry', () => {
     );
     node.signal = controller.signal;
 
-    const result = node._exec(undefined);
+    const result = node.runRetries();
     await vi.waitFor(() => expect(node.calls).toBe(2));
     controller.abort();
     resolveApprovedAttempt('late success');
 
-    await expect(result).resolves.toBe('fallback');
+    await expect(result).resolves.toEqual(scriptedResult('fallback'));
     expect(node.events).toEqual([
       'exec:1',
       'prompt:original failure',
@@ -263,7 +296,9 @@ describe('Node manual retry', () => {
       [true, false],
     );
 
-    await expect(node._exec(undefined)).resolves.toBe('fallback');
+    await expect(node.runRetries()).resolves.toEqual(
+      scriptedResult('fallback'),
+    );
     expect(node.promptErrors[1]).toBe(originalError);
     expect(node.fallbackError).toBe(originalError);
   });
@@ -275,7 +310,9 @@ describe('Node manual retry', () => {
       [true, false],
     );
 
-    await expect(node._exec(undefined)).resolves.toBe('fallback');
+    await expect(node.runRetries()).resolves.toEqual(
+      scriptedResult('fallback'),
+    );
     expect(node.promptErrors[1]).toBeInstanceOf(TypeError);
     expect(node.promptErrors[1]?.message).toBe(
       'Non-error was thrown: "raw failure". You should only throw errors.',
@@ -293,7 +330,9 @@ describe('Node manual retry', () => {
       Array.from({ length: 101 }, () => true),
     );
 
-    await expect(node._exec(undefined)).resolves.toBe('completed');
+    await expect(node.runRetries()).resolves.toEqual(
+      scriptedResult('completed'),
+    );
     expect(node.calls).toBe(102);
     expect(node.prompts).toBe(101);
   });
