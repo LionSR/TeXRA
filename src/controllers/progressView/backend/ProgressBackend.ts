@@ -33,7 +33,6 @@ import type {
   SetActiveStreamPayload,
   StreamTabId,
 } from '@shared/schemas';
-import { STREAM_PHASE } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import type { TranscriptPresentationLease } from '@transcript/StreamLogStore';
@@ -399,22 +398,6 @@ export class ProgressBackend {
     const current = this.presentation.activeStream;
     if (current && this.hasPendingPermissions(current)) return;
     void this.activateStream(stream);
-  }
-
-  /**
-   * Cancel every still-running stream because the app itself is going away.
-   * App-lifecycle only (extension deactivating); not a session fact.
-   */
-  markAllRunningTasksAsCancelled(): void {
-    for (const [stream, status] of this.state.streamStatus.entries()) {
-      if (status === STREAM_PHASE.RUNNING) {
-        this.state.streamStatus.transition(
-          stream,
-          STREAM_PHASE.CANCELLED,
-          'restart-repair',
-        );
-      }
-    }
   }
 
   /** Awaitable status application for tests and hosts that cannot fire-and-forget. */
