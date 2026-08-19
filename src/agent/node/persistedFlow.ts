@@ -179,11 +179,14 @@ interface StepResult<S> {
  * This enables:
  * - Resume from any node on crash/restart
  * - Distributed execution (different processes can resume)
- * - Execution audit trail via node history
  *
  * Key design principles:
  * - Only shared state is persisted (not services - they're runtime dependencies)
- * - Node history tracks actions, not outputs (minimal storage)
+ * - `cursor` is the whole resume contract: the next graph-local node path plus
+ *   the last action. The record keeps no step history — nothing reads one.
+ * - `schemaVersion` gates readability: a record stamped newer than
+ *   FLOW_RECORD_SCHEMA_VERSION is rejected as `unsupported-record` rather than
+ *   parsed on a guess.
  * - Resume replays by navigating the graph, not re-executing nodes
  *
  * @template S - Shared state type (must be serializable via structuredClone)
@@ -229,7 +232,7 @@ export class PersistedFlow<
    * Optional write-through projection callback.
    *
    * Called (and awaited) after every persist (stepWithResult, setShared,
-   * resetNodeHistory) so derived views (todos, conversation) stay current.
+   * rewindToStart) so derived views (todos, conversation) stay current.
    * Errors are swallowed — the authoritative flow blob is already written.
    */
   private projection:
@@ -402,7 +405,7 @@ export class PersistedFlow<
    * beginning of the flow graph. Used by round-looping subclasses to restart
    * the graph without embedding loop edges in it.
    */
-  protected async resetNodeHistory(shared: S): Promise<void> {
+  protected async rewindToStart(shared: S): Promise<void> {
     await this.commitShared(shared, (flow) => {
       flow.cursor = { nextNodeId: this.idForNode(this.start) };
     });
