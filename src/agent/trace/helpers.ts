@@ -200,8 +200,8 @@ export function logFilesLoaded(
 }
 
 /**
- * Files-loaded card built from path/ok pairs — the category becomes both
- * the source label and the display label.
+ * Files-loaded card built from path/ok pairs — the category becomes the
+ * display label.
  */
 export function logFileCategory(
   trace: AgentTrace,
@@ -213,7 +213,6 @@ export function logFileCategory(
   const entries: FileListEntry[] = files.map((f) => ({
     path: f.path,
     ok: f.ok === true,
-    source: category,
     sourceDisplay: category,
   }));
   logFilesLoaded(trace, category, entries, stageId);
