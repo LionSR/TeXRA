@@ -74,7 +74,7 @@ function getAgentFirstNameChunk(agent: string): string {
 }
 
 /**
- * The `<base>_<chunk>_r{round}_<normalizedModel>` stem: the name filename-era
+ * The `<base>_<chunk>_r{round}_<model>` stem: the name filename-era
  * runs wrote, and the one "Save as copy" still writes beside a base file
  * today. Every reader of that layout composes its names from here.
  */

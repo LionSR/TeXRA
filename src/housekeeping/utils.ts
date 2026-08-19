@@ -63,9 +63,9 @@ function getFilePatterns(
   }
 
   for (let round = 0; round < numRounds; round++) {
-    // Legacy flat layout: `<base>_<chunk>_r{round}_<normalizedModel>.*`
+    // Legacy flat layout: `<base>_<chunk>_r{round}_<model>.*`
     const legacyStem = workflowOutputCopyStem({ base, agent, model, round });
-    // Legacy stem already includes `_<normalizedModel>`; for suffix variants
+    // Legacy stem already includes `_<model>`; for suffix variants
     // we reconstruct the prefix (everything up to the model token).
     const legacyPrefix = legacyStem.slice(0, -(model.length + 1));
     patterns.push(
