@@ -340,6 +340,12 @@ export function isSelfSettledRow(row: TranscriptRow): boolean {
  * Whether a row's content can no longer change, so it is safe to print once
  * into append-only scrollback.
  *
+ * Opens with {@link isSelfSettledRow}: a row that is settled independent of
+ * position is settled full stop, without consulting `hasLaterRow` or the
+ * kind-specific terminal-state tests below. That containment
+ * (`isSettledRow` ⊇ `isSelfSettledRow`) is load-bearing — the promotion loop
+ * relies on it to treat both halves as one predicate.
+ *
  * `hasLaterRow` is the one positional fact the projector cannot answer: a
  * streaming text block is frozen when the producer has moved on to something
  * else. Hosts with no append-only surface may pass `true`.
