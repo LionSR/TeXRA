@@ -34,7 +34,10 @@ import {
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';
-import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
+import {
+  formatRoundStageLabel,
+  formatStreamStatusLabel,
+} from '@shared/streams/streamStatusDisplay';
 import { filterNotNullish, formatCompactDuration } from '@utils/core';
 
 type WorkflowRunDetailTone =
@@ -87,7 +90,12 @@ function taskGroupLine(group: TaskGroup, label: string): WorkflowRunDetailLine {
       : '';
   return {
     key: `group:${group.id}`,
-    text: `${appearance.marker} ${safeTerminalText(label)} ${WORKFLOW_TASK_STATUS_LABEL[group.status]}${duration}`,
+    // A task group's status is a StreamPhase, so it is worded with the stream
+    // vocabulary — the same one the progress view's group icon announces.
+    // WORKFLOW_TASK_STATUS_LABEL words a workflow *call* ('Finished',
+    // 'Saved result'), which is a different thing that happens to share four
+    // key names with this one.
+    text: `${appearance.marker} ${safeTerminalText(label)} ${formatStreamStatusLabel(group.status)}${duration}`,
     tone: appearance.tone,
     role: 'lifecycle',
   };
