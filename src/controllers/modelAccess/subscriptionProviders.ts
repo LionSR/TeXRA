@@ -195,6 +195,7 @@ function defineSubscriptionProvider<
       }
       log.warn(
         `${bindings.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}`,
+        { data: error },
       );
       return deviceCodeLogin(coordinator, options);
     }
