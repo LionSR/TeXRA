@@ -1,5 +1,3 @@
-import pRetry, { AbortError } from 'p-retry';
-
 import { createLog } from '@logger/logUtils';
 
 /** Flow transition action - typically 'default' or a custom action name */
@@ -44,7 +42,29 @@ class BaseNode<S = unknown, Svc = unknown> {
   }
 
   protected async _exec(prepRes: unknown): Promise<unknown> {
-    return await this.exec(prepRes);
+    try {
+      return await this.exec(prepRes);
+    } catch (error) {
+      // execFallback's contract is `error: Error`. Normalize exactly as
+      // p-retry does, so a node that throws a non-Error still reaches its
+      // fallback with something that has `.message`.
+      return await this.execFallback(
+        prepRes,
+        error instanceof Error
+          ? error
+          : new TypeError(
+              `Non-error was thrown: "${error}". You should only throw errors.`,
+            ),
+      );
+    }
+  }
+  /**
+   * Handle a failed exec(). The default rethrows, so a node that does not
+   * override this fails its flow. Override to convert the failure into a
+   * value the node's post() can route on.
+   */
+  async execFallback(_prepRes: unknown, error: Error): Promise<unknown> {
+    throw error;
   }
   async prep(_shared: S): Promise<unknown> {
     return;
@@ -106,149 +126,6 @@ class BaseNode<S = unknown, Svc = unknown> {
     return clonedNode;
   }
 }
-class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
-  maxRetries: number;
-  wait: number;
-  /**
-   * Optional abort signal for cancellation support.
-   * When set and aborted, the retry loop will skip remaining retries
-   * and go directly to execFallback(). This prevents unnecessary API
-   * calls when the user has intentionally cancelled the operation.
-   */
-  signal?: AbortSignal;
-  constructor(maxRetries: number = 1, wait: number = 0) {
-    super();
-    if (maxRetries < 1) {
-      throw new RangeError(`Node maxRetries must be >= 1, got ${maxRetries}.`);
-    }
-    this.maxRetries = maxRetries;
-    this.wait = wait;
-  }
-
-  async execFallback(prepRes: unknown, error: Error): Promise<unknown> {
-    throw error;
-  }
-  /**
-   * Hook called when the automatic retry batch is exhausted or declined.
-   * Return true to grant one additional attempt, false to proceed to execFallback.
-   * A failed additional attempt calls this hook again.
-   *
-   * Default implementation returns false (no manual retry).
-   * Override this for manual retry prompts (e.g., showing UI to user).
-   *
-   * NOTE: Override this as a regular method (not an arrow function property)
-   * because Node.clone() uses Object.assign, which copies instance properties.
-   * Arrow functions capture `this` lexically, so they would reference the
-   * original instance after cloning. Regular methods on the prototype work
-   * correctly because they get `this` from the call site.
-   *
-   * @example
-   * ```typescript
-   * class MyNode extends Node<S> {
-   *   async retryPrompt(prepRes: unknown, error: Error): Promise<boolean> {
-   *     const result = await showRetryDialog(error.message);
-   *     return result === 'retry';
-   *   }
-   * }
-   * ```
-   */
-  async retryPrompt(_prepRes: unknown, _error: Error): Promise<boolean> {
-    return false;
-  }
-  /**
-   * Whether this error should be auto-retried (silent retries with backoff).
-   * Return false to skip auto-retries and go straight to retryPrompt().
-   * Useful for errors that need human attention (e.g., auth errors).
-   *
-   * Default: true (all errors are auto-retried).
-   */
-  shouldAutoRetry(_error: Error): boolean {
-    return true;
-  }
-  /**
-   * Override clone to reset execution-specific state.
-   * Prevents stale signal/retry state from affecting new executions.
-   *
-   * NOTE: BaseNode.clone() uses Object.assign for shallow copy. Subclasses
-   * adding object/array properties must override clone() to deep-copy them,
-   * otherwise the original and clone will share the same references.
-   */
-  clone(): this {
-    const cloned = super.clone();
-    cloned.signal = undefined;
-    return cloned;
-  }
-  async _exec(prepRes: unknown): Promise<unknown> {
-    // Track the last exec error so we can forward it to execFallback when
-    // the abort signal fires during the inter-retry delay (p-retry would
-    // otherwise rethrow signal.reason, discarding the original failure).
-    let lastExecError: Error | undefined;
-    let attemptThrew = false;
-    const runAttempts = async (retries: number): Promise<unknown> => {
-      attemptThrew = false;
-      return await pRetry(
-        async () => {
-          // Throw AbortError at each attempt start so p-retry surfaces it
-          // immediately (before any delay) and skips onFailedAttempt.
-          if (this.signal?.aborted)
-            throw new AbortError('Operation cancelled by user');
-          try {
-            return await this.exec(prepRes);
-          } catch (error) {
-            attemptThrew = true;
-            throw error;
-          }
-        },
-        {
-          retries,
-          minTimeout: this.wait * 1000,
-          factor: 1, // linear (fixed) delay to preserve existing behaviour
-          randomize: false, // explicit: default is false; no jitter on fixed delays
-          signal: this.signal, // aborts an attempt or inter-retry delay early
-          shouldRetry: ({ error }) => {
-            lastExecError = error;
-            if (this.signal?.aborted) return false;
-            return this.shouldAutoRetry(error);
-          },
-        },
-      );
-    };
-
-    let retryError: Error;
-    try {
-      return await runAttempts(this.maxRetries - 1);
-    } catch (e) {
-      // User cancellation surfaces here as p-retry's aborted-delay rejection
-      // (signal.reason) or as the unwrapped error from our pre-attempt check
-      // (p-retry rethrows an AbortError's originalError, not the AbortError).
-      // Forward the recorded exec failure when one exists.
-      if (this.signal?.aborted) {
-        return await this.execFallback(prepRes, lastExecError ?? (e as Error));
-      }
-      retryError = e as Error;
-    }
-
-    for (;;) {
-      const shouldRetry = await this.retryPrompt(prepRes, retryError);
-      if (!shouldRetry || this.signal?.aborted) {
-        return await this.execFallback(prepRes, retryError);
-      }
-
-      try {
-        return await runAttempts(0);
-      } catch (e) {
-        const approvedError = e as Error;
-        if (this.signal?.aborted) {
-          return await this.execFallback(
-            prepRes,
-            attemptThrew ? approvedError : retryError,
-          );
-        }
-        retryError = approvedError;
-      }
-    }
-  }
-}
 class Flow<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
   start: BaseNode;
   constructor(start: BaseNode) {
@@ -273,4 +150,4 @@ class Flow<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
     throw new Error("Flow can't exec.");
   }
 }
-export { BaseNode, Node, Flow };
+export { BaseNode, Flow };
