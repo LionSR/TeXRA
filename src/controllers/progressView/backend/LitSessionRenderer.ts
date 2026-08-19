@@ -183,6 +183,12 @@ export class LitSessionRenderer implements SessionRendererPort {
         // Parent edge rides `StreamTabInfo.parentStreamId` on the metadata wire.
         if (!this.isAvailable()) return;
         return this.updateStreamMetadata(streamId);
+      case 'contextState':
+        // Lit's usage footer restores the same snapshot from the transcript
+        // rail's `contextState` log entry (`logSlice`), which — unlike this
+        // session-scoped record — also repopulates a stream reopened from
+        // disk. Nothing to push here.
+        return;
       case 'goalPaused':
         // Lit surfaces pause via the goal chip (`goalStateChanged`); no
         // transcript notice, unlike the TUI.
