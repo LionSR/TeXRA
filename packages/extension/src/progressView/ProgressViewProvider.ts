@@ -13,7 +13,6 @@ import {
   SIDEBAR_VIEWS,
 } from '@common/webview';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { createAgentProposalTransport } from '@controllers/progressView/backend/agentProposalTransport';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
@@ -119,23 +118,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       approvals: {
         canSend: () => this.canSendToWebview(),
         logger: this.logger,
-        overrides: {
-          retry: {
-            show: (p) =>
-              this.renderer.showPermission({
-                kind: PERMISSION_KIND.RETRY,
-                data: p,
-              }),
-            dismiss: (id) =>
-              this.renderer.resolvePermission(PERMISSION_KIND.RETRY, id),
-          },
-          proposal: createAgentProposalTransport({
-            getRenderer: () => this.backend.renderer,
-            isPending: (requestId) =>
-              this.backend.approvalHandlers.proposal.get(requestId) !==
-              undefined,
-          }),
-        },
       },
       lifecycle: {
         stopStream: (stream, options) =>
