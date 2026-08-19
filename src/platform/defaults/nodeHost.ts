@@ -167,9 +167,10 @@ export async function bootstrapNodeAgentDirectories(
   options: NodeAgentDirectoryBootstrapOptions,
 ): Promise<void> {
   const guardKey = `${options.channel}:${options.versionStateKey}`;
-  const queuedBootstrap = (
-    agentDirectoryBootstrapQueues.get(guardKey) ?? Promise.resolve()
-  ).then(async () => {
+  const predecessor =
+    agentDirectoryBootstrapQueues.get(guardKey) ?? Promise.resolve();
+  const settledPredecessor = predecessor.catch(() => undefined);
+  const queuedBootstrap = settledPredecessor.then(async () => {
     if (
       bootstrappedAgentDirectoryResources.get(guardKey) ===
       options.resourcesPath

@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
+import { setImmediate as nextTurn } from 'node:timers/promises';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -242,6 +243,30 @@ describe('desktop agent directory bootstrap', () => {
     expect(copy).toHaveBeenCalledTimes(2);
   });
 
+  it('runs a queued bootstrap after its predecessor rejects', async () => {
+    const { bootstrapNodeAgentDirectories, resourcesPath } =
+      await createHarness();
+    const copy = vi.spyOn(nodeFilesystem, 'copy').mockResolvedValue(undefined);
+    const first = bootstrapNodeAgentDirectories({
+      channel: 'desktop',
+      get resourcesPath(): string {
+        throw new Error('unexpected bootstrap failure');
+      },
+      currentVersion: '1.2.3',
+      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+    });
+    const second = bootstrapNodeAgentDirectories({
+      channel: 'desktop',
+      resourcesPath,
+      currentVersion: '1.2.3',
+      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+    });
+
+    await expect(first).rejects.toThrow('unexpected bootstrap failure');
+    await expect(second).resolves.toBeUndefined();
+    expect(copy).toHaveBeenCalledTimes(2);
+  });
+
   it('serializes overlapping resource paths in request order', async () => {
     const { bootstrapNodeAgentDirectories, resourcesPath } =
       await createHarness();
@@ -250,20 +275,21 @@ describe('desktop agent directory bootstrap', () => {
     const firstCopyBlocked = new Promise<void>((resolve) => {
       releaseFirstCopy = resolve;
     });
-    const copy = vi
-      .spyOn(nodeFilesystem, 'copy')
-      .mockImplementationOnce(() => firstCopyBlocked)
-      .mockResolvedValue(undefined);
-    vi.spyOn(nodeFileLocks, 'runExclusive').mockImplementation(
-      (_lockPath, operation) => operation(),
-    );
+    const copiedSources: string[] = [];
+    vi.spyOn(nodeFilesystem, 'copy').mockImplementation(async (source) => {
+      copiedSources.push(source);
+      if (copiedSources.length === 1) await firstCopyBlocked;
+    });
+    const runExclusive = vi
+      .spyOn(nodeFileLocks, 'runExclusive')
+      .mockImplementation((_lockPath, operation) => operation());
     const first = bootstrapNodeAgentDirectories({
       channel: 'desktop',
       resourcesPath,
       currentVersion: '1.2.3',
       versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
     });
-    await vi.waitFor(() => expect(copy).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(copiedSources).toHaveLength(1));
     const secondOptions = {
       channel: 'desktop',
       resourcesPath: nextResourcesPath,
@@ -271,16 +297,22 @@ describe('desktop agent directory bootstrap', () => {
       versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
     };
     const second = bootstrapNodeAgentDirectories(secondOptions);
-    const fallback = setTimeout(() => releaseFirstCopy(), 50);
-    const releaseAfterSecond = second.then(() => {
-      clearTimeout(fallback);
-      releaseFirstCopy();
-    });
 
-    await Promise.all([first, second, releaseAfterSecond]);
+    await nextTurn();
+    expect(runExclusive).toHaveBeenCalledOnce();
+    expect(copiedSources).toEqual([join(resourcesPath, 'agents')]);
+
+    releaseFirstCopy();
+    await Promise.all([first, second]);
+    expect(copiedSources).toEqual([
+      join(resourcesPath, 'agents'),
+      join(resourcesPath, 'tool_use_agents'),
+      join(nextResourcesPath, 'agents'),
+      join(nextResourcesPath, 'tool_use_agents'),
+    ]);
+
     await bootstrapNodeAgentDirectories(secondOptions);
-
-    expect(copy).toHaveBeenCalledTimes(4);
+    expect(copiedSources).toHaveLength(4);
   });
 
   it('uses the configured version-state key', async () => {
