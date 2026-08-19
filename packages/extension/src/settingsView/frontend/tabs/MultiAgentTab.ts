@@ -227,13 +227,7 @@ export class MultiAgentTab extends LitElement {
   }
 
   private isOrchestratorAgent(name: string): boolean {
-    // Prefer the capability-based list (catches roots like `engineer` that
-    // don't carry "orchestrator" in their name); keep the name heuristic as a
-    // fallback for presets referencing agents the registry hasn't loaded.
-    return (
-      this.orchestratorAgents.includes(name) ||
-      name.toLowerCase().includes('orchestrator')
-    );
+    return this.orchestratorAgents.includes(name);
   }
 
   private renderPresetCard(
