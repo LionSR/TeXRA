@@ -2,14 +2,13 @@
 //
 // The shared `StreamSnapshotStore` is the single accumulator for round
 // artifacts and per-run usage: `preload` seeds its memory from disk and
-// replays any live deltas recorded meanwhile on top. Hydration no longer
-// copies the round-artifact fields into `StreamSlice` (the live-fact adapter
-// still maintains the pre-hydration mirror); renderers read the canonical
-// projection (`projectStreamArtifacts`) directly, and this module owns only the
-// async preload edge plus the invalidation that makes those reads repaint.
-// Exit summaries and workflow-task metadata read `readStreamArtifacts` the same
-// way the renderers do, so hydration no longer mirrors any field into the
-// slice.
+// replays any live deltas recorded meanwhile on top. Hydration copies none of
+// the round-artifact fields into `StreamSlice`, and no other mirror of them
+// exists: the live-fact adapter lands its writes on the shared store directly,
+// and renderers read the canonical projection (`projectStreamArtifacts`). This
+// module owns only the async preload edge plus the invalidation that makes
+// those reads repaint. Exit summaries and workflow-task metadata read
+// `readStreamArtifacts` the same way the renderers do.
 
 import { signal } from '@lit-labs/signals';
 
@@ -38,10 +37,12 @@ import { subscribeToSignalChanges } from './signalSubscription';
  *  subscribe to this to repaint, and the projection memo keys on it. */
 export const streamArtifactRevision = signal<number>(0);
 
-/** Streams whose durable artifacts finished a successful preload this session.
- *  A stream absent here has no established disk provenance yet, so render-time
- *  reads fall back to the slice mirror instead of hitting unseeded getters
- *  (and their `warnIfUnseeded` noise) mid-preload (#10730). */
+/** Streams whose artifacts have established provenance this session: a
+ *  completed preload, or a live artifact write the adapter marked hydrated
+ *  (see `readStreamArtifacts`). A stream absent here has no established disk
+ *  provenance yet, so render-time reads return `undefined` — callers fall
+ *  back to empty defaults — instead of hitting unseeded getters (and their
+ *  `warnIfUnseeded` noise) mid-preload (#10730). */
 const hydratedArtifactStreams = new Set<StreamTabId>();
 
 /** Per-stream projection memo, invalidated on `streamArtifactRevision`. The
@@ -108,8 +109,12 @@ export function beginLoadedStreamsReconcile(retained: readonly StreamTabId[]): {
 
 /** Read the canonical artifact projection for one stream from the live session.
  *  Returns `undefined` when no default session exists yet (harness/tests) or
- *  when the stream has not completed a preload this session, letting callers
- *  fall back to their slice mirrors exactly as before. */
+ *  when the stream has no established provenance this session: no completed
+ *  preload and no live artifact write. `sessionSignalsAdapter` marks a stream
+ *  hydrated on every live files, missing-outputs, compile-failures, usage,
+ *  todos, or plan write, so a never-focused stream with live writes projects
+ *  here too; callers default to empty values (`artifacts?.todos ?? []`) while
+ *  the gate holds. */
 export function readStreamArtifacts(
   streamId: StreamTabId,
 ): StreamArtifactProjection | undefined {

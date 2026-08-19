@@ -57,7 +57,7 @@ import {
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import { buildChildRosters } from '@test/support/childStreamEntries';
+import { buildChildRosters } from '@test/support/childRosters';
 import {
   fileListConversationEntry,
   toolConversationEntry,
