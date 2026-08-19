@@ -55,7 +55,7 @@ import '@webview/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
 import type { StreamTabId } from '@shared/schemas';
 
-import { Signal } from '@shared/signals';
+import { Signal, subscribeToSignalChanges } from '@shared/signals';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
 
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
@@ -1200,10 +1200,10 @@ function installShellSignalWatcher(): void {
   if (shellWatcherInstalled) return;
   shellWatcherInstalled = true;
   // Subscribe to module-level progress signals so the center-pane swap
-  // (launcher ↔ conversation) and the rail tab properties stay live. Use
-  // `Signal.subtle.Watcher` from @lit-labs/signals (TC39 polyfill) — this
-  // is what `SignalWatcher(LitElement)` wraps internally. We schedule the
-  // re-render on a microtask so multiple synchronous signal writes batch.
+  // (launcher ↔ conversation) and the rail tab properties stay live.
+  // `subscribeToSignalChanges` wraps the same `Signal.subtle.Watcher` that
+  // `SignalWatcher(LitElement)` uses internally, coalescing synchronous
+  // signal writes into one microtask-scheduled re-render.
   const shellDeps = new Signal.Computed(() => {
     activeStreamId$.get();
     displayedActiveStreamId$.get();
@@ -1214,27 +1214,10 @@ function installShellSignalWatcher(): void {
     childStreamsByParent$.get();
     return Date.now();
   });
-  let shellRerenderQueued = false;
-  const shellWatcher = new Signal.subtle.Watcher(() => {
-    if (shellRerenderQueued) return;
-    shellRerenderQueued = true;
-    queueMicrotask(() => {
-      shellRerenderQueued = false;
-      // Read the pending computed so the watcher re-tracks its dependencies.
-      for (const pending of shellWatcher.getPending()) pending.get();
-      // Re-arm in `finally`: a Watcher fires once and stays dormant until
-      // `watch()` runs again, so letting a throw from `rerenderShell()` skip
-      // it would freeze the whole shell on stale data with no error and no
-      // recovery (same defect fixed in the CLI's `subscribeToSignalChanges`).
-      try {
-        rerenderShell();
-      } finally {
-        shellWatcher.watch();
-      }
-    });
-  });
-  shellWatcher.watch(shellDeps);
-  // Prime the dependency graph so the watcher knows what to listen for.
+  subscribeToSignalChanges([shellDeps], rerenderShell);
+  // Prime the dependency graph so the watcher knows what to listen for: an
+  // unevaluated computed has no dependency set, so watching it alone would
+  // never fire.
   shellDeps.get();
 }
 
