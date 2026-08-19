@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { LATEX_CITATION_COMMANDS } from '@latex/latexParsingUtils';
 import { LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS } from '@latex/latexdiff/diffCommandExecutor';
 import { MATH_MARKUP_OPTIONS } from '@latex/latexdiff/mathMarkup';
 import { STATUS_DISPLAY, STATUS_ICONS, TODO_STATUS } from '@shared/schemas';
@@ -42,6 +43,7 @@ const SHARED_LITERALS = [
     'LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS',
     LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS,
   ],
+  ['LATEX_CITATION_COMMANDS', LATEX_CITATION_COMMANDS],
   ['MATH_MARKUP_OPTIONS', MATH_MARKUP_OPTIONS],
   ['API_KEY_PROVIDER_IDS', API_KEY_PROVIDER_IDS],
   ['TOOL_JSON_SCHEMA_OPTIONS', TOOL_JSON_SCHEMA_OPTIONS],

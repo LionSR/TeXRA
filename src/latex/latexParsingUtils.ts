@@ -15,6 +15,43 @@ import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 const log = createLog('LatexParsing');
 
+/**
+ * Every citation macro TeXRA recognizes, natbib and biblatex alike, in both
+ * lowercase and sentence-case (`\Citep`) spellings. Single source for the two
+ * consumers that used to keep disjoint lists — citation-key extraction
+ * (`extractBibliography`) and latexdiff's `--exclude-textcmd`
+ * (`diffCommandExecutor`) — where a macro known to one but not the other means
+ * either a citation key silently missed or a bibliography marked up as prose.
+ *
+ * Sentence-case forms are generated, not listed: the ones no package defines
+ * (`\Nocite`) are inert in both consumers, an unmatched regex alternative and
+ * an unknown `--exclude-textcmd` entry respectively.
+ */
+const CITATION_COMMAND_STEMS = [
+  'cite',
+  'citet',
+  'citep',
+  'citealp',
+  'citealt',
+  'citeauthor',
+  'citeyear',
+  'citeyearpar',
+  'textcite',
+  'parencite',
+  'footcite',
+  'autocite',
+  'supercite',
+  'smartcite',
+  'nocite',
+] as const;
+
+export const LATEX_CITATION_COMMANDS: readonly string[] = Object.freeze([
+  ...CITATION_COMMAND_STEMS,
+  ...CITATION_COMMAND_STEMS.map(
+    (name) => `${name[0].toUpperCase()}${name.slice(1)}`,
+  ),
+]);
+
 /** Strips everything after an unescaped % on each line. */
 const COMMENT_PATTERN = /(^|[^\\])%.*$/gm;
 
