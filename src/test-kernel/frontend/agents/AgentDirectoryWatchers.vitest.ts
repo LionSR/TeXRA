@@ -158,9 +158,7 @@ describe('agent directory watcher rebuilds', () => {
   });
 
   function subscribe(): vscode.Disposable {
-    subscription = agentDirectories.watchAgentDirectories({
-      onEvent: () => {},
-    });
+    subscription = agentDirectories.watchAgentDirectories(() => {});
     return subscription;
   }
 
@@ -175,17 +173,15 @@ describe('agent directory watcher rebuilds', () => {
     return firstRead;
   }
 
-  it('builds the watcher set once for subscriptions racing the same directory read', async () => {
+  it('builds the watcher set once for rebuilds racing the same directory read', async () => {
     const firstRead = parkFirstRead(directoryList('/agents/builtin'));
 
     subscribe();
-    const second = agentDirectories.watchAgentDirectories({
-      onEvent: () => {},
-    });
+    const refreshed = agentDirectories.refreshAfterDirChange();
 
     firstRead.resolve(directoryList('/agents/builtin'));
+    await refreshed;
     await settle();
-    second.dispose();
 
     expect(mocks.watchedDirectories).toEqual(['/agents/builtin']);
   });
