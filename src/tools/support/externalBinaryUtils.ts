@@ -20,9 +20,10 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import which from 'which';
+
 import { executeCommandSync } from '@utils/system/execUtils';
-import { IS_WINDOWS } from '@utils/system/platformPaths';
+import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 
 type ElectronProcess = NodeJS.Process & {
   defaultApp?: boolean;
@@ -175,33 +176,21 @@ async function resolveBinary(
 
   // Strategy 4: PATH lookup (native installer, Homebrew, manual install)
   // Fallback — may find an older version that doesn't match the SDK.
-  {
-    const lookupResult = executeCommandSync(
-      [IS_WINDOWS ? 'where' : 'which', config.pathCommand],
-      {
-        timeout: 5000,
-      },
-    );
-    const pathHits = lookupResult.success
-      ? lookupResult.stdout.split(/\r?\n/)
-      : [];
-
-    for (const hit of pathHits) {
-      const p = hit.trim();
-      if (!p) continue;
-      // The SDK spawns the binary directly, so only a real executable is
-      // usable. `npm install -g` writes three shims next to each other —
-      // `claude`, `claude.cmd` and `claude.ps1` — and none of them can be
-      // spawned on Windows: the first is a POSIX sh script for Git Bash, and
-      // the other two need a shell. Requiring .exe rejects all three, so the
-      // tool reports "not found" with its install guide instead of resolving
-      // to a path that fails at spawn time.
-      if (IS_WINDOWS && !/\.exe$/i.test(p)) continue;
-      if (await AbsoluteFS.exists(p)) return p;
-    }
-  }
-
-  return undefined;
+  //
+  // The SDK spawns the binary directly, so only a real executable is usable.
+  // `npm install -g` writes three shims next to each other — `claude`,
+  // `claude.cmd` and `claude.ps1` — and none of them can be spawned on Windows:
+  // the first is a POSIX sh script for Git Bash, and the other two need a
+  // shell. Restricting PATHEXT to `.EXE` rejects all three, so the tool reports
+  // "not found" with its install guide instead of resolving to a path that
+  // fails at spawn time.
+  return (
+    which.sync(config.pathCommand, {
+      nothrow: true,
+      path: extendEnvPath(),
+      ...(IS_WINDOWS ? { pathExt: '.EXE' } : {}),
+    }) ?? undefined
+  );
 }
 
 /**
