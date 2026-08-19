@@ -257,11 +257,13 @@ function formatUsage(
   // tokens are the generated response, not part of the context, which is why
   // the handler reports `inputTokens` here.
   const { inputTokens: used, contextWindow, utilizationPercent } = contextState;
-  const ratio = used / contextWindow;
   const percent = Math.max(1, Math.round(utilizationPercent));
+  // Bands match the progress view's context gauge (`fillColor` in UsagePanel),
+  // and read the handler's own `utilizationPercent` rather than re-dividing
+  // used/contextWindow — the same number told two ways drifts.
   let color: StatusBarColor;
-  if (ratio >= 0.9) color = COLOR_ERROR;
-  else if (ratio >= 0.6) color = COLOR_WARNING;
+  if (utilizationPercent > 80) color = COLOR_ERROR;
+  else if (utilizationPercent > 65) color = COLOR_WARNING;
   else color = 'dim';
   return {
     ...base,
