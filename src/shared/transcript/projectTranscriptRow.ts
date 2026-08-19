@@ -118,8 +118,8 @@ const STREAMING_TEXT_ROW_KIND = {
  * field that quietly stops rendering.
  *
  * `streamDiagnostics` and `partialText` are deliberately absent: they are a
- * retry surface's material, not a transcript row's, and both remain reachable
- * through `ErrorRow.data`.
+ * retry surface's material, not a transcript row's. `RetryRequestPanel` reads
+ * them from the approval request's own payload, never from a projected row.
  */
 const ERROR_DETAIL_FIELDS = [
   'message',
@@ -170,7 +170,6 @@ function projectErrorRow(
     ...rowBase(entry),
     kind: 'error',
     summary: transcriptText(summary),
-    ...(data ? { data } : {}),
     details,
     detailText: transcriptText(
       details.map((detail) => `${detail.key}: ${detail.value}`).join('\n'),
@@ -386,9 +385,6 @@ export function projectTranscriptRow(
         summary: transcriptText(summarizeFollowupMessage(text.full)),
         ...(entry.data?.workflowSummary
           ? { workflowSummary: entry.data.workflowSummary }
-          : {}),
-        ...(entry.data?.attachments
-          ? { attachments: entry.data.attachments }
           : {}),
       };
     }

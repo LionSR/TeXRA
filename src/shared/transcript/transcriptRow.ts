@@ -25,7 +25,6 @@ import {
   type FileListEntry,
   type LoadedMediaMetadata,
   type LogLevel,
-  type MediaAttachmentKind,
   type MessageType,
   type NormalizedToolUse,
   type WorkflowCallProgress,
@@ -101,8 +100,6 @@ export interface UserRow extends TranscriptRowBase {
    *  truncation of `text`: hosts choose which of the two to paint. */
   readonly summary: TranscriptText;
   readonly workflowSummary?: WorkflowScriptDeliverySummary;
-  /** Media sent to the model with this message but never stored on the row. */
-  readonly attachments?: readonly MediaAttachmentKind[];
 }
 
 /**
@@ -118,9 +115,6 @@ export interface ErrorRow extends TranscriptRowBase {
   readonly kind: 'error';
   /** The failure headline. */
   readonly summary: TranscriptText;
-  /** The full typed payload, untouched — including the fields `details`
-   *  deliberately omits. */
-  readonly data?: ErrorLogData;
   /** Canonical detail field set, in display order. */
   readonly details: readonly ErrorRowDetail[];
   /** The detail block as one text, for copy affordances and full-output
