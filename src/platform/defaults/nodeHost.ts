@@ -22,6 +22,7 @@ import {
   defaultSkillSources,
   type SkillSourceOptions,
 } from '@skills/skillSources';
+import { KeyedMutex } from '@utils/core/keyedMutex';
 
 // Local file imports
 import { nodeFileLocks } from './fileLocks';
@@ -96,7 +97,7 @@ export interface NodeRuntimeSkillOptions {
 }
 
 const bootstrappedAgentDirectoryResources = new Map<string, string>();
-const agentDirectoryBootstrapQueues = new Map<string, Promise<void>>();
+const agentDirectoryBootstrapMutex = new KeyedMutex<string>();
 
 /**
  * Assemble the platform services for a Node-family host (CLI, desktop,
@@ -167,10 +168,8 @@ export async function bootstrapNodeAgentDirectories(
   options: NodeAgentDirectoryBootstrapOptions,
 ): Promise<void> {
   const guardKey = `${options.channel}:${options.versionStateKey}`;
-  const predecessor =
-    agentDirectoryBootstrapQueues.get(guardKey) ?? Promise.resolve();
-  const settledPredecessor = predecessor.catch(() => undefined);
-  const queuedBootstrap = settledPredecessor.then(async () => {
+
+  await agentDirectoryBootstrapMutex.runExclusive(guardKey, async () => {
     if (
       bootstrappedAgentDirectoryResources.get(guardKey) ===
       options.resourcesPath
@@ -182,13 +181,4 @@ export async function bootstrapNodeAgentDirectories(
       bootstrappedAgentDirectoryResources.set(guardKey, options.resourcesPath);
     }
   });
-  agentDirectoryBootstrapQueues.set(guardKey, queuedBootstrap);
-
-  try {
-    await queuedBootstrap;
-  } finally {
-    if (agentDirectoryBootstrapQueues.get(guardKey) === queuedBootstrap) {
-      agentDirectoryBootstrapQueues.delete(guardKey);
-    }
-  }
 }
