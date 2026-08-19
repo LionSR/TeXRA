@@ -57,7 +57,6 @@ export {
 } from './resumability';
 export { formatConversationMessage } from './conversationFormat';
 export {
-  completeOwnedExecutionLease,
   ExecutionLeaseLostError,
   inspectExecutionLease,
   markOwnedExecutionLeaseUndurable,

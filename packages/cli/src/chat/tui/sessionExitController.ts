@@ -12,7 +12,6 @@
 // A signal cause restores terminal modes synchronously before its first await,
 // then skips the graceful queue/run drain and exits with the signal code.
 
-import { completeOwnedExecutionLease } from '@agent/storage';
 import { readCliCwd } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
@@ -167,22 +166,6 @@ export function createSessionExitController(
     );
     if (hint) writeTextStdout(`\n${hint}`);
   };
-  // Materialize buffered trace chunks, then drain the debounced StreamLog disk
-  // writes so the tail of the session isn't lost (SAVE_DEBOUNCE_MS window).
-  // Persistent flushes have bounded retries; an explicitly ephemeral session
-  // has no disk work to drain.
-  const persistAndReleaseResumableIdleLease = async (
-    resumableIdle: boolean,
-  ): Promise<void> => {
-    await ctx.flushArtifacts();
-    if (resumableIdle && session.executionId) {
-      // WAITING deliberately keeps its flow record, but this CLI process is
-      // about to exit and can no longer own the execution. Relinquish the
-      // durable lease after flushing so an immediate `texra resume` continues
-      // the same execution instead of waiting for the stale horizon.
-      await completeOwnedExecutionLease(session.executionId);
-    }
-  };
   // These TUI exit paths call process.exit() directly, so bin/texra.ts's
   // `finally` (which runs platform shutdown) never fires. Run the same
   // shutdown sequence the (suppressed) platform SIGINT/SIGTERM handlers
@@ -193,11 +176,15 @@ export function createSessionExitController(
   // rely on bin/texra.ts's own `finally`.
   const runPlatformShutdown = (): Promise<void> =>
     runCliPlatformShutdownSequence(platform().lifecycle);
-  const persistBeforePlatformShutdown = async (
-    resumableIdle: boolean,
-  ): Promise<void> => {
+  // Materialize buffered trace chunks, then drain the debounced StreamLog disk
+  // writes so the tail of the session isn't lost (SAVE_DEBOUNCE_MS window).
+  // Persistent flushes have bounded retries; an explicitly ephemeral session
+  // has no disk work to drain. Ownership of any execution still held — the
+  // WAITING flow this exit deliberately preserves included — settles in the
+  // platform shutdown that follows, which every host now registers.
+  const persistBeforePlatformShutdown = async (): Promise<void> => {
     try {
-      await persistAndReleaseResumableIdleLease(resumableIdle);
+      await ctx.flushArtifacts();
     } catch {
       // Signal exit remains best-effort, but platform shutdown must still run.
     }
@@ -317,7 +304,6 @@ export function createSessionExitController(
     // roster signal reads empty — but the resume hint prints later.
     const childRosters = childRostersSignal.get();
     if (cause.kind === 'signal') {
-      const resumableIdle = ctx.isResumableIdle();
       ctx.suspendTerminalTitle();
       ink.unmount();
       // This synchronous prefix is load-bearing: force/signal exits must restore
@@ -325,7 +311,7 @@ export function createSessionExitController(
       // mode or emulator keyboard state.
       cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
       printResumeHintOnExit(childRosters);
-      return persistBeforePlatformShutdown(resumableIdle).finally(() =>
+      return persistBeforePlatformShutdown().finally(() =>
         process.exit(cause.exitCode),
       );
     }
@@ -352,7 +338,7 @@ export function createSessionExitController(
       // awaiting it would hang the process here.
       await session.runPromise;
     }
-    await persistAndReleaseResumableIdleLease(resumableIdle);
+    await ctx.flushArtifacts();
     cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
     ctx.disposeTerminalRestoreOnExit();
     // Print the resume hint after the terminal modes are restored, but before

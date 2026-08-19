@@ -589,8 +589,12 @@ socket-presence proof (`executionLease.ts` version 2, verdicts
 `alive | dead | unprovable`), so quitting mid-run no longer blocks `texra
 resume` for two minutes. What survives is the real residue: no host except the
 CLI persists a terminal outcome at exit, and an `unprovable` verdict still
-fails closed. The lifecycle doc's §3 fix 2 (an awaited session-owned drain)
-remains unimplemented.
+fails closed. **RESOLVED 2026-08-19** — the lifecycle doc's §3 fix 2 landed as
+`settleLiveSessionExecutions`, registered as each host's first ON-phase
+shutdown handler: every still-owned execution gets `CANCELLED` with its flow
+record preserved and its lease released, bounded by the phase deadline. The
+CLI-UI copy is deleted. The `unprovable` fail-closed verdict is unchanged and
+deliberate.
 
 **V9/DR13 — REFUTED as written; one owner exists.** The entry's "two truth
 sources" framing does not hold at HEAD. `deriveResumability`
