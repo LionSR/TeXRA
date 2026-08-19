@@ -1,5 +1,8 @@
+// Standard library imports
+import * as path from 'node:path';
+
 // Local imports - shared
-import type { AgentSource } from '@shared/schemas';
+import type { AgentCategory, AgentSource } from '@shared/schemas';
 
 export interface SettingsAgentDirectoryEntry {
   path?: string;
@@ -34,6 +37,14 @@ type SettingsRevealAgentFileResult =
 
 type SettingsOpenAgentFolderResult =
   { ok: true; path: string } | { ok: false; reason: 'missingLocalDirectory' };
+
+interface SettingsAgentTemplatePlan {
+  fileName: string;
+  filePath: string;
+  baseName: string;
+  description: string;
+  templateKind: 'toolUse' | 'workflowSingle';
+}
 
 export class SettingsAgentDirectoryController {
   constructor(private readonly deps: SettingsAgentDirectoryControllerDeps) {}
@@ -84,5 +95,41 @@ export class SettingsAgentDirectoryController {
     if (!sourceDir) return { ok: false, reason: 'missingLocalDirectory' };
 
     return { ok: true, path: sourceDir };
+  }
+
+  /** Rejection reason for a proposed custom-agent file name, or null. */
+  validateTemplateName(value: string): string | null {
+    if (!value) return 'Name cannot be empty';
+    if (value.includes('/') || value.includes('\\')) {
+      return 'Name cannot contain path separators';
+    }
+    if (value.includes(' ')) return 'Use underscores instead of spaces';
+    if (/[:#[\]{}|>&*!%@`]/.test(value)) {
+      return 'Name cannot contain YAML-special characters';
+    }
+    return null;
+  }
+
+  planTemplateAgent(input: {
+    category: AgentCategory;
+    name: string;
+    customDir: string;
+  }): SettingsAgentTemplatePlan {
+    const fileName = input.name.endsWith('.yaml')
+      ? input.name
+      : `${input.name}.yaml`;
+    const baseName = input.name.replace(/\.yaml$/, '');
+    const isToolUse = input.category === 'toolUse';
+    const description = isToolUse
+      ? `${baseName} — interactive tool-use agent`
+      : `${baseName} — workflow agent`;
+
+    return {
+      fileName,
+      filePath: path.join(input.customDir, fileName),
+      baseName,
+      description,
+      templateKind: isToolUse ? 'toolUse' : 'workflowSingle',
+    };
   }
 }

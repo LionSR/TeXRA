@@ -128,7 +128,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
 
   private readonly catalogController;
   private readonly directoryController;
-  private readonly visibilityController;
   private readonly roster: AgentRosterController;
   private readonly registry: DefaultDesktopAgentSettingsControllerOptions['registry'];
   private readonly directory: DefaultDesktopAgentSettingsControllerOptions['directory'];
@@ -139,7 +138,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private readonly resourcesPath: string;
   private readonly agentActions;
   /** Path planners for custom-agent copy/delete/template writes. */
-  private readonly fileController;
   private readonly remotePromptController;
 
   constructor(options: DefaultDesktopAgentSettingsControllerOptions) {
@@ -171,9 +169,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     });
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
-    this.visibilityController = controllers.visibility;
     this.roster = controllers.roster;
-    this.fileController = controllers.fileController;
     this.remotePromptController = controllers.remotePromptController;
     this.agentActions = createSettingsAgentActions({
       directoryController: this.directoryController,
@@ -324,7 +320,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private async updateAllAgentsEnabled(
     message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED>,
   ): Promise<void> {
-    await this.visibilityController.setAllAgentsEnabled(message);
+    await this.catalogController.setAllAgentsEnabled(message);
     await this.refreshCatalogData();
   }
 
@@ -385,7 +381,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     });
     if (!name) return;
 
-    const invalid = this.fileController.validateTemplateName(name);
+    const invalid = this.directoryController.validateTemplateName(name);
     if (invalid) {
       await this.notifications.showErrorMessage(invalid);
       return;
@@ -395,7 +391,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       const customDir = await this.directory.getCustomAgentDirectory();
       await AbsoluteFS.ensureDir(customDir);
 
-      const plan = this.fileController.planTemplateAgent({
+      const plan = this.directoryController.planTemplateAgent({
         category: data.category,
         name,
         customDir,

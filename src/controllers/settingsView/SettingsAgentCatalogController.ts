@@ -16,6 +16,7 @@ import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS_BY_ID,
   agentKey,
+  agentKeyOf,
   agentMatchesIdentifier,
   byCategory,
   parseAgentModePresets,
@@ -199,6 +200,42 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       records.filter((record) => !isObject(record) || record.id !== presetId),
     );
     return target;
+  }
+
+  /**
+   * Enable or disable every agent from one source within a category.
+   *
+   * The identical-list short-circuit is load-bearing: without it every
+   * "enable all" click writes the same roster back and republishes the
+   * catalog for no change.
+   */
+  async setAllAgentsEnabled(input: {
+    category: AgentCategory;
+    source: AgentSource;
+    enabled: boolean;
+  }): Promise<void> {
+    const allAgents = this.deps.state.getAgents(input.category);
+    const targetKeys = new Set(
+      allAgents
+        .filter((entry) => entry.source === input.source)
+        .map((entry) => agentKeyOf(entry)),
+    );
+
+    const current =
+      this.deps.state.getEnabledAgentKeys(input.category) ??
+      allAgents.map((entry) => agentKeyOf(entry));
+
+    const updated = input.enabled
+      ? [...new Set([...current, ...targetKeys])]
+      : current.filter((key) => !targetKeys.has(key));
+
+    if (
+      updated.length === current.length &&
+      updated.every((key, index) => key === current[index])
+    ) {
+      return;
+    }
+    await this.deps.state.setEnabledAgentKeys(input.category, updated);
   }
 
   private buildCategorySelectionItems(
