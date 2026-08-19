@@ -30,6 +30,7 @@ import { postMessage } from '@shared/hostBridge';
 import type {
   ExternalInquiryPermission,
   InquiryDraft,
+  PermissionPayload,
   InquiryTranscriptTurn,
 } from '@shared/schemas';
 import {
@@ -54,10 +55,9 @@ import {
   REDIRECT_FEEDBACK_PROMPT,
 } from './BaseFeedbackPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
-import type { PermissionState } from '../permissionState';
 
 type ExternalInquiryPermissionState = Extract<
-  PermissionState,
+  PermissionPayload,
   { kind: typeof PERMISSION_KIND.EXTERNAL_INQUIRY }
 >;
 
