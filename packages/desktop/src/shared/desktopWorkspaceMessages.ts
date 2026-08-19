@@ -17,6 +17,7 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
   WRITE_FILE: 'desktop:workspace:writeFile',
   FILE_WRITTEN: 'desktop:workspace:fileWritten',
   FILE_ERROR: 'desktop:workspace:fileError',
+  FILES_CHANGED: 'desktop:workspace:filesChanged',
   // Terminal
   TERMINAL_START: 'desktop:terminal:start',
   TERMINAL_INPUT: 'desktop:terminal:input',
@@ -102,6 +103,17 @@ export const DesktopFileErrorMessageSchema = z.object({
   requestId: z.uuid(),
   path: z.string(),
   message: z.string(),
+});
+
+/**
+ * Something outside the editor wrote into the workspace — an accepted run
+ * output, an accepted LaTeX diff — so the file tree's cached listing is out of
+ * date. Carries no paths: the tree re-lists from the main process anyway, and
+ * a path list would only tempt the renderer into a partial update it has no
+ * way to keep consistent with the directories it has not loaded.
+ */
+export const DesktopWorkspaceFilesChangedMessageSchema = z.object({
+  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED),
 });
 
 // ── Terminal ──

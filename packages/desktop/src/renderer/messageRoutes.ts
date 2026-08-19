@@ -44,6 +44,7 @@ import {
   DesktopTerminalErrorMessageSchema,
   DesktopTerminalExitMessageSchema,
   DesktopTerminalOpenCommandMessageSchema,
+  DesktopWorkspaceFilesChangedMessageSchema,
   type DesktopEnvironmentSummary,
 } from '../shared/desktopWorkspaceMessages';
 import { takePendingFileRequest } from './fileRequests';
@@ -54,6 +55,8 @@ import type { ZodType } from 'zod';
 export interface DesktopMessageRouteHandlers {
   /** Persist all dirty editor buffers. */
   saveAllFiles(): void;
+  /** Re-list the workspace after something outside the editor wrote to it. */
+  reloadWorkspaceFiles(): void;
   /** Live read of whether bootstrap failed (routes must not fire then). */
   isBootstrapFailed(): boolean;
   returnToLauncher(): void;
@@ -164,6 +167,9 @@ export function createMessageRoutes(
     messageRoute(DesktopFileWrittenMessageSchema, (message) => {
       const pending = takePendingFileRequest(message.requestId);
       if (pending?.kind === 'write') pending.resolve();
+    }),
+    messageRoute(DesktopWorkspaceFilesChangedMessageSchema, () => {
+      handlers.reloadWorkspaceFiles();
     }),
     messageRoute(DesktopFileErrorMessageSchema, (message) => {
       // One request, one rejection: the requestId names the single pending read

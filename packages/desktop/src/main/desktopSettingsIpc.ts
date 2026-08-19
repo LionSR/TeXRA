@@ -5,6 +5,7 @@ import {
   listGitHubSubscriptionEntries,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
+import { appSignals } from '@eventBus/AppSignals';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
@@ -26,6 +27,7 @@ import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/sett
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
+import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
   GITHUB_TOKEN_CREATE_URL,
   GITHUB_TOKEN_STORAGE_KEY,
@@ -296,6 +298,14 @@ export function createDesktopSettingsIpc(
     });
   }
 
+  // Both writers below re-probe external tools: the GitHub token gates the
+  // `github_subscription` tool group, so without it the Tools tab keeps
+  // showing the group as unavailable until the user clicks Re-check. The
+  // extension gets this from `secrets.onDidChange`; the desktop has no
+  // secret-change event, but these two functions are the only places it
+  // writes the token, so the explicit calls cover the same ground.
+  // `refreshToolAvailability` emits `toolAvailabilityChanged`, which is what
+  // repaints the dashboard.
   async function setGitHubToken(): Promise<void> {
     const token = await options.ui.promptForSecret?.({
       title: 'GitHub token',
@@ -306,12 +316,14 @@ export function createDesktopSettingsIpc(
     await platform().secrets.set(GITHUB_TOKEN_STORAGE_KEY, token.trim());
     await options.ui.showInfoMessage('GitHub token saved.');
     await postGitHubTokenStatus();
+    await refreshToolAvailability();
   }
 
   async function removeGitHubToken(): Promise<void> {
     await platform().secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
     await options.ui.showInfoMessage('GitHub token removed.');
     await postGitHubTokenStatus();
+    await refreshToolAvailability();
   }
 
   async function postGitHubSubscriptions(): Promise<void> {
@@ -322,6 +334,24 @@ export function createDesktopSettingsIpc(
       ),
     });
   }
+
+  // The same stance as the goal subscription above: a run that binds or
+  // releases a PR, repo, or issue subscription changes the list the Git tab is
+  // showing, and until now the desktop only re-read it when the user asked.
+  appSignals.on('githubSubscriptionsChanged', () =>
+    runAsync(postGitHubSubscriptions()),
+  );
+  // Outside VS Code a rejected token left the pollers failing in silence. Say
+  // so, and re-read the token status so the Git tab stops presenting the
+  // stored token as usable.
+  appSignals.on('githubTokenInvalid', ({ message }) =>
+    runAsync(
+      (async () => {
+        await options.ui.showErrorMessage(`GitHub token rejected: ${message}`);
+        await postGitHubTokenStatus();
+      })(),
+    ),
+  );
 
   /**
    * Jump from a settings entry (a goal, a PR subscription) to the run that owns

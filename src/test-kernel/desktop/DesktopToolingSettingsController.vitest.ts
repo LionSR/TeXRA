@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
+import { appSignals } from '@eventBus/AppSignals';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ToolDashboardItem } from '@shared/schemas';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
@@ -61,7 +62,12 @@ function createFixture(overrides: FixtureOverrides = {}) {
   const dashboard: ControllerOptions['dashboard'] = {
     buildItems: async () => [DASHBOARD_ITEM],
     getCachedCheckResults: async () => [],
-    refreshAvailability: async () => undefined,
+    // The real `refreshToolAvailability` always emits once the probes land,
+    // and that emit is what repaints the dashboard, so a fake that stays
+    // silent would leave the controller with nothing to react to.
+    refreshAvailability: async () => {
+      appSignals.emit('toolAvailabilityChanged', undefined);
+    },
     planTerminalAction: async (toolId, kind) => ({
       kind: 'terminal',
       name: toolId,
@@ -127,7 +133,10 @@ describe('DefaultDesktopToolingSettingsController', () => {
           return [DASHBOARD_ITEM];
         },
         getCachedCheckResults: async () => undefined,
-        refreshAvailability: () => refreshPending,
+        refreshAvailability: async () => {
+          await refreshPending;
+          appSignals.emit('toolAvailabilityChanged', undefined);
+        },
       },
     });
 
@@ -248,12 +257,16 @@ describe('DefaultDesktopToolingSettingsController', () => {
         },
         refreshAvailability: async () => {
           events.push('dashboard:refresh');
+          appSignals.emit('toolAvailabilityChanged', undefined);
         },
       },
     });
 
     await assertSupported(controller.toolHandlers.recheckToolStatus)({
       command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+    });
+    await vi.waitFor(() => {
+      expect(events).toContain('renderer:post');
     });
 
     expect(events).toEqual([
@@ -347,9 +360,11 @@ describe('DefaultDesktopToolingSettingsController', () => {
       command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
     });
 
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      items: [DASHBOARD_ITEM],
+    await vi.waitFor(() => {
+      expect(posted.at(-1)).toEqual({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+        items: [DASHBOARD_ITEM],
+      });
     });
   });
 });
