@@ -29,7 +29,7 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
 // Local imports
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: undefined });
@@ -94,7 +94,7 @@ describe('agent skills workspace guard', () => {
     mocks.writeSetting.mockRejectedValueOnce(error);
 
     await handler.updateStateSetting(
-      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+      GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
       true,
     );
 

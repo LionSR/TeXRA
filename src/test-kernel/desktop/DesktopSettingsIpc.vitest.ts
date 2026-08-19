@@ -392,23 +392,21 @@ describe('desktop settings IPC', () => {
   });
 
   it('round-trips multi-agent coordination and refreshes its snapshot', async () => {
-    const workspaceState = new FakeStateStore();
+    const globalState = new FakeStateStore();
     const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
+      globalState,
     });
 
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+        key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
         value: true,
       }),
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(workspaceState.get(WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP)).toBe(
-      true,
-    );
+    expect(globalState.get(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP)).toBe(true);
     expect(posted.at(-1)).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
       detachSubagentsOnStop: true,
