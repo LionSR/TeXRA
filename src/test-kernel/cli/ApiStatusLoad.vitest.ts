@@ -131,25 +131,14 @@ describe('loadCliApiStatus', () => {
       }));
   });
 
-  it.each([
-    {
-      name: 'without a profile note',
-      profile: { authenticated: false },
-      lines: ['api: your own API keys', 'auth: signed out'],
-    },
-    {
-      name: 'with no profile note',
-      profile: { authenticated: false },
-      lines: ['api: your own API keys', 'auth: signed out'],
-    },
-  ])(
-    'preserves signed-out launcher details $name',
-    async ({ profile, lines }) => {
-      mocks.getCliAuthProfile.mockResolvedValue(profile);
+  it('preserves signed-out launcher details', async () => {
+    mocks.getCliAuthProfile.mockResolvedValue({ authenticated: false });
 
-      await expect(loadCliApiStatus()).resolves.toEqual(lines);
-    },
-  );
+    await expect(loadCliApiStatus()).resolves.toEqual([
+      'api: your own API keys',
+      'auth: signed out',
+    ]);
+  });
 
   it('groups personal keys with their route', async () => {
     mocks.getCliAuthProfile.mockResolvedValue({
