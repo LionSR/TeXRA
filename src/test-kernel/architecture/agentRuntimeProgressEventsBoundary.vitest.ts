@@ -7,6 +7,7 @@ import * as ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ALL_HOST_PRODUCTION_ROOTS,
   REPO_ROOT,
   SOURCE_FILE,
   sourceFilesUnder,
@@ -38,17 +39,10 @@ const ALLOWED_CLI_PROJECTION_IMPORTERS = [
   'src/test-kernel/cli/RunProgressRenderer.vitest.ts',
 ] as const;
 
-const SCAN_ROOTS = [
-  'packages/cli/src',
-  'packages/desktop/src',
-  'packages/extension/src',
-  'src',
-] as const;
-
 const SOURCE_OR_OUTPUT_EXTENSION = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 
 function scanFiles(excludeTestKernel: boolean): string[] {
-  return SCAN_ROOTS.flatMap((root) =>
+  return ALL_HOST_PRODUCTION_ROOTS.flatMap((root) =>
     sourceFilesUnder(resolve(REPO_ROOT, root), {
       missingDirReturnsEmpty: true,
       repoRelative: true,

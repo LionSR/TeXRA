@@ -1,6 +1,8 @@
-import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { isFile, walkFiles } from './fsWalk.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = path.resolve(packageRoot, '../..');
@@ -15,15 +17,6 @@ const aliases = Object.entries(tsconfig.compilerOptions.paths)
     ),
   )
   .toSorted(([left], [right]) => right.length - left.length);
-
-async function isFile(filePath) {
-  try {
-    return (await stat(filePath)).isFile();
-  } catch (error) {
-    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return false;
-    throw error;
-  }
-}
 
 async function resolveSource(specifier) {
   for (const [pattern, targets] of aliases) {
@@ -61,21 +54,6 @@ function emittedPath(sourcePath) {
     .replace(/\.tsx?$/u, '.d.ts');
 }
 
-async function declarationFiles(directory) {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const nested = await Promise.all(
-    entries.map((entry) => {
-      const target = path.join(directory, entry.name);
-      return entry.isDirectory()
-        ? declarationFiles(target)
-        : entry.name.endsWith('.d.ts')
-          ? [target]
-          : [];
-    }),
-  );
-  return nested.flat();
-}
-
 const moduleSpecifier =
   /(?<prefix>\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\bexport\s+\*\s+from\s*)(?<quote>['"])(?<specifier>[^'"]+)\k<quote>/gu;
 
@@ -106,7 +84,9 @@ async function resolveDeclarationSpecifier(specifier, declaration) {
   return relative.startsWith('.') ? relative : `./${relative}`;
 }
 
-for (const declaration of await declarationFiles(outputRoot)) {
+for (const declaration of await walkFiles(outputRoot, (name) =>
+  name.endsWith('.d.ts'),
+)) {
   const original = await readFile(declaration, 'utf8');
   let rewritten = '';
   let cursor = 0;
