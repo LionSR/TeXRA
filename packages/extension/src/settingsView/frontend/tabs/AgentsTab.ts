@@ -94,6 +94,11 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
         width: 80px;
       }
 
+      .setting-unit {
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+      }
+
       .agent-category agent-selection-panel {
         display: block;
         min-height: 22rem;

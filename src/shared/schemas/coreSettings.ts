@@ -64,8 +64,10 @@ export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = Object.freeze({
 /**
  * Bounds, default, and copy for `model.compactionThresholdPercent`. The value
  * is the share of the model's context window that triggers automatic
- * compaction, and `0` disables it. Shared by the schema leaf below and the
- * settings-view reliability row.
+ * compaction, and `0` disables it. Shared by
+ * {@link ModelCompactionThresholdPercentSchema}, the runtime reader, and the
+ * settings-view reliability row so the schema, runtime, and UI cannot disagree
+ * about the range.
  */
 export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
   configKey: 'texra.model.compactionThresholdPercent',
@@ -203,6 +205,13 @@ export const ModelRetryMaxAttemptsSchema = z
   .describe(MODEL_RETRY_MAX_ATTEMPTS_SETTING.description)
   .prefault(MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue);
 
+export const ModelCompactionThresholdPercentSchema = z
+  .number()
+  .min(MODEL_COMPACTION_THRESHOLD_SETTING.min)
+  .max(MODEL_COMPACTION_THRESHOLD_SETTING.max)
+  .describe(MODEL_COMPACTION_THRESHOLD_SETTING.description)
+  .prefault(MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue);
+
 export const ChildRunConcurrencyBudgetSchema = z
   .int()
   .min(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min)
@@ -253,14 +262,7 @@ export const CoreSettingsShape = {
         DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
         'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool execution.',
       ),
-      compactionThresholdPercent: numberField(
-        DEFAULT_CORE_SETTINGS.model.compactionThresholdPercent,
-        MODEL_COMPACTION_THRESHOLD_SETTING.description,
-        {
-          min: MODEL_COMPACTION_THRESHOLD_SETTING.min,
-          max: MODEL_COMPACTION_THRESHOLD_SETTING.max,
-        },
-      ),
+      compactionThresholdPercent: ModelCompactionThresholdPercentSchema,
       gpt5ReasoningSummary: boolField(
         DEFAULT_CORE_SETTINGS.model.gpt5ReasoningSummary,
         "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",

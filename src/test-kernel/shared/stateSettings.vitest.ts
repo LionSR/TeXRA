@@ -36,6 +36,10 @@ import {
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
+  MODEL_COMPACTION_THRESHOLD_SETTING,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  ModelCompactionThresholdPercentSchema,
+  ModelRetryMaxAttemptsSchema,
 } from '@shared/schemas';
 import type {
   DerivedSettingsSnapshot,
@@ -58,10 +62,12 @@ import {
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { installPlatform } from '@test/support/setupPlatform';
 import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
+import { getValidatedConfig } from '@utils/config/configUtils';
 
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'config',
@@ -668,6 +674,56 @@ describe('settingsAccess', () => {
       storeName: 'config',
       expectedDefault: DEFAULT_GIT_MARK_COMMITS,
     });
+  });
+
+  // Restored from the deleted `SettingsProfileController` suite, whose
+  // "does not mask a compaction value that runtime still reads directly" case
+  // turned out not to be obsolete: the settings row must never display a
+  // number the runtime is not actually using. Row and runtime now share one
+  // resolution rule — the *merged* config scope, validated against the row's
+  // own schema — so this pins both halves. A `configTarget: 'global'` on
+  // either row breaks the workspace-override case; dropping validation from
+  // either runtime reader breaks the out-of-range case.
+  it('resolves reliability rows exactly as their runtime readers do', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const reliabilityRows = [
+      {
+        setting: MODEL_COMPACTION_THRESHOLD_SETTING,
+        schema: ModelCompactionThresholdPercentSchema,
+        inRange: 40,
+        outOfRange: 101,
+      },
+      {
+        setting: MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+        schema: ModelRetryMaxAttemptsSchema,
+        inRange: 4,
+        outOfRange: 6,
+      },
+    ];
+    try {
+      for (const { setting, schema, inRange, outOfRange } of reliabilityRows) {
+        const entry = settingsViewSettingByKey(setting.configKey);
+        assert.ok(entry, `missing settings-view row ${setting.configKey}`);
+        assert.equal(
+          entry.configTarget,
+          undefined,
+          `${setting.configKey} must not narrow itself to one config scope`,
+        );
+        for (const stored of [undefined, inRange, outOfRange]) {
+          const { stores, config } = makeFakeSettingsStores();
+          if (stored !== undefined) config.set(setting.configKey, stored);
+          await installPlatform({}, { config });
+          assert.equal(
+            readSetting(entry, stores, 'vscode'),
+            // The exact expression both runtime readers use.
+            getValidatedConfig(setting.configKey, schema, setting.defaultValue),
+            `${setting.configKey} stored=${String(stored)}`,
+          );
+        }
+      }
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('falls back to the default for a stored value that no longer validates', () => {

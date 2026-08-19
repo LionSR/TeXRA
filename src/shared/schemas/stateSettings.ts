@@ -487,17 +487,19 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
       ],
     },
   },
+  // No `configTarget`: both runtime readers resolve the *merged* config value
+  // through `getValidatedConfig`, so the row must not narrow itself to the
+  // global scope — a workspace override the runtime honors would then be
+  // invisible in (and unwritable from) the settings view.
   'model.compactionThresholdPercent': {
     title: 'Compaction threshold',
     category: 'model',
-    configTarget: 'global',
     honoredBy: everyHost('src/agent/modelHandlers/ModelHandler.ts'),
     surfaces: { settingsView: 'multi-agent' },
   },
   'model.retry.maxAttempts': {
     title: 'Automatic retries',
     category: 'model',
-    configTarget: 'global',
     honoredBy: everyHost('src/agent/core/flows/ModelInvocationNode.ts'),
     surfaces: { settingsView: 'multi-agent' },
   },
