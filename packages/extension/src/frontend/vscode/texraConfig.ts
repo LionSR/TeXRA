@@ -15,8 +15,10 @@ import { createLog } from '@logger/logUtils';
 
 // Local imports - platform
 import type { ConfigTarget, StorageProvider } from '@platform/interfaces';
-import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import type { JsonStore } from '@platform/defaults/jsonStore';
+import {
+  JsonConfigProvider,
+  type ConfigStore,
+} from '@platform/defaults/jsonConfigProvider';
 import {
   openTexraConfigStores,
   openTexraWorkspaceConfigStore,
@@ -34,8 +36,8 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
 
   constructor(
     private readonly storage: StorageProvider,
-    workspaceStore: JsonStore,
-    globalStore: JsonStore,
+    workspaceStore: ConfigStore,
+    globalStore: ConfigStore,
   ) {
     super({ workspace: workspaceStore, global: globalStore });
   }
@@ -76,7 +78,7 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
         return;
       }
 
-      let previousStore: JsonStore | undefined;
+      let previousStore: ConfigStore | undefined;
       let finalized = false;
       const seedSessionApprovalPolicy = (): void => {
         // No default session exists yet during activation's own config setup,
