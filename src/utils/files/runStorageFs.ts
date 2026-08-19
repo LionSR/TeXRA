@@ -53,7 +53,7 @@ export async function findRunDir(id: ExecutionId): Promise<string | undefined> {
   return rel ? StorageFS.fullPath(rel) : undefined;
 }
 
-export type RunStorageEntryInspection =
+type RunStorageEntryInspection =
   | { readonly kind: 'file'; readonly location: RunStorageFileLocation }
   | {
       readonly kind: 'symlink' | 'directory' | 'unsupported';

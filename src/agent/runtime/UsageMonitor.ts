@@ -181,7 +181,7 @@ export class UsageMonitor {
           reasoningTokens: roundReasoningTokens,
         }),
         ...(toolUseTokens > 0 && { toolUseTokens }),
-        ...(usageRoute != null && { usageRoute }),
+        usageRoute,
       };
 
       // One typed trace event feeds both transcript and progress projections.
@@ -270,7 +270,7 @@ export class UsageMonitor {
         responseTimeMs: Math.round(totalResponseTimeMs),
         cachedInputTokens,
         reasoningTokens: usage.reasoningTokens ?? 0,
-        ...(usage.usageRoute != null && { usageRoute: usage.usageRoute }),
+        usageRoute: usage.usageRoute,
         streamId: this.context.streamId,
       });
     } catch (error) {

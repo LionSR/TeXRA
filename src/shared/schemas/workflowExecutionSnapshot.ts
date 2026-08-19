@@ -28,7 +28,7 @@ export const WORKFLOW_CALL_STATUS = {
   CACHED: 'cached',
 } as const;
 const WorkflowExecutionCallStatusSchema = z.enum(WORKFLOW_CALL_STATUS);
-export type WorkflowExecutionCallStatus = z.infer<
+type WorkflowExecutionCallStatus = z.infer<
   typeof WorkflowExecutionCallStatusSchema
 >;
 

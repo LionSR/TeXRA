@@ -136,7 +136,7 @@ const FileLineageSchema = z.strictObject({
   diffBase: FileLocationSchema.nullable(),
   diffFile: FileLocationSchema.nullable(),
 });
-export type FileLineage = z.infer<typeof FileLineageSchema>;
+type FileLineage = z.infer<typeof FileLineageSchema>;
 
 /**
  * The file location a diff should render against: the explicit `diffBase`

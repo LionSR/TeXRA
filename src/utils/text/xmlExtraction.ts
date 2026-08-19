@@ -2,9 +2,9 @@
  * XML content extraction utilities.
  * Functions for extracting content from XML tags and documents.
  *
- * The extraction result shapes (ExtractionResult / MultipleExtractionResult)
- * are plain types: they describe internal return values, not a parsed or
- * validated boundary, so no Zod schema backs them.
+ * The extraction result shape (MultipleExtractionResult) is a plain type: it
+ * describes an internal return value, not a parsed or validated boundary, so
+ * no Zod schema backs it.
  */
 
 // Local imports - utils

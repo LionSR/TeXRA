@@ -49,8 +49,8 @@ export type ProviderEndpointStateEntry = ProviderStateEntry & {
 
 /**
  * Canonical provider registry. Registry-derived lists (MODEL_SOURCE_ORDER,
- * SERVER_SIDE_PROVIDER_IDS, PROVIDER_DISPLAY_NAMES, PROVIDER_URLS,
- * API_KEY_PROVIDER_IDS) are derived from this — no manual sync needed.
+ * PROVIDER_DISPLAY_NAMES, PROVIDER_URLS, API_KEY_PROVIDER_IDS) are derived
+ * from this — no manual sync needed.
  * Order here determines display order for direct model providers.
  *
  * To add a new provider that has a ModelProvider enum value: add a single entry

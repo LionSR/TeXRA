@@ -39,7 +39,7 @@ const logger = createLog('SessionHostInteractions');
  */
 const MAX_PENDING_PRESENTATION_REPLAYS = 256;
 
-export type DiagnosticsReader = (path: string) => Promise<GenericDiagnostic[]>;
+type DiagnosticsReader = (path: string) => Promise<GenericDiagnostic[]>;
 
 export interface ManualCriticismEntry {
   /** Absolute path resolved by the diagnostics tool. */
@@ -53,7 +53,7 @@ export interface ManualCriticismEntry {
   readonly confidence: number;
 }
 
-export type AddCriticismSink = (input: ManualCriticismEntry) => {
+type AddCriticismSink = (input: ManualCriticismEntry) => {
   readonly accepted: boolean;
   readonly resolvedPath: string;
 };
@@ -63,7 +63,7 @@ export interface OpenPdfRequest {
   readonly preserveFocus: boolean;
 }
 
-export type OpenPdfOpener = (request: OpenPdfRequest) => Promise<void> | void;
+type OpenPdfOpener = (request: OpenPdfRequest) => Promise<void> | void;
 
 /**
  * Collects one agent-review finding. Returns `accepted: false` with a reason
@@ -197,7 +197,7 @@ export type HostRetryRequest = RetryPermission;
 
 export type HostUserQuestionRequest = UserQuestionPermission;
 
-export interface HostInteractionResultByKind {
+interface HostInteractionResultByKind {
   readonly bash: BashSettlement;
   readonly planApproval: PlanApprovalResult;
   readonly proposal: ProposalResult;
@@ -206,9 +206,9 @@ export interface HostInteractionResultByKind {
   readonly userQuestion: UserQuestionSettlement;
 }
 
-export type HostExternalInquiryRequest = ExternalInquiryPermission;
+type HostExternalInquiryRequest = ExternalInquiryPermission;
 
-export interface HostExternalInquiryHandle {
+interface HostExternalInquiryHandle {
   readonly threadId: string;
 }
 

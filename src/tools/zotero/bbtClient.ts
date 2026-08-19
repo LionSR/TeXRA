@@ -97,7 +97,6 @@ export const BbtLibrarySchema = z.object({
   name: z.string(),
   collections: z.array(BbtCollectionSchema).nullish(),
 });
-export type BbtLibrary = z.infer<typeof BbtLibrarySchema>;
 
 /**
  * Collection with nested parent chain, returned by `item.collections(citekeys, true)`.
