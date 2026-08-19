@@ -51,7 +51,7 @@ import type {
   TokenValidationResult,
 } from '@agent/types/ModelHandlerContracts';
 import { createNeutralResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
-import { hasConfigurableReasoningEffort } from '@agent/modelHandlers/support/reasoningEffort';
+import { supportsReasoningLevel } from '@agent/modelHandlers/support/reasoningEffort';
 import type { ServerToolExtractionResult } from '@agent/types/ServerTools';
 import {
   attachContextWindowError,
@@ -712,11 +712,7 @@ export abstract class ModelHandler<
    * see that predicate's own #7101 note on `requiresPerCallSystemPrompt`).
    */
   get supportsReasoningLevelOverride(): boolean {
-    return (
-      hasConfigurableReasoningEffort(this.config.capabilities) ||
-      (this.config.provider === ModelProvider.DEEPSEEK &&
-        this.config.capabilities.supportsReasoning)
-    );
+    return supportsReasoningLevel(this.config);
   }
 
   /**
