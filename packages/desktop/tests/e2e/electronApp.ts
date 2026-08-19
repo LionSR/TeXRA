@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 import { _electron as electron } from 'playwright';
 import type { ElectronApplication, Page } from 'playwright';
 
-import type { DesktopWorkbenchKind } from '../../src/shared/desktopShellMessages.js';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -234,6 +233,8 @@ export async function showLauncher(launched: LaunchedApp): Promise<void> {
     { timeout: 5000 },
   );
 }
+
+export type DesktopWorkbenchKind = 'settings' | 'logs';
 
 export async function openWorkbench(
   launched: LaunchedApp,
