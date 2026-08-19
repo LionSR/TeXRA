@@ -336,7 +336,7 @@ export async function runChat(
   // navigate. Keep the project name while surfacing live attention state.
   const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
   disposables.add(terminalTitleUpdates.dispose);
-  disposables.add(subscribeStreamLog());
+  disposables.add(subscribeStreamLog(runtimeSession));
   disposables.add(subscribeStreamArtifacts(runtimeSession.snapshots));
 
   const session = new TuiSession();

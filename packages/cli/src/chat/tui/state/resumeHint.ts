@@ -21,7 +21,7 @@ import { formatCostUsd } from '@utils/text/stringUtils';
 
 import {
   childExecutionLabel,
-  retainedChildStreamsFor,
+  visibleSubagentRows,
   type ChildRosters,
 } from './childExecutions';
 import { streamPreferredUsage } from './subscribeStreamArtifacts';
@@ -163,7 +163,7 @@ export function collectResumeTargets({
   }
 
   for (const streamId of streams.keys()) {
-    for (const child of retainedChildStreamsFor(streamId, childRosters)) {
+    for (const child of visibleSubagentRows(streamId, childRosters)) {
       if (seen.has(child.executionId) || child.resumeEligible !== true) {
         continue;
       }

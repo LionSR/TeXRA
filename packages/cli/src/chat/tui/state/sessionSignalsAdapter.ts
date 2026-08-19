@@ -222,9 +222,9 @@ export function attachSessionSignalsAdapter({
   bindChildStreamState(state);
   const renderer = new TuiSessionRenderer(state, snapshots, session);
   const applier = new SessionFactApplier(state, renderer, {
-    // Removal fires no renderer-port callback by design; the CLI is the
-    // delete executor in-process, so the roster/tombstone snapshots
-    // re-derive here, same-tick with the applier's removal barrier.
+    // The shared applier pushes any roster changes through the renderer. The
+    // CLI is also the delete executor in-process, so refresh tombstone-derived
+    // topology here in the same tick as the removal barrier.
     deleteStream: (streamId: StreamTabId) => {
       removeStream(streamId);
       invalidateChildStreams();
@@ -248,10 +248,11 @@ export function attachSessionSignalsAdapter({
       });
       if (recognized) {
         syncStreamLog(
+          session,
           fact.streamId,
           isTranscriptSettlementPhase(fact.phase) ? { forceFinal: true } : {},
         );
-        releaseInactiveStreamTranscript(fact.streamId);
+        releaseInactiveStreamTranscript(session.transcripts, fact.streamId);
       }
       // A completed or user-stopped child returns manual focus to that
       // child's immediate owner. WAITING, repair events, unrelated streams,

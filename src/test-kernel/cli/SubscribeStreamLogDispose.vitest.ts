@@ -60,7 +60,7 @@ function appendUserMessage(
 describe('subscribeStreamLog batching and dispose', () => {
   beforeEach(async () => {
     // No separate default-store export to swap in anymore (#7694) —
-    // `subscribeStreamLog()` reads the default session's own `transcripts`
+    // `subscribeStreamLog(defaultSession())` reads the default session's own `transcripts`
     // store, so clear it in place instead.
     await defaultSession().transcripts.clear();
     // Twice: the first reset retires the ids this suite reuses across tests,
@@ -75,7 +75,7 @@ describe('subscribeStreamLog batching and dispose', () => {
   });
 
   it('coalesces multiple store changes within the batch window into a single sync pass', () => {
-    const dispose = subscribeStreamLog();
+    const dispose = subscribeStreamLog(defaultSession());
     const store = defaultSession().transcripts;
 
     appendUserMessage(store, streamA, 'a-1', 'hello');
@@ -96,7 +96,7 @@ describe('subscribeStreamLog batching and dispose', () => {
   });
 
   it('dispose cancels a pending batch instead of flushing it', () => {
-    const dispose = subscribeStreamLog();
+    const dispose = subscribeStreamLog(defaultSession());
     const store = defaultSession().transcripts;
 
     appendUserMessage(store, streamA, 'a-1', 'hello');
@@ -109,10 +109,10 @@ describe('subscribeStreamLog batching and dispose', () => {
   });
 
   it('a later subscribeStreamLog call still batches normally after a prior dispose', () => {
-    const firstDispose = subscribeStreamLog();
+    const firstDispose = subscribeStreamLog(defaultSession());
     firstDispose();
 
-    const secondDispose = subscribeStreamLog();
+    const secondDispose = subscribeStreamLog(defaultSession());
     const store = defaultSession().transcripts;
     appendUserMessage(store, streamA, 'a-1', 'hello again');
     vi.advanceTimersByTime(16);
@@ -146,7 +146,7 @@ describe('subscribeStreamLog batching and dispose', () => {
       if (streamId === streamA) await loadGate;
     });
     const requestEviction = vi.spyOn(store, 'requestEviction');
-    const dispose = subscribeStreamLog();
+    const dispose = subscribeStreamLog(defaultSession());
 
     activeStreamId.set(streamA);
     await Promise.resolve();
@@ -171,8 +171,8 @@ describe('subscribeStreamLog batching and dispose', () => {
     activeStreamId.set(streamA);
     const requestEviction = vi.spyOn(store, 'requestEviction');
 
-    syncStreamLog(streamB);
-    releaseInactiveStreamTranscript(streamB);
+    syncStreamLog(defaultSession(), streamB);
+    releaseInactiveStreamTranscript(defaultSession().transcripts, streamB);
 
     expect(streams.get().get(streamB)).toMatchObject({
       latestLine: 'starting',
@@ -192,7 +192,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     activeStreamId.set(streamA);
     const requestEviction = vi.spyOn(store, 'requestEviction');
 
-    releaseInactiveStreamTranscript(streamB);
+    releaseInactiveStreamTranscript(defaultSession().transcripts, streamB);
 
     expect(requestEviction).toHaveBeenCalledWith(streamB);
   });
@@ -211,10 +211,10 @@ describe('subscribeStreamLog batching and dispose', () => {
 
     // No focused stream: every stream projects the full transcript.
     activeStreamId.set(undefined);
-    releaseInactiveStreamTranscript(streamA);
+    releaseInactiveStreamTranscript(defaultSession().transcripts, streamA);
     // Focused: the active stream keeps its residency even when terminal.
     activeStreamId.set(streamA);
-    releaseInactiveStreamTranscript(streamA);
+    releaseInactiveStreamTranscript(defaultSession().transcripts, streamA);
 
     expect(requestEviction).not.toHaveBeenCalled();
   });
@@ -225,7 +225,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     activeStreamId.set(streamA);
 
     // This sync is what seeds streamB's per-stream projection state.
-    syncStreamLog(streamB);
+    syncStreamLog(defaultSession(), streamB);
     expect(streamRenderCacheSizesForTest()).toEqual({
       taskGroups: 1,
       compaction: 1,
@@ -240,7 +240,7 @@ describe('subscribeStreamLog batching and dispose', () => {
       streamId: streamB,
       status: STREAM_PHASE.COMPLETED,
     });
-    releaseInactiveStreamTranscript(streamB);
+    releaseInactiveStreamTranscript(defaultSession().transcripts, streamB);
 
     expect(streamRenderCacheSizesForTest()).toEqual({
       taskGroups: 0,
