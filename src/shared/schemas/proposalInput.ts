@@ -9,8 +9,8 @@
  * It lives in the schema layer (not the renderer) because it encodes domain
  * knowledge rather than presentation: which delegation tools map to which agent
  * category and the `extractFigures` / `extractTikz` shorthand → `toolConfig`
- * mapping. The renderer-side
- * `proposalInputStore` is a thin registry over this parser.
+ * mapping. The renderer parses the delegation input directly via
+ * `parseDelegationToolInput` (in `toolFormatters.ts`).
  *
  * The schemas here are deliberately lenient: the LLM may omit fields the
  * canonical proposal schema requires, so display-only defaults

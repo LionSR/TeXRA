@@ -32,7 +32,6 @@ import {
 } from '@agent/runtime';
 import {
   toApprovalSettlement,
-  toBashApprovalSettlement,
   toToolEditResult,
 } from '@cli/runtime/approvalAdapter';
 import {
@@ -315,7 +314,7 @@ async function requestBashInteraction(
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true);
   }
-  return toBashApprovalSettlement(decision);
+  return toApprovalSettlement(decision);
 }
 
 async function requestPlanInteraction(

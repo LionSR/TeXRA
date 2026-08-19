@@ -88,7 +88,6 @@ import {
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';

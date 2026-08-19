@@ -18,11 +18,7 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  CurrentFileType,
-  DocumentFileType,
-  MainViewInboundMessage,
-} from '@shared/schemas';
+import type { DocumentFileType, MainViewInboundMessage } from '@shared/schemas';
 import { isMultipleDocumentFileType } from '@shared/schemas';
 import { getFileStem } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';

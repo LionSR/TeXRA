@@ -36,4 +36,3 @@ export const CurrentFileTypeSchema = z.union([
   DocumentFileTypeSchema,
   z.enum(['base', 'edited']),
 ]);
-export type CurrentFileType = z.infer<typeof CurrentFileTypeSchema>;
