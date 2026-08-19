@@ -268,13 +268,18 @@ export function createDesktopSettingsIpc(
       stateSettingSnapshotPosters,
     );
     if (result.kind !== 'applied') return;
-    if (result.entry.onWrite?.invalidatesModelOptions) {
+    const invalidatesModelOptions =
+      result.entry.onWrite?.invalidatesModelOptions === true;
+    if (invalidatesModelOptions) {
       invalidateModelOptionsCache();
       await options.credentialSettingsController.refreshAfterProviderSettingChange(
         key,
       );
     }
-    if (codingPlanForUsageSetting(key) !== undefined) {
+    if (
+      !invalidatesModelOptions &&
+      codingPlanForUsageSetting(key) !== undefined
+    ) {
       await options.credentialSettingsController.postSubscriptionUsage();
     }
   }
