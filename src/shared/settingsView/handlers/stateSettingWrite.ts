@@ -1,8 +1,10 @@
-// Shared routing decision for the generic `UPDATE_STATE_SETTING` command.
+// Shared routing decision for the generic `UPDATE_STATE_SETTING` command, and
+// the one write path every settings surface goes through — the extension and
+// desktop settings views plus the CLI `/config` panel.
 //
-// The extension and desktop hosts share persistence through settingsAccess and
-// own only the post-write side effects for each outbound snapshot. This
-// resolver owns the subtle boundary rules once:
+// The hosts share persistence through settingsAccess and own only the
+// post-write side effects for each outbound snapshot. This resolver owns the
+// subtle boundary rules once:
 //   - a value-less message is a no-op (the catalog schemas `.prefault()`, so
 //     parsing `undefined` would silently write a default),
 //   - null explicitly resets a setting while an omitted value remains a no-op,
@@ -103,10 +105,13 @@ export interface StateSettingUpdatePorts {
 }
 
 /**
- * Host-neutral write path for a generic `UPDATE_STATE_SETTING` message:
- * resolve, guard, persist, and apply the approval-policy side effect. Callers
- * own all UI feedback and the outbound snapshot rebroadcast — this performs
- * only the decision and the write.
+ * Host-neutral write path for a catalog-backed setting: resolve, guard,
+ * persist, and apply the approval-policy side effect. Every surface that
+ * changes one of these rows calls this — the extension and desktop
+ * `UPDATE_STATE_SETTING` boundaries and the CLI `/config` panel — so a row with
+ * a runtime side effect cannot be persisted by one surface without the running
+ * session being told. Callers own all UI feedback and the outbound snapshot
+ * rebroadcast — this performs only the decision and the write.
  */
 export async function applyStateSettingUpdate(
   key: string,

@@ -10,6 +10,12 @@ import { type SlashCommandContext } from './slashContext';
 const APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 export const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 
+/**
+ * `/approval` is a session-scoped override, like `--approval-policy`: it moves
+ * the live policy for this session only and never writes `.texra/config.json`.
+ * The persisted default is `/config`'s row, which applies its new value to this
+ * same session through the shared write path's approval-policy port.
+ */
 export function applyCliApprovalPolicySelection(
   input: string,
   context: SlashCommandContext,

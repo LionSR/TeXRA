@@ -703,6 +703,9 @@ export function registerBuiltinSlashCommands(options?: {
         <CliConfigForm
           stores={stores}
           availableRows={props.availableRows}
+          // Same hook `/approval` drives, so the approval-policy row updates the
+          // live session and the status bar from whichever surface set it.
+          onApprovalPolicyChanged={options?.onApprovalPolicySelect}
           openExternalForm={(formName) => openCliSlashCommandForm(formName, '')}
           onClose={() => props.onDone(undefined)}
           onError={async (error) => {
