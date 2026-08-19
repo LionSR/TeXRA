@@ -257,7 +257,9 @@ describe('desktop control system', () => {
       "webContents.on('page-title-updated', republish)",
     );
     expect(commandSurface).toContain("SAVE_FILE: 'texra.desktop.saveFile'");
-    expect(commandSurface).toContain("accelerator: 'CommandOrControl+S'");
+    expect(commandSurface).toContain(
+      "keybinding: { key: 'ctrl+s', mac: 'cmd+s' }",
+    );
     expect(renderer).toContain('void editorPane.save()');
     expect(renderer).toContain('editorPane.hasUnsavedChanges()');
     expect(editorPane).toContain('model.getVersionId() !== savedVersion');

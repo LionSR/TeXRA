@@ -192,7 +192,7 @@ export interface ExtensionCommandActions {
   indentTeX(): Promise<void>;
   signIn(): Promise<boolean>;
   signInChatGpt(): Promise<void>;
-  signInGrok(): Promise<boolean>;
+  signInGrok(): Promise<void>;
   signOut(): Promise<void>;
   runSetupAssistant(): Promise<void>;
   openGettingStarted(): Thenable<unknown>;

@@ -20,6 +20,7 @@ interface ShortcutRegistryModule {
       showLauncher(): void;
       openWorkbench(kind: 'settings' | 'logs'): void;
       showSettings(tab?: string): void;
+      toggleSidePanel(): void;
     };
     openCommands(): void;
     platform?: NodeJS.Platform;
@@ -32,6 +33,10 @@ async function loadShortcutRegistry(): Promise<ShortcutRegistryModule> {
 
 async function createRegistry(
   openCommands: () => void = vi.fn(),
+  overrides: {
+    platform?: NodeJS.Platform;
+    toggleSidePanel?: () => void;
+  } = {},
 ): Promise<ShortcutRegistry> {
   const { createDesktopShortcutRegistry } = await loadShortcutRegistry();
   return createDesktopShortcutRegistry({
@@ -40,9 +45,10 @@ async function createRegistry(
       showLauncher: vi.fn(),
       openWorkbench: vi.fn(),
       showSettings: vi.fn(),
+      toggleSidePanel: overrides.toggleSidePanel ?? vi.fn(),
     },
     openCommands,
-    platform: 'darwin',
+    platform: overrides.platform ?? 'darwin',
   });
 }
 
@@ -73,6 +79,32 @@ describe('desktop shortcut registry', () => {
     );
     expect(openCommands).toHaveBeenCalledOnce();
     registry.dispose();
+  });
+
+  it('dispatches the Toggle Side Panel chord its menu advertises', async () => {
+    // Regression: the menu stored `CommandOrControl+Alt+B` while the keydown
+    // converter produces `Command+Option+B` on darwin and `Control+Alt+B`
+    // elsewhere, so the advertised shortcut dispatched nothing on any platform.
+    for (const platform of ['darwin', 'win32'] as const) {
+      const toggleSidePanel = vi.fn();
+      const registry = await createRegistry(vi.fn(), {
+        platform,
+        toggleSidePanel,
+      });
+
+      document.body.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          key: 'b',
+          altKey: true,
+          ...(platform === 'darwin' ? { metaKey: true } : { ctrlKey: true }),
+        }),
+      );
+
+      expect(toggleSidePanel).toHaveBeenCalledOnce();
+      registry.dispose();
+    }
   });
 
   it('installs one shared service and removes it on disposal', async () => {
