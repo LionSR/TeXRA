@@ -1,4 +1,4 @@
-import { getExecutionStore } from '@agent/storage';
+import { deriveOfferableResumability, getExecutionStore } from '@agent/storage';
 import {
   retrieveSessionResumeData,
   type AgentConfig,
@@ -42,12 +42,18 @@ export async function readCliToolUseResumeData(
  * many entries at once, so one unreadable flow record must not abort the whole
  * listing: degrade to `null` on retrieval failure. The returned value is the
  * same category-specific state accepted by the active resume path.
+ *
+ * Listings advertise resumability to a person, so they ask
+ * `deriveOfferableResumability` rather than the durable-state-only
+ * `deriveResumability`: a run that is executing right now also has a flow
+ * record and no outcome, and `texra resume` would refuse it anyway.
  */
 export async function readCliResumeDataForListing(
   id: ExecutionId,
   config: AgentConfig,
 ): Promise<CliSessionResumeData | null> {
   try {
+    if (!(await deriveOfferableResumability(id)).resumable) return null;
     return await readCliSessionResumeData(id, config);
   } catch (error) {
     logger.debug(
