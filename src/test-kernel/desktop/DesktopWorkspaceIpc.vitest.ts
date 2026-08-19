@@ -64,8 +64,14 @@ function createIpc(
     toWindowBounds: (bounds) => bounds,
     ...overrides,
   };
-  return createDesktopWorkspaceIpc({ postToRenderer }, options);
+  const ipc = createDesktopWorkspaceIpc({ postToRenderer }, options);
+  // The IPC subscribes to a process-global bus, so a fixture left undisposed
+  // would keep reacting to later tests' emits.
+  liveWorkspaceIpcs.push(ipc);
+  return ipc;
 }
+
+const liveWorkspaceIpcs: ReturnType<typeof createDesktopWorkspaceIpc>[] = [];
 
 describe('desktop workspace IPC', () => {
   beforeEach(async () => {
@@ -104,6 +110,7 @@ describe('desktop workspace IPC', () => {
   });
 
   afterEach(() => {
+    for (const ipc of liveWorkspaceIpcs.splice(0)) ipc.dispose();
     rmSync(fixtureRoot, { recursive: true, force: true });
   });
 

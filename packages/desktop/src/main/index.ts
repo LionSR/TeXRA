@@ -914,6 +914,10 @@ function createWindow(options: {
     session: options.processSession,
   });
   settingsIpcRef.current = settingsIpc;
+  // Both hold window-scoped subscriptions (goal state and app signals) that
+  // would otherwise accumulate one listener per macOS dock reactivation.
+  windowResources.add(() => settingsIpc.dispose());
+  windowResources.add(() => toolingSettingsController.dispose());
   const progressIpc = createDesktopProgressIpc({
     source: {
       get: () => agentExecution,
@@ -1094,6 +1098,10 @@ function createWindow(options: {
   // Shells keep running and web contents keep loading unless explicitly torn
   // down — neither is reachable once the window is gone.
   windowResources.add(() => workspaceIpc.disposeRendererResources());
+  // Separate from the renderer teardown above, which also runs on renderer
+  // reload: the app-signal subscription must survive a reload and die with the
+  // window, or macOS dock reactivation would stack one listener per reopen.
+  windowResources.add(() => workspaceIpc.dispose());
   let initialRendererNavigationComplete = false;
   window.webContents.on('did-navigate', () => {
     if (!initialRendererNavigationComplete) {

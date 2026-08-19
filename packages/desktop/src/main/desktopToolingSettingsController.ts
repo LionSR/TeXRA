@@ -64,12 +64,20 @@ export interface DesktopToolingSettingsController {
   readonly latexHandlers: DesktopLatexHandlers;
   postLatexConfigValues(): void;
   postStartupData(): Promise<void>;
+  /**
+   * Releases the app-signal subscription. Scoped to the window that built this
+   * controller: `createWindow` runs again on macOS dock reactivation, so an
+   * undisposed subscription would keep repainting a destroyed window's
+   * renderer and pile up one listener per reopen.
+   */
+  dispose(): void;
 }
 
 /** Owns the desktop settings Tools and LaTeX domains. */
 export class DefaultDesktopToolingSettingsController implements DesktopToolingSettingsController {
   readonly toolHandlers: DesktopToolHandlers;
   readonly latexHandlers: DesktopLatexHandlers;
+  private readonly unsubscribeToolAvailability: () => void;
 
   constructor(
     private readonly options: DefaultDesktopToolingSettingsControllerOptions,
@@ -92,11 +100,17 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     // Re-check button, a GitHub token write, or any future core-side input
     // change. Subscribing here rather than posting after each call site is
     // what makes the dashboard follow availability instead of following the
-    // one path that remembered to re-post. Lifetime == app, matching the
-    // desktop's other process-global subscriptions, so there is no dispose.
-    appSignals.on('toolAvailabilityChanged', () => {
-      void this.postToolDashboardData().catch(options.onError);
-    });
+    // one path that remembered to re-post.
+    this.unsubscribeToolAvailability = appSignals.on(
+      'toolAvailabilityChanged',
+      () => {
+        void this.postToolDashboardData().catch(options.onError);
+      },
+    );
+  }
+
+  dispose(): void {
+    this.unsubscribeToolAvailability();
   }
 
   postLatexConfigValues(): void {
