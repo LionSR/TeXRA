@@ -38,8 +38,8 @@ export class SettingsProfileKeyController {
         password: true,
         placeHolder: '************************************',
       });
-      if (apiKey == null) return;
-      await this.storeProviderKey(provider, apiKey);
+      if (apiKey == null) return false;
+      return this.storeProviderKey(provider, apiKey);
     });
   }
 
@@ -56,11 +56,11 @@ export class SettingsProfileKeyController {
         `Remove the ${displayName} API key? This cannot be undone.`,
         { confirmLabel: 'Remove', cancelLabel: 'Cancel', modal: false },
       );
-      if (!confirmed) return;
+      if (!confirmed) return false;
 
       await platform().secrets.delete(secretNameFor(provider));
       void this.deps.prompt.info(`${displayName} API key has been removed`);
-      await this.deps.refreshAfterKeyChange(provider);
+      return true;
     });
   }
 
@@ -74,9 +74,9 @@ export class SettingsProfileKeyController {
   private async storeProviderKey(
     provider: string,
     apiKey: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const normalizedApiKey = apiKey.trim();
-    if (!normalizedApiKey) return;
+    if (!normalizedApiKey) return false;
 
     const displayName = this.deps.getProviderDisplayName(provider);
     if (looksLikeCredentialPlaceholder(normalizedApiKey)) {
@@ -87,19 +87,33 @@ export class SettingsProfileKeyController {
 
     await platform().secrets.set(secretNameFor(provider), normalizedApiKey);
     void this.deps.prompt.info(`${displayName} API key has been set`);
-    await this.deps.refreshAfterKeyChange(provider);
+    return true;
   }
 
   private async run(
     provider: string,
     verb: 'set' | 'remove',
-    action: () => Promise<void>,
+    action: () => Promise<boolean>,
   ): Promise<void> {
+    let changed: boolean;
     try {
-      await action();
+      changed = await action();
     } catch (error) {
       await this.deps.reportFailure(
         `Failed to ${verb} ${this.deps.getProviderDisplayName(provider)} API key`,
+        error,
+      );
+      return;
+    }
+
+    if (!changed) return;
+
+    try {
+      await this.deps.refreshAfterKeyChange(provider);
+    } catch (error) {
+      const action = verb === 'set' ? 'setting' : 'removing';
+      await this.deps.reportFailure(
+        `Failed to refresh after ${action} ${this.deps.getProviderDisplayName(provider)} API key`,
         error,
       );
     }
