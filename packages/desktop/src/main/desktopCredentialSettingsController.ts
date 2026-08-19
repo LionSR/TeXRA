@@ -1,15 +1,12 @@
-import {
-  codexCoordinator,
-  loginWithLoopback as loginWithCodexLoopback,
-} from '@auth/codex';
-import {
-  loginWithLoopback as loginWithGrokLoopback,
-  xaiAccountLabel,
-  xaiCoordinator,
-} from '@auth/xai';
-import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
+import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
+import {
+  subscriptionProvider,
+  type SubscriptionDeviceCodePrompt,
+  type SubscriptionProviderId,
+  type SubscriptionSignInPresenter,
+} from '@controllers/modelAccess/subscriptionProviders';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
@@ -27,8 +24,6 @@ import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
-import { setPreferCodexSubscription } from '@model/codex/codexPreference';
-import { setPreferXaiSubscription } from '@model/xai/xaiPreference';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -55,6 +50,14 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   readonly externalOpener: Pick<ExternalOpener, 'openExternal'> & {
     presentSubscriptionSignInUrl(
       url: string,
+      productName: string,
+    ): void | Promise<void>;
+    /**
+     * Show the one-time code and verification URL for a device-code sign-in,
+     * the fallback when no browser can carry the loopback callback.
+     */
+    presentSubscriptionDeviceCode(
+      prompt: SubscriptionDeviceCodePrompt,
       productName: string,
     ): void | Promise<void>;
   };
@@ -192,15 +195,25 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     };
     this.chatGptHandlers = {
       signInChatGpt: () => this.signInChatGpt(),
-      signOutChatGpt: () => this.signOutChatGpt(),
+      signOutChatGpt: () =>
+        this.signOutSubscription('chatgpt', () =>
+          this.refreshAfterChatGptAuthChange(),
+        ),
       setChatGptPreferSubscription: (message) =>
-        this.setChatGptPreferSubscription(message.enabled),
+        this.setSubscriptionPreference('chatgpt', message.enabled, () =>
+          this.refreshAfterChatGptAuthChange(),
+        ),
     };
     this.grokHandlers = {
       signInGrok: () => this.signInGrok(),
-      signOutGrok: () => this.signOutGrok(),
+      signOutGrok: () =>
+        this.signOutSubscription('grok', () =>
+          this.refreshAfterGrokAuthChange(),
+        ),
       setGrokPreferSubscription: (message) =>
-        this.setGrokPreferSubscription(message.enabled),
+        this.setSubscriptionPreference('grok', message.enabled, () =>
+          this.refreshAfterGrokAuthChange(),
+        ),
     };
   }
 
@@ -246,68 +259,77 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.postProfileData();
   }
 
-  private async signInSubscription(options: {
-    displayName: string;
-    login: (
-      openBrowser: (url: string) => Promise<void>,
-    ) => Promise<{ email?: string }>;
-    accountLabel: (
-      session: { email?: string | null } | null | undefined,
-    ) => string;
-    enablePrefer: () => Promise<unknown>;
-    refresh: () => Promise<void>;
-  }): Promise<void> {
-    try {
-      const session = await options.login(async (url) => {
-        await this.options.externalOpener.openExternal(url);
+  /**
+   * Desktop presentation for a subscription sign-in. The loopback browser is
+   * the normal route; failing to reach one is reported as a transport
+   * failure so the shared flow can retry with a device code, which this host
+   * shows in its own dialog.
+   */
+  private signInPresenter(displayName: string): SubscriptionSignInPresenter {
+    return {
+      presentDeviceCode: (prompt) => {
+        // Informational only — awaiting would block the approval poll.
+        void Promise.resolve(
+          this.options.externalOpener.presentSubscriptionDeviceCode(
+            prompt,
+            displayName,
+          ),
+        ).catch(this.options.onError);
+      },
+      presentSignInUrl: async (url) => {
+        try {
+          await this.options.externalOpener.openExternal(url);
+        } catch (error) {
+          throw new LoopbackTransportUnavailableError(
+            `Could not open a browser for ${displayName} sign-in.`,
+            { cause: error },
+          );
+        }
         // Informational only — awaiting would block the OAuth callback.
         void Promise.resolve(
           this.options.externalOpener.presentSubscriptionSignInUrl(
             url,
-            options.displayName,
+            displayName,
           ),
         ).catch(this.options.onError);
+      },
+    };
+  }
+
+  private async signInSubscription(
+    providerId: SubscriptionProviderId,
+    refresh: () => Promise<void>,
+  ): Promise<void> {
+    const provider = subscriptionProvider(providerId);
+    try {
+      const account = await provider.signIn({
+        transport: 'auto',
+        present: this.signInPresenter(provider.displayName),
       });
-      await options.enablePrefer();
+      await provider.setPreferSubscription(true);
       await this.options.notifications.showInfoMessage(
-        `Signed in with ${options.displayName} as ${options.accountLabel(session)}.`,
+        `Signed in with ${provider.displayName} as ${account.label}.`,
       );
     } catch (error) {
       await this.options.notifications.showErrorMessage(
-        `${options.displayName} sign-in failed: ${toErrorMessage(error)}`,
+        `${provider.displayName} sign-in failed: ${toErrorMessage(error)}`,
       );
       this.options.onError(error);
     } finally {
-      await options.refresh();
+      await refresh();
     }
   }
 
   async signInChatGpt(): Promise<void> {
-    await this.signInSubscription({
-      displayName: 'ChatGPT',
-      login: (openBrowser) =>
-        loginWithCodexLoopback({
-          coordinator: codexCoordinator(),
-          openBrowser,
-        }),
-      accountLabel: codexAccountLabel,
-      enablePrefer: () => setPreferCodexSubscription(true),
-      refresh: () => this.refreshAfterChatGptAuthChange(),
-    });
+    await this.signInSubscription('chatgpt', () =>
+      this.refreshAfterChatGptAuthChange(),
+    );
   }
 
   async signInGrok(): Promise<void> {
-    await this.signInSubscription({
-      displayName: 'Grok',
-      login: (openBrowser) =>
-        loginWithGrokLoopback({
-          coordinator: xaiCoordinator(),
-          openBrowser,
-        }),
-      accountLabel: xaiAccountLabel,
-      enablePrefer: () => setPreferXaiSubscription(true),
-      refresh: () => this.refreshAfterGrokAuthChange(),
-    });
+    await this.signInSubscription('grok', () =>
+      this.refreshAfterGrokAuthChange(),
+    );
   }
 
   private async setProviderSetting(
@@ -391,81 +413,47 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.options.auth.signOut();
   }
 
-  private async signOutSubscription(options: {
-    displayName: string;
-    signOut: () => Promise<void>;
-    refresh: () => Promise<void>;
-  }): Promise<void> {
+  private async signOutSubscription(
+    providerId: SubscriptionProviderId,
+    refresh: () => Promise<void>,
+  ): Promise<void> {
+    const provider = subscriptionProvider(providerId);
     try {
-      await options.signOut();
+      await provider.signOut();
       await this.options.notifications.showInfoMessage(
-        `Signed out of ${options.displayName}.`,
+        `Signed out of ${provider.displayName}.`,
       );
     } catch (error) {
       await this.options.notifications.showErrorMessage(
-        `${options.displayName} sign-out failed: ${toErrorMessage(error)}`,
+        `${provider.displayName} sign-out failed: ${toErrorMessage(error)}`,
       );
       this.options.onError(error);
     } finally {
-      await options.refresh();
+      await refresh();
     }
   }
 
-  private async signOutChatGpt(): Promise<void> {
-    await this.signOutSubscription({
-      displayName: 'ChatGPT',
-      signOut: () => codexCoordinator().signOut(),
-      refresh: () => this.refreshAfterChatGptAuthChange(),
-    });
-  }
-
-  private async signOutGrok(): Promise<void> {
-    await this.signOutSubscription({
-      displayName: 'Grok',
-      signOut: () => xaiCoordinator().signOut(),
-      refresh: () => this.refreshAfterGrokAuthChange(),
-    });
-  }
-
-  private async setSubscriptionPreference(options: {
-    displayName: string;
-    enabled: boolean;
-    setPrefer: (enabled: boolean) => Promise<{ effective: boolean }>;
-    refresh: () => Promise<void>;
-  }): Promise<void> {
+  private async setSubscriptionPreference(
+    providerId: SubscriptionProviderId,
+    enabled: boolean,
+    refresh: () => Promise<void>,
+  ): Promise<void> {
+    const provider = subscriptionProvider(providerId);
     try {
-      const update = await options.setPrefer(options.enabled);
-      if (update.effective !== options.enabled) {
+      const update = await provider.setPreferSubscription(enabled);
+      if (update.effective !== enabled) {
         await this.options.notifications.showWarningMessage(
-          `A more specific setting still keeps ${options.displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+          `A more specific setting still keeps ${provider.displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
         );
       }
     } catch (error) {
       await this.options.notifications.showErrorMessage(
-        `${options.displayName} subscription preference update failed: ${toErrorMessage(error)}`,
+        `${provider.displayName} subscription preference update failed: ${toErrorMessage(error)}`,
       );
       this.options.onError(error);
     } finally {
-      await options.refresh();
+      await refresh();
     }
-  }
-
-  private async setChatGptPreferSubscription(enabled: boolean): Promise<void> {
-    await this.setSubscriptionPreference({
-      displayName: 'ChatGPT',
-      enabled,
-      setPrefer: setPreferCodexSubscription,
-      refresh: () => this.refreshAfterChatGptAuthChange(),
-    });
-  }
-
-  private async setGrokPreferSubscription(enabled: boolean): Promise<void> {
-    await this.setSubscriptionPreference({
-      displayName: 'Grok',
-      enabled,
-      setPrefer: setPreferXaiSubscription,
-      refresh: () => this.refreshAfterGrokAuthChange(),
-    });
   }
 
   async postProfileData(): Promise<void> {
