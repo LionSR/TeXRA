@@ -59,8 +59,9 @@ export function formatProgressStatusTemplate(
   row: ProgressStatusRow,
 ): FormatResult {
   const { level, id, groupId, timestamp } = row;
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
-    formatDisplayTimestamp(new Date(timestamp));
+  const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
+    new Date(timestamp),
+  );
 
   const summaryText = row.summary.full;
   const detailText = row.detail?.full ?? '';
@@ -70,7 +71,6 @@ export function formatProgressStatusTemplate(
   return html`<div
       data-log-id=${ifDefined(id)}
       data-group-id=${ifDefined(groupId)}
-      data-timestamp=${ifDefined(fullTimestamp)}
     ><div class="log-line"><span class="timestamp" title=${tooltipTimestamp}>${levelIcon} [${timeDisplay}]</span> <span class=${`message-${level}`}>${summaryText}</span></div>${when(
         detailText,
         () => html`<pre class=${`log-line message-${level}`}>${detailText}</pre>`,
@@ -83,8 +83,9 @@ export function formatProgressStatusTemplate(
  */
 export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const { id, groupId, timestamp } = row;
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
-    formatDisplayTimestamp(new Date(timestamp));
+  const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
+    new Date(timestamp),
+  );
 
   const summaryText = row.summary.full.trim() || 'Error occurred';
   const detailText = row.detailText.full;
@@ -115,7 +116,7 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
     'banner-details': true,
     'banner-details--error': true,
     'banner-details--no-toggle': !hasDetails,
-  })} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${summaryTemplate}${contentTemplate}</wa-details>`;
+  })} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${summaryTemplate}${contentTemplate}</wa-details>`;
 }
 
 /**
@@ -130,8 +131,9 @@ export function formatDefaultLogMessageTemplate(
   const { id, level, timestamp, groupId, verbose } = row;
   const text = row.kind === 'phase' ? row.heading : row.text.full;
   const levelIcon = buildLevelIcon(level);
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
-    formatDisplayTimestamp(new Date(timestamp));
+  const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
+    new Date(timestamp),
+  );
 
   const timestampContent = verbose
     ? html`${levelIcon} [${timeDisplay}]`
@@ -142,7 +144,6 @@ export function formatDefaultLogMessageTemplate(
       class="log-line"
       data-log-id=${id}
       data-group-id=${ifDefined(groupId)}
-      data-full-timestamp=${fullTimestamp}
     ><span class="timestamp" title=${tooltipTimestamp}>${timestampContent}</span>${when(
         verbose,
         () => html` <span class=${`level-${level}`}>${level.toUpperCase().padEnd(8)}</span>`,
