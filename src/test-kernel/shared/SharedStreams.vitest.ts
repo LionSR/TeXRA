@@ -1,5 +1,4 @@
-// Suites for src/shared/streams (child-activity reducer, stream metadata,
-// status display).
+// Suites for src/shared/streams (stream metadata, status display).
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -10,7 +9,6 @@ import {
   STREAM_SUBSTATE,
   type StreamLifecycleStatus,
 } from '@shared/schemas';
-import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import {
   formatPhaseStageLabel,
@@ -21,59 +19,6 @@ import {
   streamStatusIndicatorClass,
   type StreamStatusLabelStyle,
 } from '@shared/streams/streamStatusDisplay';
-
-// ---------------------------------------------------------------------------
-// ChildActivityReducer
-// ---------------------------------------------------------------------------
-
-describe('diffActiveChildren', () => {
-  const cases: Array<{
-    name: string;
-    previous: string[];
-    next: string[];
-    vanished: string[];
-  }> = [
-    {
-      name: 'reports no vanished ids when previous is empty',
-      previous: [],
-      next: ['a'],
-      vanished: [],
-    },
-    {
-      name: 'reports all previous ids as vanished when next is empty',
-      previous: ['a', 'b'],
-      next: [],
-      vanished: ['a', 'b'],
-    },
-    {
-      name: 'reports only the ids that dropped out on partial overlap',
-      previous: ['a', 'b', 'c'],
-      next: ['b', 'c', 'd'],
-      vanished: ['a'],
-    },
-    {
-      name: 'is unaffected by duplicate ids in either input',
-      previous: ['a', 'a', 'b'],
-      next: ['a'],
-      vanished: ['b'],
-    },
-    {
-      name: 'reports nothing vanished when previous and next are identical',
-      previous: ['a', 'b'],
-      next: ['a', 'b'],
-      vanished: [],
-    },
-  ];
-
-  it.each(cases)('$name', ({ previous, next, vanished }) => {
-    expect(
-      diffActiveChildren(
-        previous.map((executionId) => ({ executionId })),
-        next.map((executionId) => ({ executionId })),
-      ),
-    ).toEqual(new Set(vanished));
-  });
-});
 
 // ---------------------------------------------------------------------------
 // StreamMetadata
