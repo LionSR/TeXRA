@@ -23,7 +23,6 @@ import {
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
 import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
-import { appSignals } from '@eventBus/AppSignals';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import {
   isAgentCatalogAuthRefreshDeferred,
