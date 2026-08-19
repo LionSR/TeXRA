@@ -100,6 +100,7 @@ describe('StreamStatusMachine', () => {
     expect(machine.getAllStreamStates().get(streamId)).toEqual({
       phase: STREAM_PHASE.RUNNING,
       substate: STREAM_SUBSTATE.STARTING,
+      runStartedAt: expect.any(Number),
     });
     expect(machine.tryAcquire(streamId)).toBe(false);
 
@@ -133,6 +134,7 @@ describe('StreamStatusMachine', () => {
         phase: STREAM_PHASE.RUNNING,
         previousPhase: STREAM_PHASE.CANCELLED,
         cause: 'resume',
+        runStartedAt: expect.any(Number),
       },
       {
         streamId,
@@ -166,6 +168,7 @@ describe('StreamStatusMachine', () => {
         phase: STREAM_PHASE.RUNNING,
         previousPhase: STREAM_PHASE.WAITING,
         cause: 'resume',
+        runStartedAt: expect.any(Number),
       },
       {
         streamId,
@@ -197,6 +200,7 @@ describe('StreamStatusMachine', () => {
         type: 'status',
         phase: STREAM_PHASE.RUNNING,
         cause: 'lifecycle',
+        runStartedAt: expect.any(Number),
       },
       {
         streamId,
@@ -252,6 +256,7 @@ describe('StreamStatusMachine', () => {
         phase: STREAM_PHASE.RUNNING,
         previousPhase: STREAM_PHASE.RUNNING,
         cause: 'resume',
+        runStartedAt: expect.any(Number),
       },
     ]);
   });
@@ -311,6 +316,7 @@ describe('StreamStatusMachine', () => {
         phase: STREAM_PHASE.RUNNING,
         cause: 'lifecycle',
         substate: STREAM_SUBSTATE.STARTING,
+        runStartedAt: expect.any(Number),
       },
       {
         streamId,
@@ -383,12 +389,14 @@ describe('StreamStatusMachine', () => {
         previousPhase: STREAM_PHASE.WAITING,
         cause: 'resume',
         substate: STREAM_SUBSTATE.RESUMING,
+        runStartedAt: expect.any(Number),
       },
     ]);
     expect(Object.keys(payloads[0] ?? {}).toSorted()).toEqual([
       'cause',
       'phase',
       'previousPhase',
+      'runStartedAt',
       'streamId',
       'substate',
       'type',

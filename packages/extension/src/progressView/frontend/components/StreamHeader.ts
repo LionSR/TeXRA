@@ -38,7 +38,8 @@ import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-// Side-effect imports - register WA icon component
+// Side-effect imports - register WA icon component and <tool-timer>
+import '@progressView/frontend/components/ToolTimer';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
@@ -531,6 +532,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
           <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
             ${statusLabel}
           </wa-tooltip>
+          ${this.renderRunElapsed(state?.runStartedAt)}
           ${this.renderGoalChip(goalActive, goalStatus, goalObjective)}
           ${this.renderProgressBadge(progress, stage)}
         </div>
@@ -605,6 +607,22 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         ${waIcon('compass')} ${label}
       </wa-badge>
       <wa-tooltip for=${ELEMENT_IDS.GOAL_CHIP}>${tooltip}</wa-tooltip>`;
+  }
+
+  /**
+   * Live elapsed time for the run in progress. `runStartedAt` is stamped and
+   * cleared by the session status machine, so its mere presence is the "a run
+   * is active" signal — the header neither re-derives it from the phase nor
+   * keeps a clock of its own; `<tool-timer>` owns the tick.
+   */
+  private renderRunElapsed(
+    runStartedAt: number | undefined,
+  ): TemplateResult | typeof nothing {
+    if (runStartedAt === undefined) return nothing;
+    return html`<tool-timer
+      id=${ELEMENT_IDS.RUN_ELAPSED}
+      .startTime=${runStartedAt}
+    ></tool-timer>`;
   }
 
   private renderProgressBadge(
