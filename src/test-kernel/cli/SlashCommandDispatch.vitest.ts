@@ -23,6 +23,7 @@ import {
   registerSlashCommand,
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
+import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import {
   activeForm,
@@ -36,7 +37,6 @@ import {
   patchStream,
   streams,
   transientNotice,
-  type ConversationEntry,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
@@ -64,6 +64,7 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
@@ -167,15 +168,19 @@ function createContext(
 function lastEntryText(
   streamId: StreamTabId = CLI_LOCAL_STREAM_ID,
 ): string | undefined {
-  return streams.get().get(streamId)?.entries.at(-1)?.text;
+  const last = streams.get().get(streamId)?.entries.at(-1);
+  return last && transcriptRowHeadline(last);
 }
 
-function localEntries(): readonly ConversationEntry[] {
+function localEntries(): readonly TranscriptRow[] {
   return streams.get().get(CLI_LOCAL_STREAM_ID)?.entries ?? [];
 }
 
-function localEntryPairs(): Array<{ role: string; text: string }> {
-  return localEntries().map(({ role, text }) => ({ role, text }));
+function localEntryPairs(): Array<{ kind: string; text: string }> {
+  return localEntries().map((row) => ({
+    kind: row.kind,
+    text: transcriptRowHeadline(row),
+  }));
 }
 
 function transcriptJson(): string {
@@ -511,9 +516,9 @@ describe('handleTuiSlashCommand', () => {
     await handleTuiSlashCommand('/unavailable', createContext());
 
     expect(localEntryPairs()).toEqual([
-      { role: 'user', text: '/unavailable' },
+      { kind: 'user', text: '/unavailable' },
       {
-        role: 'assistant',
+        kind: 'assistant',
         text: '/unavailable is registered but is not available in this CLI view yet.',
       },
     ]);
@@ -535,7 +540,7 @@ describe('handleTuiSlashCommand', () => {
 
     form.props?.onPersist?.();
 
-    expect(localEntryPairs()).toEqual([{ role: 'user', text: '/custom-form' }]);
+    expect(localEntryPairs()).toEqual([{ kind: 'user', text: '/custom-form' }]);
   });
 
   it('opens /models as the enable/disable catalog (not the active-model picker)', async () => {

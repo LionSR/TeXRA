@@ -20,7 +20,6 @@ import {
   AgentCategory,
   type CompileFailure,
   LOG_LEVELS,
-  MESSAGE_TYPES,
   type OutputFileInfo,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
@@ -30,6 +29,7 @@ import {
 } from '@shared/schemas';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { loadInk } from '@test/support/inkTestHarness.ts';
+import { textRowFixture } from '@test/support/transcriptRowFixtures';
 
 /** Test-local full replay through the production reducer (the resync path). */
 function projectTaskGroupsFromStreamLog(
@@ -258,15 +258,9 @@ describe('selectWorkflowRunDetailLines', () => {
           status: STREAM_PHASE.RUNNING,
         },
       ],
-      entries: [
-        {
-          id: 'live',
-          role: 'assistant',
-          text: 'live workflow log',
-          messageType: MESSAGE_TYPES.DEFAULT,
-          finalized: false,
-        },
-      ],
+      // A live (not yet settled) log row: no settlement order, and the
+      // slice's `finalizedFrontier` still at 0.
+      entries: [textRowFixture('live', 'log', 'live workflow log')],
     }));
     setStreamStatusInCliState({
       streamId: STREAM_ID,

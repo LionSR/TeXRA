@@ -8,6 +8,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   releaseInactiveStreamTranscript,
   streamRenderCacheSizesForTest,
@@ -37,7 +38,7 @@ function streamEntryTexts(streamId: StreamTabId): string[] | undefined {
   return streams
     .get()
     .get(streamId)
-    ?.entries.map((e) => e.text);
+    ?.entries.map((row) => transcriptRowHeadline(row));
 }
 
 function appendUserMessage(

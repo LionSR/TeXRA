@@ -50,7 +50,6 @@ import {
   resetCliState,
   patchStream,
   streams,
-  type ConversationEntry,
   type StreamSlice,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
@@ -62,6 +61,10 @@ import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
+import {
+  isFinalizedTranscriptRow,
+  transcriptRowHeadline,
+} from '@cli/chat/tui/panes/transcriptEntries';
 import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
@@ -70,12 +73,22 @@ import {
   TOOL_USE_STATUS,
   type NormalizedToolUse,
   type RunOutcome,
+  type StreamPhase,
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import { COMPACTION_ACTIVITY_LABEL } from '@shared/streams/compactionActivityProjection';
+import {
+  transcriptText,
+  type ToolRow,
+  type TranscriptRow,
+} from '@shared/transcript';
+import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import { buildChildRosters } from '@test/support/childStreamEntries';
-import { toolConversationEntry } from '@test/support/transcriptRowFixtures';
+import {
+  compactionRowFixture,
+  textRowFixture,
+  toolRowFixture,
+} from '@test/support/transcriptRowFixtures';
 
 const STREAM_ID = 'cli-test-stream' as StreamTabId;
 const ROOT_STREAM = 'root-stream' as StreamTabId;
@@ -93,33 +106,36 @@ const SESSION_META = {
   version: '0.38.0',
 } as const;
 
+// A row the CLI treats as settled on arrival carries the recorder's durable
+// settlement order. Fixtures settle in the order they were built, so a row's
+// own wire position doubles as its settlement position.
+function settled<T extends TranscriptRow>(row: T): T {
+  return { ...row, settlementSeqNo: row.seqNo ?? 0 };
+}
+
+// Fixtures are built in the order they appear in the transcript, so a shared
+// counter gives every row a wire position and lets a settled row state a
+// settlement order that agrees with it.
+let fixtureSeq = 0;
+
 function entry(
   id: string,
-  role: 'assistant' | 'error' | 'user',
+  kind: 'assistant' | 'error' | 'user',
   text: string,
-  finalized: boolean,
-): ConversationEntry {
-  return { id, role, text, finalized };
+  isSettled: boolean,
+): TranscriptRow {
+  const seqNo = (fixtureSeq += 1);
+  const row = { ...textRowFixture(id, kind, text), seqNo };
+  // user/error rows settle on their own kind; only prose needs a settlement
+  // order to count as printable.
+  return isSettled && kind === 'assistant' ? settled(row) : row;
 }
 
 function compactionEntry(
   status: 'running' | 'interrupted' | 'completed',
   finalized = status === 'completed',
-): ConversationEntry {
-  return {
-    id: 'compaction:operation-1',
-    role: 'activity',
-    text: COMPACTION_ACTIVITY_LABEL[status],
-    finalized,
-    activity: {
-      operationId: 'operation-1',
-      status,
-      finalized,
-      startPosition: 1,
-      startedAt: 100,
-      ...(status !== 'running' ? { finishedAt: 200 } : {}),
-    },
-  };
+): TranscriptRow {
+  return compactionRowFixture(status, finalized);
 }
 
 function toolEntry(
@@ -127,24 +143,68 @@ function toolEntry(
   status: NormalizedToolUse['status'],
   outputText = status === 'completed' ? 'ok' : '',
   overrides: Partial<NormalizedToolUse> = {},
-): Extract<ConversationEntry, { role: 'tool' }> {
-  return toolConversationEntry(id, {
-    toolName: 'Bash',
-    outputText,
-    input: { command: 'ls' },
-    status,
-    ...overrides,
-  });
+): ToolRow {
+  return {
+    ...toolRowFixture(id, {
+      toolName: 'Bash',
+      outputText,
+      input: { command: 'ls' },
+      status,
+      ...overrides,
+    }),
+    seqNo: (fixtureSeq += 1),
+  };
 }
 
-function compactExecutionsEntry(
+function compactExecutionsEntry(id: string, path: string): ToolRow {
+  return toolRowFixture(id, { toolName: 'executions', input: { path } }, 0);
+}
+
+function phaseRow(
   id: string,
-  path: string,
-): Extract<ConversationEntry, { role: 'tool' }> {
-  return toolConversationEntry(
+  phaseLabel: string,
+  phaseIndex?: number,
+  phaseTotal?: number,
+): TranscriptRow {
+  return {
+    kind: 'phase',
     id,
-    { toolName: 'executions', input: { path } },
-    true,
+    timestamp: 0,
+    level: 'info',
+    heading: formatWorkflowPhaseHeading({ phaseLabel, phaseIndex, phaseTotal }),
+    phaseLabel,
+    ...(phaseIndex !== undefined ? { phaseIndex } : {}),
+    ...(phaseTotal !== undefined ? { phaseTotal } : {}),
+  };
+}
+
+function workflowTaskRow(
+  id: string,
+  call: WorkflowCallProgress,
+  line = 'Planned: Task',
+): TranscriptRow {
+  return {
+    kind: 'workflowTask',
+    id,
+    timestamp: 0,
+    level: 'info',
+    call,
+    line,
+    statusLabel: call.status,
+    metadataParts: [],
+  };
+}
+
+/** Split the rows a stream slice currently holds, at its own promotion cursor. */
+function splitSliceEntries(
+  streamId: StreamTabId,
+  status: StreamPhase | undefined,
+) {
+  const slice = streams.get().get(streamId);
+  return splitTranscriptEntries(
+    slice?.entries ?? [],
+    slice?.finalizedFrontier ?? 0,
+    status,
   );
 }
 
@@ -155,6 +215,7 @@ describe('CLI conversation transcript', () => {
 
     const running = splitTranscriptEntries(
       [user, assistant],
+      0,
       STREAM_PHASE.RUNNING,
     );
     expect(running.finalized).toEqual([user]);
@@ -162,6 +223,7 @@ describe('CLI conversation transcript', () => {
 
     const waitingBeforeFinalize = splitTranscriptEntries(
       [user, assistant],
+      0,
       STREAM_PHASE.WAITING,
     );
     expect(waitingBeforeFinalize.finalized).toEqual([user]);
@@ -178,6 +240,7 @@ describe('CLI conversation transcript', () => {
 
     const split = splitTranscriptEntries(
       [user, assistant, tool],
+      0,
       STREAM_PHASE.RUNNING,
     );
     expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
@@ -186,30 +249,17 @@ describe('CLI conversation transcript', () => {
 
   it('keeps finalized rows behind unfinished tool and workflow rows live', () => {
     const tool = toolEntry('t1', 'in_progress');
-    const toolPhase: ConversationEntry = {
-      id: 'p1',
-      role: 'phase',
-      text: 'After tool',
-      finalized: true,
-      phaseLabel: 'After tool',
-    };
-    const workflowTask: ConversationEntry = {
+    const toolPhase = phaseRow('p1', 'After tool');
+    const workflowTask = workflowTaskRow('w1', {
       id: 'w1',
-      role: 'workflowTask',
-      text: 'Planned: Task',
-      finalized: false,
-      task: { id: 'w1', label: 'Task', status: 'planned' },
-    };
-    const workflowPhase: ConversationEntry = {
-      id: 'p2',
-      role: 'phase',
-      text: 'After workflow task',
-      finalized: true,
-      phaseLabel: 'After workflow task',
-    };
+      label: 'Task',
+      status: 'planned',
+    });
+    const workflowPhase = phaseRow('p2', 'After workflow task');
 
     const toolSplit = splitTranscriptEntries(
       [tool, toolPhase],
+      0,
       STREAM_PHASE.RUNNING,
     );
     expect(toolSplit.finalized).toEqual([]);
@@ -217,6 +267,7 @@ describe('CLI conversation transcript', () => {
 
     const workflowSplit = splitTranscriptEntries(
       [workflowTask, workflowPhase],
+      0,
       STREAM_PHASE.RUNNING,
     );
     expect(workflowSplit.finalized).toEqual([]);
@@ -226,13 +277,13 @@ describe('CLI conversation transcript', () => {
   it('keeps running compaction live and promotes its terminal update once', () => {
     const running = compactionEntry('running');
     expect(
-      splitTranscriptEntries([running], STREAM_PHASE.RUNNING).pending,
+      splitTranscriptEntries([running], 0, STREAM_PHASE.RUNNING).pending,
     ).toEqual([running]);
     expect(staticItemIds([running])).toEqual(['session-header']);
 
     const completed = compactionEntry('completed');
     expect(
-      splitTranscriptEntries([completed], STREAM_PHASE.RUNNING).finalized,
+      splitTranscriptEntries([completed], 0, STREAM_PHASE.RUNNING).finalized,
     ).toEqual([completed]);
     expect(staticItemIds([completed])).toEqual([
       'session-header',
@@ -252,7 +303,7 @@ describe('CLI conversation transcript', () => {
 
     expect(liveItems.map((item) => item.id)).toEqual(['session-header']);
     expect(
-      splitTranscriptEntries([interrupted, laterUser], STREAM_PHASE.RUNNING)
+      splitTranscriptEntries([interrupted, laterUser], 0, STREAM_PHASE.RUNNING)
         .pending,
     ).toEqual([interrupted, laterUser]);
 
@@ -271,7 +322,7 @@ describe('CLI conversation transcript', () => {
       width: 8,
     });
 
-    expect(layout.role).toBe('activity');
+    expect(layout.kind).toBe('compactionActivity');
     expect(layout.lines.length).toBeGreaterThan(1);
     expect(layout.lines.every((line) => textDisplayWidth(line) <= 8)).toBe(
       true,
@@ -290,12 +341,8 @@ describe('CLI conversation transcript', () => {
 
     syncStreamLog(STREAM_ID, { forceFinal: true });
 
-    const slice = streams.get().get(STREAM_ID);
-    expect(slice?.entries.map((item) => item.finalized)).toEqual([true, true]);
-    const split = splitTranscriptEntries(
-      slice?.entries ?? [],
-      STREAM_PHASE.WAITING,
-    );
+    expect(streams.get().get(STREAM_ID)?.finalizedFrontier).toBe(2);
+    const split = splitSliceEntries(STREAM_ID, STREAM_PHASE.WAITING);
     expect(split.finalized.map((item) => item.id)).toEqual(['u1', 'a1']);
     expect(split.pending).toEqual([]);
   });
@@ -331,15 +378,9 @@ describe('CLI conversation transcript', () => {
       try {
         defaultSession().status.transition(streamId, outcome, 'restart-repair');
 
-        expect(
-          streams
-            .get()
-            .get(streamId)
-            ?.entries.map((item) => ({
-              id: item.id,
-              finalized: item.finalized,
-            })),
-        ).toEqual([{ id: 'a1', finalized: true }]);
+        const slice = streams.get().get(streamId);
+        expect(slice?.entries.map((item) => item.id)).toEqual(['a1']);
+        expect(slice?.finalizedFrontier).toBe(1);
       } finally {
         dispose();
         defaultSession().status.clearStream(streamId);
@@ -384,6 +425,7 @@ describe('CLI conversation transcript', () => {
 
     const split = splitTranscriptEntries(
       [user, assistant, tool],
+      0,
       STREAM_PHASE.RUNNING,
     );
 
@@ -406,19 +448,13 @@ describe('CLI conversation transcript', () => {
       ],
     }));
 
-    let split = splitTranscriptEntries(
-      streams.get().get(streamId)?.entries ?? [],
-      STREAM_PHASE.RUNNING,
-    );
+    let split = splitSliceEntries(streamId, STREAM_PHASE.RUNNING);
     expect(split.finalized).toHaveLength(0);
     expect(split.pending.map((e) => e.id)).toEqual(['a1', 't1']);
 
     syncStreamLog(streamId, { forceFinal: true });
 
-    split = splitTranscriptEntries(
-      streams.get().get(streamId)?.entries ?? [],
-      STREAM_PHASE.WAITING,
-    );
+    split = splitSliceEntries(streamId, STREAM_PHASE.WAITING);
     expect(split.finalized.map((e) => e.id)).toEqual(['a1', 't1']);
     expect(split.pending).toHaveLength(0);
   });
@@ -444,10 +480,9 @@ describe('CLI conversation transcript', () => {
       ...base.toolUse,
       toolName: {} as string,
     } as NormalizedToolUse;
-    const malformedEntry: ConversationEntry = {
+    const malformedEntry: ToolRow = {
       ...base,
       toolUse: malformedTool,
-      row: { ...base.row, toolUse: malformedTool },
     };
 
     expect(estimateTranscriptEntryRows(malformedEntry, 80)).toBe(1);
@@ -477,12 +512,13 @@ describe('CLI conversation transcript', () => {
       '\n',
     );
 
-    const assistant = (finalized: boolean): ConversationEntry => ({
-      finalized,
-      id: finalized ? 'finalized' : 'streaming',
-      role: 'assistant',
-      text,
-    });
+    const assistant = (isSettled: boolean): TranscriptRow =>
+      entry(
+        isSettled ? 'finalized' : 'streaming',
+        'assistant',
+        text,
+        isSettled,
+      );
     const finalizedTail = boundedTranscriptEntryLayout(
       transcriptEntryLayout(assistant(true), {
         colorEnabled: false,
@@ -584,17 +620,10 @@ describe('CLI conversation transcript', () => {
       { id: 'a', label: 'Task', status: 'failed', error: 'Runner stopped.' },
     ];
     const firstLines = calls.map(
-      (task) =>
-        transcriptEntryLayout(
-          {
-            id: 'a',
-            role: 'workflowTask',
-            text: 'Task',
-            finalized: true,
-            task,
-          },
-          { width: 80 },
-        ).lines[0] ?? '',
+      (call) =>
+        transcriptEntryLayout(workflowTaskRow('a', call, 'Task'), {
+          width: 80,
+        }).lines[0] ?? '',
     );
 
     // Every call row nests two columns under the `◆` phase divider heading it.
@@ -611,13 +640,11 @@ describe('CLI conversation transcript', () => {
 
   it('aligns a wrapped call row under its own marker', () => {
     const layout = transcriptEntryLayout(
-      {
-        id: 'a',
-        role: 'workflowTask',
-        text: `Finished: ${'w'.repeat(40)} ${'x'.repeat(40)}`,
-        finalized: true,
-        task: { id: 'a', label: 'Task', status: 'completed', durationMs: 1 },
-      },
+      workflowTaskRow(
+        'a',
+        { id: 'a', label: 'Task', status: 'completed', durationMs: 1 },
+        `Finished: ${'w'.repeat(40)} ${'x'.repeat(40)}`,
+      ),
       { width: 40 },
     );
 
@@ -629,12 +656,9 @@ describe('CLI conversation transcript', () => {
   });
 
   it('budgets live rich tool rows without reflowing their display lines', () => {
-    const tool: ConversationEntry = toolEntry(
-      't1',
-      TOOL_USE_STATUS.COMPLETED,
-      'ok',
-      { input: { command: 'x'.repeat(80) } },
-    );
+    const tool = toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'ok', {
+      input: { command: 'x'.repeat(80) },
+    });
     const liveLayout = transcriptEntryLayout(tool, {
       mode: 'live',
       width: 20,
@@ -673,6 +697,7 @@ describe('CLI conversation transcript', () => {
 
     const split = splitTranscriptEntries(
       [user, emptyAssistant, tool],
+      0,
       STREAM_PHASE.RUNNING,
     );
     expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
@@ -687,11 +712,7 @@ describe('CLI conversation transcript', () => {
     ).toEqual(['t1']);
 
     expect(
-      staticItemIds([
-        user,
-        { ...emptyAssistant, finalized: true },
-        { ...tool, finalized: true },
-      ]),
+      staticItemIds([user, settled(emptyAssistant), settled(tool)]),
     ).toEqual(['session-header', 'u1', 't1']);
 
     expect(
@@ -713,7 +734,7 @@ describe('CLI conversation transcript', () => {
       ],
     ]);
 
-    const split = splitTranscriptEntries([user], STREAM_PHASE.RUNNING);
+    const split = splitTranscriptEntries([user], 0, STREAM_PHASE.RUNNING);
     expect(split.finalized).toEqual([]);
     expect(split.pending.map((item) => item.id)).toEqual(['u1']);
 
@@ -738,7 +759,7 @@ describe('CLI conversation transcript', () => {
       ],
     ]);
 
-    const split = splitTranscriptEntries([user, tool], STREAM_PHASE.RUNNING);
+    const split = splitTranscriptEntries([user, tool], 0, STREAM_PHASE.RUNNING);
     expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
     expect(split.pending.map((item) => item.id)).toEqual(['t1']);
 
@@ -763,6 +784,7 @@ describe('CLI conversation transcript', () => {
 
     const split = splitTranscriptEntries(
       [continuation, assistant],
+      0,
       STREAM_PHASE.RUNNING,
     );
     expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
@@ -779,8 +801,9 @@ describe('CLI conversation transcript', () => {
     );
     const tool = toolEntry('t1', 'in_progress');
 
-    expect(terminalVisibleTranscriptText(invisibleAssistant.text)).toBe('\n\n');
-    expect(trimAssistantTranscriptLead(invisibleAssistant.text)).toBe('');
+    const invisibleText = transcriptRowHeadline(invisibleAssistant);
+    expect(terminalVisibleTranscriptText(invisibleText)).toBe('');
+    expect(trimAssistantTranscriptLead(invisibleText)).toBe('');
     expect(trimAssistantTranscriptLead('\u001B[2m\u200B\nvisible')).toBe(
       '\u001B[2mvisible',
     );
@@ -790,6 +813,7 @@ describe('CLI conversation transcript', () => {
     expect(
       splitTranscriptEntries(
         [user, invisibleAssistant, tool],
+        0,
         STREAM_PHASE.RUNNING,
       ).pending.map((item) => item.id),
     ).toEqual(['t1']);
@@ -826,7 +850,7 @@ describe('CLI conversation transcript', () => {
     expect(first[0]?.kind).toBe('header');
     expect(first.slice(1).map((item) => item.id)).toEqual(['u1']);
 
-    const second = staticItems([user, { ...assistant, finalized: true }], {
+    const second = staticItems([user, settled(assistant)], {
       currentItems: first,
     });
     expect(second).toHaveLength(3);
@@ -887,8 +911,8 @@ describe('CLI conversation transcript', () => {
         TOOL_USE_STATUS.COMPLETED,
         Array.from({ length: 20 }, (_, index) => `line ${index}`).join('\n'),
       ),
-      finalized: true,
-    } satisfies ConversationEntry;
+      settlementSeqNo: 0,
+    } satisfies ToolRow;
     const renderedRows = transcriptEntryLayoutRows(
       transcriptEntryLayout(tool, { mode: 'scrollback', width: 80 }),
     );
@@ -1130,10 +1154,9 @@ describe('CLI conversation transcript', () => {
     const user = entry('u1', 'user', 'go', true);
     const assistant = entry('a1', 'assistant', 'working', false);
     const tool = {
-      ...toolEntry('t1', TOOL_USE_STATUS.COMPLETED),
-      finalized: true,
+      ...settled(toolEntry('t1', TOOL_USE_STATUS.COMPLETED)),
     };
-    const settledAssistant = { ...assistant, finalized: true };
+    const settledAssistant = settled(assistant);
     const emptyCursor = {
       entriesRef: undefined,
       scannedIndex: 0,
@@ -1144,12 +1167,14 @@ describe('CLI conversation transcript', () => {
     expect(
       orderedStaticTranscriptEntries(
         [user, assistant, tool],
+        0,
         STREAM_PHASE.RUNNING,
       ).map((item) => item.id),
     ).toEqual(['u1']);
 
     const first = incrementalStaticTranscriptEntries(
       [user, assistant, tool],
+      0,
       STREAM_PHASE.RUNNING,
       emptyCursor,
     );
@@ -1158,6 +1183,7 @@ describe('CLI conversation transcript', () => {
 
     const second = incrementalStaticTranscriptEntries(
       [user, settledAssistant, tool],
+      0,
       STREAM_PHASE.RUNNING,
       first.cursor,
     );
@@ -1582,7 +1608,7 @@ describe('CLI conversation transcript', () => {
   it('appends settled entries incrementally and resumes a deferred live prompt', () => {
     const user = entry('u1', 'user', 'what is this repo about', true);
     const assistantPending = entry('a1', 'assistant', 'working', false);
-    const assistantSettled = { ...assistantPending, finalized: true };
+    const assistantSettled = settled(assistantPending);
     const emptyCursor = {
       entriesRef: undefined,
       scannedIndex: 0,
@@ -1592,6 +1618,7 @@ describe('CLI conversation transcript', () => {
 
     const first = incrementalStaticTranscriptEntries(
       [user],
+      0,
       STREAM_PHASE.RUNNING,
       emptyCursor,
     );
@@ -1600,6 +1627,7 @@ describe('CLI conversation transcript', () => {
 
     const second = incrementalStaticTranscriptEntries(
       [user, assistantPending],
+      0,
       STREAM_PHASE.RUNNING,
       first.cursor,
     );
@@ -1608,6 +1636,7 @@ describe('CLI conversation transcript', () => {
 
     const third = incrementalStaticTranscriptEntries(
       [user, assistantSettled],
+      0,
       STREAM_PHASE.RUNNING,
       second.cursor,
     );
@@ -1699,17 +1728,7 @@ describe('CLI conversation transcript', () => {
         [ROOT_STREAM, sliceWithEntries(ROOT_STREAM, [])],
         [
           WORKFLOW,
-          sliceWithEntries(WORKFLOW, [
-            {
-              id: 'phase-1',
-              role: 'phase',
-              text: 'Survey',
-              finalized: true,
-              phaseLabel: 'Survey',
-              phaseIndex: 0,
-              phaseTotal: 1,
-            },
-          ]),
+          sliceWithEntries(WORKFLOW, [phaseRow('phase-1', 'Survey', 0, 1)]),
         ],
         [TASK, sliceWithEntries(TASK, [entry('a1', 'assistant', 'ok', true)])],
       ]);
@@ -2069,7 +2088,7 @@ describe('CLI conversation transcript', () => {
 
 function sliceWithEntries(
   streamId: StreamTabId,
-  entries: readonly ConversationEntry[],
+  entries: readonly TranscriptRow[],
   init: Partial<StreamSlice> = {},
 ): StreamSlice {
   return { ...emptySlice(streamId), entries, ...init };
@@ -2108,7 +2127,7 @@ function rootChildStreams(
 
 /** Static scrollback for a single-stream transcript of `entries`. */
 function staticItems(
-  entries: readonly ConversationEntry[],
+  entries: readonly TranscriptRow[],
   options: {
     readonly currentItems?: readonly StaticTranscriptItem[];
     readonly maxRows?: number;
@@ -2126,7 +2145,7 @@ function staticItems(
 }
 
 function staticItemIds(
-  entries: readonly ConversationEntry[],
+  entries: readonly TranscriptRow[],
   options: Parameters<typeof staticItems>[1] = {},
 ): readonly string[] {
   return staticItems(entries, options).map((item) => item.id);

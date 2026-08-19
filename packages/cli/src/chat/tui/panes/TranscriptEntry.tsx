@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { Box, Text } from 'ink';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { fillRows } from '@cli/runtime/terminalText';
+import type { TranscriptRow } from '@shared/transcript';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 // Local imports - CLI TUI rendering
@@ -20,8 +21,10 @@ import {
   transcriptEntryLayout,
   type TranscriptEntryLayout,
 } from './transcriptEntryLayout';
-import { isInquiryContinuationText } from './transcriptEntries';
-import type { ConversationEntry } from '../state/cliState';
+import {
+  isInquiryContinuationText,
+  transcriptRowHeadline,
+} from './transcriptEntries';
 
 function PlainEntryRows({
   colorEnabled,
@@ -30,17 +33,17 @@ function PlainEntryRows({
   layout,
 }: {
   readonly colorEnabled?: boolean;
-  readonly entry: ConversationEntry;
+  readonly entry: TranscriptRow;
   readonly fillWidth?: boolean;
   readonly layout: TranscriptEntryLayout;
 }): React.JSX.Element {
   const isInquiryContinuation =
-    entry.role === 'user' && isInquiryContinuationText(entry.text);
+    entry.kind === 'user' && isInquiryContinuationText(entry.summary.full);
   // User turns are full-width inverse bands in both static and live panes.
   // Inquiry continuations remain ordinary prefixed rows and only fill when
   // their bounded caller requests it.
   const shouldFill =
-    fillWidth === true || (entry.role === 'user' && !isInquiryContinuation);
+    fillWidth === true || (entry.kind === 'user' && !isInquiryContinuation);
   const lines = shouldFill
     ? fillRows(layout.lines.join('\n'), layout.columns).split('\n')
     : layout.lines;
@@ -73,19 +76,19 @@ function PlainEntryRows({
   // Workflow-call rows carry the same status color as their layout marker, so
   // the six statuses stay distinguishable at a glance.
   let rowColor: string | undefined;
-  if (entry.role === 'error') {
+  if (entry.kind === 'error') {
     rowColor = COLOR_ERROR;
-  } else if (entry.role === 'activity' && colorEnabled !== false) {
-    rowColor = COMPACTION_ACTIVITY_STATUS_STYLE[entry.activity.status].color;
-  } else if (entry.role === 'workflowTask' && colorEnabled !== false) {
-    rowColor = WORKFLOW_TASK_STATUS_STYLE[entry.task.status].color;
+  } else if (entry.kind === 'compactionActivity' && colorEnabled !== false) {
+    rowColor = COMPACTION_ACTIVITY_STATUS_STYLE[entry.block.status].color;
+  } else if (entry.kind === 'workflowTask' && colorEnabled !== false) {
+    rowColor = WORKFLOW_TASK_STATUS_STYLE[entry.call.status].color;
   }
 
   return (
     <Box {...boxProps}>
       <Text
         color={rowColor}
-        inverse={entry.role === 'user' && colorEnabled !== false}
+        inverse={entry.kind === 'user' && colorEnabled !== false}
       >
         {lines.join('\n')}
       </Text>
@@ -103,20 +106,20 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   fillWidth,
   subagentExecutionLabels,
 }: {
-  readonly entry: ConversationEntry;
-  /** The entry printed directly above this one, so its bottom separator can
-   *  absorb this entry's top one. Yoga does not collapse margins. */
-  readonly previousEntry?: ConversationEntry;
+  readonly entry: TranscriptRow;
+  /** The row printed directly above this one, so its bottom separator can
+   *  absorb this row's top one. Yoga does not collapse margins. */
+  readonly previousEntry?: TranscriptRow;
   readonly width?: number;
   readonly colorEnabled?: boolean;
   readonly fillWidth?: boolean;
   readonly subagentExecutionLabels?: ExecutionLabels;
 }): React.JSX.Element {
-  if (entry.role === 'tool') {
+  if (entry.kind === 'tool') {
     return (
       <ToolUseRow
         subagentExecutionLabels={subagentExecutionLabels}
-        toolRow={entry.row}
+        toolRow={entry}
         width={width}
       />
     );
@@ -129,7 +132,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
     width,
   });
 
-  switch (entry.role) {
+  switch (entry.kind) {
     case 'phase':
       // A bold, colored divider that separates a workflow-script run's phases
       // from the per-agent rows beneath. Stateless props-in → JSX-out.
@@ -144,20 +147,20 @@ export const TranscriptEntry = memo(function TranscriptEntry({
         </Box>
       );
     case 'assistant':
+    case 'log':
       return (
         <Box
           marginBottom={layout.marginBottomRows}
           marginTop={layout.marginTopRows}
         >
           <Markdown
-            content={entry.text}
+            content={transcriptRowHeadline(entry)}
             width={layout.columns}
             colorEnabled={colorEnabled}
             fillWidth={fillWidth}
           />
         </Box>
       );
-    case 'workflowTask':
     default:
       return (
         <PlainEntryRows
@@ -178,17 +181,17 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
   width,
 }: {
   readonly colorEnabled?: boolean;
-  readonly entry: ConversationEntry;
+  readonly entry: TranscriptRow;
   readonly maxRows: number;
   readonly subagentExecutionLabels?: ExecutionLabels;
   readonly width?: number;
 }): React.JSX.Element {
-  if (entry.role === 'tool') {
+  if (entry.kind === 'tool') {
     return (
       <ToolUseRow
         maxRows={maxRows}
         subagentExecutionLabels={subagentExecutionLabels}
-        toolRow={entry.row}
+        toolRow={entry}
         width={width}
       />
     );
@@ -217,7 +220,7 @@ export const LiveTranscriptEntry = memo(function LiveTranscriptEntry({
   entry,
   width,
 }: {
-  readonly entry: ConversationEntry;
+  readonly entry: TranscriptRow;
   readonly width?: number;
 }): React.JSX.Element {
   const layout = boundedTranscriptEntryLayout(

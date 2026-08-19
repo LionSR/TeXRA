@@ -32,7 +32,6 @@ import {
   activeStreamId,
   emptySlice,
   streams as streamsSignal,
-  type ConversationEntry,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
 import {
@@ -53,14 +52,17 @@ import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
   STREAM_PHASE,
+  WORKFLOW_TASK_STATUS_LABEL,
   type StreamStage,
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
+import type { TranscriptRowOf } from '@shared/transcript';
+import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import { buildChildRosters } from '@test/support/childStreamEntries';
 import {
-  fileListConversationEntry,
-  toolConversationEntry,
+  fileListRowFixture,
+  toolRowFixture,
 } from '@test/support/transcriptRowFixtures';
 import {
   loadInk,
@@ -130,29 +132,41 @@ function phaseEntry(
   id: string,
   label: string,
   overrides: {
-    readonly finalized?: boolean;
     readonly phaseIndex?: number;
     readonly phaseTotal?: number;
     readonly attemptId?: string;
   } = {},
-): ConversationEntry {
+): TranscriptRowOf<'phase'> {
   return {
     id,
-    role: 'phase',
-    text: label,
-    finalized: true,
+    kind: 'phase',
+    timestamp: 0,
+    level: 'info',
+    heading: formatWorkflowPhaseHeading({ phaseLabel: label, ...overrides }),
     phaseLabel: label,
     ...overrides,
   };
 }
 
+/** `settlementSeqNo` is the durable printable order the recorder assigns; a
+ *  task row that has one is settled on arrival. */
 function workflowTaskEntry(
   id: string,
-  text: string,
-  task: WorkflowCallProgress,
-  finalized = false,
-): ConversationEntry {
-  return { id, role: 'workflowTask', text, finalized, task };
+  line: string,
+  call: WorkflowCallProgress,
+  settlementSeqNo?: number,
+): TranscriptRowOf<'workflowTask'> {
+  return {
+    id,
+    kind: 'workflowTask',
+    timestamp: 0,
+    level: 'info',
+    ...(settlementSeqNo !== undefined ? { settlementSeqNo } : {}),
+    call,
+    line,
+    statusLabel: WORKFLOW_TASK_STATUS_LABEL[call.status],
+    metadataParts: [],
+  };
 }
 
 async function renderSubagentList(
@@ -189,9 +203,9 @@ describe('CLI child list display model', () => {
     );
     const root = workflowAgentSlice('budget-root', {
       entries: [
-        phaseEntry('phase-a', 'A', { finalized: false }),
+        phaseEntry('phase-a', 'A'),
         ...tasks.slice(0, 2),
-        phaseEntry('phase-b', 'B', { finalized: false }),
+        phaseEntry('phase-b', 'B'),
         ...tasks.slice(2),
       ],
     });
@@ -268,7 +282,7 @@ describe('CLI child list display model', () => {
             status: 'completed',
             durationMs: 1_000,
           },
-          true,
+          1,
         ),
         workflowTaskEntry('task-b', 'Running: Read the contracts', {
           id: 'contracts',
@@ -313,7 +327,7 @@ describe('CLI child list display model', () => {
             status: 'completed',
             durationMs: 1_000,
           },
-          true,
+          1,
         ),
         workflowTaskEntry('task-bad', 'Failed: Read the contracts', {
           id: 'contracts',
@@ -497,7 +511,7 @@ describe('CLI child list display model', () => {
             status: 'completed',
             durationMs: 1_000,
           },
-          true,
+          1,
         ),
       ],
     });
@@ -531,7 +545,7 @@ describe('CLI child list display model', () => {
             status: 'completed',
             durationMs: 1_000,
           },
-          true,
+          1,
         ),
       ],
     });
@@ -549,7 +563,7 @@ describe('CLI child list display model', () => {
     const slice = workflowAgentSlice(streamId, {
       status: STREAM_PHASE.RUNNING,
       entries: [
-        toolConversationEntry('live-tool', {
+        toolRowFixture('live-tool', {
           toolName: 'write_file',
           input: { path: 'paper.tex' },
           headerSummary: 'Drafting paper.tex',
@@ -576,7 +590,7 @@ describe('CLI child list display model', () => {
   it.each([
     {
       activityLabel: 'live tool activity',
-      activity: toolConversationEntry('live-tool', {
+      activity: toolRowFixture('live-tool', {
         toolName: 'write_file',
         input: { path: 'paper.tex' },
         headerSummary: 'Drafting',
@@ -586,7 +600,7 @@ describe('CLI child list display model', () => {
     },
     {
       activityLabel: 'failed tool activity',
-      activity: toolConversationEntry('live-error', {
+      activity: toolRowFixture('live-error', {
         toolName: 'write_file',
         input: { path: 'paper.tex' },
         errorText: 'Failed',
@@ -639,13 +653,13 @@ describe('CLI child list display model', () => {
       ...emptySlice(streamId),
       status: STREAM_PHASE.RUNNING,
       entries: [
-        toolConversationEntry('blocking-tool', {
+        toolRowFixture('blocking-tool', {
           toolName: 'write_file',
           input: { path: 'paper.tex' },
           headerSummary: 'Drafting paper.tex',
           status: 'in_progress',
         }),
-        fileListConversationEntry('held-media', [
+        fileListRowFixture('held-media', [
           {
             path: '/tmp/held-plot.png',
             ok: true,
@@ -677,7 +691,7 @@ describe('CLI child list display model', () => {
       ...emptySlice(streamId),
       status: STREAM_PHASE.RUNNING,
       entries: [
-        toolConversationEntry('blocking-tool', {
+        toolRowFixture('blocking-tool', {
           toolName: 'write_file',
           input: { path: 'paper.tex' },
           headerSummary: 'Drafting paper.tex',
@@ -1102,7 +1116,7 @@ describe('CLI child list display model', () => {
             durationMs: 2_000,
             totalCostUsd: 0.125,
           },
-          true,
+          1,
         ),
         workflowTaskEntry(
           'task-cached',
@@ -1113,7 +1127,7 @@ describe('CLI child list display model', () => {
             phase: 'Write',
             status: 'cached',
           },
-          true,
+          1,
         ),
       ],
     });
@@ -1255,7 +1269,7 @@ describe('CLI child list display model', () => {
             durationMs: 1_000,
             totalCostUsd: 0.5,
           },
-          true,
+          1,
         ),
         workflowTaskEntry(
           'task-labelled',
@@ -1266,7 +1280,7 @@ describe('CLI child list display model', () => {
             status: 'completed',
             model: 'deepseekT',
           },
-          true,
+          1,
         ),
         workflowTaskEntry('task-missing', 'Running: Missing', {
           id: 'missing',
@@ -1283,7 +1297,7 @@ describe('CLI child list display model', () => {
             status: 'completed',
             childStreamId: fallback,
           },
-          true,
+          1,
         ),
       ],
     });

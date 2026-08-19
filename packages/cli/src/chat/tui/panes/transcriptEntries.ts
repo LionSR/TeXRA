@@ -1,10 +1,13 @@
 import stripAnsi from 'strip-ansi';
 
 import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
+import { safeTerminalText } from '@cli/runtime/terminalText';
+import { redactSecrets } from '@logger/redaction';
 import { type StreamPhase } from '@shared/schemas';
+import type { TranscriptRow, TranscriptRowKind } from '@shared/transcript';
 import { isActivePhase } from '@shared/streams/streamStatus';
 
-import type { ConversationEntry } from '../state/cliState';
+import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 
 const INQUIRY_CONTINUATION_RE =
   /^\[inquiry\]\s+\S+\s+(?:answered|dropped by user)\.(?:\n|$)/;
@@ -62,40 +65,172 @@ export function trimAssistantTranscriptLead(text: string): string {
     : tail;
 }
 
-export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
-  switch (entry.role) {
-    case 'activity':
+/**
+ * The headline a row leads with: the one line its terminal paint starts from.
+ * Body lines come from the row itself (`transcriptRowBodyLines`) at the
+ * painter's own width — nothing is cut here.
+ *
+ * Memoized on the row object, which the fold replaces (never mutates) when its
+ * content changes, so a hit is always current and a dropped row takes its
+ * cache slot with it. Without the memo the renderable/split/scan walks would
+ * re-run the markdown normalize and redaction passes for every row on every
+ * frame.
+ */
+const HEADLINE_CACHE = new WeakMap<TranscriptRow, string>();
+
+export function transcriptRowHeadline(row: TranscriptRow): string {
+  const cached = HEADLINE_CACHE.get(row);
+  if (cached !== undefined) return cached;
+  const headline = deriveTranscriptRowHeadline(row);
+  HEADLINE_CACHE.set(row, headline);
+  return headline;
+}
+
+function deriveTranscriptRowHeadline(row: TranscriptRow): string {
+  switch (row.kind) {
     case 'assistant':
-    case 'error':
+      return normalizeKnownHtmlForCliMarkdown(
+        trimAssistantTranscriptLead(row.text.full),
+      );
+    case 'log':
+      return redactSecrets(
+        safeTerminalText(
+          normalizeKnownHtmlForCliMarkdown(
+            trimAssistantTranscriptLead(row.text.full),
+          ),
+        ),
+      );
+    // Detail rows lead with a bare noun; their `●` marker is layout geometry
+    // (ROW_GEOMETRY), not part of the text.
+    case 'thinking':
+      return 'Thinking';
+    case 'scratchpad':
+      return 'Scratchpad';
     case 'user':
-    case 'phase':
-    case 'workflowTask':
-      return terminalVisibleTranscriptText(entry.text).trim().length > 0;
-    // An attachment load and a compact detail row are rows because the
-    // projector said so; the terminal never re-decides membership. A file list
-    // whose entries all failed to load is exactly the case a reader must see.
-    case 'detail':
-    case 'media':
+      return row.summary.full;
+    case 'error':
+      return redactSecrets(safeTerminalText(row.summary.full));
     case 'tool':
-      return true;
+      return '';
+    case 'webSearch':
+    case 'webFetch':
+      return row.label;
+    case 'fileList':
+    case 'missingOutputs':
+      return row.summary;
+    case 'latexdiff':
+      return `Latexdiff results (${row.entries.length})`;
+    case 'statistics':
+      return 'Usage';
+    case 'contextManagement':
+    case 'compactionActivity':
+      return row.label;
+    case 'progressStatus':
+      return safeTerminalText(row.summary.full);
+    case 'workflowTask':
+      return row.line;
+    case 'phase':
+      return row.heading;
+    case 'contextState':
+      return '';
   }
+}
+
+/**
+ * Row kinds the terminal paints as a typed widget rather than as a headline,
+ * so an empty headline is not an empty row: an attachment load and a compact
+ * detail row are rows because the projector said so, and the terminal never
+ * re-decides membership (a file list whose entries all failed to load is
+ * exactly the case a reader must see). Exhaustive by construction, so a new
+ * row kind has to state which side it is on.
+ */
+const ROW_KIND_IS_WIDGET = {
+  assistant: false,
+  compactionActivity: false,
+  error: false,
+  log: false,
+  phase: false,
+  user: false,
+  workflowTask: false,
+  contextManagement: true,
+  contextState: true,
+  fileList: true,
+  latexdiff: true,
+  missingOutputs: true,
+  progressStatus: true,
+  scratchpad: true,
+  statistics: true,
+  thinking: true,
+  tool: true,
+  webFetch: true,
+  webSearch: true,
+} as const satisfies Record<TranscriptRowKind, boolean>;
+
+export function isRenderableTranscriptEntry(row: TranscriptRow): boolean {
+  if (ROW_KIND_IS_WIDGET[row.kind]) return true;
+  return (
+    terminalVisibleTranscriptText(transcriptRowHeadline(row)).trim().length > 0
+  );
+}
+
+/**
+ * Rows whose content is fixed the moment they appear, independent of anything
+ * around them — a durable settlement order assigned by the recorder, a host's
+ * own local row, a compaction block that reached a terminal state, or a kind
+ * that is complete on arrival.
+ *
+ * This is one half of "finalized"; the other half is the append-only promotion
+ * cursor (`StreamSlice.finalizedFrontier`), which is the fold's alone.
+ */
+const IMMEDIATELY_SETTLED_ROW_KINDS = new Set<TranscriptRowKind>([
+  'user',
+  'error',
+  'phase',
+  'fileList',
+  'missingOutputs',
+  'latexdiff',
+  'statistics',
+  'contextManagement',
+  'progressStatus',
+]);
+
+export function isSelfSettledRow(row: TranscriptRow): boolean {
+  if (row.kind === 'compactionActivity') return row.block.finalized;
+  return (
+    row.settlementSeqNo !== undefined ||
+    row.origin === 'local' ||
+    IMMEDIATELY_SETTLED_ROW_KINDS.has(row.kind)
+  );
+}
+
+/**
+ * Whether the row at `index` may be printed into append-only scrollback: the
+ * settled-prefix promotion has already reached it, or the row settles on its
+ * own regardless of what precedes it.
+ */
+export function isFinalizedTranscriptRow(
+  row: TranscriptRow,
+  index: number,
+  finalizedFrontier: number,
+): boolean {
+  return index < finalizedFrontier || isSelfSettledRow(row);
 }
 
 /** Callers gate on {@link isRenderableTranscriptEntry} before asking. */
 function userPromptAwaitsLiveContinuation(
-  entries: readonly ConversationEntry[],
+  rows: readonly TranscriptRow[],
   index: number,
   status: StreamPhase | undefined,
 ): boolean {
-  const entry = entries[index];
+  const row = rows[index];
   if (
-    entry?.role !== 'user' ||
-    isInquiryContinuationText(entry.text) ||
+    row?.kind !== 'user' ||
+    isInquiryContinuationText(transcriptRowHeadline(row)) ||
     !isActivePhase(status)
   ) {
     return false;
   }
-  return !entries.some(
+  return !rows.some(
     (later, laterIndex) =>
       laterIndex > index && isRenderableTranscriptEntry(later),
   );
@@ -103,31 +238,27 @@ function userPromptAwaitsLiveContinuation(
 
 /** Whether an entry belongs in append-only terminal scrollback now. */
 function isStaticTranscriptEntryAt(
-  entries: readonly ConversationEntry[],
+  rows: readonly TranscriptRow[],
   index: number,
+  finalizedFrontier: number,
   status: StreamPhase | undefined,
 ): boolean {
-  const entry = entries[index];
+  const row = rows[index];
   return (
-    entry !== undefined &&
-    entry.finalized &&
-    isRenderableTranscriptEntry(entry) &&
-    !userPromptAwaitsLiveContinuation(entries, index, status)
+    row !== undefined &&
+    isFinalizedTranscriptRow(row, index, finalizedFrontier) &&
+    isRenderableTranscriptEntry(row) &&
+    !userPromptAwaitsLiveContinuation(rows, index, status)
   );
 }
 
-/** `(settlement order, synthetic-after-source tiebreak)` sort key for one entry. */
+/** `(settlement order, local-after-source tiebreak)` sort key for one row. */
 function transcriptOrderKey(
-  entry: ConversationEntry,
+  row: TranscriptRow,
   index: number,
-): readonly [seq: number, synthetic: number] {
-  const seq =
-    entry.settlementSeqNo ??
-    entry.syntheticAfterSettlementSeqNo ??
-    entry.sourceSeqNo ??
-    index + 1;
-  const synthetic = entry.syntheticAfterSettlementSeqNo !== undefined ? 1 : 0;
-  return [seq, synthetic];
+): readonly [seq: number, local: number] {
+  const seq = row.settlementSeqNo ?? row.seqNo ?? index + 1;
+  return [seq, row.origin === 'local' ? 1 : 0];
 }
 
 function compareTranscriptOrderKeys(
@@ -151,17 +282,20 @@ function compareTranscriptOrderKeys(
  * filtered slice is already ordered, at the cost of one O(n) pass over it.
  */
 export function orderedStaticTranscriptEntries(
-  entries: readonly ConversationEntry[],
+  entries: readonly TranscriptRow[],
+  finalizedFrontier: number,
   status: StreamPhase | undefined,
-): readonly ConversationEntry[] {
+): readonly TranscriptRow[] {
   const candidates: Array<{
-    entry: ConversationEntry;
+    entry: TranscriptRow;
     index: number;
     key: readonly [number, number];
   }> = [];
   for (const [index, entry] of entries.entries()) {
-    if (!entry.finalized) break;
-    if (!isStaticTranscriptEntryAt(entries, index, status)) continue;
+    if (!isFinalizedTranscriptRow(entry, index, finalizedFrontier)) break;
+    if (!isStaticTranscriptEntryAt(entries, index, finalizedFrontier, status)) {
+      continue;
+    }
     candidates.push({ entry, index, key: transcriptOrderKey(entry, index) });
   }
 
@@ -182,10 +316,11 @@ export function orderedStaticTranscriptEntries(
 }
 
 export function splitTranscriptEntries(
-  entries: readonly ConversationEntry[],
+  entries: readonly TranscriptRow[],
+  finalizedFrontier: number,
   status: StreamPhase | undefined,
 ): {
-  readonly finalized: ConversationEntry[];
+  readonly finalized: TranscriptRow[];
   /** Non-finalized entries in original stream order. The renderer must
    *  walk this list (rather than rendering tool rows and the live
    *  assistant as separate buckets) so that text emitted before a tool
@@ -194,17 +329,22 @@ export function splitTranscriptEntries(
    *  them earlier would let a fast tool jump ahead of still-streaming
    *  assistant text in `<Static>` scrollback, where insertion order is
    *  fixed. */
-  readonly pending: ConversationEntry[];
+  readonly pending: TranscriptRow[];
 } {
   const showLiveAssistant = isActivePhase(status);
-  const finalized: ConversationEntry[] = [];
-  const pending: ConversationEntry[] = [];
+  const finalized: TranscriptRow[] = [];
+  const pending: TranscriptRow[] = [];
   let canPromoteToStatic = true;
   for (const [index, entry] of entries.entries()) {
+    const entryFinalized = isFinalizedTranscriptRow(
+      entry,
+      index,
+      finalizedFrontier,
+    );
     // Mirror the static-ring settled-prefix barrier: any unfinished entry
     // blocks later finalized rows from static promotion, so they stay visible
     // in the live pending pane instead of disappearing between the two panes.
-    if (!entry.finalized) {
+    if (!entryFinalized) {
       canPromoteToStatic = false;
     }
     if (!isRenderableTranscriptEntry(entry)) continue;
@@ -212,28 +352,29 @@ export function splitTranscriptEntries(
       pending.push(entry);
       continue;
     }
-    if (entry.finalized) {
+    if (entryFinalized) {
       (canPromoteToStatic ? finalized : pending).push(entry);
       continue;
     }
     if (
-      entry.role === 'activity' ||
-      entry.role === 'tool' ||
-      entry.role === 'workflowTask'
+      entry.kind === 'compactionActivity' ||
+      entry.kind === 'tool' ||
+      entry.kind === 'workflowTask'
     ) {
       pending.push(entry);
       continue;
     }
-    if (entry.role === 'assistant' && showLiveAssistant) {
+    if (
+      (entry.kind === 'assistant' || entry.kind === 'log') &&
+      showLiveAssistant
+    ) {
       pending.push(entry);
     }
   }
   return { finalized, pending };
 }
 
-const EMPTY_TRANSCRIPT_ENTRIES: readonly ConversationEntry[] = Object.freeze(
-  [],
-);
+const EMPTY_TRANSCRIPT_ENTRIES: readonly TranscriptRow[] = Object.freeze([]);
 
 /** Cursor over the settled prefix of a stream's projected entries. The static
  *  transcript appends only entries after this cursor on ordinary syncs; a
@@ -241,18 +382,18 @@ const EMPTY_TRANSCRIPT_ENTRIES: readonly ConversationEntry[] = Object.freeze(
  *  rebuild through {@link orderedStaticTranscriptEntries}. */
 export interface StaticTranscriptScanCursor {
   /** The `slice.entries` array the cursor was advanced against. */
-  readonly entriesRef: readonly ConversationEntry[] | undefined;
+  readonly entriesRef: readonly TranscriptRow[] | undefined;
   /** Number of leading entries already consumed by a previous scan. */
   readonly scannedIndex: number;
   /** Reference to `entriesRef[scannedIndex - 1]`, used to detect append-only
    *  extensions without rescanning the whole history. */
-  readonly lastScannedEntry: ConversationEntry | undefined;
+  readonly lastScannedEntry: TranscriptRow | undefined;
   /** Stream phase at scan time; a phase change forces a rescan of the tail. */
   readonly status: StreamPhase | undefined;
 }
 
 export interface StaticTranscriptScanResult {
-  readonly appended: readonly ConversationEntry[];
+  readonly appended: readonly TranscriptRow[];
   readonly cursor: StaticTranscriptScanCursor;
   /** True when the caller must rebuild from scratch instead of using the
    *  returned suffix (owner switch, hard reset, or non-append-only change). */
@@ -260,7 +401,7 @@ export interface StaticTranscriptScanResult {
 }
 
 function makeStaticTranscriptScanCursor(
-  entriesRef: readonly ConversationEntry[] | undefined,
+  entriesRef: readonly TranscriptRow[] | undefined,
   scannedIndex: number,
   status: StreamPhase | undefined,
 ): StaticTranscriptScanCursor {
@@ -286,7 +427,8 @@ function makeStaticTranscriptScanCursor(
  * deferral rule (`userPromptAwaitsLiveContinuation`).
  */
 export function incrementalStaticTranscriptEntries(
-  entries: readonly ConversationEntry[] | undefined,
+  entries: readonly TranscriptRow[] | undefined,
+  finalizedFrontier: number,
   status: StreamPhase | undefined,
   previous: StaticTranscriptScanCursor | undefined,
 ): StaticTranscriptScanResult {
@@ -333,19 +475,21 @@ export function incrementalStaticTranscriptEntries(
     }
   }
 
-  const appended: ConversationEntry[] = [];
+  const appended: TranscriptRow[] = [];
   let scannedIndex = start;
   for (let index = 0; index < suffix.length; index += 1) {
     const entry = suffix[index]!;
-    if (!entry.finalized) break;
+    if (!isFinalizedTranscriptRow(entry, start + index, finalizedFrontier)) {
+      break;
+    }
     if (!isRenderableTranscriptEntry(entry)) {
       scannedIndex = start + index + 1;
       continue;
     }
     const defersLiveUserPrompt =
       isActivePhase(status) &&
-      entry.role === 'user' &&
-      !isInquiryContinuationText(entry.text) &&
+      entry.kind === 'user' &&
+      !isInquiryContinuationText(transcriptRowHeadline(entry)) &&
       !hasLaterRenderable[index];
     if (defersLiveUserPrompt) break;
     scannedIndex = start + index + 1;

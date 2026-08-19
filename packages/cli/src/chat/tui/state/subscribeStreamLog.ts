@@ -26,6 +26,7 @@ import {
   MESSAGE_TYPES,
   type StreamTabId,
 } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import {
   isActivePhase,
   isTranscriptSettlementPhase,
@@ -33,6 +34,7 @@ import {
 import { StreamLogDeltaBuffer } from '@transcript';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { transcriptRowHeadline } from '../panes/transcriptEntries';
 import {
   activeStreamId,
   focusStream,
@@ -42,15 +44,14 @@ import {
   registerCliStateResetHook,
   setTransientNotice,
   streams,
-  type ConversationEntry,
 } from './cliState';
 import { isChildStreamRemoved, streamMetadataFor } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
 import {
+  advanceFinalizedFrontier,
   applyStreamChanges,
   compactWorkflowEntries,
   createTranscriptFoldState,
-  finalizeSettledPrefix,
   isFullLogChildStream,
   logEntryStreamIsRunning,
   newFoldChangeFlags,
@@ -58,10 +59,6 @@ import {
   workflowOperationalLatestLine,
   type FoldContext,
 } from './transcriptFold';
-
-// Re-export the fold primitive tests (and any other subscribeStreamLog
-// consumers) still import from this module after the fold extraction.
-export { finalizeSettledPrefix };
 
 // Coalesce bursts into a single render without visibly delaying the
 // first paint. 200ms looks like a hang on short replies (an entire reply
@@ -255,8 +252,14 @@ export function syncStreamLog(
     // next rebuild inherits promotion from the slice rows.
     if (options.forceFinal === true) {
       patchStream(streamId, (slice) => {
-        const entries = finalizeSettledPrefix(slice.entries, true);
-        return entries === slice.entries ? slice : { ...slice, entries };
+        const finalizedFrontier = advanceFinalizedFrontier(
+          slice.entries,
+          slice.finalizedFrontier,
+          true,
+        );
+        return finalizedFrontier === slice.finalizedFrontier
+          ? slice
+          : { ...slice, finalizedFrontier };
       });
       const fold = streams.get().get(streamId)?.transcriptFold;
       if (fold) resetTranscriptFoldState(fold);
@@ -355,9 +358,14 @@ export function syncStreamLog(
       const inheritRows = state.hydrated
         ? state.items.map((item) => item.rendered)
         : slice.entries;
-      const inherit = new Map<string, ConversationEntry>();
-      for (const row of inheritRows) {
-        if (!row.synthetic) inherit.set(row.id, row);
+      const promotedCount = state.hydrated
+        ? state.finalizedFrontier
+        : slice.finalizedFrontier;
+      const inherit = new Map<string, TranscriptRow>();
+      const promotedIds = new Set<string>();
+      for (const [index, row] of inheritRows.entries()) {
+        if (row.origin !== 'local') inherit.set(row.id, row);
+        if (index < promotedCount) promotedIds.add(row.id);
       }
       resetTranscriptFoldState(state);
       state.workflowOperationalOnly = workflowOperationalOnly;
@@ -371,6 +379,7 @@ export function syncStreamLog(
       projections = applyStreamChanges(state, log.getRange(0), [], {
         ...ctx,
         inherit,
+        promotedIds,
       });
     }
 
@@ -388,11 +397,13 @@ export function syncStreamLog(
     // is the runtime's own one-liner and is never written from here.
     const latestUserPos = state.latestUserPos;
     const latestInstruction =
-      latestUserPos >= 0 ? state.items[latestUserPos].rendered.text : undefined;
+      latestUserPos >= 0
+        ? transcriptRowHeadline(state.items[latestUserPos].rendered)
+        : undefined;
     const latestLine = workflowOperationalOnly
       ? (workflowOperationalLatestLine(state.items) ?? slice.latestLine)
       : ((state.latestResponsePos > latestUserPos
-          ? state.items[state.latestResponsePos].rendered.text
+          ? transcriptRowHeadline(state.items[state.latestResponsePos].rendered)
           : undefined) ??
         latestInstruction ??
         slice.latestLine);
@@ -405,17 +416,29 @@ export function syncStreamLog(
     const outputStale =
       state.lastEntriesOutput !== slice.entries ||
       state.lastOutputFull !== projectFullTranscript;
-    let entries: readonly ConversationEntry[] = slice.entries;
+    let entries: readonly TranscriptRow[] = slice.entries;
+    // The promotion cursor travels with the selection it indexes into: the
+    // full transcript inherits the fold's frontier, a compacted workflow
+    // recounts it over the retained rows, and a local-rows-only projection is
+    // promoted end to end (every local row settles on arrival).
+    let finalizedFrontier = slice.finalizedFrontier;
     if (projectFullTranscript) {
+      finalizedFrontier = state.finalizedFrontier;
       if (flags.itemsChanged || outputStale) {
         entries = state.items.map((item) => item.rendered);
       }
     } else if (workflowStream) {
       if (flags.compactAffected || outputStale) {
-        entries = compactWorkflowEntries(state.items);
+        const compact = compactWorkflowEntries(
+          state.items,
+          state.finalizedFrontier,
+        );
+        entries = compact.rows;
+        finalizedFrontier = compact.finalizedFrontier;
       }
     } else if (flags.syntheticsChanged || outputStale) {
       entries = state.synthetics;
+      finalizedFrontier = entries.length;
     }
     state.lastOutputFull = projectFullTranscript;
     state.lastEntriesOutput = entries;
@@ -423,6 +446,7 @@ export function syncStreamLog(
     if (
       slice.transcriptFold === state &&
       entries === slice.entries &&
+      slice.finalizedFrontier === finalizedFrontier &&
       slice.latestLine === latestLine &&
       slice.thinkingActive === thinkingActive &&
       slice.compactingActive === compactingActive &&
@@ -438,6 +462,7 @@ export function syncStreamLog(
       transcriptFold: state,
       latestLine,
       entries,
+      finalizedFrontier,
       thinkingActive,
       compactingActive,
       workflowAttemptId: state.workflowAttemptId,

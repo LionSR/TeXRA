@@ -1,5 +1,6 @@
 import { defaultSession } from '@agent/runtime';
 import type { StreamTabId } from '@shared/schemas';
+import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import {
   activeStreamId,
   focusStream,
@@ -8,7 +9,6 @@ import {
   removeStream,
   patchStream,
   streams,
-  type ConversationEntry,
 } from './cliState';
 import { parentStream } from './childExecutions';
 import { activeStreamParentOrSelfId } from './streamViews';
@@ -32,8 +32,52 @@ export function appendLocalUserTranscript(text: string): void {
   appendLocalTranscriptEntry('user', text);
 }
 
+/**
+ * A CLI notice as an ordinary transcript row. `origin: 'local'` is the whole
+ * difference from a projected row: it says there is no `StreamLogEntry` behind
+ * this one, which is what makes it immutable from birth and what places it
+ * after an equal-keyed source row. Its position comes from the two log cursors
+ * captured at append time, carried in the row's own ordering fields.
+ */
+function localTranscriptRow(
+  kind: 'assistant' | 'error' | 'user',
+  id: string,
+  text: string,
+  seqNo: number,
+  settlementSeqNo: number,
+): TranscriptRow {
+  const base = {
+    id,
+    origin: 'local',
+    seqNo,
+    settlementSeqNo,
+    timestamp: Date.now(),
+  } as const;
+  const body = transcriptText(text);
+  if (kind === 'error') {
+    return {
+      ...base,
+      level: 'error',
+      kind: 'error',
+      summary: body,
+      details: [],
+      detailText: transcriptText(''),
+    };
+  }
+  if (kind === 'user') {
+    return { ...base, level: 'info', kind: 'user', text: body, summary: body };
+  }
+  return {
+    ...base,
+    level: 'info',
+    kind: 'assistant',
+    text: body,
+    streaming: false,
+  };
+}
+
 function appendLocalTranscriptEntry(
-  role: 'assistant' | 'error' | 'user',
+  kind: 'assistant' | 'error' | 'user',
   text: string,
   explicitStreamId?: StreamTabId,
 ): void {
@@ -43,22 +87,22 @@ function appendLocalTranscriptEntry(
   const streamId = explicitStreamId ?? defaultLocalTranscriptStreamId();
   focusStream(streamId, { onlyIfUnset: true });
   const log = defaultSession().transcripts.get(streamId);
-  const syntheticAfterSeq = log?.head ?? 0;
-  const syntheticAfterSettlementSeqNo = log?.settlementHead ?? 0;
+  const seqNo = log?.head ?? 0;
+  const settlementSeqNo = log?.settlementHead ?? 0;
 
-  patchStream(streamId, (slice) => {
-    const entry: ConversationEntry = {
-      id: `local:${localEntrySeq++}:${streamId}:${slice.entries.length}`,
-      role,
-      text: normalized,
-      finalized: true,
-      synthetic: true,
-      syntheticKind: 'local',
-      syntheticAfterSeq,
-      syntheticAfterSettlementSeqNo,
-    };
-    return { ...slice, entries: [...slice.entries, entry] };
-  });
+  patchStream(streamId, (slice) => ({
+    ...slice,
+    entries: [
+      ...slice.entries,
+      localTranscriptRow(
+        kind,
+        `local:${localEntrySeq++}:${streamId}:${slice.entries.length}`,
+        normalized,
+        seqNo,
+        settlementSeqNo,
+      ),
+    ],
+  }));
 }
 
 /**
@@ -101,6 +145,9 @@ export function moveLocalTranscriptToStream(streamId: StreamTabId): void {
   patchStream(streamId, (slice) => ({
     ...slice,
     entries: [...localSlice.entries, ...slice.entries],
+    // The re-homed rows are printable on arrival and land ahead of everything
+    // already promoted, so the promotion cursor shifts with them.
+    finalizedFrontier: slice.finalizedFrontier + localSlice.entries.length,
   }));
   if (activeStreamId.get() === CLI_LOCAL_STREAM_ID) {
     focusStream(streamId);
