@@ -33,11 +33,14 @@ describe('listRunGeneratedFiles', () => {
       [path.join(RUN_PATH, 'vanished.tex')]: 'gone',
       [path.join(RUN_PATH, 'blocked.tex')]: 'blocked',
       [path.join(RUN_PATH, 'unreadable.tex')]: 'unreadable',
+      // A KV-*named* directory is internal metadata all the way down: the walk
+      // must skip it before recursing, or its children leak into the listing.
+      [path.join(RUN_PATH, 'meta.json', 'buried.tex')]: 'buried',
     },
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('lists generated metadata in path order and omits concurrent disappearance', async () => {
+  it('lists in path order, skipping KV-named subtrees and concurrent disappearance', async () => {
     failStatFor(
       path.join(RUN_PATH, 'vanished.tex'),
       fsError('ENOENT', 'entry disappeared after readDir'),
