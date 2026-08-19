@@ -88,7 +88,7 @@ vi.mock('@tools/agentCliSessionStores', () => ({
   }),
 }));
 
-vi.mock('@platform/defaults/nodeHost', () => ({
+vi.mock('@platform/defaults/nodeAgentRuntime', () => ({
   initNodeAgentRuntime: mocks.initNodeAgentRuntime,
 }));
 

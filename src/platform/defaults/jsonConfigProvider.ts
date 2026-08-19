@@ -1,26 +1,36 @@
 import { getCoreSettingDefault } from '@shared/schemas';
 import { canonicalConfigKey } from '@shared/config/configKeys';
 
-import type { JsonStore } from './jsonStore';
 import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
 } from '../interfaces';
 
+/**
+ * The store surface one config target needs. `JsonStore` satisfies it; so does
+ * the in-memory twin behind `MemoryConfigProvider`, which is why the
+ * layered-resolution rule below has exactly one implementation.
+ */
+export interface ConfigStore {
+  get<T>(key: string): T | undefined;
+  has(key: string): boolean;
+  set(key: string, value: unknown): Promise<void>;
+}
+
 export interface JsonConfigProviderOptions {
-  workspace: JsonStore;
-  global: JsonStore;
+  workspace: ConfigStore;
+  global: ConfigStore;
 }
 
 /**
- * File-backed {@link ConfigProvider}. Keys are stored flat with the canonical
+ * Store-backed {@link ConfigProvider}. Keys are stored flat with the canonical
  * `texra.*` prefix. Workspace values shadow global values on read and
  * `update()` routes writes by {@link ConfigTarget}.
  */
 export class JsonConfigProvider implements ConfigProvider {
-  private workspaceStore: JsonStore;
-  private readonly globalStore: JsonStore;
+  private workspaceStore: ConfigStore;
+  private readonly globalStore: ConfigStore;
 
   constructor({ workspace, global }: JsonConfigProviderOptions) {
     this.workspaceStore = workspace;
@@ -38,7 +48,7 @@ export class JsonConfigProvider implements ConfigProvider {
   }
 
   /** Switch workspace scope while retaining global values. */
-  replaceWorkspaceStore(workspaceStore: JsonStore): JsonStore {
+  replaceWorkspaceStore(workspaceStore: ConfigStore): ConfigStore {
     const previousStore = this.workspaceStore;
     this.workspaceStore = workspaceStore;
     return previousStore;
