@@ -4,7 +4,7 @@ import {
   teamTexraHostedMissingNames,
 } from '@common/teams/TeamPlan';
 import type { ExecutionId } from '@shared/schemas';
-import { agentKeyOf } from '@shared/schemas';
+import { agentKeyOf, agentName } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -13,9 +13,16 @@ import {
   formatCliMultiAgentPresetLauncherSummary,
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
-import { pickDefaultToolUseAgent } from './defaultAgents';
+import {
+  DEFAULT_AGENT_PRIORITY,
+  pickDefaultToolUseAgent,
+} from './defaultAgents';
 import { formatCliHistoryResumeSummary } from './historyLabels';
-import { resumableCliHistoryEntries, type CliHistoryEntry } from './history';
+import {
+  resumableCliHistoryEntries,
+  RESUME_LIST_LIMIT,
+  type CliHistoryEntry,
+} from './history';
 import {
   modelAccessLaunchBlockDescription,
   modelSelectItemsForCli,
@@ -160,12 +167,18 @@ export function buildCliOrchestrationItems(
       disabled: launchBlocked,
     });
   }
-  const resumeItems = buildCliResumeItems(input.history);
-  if (resumeItems.length > 0) {
+  // Count only — the rows themselves are built when the browser opens, and
+  // the count is capped at the same limit so it never reports more sessions
+  // than the browser can list.
+  const resumableCount = Math.min(
+    resumableCliHistoryEntries(input.history).length,
+    RESUME_LIST_LIMIT,
+  );
+  if (resumableCount > 0) {
     items.push({
       value: { kind: 'browse-resumes' },
       label: 'Resume',
-      description: formatResultCount(resumeItems.length, 'session'),
+      description: formatResultCount(resumableCount, 'session'),
     });
   }
   if (implicitDefaultToolUseAgents(input.toolUseAgents).length > 0) {
@@ -287,14 +300,18 @@ export function buildCliAccountItems(
 export function buildCliAgentItems(
   toolUseAgents: readonly AgentEntry[],
 ): CliOrchestrationItem[] {
-  const priority = new Map([
-    ['assistant', 0],
-    ['orchestrator', 1],
-  ]);
+  // Order by the implicit-default priority (`pickDefaultToolUseAgent`) so the
+  // first row is the agent a bare Enter starts. Names are matched the way the
+  // default picker matches them — on the source-stripped `agentName`, not the
+  // raw entry name, so a custom agent carrying a source prefix still ranks.
+  const unprioritized = DEFAULT_AGENT_PRIORITY.length;
+  const priorityOf = (name: string): number => {
+    const index = DEFAULT_AGENT_PRIORITY.indexOf(agentName(name));
+    return index === -1 ? unprioritized : index;
+  };
   return implicitDefaultToolUseAgents(toolUseAgents)
     .toSorted((left, right) => {
-      const byPriority =
-        (priority.get(left.name) ?? 2) - (priority.get(right.name) ?? 2);
+      const byPriority = priorityOf(left.name) - priorityOf(right.name);
       return byPriority || left.name.localeCompare(right.name);
     })
     .map((agent) => ({
@@ -316,7 +333,7 @@ export function buildCliResumeItems(
   history: readonly CliHistoryEntry[],
 ): CliOrchestrationItem[] {
   return resumableCliHistoryEntries(history)
-    .slice(0, 50)
+    .slice(0, RESUME_LIST_LIMIT)
     .map((entry) => ({
       value: { kind: 'resume', id: entry.id },
       label: entry.id,
