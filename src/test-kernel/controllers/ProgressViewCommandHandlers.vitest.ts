@@ -141,7 +141,6 @@ function createSecondTierActions(
     getRunMetadata: vi.fn(() => ({
       identity: { kind: 'agent' as const, agent: 'chat' },
     })),
-    getRunConfig: vi.fn(),
     restoreRunConfig: vi.fn(),
     applyFollowUpPlan: vi.fn(),
     applyPolishResult: vi.fn(),
@@ -1022,7 +1021,7 @@ describe('createProgressViewSecondTierHandlers', () => {
 
   it('skips polishing when the stream has no run config', async () => {
     const actions = createSecondTierActions({
-      getRunConfig: vi.fn().mockReturnValue(undefined),
+      getRunMetadata: vi.fn().mockReturnValue({}),
     });
     const handlers = createProgressViewSecondTierHandlers(actions);
 
@@ -1040,7 +1039,7 @@ describe('createProgressViewSecondTierHandlers', () => {
     const polishFailure = new Error('polish failed');
     const reportingFailure = new Error('reporting failed');
     const actions = createSecondTierActions({
-      getRunConfig: vi.fn().mockReturnValue({}),
+      getRunMetadata: vi.fn().mockReturnValue({ config: {} }),
       followUpPolish: {
         polishFollowUp: vi.fn().mockRejectedValue(polishFailure),
       } as unknown as ProgressViewSecondTierActions['followUpPolish'],
@@ -1065,7 +1064,7 @@ describe('createProgressViewSecondTierHandlers', () => {
     const order: string[] = [];
     const polishResult = { kind: 'skipped' };
     const actions = createSecondTierActions({
-      getRunConfig: vi.fn().mockReturnValue({}),
+      getRunMetadata: vi.fn().mockReturnValue({ config: {} }),
       followUpPolish: {
         polishFollowUp: vi.fn(async () => {
           order.push('polish');
@@ -1099,7 +1098,7 @@ describe('createProgressViewSecondTierHandlers', () => {
   it('polishes without a progress reporter when the host has none', async () => {
     const polishResult = { kind: 'skipped' };
     const actions = createSecondTierActions({
-      getRunConfig: vi.fn().mockReturnValue({}),
+      getRunMetadata: vi.fn().mockReturnValue({ config: {} }),
       followUpPolish: {
         polishFollowUp: vi.fn().mockResolvedValue(polishResult),
       } as unknown as ProgressViewSecondTierActions['followUpPolish'],
