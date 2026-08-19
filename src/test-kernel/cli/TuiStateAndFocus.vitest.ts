@@ -2079,7 +2079,7 @@ describe('CLI transcript state', () => {
     // media subset kept beside them rather than instead of them.
     expect(entries[0]).toMatchObject({
       kind: 'fileList',
-      counts: { loaded: 5, failed: 0, total: 5 },
+      summary: 'Files (5/5 loaded)',
       media: [
         { path: '/private/tmp/loaded.png' },
         { path: '/private/tmp/loaded.png' },

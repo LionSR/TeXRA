@@ -138,7 +138,6 @@ export function compactionRowFixture(
 export function fileListRowFixture(
   id: string,
   files: readonly FileListEntry[],
-  category = 'media',
 ): TranscriptRowOf<'fileList'> {
   const row = projectTranscriptRow({
     id,
@@ -147,7 +146,6 @@ export function fileListRowFixture(
     seqNo: 0,
     timestamp: 0,
     level: 'info',
-    text: category,
     data: [...files],
   });
   if (row?.kind !== 'fileList') {
