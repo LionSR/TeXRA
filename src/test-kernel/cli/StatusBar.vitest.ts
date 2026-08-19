@@ -758,8 +758,8 @@ describe('CLI StatusBar display model', () => {
         buildStatusBarDisplay(
           statusInput({
             modelAccess: resolveCliModelAccessRoute({
-              subscriptionActive: true,
               usageRoute,
+              prospectiveRoute: 'chatgpt-subscription',
             }),
             usage: {
               inputTokens: 1_000,
