@@ -26,17 +26,18 @@ npm install -g @texra-ai/cli
 brew install texra-ai/tap/texra
 ```
 
-Sign in with GitHub or Google for hosted access (no key management
-required), or set `<PROVIDER>_API_KEY` to use your own credentials.
+Set `<PROVIDER>_API_KEY` to use your own credentials, sign in with a
+ChatGPT or Grok subscription, or add the API key for a Kimi Code or
+GLM Coding Plan subscription.
 
 ### Researcher Access Program
 
-Academic researchers can sign in for complimentary hosted access to
-a curated set of budget-friendly models — enough to run the
-Orchestrator and the full roster of hosted specialists on real work,
-without managing provider keys or paying per-token rates. Sign in
-through the Profile view in VS Code, or `texra login` in the
-terminal.
+Academic researchers can sign in with GitHub or Google for
+complimentary access to the hosted agent catalog — the Orchestrator
+and the full roster of hosted specialists. Sign in through the
+Profile view in VS Code, or `texra login` in the terminal. The agents
+are free; their model calls run on your configured model credential,
+the same as your built-in agents.
 
 The program is sustained by the community. If TeXRA helps your
 research, consider supporting it via
