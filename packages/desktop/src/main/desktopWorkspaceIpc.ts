@@ -61,6 +61,14 @@ export interface DesktopWorkspaceIpc extends DesktopMessageHandler {
    * layout, so neither resource may survive across that boundary.
    */
   disposeRendererResources(): void;
+
+  /**
+   * Releases the app-signal subscription. Separate from
+   * {@link DesktopWorkspaceIpc.disposeRendererResources} because that one also
+   * runs on renderer reload, where the subscription must survive — this one is
+   * window-scoped, and `createWindow` runs again on macOS dock reactivation.
+   */
+  dispose(): void;
 }
 
 /** The single workspace-boundary error every containment path reports. */
@@ -169,16 +177,18 @@ export function createDesktopWorkspaceIpc(
   // before this the newly written files stayed invisible until the user hit
   // Refresh. There is no filesystem watcher here; this signal is the only
   // notice the main process gets. Writes outside the workspace root cannot
-  // appear in the tree, so they are not worth a re-list. Lifetime == app,
-  // matching the desktop's other process-global subscriptions.
-  appSignals.on('workspaceFilesWritten', ({ absolutePaths }) => {
-    const root = WorkspaceFS.getPath();
-    if (!root) return;
-    if (!absolutePaths.some((path) => isPathWithin(root, path))) return;
-    renderer.postToRenderer({
-      command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
-    });
-  });
+  // appear in the tree, so they are not worth a re-list.
+  const unsubscribeFilesWritten = appSignals.on(
+    'workspaceFilesWritten',
+    ({ absolutePaths }) => {
+      const root = WorkspaceFS.getPath();
+      if (!root) return;
+      if (!absolutePaths.some((path) => isPathWithin(root, path))) return;
+      renderer.postToRenderer({
+        command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
+      });
+    },
+  );
 
   function postFileError(
     requestId: string,
@@ -337,6 +347,10 @@ export function createDesktopWorkspaceIpc(
     disposeRendererResources() {
       options.ptyHost.disposeAll();
       options.browserViews.disposeAll();
+    },
+
+    dispose() {
+      unsubscribeFilesWritten();
     },
 
     handleMessage(message: DesktopCommandMessage) {

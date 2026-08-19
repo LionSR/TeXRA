@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
@@ -46,6 +46,8 @@ const DASHBOARD_ITEM: ToolDashboardItem = {
 type ControllerOptions = ConstructorParameters<
   typeof DefaultDesktopToolingSettingsController
 >[0];
+
+const liveControllers: DefaultDesktopToolingSettingsController[] = [];
 
 /** Dashboard members not listed fall back to the fixture defaults below. */
 type FixtureOverrides = Partial<Omit<ControllerOptions, 'dashboard'>> & {
@@ -107,6 +109,9 @@ function createFixture(overrides: FixtureOverrides = {}) {
     ...overrides,
     dashboard,
   });
+  // The controller subscribes to a process-global bus, so a fixture left
+  // undisposed would keep reacting to later tests' emits.
+  liveControllers.push(controller);
 
   return {
     controller,
@@ -120,6 +125,10 @@ function createFixture(overrides: FixtureOverrides = {}) {
 }
 
 describe('DefaultDesktopToolingSettingsController', () => {
+  afterEach(() => {
+    for (const controller of liveControllers.splice(0)) controller.dispose();
+  });
+
   it('posts cached startup data before refreshing external tools', async () => {
     let finishRefresh: (() => void) | undefined;
     const refreshPending = new Promise<void>((resolve) => {
