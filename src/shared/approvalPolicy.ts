@@ -7,6 +7,14 @@ export const TEXRA_APPROVAL_POLICIES = ['never', 'ask', 'yolo'] as const;
 export const TexraApprovalPolicySchema = z.enum(TEXRA_APPROVAL_POLICIES);
 export type TexraApprovalPolicy = z.infer<typeof TexraApprovalPolicySchema>;
 export const TEXRA_APPROVAL_POLICY_DEFAULT: TexraApprovalPolicy = 'ask';
+/**
+ * The policy a `--no-input` run falls back to. Deliberately divergent from
+ * {@link TEXRA_APPROVAL_POLICY_DEFAULT}: a run that cannot present a prompt
+ * denies instead of hanging, and `buildCliContext` narrows the candidate list
+ * to the explicit `--approval-policy` flag alone — a persisted or env-provided
+ * `yolo` must not silently auto-approve a headless run that nobody is watching.
+ * Changing that requires changing headless discipline, not just this constant.
+ */
 export const TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT: TexraApprovalPolicy =
   'never';
 /** Canonical persisted spelling in `.texra/config.json` for every host. */

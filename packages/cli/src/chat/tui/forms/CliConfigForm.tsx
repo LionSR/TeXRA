@@ -13,14 +13,15 @@ import {
   saveProviderApiKey,
 } from '@cli/runtime/providerApiKey';
 import type { ApiKeyStatus, ApiProvider } from '@model/apiProviders';
-import { CLI_STATE_SETTINGS } from '@shared/schemas';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import { CLI_STATE_SETTINGS, type SurfacedSettingEntry } from '@shared/schemas';
 import {
   readSetting,
-  resetSetting,
-  writeSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
+import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { refreshSubscriptionPreferenceViews } from '../state/subscriptionPreference';
 import { AgentRosterForm } from './AgentRosterForm';
@@ -43,6 +44,12 @@ export interface CliConfigFormProps {
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
   readonly openExternalForm?: (formName: string) => void;
+  /**
+   * Applies the approval-policy side effect when that row is written here — the
+   * chat TUI's live-session hook, identical to the one `/approval` drives.
+   * Omitted by `texra config edit`, whose process holds no session to update.
+   */
+  readonly onApprovalPolicyChanged?: (policy: TexraApprovalPolicy) => void;
 }
 
 export interface CreateCliConfigFormPropsInput extends CliConfigFormProps {
@@ -145,28 +152,53 @@ export function createCliConfigFormProps(
   const githubTokenStatusView =
     props.githubTokenStatusView ??
     (INITIAL_STATUS_VIEW as GitHubTokenStatusView);
+  // The one CLI write path for a `/config` row: the same
+  // `applyStateSettingUpdate` the extension and desktop settings views call, so
+  // a row that carries a live side effect (approval policy) cannot be persisted
+  // from here while the running session keeps enforcing the old value. The
+  // catalog row still owns the write consequences below it — `writeSetting`
+  // applies the declared mutual exclusions (Kimi Code clears OpenRouter) and
+  // `onWrite.invalidatesModelOptions` marks the rows whose change re-routes
+  // models — so this form keeps no key list of its own. `null` is the shared
+  // reset convention (delete the key so the schema default reappears).
+  const applyUpdate = async (
+    entry: SurfacedSettingEntry,
+    value: unknown,
+  ): Promise<void> => {
+    const result = await applyStateSettingUpdate(entry.key, value, {
+      host: 'cli',
+      stores,
+      onApprovalPolicyChanged: props.onApprovalPolicyChanged,
+    });
+    const label = entry.title ?? entry.key;
+    switch (result.kind) {
+      case 'applied':
+        break;
+      case 'rejected':
+      case 'failed':
+        // ConfigForm rolls its optimistic value back on a rejection and reports
+        // it, so a refused write must throw rather than read as applied.
+        throw new Error(
+          `Failed to update "${label}": ${toErrorMessage(result.error)}`,
+          { cause: result.error },
+        );
+      case 'ignored':
+      case 'workspace-required':
+        throw new Error(
+          `Setting "${label}" is not writable from /config (${result.kind}).`,
+        );
+    }
+    if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
+    if (entry.onWrite?.invalidatesModelOptions) {
+      refreshSubscriptionPreferenceViews();
+    }
+  };
   return {
     availableRows: props.availableRows,
     entries: CLI_STATE_SETTINGS,
     readValue: (entry) => readSetting(entry, stores, 'cli'),
-    // The catalog row owns write consequences: `writeSetting` applies the
-    // declared mutual exclusions (Kimi Code clears OpenRouter) and
-    // `onWrite.invalidatesModelOptions` marks the rows whose change re-routes
-    // models, so this form no longer keeps its own key list.
-    writeValue: async (entry, value) => {
-      await writeSetting(entry, value, stores, 'cli');
-      if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
-      if (entry.onWrite?.invalidatesModelOptions) {
-        refreshSubscriptionPreferenceViews();
-      }
-    },
-    resetValue: async (entry) => {
-      await resetSetting(entry, stores, 'cli');
-      if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
-      if (entry.onWrite?.invalidatesModelOptions) {
-        refreshSubscriptionPreferenceViews();
-      }
-    },
+    writeValue: (entry, value) => applyUpdate(entry, value),
+    resetValue: (entry) => applyUpdate(entry, null),
     formLinks: [
       {
         name: 'agents',
