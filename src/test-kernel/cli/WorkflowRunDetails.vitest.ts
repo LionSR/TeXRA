@@ -142,8 +142,8 @@ describe('selectWorkflowRunDetailLines', () => {
     );
 
     expect(lines.map((line) => line.text)).toEqual([
-      '✓ Repository audit Finished · 9s',
-      '✓ r1/2 Finished · 7s',
+      '✓ Repository audit Completed · 9s',
+      '✓ r1/2 Completed · 7s',
       '  Generated files',
       '    • paper.tex (+12 -3)',
       '  ⚠ r1 · Missing expected output: appendix.tex',
@@ -269,7 +269,9 @@ describe('selectWorkflowRunDetailLines', () => {
       100,
     );
 
-    expect(lines.map((line) => line.text)).toEqual(['✓ Round 3 Finished · 1s']);
+    expect(lines.map((line) => line.text)).toEqual([
+      '✓ Round 3 Completed · 1s',
+    ]);
   });
 
   it('budgets detail rows together with the live transcript viewport', async () => {
@@ -330,7 +332,7 @@ describe('selectWorkflowRunDetailLines', () => {
     );
 
     expect(lines.map((line) => line.text)).toEqual([
-      '✓ r1/2 Finished · 0s',
+      '✓ r1/2 Completed · 0s',
       '  ✗ r1 · Compile check failed: paper.pdf · paper.log',
       '□ r2/2 Planned',
     ]);
