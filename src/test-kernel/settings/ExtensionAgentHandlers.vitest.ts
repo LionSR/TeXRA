@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentEntry } from '@agent/index/agentEntry';
-import { initializeStateManagers } from '@common/state';
 import { resetAgentCatalogAuthRefreshScopeForTests } from '@frontend/auth/agentCatalogRefreshScope';
 import type { AgentCategory, AgentSource } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 
 type AgentCatalog = Record<AgentCategory, AgentEntry[]>;
 
@@ -95,14 +95,11 @@ interface HandlerFixtureOptions {
   readonly modalChoice?: string | undefined;
 }
 
-function createHandlerFixture(options: HandlerFixtureOptions = {}) {
+async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
   const workspaceState = options.workspaceState ?? new FakeStateStore();
   const globalState = new FakeStateStore();
   registry.catalog = options.catalog ?? { workflow: [], toolUse: [] };
-  initializeStateManagers({
-    workspaceState,
-    globalState,
-  } as unknown as Parameters<typeof initializeStateManagers>[0]);
+  await installPlatform({}, { workspaceState, globalState });
 
   const notifications: string[] = [];
   const modalPrompts: string[] = [];
@@ -169,7 +166,7 @@ describe('extension settings AgentHandlers', () => {
       notifications,
       refreshAfterAgentMutation,
       workspaceState,
-    } = createHandlerFixture({
+    } = await createHandlerFixture({
       catalog: physicistCatalog(),
       modalChoice: 'Continue with available members',
     });
@@ -202,7 +199,7 @@ describe('extension settings AgentHandlers', () => {
         },
       ],
     });
-    const { handlers, notifications } = createHandlerFixture({
+    const { handlers, notifications } = await createHandlerFixture({
       catalog,
       workspaceState,
     });
@@ -233,7 +230,7 @@ describe('extension settings AgentHandlers', () => {
       order.push('sign-in');
       return true;
     });
-    const { handlers } = createHandlerFixture({
+    const { handlers } = await createHandlerFixture({
       workspaceState,
       modalChoice: 'Sign in to TeXRA',
     });
@@ -260,7 +257,7 @@ describe('extension settings AgentHandlers', () => {
   it('does not write roster state when team preflight is cancelled', async () => {
     const workspaceState = new FakeStateStore(REMOTE_TEAM_STATE);
     const { handlers, modalPrompts, refreshAfterAgentMutation } =
-      createHandlerFixture({ workspaceState, modalChoice: undefined });
+      await createHandlerFixture({ workspaceState, modalChoice: undefined });
     const update = vi.spyOn(workspaceState, 'update');
 
     await applyPreset(handlers, 'remote-team');

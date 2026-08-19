@@ -86,11 +86,6 @@ vi.mock('@agent/index/platformAgentDirectories', () => ({
   }),
 }));
 
-vi.mock('@common/state', () => ({
-  GlobalStateKey: { CUSTOM_AGENT_DIR: 'customAgentDir' },
-  globalSM: { get: () => '', update: async () => {} },
-}));
-
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedMessageWithDocs: vi.fn(),
 }));

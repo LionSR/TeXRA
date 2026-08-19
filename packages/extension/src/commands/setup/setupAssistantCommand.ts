@@ -7,7 +7,6 @@ import { AgentConfigSchema, defaultSession, runAgent } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
-import { globalSM } from '@common/state';
 import {
   resolveSetupLaunchModel,
   SETUP_INSTRUCTION,
@@ -55,14 +54,16 @@ async function selectLaunchModel(): Promise<LaunchModelResolution | null> {
  * restore it, including failures before `executeAgent` starts.
  */
 async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
-  const prior = globalSM.get<boolean>(GlobalStateKey.USE_OPENROUTER) === true;
+  const globalState = platform().globalState;
+  const prior =
+    globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER) === true;
   if (prior) return fn();
 
-  await globalSM.update(GlobalStateKey.USE_OPENROUTER, true);
+  await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
   try {
     return await fn();
   } finally {
-    await globalSM
+    await globalState
       .update(GlobalStateKey.USE_OPENROUTER, false)
       .then(undefined, (err) => {
         log.error('Failed to restore useOpenRouter flag.', {

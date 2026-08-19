@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
-import { setPendingState } from '@common/state';
+import { setPendingState } from '@common/state/pendingStateManager';
 import {
   buildMainViewState,
   RestoreRunConfigInputSchema,
