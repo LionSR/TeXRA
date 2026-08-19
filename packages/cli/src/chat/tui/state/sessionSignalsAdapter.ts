@@ -15,9 +15,7 @@ import {
   type GoalStatus,
   type InquiryThreadUpdatedEvent,
   type Plan,
-  type StreamPhase,
   type StreamStage,
-  type StreamSubstate,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
@@ -111,24 +109,13 @@ class TuiSessionRenderer implements SessionRendererPort {
     assertNever(slice, 'Unhandled session render slice');
   }
 
-  onStreamStatusChanged(
-    streamId: StreamTabId,
-    status: StreamPhase,
-    _logHead: number,
-    lastTimestamp?: number,
-    substate?: StreamSubstate,
-  ): void {
-    setStreamStatusInCliState({
-      streamId,
-      status,
-      substate,
-      // Use the backend's last-known timestamp for the stream (from its log
-      // entries) rather than Date.now() at render time, so `runStartedAt`
-      // reflects a backend timestamp instead of when the TUI received it.
-      ...(lastTimestamp !== undefined ? { nowMs: lastTimestamp } : {}),
-    });
-    // Roster rows carry phase (`recordChildPhase`); re-derive snapshots so
-    // child rows repaint on phase flips.
+  onStreamStatusChanged(): void {
+    // The slice already carries this transition: the CLI writes it from the
+    // `status` fact before handing the fact to the applier, and the fact
+    // carries the status machine's own `runStartedAt`, so there is nothing
+    // left for this callback to re-apply. Roster rows carry phase
+    // (`recordChildPhase`); re-derive snapshots so child rows repaint on
+    // phase flips.
     invalidateChildStreams();
   }
 
@@ -257,6 +244,7 @@ export function attachSessionSignalsAdapter({
         streamId: fact.streamId,
         status: fact.phase,
         substate: fact.substate,
+        runStartedAt: fact.runStartedAt,
       });
       if (recognized) {
         syncStreamLog(

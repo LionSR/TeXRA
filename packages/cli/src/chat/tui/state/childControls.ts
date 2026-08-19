@@ -6,6 +6,7 @@ import {
   type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
+import { childElapsedMs } from '@shared/streams/childElapsed';
 import { formatCompactDuration } from '@utils/core';
 
 // Local imports - CLI state
@@ -18,16 +19,18 @@ export interface ChildListTarget {
   readonly streamId: StreamTabId | undefined;
 }
 
+/** Compact elapsed reading for one child row, shown only while it is running:
+ *  a settled row's duration is reported by the task card that owns its
+ *  outcome, so repeating a frozen figure in the live list is noise. */
 export function childElapsed(
-  child: Pick<ActiveChildInfo, 'elapsed' | 'startedAt' | 'status'>,
+  child: Pick<ActiveChildInfo, 'startedAt' | 'finishedAt' | 'status'>,
   nowMs = Date.now(),
-): string | null | undefined {
-  const { startedAt, status } = child;
-  if (startedAt === undefined) return child.elapsed;
-  if (status !== undefined && status !== STREAM_PHASE.RUNNING) {
-    return child.elapsed;
+): string | undefined {
+  if (child.status !== undefined && child.status !== STREAM_PHASE.RUNNING) {
+    return undefined;
   }
-  return formatCompactDuration(nowMs - startedAt);
+  const elapsedMs = childElapsedMs(child, nowMs);
+  return elapsedMs === undefined ? undefined : formatCompactDuration(elapsedMs);
 }
 
 function hasChildListItems(

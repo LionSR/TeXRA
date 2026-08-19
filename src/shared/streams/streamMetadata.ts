@@ -35,6 +35,7 @@ export function buildStreamMetadata(
       stage: inputs.stage ?? null,
     }),
     substate: inputs.substate,
+    runStartedAt: inputs.runStartedAt,
     userFollowUpSupport: inputs.userFollowUpSupport,
     lastTimestamp: inputs.lastTimestamp,
     category: inputs.category,

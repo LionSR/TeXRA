@@ -453,6 +453,7 @@ export class LitSessionRenderer implements SessionRendererPort {
       category: streamInfo.agentCategory,
       status: status?.phase,
       substate: status?.substate,
+      runStartedAt: status?.runStartedAt,
       userFollowUpSupport: streamInfo.userFollowUpSupport,
       lastTimestamp: this.state.streamLogs.getTimestampRange(streamInfo.name)
         .last,
