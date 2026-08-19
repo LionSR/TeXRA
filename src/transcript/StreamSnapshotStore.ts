@@ -688,20 +688,6 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Run a mutation only once the stream's disk provenance is established;
-   * otherwise queue it behind the per-stream seed chain so it merges onto the
-   * real sidecar state instead of an empty base. Eager memory application in
-   * the overlay mutators keeps read-back immediate either way.
-   */
-  private mutate<T>(stream: StreamTabId, apply: () => T): T | undefined {
-    const version = this.streamVersion(stream);
-    if (this.hasDiskProvenance(stream)) return apply();
-
-    this.queueAfterSeed(stream, version, apply);
-    return undefined;
-  }
-
-  /**
    * Queue a mutation onto the stream's seed lane: the lane's single-flight
    * FIFO order (concurrency 1, shared with `refreshSeed`) is what guarantees
    * this runs after every unit of work queued ahead of it, seed reads
@@ -1335,11 +1321,19 @@ export class StreamSnapshotStore {
   ): void {
     this.patchMetaMemory(stream, patch);
     this.getOrCreateRecord(stream).metaOverlay = true;
-    const applied = this.mutate(stream, () => {
+    const applyMeta = (): void => {
       this.writeMeta(stream, this.patchMetaMemory(stream, patch));
-      return true;
-    });
-    if (applied) this.getOrCreateRecord(stream).metaOverlay = false;
+    };
+    // Persist immediately once the stream's disk provenance is established;
+    // otherwise queue behind the per-stream seed chain so it merges onto the
+    // real sidecar state instead of an empty base, leaving `metaOverlay` set
+    // for `applyStreamData`/`persistEagerOverlays` to reconcile.
+    if (this.hasDiskProvenance(stream)) {
+      applyMeta();
+      this.getOrCreateRecord(stream).metaOverlay = false;
+    } else {
+      this.queueAfterSeed(stream, this.streamVersion(stream), applyMeta);
+    }
   }
 
   // ==========================================================================
@@ -1586,18 +1580,10 @@ export class StreamSnapshotStore {
     // A staged deletion owns the stream's namespace, so it takes the value
     // into its transactional buffer instead of letting it reach disk.
     if (this.deletions.bufferWrite(stream, key, value)) return;
-    this.writeUnbuffered(stream, key, value);
-  }
-
-  private writeUnbuffered(
-    stream: StreamTabId,
-    key: string,
-    value: unknown,
-  ): void {
     const chainKey = `${stream}::${key}`;
-    const write = { stream, key, value } satisfies DirtySidecarWrite;
-    this.dirtyWrites.set(chainKey, write);
-    void this.persistDirtyWrite(chainKey, write).catch((err: unknown) =>
+    const dirty = { stream, key, value } satisfies DirtySidecarWrite;
+    this.dirtyWrites.set(chainKey, dirty);
+    void this.persistDirtyWrite(chainKey, dirty).catch((err: unknown) =>
       log.warn(
         `Failed to persist ${key}.json for stream ${stream}; sidecar remains dirty.`,
         { data: err },

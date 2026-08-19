@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import type { AgentTrace, StageHandle } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -113,7 +113,6 @@ export class LatexDiffManager {
   async handleLatexdiffOfOutput(
     currRound: number,
     mapping: RoundFileMapping,
-    stage?: StageHandle,
   ): Promise<CompiledPdfArtifact[]> {
     const execute = async (): Promise<CompiledPdfArtifact[]> => {
       if (!(await checkToolInstalled('latexdiff'))) {
@@ -255,7 +254,7 @@ export class LatexDiffManager {
 
       return artifacts;
     };
-    return tryOperation(() => (stage ? stage.within(execute) : execute()), {
+    return tryOperation(execute, {
       logger: this.logger,
       level: 'error',
       label: 'Error during latexdiff processing',

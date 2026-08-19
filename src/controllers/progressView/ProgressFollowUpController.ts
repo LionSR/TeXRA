@@ -12,8 +12,8 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
-import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { pluralize } from '@utils/text/stringUtils';
+import type { StreamOutputsSource } from './streamOutputs';
 
 export interface ProgressFollowUpModelOption {
   value: string;
@@ -35,12 +35,8 @@ export interface ProgressFollowUpControllerDeps {
   workspace: ProgressFollowUpWorkspace;
 }
 
-export interface ProgressFollowUpState {
-  getRunMetadata(stream: StreamTabId): RunMetadata;
-  getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
+export interface ProgressFollowUpState extends StreamOutputsSource {
   getCompileFailures(stream: StreamTabId): RoundIndexed<CompileFailure>;
-  /** Warm this stream's sidecars before the plan's synchronous readers run. */
-  preload?(stream: StreamTabId): Promise<void>;
 }
 
 interface CompileFixerTarget {

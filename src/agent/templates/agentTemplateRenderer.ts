@@ -3,7 +3,7 @@ import nunjucks from 'nunjucks';
 import { buildUserVarPassthrough } from '@agent/prompt/userVars';
 import { createTexraNunjucksEnvironment } from '@utils/prompt';
 
-export type AgentTemplateKind = 'toolUse' | 'workflowSingle';
+type AgentTemplateKind = 'toolUse' | 'workflowSingle';
 
 export const AGENT_TEMPLATE_FILES: Record<AgentTemplateKind, string> = {
   toolUse: 'agentTemplate-toolUse.yaml',

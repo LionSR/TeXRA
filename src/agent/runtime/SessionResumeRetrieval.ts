@@ -25,10 +25,7 @@ import {
   inferAndLogPersistedModelHandlerCompatibilityKey,
   inferPersistedModelHandlerCompatibilityKey,
 } from './modelHandlerCompatibilityInference';
-import {
-  ModelHandlerCompatibilityKeySchema,
-  type ModelHandlerCompatibilityKey,
-} from './modelHandlerCompatibilityKey';
+import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const logger = createLog('SessionResumeRetrieval');
 

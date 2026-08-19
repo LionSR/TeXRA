@@ -53,7 +53,7 @@ export const WebSearchResultEntrySchema = z.object({
 });
 
 /** A single web search result entry - derived from schema. */
-export type WebSearchResultEntry = z.infer<typeof WebSearchResultEntrySchema>;
+type WebSearchResultEntry = z.infer<typeof WebSearchResultEntrySchema>;
 
 /**
  * Schema for unified web search result across all providers.

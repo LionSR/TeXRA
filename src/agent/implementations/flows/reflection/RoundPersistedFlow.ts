@@ -117,9 +117,8 @@ export class RoundPersistedFlow<
       parentStage?: StageHandle | null;
       sharedSchema?: z.ZodType<S>;
     },
-    runId?: string,
   ) {
-    super(start, kv, runId, options?.sharedSchema);
+    super(start, kv, undefined, options?.sharedSchema);
     this.callbacks = options?.callbacks ?? {};
     this.parentStage = options?.parentStage ?? null;
   }

@@ -51,7 +51,7 @@ const logger = createChannelTrace('executionRegistry');
  * cascades. Omitting the field means cascade — the conservative reading, since
  * a child left running has no owner to report to.
  */
-export interface ExecutionStopOptions {
+interface ExecutionStopOptions {
   readonly detachActiveChildren?: boolean;
 }
 
