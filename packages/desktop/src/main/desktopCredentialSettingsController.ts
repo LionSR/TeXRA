@@ -264,6 +264,18 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
    * failure so the shared flow can retry with a device code, which this host
    * shows in its own dialog.
    */
+  private reportSignInPresentationFailure(
+    displayName: string,
+    error: unknown,
+  ): void {
+    this.options.onError(error);
+    void this.options.notifications
+      .showErrorMessage(
+        `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(error)}`,
+      )
+      .catch(this.options.onError);
+  }
+
   private signInPresenter(displayName: string): SubscriptionSignInPresenter {
     return {
       presentDeviceCode: (prompt) => {
@@ -273,7 +285,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
             prompt,
             displayName,
           ),
-        ).catch(this.options.onError);
+        ).catch((error: unknown) =>
+          this.reportSignInPresentationFailure(displayName, error),
+        );
       },
       presentSignInUrl: async (url) => {
         try {
@@ -290,7 +304,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
             url,
             displayName,
           ),
-        ).catch(this.options.onError);
+        ).catch((error: unknown) =>
+          this.reportSignInPresentationFailure(displayName, error),
+        );
       },
     };
   }

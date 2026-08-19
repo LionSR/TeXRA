@@ -10,6 +10,7 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
+import { codingPlanForUsageSetting } from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchSettingsViewInbound,
@@ -267,11 +268,19 @@ export function createDesktopSettingsIpc(
       stateSettingSnapshotPosters,
     );
     if (result.kind !== 'applied') return;
-    if (result.entry.onWrite?.invalidatesModelOptions) {
+    const invalidatesModelOptions =
+      result.entry.onWrite?.invalidatesModelOptions === true;
+    if (invalidatesModelOptions) {
       invalidateModelOptionsCache();
       await options.credentialSettingsController.refreshAfterProviderSettingChange(
         key,
       );
+    }
+    if (
+      !invalidatesModelOptions &&
+      codingPlanForUsageSetting(key) !== undefined
+    ) {
+      await options.credentialSettingsController.postSubscriptionUsage();
     }
   }
 
