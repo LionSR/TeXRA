@@ -106,7 +106,7 @@ describe('LaTeXdiffService shadow output', () => {
     const result = await runShadowDiff(sourceDir, shadowDir);
 
     expect(result).toMatchObject({ success: true });
-    expect(result.diffFileName).toBe('revised_diff.tex');
+    expect(path.basename(result.diffPath ?? '')).toBe('revised_diff.tex');
     await expect(
       readFile(path.join(shadowDir, 'revised_diff.tex'), 'utf8'),
     ).resolves.toContain('changed');

@@ -114,7 +114,7 @@ Available agents: loaded from the active roster at runtime.
 
 Pick the agent whose description matches the task. Do not default to the first listed agent.
 
-Available models: loaded from the active API mode at runtime.
+Available models: loaded from the active credentials at runtime.
 Largest models for deep reasoning; long-context for lengthy tedious work; cost-effective for parallel routine work.
 
 Optional auto-attach from the input LaTeX:
@@ -226,7 +226,7 @@ Available agents: loaded from the active roster at runtime.
 
 Agent selection: choose the most specific agent whose description matches the task.
 
-Available models: loaded from the active API mode at runtime.
+Available models: loaded from the active credentials at runtime.
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
 Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliography slide formatting."

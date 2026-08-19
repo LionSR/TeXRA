@@ -165,15 +165,8 @@ export interface LoadedMediaRef {
 
 export interface FileListRow extends TranscriptRowBase {
   readonly kind: 'fileList';
-  /** Which category of attachment this load reported (`input`, `media`, …). */
-  readonly category: string;
   /** Every entry the loader reported, loaded and failed alike. */
   readonly files: readonly FileListEntry[];
-  readonly counts: {
-    readonly loaded: number;
-    readonly failed: number;
-    readonly total: number;
-  };
   /** `Files (3/4 loaded, 1 not found)` — the one statement of partial load. */
   readonly summary: string;
   /** The subset a host can preview inline. Kept beside `files`, not instead
