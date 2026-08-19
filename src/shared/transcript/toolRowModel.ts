@@ -28,11 +28,7 @@ import {
   type ProposalFileGroup,
   type ToolUseStatus,
 } from '@shared/schemas';
-import {
-  EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
-  EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
-  EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
-} from '@shared/toolUse';
+import { executionsWaitTimeoutSeconds } from '@shared/toolUse';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOLS,
@@ -49,7 +45,7 @@ import {
 } from '@shared/tools/toolDisplayName';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { isEditLikeToolName, toolDisplayKind } from '@shared/tools/toolKind';
-import { clamp, filterNotNullish, formatDuration, isObject } from '@utils/core';
+import { filterNotNullish, formatDuration, isObject } from '@utils/core';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
 import {
@@ -439,17 +435,6 @@ function buildMemorySections(ctx: SectionContext): ToolSection[] {
     }
   }
   return sections;
-}
-
-/** Clamp of the `executions wait` timeout, matching what the tool enforces. */
-function executionsWaitTimeoutSeconds(timeout: unknown): number {
-  return typeof timeout === 'number' && Number.isFinite(timeout)
-    ? clamp(
-        timeout,
-        EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
-        EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
-      )
-    : EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS;
 }
 
 function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
