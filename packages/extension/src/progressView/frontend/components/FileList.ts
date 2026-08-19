@@ -221,7 +221,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
   }
 
   private handleDismissStorageHint = (): void => {
-    webviewStorage.set(STORAGE_HINT_DISMISS_KEY, true);
+    void webviewStorage.update(STORAGE_HINT_DISMISS_KEY, true);
     this.storageHintDismissed = true;
   };
 
