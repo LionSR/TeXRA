@@ -449,7 +449,7 @@ export class TaskGroupList extends LitElement {
       <span class="group-title">${title}</span>
       ${this.renderGroupProgress(group, rows)}
       <span class="group-time">
-        <span class="group-start-time" data-start=${String(group.startTime)}>
+        <span class="group-start-time">
           ${waIcon('clock')} ${formattedStartTime}
         </span>
         ${
