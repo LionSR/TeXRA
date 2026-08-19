@@ -1,9 +1,8 @@
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   createStdinWorkflowInputMaterializer,
@@ -11,16 +10,14 @@ import {
   withExpandedRunInputs,
 } from '@cli/runtime/workflowInputs';
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 describe('CLI workflow input lifecycle', () => {
+  const tempDirs = useTempDirs();
   let root: string;
 
   beforeEach(async () => {
-    root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
-  });
-
-  afterEach(async () => {
-    await fs.rm(root, { recursive: true, force: true });
+    root = await makeTempDir('texra-cli-stdin-', tempDirs);
   });
 
   async function installFakePlatform() {

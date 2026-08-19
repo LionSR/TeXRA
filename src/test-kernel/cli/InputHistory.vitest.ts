@@ -1,14 +1,14 @@
 // Persistent ↑/↓ + Ctrl-R input history for the chat TUI input bar.
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { loadInputHistory } from '@cli/chat/tui/history/inputHistory';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 describe('CLI TUI input history', () => {
   // GlobalStorageFS resolves paths through the platform but writes with the
@@ -21,10 +21,6 @@ describe('CLI TUI input history', () => {
       { fs: nodeFilesystem },
     ),
   );
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
 
   it('exposes indexed entries for ↑/↓ history browsing', async () => {
     const history = await loadInputHistory();

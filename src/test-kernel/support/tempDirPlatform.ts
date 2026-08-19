@@ -3,6 +3,8 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+import { afterEach } from 'vitest';
+
 // Platform defaults
 
 // Local imports
@@ -74,6 +76,20 @@ export async function withTempDir<T>(
   } finally {
     await cleanupTempDirs(tempDirs);
   }
+}
+
+/**
+ * Returns a `tempDirs` registry for `makeTempDir` / `createTempDirPlatform`
+ * and registers the `afterEach` that empties it — the declaration form of the
+ * registry-plus-cleanup-hook pair every suite used to hand-write. Call it once
+ * at module scope, or inside a `describe` when the registry is suite-local.
+ */
+export function useTempDirs(): string[] {
+  const tempDirs: string[] = [];
+  afterEach(async () => {
+    await cleanupTempDirs(tempDirs);
+  });
+  return tempDirs;
 }
 
 /** Removes every directory recorded by `createTempDirPlatform` (or pushed manually), then clears the list. */

@@ -1,7 +1,3 @@
-import { mkdtemp } from 'node:fs/promises';
-import * as os from 'node:os';
-import * as path from 'node:path';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
@@ -10,10 +6,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
 import { AgentError } from '@common/errors';
-import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type {
   ExecutionId,
@@ -23,7 +15,10 @@ import type {
 } from '@shared/schemas';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
-import { cleanupTempDirs } from '@test/support/tempDirPlatform';
+import {
+  createTempDirPlatform,
+  useTempDirs,
+} from '@test/support/tempDirPlatform';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
 
 const mocks = vi.hoisted(() => ({
@@ -48,7 +43,7 @@ const mocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn(),
 }));
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 async function installFreshDefaultSession(): Promise<void> {
   const { installPlatform } = await import('@test/support/setupPlatform');
@@ -65,23 +60,8 @@ async function installFreshDefaultSession(): Promise<void> {
 }
 
 async function installStoragePlatform(): Promise<void> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-run-'));
-  tempDirs.push(tempDir);
-  const workspaceDir = path.join(tempDir, 'workspace');
-  const storageRoot = path.join(tempDir, 'storage');
   const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform(
-      { workspacePath: workspaceDir },
-      {
-        fs: nodeFilesystem,
-        workspace: createNodeWorkspace(() => workspaceDir),
-        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-        globalState: new MemoryStateStore(),
-        workspaceState: new MemoryStateStore(),
-      },
-    ),
-  );
+  initPlatform(await createTempDirPlatform('texra-run-', tempDirs));
 }
 
 vi.mock('@agent/runtime/runAgent', () => ({
@@ -301,9 +281,8 @@ describe('executeCliRequest', () => {
     await installFreshDefaultSession();
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it.each(['text', 'json'] as const)(

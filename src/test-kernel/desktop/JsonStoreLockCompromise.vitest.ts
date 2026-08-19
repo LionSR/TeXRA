@@ -1,8 +1,7 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   lock: vi.fn(),
@@ -11,19 +10,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock('proper-lockfile', () => ({ lock: mocks.lock }));
 
 // Local imports - test support
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { loadSourceModule } from './loadSourceModule.ts';
 
 describe('JsonStore lock compromise boundary', () => {
-  let tempDir: string | undefined;
-
-  afterEach(async () => {
-    if (tempDir == null) return;
-    await rm(tempDir, { recursive: true, force: true });
-    tempDir = undefined;
-  });
+  const tempDirs = useTempDirs();
 
   it('rejects set() through the compromise path instead of crashing the process', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-json-store-compromise-'));
+    const tempDir = await makeTempDir('texra-json-store-compromise-', tempDirs);
     const filePath = join(tempDir, 'state.json');
     await writeFile(filePath, '{}\n');
 

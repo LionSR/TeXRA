@@ -16,7 +16,7 @@ import {
   setWorkspaceCliChatAgent,
 } from '@cli/runtime/cliConfig';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -25,11 +25,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 const mockedReadFile = vi.mocked(nodeReadFile);
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 afterEach(async () => {
   mockedReadFile.mockClear();
-  await cleanupTempDirs(tempDirs);
 });
 
 const ANSWERS: InitAnswers = {
