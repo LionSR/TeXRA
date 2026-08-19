@@ -34,14 +34,9 @@ import { formatDuration, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { getRunDir, ensureRunDir } from '@utils/files/runStorageFs';
-import {
-  diffTextByLine,
-  DIFF_DELETE,
-  DIFF_EQUAL,
-  DIFF_INSERT,
-} from '@utils/text/diff';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import { countLines } from '@utils/text/stringUtils';
+import { unifiedDiffText } from '@utils/text/unifiedDiff';
 import {
   formatChildRunDelivery,
   formatChildRunError,
@@ -379,41 +374,6 @@ const log = createLog(LOG_CHANNEL);
 const DELIVERY_LOG_CHANNEL = 'subagentDelivery';
 const deliveryLog = createLog(DELIVERY_LOG_CHANNEL);
 
-const DIFF_LINE_PREFIX: Readonly<Record<number, string>> = Object.freeze({
-  [DIFF_INSERT]: '+',
-  [DIFF_DELETE]: '-',
-  [DIFF_EQUAL]: ' ',
-});
-
-/**
- * Compute a human-readable line-level diff between two strings.
- * Uses diff-match-patch's line-mode diffing (diff_linesToChars_ /
- * diff_charsToLines_) to produce clean whole-line diffs with +/- prefixes.
- * Returns null if the strings are identical.
- */
-function computeReadableDiff(
-  original: string,
-  modified: string,
-): string | null {
-  const diffs = diffTextByLine(original, modified, {
-    cleanupSemantic: false,
-  });
-
-  // Check if there are any actual changes.
-  if (diffs.every(([op]) => op === DIFF_EQUAL)) return null;
-
-  const lines: string[] = [];
-  for (const [op, text] of diffs) {
-    const prefix = DIFF_LINE_PREFIX[op] ?? ' ';
-    // Each chunk is one or more complete lines (with trailing \n).
-    // Split and prefix each line, dropping the trailing empty entry from split.
-    const chunkLines = text.split('\n');
-    if (chunkLines.at(-1) === '') chunkLines.pop();
-    for (const line of chunkLines) lines.push(`${prefix}${line}`);
-  }
-  return lines.join('\n');
-}
-
 /**
  * Truncate diff text to a maximum number of lines.
  * Appends a truncation notice if the diff exceeds the limit.
@@ -469,7 +429,7 @@ export async function computeAndWriteWorkflowDiffs(
           largeChange = changedLines / originalLines > LARGE_CHANGE_RATIO;
         }
 
-        const diff = computeReadableDiff(original, modified);
+        const diff = unifiedDiffText(original, modified);
         if (diff) {
           const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
           const truncated = truncateDiff(diff, limit);

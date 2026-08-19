@@ -2,7 +2,6 @@ import type {
   HostBashApprovalRequest,
   HostUserQuestionRequest,
 } from '@agent/runtime';
-import { buildHunks, formatHunkHeader } from '@cli/runtime/diffHunks';
 import {
   agentProposalCategoryLabel,
   getProposalFileGroups,
@@ -10,6 +9,7 @@ import {
   type RetryPermission,
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 
 import {
   cliRetryActionHint,
@@ -181,8 +181,7 @@ export function formatBashApprovalSummary(
 function toolEditDiffLines(
   request: ToolEditApprovalRequest,
 ): readonly string[] {
-  const hunks = buildHunks(
-    request.path,
+  const hunks = buildDiffHunks(
     request.originalContent,
     request.proposedContent,
   );
@@ -191,7 +190,7 @@ function toolEditDiffLines(
   return [
     `--- ${request.path}`,
     `+++ ${request.path}`,
-    ...hunks.flatMap((hunk) => [formatHunkHeader(hunk), ...hunk.lines]),
+    ...formatHunkLines(hunks),
   ];
 }
 

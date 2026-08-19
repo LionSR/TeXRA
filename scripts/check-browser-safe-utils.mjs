@@ -38,7 +38,6 @@ const EXPECTED_REACHABLE = [
   '@utils/core/keyedMutex',
   '@utils/errors/errorMessage',
   '@utils/files/pastedImageName',
-  '@utils/text/diff',
   '@utils/text/stringUtils',
 ];
 
