@@ -20,8 +20,7 @@ const StateSchema = z.object({
 describe('PersistedState loading', () => {
   const storage = {
     get: vi.fn(),
-    set: vi.fn(),
-    delete: vi.fn(),
+    update: vi.fn<(key: string, value: unknown) => Promise<void>>(),
   };
 
   let warn: MockInstance<typeof console.warn>;
@@ -41,7 +40,7 @@ describe('PersistedState loading', () => {
     const state = new PersistedState(storage, 'viewPrefs', StateSchema);
 
     expect(state.getState()).toEqual({ density: 'comfortable' });
-    expect(storage.set).not.toHaveBeenCalled();
+    expect(storage.update).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -51,7 +50,7 @@ describe('PersistedState loading', () => {
     const state = new PersistedState(storage, 'viewPrefs', StateSchema);
 
     expect(state.getState()).toEqual({ density: 'comfortable' });
-    expect(storage.set).toHaveBeenCalledWith('viewPrefs', {
+    expect(storage.update).toHaveBeenCalledWith('viewPrefs', {
       density: 'comfortable',
     });
     expect(warn).toHaveBeenCalledOnce();

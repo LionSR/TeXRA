@@ -653,9 +653,8 @@ export default tseslint.config(
     },
   },
 
-  // Production core code must not reach back into host-owned layers. The only
-  // intentional prose reference in this area is a JSDoc note in
-  // src/shared/state/PersistedState.ts; import declarations stay forbidden.
+  // Production core code must not reach back into host-owned layers; import
+  // declarations are forbidden.
   {
     files: ['src/**/*.{ts,tsx}', 'packages/agent/src/**/*.{ts,tsx}'],
     ignores: ['src/test-kernel/**'],
