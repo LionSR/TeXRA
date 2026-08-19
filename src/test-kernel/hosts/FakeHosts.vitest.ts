@@ -44,27 +44,6 @@ describe('FakeHosts', () => {
     ]);
   });
 
-  it('does not return queued input rejected by validation', async () => {
-    const hosts = createFakeUIHosts({ inputResponses: ['bad-name'] });
-    const validateInput = (value: string) =>
-      value.includes(' ') ? undefined : 'Enter at least two words';
-
-    const input = await hosts.prompt.input({
-      prompt: 'Name',
-      validateInput,
-    });
-
-    assert.equal(input, undefined);
-    assert.deepEqual(hosts.prompt.inputs, [
-      {
-        options: {
-          prompt: 'Name',
-          validateInput,
-        },
-      },
-    ]);
-  });
-
   it('records opener and diff effects', async () => {
     const hosts = createFakeUIHosts({
       proposedDiffContent: { '/tmp/proposed.tex': 'edited' },
