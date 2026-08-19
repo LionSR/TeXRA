@@ -277,8 +277,9 @@ export interface ChildRunLoopParams<TTurn> {
   readonly childStream?: ChildStreamPort;
   /**
    * The child's stream id, known deterministically upfront by every caller
-   * (agent-CLI: `createChildStream`'s own id; native: `getStreamTabId` — the
-   * same formula `buildAgentLaunchContext` derives internally) — never
+   * (one `getStreamTabId` formula either way — agent-CLI passes the launching
+   * tool's stream prefix, native passes the clean agent name, which is what
+   * `buildAgentLaunchContext` derives internally) — never
    * discovered mid-flight, so the loop can acquire the follow-up queue and
    * attach its interrupt handler before the first turn ever runs when a handle
    * already exists.
