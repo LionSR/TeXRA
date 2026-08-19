@@ -274,14 +274,15 @@ export function buildFileListRender(
     const iconName = file.ok ? 'check' : 'triangle-exclamation';
     const filePath = file.path;
     const fileName = getBasename(filePath);
-
-    const source = file.source ?? 'unknown';
-    const showSource = source !== 'unknown';
-    const sourceText = file.sourceDisplay ?? source;
     const loaded = mediaByPath.get(filePath);
 
+    // The one rule for a loaded file's source label, shared with the CLI
+    // (transcriptRowLines): paint `sourceDisplay`, nothing else. Raw `source`
+    // is a producer-side code identifier (`requiredFilesInternal`, a tool
+    // name) and must never reach a user — an entry worth labelling sets
+    // `sourceDisplay`, so no host needs a fallback to spell it out.
     // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, fileName)}${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}${loaded ? html` <span class="file-media">[${loaded.kind}, ${formatBytes(loaded.sizeBytes)}]</span>` : ''}</li>`;
+    return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, fileName)}${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(${file.sourceDisplay})</span>` : ''}${loaded ? html` <span class="file-media">[${loaded.kind}, ${formatBytes(loaded.sizeBytes)}]</span>` : ''}</li>`;
   })}`;
 }
 
