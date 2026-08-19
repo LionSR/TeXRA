@@ -425,17 +425,48 @@ and pinned by `RelaySharedConfigParity.vitest.ts` (attic copy):
 
 ## 11. Sunset record (fill in as executed)
 
-1. ☐ Tier-config provider list emptied for all tiers (date: ______). Old
-   released clients deny included access client-side
+**Hard precondition: do none of this until the removal release has shipped.**
+Until then `relay` and `relay-tokens` stay fully live and every provider
+secret stays set. Every user still running a relay-enabled build depends on
+them, and many have no personal API key configured — cutting the server side
+first would strand exactly those users. The client-side removal is what makes
+them stop asking; the server steps only clean up afterwards.
+
+**How "empty the provider list" actually works.** It is not a config edit.
+`ENABLED_PROVIDERS` in `relay/index.ts` is derived at cold start by filtering
+`PROVIDER_CONFIGS` to those whose `envKey` is present in the environment, and
+`/relay/tier-config` overrides its `providers` field with that list. So the
+list is emptied by **unsetting the provider secrets** — a secret change
+restarts every function, so it takes effect on the next cold start. This
+means old step 1 and old step 4 were the same operation described twice.
+
+State verified 2026-08-19 on project `jntubmcgbhwtcktubelv`: `relay` and
+`relay-tokens` deployed and ACTIVE; provider secrets set are
+`ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `GOOGLE_API_KEY`,
+`MOONSHOT_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY` (DashScope, MiniMax and
+GLM were never set). All six are relay-only — no surviving function
+references any of them, so unsetting them cannot affect the services that
+stay.
+
+1. ☐ Removal release shipped on all three surfaces (date: ______).
+2. ☐ Adoption window observed; relay traffic falling (date: ______).
+3. ☐ Provider secrets unset, which empties the served provider list
+   (date: ______):
+   `supabase secrets unset ANTHROPIC_API_KEY DEEPSEEK_API_KEY GOOGLE_API_KEY MOONSHOT_API_KEY OPENAI_API_KEY XAI_API_KEY --project-ref <ref>`.
+   Stragglers on old builds then deny included access client-side
    (`ServerSideKeyService` requires `providers.length > 0`) and fall back to
-   own API keys within the 5-minute cache TTL. Left in place permanently.
-2. ☐ Relay traffic monitored to ~0 (date: ______).
-3. ☐ `supabase functions delete relay` / `relay-tokens` (date: ______).
-4. ☐ Server-held provider API keys revoked at each provider console and
-   `supabase secrets unset` (date: ______).
-5. Kept deployed: `log-usage`, `auth-github`, `auth-device`, `auth-bridge`,
+   their own API keys within the 5-minute cache TTL — a graceful degrade
+   rather than the hard failure they would hit if the function simply
+   vanished. This is why it precedes deletion.
+4. ☐ Relay traffic monitored to ~0 (date: ______).
+5. ☐ `supabase functions delete relay` / `relay-tokens` (date: ______).
+6. ☐ Server-held provider API keys revoked at each provider console
+   (date: ______). Unsetting the secret only unbinds the key; the key itself
+   stays valid until revoked at the provider, so this step is what actually
+   ends the spend exposure.
+7. Kept deployed: `log-usage`, `auth-github`, `auth-device`, `auth-bridge`,
    `get-agent-config`, `before-user-created`, `github-app-token-exchange`.
-6. ☐ Optional: `relay_ci_tokens` table dropped. `profiles.tier` left intact.
+8. ☐ Optional: `relay_ci_tokens` table dropped. `profiles.tier` left intact.
 
 ## 12. Rebuild recipe
 
