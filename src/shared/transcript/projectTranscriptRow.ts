@@ -560,9 +560,6 @@ export function projectTranscriptRow(
       };
     }
 
-    case MESSAGE_TYPES.CONTEXT_STATE:
-      return { ...rowBase(entry), kind: 'contextState', data: entry.data };
-
     case MESSAGE_TYPES.PROGRESS_STATUS: {
       const detail = stringifyPayload(entry.data).text;
       return {
@@ -599,9 +596,12 @@ export function projectTranscriptRow(
     // `compactionActivityRow`. `activeSkills` is a per-run snapshot read on
     // demand from the log (the CLI's `/status`), not a transcript row, and
     // `internal` is a durable marker (the workflow-attempt boundary) that
-    // nothing renders.
+    // nothing renders. Context utilization is a status surface on both hosts —
+    // the CLI reads it off `StreamExecutionState.contextState` and the webview
+    // off the raw entry in `logSlice` — so it has no transcript row either.
     case MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY:
     case MESSAGE_TYPES.ACTIVE_SKILLS:
+    case MESSAGE_TYPES.CONTEXT_STATE:
     case MESSAGE_TYPES.INTERNAL:
       return undefined;
 

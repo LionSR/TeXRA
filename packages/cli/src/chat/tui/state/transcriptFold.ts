@@ -44,7 +44,6 @@ import { truncateSummary } from '@utils/text/stringUtils';
 import {
   isFinalizedTranscriptRow,
   isRenderableTranscriptEntry,
-  isSelfSettledRow,
   transcriptRowHeadline,
 } from '../panes/transcriptEntries';
 import type { TranscriptFoldItem, TranscriptFoldState } from './cliState';
@@ -151,18 +150,13 @@ export function logEntryStreamIsRunning(entry: StreamLogEntry): boolean {
  * The transcript row a projected row paints as, or `null` when the terminal
  * has no line for it.
  *
- * Two drops: context utilization is a status-bar fact, not a transcript line
- * (it reaches the CLI through the same projection so there is one derivation,
- * but has no inline row on either host); and a prose row whose text is
- * invisible in a terminal — an all-ANSI or zero-width chunk — never becomes a
- * row at all, so nothing downstream has to reserve space for it. Typed rows
- * keep their membership: the projector decided it, and the terminal does not
- * re-decide.
+ * One drop: a prose row whose text is invisible in a terminal — an all-ANSI or
+ * zero-width chunk — never becomes a row at all, so nothing downstream has to
+ * reserve space for it. Typed rows keep their membership: the projector
+ * decided it, and the terminal does not re-decide.
  */
 function transcriptRowForPaint(row: TranscriptRow): TranscriptRow | null {
   switch (row.kind) {
-    case 'contextState':
-      return null;
     case 'assistant':
     case 'log':
     case 'user':
@@ -194,20 +188,23 @@ function blocksSettledPrefix(
 // round's earlier content). Only a contiguous prefix is promoted: `<Static>`
 // is append-only, so a row must not finalize while any earlier row is still
 // pending, or insertion order would reverse.
-export function advanceFinalizedFrontier(
-  rows: readonly TranscriptRow[],
-  frontier: number,
+//
+// Both holders of a frontier walk this same loop — the fold over its items,
+// and the no-resident-log turn boundary over the slice's rows — so the walk
+// (and its start clamp) is stated once. Positions below `start` are already
+// printed, so only the newly promotable tail is walked.
+export function advanceSettledPrefixIndex(
+  rowAt: (index: number) => TranscriptRow,
+  total: number,
+  start: number,
   streamFinal: boolean,
+  onAdvanced?: (index: number, row: TranscriptRow) => void,
 ): number {
-  let index = Math.min(frontier, rows.length);
-  while (index < rows.length) {
-    const row = rows[index]!;
-    if (
-      !isSelfSettledRow(row) &&
-      blocksSettledPrefix(row, index, rows.length, streamFinal)
-    ) {
-      break;
-    }
+  let index = Math.min(start, total);
+  while (index < total) {
+    const row = rowAt(index);
+    if (blocksSettledPrefix(row, index, total, streamFinal)) break;
+    onAdvanced?.(index, row);
     index += 1;
   }
   return index;
@@ -804,30 +801,24 @@ function reconcileSynthetics(
   state.synthetics = current;
 }
 
-// Advance the contiguous settled-prefix promotion. Positions below the
-// frontier are already printed, so each application only walks the newly
-// promotable tail.
+// Advance the fold's settled-prefix promotion over its items.
 function advanceSettledPrefix(
   state: TranscriptFoldState,
   streamFinal: boolean,
 ): void {
   const items = state.items;
-  let index = state.finalizedFrontier;
-  while (index < items.length) {
-    const row = items[index].rendered;
-    if (
-      !isSelfSettledRow(row) &&
-      blocksSettledPrefix(row, index, items.length, streamFinal)
-    ) {
-      break;
-    }
+  state.finalizedFrontier = advanceSettledPrefixIndex(
+    (index) => items[index]!.rendered,
+    items.length,
+    state.finalizedFrontier,
+    streamFinal,
     // A newly printed model reply becomes the stream's latest line.
-    if (isResponseRow(row) && index > state.latestResponsePos) {
-      state.latestResponsePos = index;
-    }
-    index += 1;
-  }
-  state.finalizedFrontier = index;
+    (index, row) => {
+      if (isResponseRow(row) && index > state.latestResponsePos) {
+        state.latestResponsePos = index;
+      }
+    },
+  );
 }
 
 /**
