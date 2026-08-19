@@ -7,12 +7,14 @@
 
 import { isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
-import type { DiffStats, FileLocation, OutputFileInfo } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
-  createWorkspaceLocation,
-  getComparablePath,
-} from '@utils/files/fileLocation';
+  fileLocationDisplayPath,
+  type DiffStats,
+  type FileLocation,
+  type OutputFileInfo,
+} from '@shared/schemas';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { diffLineChanges } from '@utils/text/diff';
@@ -109,7 +111,7 @@ export async function computeOutputDiffStats(
   return Promise.all(
     roundOutputs.map(async (output) => {
       const location = output.location;
-      const locationPath = getComparablePath(location);
+      const locationPath = fileLocationDisplayPath(location);
 
       const entry = mapping.get(locationPath);
       const baseLocation = entry?.base ?? null;
@@ -121,7 +123,7 @@ export async function computeOutputDiffStats(
       if (
         !diffBaseLocation &&
         originalLocation &&
-        getComparablePath(originalLocation) !== locationPath
+        fileLocationDisplayPath(originalLocation) !== locationPath
       ) {
         diffBaseLocation = originalLocation;
       }
@@ -133,7 +135,7 @@ export async function computeOutputDiffStats(
       // so the diff stats reflect real changes against the original.
       if (!diffBaseLocation && !originalLocation && baseFiles.length === 1) {
         const candidate = baseFiles[0];
-        if (getComparablePath(candidate) !== locationPath) {
+        if (fileLocationDisplayPath(candidate) !== locationPath) {
           diffBaseLocation = candidate;
         }
       }

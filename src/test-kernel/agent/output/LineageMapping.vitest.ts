@@ -5,11 +5,8 @@ import {
   createOutputState,
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
-import type { ExecutionId } from '@shared/schemas';
-import {
-  createRunStorageLocation,
-  getComparablePath,
-} from '@utils/files/fileLocation';
+import { fileLocationDisplayPath, type ExecutionId } from '@shared/schemas';
+import { createRunStorageLocation } from '@utils/files/fileLocation';
 
 describe('workflow output lineage mapping', () => {
   const executionId: ExecutionId = 'abc123';
@@ -48,10 +45,10 @@ describe('workflow output lineage mapping', () => {
 
     const mapping = traceFileLineage(state, [chapter1, chapter2], 0);
 
-    const chapter1Entry = mapping.get(getComparablePath(chapter1Output));
+    const chapter1Entry = mapping.get(fileLocationDisplayPath(chapter1Output));
     expect(chapter1Entry?.origin).toBe(chapter1);
     expect(chapter1Entry?.base).toBe(chapter1);
-    const chapter2Entry = mapping.get(getComparablePath(chapter2Output));
+    const chapter2Entry = mapping.get(fileLocationDisplayPath(chapter2Output));
     expect(chapter2Entry?.origin).toBe(chapter2);
     expect(chapter2Entry?.base).toBe(chapter2);
   });

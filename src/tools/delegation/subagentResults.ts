@@ -23,7 +23,11 @@ import {
 } from '@agent/runtime/AgentFinalResult';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
-import type { ExecutionId, OutputFileSummary } from '@shared/schemas';
+import {
+  runStorageFilePath,
+  type ExecutionId,
+  type OutputFileSummary,
+} from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration, unique } from '@utils/core';
@@ -64,7 +68,7 @@ function formatOutputFile(
 ): string {
   const readPath =
     o.location === 'runStorage'
-      ? `/executions/${executionId}/files/${o.relativePath}`
+      ? runStorageFilePath(executionId, o.relativePath)
       : o.absolutePath;
   const attrs = [
     `path="${escapeAttr(o.relativePath)}"`,
