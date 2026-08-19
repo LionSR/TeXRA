@@ -20,7 +20,8 @@ export type PresentedStreamId = StreamTabId | '';
  * A projection slice whose new value the host re-reads from the shared state
  * rather than receiving on the wire. Each key names the field the host reads
  * (`outputs.files`, `outputs.compileFailures`, `workPlan.queuedFollowUps`,
- * `SessionStreamMetadata.parentStreamId`) or the fact it reacts to
+ * `SessionStreamMetadata.parentStreamId`,
+ * `StreamExecutionState.contextState`) or the fact it reacts to
  * (`goalPaused`); nothing here is new vocabulary. Slices whose notification
  * carries real delta semantics — `onMissingOutputsChanged`'s `reset`,
  * `onStageChanged`'s phase-vs-round split — keep their own method.
@@ -30,6 +31,7 @@ export type SessionRenderSlice =
   | 'compileFailures'
   | 'queuedFollowUps'
   | 'parentStreamId'
+  | 'contextState'
   | 'goalPaused';
 
 /**
