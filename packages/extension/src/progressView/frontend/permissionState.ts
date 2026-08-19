@@ -4,9 +4,9 @@
  * (`PermissionPayload`) — the frontend stores what the backend sent, with no
  * parallel view model to keep in sync.
  *
- * Lives in its own leaf module (not `components/PermissionCard.ts`) so state
- * files (store, contexts, slices, dispatcher) can use them without importing
- * the Lit component and its side-effect imports.
+ * Lives in its own leaf module so state files (store, contexts, slices,
+ * dispatcher) can use them without importing a Lit component and its
+ * side-effect imports.
  */
 import type { PermissionPayload } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
