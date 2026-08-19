@@ -448,7 +448,7 @@ function progressMessages() {
       permission: {
         kind: 'proposal',
         data: {
-          proposalId: 'proposal-polish-intro',
+          requestId: 'proposal-polish-intro',
           streamId: stream,
           agent: 'polish',
           model: 'gemini31p',

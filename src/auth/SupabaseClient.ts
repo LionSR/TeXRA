@@ -286,14 +286,6 @@ export class SupabaseClient {
   }
 
   /**
-   * Whether PostgREST-backed remote agent definitions can be queried.
-   * Requires a normal GoTrue session access token.
-   */
-  static async canAccessRemoteAgentCatalog(): Promise<boolean> {
-    return (await this.getAccessToken()) !== null;
-  }
-
-  /**
    * Health of the stored GoTrue session. This is the canonical
    * classification for account UI and commands.
    */

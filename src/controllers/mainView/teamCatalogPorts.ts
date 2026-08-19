@@ -24,7 +24,7 @@ export function createTeamCatalogPorts(): {
     ),
     ensureCatalogLoaded: loadAgents,
     getAgents: getAgentsByCategory,
-    canAccessRemoteCatalog: () => SupabaseClient.canAccessRemoteAgentCatalog(),
+    canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
     refreshRemote: () => refresh({ includeRemote: true }),
   };
 }

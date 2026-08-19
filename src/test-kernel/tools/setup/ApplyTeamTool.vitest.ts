@@ -48,9 +48,8 @@ function expectNoTeamState(): void {
   expect(getDefaultTeamId(platform().globalState)).toBeUndefined();
 }
 
-function mockSignedInCatalogAccess(canAccessCatalog: boolean): void {
-  vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
-  vi.spyOn(SupabaseClient, 'canAccessRemoteAgentCatalog').mockResolvedValue(
+function mockCatalogAccess(canAccessCatalog: boolean): void {
+  vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(
     canAccessCatalog,
   );
   vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
@@ -176,7 +175,7 @@ describe('apply_team', () => {
   });
 
   it('honors an explicit continuation when catalog access is available', async () => {
-    mockSignedInCatalogAccess(true);
+    mockCatalogAccess(true);
 
     const result = await applyTeam({
       teamId: 'starter',
@@ -191,7 +190,7 @@ describe('apply_team', () => {
 
   it('uses the host setup sign-in capability before its forced retry', async () => {
     const signIn = vi.fn(async () => true);
-    mockSignedInCatalogAccess(false);
+    mockCatalogAccess(false);
     setSetupPlatform(createFakeSetupPlatform({ signIn }));
 
     const result = await applyTeam({
