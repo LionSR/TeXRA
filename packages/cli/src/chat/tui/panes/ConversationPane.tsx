@@ -5,6 +5,7 @@ import { Box, Text } from 'ink';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { AgentCategory } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import {
   formatWorkflowPhaseHeading,
   latestWorkflowCallsById,
@@ -17,7 +18,6 @@ import {
   activeStreamId as activeStreamIdSignal,
   currentWorkflowAttemptId,
   streams as streamsSignal,
-  type ConversationEntry,
   type StreamSlice,
 } from '../state/cliState';
 import {
@@ -69,13 +69,13 @@ function renderConversationPaneEntry({
   width,
 }: {
   readonly colorEnabled?: boolean;
-  readonly entry: ConversationEntry;
+  readonly entry: TranscriptRow;
   readonly rowLimit?: number;
   readonly subagentExecutionLabels?: ExecutionLabels;
   readonly width?: number;
 }): React.JSX.Element | null {
-  // When the newest entry alone overflows the pane, the bounded renderer is the
-  // paint contract. Apply it before role/mode branches so sizing and painting
+  // When the newest row alone overflows the pane, the bounded renderer is the
+  // paint contract. Apply it before kind/mode branches so sizing and painting
   // stay in lockstep.
   const content = ((): React.JSX.Element | null => {
     if (rowLimit !== undefined) {
@@ -89,63 +89,62 @@ function renderConversationPaneEntry({
         />
       );
     }
-    if (entry.role === 'tool') {
-      return (
-        <ToolUseRow
-          subagentExecutionLabels={subagentExecutionLabels}
-          toolRow={entry.row}
-          width={width}
-        />
-      );
+    switch (entry.kind) {
+      case 'tool':
+        return (
+          <ToolUseRow
+            subagentExecutionLabels={subagentExecutionLabels}
+            toolRow={entry}
+            width={width}
+          />
+        );
+      case 'assistant':
+      case 'log':
+        return <LiveTranscriptEntry entry={entry} width={width} />;
+      case 'user':
+        return (
+          <TranscriptEntry
+            colorEnabled={colorEnabled}
+            entry={entry}
+            fillWidth
+            width={width}
+          />
+        );
+      case 'phase':
+        return (
+          <TranscriptEntry
+            colorEnabled={colorEnabled}
+            entry={entry}
+            width={width}
+          />
+        );
+      case 'compactionActivity':
+      case 'error':
+      case 'fileList':
+      case 'workflowTask':
+        return (
+          <BoundedTranscriptEntry
+            colorEnabled={colorEnabled}
+            entry={entry}
+            maxRows={estimateTranscriptEntryRows(
+              entry,
+              width,
+              subagentExecutionLabels,
+            )}
+            width={width}
+          />
+        );
+      // Compact detail rows (thinking, web search/fetch, usage, status, …)
+      // have no live presentation: they appear once they reach scrollback.
+      default:
+        return null;
     }
-    if (entry.role === 'assistant') {
-      return <LiveTranscriptEntry entry={entry} width={width} />;
-    }
-    if (entry.role === 'user') {
-      return (
-        <TranscriptEntry
-          colorEnabled={colorEnabled}
-          entry={entry}
-          fillWidth
-          width={width}
-        />
-      );
-    }
-    if (entry.role === 'phase') {
-      return (
-        <TranscriptEntry
-          colorEnabled={colorEnabled}
-          entry={entry}
-          width={width}
-        />
-      );
-    }
-    if (
-      entry.role === 'activity' ||
-      entry.role === 'error' ||
-      entry.role === 'media' ||
-      entry.role === 'workflowTask'
-    ) {
-      return (
-        <BoundedTranscriptEntry
-          colorEnabled={colorEnabled}
-          entry={entry}
-          maxRows={estimateTranscriptEntryRows(
-            entry,
-            width,
-            subagentExecutionLabels,
-          )}
-          width={width}
-        />
-      );
-    }
-    return null;
   })();
   if (content === null) return null;
-  // Isolate per entry so a single throwing renderer can't blank the live pane.
+  // Isolate per row so a single throwing renderer can't blank the live pane.
   // The key moves to the boundary since it is now the list child.
   return (
-    <EntryErrorBoundary key={entry.id} label={entry.role}>
+    <EntryErrorBoundary key={entry.id} label={entry.kind}>
       {content}
     </EntryErrorBoundary>
   );
@@ -180,8 +179,8 @@ export function workflowRunStatusSummary(
   if (!slice || category !== AgentCategory.Workflow) return undefined;
   const phase = currentWorkflowPhaseHeading(slice, category);
   const currentCalls = latestWorkflowCallsById(
-    slice.entries.flatMap((entry) =>
-      entry.role === 'workflowTask' ? [entry.task] : [],
+    slice.entries.flatMap((row) =>
+      row.kind === 'workflowTask' ? [row.call] : [],
     ),
     currentWorkflowAttemptId(
       slice.workflowAttemptId,
@@ -226,7 +225,11 @@ export function ConversationPane(
   const artifacts =
     activeStreamId && slice ? readStreamArtifacts(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
-  const displayEntries = splitTranscriptEntries(entries, slice?.status).pending;
+  const displayEntries = splitTranscriptEntries(
+    entries,
+    slice?.finalizedFrontier ?? 0,
+    slice?.status,
+  ).pending;
 
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
   const metadataWidth =

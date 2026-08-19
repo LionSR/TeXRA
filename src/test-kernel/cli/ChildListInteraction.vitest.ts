@@ -17,7 +17,8 @@ import {
 } from '@cli/chat/tui/state/workflowDashboardModel';
 import type { StreamView } from '@cli/chat/tui/state/streamViews';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { type StreamTabId } from '@shared/schemas';
+import { type StreamTabId, type WorkflowCallProgress } from '@shared/schemas';
+import type { TranscriptRowOf } from '@shared/transcript';
 import {
   loadInk,
   renderInteractive,
@@ -86,6 +87,41 @@ function workflowRootSlice(entries: StreamSlice['entries']): StreamSlice {
   return {
     ...emptySlice(root),
     entries,
+  };
+}
+
+function phaseRow(
+  id: string,
+  phaseLabel: string,
+  phaseIndex: number,
+  phaseTotal: number,
+): TranscriptRowOf<'phase'> {
+  return {
+    kind: 'phase',
+    id,
+    timestamp: 0,
+    level: 'info',
+    heading: phaseLabel,
+    phaseLabel,
+    phaseIndex,
+    phaseTotal,
+  };
+}
+
+function taskRow(
+  id: string,
+  call: WorkflowCallProgress,
+): TranscriptRowOf<'workflowTask'> {
+  const statusLabel = call.status === 'running' ? 'Running' : 'Planned';
+  return {
+    kind: 'workflowTask',
+    id,
+    timestamp: 0,
+    level: 'info',
+    call,
+    line: `${statusLabel}: ${call.label}`,
+    statusLabel,
+    metadataParts: [],
   };
 }
 
@@ -283,40 +319,20 @@ describe('CLI child list interaction', () => {
     const childTaskValue = workflowTaskListValue('task-child');
     const plannedTaskValue = workflowTaskListValue('task-planned');
     const rootSlice = workflowRootSlice([
-      {
-        id: 'phase-map',
-        role: 'phase',
-        text: 'Map',
-        finalized: true,
-        phaseLabel: 'Map',
-        phaseIndex: 0,
-        phaseTotal: 1,
-      },
-      {
-        id: 'task-child',
-        role: 'workflowTask',
-        text: 'Running: Inspect',
-        finalized: false,
-        task: {
-          id: 'inspect',
-          label: 'Inspect',
-          phase: 'Map',
-          status: 'running',
-          childStreamId: child,
-        },
-      },
-      {
-        id: 'task-planned',
-        role: 'workflowTask',
-        text: 'Planned: Summarize',
-        finalized: false,
-        task: {
-          id: 'summarize',
-          label: 'Summarize',
-          phase: 'Map',
-          status: 'planned',
-        },
-      },
+      phaseRow('phase-map', 'Map', 0, 1),
+      taskRow('task-child', {
+        id: 'inspect',
+        label: 'Inspect',
+        phase: 'Map',
+        status: 'running',
+        childStreamId: child,
+      }),
+      taskRow('task-planned', {
+        id: 'summarize',
+        label: 'Summarize',
+        phase: 'Map',
+        status: 'planned',
+      }),
     ]);
     const listProps = {
       keyboardActive: true,
@@ -397,30 +413,20 @@ describe('CLI child list interaction', () => {
     const onFocusStream = vi.fn();
     const onWorkflowControl = vi.fn();
     const rootSlice = workflowRootSlice([
-      ...['first', 'second'].map((id) => ({
-        id: `task-${id}`,
-        role: 'workflowTask' as const,
-        text: `Running: ${id}`,
-        finalized: false,
-        task: {
+      ...['first', 'second'].map((id) =>
+        taskRow(`task-${id}`, {
           id,
           label: id,
-          status: 'running' as const,
-          childStreamId: child,
-        },
-      })),
-      {
-        id: 'task-missing',
-        role: 'workflowTask',
-        text: 'Running: missing',
-        finalized: false,
-        task: {
-          id: 'missing',
-          label: 'missing',
           status: 'running',
-          childStreamId: 'missing-child' as StreamTabId,
-        },
-      },
+          childStreamId: child,
+        }),
+      ),
+      taskRow('task-missing', {
+        id: 'missing',
+        label: 'missing',
+        status: 'running',
+        childStreamId: 'missing-child' as StreamTabId,
+      }),
     ]);
 
     const dashboard = workflowDashboardModel(rootSlice, 100);

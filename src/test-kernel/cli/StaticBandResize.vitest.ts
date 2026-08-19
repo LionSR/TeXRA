@@ -20,11 +20,9 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 // Local imports
 import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
-import type {
-  ConversationEntry,
-  SessionMeta,
-} from '@cli/chat/tui/state/cliState';
+import type { SessionMeta } from '@cli/chat/tui/state/cliState';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import type { TranscriptRow } from '@shared/transcript';
 import {
   FakeStdin,
   FakeStdout,
@@ -33,7 +31,10 @@ import {
   renderWithTerminalSize,
 } from '@test/support/inkTestHarness.ts';
 import { pollForCondition } from '@test/support/asyncTestUtils';
-import { toolConversationEntry } from '@test/support/transcriptRowFixtures';
+import {
+  textRowFixture,
+  toolRowFixture,
+} from '@test/support/transcriptRowFixtures';
 
 afterAll(() => {
   for (const [name, value] of Object.entries(ORIGINAL_COLOR_ENV)) {
@@ -110,28 +111,30 @@ function seedTranscript(
   cliState: typeof import('@cli/chat/tui/state/cliState'),
   streamId: StreamTabId,
   cwd: string,
-  entries: ConversationEntry[],
+  entries: TranscriptRow[],
 ): void {
   cliState.resetCliState({ ...TRANSCRIPT_SESSION, cwd });
   cliState.patchStream(streamId, (slice) => ({ ...slice, entries }));
 }
 
-/** A completed tool row; only the fields each case varies are parameters. */
+/** A completed tool row; only the fields each case varies are parameters. A
+ *  `settlementSeqNo` is what makes the row settled on arrival, so the static
+ *  band can print it without waiting for the promotion frontier. */
 function completedToolEntry(fields: {
   id: string;
   toolName: string;
   input: Record<string, unknown>;
   outputText: string;
-  finalized: boolean;
-}): ConversationEntry {
-  return toolConversationEntry(
+  settlementSeqNo?: number;
+}): TranscriptRow {
+  return toolRowFixture(
     fields.id,
     {
       toolName: fields.toolName,
       input: fields.input,
       outputText: fields.outputText,
     },
-    fields.finalized,
+    fields.settlementSeqNo,
   );
 }
 
@@ -147,18 +150,14 @@ describe('Static band resize', () => {
     const { createElement } = React;
     const streamId = 'resize-static-stream' as StreamTabId;
     const prompt = 'resize geometry prompt';
-    const finalizedUser: ConversationEntry = {
-      id: 'resize-user',
-      role: 'user',
-      text: prompt,
-      finalized: true,
-    };
-    const liveAssistant: ConversationEntry = {
-      id: 'live-assistant',
-      role: 'assistant',
-      text: 'working',
-      finalized: false,
-    };
+    // A user row is settled on arrival; the assistant and tool rows carry no
+    // settlement order, so they stay live.
+    const finalizedUser = textRowFixture('resize-user', 'user', prompt);
+    const liveAssistant = textRowFixture(
+      'live-assistant',
+      'assistant',
+      'working',
+    );
     const tool = completedToolEntry({
       id: 'full-output-tool',
       toolName: 'Bash',
@@ -167,7 +166,6 @@ describe('Static band resize', () => {
         { length: 15 },
         (_, index) => `tool line ${index}`,
       ).join('\n'),
-      finalized: false,
     });
 
     seedTranscript(cliState, streamId, '/tmp/resize-proof', [
@@ -242,7 +240,7 @@ describe('Static band resize', () => {
       toolName: 'executions',
       input: { path: executionPath },
       outputText: 'report',
-      finalized: true,
+      settlementSeqNo: 1,
     });
 
     seedTranscript(cliState, streamId, '/tmp/execution-label-proof', [
@@ -303,7 +301,7 @@ describe('Static band resize', () => {
       await loadTranscriptStack();
     const { createElement } = React;
     const streamId = 'listener-count-stream' as StreamTabId;
-    const toolEntries: ConversationEntry[] = Array.from(
+    const toolEntries: TranscriptRow[] = Array.from(
       { length: 70 },
       (_, index) =>
         completedToolEntry({
@@ -311,7 +309,7 @@ describe('Static band resize', () => {
           toolName: 'Bash',
           input: { command: `printf ${index}` },
           outputText: `result ${index}`,
-          finalized: true,
+          settlementSeqNo: index + 1,
         }),
     );
 

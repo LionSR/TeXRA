@@ -12,8 +12,6 @@ import type {
   AgentDelegationScope,
   CompileFailure,
   ConversationProgress,
-  MessageType,
-  NormalizedToolUse,
   OutputFileInfo,
   Plan,
   RoundIndexed,
@@ -27,14 +25,9 @@ import type {
   TodoItem,
   TokenUsageStats,
   UserFollowUpSupport,
-  WorkflowCallProgress,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import type {
-  ToolRow,
-  TranscriptRow,
-  TranscriptRowOf,
-} from '@shared/transcript';
+import type { TranscriptRow } from '@shared/transcript';
 import { latestWorkflowAttemptId } from '@shared/copy/workflowCall';
 import type {
   CompactionActivityBlock,
@@ -52,121 +45,19 @@ import { isChildStreamRemoved } from './childExecutions';
 // (one record per stream + an `activeStreamId`) so future feature parity is a
 // port, not a rewrite.
 
-interface ConversationEntryBase {
-  /** Same id as the upstream `StreamLogEntry.id` — stable across deltas. */
-  readonly id: string;
-  /** The shared projection this row paints from (`@shared/transcript`).
-   *  Absent only on CLI-synthetic rows, which have no source entry. */
-  readonly row?: TranscriptRow;
-  /** Headline text: the one line a row leads with. Body lines come from
-   *  `row` at paint time, where the terminal spends its own width budget.
-   *  Empty for tool rows. */
-  readonly text: string;
-  /** Original shared log vocabulary. Role alone intentionally groups several
-   * display kinds and is not precise enough for semantic selection. */
-  readonly messageType?: MessageType;
-  /** True while rendered assistant text is hiding an incomplete protocol block. */
-  readonly pendingEmbeddedSubagentFollowup?: boolean;
-  /** True once the stream transitions to `WAITING`/`COMPLETED`. */
-  readonly finalized: boolean;
-  /** Recorder-owned full text, available only through the on-demand reader. */
-  readonly spillPath?: string;
-  /** Set by the on-demand reader when the spill artifact failed to load, so
-   *  renderers can show the failure notice without the "Full output:" header. */
-  readonly spillFailed?: boolean;
-}
-
-type ConversationEntryOrigin =
-  | {
-      /** Source-backed row persisted by StreamLogStore. */
-      readonly synthetic?: false;
-      /** Durable StreamLog position, including legacy rows without settlement order. */
-      readonly sourceSeqNo?: number;
-      /** Source-owned order in which this immutable row became printable. */
-      readonly settlementSeqNo?: number;
-      readonly syntheticKind?: never;
-      readonly syntheticAfterSeq?: never;
-      readonly syntheticAfterSettlementSeqNo?: never;
-    }
-  | {
-      /** CLI-owned row that is not present in StreamLogStore. */
-      readonly synthetic: true;
-      readonly sourceSeqNo?: never;
-      readonly settlementSeqNo?: never;
-      /** Why the CLI synthesized this entry. */
-      readonly syntheticKind: 'local';
-      /** StreamLog head at the moment this row was appended. */
-      readonly syntheticAfterSeq: number;
-      /** Durable settlement cursor when this row became printable. */
-      readonly syntheticAfterSettlementSeqNo: number;
-    };
-
-/**
- * Discriminated on `role` so `toolUse` is required exactly for the rows that
- * need it, instead of an independently-optional field every consumer has to
- * null-check regardless of role.
- *
- * `role` is the coarse classifier the geometry, promotion and workflow
- * filters key on; the row kind it was projected from stays on `row`, which
- * carries the typed payload each renderer paints.
- */
-export type ConversationEntry = ConversationEntryOrigin &
-  (
-    | (ConversationEntryBase & {
-        readonly role: 'assistant' | 'error' | 'user';
-      })
-    | (ConversationEntryBase & {
-        /** A compact informational row: thinking, web search/fetch, missing
-         *  outputs, latexdiff, statistics, context management, status. */
-        readonly role: 'detail';
-        readonly row: TranscriptRow;
-      })
-    | (ConversationEntryBase & {
-        readonly role: 'activity';
-        readonly activity: CompactionActivityBlock;
-      })
-    | (ConversationEntryBase & {
-        readonly role: 'workflowTask';
-        /** Parsed workflow-call state retained for semantic settlement and styling. */
-        readonly task: WorkflowCallProgress;
-      })
-    | (ConversationEntryBase & {
-        readonly role: 'phase';
-        /** Phase title displayed in the group-header divider row. */
-        readonly phaseLabel: string;
-        /** 0-based phase order within the run, when the emitter provides it. */
-        readonly phaseIndex?: number;
-        /** Total phase count for the run, when the emitter provides it. */
-        readonly phaseTotal?: number;
-        /** Physical workflow attempt that emitted this phase. */
-        readonly attemptId?: string;
-      })
-    | (ConversationEntryBase & {
-        readonly role: 'tool';
-        readonly toolUse: NormalizedToolUse;
-        readonly row: ToolRow;
-      })
-    | (ConversationEntryBase & {
-        /** An attachment load: every file the loader reported, whether it
-         *  loaded or not. */
-        readonly role: 'media';
-        readonly row: TranscriptRowOf<'fileList'>;
-      })
-  );
-
 /** Resolve the current workflow attempt from session state, with a legacy transcript fallback. */
 export function currentWorkflowAttemptId(
   declaredAttemptId: string | undefined,
-  entries: readonly ConversationEntry[],
+  rows: readonly TranscriptRow[],
   boundaryDeclared: boolean,
 ): string | null | undefined {
   if (boundaryDeclared) return declaredAttemptId ?? null;
   return (
     declaredAttemptId ??
     latestWorkflowAttemptId(
-      entries.map((entry) => {
-        if (entry.role === 'workflowTask') return entry.task.attemptId;
-        if (entry.role === 'phase') return entry.attemptId;
+      rows.map((row) => {
+        if (row.kind === 'workflowTask') return row.call.attemptId;
+        if (row.kind === 'phase') return row.attemptId;
         return undefined;
       }),
     )
@@ -182,7 +73,7 @@ export function currentWorkflowAttemptId(
  * settled-prefix promotion reaches it; the item object itself is stable.
  */
 export interface TranscriptFoldItem {
-  rendered: ConversationEntry;
+  rendered: TranscriptRow;
   readonly sortSeq: number;
   readonly tieBreak: number;
   /** Equal-key source order: 0 = compaction row, 1 = log row, 2 = synthetic. */
@@ -251,8 +142,8 @@ export interface TranscriptFoldState {
   workflowAttemptId?: string;
   workflowAttemptBoundaryDeclared: boolean;
   workflowAttemptSeqNo: number;
-  /** Synthetic rows reconciled into `items`, in slice order, by identity. */
-  synthetics: readonly ConversationEntry[];
+  /** Local rows reconciled into `items`, in slice order, by identity. */
+  synthetics: readonly TranscriptRow[];
   /** Incremental task-group / compaction memos. Unlike the fold fields above
    *  they are NOT cleared by a fold rebuild (each is self-consistent against
    *  a full replay); they are dropped only when the stream's transcript
@@ -263,9 +154,9 @@ export interface TranscriptFoldState {
    *  undefined until the first emission. */
   lastOutputFull?: boolean;
   /** The exact `entries` array last emitted. A slice whose entries no longer
-   *  match was patched out of band (synthetic rows), so the next application
+   *  match was patched out of band (local rows), so the next application
    *  must rebuild its output instead of reusing `slice.entries`. */
-  lastEntriesOutput?: readonly ConversationEntry[];
+  lastEntriesOutput?: readonly TranscriptRow[];
 }
 
 export interface SessionMeta {
@@ -326,7 +217,13 @@ export interface StreamSlice {
   readonly thinkingActive: boolean;
   /** True while the runtime is summarizing prior conversation context. */
   readonly compactingActive: boolean;
-  readonly entries: readonly ConversationEntry[];
+  readonly entries: readonly TranscriptRow[];
+  /** How far the append-only `<Static>` promotion has reached in `entries`:
+   *  rows before this index have been printed to terminal scrollback and can
+   *  never be taken back. This is the only home of that fact — a row's own
+   *  immutability is read off the row (`isSelfSettledRow`), and the two
+   *  together answer "is this row finalized" (`isFinalizedTranscriptRow`). */
+  readonly finalizedFrontier: number;
   /** Transcript-projection working state (see {@link TranscriptFoldState}).
    *  A mutable box owned by `subscribeStreamLog`; renderers ignore it. */
   readonly transcriptFold?: TranscriptFoldState;
@@ -359,6 +256,7 @@ export function emptySlice(streamId: StreamTabId): StreamSlice {
     compactingActive: false,
     usage: undefined,
     entries: [],
+    finalizedFrontier: 0,
     bypass: NO_BYPASS,
   };
 }
