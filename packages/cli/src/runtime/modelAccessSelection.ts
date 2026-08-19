@@ -13,6 +13,7 @@ import {
 } from '@model/codingPlanSubscriptions';
 import { platform } from '@platform/platform';
 import { providerDisplayName } from '@shared/constants/providers';
+import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import {
@@ -21,7 +22,6 @@ import {
   type CliSubscriptionLoginOptions,
 } from './subscriptionLogin';
 import {
-  formatCliModelAccessRouteInline,
   type CliModelAccessSelection,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
@@ -151,7 +151,7 @@ async function updateKeyedCliModelAccess(
   await runtime.setEnabled(true);
   invalidateModelOptionsCache();
   return {
-    message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${formatCliModelAccessRouteInline('personal')}.`,
+    message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${OWN_API_KEYS.inline}.`,
   };
 }
 
