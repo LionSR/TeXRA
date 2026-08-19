@@ -191,8 +191,13 @@ export const logEntryStyles = css`
   }
 
   .file-list-content .file-var,
-  .file-list-content .file-source {
+  .file-list-content .file-source,
+  .file-list-content .file-media {
     color: var(--color-text-muted);
+  }
+
+  .file-list-content .file-media {
+    font-size: 0.85em;
   }
 
   .file-list-content .file-var {
