@@ -4,10 +4,11 @@
  * compacted (summarized) mid-run.
  */
 
-import type {
-  ActiveChildInfo,
-  TodoItem,
-  WorkPlanSnapshot,
+import {
+  STREAM_PHASE,
+  type ActiveChildInfo,
+  type TodoItem,
+  type WorkPlanSnapshot,
 } from '@shared/schemas';
 import { childElapsedMs } from '@shared/streams/childElapsed';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
@@ -52,7 +53,12 @@ export function formatPostCompactionContext(
     lines.push(`<active-subagents count="${subagents.length}">`);
     for (const sa of subagents) {
       const statusAttr = sa.status ? ` status="${escapeAttr(sa.status)}"` : '';
-      const elapsedMs = childElapsedMs(sa, Date.now());
+      // Paused and settled children have no live elapsed reading. This mirrors
+      // the CLI child list and avoids presenting pause time as execution time.
+      const elapsedMs =
+        sa.status === STREAM_PHASE.RUNNING
+          ? childElapsedMs(sa, Date.now())
+          : undefined;
       const elapsedAttr =
         elapsedMs === undefined
           ? ''
