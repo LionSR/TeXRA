@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execa } from 'execa';
 
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 
@@ -36,36 +36,22 @@ export function resolveBrowserLaunch(
   }
 }
 
-function launchBrowser(url: string): Promise<void> {
+async function launchBrowser(url: string): Promise<void> {
   const launch = resolveBrowserLaunch(url);
-  return new Promise((resolve, reject) => {
-    let child: ChildProcess;
-    try {
-      child = spawn(launch.command, launch.args, {
-        stdio: 'ignore',
-      });
-    } catch (error) {
-      rejectBrowserLaunch(error);
-      return;
-    }
-
-    child.once('close', (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      rejectBrowserLaunch(
-        new Error(`${launch.command} exited with code ${code ?? 'unknown'}`),
-      );
-    });
-    child.once('error', rejectBrowserLaunch);
-
-    function rejectBrowserLaunch(error: unknown): void {
-      const message =
-        extractErrorMessage(error) ?? 'unknown browser launch error';
-      reject(new Error(`Could not open the browser automatically: ${message}`));
-    }
+  // reject: false — a spawn failure (no `xdg-open` on a headless box) and a
+  // non-zero exit are the same "could not open a browser" outcome here.
+  const result = await execa(launch.command, launch.args, {
+    stdio: 'ignore',
+    reject: false,
   });
+  if (!result.failed) return;
+  // `cause` carries the spawn error ("spawn xdg-open ENOENT"); execa's own
+  // `message` is not used because it embeds the argv, and the argv is the
+  // sign-in URL.
+  const message =
+    extractErrorMessage(result.cause) ??
+    `${launch.command} exited with code ${result.exitCode ?? 'unknown'}`;
+  throw new Error(`Could not open the browser automatically: ${message}`);
 }
 
 export function openBrowser(
