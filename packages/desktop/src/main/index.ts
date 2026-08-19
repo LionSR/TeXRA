@@ -19,6 +19,7 @@ import {
   agentResponseTextConnector,
   attachTerminalResultToast,
   SessionHandle,
+  settleLiveSessionExecutions,
 } from '@agent/runtime';
 import {
   computeAgentOptionsData,
@@ -1272,6 +1273,13 @@ if (protocolLifecycle.shouldContinue) {
       // process alive until the directories are actually gone.
       lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
         diffHostDisposeQueue.onIdle(),
+      );
+      // First ON handler: every BEFORE handler above has had its turn at the
+      // runs it owns, so this settles what quitting left mid-run — a durable
+      // CANCELLED outcome and a released lease instead of a record the next
+      // launch has to repair — before the disposal below.
+      lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
+        settleLiveSessionExecutions(signal),
       );
       lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
         agentResumeHandler.dispose();
