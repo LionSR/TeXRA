@@ -154,16 +154,8 @@ vi.mock('vscode', () => ({
 import { registerLatexdiffCommands } from '@commands/latex/latexdiffCommands';
 
 const mixedResults = [
-  {
-    success: true,
-    basePath: '/workspace/base.tex',
-    diffFileName: 'diff-1.tex',
-  },
-  {
-    success: true,
-    basePath: '/tmp/base.tex',
-    diffFileName: 'diff-2.tex',
-  },
+  { success: true, diffPath: '/workspace/diff-1.tex' },
+  { success: true, diffPath: '/tmp/diff-2.tex' },
 ];
 
 const runConfig = {

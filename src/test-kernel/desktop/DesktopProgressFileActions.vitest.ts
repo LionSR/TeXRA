@@ -14,8 +14,7 @@ type DiffOutcome = {
   results: Array<{
     success: boolean;
     message?: string;
-    basePath?: string;
-    diffFileName?: string;
+    diffPath?: string;
   }>;
   totalOperations: number;
 };
@@ -26,11 +25,15 @@ function absolutePath(...segments: string[]): string {
   return path.join(path.sep, ...segments);
 }
 
+/** A successful run whose diff landed beside `basePath`, as the service reports it. */
 function successResult(
   basePath: string,
   diffFileName = 'main_diff.tex',
 ): DiffResult {
-  return { success: true, basePath, diffFileName };
+  return {
+    success: true,
+    diffPath: path.join(path.dirname(basePath), diffFileName),
+  };
 }
 
 function expectOpenedDiff(
@@ -66,7 +69,7 @@ async function loadFileActions(options: {
   fallbackResult?: {
     success: boolean;
     message?: string;
-    diffFileName?: string;
+    diffPath?: string;
   };
 }): Promise<{
   actions: InstanceType<
@@ -93,7 +96,7 @@ async function loadFileActions(options: {
     async () =>
       options.fallbackResult ?? {
         success: true,
-        diffFileName: 'main_diff.tex',
+        diffPath: absolutePath('workspace', 'main_diff.tex'),
       },
   );
 
@@ -225,7 +228,10 @@ describe('DesktopProgressFileActions latexdiff', () => {
     const { actions, openBuildDisplay, runLatexdiffForExecution, runDiff } =
       await loadFileActions({
         outcome: { results: [], totalOperations: 0 },
-        fallbackResult: { success: true, diffFileName: 'fallback_diff.tex' },
+        fallbackResult: {
+          success: true,
+          diffPath: absolutePath('workspace', 'fallback_diff.tex'),
+        },
       });
 
     await actions.diffAcceptedFilePair(
@@ -284,7 +290,10 @@ describe('DesktopProgressFileActions latexdiff', () => {
   it('falls back to single-file latexdiff when the shared core throws', async () => {
     const { actions, openBuildDisplay, runDiff } = await loadFileActions({
       throws: true,
-      fallbackResult: { success: true, diffFileName: 'fallback_diff.tex' },
+      fallbackResult: {
+        success: true,
+        diffPath: absolutePath('workspace', 'fallback_diff.tex'),
+      },
     });
 
     await actions.diffAcceptedFilePair(
@@ -309,7 +318,10 @@ describe('DesktopProgressFileActions latexdiff', () => {
         results: [{ success: false, message: 'missing base' }],
         totalOperations: 1,
       },
-      fallbackResult: { success: true, diffFileName: 'fallback_diff.tex' },
+      fallbackResult: {
+        success: true,
+        diffPath: absolutePath('workspace', 'fallback_diff.tex'),
+      },
     });
 
     await actions.diffAcceptedFilePair(

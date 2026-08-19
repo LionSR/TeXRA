@@ -177,15 +177,14 @@ export class DesktopProgressFileActions {
       DEFAULT_MATH_MARKUP,
     );
 
-    if (!result.success || !result.diffFileName) {
+    if (!result.success || !result.diffPath) {
       await this.ui.showErrorMessage(
         result.message ?? 'Failed to generate diff file.',
       );
       return;
     }
 
-    const diffFilePath = path.join(path.dirname(baseFile), result.diffFileName);
-    await this.openDiffOutput(diffFilePath);
+    await this.openDiffOutput(result.diffPath);
   }
 
   async findAndOpenLabel(label: string): Promise<boolean> {
@@ -250,18 +249,12 @@ export class DesktopProgressFileActions {
     outcome: DiffRunOutcome,
   ): Promise<boolean> {
     const successes = outcome.results.filter(
-      (
-        entry,
-      ): entry is DiffRunResult & { basePath: string; diffFileName: string } =>
-        entry.success && Boolean(entry.basePath) && Boolean(entry.diffFileName),
+      (entry): entry is DiffRunResult & { diffPath: string } =>
+        entry.success && Boolean(entry.diffPath),
     );
 
     for (const result of successes) {
-      const diffFilePath = path.join(
-        path.dirname(result.basePath),
-        result.diffFileName,
-      );
-      await this.openDiffOutput(diffFilePath);
+      await this.openDiffOutput(result.diffPath);
     }
 
     return successes.length > 0;

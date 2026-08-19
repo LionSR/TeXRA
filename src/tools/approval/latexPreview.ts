@@ -266,25 +266,12 @@ export async function runLatexdiff(
       },
     );
 
-    if (!result.success || !result.diffFileName) {
+    if (!result.success || !result.diffPath) {
       entry.onError(result.message ?? 'Failed to generate LaTeXdiff');
       return;
     }
 
-    // Validate filename to prevent path traversal
-    if (
-      result.diffFileName.includes('/') ||
-      result.diffFileName.includes('\\') ||
-      result.diffFileName.includes('..')
-    ) {
-      entry.onError('LaTeXdiff failed: invalid output filename');
-      return;
-    }
-
-    const diffFilePath = path.join(
-      path.dirname(originalPath),
-      result.diffFileName,
-    );
+    const diffFilePath = result.diffPath;
     registerCleanup(entry, async () => {
       await silentUnlink(diffFilePath);
       await cleanupLatexAuxFiles(diffFilePath);
