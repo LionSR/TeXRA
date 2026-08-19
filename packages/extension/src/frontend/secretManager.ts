@@ -35,13 +35,6 @@ export class SecretManager {
     return resolveGitHubTokenSource(platform().secrets);
   }
 
-  public static async anyApiKeyExists(): Promise<boolean> {
-    const keyChecks = await Promise.all(
-      this.API_PROVIDERS.map((provider) => this.hasUsableApiKey(provider)),
-    );
-    return keyChecks.some(Boolean);
-  }
-
   /** Usable-key check, delegated to `@model/apiProviders`'s `hasUsableApiKey`. */
   public static async hasUsableApiKey(provider: ApiProvider): Promise<boolean> {
     return resolvedHasUsableApiKey(platform().secrets, provider);
