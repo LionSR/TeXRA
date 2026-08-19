@@ -3,6 +3,7 @@ import type {
   MainViewStartupOptions,
 } from '@controllers/mainView/MainViewStartupController';
 import type { StateStore } from '@platform/interfaces';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewExecuteMessage } from '@shared/schemas';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
@@ -12,6 +13,7 @@ import {
 } from './desktopLogIpc.js';
 import { createDesktopMainViewStartup } from './desktopMainViewStartup.js';
 import {
+  createCommandHandler,
   isDesktopCommandMessage,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
@@ -74,6 +76,12 @@ export function installDesktopMainViewIpc(
   const bridge = installDesktopHostBridge(window, {
     onRendererMessage: handleRendererMessage,
   });
+  const banner = createCommandHandler({
+    // Banner state is frontend-owned, so renderer updates round-trip through
+    // the host just as they do in the extension.
+    [MAIN_VIEW_COMMANDS.SET_BANNER]: (message) =>
+      bridge.postToRenderer(message),
+  });
   const viewState = createDesktopViewStateIpc(bridge);
   const shell = createDesktopShellIpc(options.shellActions);
   const execution = createDesktopExecutionIpc({
@@ -92,6 +100,7 @@ export function installDesktopMainViewIpc(
     globalState: options.globalState,
   });
   const messageHandlers: DesktopMessageHandler[] = [
+    banner,
     startup,
     options.fileSelection,
     options.prompt,
