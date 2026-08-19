@@ -8,8 +8,9 @@ export const BUILTIN_DEFAULT_CHAT_AGENT = 'assistant';
 
 // Priority for the implicit default: the built-in default first, then the shared
 // preferred order with the built-in removed so it isn't re-checked (it already
-// appears in PREFERRED_TOOL_USE_AGENTS). Built once at module load.
-const DEFAULT_AGENT_PRIORITY: readonly string[] = [
+// appears in PREFERRED_TOOL_USE_AGENTS). Built once at module load. Shared with
+// the launcher's agent menu so the first row is the agent a bare Enter starts.
+export const DEFAULT_AGENT_PRIORITY: readonly string[] = [
   BUILTIN_DEFAULT_CHAT_AGENT,
   ...PREFERRED_TOOL_USE_AGENTS.filter(
     (name) => name !== BUILTIN_DEFAULT_CHAT_AGENT,
