@@ -96,6 +96,7 @@ export interface NodeRuntimeSkillOptions {
 }
 
 const bootstrappedAgentDirectoryResources = new Map<string, string>();
+const agentDirectoryBootstrapQueues = new Map<string, Promise<void>>();
 
 /**
  * Assemble the platform services for a Node-family host (CLI, desktop,
@@ -157,21 +158,37 @@ export function initializeNodeRuntimeSkills(
  * Reconcile packaged agent directories for a host after `initPlatform`.
  *
  * Hosts use different version-state keys, but the resources-path re-entry rule
- * is the same: a process only reconciles a given host channel again when its
- * active packaged resources path changes. Reconciliation failures are reported
- * and swallowed by `bootstrapPlatformAgentDirectories` — a broken agent
- * directory must not abort startup.
+ * is the same: after a successful reconcile, a process only reconciles a given
+ * host channel again when its active packaged resources path changes. Failures
+ * are reported and swallowed by `bootstrapPlatformAgentDirectories` so a broken
+ * agent directory does not abort startup, and a later call can retry.
  */
 export async function bootstrapNodeAgentDirectories(
   options: NodeAgentDirectoryBootstrapOptions,
 ): Promise<void> {
   const guardKey = `${options.channel}:${options.versionStateKey}`;
-  if (
-    bootstrappedAgentDirectoryResources.get(guardKey) === options.resourcesPath
-  ) {
-    return;
-  }
+  const predecessor =
+    agentDirectoryBootstrapQueues.get(guardKey) ?? Promise.resolve();
+  const settledPredecessor = predecessor.catch(() => undefined);
+  const queuedBootstrap = settledPredecessor.then(async () => {
+    if (
+      bootstrappedAgentDirectoryResources.get(guardKey) ===
+      options.resourcesPath
+    ) {
+      return;
+    }
 
-  await bootstrapPlatformAgentDirectories(options);
-  bootstrappedAgentDirectoryResources.set(guardKey, options.resourcesPath);
+    if (await bootstrapPlatformAgentDirectories(options)) {
+      bootstrappedAgentDirectoryResources.set(guardKey, options.resourcesPath);
+    }
+  });
+  agentDirectoryBootstrapQueues.set(guardKey, queuedBootstrap);
+
+  try {
+    await queuedBootstrap;
+  } finally {
+    if (agentDirectoryBootstrapQueues.get(guardKey) === queuedBootstrap) {
+      agentDirectoryBootstrapQueues.delete(guardKey);
+    }
+  }
 }
