@@ -132,7 +132,6 @@ function createPortSession(): {
       stagePreview: async () => {
         throw new Error('tool-edit approvals are not exercised here');
       },
-      relativeDisplayPath: (filePath) => filePath,
       revealApprovalSurface: async () => {},
       openBuildDisplay: async () => {},
       reportError: () => {},
