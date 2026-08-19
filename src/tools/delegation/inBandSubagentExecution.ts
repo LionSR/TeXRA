@@ -330,6 +330,26 @@ async function throwRetryableDurabilityError(
   throw error;
 }
 
+/**
+ * Register the parsed child, reclassifying a registration failure as a
+ * retryable `SubagentDurabilityError` only in `required-result` mode — a
+ * `best-effort-delivery` caller rethrows the raw cause unwrapped.
+ */
+async function registerInBandChild(
+  mode: PersistenceMode,
+  params: Parameters<typeof registerParsedAgentChildExecution>[0],
+): Promise<OwnedExecutionLeaseScope> {
+  try {
+    return await registerParsedAgentChildExecution(params);
+  } catch (cause) {
+    if (mode !== 'required-result') throw cause;
+    throw new SubagentDurabilityError(
+      `Failed to register subagent ${params.executionId}.`,
+      { cause },
+    );
+  }
+}
+
 function recordCost(
   onCost: InBandSubagentExecutionBaseOptions['onCost'],
   totalCostUsd: number | undefined,
@@ -385,25 +405,14 @@ async function executeInBand(
   const workingDirectory = config.workingDirectory ?? undefined;
   const store = getExecutionStore(executionId);
 
-  let runWithOwnership: OwnedExecutionLeaseScope;
-  try {
-    runWithOwnership = await registerParsedAgentChildExecution({
-      executionId,
-      config,
-      childStreamId,
-      agentName: options.agentName,
-      parentExecutionId: options.parentExecutionId,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    });
-  } catch (cause) {
-    if (mode === 'required-result') {
-      throw new SubagentDurabilityError(
-        `Failed to register subagent ${executionId}.`,
-        { cause },
-      );
-    }
-    throw cause;
-  }
+  const runWithOwnership = await registerInBandChild(mode, {
+    executionId,
+    config,
+    childStreamId,
+    agentName: options.agentName,
+    parentExecutionId: options.parentExecutionId,
+    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+  });
   let stableCompletionCommitted = false;
   const completed = await runWithOwnership(async () => {
     let settledTurn: SettledInBandTurn | undefined;
