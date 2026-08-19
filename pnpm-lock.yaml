@@ -672,6 +672,9 @@ importers:
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
+      execa:
+        specifier: ^10.0.1
+        version: 10.0.1
       ink:
         specifier: ^7.1.1
         version: 7.1.1(patch_hash=db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6)(@types/react@19.2.18)(react@19.2.8)
