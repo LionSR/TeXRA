@@ -905,12 +905,14 @@ describe('provider error schemas', () => {
     });
     expect(upstreamLegacy.exhaustionReason).toBe('upstream-credit');
 
-    const relayLimitLegacy = RetryErrorInfoSchema.parse({
-      message: 'legacy relay-limit record',
+    // A bare `isCredentialExhausted` used to reconstruct the retired
+    // 'relay-limit' reason; with the relay gone it maps to no reason.
+    const bareExhaustedLegacy = RetryErrorInfoSchema.parse({
+      message: 'legacy bare-exhausted record',
       userRetryable: true,
       isCredentialExhausted: true,
     });
-    expect(relayLimitLegacy.exhaustionReason).toBe('relay-limit');
+    expect(bareExhaustedLegacy.exhaustionReason).toBeUndefined();
 
     const noExhaustionLegacy = RetryErrorInfoSchema.parse({
       message: 'legacy non-exhausted record',
@@ -928,7 +930,7 @@ describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
     statusCode: 429,
     statusText: 'Too Many Requests',
     provider: 'anthropic',
-    exhaustionReason: 'relay-limit',
+    exhaustionReason: 'upstream-credit',
     requestId: 'req_abc123',
     streamDiagnostics: {
       thinkingChars: 100,
@@ -953,7 +955,7 @@ describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
 
     expect(reconstructed.statusCode).toBe(429);
     expect(reconstructed.provider).toBe('anthropic');
-    expect(reconstructed.exhaustionReason).toBe('relay-limit');
+    expect(reconstructed.exhaustionReason).toBe('upstream-credit');
     expect(reconstructed.requestId).toBe('req_abc123');
     expect(reconstructed.userRetryable).toBe(true);
   });
@@ -1033,9 +1035,10 @@ describe('attachProviderError end-to-end', () => {
     // `lastError`, which bypasses the schema-level migration on that resume
     // path (parseToolUseShared parses the persisted shape directly).
     const legacyCached = {
-      message: 'legacy relay-limit record',
+      message: 'legacy exhausted-credential record',
       retryable: true,
       isCredentialExhausted: true,
+      isUpstreamCreditDepleted: true,
     } as unknown as ProviderError;
 
     const err = new Error(legacyCached.message);
@@ -1044,9 +1047,10 @@ describe('attachProviderError end-to-end', () => {
     const recovered = normalizeProviderError(err);
 
     expect(recovered.userRetryable).toBe(true);
-    expect(recovered.exhaustionReason).toBe('relay-limit');
+    expect(recovered.exhaustionReason).toBe('upstream-credit');
     expect('retryable' in recovered).toBe(false);
     expect('isCredentialExhausted' in recovered).toBe(false);
+    expect('isUpstreamCreditDepleted' in recovered).toBe(false);
     expect(recovered.exhaustionReason !== undefined).toBe(true);
   });
 });

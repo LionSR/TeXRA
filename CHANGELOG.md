@@ -13,7 +13,10 @@ All notable changes to this project will be documented in this file.
   calls now always use your own provider API keys or a provider subscription
   (ChatGPT, Grok, Kimi Code, GLM Coding Plan). Signing in to TeXRA still
   unlocks the hosted research-agent catalog — it no longer grants model
-  access on its own.
+  access on its own. Relay-era history is affected in two small ways: an
+  error recorded as a relay spending-limit no longer shows that label, and a
+  run that was interrupted mid-flight back then can no longer be resumed
+  (start it again instead). Historical usage and cost still display.
 
 #### Features
 

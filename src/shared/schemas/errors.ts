@@ -29,11 +29,6 @@ export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;
  *  rather than independent booleans. `isCredentialExhausted` below answers the
  *  combined "exhausted for any reason" question. */
 export const ExhaustionReasonSchema = z.enum([
-  /** LEGACY: relay monthly spending limit. The relay was removed 2026-08
-   *  (docs/proposals/2026-08-18-relay-removal-and-recovery.md); the member
-   *  stays because persisted stream logs are reparsed on load and the legacy
-   *  migration below reconstructs it. Delete after 2026-11. */
-  'relay-limit',
   /** The upstream provider account itself is out of credit/quota — the key
    *  the user has IS the broken one, so a new key is required. */
   'upstream-credit',
@@ -78,9 +73,10 @@ export type ExhaustionReason = z.infer<typeof ExhaustionReasonSchema>;
  * logs are unversioned JSON reparsed on later loads). Priority mirrors the
  * original derivation order in `formatProviderHttpError`: ChatGPT-subscription
  * and upstream-credit were independently detected and OR'd into
- * `isCredentialExhausted` alongside the relay-limit condition, so a legacy
- * record with only `isCredentialExhausted: true` set reconstructs as
- * `'relay-limit'`.
+ * `isCredentialExhausted` alongside the (now-removed) relay-limit condition.
+ * A legacy record with only the bare `isCredentialExhausted: true` therefore
+ * has no surviving reason to map to, and normalizes with no
+ * `exhaustionReason` at all rather than an invented one.
  */
 export function normalizeLegacyProviderErrorFields(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -117,9 +113,11 @@ export function normalizeLegacyProviderErrorFields(value: unknown): unknown {
     exhaustionReason = 'chatgpt-subscription';
   } else if (isUpstreamCreditDepleted === true) {
     exhaustionReason = 'upstream-credit';
-  } else if (isCredentialExhausted === true) {
-    exhaustionReason = 'relay-limit';
   }
+  // A bare `isCredentialExhausted: true` used to reconstruct as 'relay-limit'.
+  // That member is gone with the relay, and there is no other reason it could
+  // have meant, so the record keeps its message and simply carries no
+  // exhaustion classification. The legacy booleans are dropped either way.
   return exhaustionReason === undefined ? rest : { ...rest, exhaustionReason };
 }
 
