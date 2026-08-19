@@ -65,10 +65,7 @@ export interface ApprovalRequestHandlerSet {
  *  indexed by interaction kind without narrowing to a concrete payload type. */
 interface CancellableApprovalRequestHandler {
   cancelWhere(
-    predicate: (
-      item: { readonly streamId: string },
-      cancellationScope?: object,
-    ) => boolean,
+    predicate: (item: { readonly streamId: string }) => boolean,
     cause?: string,
   ): number;
 }
@@ -83,13 +80,9 @@ export function cancelApprovalRequestHandlers(
   for (const kind of kinds) {
     const handler: CancellableApprovalRequestHandler = handlers[kind];
     cancelled += handler.cancelWhere(
-      (item, cancellationScope) =>
+      (item) =>
         matchesCancelSelector(
-          {
-            kind,
-            streamId: item.streamId || undefined,
-            cancellationScope,
-          },
+          { kind, streamId: item.streamId || undefined },
           selector,
         ),
       selector.cause,
