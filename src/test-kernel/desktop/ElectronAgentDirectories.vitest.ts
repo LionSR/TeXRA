@@ -31,6 +31,7 @@ describe('desktop agent directory bootstrap', () => {
   const tempDirs = useTempDirs();
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.resetModules();
   });
 
@@ -220,6 +221,66 @@ describe('desktop agent directory bootstrap', () => {
     await expect(readFile(copiedAgent, 'utf8')).resolves.toBe(
       'name: locally-edited\n',
     );
+  });
+
+  it('coalesces concurrent bootstraps for the same resource path', async () => {
+    const { bootstrapNodeAgentDirectories, resourcesPath } =
+      await createHarness();
+    const copy = vi.spyOn(nodeFilesystem, 'copy').mockResolvedValue(undefined);
+    const options = {
+      channel: 'desktop',
+      resourcesPath,
+      currentVersion: '1.2.3',
+      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+    };
+
+    await Promise.all([
+      bootstrapNodeAgentDirectories(options),
+      bootstrapNodeAgentDirectories(options),
+    ]);
+
+    expect(copy).toHaveBeenCalledTimes(2);
+  });
+
+  it('serializes overlapping resource paths in request order', async () => {
+    const { bootstrapNodeAgentDirectories, resourcesPath } =
+      await createHarness();
+    const nextResourcesPath = join(dirname(resourcesPath), 'resources-next');
+    let releaseFirstCopy!: () => void;
+    const firstCopyBlocked = new Promise<void>((resolve) => {
+      releaseFirstCopy = resolve;
+    });
+    const copy = vi
+      .spyOn(nodeFilesystem, 'copy')
+      .mockImplementationOnce(() => firstCopyBlocked)
+      .mockResolvedValue(undefined);
+    vi.spyOn(nodeFileLocks, 'runExclusive').mockImplementation(
+      (_lockPath, operation) => operation(),
+    );
+    const first = bootstrapNodeAgentDirectories({
+      channel: 'desktop',
+      resourcesPath,
+      currentVersion: '1.2.3',
+      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+    });
+    await vi.waitFor(() => expect(copy).toHaveBeenCalledOnce());
+    const secondOptions = {
+      channel: 'desktop',
+      resourcesPath: nextResourcesPath,
+      currentVersion: '1.2.4',
+      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+    };
+    const second = bootstrapNodeAgentDirectories(secondOptions);
+    const fallback = setTimeout(() => releaseFirstCopy(), 50);
+    const releaseAfterSecond = second.then(() => {
+      clearTimeout(fallback);
+      releaseFirstCopy();
+    });
+
+    await Promise.all([first, second, releaseAfterSecond]);
+    await bootstrapNodeAgentDirectories(secondOptions);
+
+    expect(copy).toHaveBeenCalledTimes(4);
   });
 
   it('uses the configured version-state key', async () => {

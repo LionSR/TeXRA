@@ -96,6 +96,7 @@ export interface NodeRuntimeSkillOptions {
 }
 
 const bootstrappedAgentDirectoryResources = new Map<string, string>();
+const agentDirectoryBootstrapQueues = new Map<string, Promise<void>>();
 
 /**
  * Assemble the platform services for a Node-family host (CLI, desktop,
@@ -166,13 +167,27 @@ export async function bootstrapNodeAgentDirectories(
   options: NodeAgentDirectoryBootstrapOptions,
 ): Promise<void> {
   const guardKey = `${options.channel}:${options.versionStateKey}`;
-  if (
-    bootstrappedAgentDirectoryResources.get(guardKey) === options.resourcesPath
-  ) {
-    return;
-  }
+  const queuedBootstrap = (
+    agentDirectoryBootstrapQueues.get(guardKey) ?? Promise.resolve()
+  ).then(async () => {
+    if (
+      bootstrappedAgentDirectoryResources.get(guardKey) ===
+      options.resourcesPath
+    ) {
+      return;
+    }
 
-  if (await bootstrapPlatformAgentDirectories(options)) {
-    bootstrappedAgentDirectoryResources.set(guardKey, options.resourcesPath);
+    if (await bootstrapPlatformAgentDirectories(options)) {
+      bootstrappedAgentDirectoryResources.set(guardKey, options.resourcesPath);
+    }
+  });
+  agentDirectoryBootstrapQueues.set(guardKey, queuedBootstrap);
+
+  try {
+    await queuedBootstrap;
+  } finally {
+    if (agentDirectoryBootstrapQueues.get(guardKey) === queuedBootstrap) {
+      agentDirectoryBootstrapQueues.delete(guardKey);
+    }
   }
 }

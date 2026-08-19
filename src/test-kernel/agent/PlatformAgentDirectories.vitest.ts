@@ -149,7 +149,7 @@ describe('bootstrapPlatformAgentDirectories', () => {
 
     const bootstrapped = bootstrap();
     await vi.runAllTimersAsync();
-    await bootstrapped;
+    await expect(bootstrapped).resolves.toBe(false);
 
     expect(runExclusive).toHaveBeenCalledTimes(21);
     expect(logs.warn).toHaveBeenCalledWith(

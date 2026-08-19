@@ -178,7 +178,7 @@ async function reconcileUnlocked(
 async function reconcileBundledAgentDirectories(
   options: BundledAgentReconcileOptions,
   log: Log,
-): Promise<void> {
+): Promise<boolean> {
   let operationStarted = false;
 
   try {
@@ -201,6 +201,7 @@ async function reconcileBundledAgentDirectories(
           !operationStarted && isLockContentionError(error),
       },
     );
+    return true;
   } catch (error) {
     // A live or stale owner must not make startup fail. If ownership remains
     // unavailable, leave the shared cache untouched and try again next run.
@@ -208,7 +209,7 @@ async function reconcileBundledAgentDirectories(
       log.warn(
         'Skipping bundled agent refresh because another process still owns the sync lock',
       );
-      return;
+      return false;
     }
     throw error;
   }
@@ -223,8 +224,7 @@ export async function bootstrapPlatformAgentDirectories(
 ): Promise<boolean> {
   const log = createLog(options.channel);
   try {
-    await reconcileBundledAgentDirectories(options, log);
-    return true;
+    return await reconcileBundledAgentDirectories(options, log);
   } catch (error) {
     // An unreadable or partially written agent directory must not abort host
     // startup — VS Code activation in particular has to survive it. Loud, not
