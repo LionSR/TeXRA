@@ -193,8 +193,13 @@ function defineSubscriptionProvider<
       ) {
         throw error;
       }
+      const causeMessage =
+        error.cause === undefined
+          ? ''
+          : ` Cause: ${toErrorMessage(error.cause)}`;
       log.warn(
-        `${bindings.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}`,
+        `${bindings.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}${causeMessage}`,
+        { data: error },
       );
       return deviceCodeLogin(coordinator, options);
     }

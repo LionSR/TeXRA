@@ -261,6 +261,23 @@ describe('desktop preview host', () => {
     expect(shell.openExternal).toHaveBeenCalledWith('https://texra.ai');
   });
 
+  it('can preserve an external-open error without showing a dialog', async () => {
+    const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
+    const browserError = new Error('no browser handler');
+    const shell = makeShell();
+    shell.openExternal.mockRejectedValueOnce(browserError);
+    const showErrorMessage = vi.fn();
+
+    const host = createDesktopPreviewHost({ shell, showErrorMessage });
+
+    await expect(
+      host.openExternal('https://auth.openai.com/authorize', {
+        reportFailure: false,
+      }),
+    ).rejects.toBe(browserError);
+    expect(showErrorMessage).not.toHaveBeenCalled();
+  });
+
   it('prefers the in-app PDF overlay when postToRenderer accepts the post', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
     const { texPath, pdfPath } = await makeTexFixture('paper');

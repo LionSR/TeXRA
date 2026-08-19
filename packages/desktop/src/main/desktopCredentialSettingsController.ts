@@ -49,6 +49,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   };
   readonly prompt: Pick<PromptHost, 'input' | 'confirm'>;
   readonly externalOpener: Pick<ExternalOpener, 'openExternal'> & {
+    openSubscriptionSignInUrl(url: string): Promise<void>;
     presentSubscriptionSignInUrl(
       url: string,
       productName: string,
@@ -280,7 +281,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       },
       presentSignInUrl: async (url) => {
         try {
-          await this.options.externalOpener.openExternal(url);
+          await this.options.externalOpener.openSubscriptionSignInUrl(url);
         } catch (error) {
           throw new LoopbackTransportUnavailableError(
             `Could not open a browser for ${displayName} sign-in.`,

@@ -767,6 +767,8 @@ function createWindow(options: {
       },
       externalOpener: {
         openExternal: previewHost.openExternal,
+        openSubscriptionSignInUrl: (url) =>
+          previewHost.openExternal(url, { reportFailure: false }),
         presentSubscriptionSignInUrl: async (url, productName) => {
           const result = await dialog.showMessageBox(window, {
             type: 'info',
