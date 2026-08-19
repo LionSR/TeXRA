@@ -14,32 +14,16 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
   collectBibliographyPaths,
   collectCommaSeparatedMatches,
+  LATEX_CITATION_COMMANDS,
   stripLatexComments,
 } from './latexParsingUtils';
 
 // Third-party imports - types
 import type { BibEntry } from 'bibtex';
 
-const CITE_COMMANDS = [
-  'cite',
-  'citet',
-  'citep',
-  'textcite',
-  'parencite',
-  'footcite',
-  'autocite',
-  'nocite',
-  'Cite',
-  'Citet',
-  'Citep',
-  'Textcite',
-  'Parencite',
-  'Footcite',
-];
-
 // Compiled regex patterns (matchAll clones the regex, so module-level is safe)
 const CITATION_PATTERN = new RegExp(
-  `\\\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\\{([^}]*)\\}`,
+  `\\\\(?:${LATEX_CITATION_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\\{([^}]*)\\}`,
   'g',
 );
 

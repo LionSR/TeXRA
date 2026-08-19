@@ -6,6 +6,7 @@ import { executeCommand } from '@utils/system/execUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
 // Local file imports
+import { LATEX_CITATION_COMMANDS } from '../latexParsingUtils';
 import type { MathMarkupOption } from './mathMarkup';
 
 const LATEXDIFF_PICTURE_ENVIRONMENTS =
@@ -18,22 +19,12 @@ const BIBLIOGRAPHY_ERROR_PATTERNS = [
   'Running bibtex to generate',
 ] as const;
 
-export const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS = Object.freeze([
-  'cite\\*?',
-  'citep\\*?',
-  'citet\\*?',
-  'citealp\\*?',
-  'citealt\\*?',
-  'citeauthor\\*?',
-  'citeyear\\*?',
-  'citeyearpar\\*?',
-  'parencite\\*?',
-  'textcite\\*?',
-  'autocite\\*?',
-  'footcite\\*?',
-  'supercite\\*?',
-  'smartcite\\*?',
-] as const);
+/**
+ * `--exclude-textcmd` argument: every citation macro, starred forms included,
+ * whose argument latexdiff must leave alone instead of marking up as prose.
+ */
+export const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS: readonly string[] =
+  Object.freeze(LATEX_CITATION_COMMANDS.map((name) => `${name}\\*?`));
 
 export const LATEXDIFF_CHANGES_ONLY_SUBTYPE = 'ONLYCHANGEDPAGE';
 
