@@ -168,7 +168,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       if (input.action === 'wait') {
         await this.waitForAnyChange(input.timeout, input.ids);
       }
-      return this.listExecutions(input.offset ?? 0, input.limit ?? 100);
+      return this.listExecutions(input.offset, input.limit);
     }
 
     const executionId = this.resolveExecutionId(id);
@@ -216,11 +216,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
             'Conversation pagination is message-based. Use offset and limit; view_range applies only to file and background-command output.',
           );
         }
-        return this.showConversation(
-          executionId,
-          input.offset ?? 0,
-          input.limit ?? 100,
-        );
+        return this.showConversation(executionId, input.offset, input.limit);
       }
       case 'todos':
         return this.showTodos(executionId);
