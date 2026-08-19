@@ -18,7 +18,7 @@ import {
 
 import type { TraceDocument } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { recordName, replayTrace } from './replayTrace';
+import { replayTrace, traceDisplayName } from './replayTrace';
 import { parseTraceData } from './traceDataSchema';
 
 const rootElement = document.querySelector<HTMLElement>('#app');
@@ -108,7 +108,7 @@ loadTrace()
     replayTrace(trace);
     // Landmark + title carry the run's identity once known, so AT users and
     // browser tabs can tell exported traces apart.
-    const label = `Trace: ${recordName(trace.config)}`;
+    const label = `Trace: ${traceDisplayName(trace)}`;
     root.setAttribute('aria-label', label);
     document.title = label;
   })

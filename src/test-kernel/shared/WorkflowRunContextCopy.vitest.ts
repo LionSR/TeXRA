@@ -11,7 +11,9 @@ import { formatWorkflowRunContext } from '@shared/copy/workflowRunContext';
 function baseStream(overrides: Partial<StreamTabInfo> = {}): StreamTabInfo {
   return {
     name: 'stream-a',
-    label: 'Stream A',
+    // What buildStreamTabInfo emits for this identity — a producer never
+    // ships an arbitrary label beside a resolved identity.
+    label: 'writer',
     identity: { kind: 'agent', agent: 'writer' },
     agentCategory: AgentCategory.Workflow,
     model: 'gemini31p',
@@ -169,18 +171,6 @@ describe('formatWorkflowRunContext', () => {
     expect(text).not.toContain('Execution:');
     expect(text).not.toContain('Goal:');
     expect(text.startsWith('Workflow run: writer (Gemini 3.1 Pro)')).toBe(true);
-  });
-
-  it('falls back to the tab label when the run has no identity', () => {
-    const text = formatWorkflowRunContext({
-      stream: baseStream({ identity: undefined }),
-      files: { 2: [output()] },
-      compileFailures: {},
-    });
-
-    expect(text.startsWith('Workflow run: Stream A (Gemini 3.1 Pro)')).toBe(
-      true,
-    );
   });
 
   it('drops the model parenthetical when the run has no model', () => {

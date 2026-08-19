@@ -16,7 +16,6 @@ import {
   DEFAULT_STREAM_METADATA_STATUS,
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  runIdentityDisplayName,
   type StreamLifecycleStatus,
   type StreamState,
   type StreamSubstate,
@@ -85,12 +84,9 @@ function buildTooltip(
   const worktreeDisplay = info.worktree
     ? `Worktree: ${info.worktree.branch}${info.worktree.pr ? ` (#${info.worktree.pr.number})` : ''}`
     : undefined;
-  // Prefer the declared RunIdentity over the derived tab label.
-  const identityDisplay = info.identity
-    ? runIdentityDisplayName(info.identity)
-    : undefined;
   const mainLine = [
-    identityDisplay || streamDisplayLabel(info),
+    // `label` already is the identity display name (`buildStreamTabInfo`).
+    streamDisplayLabel(info),
     `Status: ${statusLabel}`,
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
@@ -201,7 +197,7 @@ class StreamTab extends LitElement {
     // repeating it in the meta line underneath would just echo the title.
     const metaAgentName =
       stream.identity?.kind === 'agent' && stream.description
-        ? runIdentityDisplayName(stream.identity)
+        ? stream.label
         : undefined;
 
     return html`
