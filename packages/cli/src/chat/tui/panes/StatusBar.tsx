@@ -8,14 +8,12 @@ import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { activeCodingPlanForModel } from '@model/codingPlanSubscriptions';
-import {
-  isCodexSubscriptionActive,
-  isXaiSubscriptionActive,
-} from '@model/providerCapabilities';
+import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
+import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
+  UsageRoute,
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 
@@ -114,35 +112,26 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? undefined
       : streamMetadataFor(displayStreamId)?.config?.model) ?? sessionMeta.model;
 
-  // Whether the selected stream's model would currently route through
-  // ChatGPT, Grok, or Kimi Code subscription access. The completed usage
-  // snapshot supersedes this prospective value in the display. Polling
-  // re-reads external config changes; an in-process access change also bumps
-  // `codexPreferenceVersion` for an immediate refresh.
+  // Which subscription, if any, would serve the selected stream's model on its
+  // next request. The completed usage snapshot supersedes this prospective
+  // value in the display. Polling re-reads external config changes; an
+  // in-process access change also bumps `codexPreferenceVersion` for an
+  // immediate refresh.
   const codexPreferenceVersion = useSignal(codexPreferenceVersionSignal);
   const [subscriptionResolution, setSubscriptionResolution] = useState<{
     readonly model: string;
     readonly preferenceVersion: number;
-    readonly active: boolean;
-    readonly grokActive: boolean;
-    readonly kimiCodeActive: boolean;
-    readonly glmCodingPlanActive: boolean;
-    readonly codingPlanUsageProvider?: SubscriptionUsageProvider;
+    readonly route?: UsageRoute;
   }>();
   const resolutionCurrent =
     subscriptionResolution?.model === accessModel &&
     subscriptionResolution.preferenceVersion === codexPreferenceVersion;
-  const resolution = resolutionCurrent ? subscriptionResolution : undefined;
-  const subscriptionActive = resolution?.active ?? false;
-  const grokSubscriptionActive = resolution?.grokActive ?? false;
-  const kimiCodeActive = resolution?.kimiCodeActive ?? false;
-  const glmCodingPlanActive = resolution?.glmCodingPlanActive ?? false;
+  const prospectiveRoute = resolutionCurrent
+    ? subscriptionResolution?.route
+    : undefined;
   const modelAccess = resolveCliModelAccessRoute({
-    subscriptionActive,
-    grokSubscriptionActive,
-    kimiCodeActive,
-    glmCodingPlanActive,
     usageRoute: statusSlice?.usage?.usageRoute,
+    prospectiveRoute,
   });
 
   // Both periodic reads run on the shared poll registry (`usePollingInterval`)
@@ -162,21 +151,13 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       const readKey = `${accessModel}:${codexPreferenceVersion}`;
       if (subscriptionInFlightKeyRef.current === readKey) return;
       subscriptionInFlightKeyRef.current = readKey;
-      void Promise.all([
-        isCodexSubscriptionActive(accessModel),
-        isXaiSubscriptionActive(accessModel),
-        activeCodingPlanForModel(accessModel),
-      ])
-        .then(([active, grokActive, codingPlan]) => {
+      void activeSubscriptionUsageRoute(accessModel)
+        .then((route) => {
           if (subscriptionDesiredKeyRef.current !== readKey) return;
           setSubscriptionResolution({
             model: accessModel,
             preferenceVersion: codexPreferenceVersion,
-            active,
-            grokActive,
-            kimiCodeActive: codingPlan?.descriptor.id === 'kimiCode',
-            glmCodingPlanActive: codingPlan?.descriptor.id === 'glmCodingPlan',
-            codingPlanUsageProvider: codingPlan?.descriptor.usageProvider,
+            route,
           });
         })
         .catch(() => {
@@ -184,10 +165,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
           setSubscriptionResolution({
             model: accessModel,
             preferenceVersion: codexPreferenceVersion,
-            active: false,
-            grokActive: false,
-            kimiCodeActive: false,
-            glmCodingPlanActive: false,
           });
         })
         .finally(() => {
@@ -203,7 +180,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionUsageProvider = subscriptionUsageProviderForStatus({
     usageRoute: statusSlice?.usage?.usageRoute,
     modelAccess,
-    prospectiveCodingPlan: resolution?.codingPlanUsageProvider,
+    prospectiveCodingPlan:
+      codingPlanForUsageRoute(prospectiveRoute)?.usageProvider,
   });
   const [subscriptionQuotaRead, setSubscriptionQuotaRead] = useState<{
     readonly provider: SubscriptionUsageProvider;
