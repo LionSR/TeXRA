@@ -146,9 +146,10 @@ export class ToolUseDispatchNode<C> extends BaseNode<
    * duplicates filled from their primary's result afterwards. Results keep
    * the original call order; skipped/interrupted slots stay null.
    *
-   * Bypasses Node._exec's per-item retry machinery on purpose: tool calls
-   * are never auto-retried (default maxRetries, exec never throws), and
-   * cancellation runs through the run's abort signal, not `this.signal`.
+   * Owns its own batching instead of deferring to `BaseNode._exec`: tool
+   * calls are never auto-retried (exec never throws), and cancellation runs
+   * through the run's abort signal. Retry lives on `ModelInvocationNode`,
+   * which this node does not extend.
    */
   async _exec(calls: SdkToolCall[]): Promise<(ToolExecutionResult | null)[]> {
     if (calls.length === 0) return [];
