@@ -5,11 +5,6 @@ import * as vscode from 'vscode';
 
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import {
-  planCurrentFileAsBase,
-  planCurrentFileAsEdited,
-  type MainViewBaseFileSelectionPlan,
-} from '@controllers/mainView/MainViewBaseFileController';
-import {
   MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES,
   normalizeMainViewFileExtension,
   planMainViewDroppedFileAttachments,
@@ -140,25 +135,59 @@ export class FileManager extends BaseWebviewManager {
       return;
     }
 
+    // An edited file is valid when its basename starts with the base file's
+    // basename without being identical to it (`paper-revised.tex` is a valid
+    // edited version of `paper.tex`). Neither rejection selects anything.
     if (fileType === 'edited') {
-      const plan = planCurrentFileAsEdited(currentOpenFile, message.baseFile);
-      await this.applyBaseFileSelectionPlan(plan, fileType, currentOpenFile);
-      return;
+      const baseFile = message.baseFile;
+      if (!baseFile) {
+        vscode.window.showInformationMessage('Choose a base file first.');
+        return;
+      }
+      const baseFileStem = path.basename(baseFile, path.extname(baseFile));
+      const currentFileStem = path.basename(
+        currentOpenFile,
+        path.extname(currentOpenFile),
+      );
+      if (
+        !currentFileStem.startsWith(baseFileStem) ||
+        currentFileStem === baseFileStem
+      ) {
+        vscode.window.showInformationMessage(
+          'The current file is not a valid edited version of the base file.',
+        );
+        return;
+      }
     }
 
+    // Opening a latexdiff artifact (`paper-diff1234abcd.tex`) as the base file
+    // selects the file it was derived from instead, when that file is still on
+    // disk. The dropdown is refreshed first so the derived path already exists
+    // as an option by the time SET_CURRENT_FILE names it.
     if (fileType === 'base') {
       const derivedBaseFile =
-        parseVersionControlDiffFilename(currentOpenFile)?.sourcePath ?? null;
-      const derivedBaseFileExists = derivedBaseFile
-        ? await WorkspaceFS.exists(derivedBaseFile)
-        : false;
-      const plan = planCurrentFileAsBase(
-        currentOpenFile,
-        derivedBaseFile,
-        derivedBaseFileExists,
-      );
-      await this.applyBaseFileSelectionPlan(plan, fileType, currentOpenFile);
-      return;
+        parseVersionControlDiffFilename(currentOpenFile)?.sourcePath;
+      if (derivedBaseFile) {
+        if (await WorkspaceFS.exists(derivedBaseFile)) {
+          await this.handleRequestBaseFile({
+            command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
+            preserveBaseFile: true,
+          });
+          this.postMessage({
+            command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
+            filePath: derivedBaseFile,
+            fileType,
+          });
+          await this.maybeSelectCommitFromDiffFile(currentOpenFile);
+          return;
+        }
+        log.info(
+          `Derived base file ${derivedBaseFile} from ${currentOpenFile} does not exist on disk`,
+        );
+        vscode.window.showInformationMessage(
+          `The base file ${derivedBaseFile} could not be found. Keeping ${currentOpenFile} selected.`,
+        );
+      }
     }
 
     this.postMessage({
@@ -168,38 +197,6 @@ export class FileManager extends BaseWebviewManager {
     });
 
     await this.maybeSelectCommitFromDiffFile(currentOpenFile);
-  }
-
-  /** Apply a host-neutral base-file selection plan to the VS Code host. */
-  private async applyBaseFileSelectionPlan(
-    plan: MainViewBaseFileSelectionPlan,
-    fileType: CurrentFileType,
-    currentOpenFile: string,
-  ): Promise<void> {
-    if (plan.log) {
-      const logFn = plan.log.level === 'info' ? log.info : log.warn;
-      logFn(plan.log.message);
-    }
-
-    if (plan.notification) {
-      vscode.window.showInformationMessage(plan.notification.message);
-    }
-
-    if (plan.shouldRequestBaseFile) {
-      await this.handleRequestBaseFile({
-        command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
-        preserveBaseFile: true,
-      });
-    }
-
-    if (plan.shouldPostSetCurrentFile) {
-      this.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
-        filePath: plan.filePathToSelect,
-        fileType,
-      });
-      await this.maybeSelectCommitFromDiffFile(currentOpenFile);
-    }
   }
 
   private async maybeSelectCommitFromDiffFile(filePath: string): Promise<void> {
