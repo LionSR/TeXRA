@@ -178,13 +178,13 @@ export class SessionFactApplier {
     updatePlan: (_streamId, event) =>
       this.renderer.onPlanChanged(event.streamId, event.plan),
     addOutputFiles: (_streamId, event) =>
-      this.renderer.onFilesChanged(event.streamId),
+      this.renderer.invalidate(event.streamId, 'files'),
     updateMissingOutputs: (_streamId, event) =>
       this.renderer.onMissingOutputsChanged(event.streamId),
     updateCompileFailures: (_streamId, event) =>
-      this.renderer.onCompileFailuresChanged(event.streamId),
+      this.renderer.invalidate(event.streamId, 'compileFailures'),
     goalPaused: (_streamId, event) =>
-      this.renderer.onGoalPaused(event.streamId),
+      this.renderer.invalidate(event.streamId, 'goalPaused'),
     'conversation.progress': (streamId, event) =>
       this.handleUpdateConversationProgress({
         streamId,
@@ -320,8 +320,9 @@ export class SessionFactApplier {
           // queue may have changed.
           case 'updateQueuedFollowUps':
           case 'followUpSent':
-            return this.renderer.onQueuedFollowUpsChanged(
+            return this.renderer.invalidate(
               fact.payload.streamId,
+              'queuedFollowUps',
             );
           case 'setActiveStream':
             return this.handleSetActiveStream(fact.payload);
@@ -589,11 +590,12 @@ export class SessionFactApplier {
     parentStreamId,
   }: SetParentStreamPayload): void {
     this.state.setStreamParent(childStreamId, parentStreamId);
-    // Topology hosts (TUI) and Lit both learn the edge here. Lit projects it
-    // onto `StreamTabInfo.parentStreamId` inside its renderer; do not also
-    // fire `onStreamMetadataChanged` — that mint a StreamSlice on signal
-    // hosts before attachment.
-    this.renderer.onParentStreamChanged(childStreamId, parentStreamId ?? null);
+    // Topology hosts (TUI) and Lit both learn the edge here — the new value is
+    // already on `SessionState` metadata, so the notification only names the
+    // slice. Lit projects it onto `StreamTabInfo.parentStreamId` inside its
+    // renderer; do not also fire `onStreamMetadataChanged` — that mints a
+    // StreamSlice on signal hosts before attachment.
+    this.renderer.invalidate(childStreamId, 'parentStreamId');
   }
 
   private handleSetActiveStream(payload: SetActiveStreamPayload): void {

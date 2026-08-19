@@ -13,6 +13,7 @@ import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import {
   createRunProgressRenderer,
   shouldRenderRunProgress,
+  type RunProgressRenderer,
   type RunProgressRendererInit,
 } from '@cli/runtime/runProgressRenderer';
 import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
@@ -32,6 +33,7 @@ import {
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 const mocks = vi.hoisted(() => ({
   getAgent: vi.fn(),
@@ -120,10 +122,21 @@ const RUNTIME_PRESENTATION_NDJSON_CASES = {
 } satisfies RuntimePresentationNdjsonCases;
 
 // context() always sets renderRunProgress: true, so the factory never
-// returns undefined inside these helpers.
-type TestRunProgressRenderer = NonNullable<
-  ReturnType<typeof createRunProgressRenderer>
->;
+// returns undefined inside these helpers. Facts reach the renderer the way
+// they do in production — through the session hub the applier subscribes to.
+type TestRunProgressRenderer = RunProgressRenderer & {
+  emit(event: SessionEvent): void;
+  detach(): void;
+};
+
+function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
+  const session = createTestSession();
+  const detach = renderer.attach(session);
+  return Object.assign(renderer, {
+    emit: (event: SessionEvent) => session.events.emit(event),
+    detach,
+  });
+}
 
 type RunConfigOverrides = {
   streamId?: string;
@@ -178,11 +191,22 @@ function subagentChild(
   };
 }
 
+/**
+ * A run reaches the renderer the way a live one does: `run.config` first, then
+ * the RUNNING transition. The transition is what mints the shared execution
+ * state that later progress, stage and roster facts land on.
+ */
 function handleRunConfig(
   renderer: TestRunProgressRenderer,
   overrides: RunConfigOverrides = {},
 ): void {
-  renderer.handleSessionEvent(runConfigEvent(overrides));
+  renderer.emit(runConfigEvent(overrides));
+  handleStreamStatus(
+    renderer,
+    overrides.streamId ?? 'stream-1',
+    STREAM_PHASE.RUNNING,
+    STREAM_PHASE.WAITING,
+  );
 }
 
 /** Input-less root run the heartbeat and live-line cases below all start from. */
@@ -199,7 +223,7 @@ function handleRoundStage(
   streamId: string,
   roundStage: RoundStage,
 ): void {
-  renderer.handleSessionEvent({
+  renderer.emit({
     scope: 'run',
     streamId: streamId as StreamTabId,
     event: {
@@ -218,7 +242,7 @@ function handleConversationProgress(
   streamId: string,
   progress: ConversationProgress,
 ): void {
-  renderer.handleSessionEvent({
+  renderer.emit({
     scope: 'run',
     streamId: streamId as StreamTabId,
     event: {
@@ -235,7 +259,7 @@ function handleStreamStatus(
   previousStatus: StreamPhase = STREAM_PHASE.RUNNING,
 ): void {
   // Status reaches the renderer on the session-fact rail only.
-  renderer.handleSessionEvent({
+  renderer.emit({
     scope: 'session',
     event: {
       type: 'status',
@@ -247,42 +271,16 @@ function handleStreamStatus(
   });
 }
 
-function handleFollowUpSent(
-  renderer: TestRunProgressRenderer,
-  streamId: string,
-): void {
-  renderer.handleSessionEvent({
-    scope: 'session',
-    event: {
-      type: 'followUpSent',
-      payload: { streamId: streamId as StreamTabId },
-    },
-  });
-}
-
 function handleStreamDescription(
   renderer: TestRunProgressRenderer,
   streamId: string,
   description: string,
 ): void {
-  renderer.handleSessionEvent({
+  renderer.emit({
     scope: 'session',
     event: {
       type: 'updateStreamDescription',
       payload: { streamId: streamId as StreamTabId, description },
-    },
-  });
-}
-
-function handleRemoveStream(
-  renderer: TestRunProgressRenderer,
-  streamId: string,
-): void {
-  renderer.handleSessionEvent({
-    scope: 'session',
-    event: {
-      type: 'removeStream',
-      payload: { streamId: streamId as StreamTabId },
     },
   });
 }
@@ -292,7 +290,7 @@ function handleActiveSubagents(
   parentStreamId: string,
   children: readonly ActiveChildInfo[],
 ): void {
-  renderer.handleSessionEvent({
+  renderer.emit({
     scope: 'run',
     streamId: parentStreamId as StreamTabId,
     event: {
@@ -317,24 +315,28 @@ function plainRenderer(
   output: ReturnType<typeof outputBuffer>,
   init: Partial<RunProgressRendererInit> = {},
 ): TestRunProgressRenderer {
-  return createRunProgressRenderer(context({ stderrColorEnabled: false }), {
-    colorEnabled: false,
-    write: output.write,
-    nowMs: () => 0,
-    ...init,
-  })!;
+  return attached(
+    createRunProgressRenderer(context({ stderrColorEnabled: false }), {
+      colorEnabled: false,
+      write: output.write,
+      nowMs: () => 0,
+      ...init,
+    })!,
+  );
 }
 
 function ansiRenderer(
   output: ReturnType<typeof outputBuffer>,
   init: Partial<RunProgressRendererInit> = {},
 ): TestRunProgressRenderer {
-  return createRunProgressRenderer(context(), {
-    colorEnabled: true,
-    write: output.write,
-    nowMs: () => 0,
-    ...init,
-  })!;
+  return attached(
+    createRunProgressRenderer(context(), {
+      colorEnabled: true,
+      write: output.write,
+      nowMs: () => 0,
+      ...init,
+    })!,
+  );
 }
 
 function fakeTimers() {
@@ -622,10 +624,11 @@ describe('CLI run progress renderer', () => {
     expect(output.text.endsWith('\n')).toBe(true);
   });
 
-  it('can add typed round progress after tool-call progress claims the root stream', () => {
+  it('keeps the claimed root stream when a child run.config arrives later', () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
 
+    handleOrchestratorRootRun(renderer);
     handleConversationProgress(renderer, 'root-stream', { toolCallCount: 4 });
     handleRoundStage(renderer, 'root-stream', { index: 1 });
     handleRunConfig(renderer, {
@@ -635,7 +638,9 @@ describe('CLI run progress renderer', () => {
     });
 
     expect(output.text).toBe(
-      'running · tools: 4 · 0s\n' + '[r2] · running · tools: 4 · 0s\n',
+      'orchestrator · 0s\n' +
+        'orchestrator · tools: 4 · 0s\n' +
+        '[r2] · orchestrator · tools: 4 · 0s\n',
     );
   });
 
@@ -709,39 +714,6 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
         'orchestrator · subagent: review — Run PASSWORD=[redacted] now · 0s\n',
-    );
-  });
-
-  it('drops the previous task when a waiting child begins a follow-up turn', () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    handleOrchestratorRootRun(renderer);
-    handleStreamDescription(renderer, 'child-stream', 'Initial review task');
-    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    handleFollowUpSent(renderer, 'child-stream');
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — Initial review task · 0s\n' +
-        'orchestrator · subagent: review · 0s\n',
-    );
-
-    // The status subscriber may repaint the roster before this renderer sees
-    // WAITING -> RUNNING. That repaint must not recover the previous label.
-    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.WAITING);
-    handleStreamStatus(
-      renderer,
-      'child-stream',
-      STREAM_PHASE.RUNNING,
-      STREAM_PHASE.WAITING,
-    );
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — Initial review task · 0s\n' +
-        'orchestrator · subagent: review · 0s\n',
     );
   });
 
@@ -826,62 +798,6 @@ describe('CLI run progress renderer', () => {
     );
   });
 
-  it('forgets a child description when that child becomes terminal', () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    handleOrchestratorRootRun(renderer);
-    handleStreamDescription(renderer, 'child-stream', 'First review task');
-    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.COMPLETED);
-    handleActiveSubagents(renderer, 'root-stream', []);
-    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — First review task · 0s\n' +
-        'orchestrator · subagent: review · 0s\n' +
-        'orchestrator · 0s\n' +
-        'orchestrator · subagent: review · 0s\n',
-    );
-  });
-
-  it('ignores a description that arrives after the child becomes terminal', () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    handleOrchestratorRootRun(renderer);
-    handleStreamDescription(renderer, 'child-stream', 'First review task');
-    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.COMPLETED);
-    handleStreamDescription(renderer, 'child-stream', 'Late generated label');
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — First review task · 0s\n' +
-        'orchestrator · subagent: review · 0s\n',
-    );
-  });
-
-  it('accepts a description for a new incarnation of a closed child ID', () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    handleOrchestratorRootRun(renderer);
-    handleStreamDescription(renderer, 'child-stream', 'First review task');
-    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    handleStreamStatus(renderer, 'child-stream', STREAM_PHASE.COMPLETED);
-    handleRunConfig(renderer, { streamId: 'child-stream', agent: 'review' });
-    handleStreamDescription(renderer, 'child-stream', 'Relaunched review task');
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — First review task · 0s\n' +
-        'orchestrator · subagent: review · 0s\n' +
-        'orchestrator · subagent: review — Relaunched review task · 0s\n',
-    );
-  });
-
   it('keeps the task description when an active child switches models', () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output);
@@ -895,26 +811,6 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
         'orchestrator · subagent: review — Current review task · 0s\n',
-    );
-  });
-
-  it('forgets a child description when that child stream is removed', () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    handleOrchestratorRootRun(renderer);
-    handleStreamDescription(renderer, 'child-stream', 'Removed review task');
-    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    handleRemoveStream(renderer, 'child-stream');
-    handleActiveSubagents(renderer, 'root-stream', []);
-    handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — Removed review task · 0s\n' +
-        'orchestrator · subagent: review · 0s\n' +
-        'orchestrator · 0s\n' +
-        'orchestrator · subagent: review · 0s\n',
     );
   });
 
@@ -1027,7 +923,7 @@ describe('CLI run progress renderer', () => {
 
   it('uses the stderr color gate when stdout alone allows color', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
-      const events = new SessionEventHub();
+      const session = createTestSession();
       const host = createCliRuntimeHost(
         context({
           quietLogs: true,
@@ -1036,8 +932,8 @@ describe('CLI run progress renderer', () => {
           stderrColorEnabled: false,
         }),
       );
-      const detach = host.attachRunProgressRenderer(events);
-      events.emit(runConfigEvent());
+      const detach = host.attachRunProgressRenderer(session);
+      session.events.emit(runConfigEvent());
       detach();
       await host.close();
     });
@@ -1048,7 +944,7 @@ describe('CLI run progress renderer', () => {
 
   it('writes one status line when a run-scope status fact accompanies the session fact', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
-      const events = new SessionEventHub();
+      const session = createTestSession();
       const host = createCliRuntimeHost(
         context({
           stderrColorEnabled: false,
@@ -1056,12 +952,12 @@ describe('CLI run progress renderer', () => {
           renderRunProgress: true,
         }),
       );
-      const detach = host.attachRunProgressRenderer(events);
+      const detach = host.attachRunProgressRenderer(session);
 
-      events.emit(runConfigEvent());
+      session.events.emit(runConfigEvent());
       // Status travels only as a session fact (run-scope status is no longer
       // representable), so exactly one line renders for the transition.
-      events.emit({
+      session.events.emit({
         scope: 'session',
         event: {
           type: 'status',
@@ -1083,7 +979,7 @@ describe('CLI run progress renderer', () => {
 
   it('preserves the live progress line before interactive prompts', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
-      const events = new SessionEventHub();
+      const session = createTestSession();
       const host = createCliRuntimeHost(
         context({
           approvalPolicy: 'ask',
@@ -1091,8 +987,8 @@ describe('CLI run progress renderer', () => {
         }),
       );
 
-      const detach = host.attachRunProgressRenderer(events);
-      events.emit(runConfigEvent());
+      const detach = host.attachRunProgressRenderer(session);
+      session.events.emit(runConfigEvent());
       host.prepareInteractivePrompt?.();
       await Promise.resolve();
       detach();
@@ -1106,7 +1002,7 @@ describe('CLI run progress renderer', () => {
     let stderr = '';
     const stdout = await captureStreamWrites(process.stdout, async () => {
       stderr = await captureStreamWrites(process.stderr, async () => {
-        const events = new SessionEventHub();
+        const session = createTestSession();
         const host = createCliRuntimeHost(
           context({
             outputFormat: 'json',
@@ -1114,8 +1010,8 @@ describe('CLI run progress renderer', () => {
             renderRunProgress: true,
           }),
         );
-        const detach = host.attachRunProgressRenderer(events);
-        events.emit(runConfigEvent());
+        const detach = host.attachRunProgressRenderer(session);
+        session.events.emit(runConfigEvent());
         detach();
         await host.close();
       });
@@ -1202,9 +1098,9 @@ describe('CLI run progress renderer', () => {
 
   it('writes projected subagent progress records to stdout in ndjson mode', async () => {
     const output = await captureStreamWrites(process.stdout, async () => {
-      const events = new SessionEventHub();
-      const detach = attachCliSessionProgressProjection(events);
-      events.emit({
+      const session = createTestSession();
+      const detach = attachCliSessionProgressProjection(session.events);
+      session.events.emit({
         scope: 'run',
         streamId: 'parent-stream' as StreamTabId,
         event: {

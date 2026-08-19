@@ -5,7 +5,7 @@ import {
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
-  type SessionEventHub,
+  type SessionHandle,
 } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
@@ -31,7 +31,7 @@ export interface CliRuntimeHost {
     event: K,
     payload: RuntimePresentationEventPayloads[K],
   ): boolean;
-  attachRunProgressRenderer(events: SessionEventHub): () => void;
+  attachRunProgressRenderer(session: SessionHandle): () => void;
   prepareInteractivePrompt?: () => void;
   emitApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
   close(): Promise<void>;
@@ -158,8 +158,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     };
 
   return {
-    attachRunProgressRenderer: (events) =>
-      attachRunProgressRenderer(events, runProgress),
+    attachRunProgressRenderer: (session) =>
+      attachRunProgressRenderer(session, runProgress),
     prepareInteractivePrompt: () => runProgress?.preserve(),
     emitApprovalBypassState({ streamId, kind, bypassActive }) {
       if (closed || context.outputFormat !== 'ndjson') return;
