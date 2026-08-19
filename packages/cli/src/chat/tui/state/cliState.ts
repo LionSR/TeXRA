@@ -338,11 +338,9 @@ function streamSliceWithStatus(
  *
  * Runtime status still originates in the default session's status machine
  * (`defaultSession().status`), but TUI renderers should read only
- * StreamSlice data. The child `StreamSlice` is the single
- * status owner for retained/active child rows too: `childExecutions.ts`'s
- * selectors read status from here directly, so no copy into another
- * collection is needed. A status for a stream tombstoned by `removeStream`
- * is ignored — removal is final for that stream identity.
+ * StreamSlice data, so the slice is the single status owner at paint.
+ * A status for a stream tombstoned by `removeStream`, or retired by
+ * `resetCliState`, is ignored — both are final for that stream identity.
  */
 export function setStreamStatusInCliState({
   runStartedAt,

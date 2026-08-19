@@ -481,11 +481,7 @@ function withRunFacts(
     snapshots,
     transcripts: StreamLogStore.ephemeral('TUI session signals test'),
   });
-  const detach = attachSessionSignalsAdapter({
-    events: hub,
-    session,
-    snapshots,
-  });
+  const detach = attachSessionSignalsAdapter(session);
   try {
     body(hub, session);
   } finally {
@@ -3372,11 +3368,7 @@ describe('sessionSignalsAdapter run facts', () => {
       snapshots,
       transcripts: StreamLogStore.ephemeral('TUI reset-race test'),
     });
-    const detach = attachSessionSignalsAdapter({
-      events: hub,
-      session,
-      snapshots,
-    });
+    const detach = attachSessionSignalsAdapter(session);
     try {
       hub.emit({
         scope: 'session',
@@ -3473,11 +3465,7 @@ describe('sessionSignalsAdapter run facts', () => {
       },
     ];
     const session = defaultSession();
-    const detach = attachSessionSignalsAdapter({
-      events: session.events,
-      session,
-      snapshots: session.snapshots,
-    });
+    const detach = attachSessionSignalsAdapter(session);
     try {
       session.events.emit({
         scope: 'run',
