@@ -74,7 +74,7 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/streams/compactionActivityProjection';
-import { buildChildRosters } from '@test/support/childStreamEntries';
+import { buildChildRosters } from '@test/support/childRosters';
 import { toolConversationEntry } from '@test/support/transcriptRowFixtures';
 
 const STREAM_ID = 'cli-test-stream' as StreamTabId;
@@ -1181,7 +1181,7 @@ describe('CLI conversation transcript', () => {
     ]);
     withBoundSessionState((childState) => {
       const initial = buildStaticTranscriptState({
-        childStreamEntries: new Map(),
+        childRosters: new Map(),
         maxRows: undefined,
         meta: SESSION_META,
         ownerKey: `stream:${CHILD}`,
@@ -1200,7 +1200,7 @@ describe('CLI conversation transcript', () => {
         config: { model: 'kimi26T' },
       });
       const advanced = advanceStaticTranscriptState(initial, {
-        childStreamEntries: new Map(),
+        childRosters: new Map(),
         maxRows: undefined,
         meta: SESSION_META,
         ownerKey: `stream:${CHILD}`,
@@ -1220,7 +1220,7 @@ describe('CLI conversation transcript', () => {
 
   it('keeps the scan cursor and state identical while the scrollback slice is missing', () => {
     const initial = buildStaticTranscriptState({
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       maxRows: undefined,
       meta: SESSION_META,
       ownerKey: 'root',
@@ -1232,7 +1232,7 @@ describe('CLI conversation transcript', () => {
     });
 
     const advanced = advanceStaticTranscriptState(initial, {
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       maxRows: undefined,
       meta: SESSION_META,
       ownerKey: 'root',
@@ -1253,7 +1253,7 @@ describe('CLI conversation transcript', () => {
       [STREAM_ID, sliceWithEntries(STREAM_ID, [settled])],
     ]);
     const initial = buildStaticTranscriptState({
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       maxRows: undefined,
       meta: SESSION_META,
       ownerKey: 'root',
@@ -1264,7 +1264,7 @@ describe('CLI conversation transcript', () => {
       width: 80,
     });
     const advancedOnce = advanceStaticTranscriptState(initial, {
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       maxRows: undefined,
       meta: SESSION_META,
       ownerKey: 'root',
@@ -1277,7 +1277,7 @@ describe('CLI conversation transcript', () => {
     expect(advancedOnce.scan.scannedIndex).toBe(1);
 
     const missing = advanceStaticTranscriptState(advancedOnce, {
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       maxRows: undefined,
       meta: SESSION_META,
       ownerKey: 'root',
@@ -1290,7 +1290,7 @@ describe('CLI conversation transcript', () => {
     expect(missing.repaintEpoch).toBe(advancedOnce.repaintEpoch + 1);
 
     const missingAgain = advanceStaticTranscriptState(missing, {
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       maxRows: undefined,
       meta: SESSION_META,
       ownerKey: 'root',
@@ -1319,7 +1319,7 @@ describe('CLI conversation transcript', () => {
       [STREAM_ID, sliceWithEntries(STREAM_ID, entries)],
     ]);
     const wide = buildStaticTranscriptState({
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       maxRows: 1,
       meta: SESSION_META,
       ownerKey: 'root',
@@ -1342,7 +1342,7 @@ describe('CLI conversation transcript', () => {
     expect(wide.repaintEpoch).toBe(0);
 
     const narrow = advanceStaticTranscriptState(wide, {
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       maxRows: 1,
       meta: SESSION_META,
       ownerKey: 'root',
@@ -1379,7 +1379,7 @@ describe('CLI conversation transcript', () => {
       [STREAM_ID, sliceWithEntries(STREAM_ID, entries)],
     ]);
     const initial = buildStaticTranscriptState({
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       executionLabels: shortLabels,
       maxRows: 1,
       meta: SESSION_META,
@@ -1401,7 +1401,7 @@ describe('CLI conversation transcript', () => {
     expect(initial.repaintEpoch).toBe(0);
 
     const advanced = advanceStaticTranscriptState(initial, {
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       executionLabels: longLabels,
       maxRows: 1,
       meta: SESSION_META,
@@ -1429,7 +1429,7 @@ describe('CLI conversation transcript', () => {
       [STREAM_ID, sliceWithEntries(STREAM_ID, entries)],
     ]);
     const initial = buildStaticTranscriptState({
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       executionLabels: labels,
       maxRows: 1,
       meta: SESSION_META,
@@ -1445,7 +1445,7 @@ describe('CLI conversation transcript', () => {
     // unrelated child-roster churn, so they must not read as a layout change.
     const sameLabelsFreshMap = new Map<string, string>([['sub', 'A']]);
     const unchanged = advanceStaticTranscriptState(initial, {
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       executionLabels: sameLabelsFreshMap,
       maxRows: 1,
       meta: SESSION_META,
@@ -1472,7 +1472,7 @@ describe('CLI conversation transcript', () => {
       [STREAM_ID, sliceWithEntries(STREAM_ID, [firstEntry])],
     ]);
     const initial = buildStaticTranscriptState({
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       maxRows: 1,
       meta: SESSION_META,
       ownerKey: 'root',
@@ -1495,7 +1495,7 @@ describe('CLI conversation transcript', () => {
       [STREAM_ID, sliceWithEntries(STREAM_ID, [firstEntry, secondEntry])],
     ]);
     const advanced = advanceStaticTranscriptState(initial, {
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       maxRows: 1,
       meta: SESSION_META,
       ownerKey: 'root',
@@ -1552,7 +1552,7 @@ describe('CLI conversation transcript', () => {
       ],
     ]);
     const initial = buildStaticTranscriptState({
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       maxRows: 1,
       meta: SESSION_META,
       ownerKey: 'root',
@@ -1565,7 +1565,7 @@ describe('CLI conversation transcript', () => {
     expect(initial.repaintEpoch).toBe(5);
 
     const switched = advanceStaticTranscriptState(initial, {
-      childStreamEntries: new Map(),
+      childRosters: new Map(),
       maxRows: 1,
       meta: SESSION_META,
       ownerKey: 'stream:other',
@@ -1666,7 +1666,7 @@ describe('CLI conversation transcript', () => {
       ],
       [CHILD, sliceWithEntries(CHILD, [entry('a1', 'assistant', 'ok', true)])],
     ]);
-    const childStreamEntries = buildChildRosters({
+    const childRosters = buildChildRosters({
       parentStreamId: ROOT_STREAM,
       rows: [
         {
@@ -1686,7 +1686,7 @@ describe('CLI conversation transcript', () => {
 
       expect(
         sessionHeaderIdentityLine(SESSION_META, {
-          childStreamEntries,
+          childRosters,
           parentStream: new Map([[CHILD, ROOT_STREAM]]),
           streamId: CHILD,
           streams,
@@ -1755,7 +1755,7 @@ describe('CLI conversation transcript', () => {
       ]);
       expect(
         sessionHeaderIdentityLine(SESSION_META, {
-          childStreamEntries: workflowChildren,
+          childRosters: workflowChildren,
           parentStream: new Map([
             [WORKFLOW, ROOT_STREAM],
             [TASK, WORKFLOW],
@@ -1772,7 +1772,7 @@ describe('CLI conversation transcript', () => {
           scrollbackStreamId: CHILD,
           currentItems: [],
           streams,
-          childStreamEntries,
+          childRosters,
           meta: SESSION_META,
           parentStream: new Map([[CHILD, ROOT_STREAM]]),
         }).items[0],

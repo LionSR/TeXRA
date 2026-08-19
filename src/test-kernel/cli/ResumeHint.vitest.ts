@@ -15,7 +15,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { buildChildRosters } from '@test/support/childStreamEntries';
+import { buildChildRosters } from '@test/support/childRosters';
 
 function makeSlice(
   over: Partial<StreamSlice> & { streamId: string },

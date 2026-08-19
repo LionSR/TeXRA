@@ -178,10 +178,12 @@ export function streamTreeEntries(
 ): readonly ActiveStreamTreeEntry[] {
   const root = init.rootStreamId;
   if (!root) return [];
-  // Newest-first: focus order returns children oldest-first (retained order,
-  // then creation order), so the child list and its
-  // Alt+1..9 shortcuts read top-to-bottom from most to least recently
-  // started, keeping the row a user is most likely watching near the top.
+  // Newest-first: `focusOrderDescendants` yields the shared roster order
+  // (live rows in emission order, then retained rows ascending `finishedAt`)
+  // followed by children seen only as a parent edge so far; reversing it
+  // makes the rendered child list and its Alt+1..9 shortcuts read
+  // top-to-bottom from most to least recent, keeping the row a user is most
+  // likely watching near the top.
   const ordered = focusOrderDescendants(
     root,
     init.childRosters,
