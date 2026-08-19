@@ -7,6 +7,8 @@
  * what the user edited — lives behind {@link ToolEditApprovalHost}.
  */
 
+import path from 'node:path';
+
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   cancellationResultFor,
@@ -35,9 +37,23 @@ import {
 } from '@tools/approval/toolEditApproval';
 import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ToolEditApproval';
+
+/**
+ * Path shown to the user, relative to the workspace when there is one.
+ * A host without an initialized platform falls back to the basename rather
+ * than failing the request.
+ */
+function relativeDisplayPath(filePath: string): string {
+  try {
+    return WorkspaceFS.relativePath(filePath);
+  } catch {
+    return path.basename(filePath);
+  }
+}
 
 /** The host view of one staged request, live until the approval settles. */
 export interface ToolEditPreview {
@@ -75,8 +91,6 @@ export interface ToolEditApprovalHost {
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
   ): Promise<ToolEditPreview>;
-  /** Path shown to the user, relative to the workspace when there is one. */
-  relativeDisplayPath(filePath: string): string;
   /**
    * Resolve once the surface that renders approval prompts is visible.
    * Awaiting it is what keeps a request cancelled while that surface opens
@@ -139,7 +153,7 @@ export class ToolEditApprovalController {
     }
 
     const requestId = `approval-${generateShortId()}`;
-    const relativePath = this.options.host.relativeDisplayPath(request.path);
+    const relativePath = relativeDisplayPath(request.path);
     const initialization: InitializingToolEditApproval = {
       phase: 'initializing',
       request,
