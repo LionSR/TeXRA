@@ -463,6 +463,9 @@ export const logEntryStyles = css`
     );
     color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
     padding-block: var(--wa-space-xs);
+    /* <terminal-output> fills this box and scrolls inside its own viewport;
+       the outer container must not add a second scrollbar. */
+    overflow: hidden;
   }
 
   :host([terminal]) .log-line {
@@ -495,29 +498,6 @@ export const logEntryStyles = css`
 
   :host([terminal]) .message-error {
     color: var(--wa-color-terminal-ansi-red, var(--color-error));
-  }
-
-  /* Pre-formatted text nodes for terminal-mode streams.
-     Keep committed output and the live tail separate without changing text flow. */
-  :host([terminal]) .terminal-container {
-    margin: 0;
-    padding: 0;
-    font-family: inherit;
-    font-size: inherit;
-    color: inherit;
-    white-space: pre-wrap;
-    word-break: break-all;
-  }
-
-  :host([terminal]) .terminal-pre {
-    display: inline;
-    margin: 0;
-    padding: 0;
-    font-family: inherit;
-    font-size: inherit;
-    color: inherit;
-    white-space: inherit;
-    word-break: inherit;
   }
 `;
 
