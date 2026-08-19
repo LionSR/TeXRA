@@ -1684,23 +1684,55 @@ export abstract class ModelHandler<
   abstract extractToolUse(responseObject: Resp): T[];
 
   /**
-   * Build a provider-specific follow-up message containing a tool result.
+   * Build provider-specific follow-up messages carrying the results of one
+   * model turn's tool calls.
    *
-   * @param client - Provider client (for file uploads if supported)
-   * @param call - Parsed tool call object
-   * @param result - Tool result payload (binary data stripped, properly typed)
-   * @param attachments - Extracted file attachments (for upload/inline if supported)
-   * @param workspaceState - Optional workspace state
-   * @param text - Optional text to include before tool call
+   * This is the single follow-up contract: handlers implement the batched
+   * shape and get the single-call path for free from
+   * {@link createToolUseFollowUpMessages} below. Providers that must keep
+   * parallel calls in one assistant turn (thought signatures, DeepSeek-style
+   * `reasoning_content`) assemble them here; providers that never batch
+   * concatenate per entry.
+   *
+   * @param entries - One entry per tool call, in original model-response order.
+   *   Each entry bundles the call with its own result and attachments, so
+   *   alignment is structural rather than three positionally-zipped arrays.
+   * @param workspaceState - Optional workspace state (reasoning / server-tool
+   *   content to replay, reset once consumed)
+   * @param text - Assistant text emitted before the tool calls, if any
+   * @param client - Provider client bound to the current run and credential
+   *   route (for tool-result file uploads, where supported)
    */
-  abstract createToolUseFollowUpMessages(
+  abstract createBatchedToolUseFollowUpMessages(
+    entries: Array<{
+      call: T;
+      result: ToolResult;
+      attachments: ToolFileAttachment[];
+    }>,
+    workspaceState: AgentWorkspaceState | undefined,
+    text: string | undefined,
+    client: C | undefined,
+  ): Promise<M[]>;
+
+  /**
+   * Build a provider-specific follow-up message containing a single tool
+   * result — the batched contract applied to one entry.
+   */
+  async createToolUseFollowUpMessages(
     client: C | undefined,
     call: T,
     result: ToolResult,
     attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
-  ): Promise<M[]>;
+  ): Promise<M[]> {
+    return this.createBatchedToolUseFollowUpMessages(
+      [{ call, result, attachments }],
+      workspaceState,
+      text,
+      client,
+    );
+  }
 
   /**
    * Append a simple text follow-up from the user.

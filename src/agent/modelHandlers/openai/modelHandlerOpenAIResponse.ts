@@ -2646,7 +2646,39 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     return { webSearchResults, webFetchResults: [], contentBlocks };
   }
 
-  async createToolUseFollowUpMessages(
+  /**
+   * The Responses surface never batches parallel tool results
+   * (`requiresBatchedParallelToolResults` stays false), so a multi-call turn is
+   * exactly the per-call items concatenated, with the assistant text carried on
+   * the first entry only.
+   */
+  async createBatchedToolUseFollowUpMessages(
+    entries: Array<{
+      call: OpenAIResponseToolCall;
+      result: ToolResult;
+      attachments: ToolFileAttachment[];
+    }>,
+    workspaceState: AgentWorkspaceState | undefined,
+    text: string | undefined,
+    client: OpenAI | undefined,
+  ): Promise<ResponseInputItem[]> {
+    const messages: ResponseInputItem[] = [];
+    for (const [index, { call, result, attachments }] of entries.entries()) {
+      messages.push(
+        ...(await this.buildSingleToolUseFollowUp(
+          client,
+          call,
+          result,
+          attachments,
+          workspaceState,
+          index === 0 ? text : undefined,
+        )),
+      );
+    }
+    return messages;
+  }
+
+  private async buildSingleToolUseFollowUp(
     client: OpenAI | undefined,
     call: OpenAIResponseToolCall,
     result: ToolResult,
