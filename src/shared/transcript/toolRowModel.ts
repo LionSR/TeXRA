@@ -302,7 +302,7 @@ function outputEdits<T>(output: unknown): T[] | undefined {
  */
 function editCandidates(
   input: unknown,
-): { oldText: string; newText: string }[] {
+): { oldText: string; newText: string; path?: string }[] {
   if (!isObject(input)) return [];
   const source = Array.isArray(input.edits) ? input.edits : [input];
   return source
@@ -310,9 +310,11 @@ function editCandidates(
       if (!isObject(raw)) return undefined;
       const oldText = asString(raw.old_str) ?? asString(raw.old_string);
       const newText = asString(raw.new_str) ?? asString(raw.new_string);
-      return oldText === undefined || newText === undefined
-        ? undefined
-        : { oldText, newText };
+      if (oldText === undefined || newText === undefined) return undefined;
+      // Read by the same rule as the top-level path: a `MultiEdit` can span
+      // files, and then the per-edit path is the only thing that says which.
+      const path = inputFilePath(raw);
+      return { oldText, newText, ...(path ? { path } : {}) };
     })
     .filter(filterNotNullish);
 }
@@ -323,6 +325,10 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
   const sections: ToolSection[] = [];
   const startLine = outputEdits<{ startLine?: number }>(ctx.parsedOutput)?.[0]
     ?.startLine;
+  // Tracks which file the diffs emitted so far belong to. Painters label a run
+  // of diff sections by the most recent `file` section above them, so this is
+  // the state that keeps a multi-file edit honest.
+  let labelledPath = ctx.filePath;
   if (ctx.filePath) {
     sections.push({
       kind: 'file',
@@ -333,6 +339,19 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
     });
   }
   for (const candidate of candidates) {
+    // A `MultiEdit` spanning several files carries a path per edit. Emitting a
+    // heading whenever it changes restores the per-file attribution the CLI
+    // rendered before the shared row model, and costs nothing for the common
+    // single-file call, where every candidate repeats `ctx.filePath`.
+    if (candidate.path && candidate.path !== labelledPath) {
+      labelledPath = candidate.path;
+      sections.push({
+        kind: 'file',
+        label: 'File:',
+        path: candidate.path,
+        namespace: 'workspace',
+      });
+    }
     sections.push({
       kind: 'diff',
       label: '',
@@ -772,6 +791,13 @@ function inputFilePath(input: unknown): string {
 const SECTION_BUILDERS: readonly {
   readonly match: (ctx: SectionContext) => boolean;
   readonly build: (ctx: SectionContext) => ToolSection[];
+  /**
+   * Set when this builder's file link is what makes the generic output block
+   * redundant. `outputSuppression` reads it rather than re-deriving the tool
+   * kind, because these matchers also require a file path: a `read` call whose
+   * input carries no path builds no link, and its output must still be shown.
+   */
+  readonly fileLinkKind?: 'read' | 'write';
 }[] = [
   {
     match: (ctx) => isEditLikeToolName(ctx.toolName) && isObject(ctx.input),
@@ -781,11 +807,13 @@ const SECTION_BUILDERS: readonly {
     match: (ctx) =>
       toolDisplayKind(ctx.toolName) === 'read' && Boolean(ctx.filePath),
     build: buildReadSections,
+    fileLinkKind: 'read',
   },
   {
     match: (ctx) =>
       toolDisplayKind(ctx.toolName) === 'write' && Boolean(ctx.filePath),
     build: buildWriteSections,
+    fileLinkKind: 'write',
   },
   {
     match: (ctx) => normalizeToolName(ctx.toolName) === 'memory',
@@ -834,8 +862,10 @@ function dispatchSections(ctx: SectionContext): {
   sections: ToolSection[];
   /** True when the matched builder already carries the call's output. */
   carriesOutput: boolean;
+  /** The file link the matched builder actually built, if any. */
+  fileLinkKind?: 'read' | 'write';
 } {
-  for (const { match, build } of SECTION_BUILDERS) {
+  for (const { match, build, fileLinkKind } of SECTION_BUILDERS) {
     if (!match(ctx)) continue;
     // A matched builder that finds nothing displayable (an edit-like tool
     // whose input shape it does not recognize) falls through to the generic
@@ -850,6 +880,7 @@ function dispatchSections(ctx: SectionContext): {
       carriesOutput:
         isMcpToolName(ctx.toolName) ||
         sections.some((section) => section.kind === 'diff'),
+      ...(fileLinkKind ? { fileLinkKind } : {}),
     };
   }
   return { sections: buildDefaultSections(ctx), carriesOutput: false };
@@ -873,6 +904,11 @@ function dispatchSections(ctx: SectionContext): {
  *  - `trivial-write`        — a `write`-kind call whose whole output is
  *                             `written`.
  *
+ * The last two are keyed on the link the section builder actually built, not
+ * on the tool kind: a `read`/`write` call whose input carries no path builds
+ * no link, and suppressing its output would drop the result with nothing shown
+ * in its place.
+ *
  * MCP output is shown, through the structured sections. The CLI's former
  * "hide unless bash or MCP" allowlist is gone: terminal economy is a paint-
  * time head/tail elision, never a decision to drop the data.
@@ -881,8 +917,9 @@ function outputSuppression(
   normalized: NormalizedToolUse,
   headerPreview: string,
   carriesOutput: boolean,
+  fileLinkKind: 'read' | 'write' | undefined,
 ): ToolOutputSuppression | undefined {
-  const { outputText, errorText, toolName } = normalized;
+  const { outputText, errorText } = normalized;
   if (!outputText) return 'empty';
   const collapsed = collapseWhitespace(outputText).trim();
   if (collapsed && collapsed === collapseWhitespace(headerPreview).trim()) {
@@ -892,9 +929,8 @@ function outputSuppression(
     return 'duplicate-of-error';
   }
   if (carriesOutput) return 'rendered-by-sections';
-  const kind = toolDisplayKind(toolName);
-  if (kind === 'read') return 'file-link';
-  if (kind === 'write' && outputText.trim() === TRIVIAL_WRITE_OUTPUT) {
+  if (fileLinkKind === 'read') return 'file-link';
+  if (fileLinkKind === 'write' && outputText.trim() === TRIVIAL_WRITE_OUTPUT) {
     return 'trivial-write';
   }
   return undefined;
@@ -909,7 +945,7 @@ export function toolRowModel(
   ctx: ToolRowModelContext = {},
 ): ToolRowModel {
   const headerPreview = toolHeaderPreview(normalized, ctx);
-  const { sections, carriesOutput } = dispatchSections({
+  const { sections, carriesOutput, fileLinkKind } = dispatchSections({
     toolName: normalized.toolName,
     input: normalized.input,
     filePath: inputFilePath(normalized.input),
@@ -921,6 +957,7 @@ export function toolRowModel(
     normalized,
     headerPreview,
     carriesOutput,
+    fileLinkKind,
   );
   const output =
     suppression === undefined
