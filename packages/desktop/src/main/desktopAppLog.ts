@@ -18,7 +18,7 @@ import {
 } from 'electron';
 
 import { redactSecrets } from '@logger/redaction';
-import { normalizeFilePath } from '@utils/core';
+import { normalizeFilePath, unique } from '@utils/core';
 
 import type { DesktopLogSnapshot } from '../shared/desktopLogMessages.js';
 
@@ -62,9 +62,10 @@ export function readDesktopLogSnapshot(options: {
 }): DesktopLogSnapshot {
   const path = getDesktopLogFilePath();
   const maxBytes = Math.max(0, options.maxBytes ?? MAX_VIEWER_LOG_BYTES);
-  const workspacePath = options.workspacePath;
-  const displayWorkspacePath =
-    workspacePath == null ? undefined : normalizeFilePath(workspacePath);
+  const workspacePath =
+    options.workspacePath == null
+      ? undefined
+      : normalizeFilePath(options.workspacePath);
   try {
     const buffer = readFileSync(path);
     const truncated = buffer.length > maxBytes;
@@ -72,13 +73,13 @@ export function readDesktopLogSnapshot(options: {
       ? buffer.subarray(buffer.length - maxBytes)
       : buffer;
     return {
-      path: redactDesktopLogPath(normalizeFilePath(path), displayWorkspacePath),
+      path: redactDesktopLogText(normalizeFilePath(path), workspacePath),
       truncated,
       text: redactDesktopLogText(excerpt.toString('utf8'), workspacePath),
     };
   } catch (error) {
     return {
-      path: redactDesktopLogPath(normalizeFilePath(path), displayWorkspacePath),
+      path: redactDesktopLogText(normalizeFilePath(path), workspacePath),
       truncated: false,
       text: redactDesktopLogText(
         format('Desktop log is not available: %s', error),
@@ -165,16 +166,16 @@ function redactDesktopLogText(
   text: string,
   workspacePath: string | undefined,
 ): string {
-  return redactSecrets(redactPathPrefixes(text, workspacePath, homedir()));
+  return redactSecrets(
+    redactPathPrefixes(text, workspacePath, normalizeFilePath(homedir())),
+  );
 }
 
-function redactDesktopLogPath(
-  path: string,
-  workspacePath: string | undefined,
-): string {
-  return redactSecrets(
-    redactPathPrefixes(path, workspacePath, normalizeFilePath(homedir())),
-  );
+/** Both separator spellings of a prefix, so mixed-separator log text redacts. */
+function separatorVariants(prefix: string): string[] {
+  const forward = normalizeFilePath(prefix);
+  const backward = forward === '/' ? forward : forward.replaceAll('/', '\\');
+  return unique([prefix, forward, backward]);
 }
 
 function redactPathPrefixes(
@@ -183,6 +184,7 @@ function redactPathPrefixes(
 ): string {
   return prefixes
     .filter((prefix): prefix is string => Boolean(prefix))
+    .flatMap(separatorVariants)
     .toSorted((a, b) => b.length - a.length)
     .reduce((redacted, prefix) => {
       if (prefix === '/') {
