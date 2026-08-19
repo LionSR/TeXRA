@@ -86,7 +86,6 @@ type DesktopProfileHandlers = Pick<
   | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY
   | typeof SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY
   | typeof SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL
-  | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING
   | typeof SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL
 >;
 
@@ -149,7 +148,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       loadProviderKeyStatuses: () =>
         loadApiKeyStatusMap(options.secrets, API_PROVIDERS),
       getConfig: (key, defaultValue) => options.config.get(key, defaultValue),
-      updateConfig: (key, value) => options.config.update(key, value, 'global'),
     });
     this.profileKeyController = new SettingsProfileKeyController({
       prompt: {
@@ -189,8 +187,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         this.profileKeyController.removeProviderKey(message.provider),
       openProviderKeyUrl: (message) =>
         this.profileKeyController.openProviderKeyUrl(message.provider),
-      setProviderSetting: (message) =>
-        this.setProviderSetting(message.key, message.value),
       openExternalUrl: (message) =>
         options.externalOpener.openExternal(message.url),
     };
@@ -331,27 +327,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.signInSubscription('grok', () =>
       this.refreshAfterGrokAuthChange(),
     );
-  }
-
-  private async setProviderSetting(
-    key: string,
-    value: boolean | number,
-  ): Promise<void> {
-    const result = await this.profileController.setProviderSetting({
-      key,
-      value,
-    });
-    if (result.kind === 'rejected') {
-      await this.options.notifications.showErrorMessage(
-        `Unknown provider setting: ${result.key}`,
-      );
-      return;
-    }
-
-    await this.postProfileData();
-    if (codingPlanForUsageSetting(key)) {
-      await this.postSubscriptionUsage();
-    }
   }
 
   /**

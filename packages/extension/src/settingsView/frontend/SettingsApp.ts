@@ -70,6 +70,7 @@ import {
   claudeAgentPermissionMode,
   codexApprovalPolicy,
   codexReasoningEffort,
+  compactionThresholdPercent,
   codexSandboxMode,
   copilotRouteInfos,
   customAgentDir,
@@ -96,13 +97,13 @@ import {
   memoryEnabled,
   memoryItems,
   memoryToggleDisabled,
+  modelRetryMaxAttempts,
   modelSelectionItems,
   orchestratorAgents,
   preferShortModelNames,
   prSubscriptions,
   providerKeyModal,
   providerKeyStatuses,
-  reliabilitySettings,
   resetSettingsState,
   selectedPanel,
   sessionProblem,
@@ -392,7 +393,8 @@ export class SettingsApp extends SettingsAppBase {
             .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
             .customAgentScanIssues=${customAgentScanIssues.get()}
             .initialSubTab=${agentSubTab.get()}
-            .reliabilitySettings=${reliabilitySettings.get()}
+            .compactionThresholdPercent=${compactionThresholdPercent.get()}
+            .modelRetryMaxAttempts=${modelRetryMaxAttempts.get()}
             .unsupportedCommands=${unsupportedCommands.get()}
           ></agents-tab>
         `;

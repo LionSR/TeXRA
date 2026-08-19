@@ -53,11 +53,27 @@ export type LatexdiffTempFileLocation =
  * the schema and the UI cannot disagree about the range.
  */
 export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = {
+  configKey: 'texra.model.retry.maxAttempts',
   defaultValue: 2,
   min: 0,
   max: 5,
   description:
     'Additional automatic retries after the initial model request (0–5). Long-running background requests retain at least two recovery retries.',
+} as const;
+
+/**
+ * Bounds, default, and copy for `model.compactionThresholdPercent`. The value
+ * is the share of the model's context window that triggers automatic
+ * compaction, and `0` disables it. Shared by the schema leaf below and the
+ * settings-view reliability row.
+ */
+export const MODEL_COMPACTION_THRESHOLD_SETTING = {
+  configKey: 'texra.model.compactionThresholdPercent',
+  defaultValue: 75,
+  min: 0,
+  max: 100,
+  description:
+    "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
 } as const;
 
 /**
@@ -87,7 +103,7 @@ export const DEFAULT_CORE_SETTINGS = {
     useGoogleInteractionsServerState: true,
     useBackgroundResponses: true,
     openaiParallelToolCalls: true,
-    compactionThresholdPercent: 75,
+    compactionThresholdPercent: MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue,
     gpt5ReasoningSummary: false,
     retry: {
       maxAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
@@ -239,8 +255,11 @@ export const CoreSettingsShape = {
       ),
       compactionThresholdPercent: numberField(
         DEFAULT_CORE_SETTINGS.model.compactionThresholdPercent,
-        "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
-        { min: 0, max: 100 },
+        MODEL_COMPACTION_THRESHOLD_SETTING.description,
+        {
+          min: MODEL_COMPACTION_THRESHOLD_SETTING.min,
+          max: MODEL_COMPACTION_THRESHOLD_SETTING.max,
+        },
       ),
       gpt5ReasoningSummary: boolField(
         DEFAULT_CORE_SETTINGS.model.gpt5ReasoningSummary,

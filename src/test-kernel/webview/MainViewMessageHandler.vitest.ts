@@ -93,7 +93,6 @@ vi.mock('@shared/state/onboardingState', () => ({
 vi.mock('@utils/config/constants', () => ({}));
 vi.mock('@utils/config/configUtils', () => ({
   getConfig: vi.fn(),
-  updateConfig: vi.fn(),
 }));
 vi.mock('@common/state', async () => {
   const keys = await import('@shared/state/stateKeys');

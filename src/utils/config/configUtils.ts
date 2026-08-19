@@ -1,18 +1,12 @@
 // Local imports
 import { createLog } from '@logger/logUtils';
 import { platform, tryPlatform } from '@platform/platform';
-import type { ConfigTarget } from '@platform/interfaces';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Third-party imports
 import type { ZodType } from 'zod';
 
 const log = createLog('configUtils');
-
-interface UpdateConfigOptions {
-  target?: ConfigTarget;
-  prefix?: boolean;
-}
 
 function configProvider() {
   return platform().config;
@@ -81,27 +75,4 @@ export function getValidatedConfig<T>(
     );
   }
   return defaultValue;
-}
-
-/**
- * Updates a value in the host's native TeXRA configuration.
- *
- * Path conventions:
- * - Use dot notation with or without the canonical `texra.` prefix.
- * - `prefix: false` is retained for callers that already pass a canonical key.
- *
- * @param path Configuration path
- * @param value The value to set
- * @param options Additional options for the update
- * @returns Promise that resolves when configuration is updated
- */
-export async function updateConfig<T>(
-  path: string,
-  value: T,
-  options: UpdateConfigOptions = {},
-): Promise<void> {
-  const { target = 'workspace', prefix = true } = options;
-
-  const key = prefix && !path.startsWith('texra.') ? `texra.${path}` : path;
-  await configProvider().update(key, value, target);
 }

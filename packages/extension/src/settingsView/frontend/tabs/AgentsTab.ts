@@ -26,8 +26,9 @@ import {
   type AgentScanIssue,
   type AgentSelectionItem,
   type ByCategory,
-  type NumberSetting,
   byCategory,
+  MODEL_COMPACTION_THRESHOLD_SETTING,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
 import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
@@ -36,14 +37,17 @@ import {
   renderLabeledActionButton,
 } from '@shared/wa/actionButtons';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import {
+  renderSettingsNumberRow,
+  renderSettingsSectionHeading,
+} from '@shared/wa/settingsSection';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
+import { postStateSetting } from '../components/shared/stateSettingRows';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/AgentSelectionPanel';
-import '../components/profile/ReliabilitySettingsSection';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
@@ -82,8 +86,12 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
       }
 
       .agent-category + .agent-category,
-      .agent-category + reliability-settings-section {
+      .agent-category + .settings-section-heading {
         margin-top: var(--wa-space-l);
+      }
+
+      .setting-number-input {
+        width: 80px;
       }
 
       .agent-category agent-selection-panel {
@@ -99,7 +107,10 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
   @property({ attribute: false }) customAgentDirIsDefault = true;
   @property({ attribute: false }) customAgentScanIssues: AgentScanIssue[] = [];
   @property({ attribute: false }) initialSubTab?: AgentCategory;
-  @property({ attribute: false }) reliabilitySettings: NumberSetting[] = [];
+  @property({ attribute: false }) compactionThresholdPercent =
+    MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue;
+  @property({ attribute: false }) modelRetryMaxAttempts =
+    MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue;
 
   protected override updated(changed: PropertyValues): void {
     super.updated(changed);
@@ -278,13 +289,44 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
           'Focused specialists for writing, review, research, and structured paper workflows.',
           'wand-magic-sparkles',
         )}
-        ${
-          this.reliabilitySettings.length > 0
-            ? html`<reliability-settings-section
-                .settings=${this.reliabilitySettings}
-              ></reliability-settings-section>`
-            : nothing
-        }
+        ${renderSettingsSectionHeading({
+          title: 'Reliability',
+          description:
+            'Tweak how long model sessions handle retries and context limits.',
+          icon: 'rotate-right',
+        })}
+        <div class="settings-section">
+          ${renderSettingsNumberRow({
+            label: 'Compaction threshold',
+            description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
+            value: this.compactionThresholdPercent,
+            min: MODEL_COMPACTION_THRESHOLD_SETTING.min,
+            max: MODEL_COMPACTION_THRESHOLD_SETTING.max,
+            unit: '%',
+            // Clearing the field commits 0, which is the documented way to
+            // disable compaction — not a no-op edit to be reverted.
+            revertOnEmpty: false,
+            onChange: (value) =>
+              postStateSetting(
+                MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
+                value,
+              ),
+          })}
+          ${renderSettingsNumberRow({
+            label: 'Automatic retries',
+            description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
+            value: this.modelRetryMaxAttempts,
+            min: MODEL_RETRY_MAX_ATTEMPTS_SETTING.min,
+            max: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
+            step: 1,
+            revertOnEmpty: false,
+            onChange: (value) =>
+              postStateSetting(
+                MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+                value,
+              ),
+          })}
+        </div>
       </div>
     `;
   }

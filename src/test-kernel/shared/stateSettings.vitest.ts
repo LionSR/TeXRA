@@ -492,13 +492,8 @@ describe('catalog-derived settings snapshots', () => {
           .sort(),
         `${snapshot} payload keys`,
       );
-      // The multi-agent arm alone carries a non-catalog field.
-      const posted =
-        snapshot === 'multi-agent'
-          ? { ...message, reliabilitySettings: [] }
-          : message;
       assert.equal(
-        dispatchSettingsViewOutbound(posted, {
+        dispatchSettingsViewOutbound(message, {
           [message.command]: () => {},
         } as never),
         true,

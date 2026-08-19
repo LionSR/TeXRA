@@ -38,19 +38,6 @@ const ProviderSettingSchema = ProviderSettingDefSchema.extend({
 });
 export type ProviderSetting = z.infer<typeof ProviderSettingSchema>;
 
-/** A numeric configuration surfaced in a settings section. */
-export const NumberSettingSchema = z.object({
-  key: z.string(),
-  label: z.string(),
-  description: z.string(),
-  value: z.number(),
-  min: z.number().optional(),
-  max: z.number().optional(),
-  step: z.number().positive().optional(),
-  unit: z.string().optional(),
-});
-export type NumberSetting = z.infer<typeof NumberSettingSchema>;
-
 const ProviderKeyStatusSchema = z.object({
   provider: z.string(),
   displayName: z.string(),

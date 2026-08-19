@@ -488,10 +488,18 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     },
   },
   'model.compactionThresholdPercent': {
+    title: 'Compaction threshold',
+    category: 'model',
+    configTarget: 'global',
     honoredBy: everyHost('src/agent/modelHandlers/ModelHandler.ts'),
+    surfaces: { settingsView: 'multi-agent' },
   },
   'model.retry.maxAttempts': {
+    title: 'Automatic retries',
+    category: 'model',
+    configTarget: 'global',
     honoredBy: everyHost('src/agent/core/flows/ModelInvocationNode.ts'),
+    surfaces: { settingsView: 'multi-agent' },
   },
   // Thin provider modules own the public prefer-switch surface; the shared
   // factory in subscriptionPreference.ts is not a separate consumer key.

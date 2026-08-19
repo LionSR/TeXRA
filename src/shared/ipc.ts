@@ -234,7 +234,6 @@ export const SETTINGS_VIEW_CMD = {
   SET_PROVIDER_KEY: 'setProviderKey',
   REMOVE_PROVIDER_KEY: 'removeProviderKey',
   OPEN_PROVIDER_KEY_URL: 'openProviderKeyUrl',
-  SET_PROVIDER_SETTING: 'setProviderSetting',
   OPEN_EXTERNAL_URL: 'openExternalUrl',
   // Model selection commands
   SET_MODEL_ENABLED: 'setModelEnabled',

@@ -146,20 +146,10 @@ export function createDesktopSettingsIpc(
     globalState,
   };
 
-  /**
-   * Post one catalog-derived snapshot. The desktop build has no reliability
-   * tuning of its own, so the multi-agent arm carries an empty list.
-   */
+  /** Post one catalog-derived snapshot. */
   function postSettingsSnapshot(snapshot: DerivedSettingsSnapshot): void {
-    const message = buildSettingsSnapshotMessage(
-      snapshot,
-      settingsStores,
-      'desktop',
-    );
     options.postToRenderer(
-      snapshot === 'multi-agent'
-        ? { ...message, reliabilitySettings: [] }
-        : message,
+      buildSettingsSnapshotMessage(snapshot, settingsStores, 'desktop'),
     );
   }
 

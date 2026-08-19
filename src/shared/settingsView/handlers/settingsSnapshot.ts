@@ -26,11 +26,7 @@ export interface SettingsSnapshotMessage {
   readonly values: SettingsSnapshotValues;
 }
 
-/**
- * Read one settings-view snapshot from the host's stores. Callers that carry
- * extra host-specific payload (the multi-agent arm's `reliabilitySettings`)
- * spread the result and add their field.
- */
+/** Read one settings-view snapshot from the host's stores. */
 export function buildSettingsSnapshotMessage(
   snapshot: DerivedSettingsSnapshot,
   stores: SettingsStores,
