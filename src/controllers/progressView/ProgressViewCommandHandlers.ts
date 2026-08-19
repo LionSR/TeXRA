@@ -1,12 +1,14 @@
 // Local imports
 import type { DeleteStreamResult } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { ExecutionRequest } from '@agent/core/state/executionRequests';
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { isApiProvider } from '@model/apiProviders';
+import { platform } from '@platform/platform';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   AgentProposal,
@@ -15,7 +17,7 @@ import type {
   ProgressViewOutboundMessage,
   StreamTabId,
 } from '@shared/schemas';
-import { isPlainAgentIdentity } from '@shared/schemas';
+import { AgentCategory, isPlainAgentIdentity } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   isApprovalBypassedForStream,
@@ -35,6 +37,8 @@ import {
   type TranscriptExportPorts,
 } from './exportTranscript';
 import type { ProgressWorkflowActionsController } from './ProgressWorkflowActionsController';
+import type { ProgressWorkflowFileActionsController } from './ProgressWorkflowFileActionsController';
+import type { ProgressAgentProposalController } from './ProgressAgentProposalController';
 import type { ProgressApiKeyRetryController } from './ProgressApiKeyRetryController';
 import type {
   ProgressFollowUpController,
@@ -54,7 +58,7 @@ import type {
  * those stored configs would run the wrong thing.
  * Returns the resolved metadata when the action may proceed, else null.
  */
-export async function resolveNativeAgentRun(
+async function resolveNativeAgentRun(
   getRunMetadata: (stream: StreamTabId) => RunMetadata,
   stream: StreamTabId,
   showInfo: (message: string) => void | PromiseLike<unknown>,
@@ -79,6 +83,72 @@ export async function resolveNativeAgentRun(
   return { ...metadata, config };
 }
 
+interface ProgressViewRunState {
+  getRunMetadata(stream: StreamTabId): RunMetadata;
+  /** Warm a webview-selected stream before its run metadata is read. */
+  preload?(stream: StreamTabId): Promise<void>;
+}
+
+interface ProgressViewRunDependencies {
+  readonly state: ProgressViewRunState;
+  /**
+   * Launch or resume a run for this request. This is a host callback, not
+   * the `@agent/runtime` `executeAgent`/`runAgent` functions it dispatches
+   * to — hosts wire it to their own command/IPC handling, which eventually
+   * reaches `runAgent`.
+   */
+  runExecutionRequest(request: ExecutionRequest): Promise<void>;
+}
+
+/**
+ * Resume the run behind a stream. Workflow runs relaunch through the host's
+ * executor with the original execution id; tool-use runs carry canonical
+ * session state, so they go through the host resume port that restores it
+ * instead of starting a fresh run.
+ */
+async function resumeStream(
+  dependencies: ProgressViewRunDependencies,
+  stream: StreamTabId,
+  showInfo: (message: string) => void | PromiseLike<unknown>,
+): Promise<void> {
+  const metadata = await resolveNativeAgentRun(
+    dependencies.state.getRunMetadata,
+    stream,
+    showInfo,
+    'resumed',
+    dependencies.state.preload,
+  );
+  if (!metadata) return;
+  const { config, executionId } = metadata;
+
+  if (config.agentCategory !== AgentCategory.Workflow) {
+    await platform().agentResume.tryResumeStream(stream);
+    return;
+  }
+
+  await dependencies.runExecutionRequest({
+    config,
+    ...(executionId && { executionId }),
+  });
+}
+
+async function runNewStream(
+  dependencies: ProgressViewRunDependencies,
+  stream: StreamTabId,
+  showInfo: (message: string) => void | PromiseLike<unknown>,
+): Promise<void> {
+  const metadata = await resolveNativeAgentRun(
+    dependencies.state.getRunMetadata,
+    stream,
+    showInfo,
+    're-run',
+    dependencies.state.preload,
+  );
+  if (!metadata) return;
+
+  await dependencies.runExecutionRequest({ config: metadata.config });
+}
+
 type ProgressViewMessage<C extends ProgressViewInboundMessage['command']> =
   Extract<ProgressViewInboundMessage, { command: C }>;
 
@@ -96,7 +166,7 @@ interface ProgressViewFollowUpSubmission {
   mediaFiles?: readonly string[];
 }
 
-export interface ProgressViewLifecycleCommandActions {
+interface ProgressViewLifecycleCommandActions {
   setActiveStream(
     stream: StreamTabId | '',
     requestId: string,
@@ -108,35 +178,25 @@ export interface ProgressViewLifecycleCommandActions {
   stopStream(stream: StreamTabId): Promise<void> | void;
 }
 
-interface ProgressViewRunCommandActions {
-  resumeStream(stream: StreamTabId): Promise<void> | void;
-  runNewStream(stream: StreamTabId): Promise<void> | void;
-}
-
-export interface ProgressViewFileCommandActions {
+/**
+ * The two file commands a host owns. The rest of the file surface (task
+ * storage, the four compare/accept/merge/latexdiff verbs, and label opening)
+ * is {@link ProgressWorkflowFileActionsController}'s and is reached through
+ * the controller directly.
+ */
+interface ProgressViewFileCommandActions {
   openFile(file: string, line?: number): Promise<void> | void;
   openSpillArtifact(spillPath: string): Promise<void> | void;
-  openTaskStorage(stream: StreamTabId): Promise<void> | void;
-  compareOriginal(file: string, base?: string): Promise<void> | void;
-  comparePrevious(
-    file: string,
-    base?: string,
-    previous?: string,
-  ): Promise<void> | void;
-  acceptFile(file: string, base?: string): Promise<void> | void;
-  mergeFile(file: string, base?: string): Promise<void> | void;
-  latexdiffFile(file: string, base?: string): Promise<void> | void;
-  openLabel(label: string): Promise<void> | void;
 }
 
-export interface ProgressViewFollowUpCommandActions {
+interface ProgressViewFollowUpCommandActions {
   sendFollowUp(
     submission: ProgressViewFollowUpSubmission,
   ): Promise<void> | void;
   reportImageSaveError(image: ProgressViewFollowUpImage, error: unknown): void;
 }
 
-export interface ProgressViewBypassCommandOptions {
+interface ProgressViewBypassCommandOptions {
   /**
    * Session that owns the approval bypass state. Desktop scopes it to its
    * window session; the extension omits it so the default session applies.
@@ -147,7 +207,7 @@ export interface ProgressViewBypassCommandOptions {
   showInfo(message: string): void | PromiseLike<unknown>;
 }
 
-export interface ProgressViewApprovalCommandActions {
+interface ProgressViewApprovalCommandActions {
   approvePendingDelegatedWork(
     stream: StreamTabId,
     initiatingProposalId: string,
@@ -172,14 +232,9 @@ export interface ProgressViewApprovalCommandActions {
       typeof PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION
     >,
   ): unknown;
-  handleAgentProposalAction(
-    message: ProgressViewMessage<
-      typeof PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION
-    >,
-  ): unknown;
 }
 
-export interface ProgressViewExternalInquiryCommandActions {
+interface ProgressViewExternalInquiryCommandActions {
   /**
    * Continuation owner. Desktop scopes it to its window session; the extension
    * omits it so the module default applies.
@@ -191,10 +246,14 @@ export interface ProgressViewExternalInquiryCommandActions {
 
 export interface ProgressViewCommandActions {
   lifecycle: ProgressViewLifecycleCommandActions;
-  run: ProgressViewRunCommandActions;
+  run: ProgressViewRunDependencies;
   followUp: ProgressViewFollowUpCommandActions;
   bypass: ProgressViewBypassCommandOptions;
   file: ProgressViewFileCommandActions;
+  /** Owns the workflow file verbs and label opening. */
+  workflowFileActions: ProgressWorkflowFileActionsController;
+  /** Owns the agent-proposal card's approve/reject/setup actions. */
+  agentProposal: ProgressAgentProposalController;
   approval: ProgressViewApprovalCommandActions;
   externalInquiry: ProgressViewExternalInquiryCommandActions;
 }
@@ -219,7 +278,16 @@ export interface ProgressViewCommandActions {
 export function createProgressViewCommandHandlers(
   actions: ProgressViewCommandActions,
 ) {
-  const { lifecycle, run, file, followUp, approval, externalInquiry } = actions;
+  const {
+    lifecycle,
+    run,
+    file,
+    workflowFileActions,
+    agentProposal,
+    followUp,
+    approval,
+    externalInquiry,
+  } = actions;
   const { session, showInfo } = actions.bypass;
 
   const reportDelegatedWorkApproval = async (
@@ -243,26 +311,29 @@ export function createProgressViewCommandHandlers(
     [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: (data) =>
       lifecycle.stopStream(data.stream),
 
-    [PROGRESS_VIEW_COMMANDS.RESUME]: (data) => run.resumeStream(data.stream),
-    [PROGRESS_VIEW_COMMANDS.RUN_NEW]: (data) => run.runNewStream(data.stream),
+    [PROGRESS_VIEW_COMMANDS.RESUME]: (data) =>
+      resumeStream(run, data.stream, showInfo),
+    [PROGRESS_VIEW_COMMANDS.RUN_NEW]: (data) =>
+      runNewStream(run, data.stream, showInfo),
 
     [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: (data) =>
       file.openFile(data.file, data.line),
     [PROGRESS_VIEW_COMMANDS.OPEN_SPILL_ARTIFACT]: (data) =>
       file.openSpillArtifact(data.spillPath),
     [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]: (data) =>
-      file.openTaskStorage(data.stream),
+      workflowFileActions.openTaskStorage(data.stream),
     [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: (data) =>
-      file.compareOriginal(data.file, data.base),
+      workflowFileActions.compareOriginal(data.file, data.base),
     [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]: (data) =>
-      file.comparePrevious(data.file, data.base, data.prev),
+      workflowFileActions.comparePrevious(data.file, data.base, data.prev),
     [PROGRESS_VIEW_COMMANDS.ACCEPT_FILE]: (data) =>
-      file.acceptFile(data.file, data.base),
+      workflowFileActions.acceptFile(data.file, data.base),
     [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: (data) =>
-      file.mergeFile(data.file, data.base),
+      workflowFileActions.mergeFile(data.file, data.base),
     [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]: (data) =>
-      file.latexdiffFile(data.file, data.base),
-    [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: (data) => file.openLabel(data.label),
+      workflowFileActions.latexdiffFile(data.file, data.base),
+    [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: (data) =>
+      workflowFileActions.openLabel(data.label),
 
     [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: async (data) => {
       const mediaFiles = await saveFollowUpImages(
@@ -335,7 +406,7 @@ export function createProgressViewCommandHandlers(
       await approval.handleUserQuestionAction(data);
     },
     [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: async (data) => {
-      await approval.handleAgentProposalAction(data);
+      await agentProposal.handleAction(data);
     },
 
     // Draft persists the open turn; the canonical submit/drop union settles it.

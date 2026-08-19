@@ -48,8 +48,10 @@ import {
   type WorkflowFileOperationRequest,
 } from '@controllers/progressView/ProgressWorkflowActionsController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
-import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
+import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
+import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import {
+  createProgressViewCommandHandlers,
   createProgressViewSecondTierHandlers,
   type ProgressViewSecondTierActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
@@ -169,9 +171,11 @@ export class DesktopProgressBridge {
   private readonly backend: ProgressBackend;
   private readonly state: ProgressBackend['state'];
   private readonly streamLogs: ProgressBackend['state']['streamLogs'];
-  private progressHost!: ProgressViewHost;
-  private agentProposalController!: ProgressViewHost['agentProposalController'];
-  private workflowFileActions!: ProgressViewHost['workflowFileActionsController'];
+  private agentProposalController!: ProgressAgentProposalController;
+  private workflowFileActions!: ProgressWorkflowFileActionsController;
+  private commandHandlers!: ReturnType<
+    typeof createProgressViewCommandHandlers
+  >;
   /**
    * Stream-toolbar diff/pack/clean. The controller is host-neutral: it resolves
    * each run's agent/model/input/output configuration from the shared snapshot
@@ -401,9 +405,9 @@ export class DesktopProgressBridge {
       },
       listWorkspaceCandidateFiles: () => this.listWorkspaceCandidateFiles(),
     });
-    this.progressHost = this.createProgressViewHost();
-    this.workflowFileActions = this.progressHost.workflowFileActionsController;
-    this.agentProposalController = this.progressHost.agentProposalController;
+    this.workflowFileActions = this.createWorkflowFileActionsController();
+    this.agentProposalController = this.createAgentProposalController();
+    this.commandHandlers = this.createProgressViewCommandHandlers();
     this.workflowActions = this.createWorkflowActionsController();
     this.followUpController = this.createFollowUpController();
     this.apiKeyRetryController = this.createApiKeyRetryController();
@@ -674,8 +678,83 @@ export class DesktopProgressBridge {
     }
   }
 
-  private createProgressViewHost(): ProgressViewHost {
-    return new ProgressViewHost({
+  private createWorkflowFileActionsController(): ProgressWorkflowFileActionsController {
+    return new ProgressWorkflowFileActionsController({
+      state: {
+        getActiveStream: () => this.backend.presentation.activeStream,
+        getRunMetadata: (stream) => this.getRunMetadata(stream),
+        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
+        preload: (stream) => this.state.snapshots.preload([stream]),
+      },
+      host: {
+        compareFiles: (baseFile, editedFile) =>
+          this.fileActions.compareFiles(baseFile, editedFile),
+        acceptEditedFile: (baseFile, editedFile) =>
+          this.fileActions.acceptEditedFile(baseFile, editedFile),
+        mergeFile: (baseFile, editedFile) =>
+          this.fileActions.runMergeFile(baseFile, editedFile),
+        latexdiffFile: (baseFile, editedFile) =>
+          this.runLatexdiffFile(baseFile, editedFile),
+        openDirectory: (directory) => this.options.host.openPath(directory),
+        openLabel: (label) => this.fileActions.findAndOpenLabel(label),
+        readFile: (file) => readFile(file, 'utf8'),
+        showInfo: async (message) => {
+          await this.options.host.showInfoMessage(message);
+        },
+        showError: async (message) => {
+          await this.options.host.showErrorMessage(message);
+        },
+        logError: (message, error) =>
+          this.logger.error(message, {
+            data: toLogData(error),
+          }),
+      },
+      sendFollowUp: (stream, text) => this.sendFollowUp(stream, text),
+    });
+  }
+
+  private createAgentProposalController(): ProgressAgentProposalController {
+    return new ProgressAgentProposalController({
+      getPendingProposal: (requestId) =>
+        this.backend.approvalHandlers.proposal.get(requestId),
+      restoreRunConfig: async (config) => this.restoreRunConfig(config),
+      openFile: (file) => this.options.host.openPath(file),
+      settleProposal: (requestId, result) => {
+        const resolved = this.hostInteractions.submitProposalDecision(
+          requestId,
+          result,
+        );
+        if (!resolved) {
+          this.logger.warn(
+            `No pending desktop host interaction found for proposal: ${requestId}`,
+          );
+        }
+      },
+      onMissingProposal: (requestId) => {
+        this.logger.warn(
+          `No pending desktop agent proposal found for setup: ${requestId}`,
+        );
+      },
+      onInvalidProposal: (issues) => {
+        this.logger.warn('Invalid desktop agent proposal config', {
+          data: { errors: issues },
+        });
+      },
+      onSetupComplete: (proposal) => {
+        this.logger.info(
+          `Desktop agent proposal ${proposal.requestId} set up in main view`,
+          {
+            data: { agent: proposal.agent },
+          },
+        );
+      },
+    });
+  }
+
+  private createProgressViewCommandHandlers(): ReturnType<
+    typeof createProgressViewCommandHandlers
+  > {
+    return createProgressViewCommandHandlers({
       run: {
         state: {
           getRunMetadata: (stream) => this.getRunMetadata(stream),
@@ -684,165 +763,97 @@ export class DesktopProgressBridge {
         runExecutionRequest: (request) =>
           this.runValidatedExecutionRequest(request),
       },
-      workflowFileActions: {
-        state: {
-          getActiveStream: () => this.backend.presentation.activeStream,
-          getRunMetadata: (stream) => this.getRunMetadata(stream),
-          getOutputFiles: (stream) =>
-            this.state.snapshots.getOutputFiles(stream),
-          preload: (stream) => this.state.snapshots.preload([stream]),
-        },
-        host: {
-          compareFiles: (baseFile, editedFile) =>
-            this.fileActions.compareFiles(baseFile, editedFile),
-          acceptEditedFile: (baseFile, editedFile) =>
-            this.fileActions.acceptEditedFile(baseFile, editedFile),
-          mergeFile: (baseFile, editedFile) =>
-            this.fileActions.runMergeFile(baseFile, editedFile),
-          latexdiffFile: (baseFile, editedFile) =>
-            this.runLatexdiffFile(baseFile, editedFile),
-          openDirectory: (directory) => this.options.host.openPath(directory),
-          openLabel: (label) => this.fileActions.findAndOpenLabel(label),
-          readFile: (file) => readFile(file, 'utf8'),
-          showInfo: async (message) => {
-            await this.options.host.showInfoMessage(message);
-          },
-          showError: async (message) => {
-            await this.options.host.showErrorMessage(message);
-          },
-          logError: (message, error) =>
-            this.logger.error(message, {
-              data: toLogData(error),
-            }),
-        },
-        sendFollowUp: (stream, text) => this.sendFollowUp(stream, text),
+      workflowFileActions: this.workflowFileActions,
+      agentProposal: this.agentProposalController,
+      lifecycle: {
+        setActiveStream: (stream, requestId) =>
+          this.setActiveStream(stream, requestId),
+        deleteStream: (stream) => this.backend.deleteStream(stream),
+        deleteAllStreams: () => this.backend.deleteAllStreams(),
+        stopStream: (stream) => this.backend.stopStream(stream),
       },
-      agentProposal: {
-        getPendingProposal: (requestId) =>
-          this.backend.approvalHandlers.proposal.get(requestId),
-        restoreRunConfig: async (config) => this.restoreRunConfig(config),
-        openFile: (file) => this.options.host.openPath(file),
-        settleProposal: (requestId, result) => {
-          const resolved = this.hostInteractions.submitProposalDecision(
-            requestId,
-            result,
-          );
-          if (!resolved) {
-            this.logger.warn(
-              `No pending desktop host interaction found for proposal: ${requestId}`,
+      followUp: {
+        sendFollowUp: ({ stream, text, mediaFiles }) =>
+          this.sendFollowUp(stream, text, mediaFiles),
+        reportImageSaveError: (image, error) =>
+          this.logger.warn(
+            `Failed to save pasted follow-up image ${image.fileName}`,
+            { data: toLogData(error) },
+          ),
+      },
+      bypass: {
+        session: this.session,
+        showInfo: (message) => this.options.host.showInfoMessage(message),
+      },
+      file: {
+        openFile: (file, line) => this.options.host.openPath(file, line),
+        openSpillArtifact: async (spillPath) => {
+          let file: string | undefined;
+          try {
+            await this.session.flushArtifacts();
+            file = await findTranscriptSpillFile(spillPath);
+          } catch (error) {
+            await this.options.host.showErrorMessage(
+              `Full output could not be opened: ${toErrorMessage(error)}`,
             );
+            return;
+          }
+          if (!file) {
+            await this.options.host.showErrorMessage(
+              'Full output is unavailable because this run artifact was deleted.',
+            );
+            return;
+          }
+          try {
+            await this.options.host.openPath(file);
+          } catch (error) {
+            // The desktop preview host already surfaced its own "Failed to
+            // open file …" dialog before rethrowing (desktopPreviewHost's
+            // fail() shows-then-throws), so reporting here would stack a
+            // second toast on the same failure (#10848). Log only.
+            this.logger.warn('Failed to open the full output artifact', {
+              data: toLogData(error),
+            });
           }
         },
-        onMissingProposal: (requestId) => {
-          this.logger.warn(
-            `No pending desktop agent proposal found for setup: ${requestId}`,
+      },
+      approval: {
+        approvePendingDelegatedWork: (stream, initiatingProposalId) =>
+          this.hostInteractions.approvePendingDelegatedWork(
+            stream,
+            initiatingProposalId,
+          ),
+        handleToolEditApprovalAction: (message) =>
+          this.toolEditApprovals!.handleAction(message),
+        handleBashApprovalAction: (message) =>
+          void this.hostInteractions.submitBashDecision(
+            message.requestId,
+            message.action === 'approve'
+              ? { action: 'approve' }
+              : { action: 'reject', feedback: message.feedback },
+          ),
+        handlePlanApprovalAction: (message) => {
+          this.hostInteractions.submitPlanDecision(
+            message.requestId,
+            message.action === 'reject'
+              ? { action: 'reject', feedback: message.feedback }
+              : { action: message.action },
           );
         },
-        onInvalidProposal: (issues) => {
-          this.logger.warn('Invalid desktop agent proposal config', {
-            data: { errors: issues },
-          });
-        },
-        onSetupComplete: (proposal) => {
-          this.logger.info(
-            `Desktop agent proposal ${proposal.requestId} set up in main view`,
-            {
-              data: { agent: proposal.agent },
-            },
+        handleUserQuestionAction: (message) => {
+          this.hostInteractions.submitUserQuestionDecision(
+            message.requestId,
+            message.action === 'submit'
+              ? { action: 'submit', answers: message.answers }
+              : { action: message.action, feedback: message.feedback },
           );
+          return undefined;
         },
       },
-      commands: {
-        lifecycle: {
-          setActiveStream: (stream, requestId) =>
-            this.setActiveStream(stream, requestId),
-          deleteStream: (stream) => this.backend.deleteStream(stream),
-          deleteAllStreams: () => this.backend.deleteAllStreams(),
-          stopStream: (stream) => this.backend.stopStream(stream),
-        },
-        followUp: {
-          sendFollowUp: ({ stream, text, mediaFiles }) =>
-            this.sendFollowUp(stream, text, mediaFiles),
-          reportImageSaveError: (image, error) =>
-            this.logger.warn(
-              `Failed to save pasted follow-up image ${image.fileName}`,
-              { data: toLogData(error) },
-            ),
-        },
-        bypass: {
-          session: this.session,
-          showInfo: (message) => this.options.host.showInfoMessage(message),
-        },
-        file: {
-          openFile: (file, line) => this.options.host.openPath(file, line),
-          openSpillArtifact: async (spillPath) => {
-            let file: string | undefined;
-            try {
-              await this.session.flushArtifacts();
-              file = await findTranscriptSpillFile(spillPath);
-            } catch (error) {
-              await this.options.host.showErrorMessage(
-                `Full output could not be opened: ${toErrorMessage(error)}`,
-              );
-              return;
-            }
-            if (!file) {
-              await this.options.host.showErrorMessage(
-                'Full output is unavailable because this run artifact was deleted.',
-              );
-              return;
-            }
-            try {
-              await this.options.host.openPath(file);
-            } catch (error) {
-              // The desktop preview host already surfaced its own "Failed to
-              // open file …" dialog before rethrowing (desktopPreviewHost's
-              // fail() shows-then-throws), so reporting here would stack a
-              // second toast on the same failure (#10848). Log only.
-              this.logger.warn('Failed to open the full output artifact', {
-                data: toLogData(error),
-              });
-            }
-          },
-        },
-        approval: {
-          approvePendingDelegatedWork: (stream, initiatingProposalId) =>
-            this.hostInteractions.approvePendingDelegatedWork(
-              stream,
-              initiatingProposalId,
-            ),
-          handleToolEditApprovalAction: (message) =>
-            this.toolEditApprovals!.handleAction(message),
-          handleBashApprovalAction: (message) =>
-            void this.hostInteractions.submitBashDecision(
-              message.requestId,
-              message.action === 'approve'
-                ? { action: 'approve' }
-                : { action: 'reject', feedback: message.feedback },
-            ),
-          handlePlanApprovalAction: (message) => {
-            this.hostInteractions.submitPlanDecision(
-              message.requestId,
-              message.action === 'reject'
-                ? { action: 'reject', feedback: message.feedback }
-                : { action: message.action },
-            );
-          },
-          handleUserQuestionAction: (message) => {
-            this.hostInteractions.submitUserQuestionDecision(
-              message.requestId,
-              message.action === 'submit'
-                ? { action: 'submit', answers: message.answers }
-                : { action: message.action, feedback: message.feedback },
-            );
-            return undefined;
-          },
-        },
-        externalInquiry: {
-          session: this.session,
-          dismiss: (threadId) =>
-            this.hostInteractions.dismissExternalInquiry(threadId),
-        },
+      externalInquiry: {
+        session: this.session,
+        dismiss: (threadId) =>
+          this.hostInteractions.dismissExternalInquiry(threadId),
       },
     });
   }
@@ -915,7 +926,7 @@ export class DesktopProgressBridge {
 
     return {
       // First-tier shared progress command groups
-      ...this.progressHost.commandHandlers,
+      ...this.commandHandlers,
 
       // Second-tier shared progress command groups
       ...createProgressViewSecondTierHandlers(secondTierActions),
