@@ -7,14 +7,15 @@
 
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
-import { deriveResumability } from './resumability';
+import { deriveOfferableResumability } from './resumability';
 
 /**
  * Detect streams that have persisted flow state and should be marked as WAITING.
  *
- * A stream is considered "waiting" if it has a persisted flow record, which only
- * happens when VS Code reloads mid-execution (the finally block in runToolUseFlow
- * deletes the record on normal completion).
+ * A stream is considered "waiting" if it has a persisted flow record and no
+ * host still owns its execution lease. The record alone is ambiguous — it also
+ * exists while the run is live — so the offer goes through
+ * `deriveOfferableResumability`, which settles liveness.
  *
  * @returns Set of streamIds that have persisted flows (should be marked WAITING)
  */
@@ -22,7 +23,9 @@ export async function detectWaitingStreams(
   executionIdMap: ReadonlyMap<StreamTabId, ExecutionId>,
 ): Promise<Set<StreamTabId>> {
   const checks = Array.from(executionIdMap, async ([streamId, executionId]) =>
-    (await deriveResumability(executionId)).resumable ? streamId : null,
+    (await deriveOfferableResumability(executionId)).resumable
+      ? streamId
+      : null,
   );
   const results = await Promise.all(checks);
   return new Set(results.filter(filterNotNull));
