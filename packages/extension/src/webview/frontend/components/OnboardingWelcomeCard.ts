@@ -260,7 +260,7 @@ export class OnboardingWelcomeCard extends LitElement {
                 <span>1. Connect</span>
               </span>
               <p class="path-step__copy">
-                ChatGPT subscription, Researcher Access, or a provider API key.
+                A ChatGPT subscription or your own provider API key.
               </p>
             </div>
             <div class="path-step" role="listitem">

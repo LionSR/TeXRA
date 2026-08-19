@@ -5,8 +5,8 @@
  * The delegate_agent / delegate_workflow descriptions ship with placeholder
  * "Available agents:", "Available models:", and "Git worktree support:" lines.
  * All three depend on state the user can change after the tool registry is
- * built (roster visibility, a multi-agent preset swap, API mode, the worktree
- * setting), so each line is resolved per run at the `resolveAgentTools`
+ * built (roster visibility, a multi-agent preset swap, model credentials, the
+ * worktree setting), so each line is resolved per run at the `resolveAgentTools`
  * boundary instead of being frozen into the tool definition at first access.
  *
  * Keeping the roster current is what lets the agent-native delegation
@@ -218,7 +218,7 @@ function formatAvailableModelsLine(
     return 'Available models: unavailable to load; omit model unless the user explicitly requested one.';
   }
   if (modelNames.length === 0) {
-    return 'Available models: none currently available. Ask the user to switch API mode or configure an API key before delegating.';
+    return 'Available models: none currently available. Ask the user to configure model access before delegating.';
   }
   return `Available models: ${modelNames.join(', ')}`;
 }

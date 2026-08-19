@@ -19,7 +19,7 @@ import { getHelperModelName } from './helperModelName';
  * Swap `config`'s model for the configured helper model, or return it unchanged
  * when the helper model already equals it, a tool-use agent's helper model can't
  * call functions (the tool-use flow would strip its tools), or the helper model
- * is unavailable in the active API mode.
+ * is unavailable.
  */
 export async function applyHelperModelPreference(
   config: AgentConfig,

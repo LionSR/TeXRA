@@ -71,7 +71,7 @@ export class LatexDiffManager {
   ): void {
     if (result.success) {
       this.logger.debug('Successfully generated diff file', {
-        data: { operation, diffFileName: result.diffFileName },
+        data: { operation, diffPath: result.diffPath },
       });
       return;
     }
@@ -364,13 +364,14 @@ export class LatexDiffManager {
     diffLocation: FileLocation;
     artifact: CompiledPdfArtifact | null;
   } | null> {
-    if (!result.success || !result.diffFileName) {
+    if (!result.success || !result.diffPath) {
       return null;
     }
 
+    const diffFileName = path.basename(result.diffPath);
     const diffLocation = createRunStorageLocation(
-      path.join(diffDirectory.absolutePath, result.diffFileName),
-      path.join(diffDirectory.relativePath, result.diffFileName),
+      path.join(diffDirectory.absolutePath, diffFileName),
+      path.join(diffDirectory.relativePath, diffFileName),
       diffDirectory.executionId,
     );
 

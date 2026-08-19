@@ -17,6 +17,7 @@ import {
 } from '@shared/toolUse';
 
 // Local file imports
+import { nullishWithDefault } from '../core/inputSchema';
 import { ViewRangeSchema } from '../formatting';
 
 /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/workspace-files/{path} */
@@ -54,23 +55,14 @@ const ViewActionSchema = z.strictObject({
   ),
 
   /** Zero-based offset for list or conversation pagination. */
-  offset: z
-    .int()
-    .min(0)
-    .nullish()
-    .describe(
-      'Zero-based offset into the executions list or conversation messages. Use with limit on /executions or /executions/{id}/conversation. Default: 0.',
-    ),
+  offset: nullishWithDefault(z.int().min(0), 0).describe(
+    'Zero-based offset into the executions list or conversation messages. Use with limit on /executions or /executions/{id}/conversation.',
+  ),
 
   /** Maximum list entries or conversation messages to return. */
-  limit: z
-    .int()
-    .min(1)
-    .max(200)
-    .nullish()
-    .describe(
-      'Max entries or conversation messages to return. Use on /executions or /executions/{id}/conversation. Default: 100, max: 200.',
-    ),
+  limit: nullishWithDefault(z.int().min(1).max(200), 100).describe(
+    'Max entries or conversation messages to return. Use on /executions or /executions/{id}/conversation. Max: 200.',
+  ),
 });
 
 const WaitActionSchema = z.strictObject({
@@ -106,23 +98,14 @@ const WaitActionSchema = z.strictObject({
     ),
 
   /** Zero-based offset for the /executions listing returned once the wait resolves. */
-  offset: z
-    .int()
-    .min(0)
-    .nullish()
-    .describe(
-      'Zero-based offset into the executions list returned once the wait resolves (with /executions only). Default: 0.',
-    ),
+  offset: nullishWithDefault(z.int().min(0), 0).describe(
+    'Zero-based offset into the executions list returned once the wait resolves (with /executions only).',
+  ),
 
   /** Maximum list entries in the /executions listing returned once the wait resolves. */
-  limit: z
-    .int()
-    .min(1)
-    .max(200)
-    .nullish()
-    .describe(
-      'Max entries in the executions list returned once the wait resolves (with /executions only). Default: 100, max: 200.',
-    ),
+  limit: nullishWithDefault(z.int().min(1).max(200), 100).describe(
+    'Max entries in the executions list returned once the wait resolves (with /executions only). Max: 200.',
+  ),
 });
 
 const KillActionSchema = z.strictObject({

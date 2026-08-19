@@ -181,17 +181,11 @@ function projectErrorRow(
 // Attachments
 // ---------------------------------------------------------------------------
 
-function fileListSummary(files: readonly FileListEntry[]): {
-  summary: string;
-  counts: { loaded: number; failed: number; total: number };
-} {
+function fileListSummary(files: readonly FileListEntry[]): string {
   const loaded = files.filter((file) => file.ok).length;
   const failed = files.length - loaded;
   const failedSuffix = failed > 0 ? `, ${failed} not found` : '';
-  return {
-    summary: `Files (${loaded}/${files.length} loaded${failedSuffix})`,
-    counts: { loaded, failed, total: files.length },
-  };
+  return `Files (${loaded}/${files.length} loaded${failedSuffix})`;
 }
 
 function loadedMedia(files: readonly FileListEntry[]): LoadedMediaRef[] {
@@ -450,14 +444,11 @@ export function projectTranscriptRow(
     case MESSAGE_TYPES.FILE_LIST: {
       const files = entry.data;
       if (files.length === 0) return undefined;
-      const { summary, counts } = fileListSummary(files);
       return {
         ...rowBase(entry),
         kind: 'fileList',
-        category: entry.text ?? '',
         files,
-        counts,
-        summary,
+        summary: fileListSummary(files),
         media: loadedMedia(files),
       };
     }

@@ -545,7 +545,6 @@ describe('cross-process execution leases', () => {
 
     await expect(deleteAllExecutions({ beforeDelete })).resolves.toEqual({
       deleted: [deletedId],
-      notFound: [],
       active: [activeId],
       failed: [],
     });
@@ -585,7 +584,6 @@ describe('cross-process execution leases', () => {
 
     await expect(deleteAllExecutions()).resolves.toEqual({
       deleted: [deletedId],
-      notFound: [],
       active: [],
       failed: [{ executionId: failedId, message: 'permission denied' }],
     });
