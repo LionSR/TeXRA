@@ -165,15 +165,9 @@ export function createProgressWorkflowActionsHarness(
   };
 }
 
-/** Approval transport a backend can send through, recording retry/proposal UI. */
+/** Approval transport a backend can send through. */
 export function createApprovalOptions(): ProgressBackendOptions['approvals'] {
-  return {
-    canSend: () => true,
-    overrides: {
-      retry: { show: vi.fn(), dismiss: vi.fn() },
-      proposal: { show: vi.fn(), dismiss: vi.fn() },
-    },
-  };
+  return { canSend: () => true };
 }
 
 /** Host lifecycle callbacks as spies, so a suite asserts on what the backend asked its host to do. */

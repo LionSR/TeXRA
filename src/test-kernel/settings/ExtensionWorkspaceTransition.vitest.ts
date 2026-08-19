@@ -108,9 +108,6 @@ vi.mock('@controllers/approval/ToolEditApprovalController', () => ({
     dispose(): void {}
   },
 }));
-vi.mock('@controllers/progressView/backend/agentProposalTransport', () => ({
-  createAgentProposalTransport: () => ({}),
-}));
 vi.mock('@controllers/progressView/backend/progressBackendUiConfig', () => ({
   replayApprovalRequestHandlers: vi.fn(),
 }));
