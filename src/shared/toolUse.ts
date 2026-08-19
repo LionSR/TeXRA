@@ -14,7 +14,7 @@ import {
   type NormalizedToolUse,
   type ToolUseStatus,
 } from '@shared/schemas';
-import { isObject } from '@utils/core';
+import { clamp, isObject } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 function trimmedOrNull(value: unknown): string | null {
@@ -270,3 +270,19 @@ export const EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS = 60;
 
 /** Maximum `executions wait` timeout (seconds). */
 export const EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS = 1800;
+
+/**
+ * The `executions wait` timeout the tool will actually honour, in seconds.
+ * Sole owner of the clamp: the tool's own input schema normalizes through it,
+ * and both transcript surfaces read it back so no host can invent a different
+ * number than the one the wait enforces.
+ */
+export function executionsWaitTimeoutSeconds(timeout: unknown): number {
+  return typeof timeout === 'number' && Number.isFinite(timeout)
+    ? clamp(
+        timeout,
+        EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
+        EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
+      )
+    : EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS;
+}
