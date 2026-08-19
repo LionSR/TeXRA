@@ -306,10 +306,9 @@ export class MainViewProvider
 
   private setupAgentWatcher() {
     this.context.subscriptions.push(
-      agentDirectories.watchAgentDirectories({
-        pattern: '**/*.yaml',
-        onEvent: () => this.debouncedRefreshAgentOptions(),
-      }),
+      agentDirectories.watchAgentDirectories(() =>
+        this.debouncedRefreshAgentOptions(),
+      ),
     );
   }
 
