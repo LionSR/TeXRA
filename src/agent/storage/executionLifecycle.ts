@@ -230,6 +230,14 @@ export interface FinalizeExecutionInput {
   readonly executionId: ExecutionId;
   readonly outcome: RunOutcome;
   readonly flowRecord: 'preserve' | 'delete';
+  /**
+   * Keep an outcome already on disk instead of replacing it. For a backstop
+   * finalizer that does not own the run's result — the host-exit drain, which
+   * can race the run's own driver across the same per-execution meta lock —
+   * the driver's outcome is the authoritative one. Read and write happen in
+   * the same locked cycle, so "already settled" cannot go stale between them.
+   */
+  readonly keepExistingOutcome?: boolean;
 }
 
 export type FinalizeExecutionResult =
@@ -257,10 +265,15 @@ export async function finalizeExecution({
   executionId,
   outcome,
   flowRecord,
+  keepExistingOutcome,
 }: FinalizeExecutionInput): Promise<FinalizeExecutionResult> {
   try {
     // Persist the canonical terminal outcome — the one terminal write.
-    await enqueueMetaUpdate(executionId, () => ({ outcome }));
+    await enqueueMetaUpdate(executionId, (existing) =>
+      keepExistingOutcome === true && existing.outcome != null
+        ? {}
+        : { outcome },
+    );
   } catch (error) {
     // A terminal COMPLETED/FAILED result must never retain a resumable flow,
     // even when the caller requested preservation before the status write failed.
