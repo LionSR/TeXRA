@@ -65,7 +65,7 @@ export interface SubscriptionUsageCredentials {
   useGlmChina?(): boolean | Promise<boolean>;
 }
 
-export interface SubscriptionUsageServiceInit {
+interface SubscriptionUsageServiceInit {
   readonly http?: SubscriptionUsageHttp;
   readonly credentials?: SubscriptionUsageCredentials;
   readonly now?: () => number;

@@ -55,7 +55,7 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
   return null;
 }
 
-export interface SetupModelResolution {
+interface SetupModelResolution {
   model: string;
   reason: RunModelDecisionReason;
 }

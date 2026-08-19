@@ -330,16 +330,6 @@ function streamLogEntriesToConversation(
   );
 }
 
-/** Reconstruct one stream's conversation; `[]` when the log is absent/empty. */
-async function conversationFromStream(
-  streamLogStore: StreamLogStore,
-  streamId: StreamTabId,
-): Promise<unknown[]> {
-  return streamLogEntriesToConversation(
-    await streamLogStore.readEntries(streamId),
-  );
-}
-
 /**
  * Read the archived conversation for a completed run from the transcript
  * sidecar (`streamLogs/{stream}.json`), reconstructed into provider-agnostic
@@ -356,7 +346,9 @@ export async function readCompletedRunConversation(
   // reader neither reloads a live store nor scans the whole streamLogs
   // directory, and never mutates persistence.
   const streamLogStore = await StreamLogStore.openReadOnlyForStream(streamId);
-  const conversation = await conversationFromStream(streamLogStore, streamId);
+  const conversation = streamLogEntriesToConversation(
+    await streamLogStore.readEntries(streamId),
+  );
   return conversation.length > 0
     ? { conversation, source: 'streamLog', streamId }
     : { conversation: null, source: 'none', streamId };

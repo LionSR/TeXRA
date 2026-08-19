@@ -23,6 +23,7 @@ import {
   WorkPlanSnapshotShape,
   type CompileFailure,
   type OutputFileInfo,
+  type ParsedUsageData,
   type RoundIndexed,
   type StreamSnapshot,
   type StreamTabId,
@@ -250,9 +251,7 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
  * I/O errors and JSON `SyntaxError` propagate, and a present non-object value
  * is rejected instead of being silently treated as empty.
  */
-export async function readUsageData(
-  kv: KVStore,
-): Promise<ReturnType<typeof parseUsageData>> {
+export async function readUsageData(kv: KVStore): Promise<ParsedUsageData> {
   const raw = await kv.read(STREAM_DATA_KEYS.USAGE_STATS);
   if (raw === undefined) return parseUsageData(undefined);
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {

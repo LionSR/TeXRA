@@ -10,7 +10,7 @@ export type StreamInfoSource = Pick<
 >;
 
 /** The state the full tab list is built from. */
-export type StreamInfoListSource = StreamInfoSource &
+type StreamInfoListSource = StreamInfoSource &
   Pick<SessionState, 'selectableStreamNames'>;
 
 /** Build a StreamTabInfo object for a single stream ID. */

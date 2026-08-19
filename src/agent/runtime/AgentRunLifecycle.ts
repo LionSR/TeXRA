@@ -116,7 +116,7 @@ export type RunTerminalPersistence =
       readonly flowRecord: FlowRecordRetention;
     };
 
-export interface FinalizeRunTerminalParams {
+interface FinalizeRunTerminalParams {
   /** Live handle for this terminal attempt; its settled flag is the exactly-once guard. */
   readonly handle: AgentExecutionHandle;
   /** Registry tracking the handle; untracked after the delivery hook runs. */
@@ -165,7 +165,7 @@ export interface FinalizeRunTerminalParams {
   readonly deliver?: (outcome: RunOutcome) => void | Promise<void>;
 }
 
-export interface FinalizeRunTerminalResult {
+interface FinalizeRunTerminalResult {
   readonly event: ResultEvent;
   readonly outcomePersisted: boolean;
 }

@@ -19,8 +19,7 @@ export interface AgentEntry {
 }
 
 /**
- * Result of resolving an agent. Replaces the old AgentPathResolution interface.
- * Simple, flat, no redundant fields.
+ * Result of resolving an agent. Simple, flat, no redundant fields.
  */
 export interface ResolvedAgent {
   /** The full agent entry from the registry. */
