@@ -240,7 +240,6 @@ async function prepareLatexdiffResultsAndScheduleViewer(
  * underlying diff call and the tool name used for logging.
  */
 async function runDiffAndOpen(
-  fileToUseLocation: FileLocation,
   toolLabel: string,
   runDiff: (mathMarkup: MathMarkupOption) => Promise<LaTeXdiffResult>,
 ): Promise<void> {
@@ -303,7 +302,7 @@ async function handleLatexdiff(
 
   await withLatexdiffTool('latexdiff', 'Error creating LaTeX diff', () => {
     const fileToUseLocation = pathToLocation(fileToUse);
-    return runDiffAndOpen(fileToUseLocation, 'latexdiff', (mathMarkup) =>
+    return runDiffAndOpen('latexdiff', (mathMarkup) =>
       latexdiffService.runDiff(
         fileToUseLocation,
         pathToLocation(editedFile),
@@ -322,7 +321,7 @@ async function handleLatexdiffvc(
   const fileToUse = baseFile ?? inputFile;
   await withLatexdiffTool('latexdiff-vc', 'Error creating LaTeX diff', () => {
     const fileToUseLocation = pathToLocation(fileToUse);
-    return runDiffAndOpen(fileToUseLocation, 'latexdiff-vc', (mathMarkup) =>
+    return runDiffAndOpen('latexdiff-vc', (mathMarkup) =>
       latexdiffService.runDiffVc(fileToUseLocation, commitHash, mathMarkup),
     );
   });
