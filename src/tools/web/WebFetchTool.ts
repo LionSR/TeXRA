@@ -4,7 +4,6 @@ import { isIP } from 'node:net';
 // Third-party imports
 import ky from 'ky';
 import { AbortError } from 'p-retry';
-import TurndownService from 'turndown';
 import { z } from 'zod';
 
 // Local imports - core
@@ -15,6 +14,7 @@ import {
   retryTransientFetch,
   toFetchToolError,
 } from '@tools/timeouts';
+import { createHtmlToMarkdown } from '@tools/htmlToMarkdown';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -101,7 +101,7 @@ export class WebFetchTool extends defineTool({
     'Fetch content from a URL and return it as clean text. Uses the native provider fetch tool when available; falls back to fetching HTML and converting to Markdown locally. Include an optional prompt to explain what context you need so the fetched content can be interpreted correctly.',
   schema: WebFetchInputSchema,
 }) {
-  private readonly turndown = new TurndownService({ headingStyle: 'atx' });
+  private readonly turndown = createHtmlToMarkdown();
 
   protected async execute(input: WebFetchInput): Promise<ToolResult> {
     const { url, prompt } = input;

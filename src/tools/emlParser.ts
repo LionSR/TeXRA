@@ -1,6 +1,9 @@
 // Third-party imports
 import PostalMime from 'postal-mime';
-import TurndownService from 'turndown';
+
+// Local imports
+import { createHtmlToMarkdown } from '@tools/htmlToMarkdown';
+
 import type { Address, Attachment, Email } from 'postal-mime';
 
 /** An image extracted from the email (inline or attached). */
@@ -27,10 +30,7 @@ interface AttachmentPartition {
 
 const IMAGE_MIME_PREFIX = 'image/';
 
-const turndownService = new TurndownService({ headingStyle: 'atx' }).remove([
-  'style',
-  'script',
-]);
+const turndownService = createHtmlToMarkdown();
 
 /**
  * Parse an EML file's raw text content into a human-readable representation,
