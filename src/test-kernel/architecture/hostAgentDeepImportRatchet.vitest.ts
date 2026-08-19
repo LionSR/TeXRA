@@ -21,10 +21,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-import { REPO_ROOT, sourceFilesUnder } from '../support/repoScan';
+import {
+  collectModuleSpecifiers,
+  parseSourceFile,
+  REPO_ROOT,
+  sourceFilesUnder,
+} from '../support/repoScan';
 
 const HOSTS = ['cli', 'desktop', 'extension', 'agent'] as const;
 
@@ -51,62 +55,10 @@ function sortedSpecifiers(specifiers: Iterable<string>): string[] {
   return [...specifiers].toSorted((a, b) => a.localeCompare(b));
 }
 
-function moduleSpecifiers(node: ts.Node): string[] {
-  if (
-    (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-    node.moduleSpecifier != null &&
-    ts.isStringLiteralLike(node.moduleSpecifier)
-  ) {
-    return [node.moduleSpecifier.text];
-  }
-  if (
-    ts.isImportEqualsDeclaration(node) &&
-    ts.isExternalModuleReference(node.moduleReference) &&
-    node.moduleReference.expression != null &&
-    ts.isStringLiteralLike(node.moduleReference.expression)
-  ) {
-    return [node.moduleReference.expression.text];
-  }
-  if (
-    ts.isImportTypeNode(node) &&
-    ts.isLiteralTypeNode(node.argument) &&
-    ts.isStringLiteralLike(node.argument.literal)
-  ) {
-    return [node.argument.literal.text];
-  }
-  if (ts.isCallExpression(node) && node.arguments.length === 1) {
-    const [argument] = node.arguments;
-    const isDynamicImport =
-      node.expression.kind === ts.SyntaxKind.ImportKeyword;
-    const isRequire =
-      ts.isIdentifier(node.expression) && node.expression.text === 'require';
-    if ((isDynamicImport || isRequire) && ts.isStringLiteralLike(argument)) {
-      return [argument.text];
-    }
-  }
-  return [];
-}
-
 function collectAgentDeepImportSpecifiers(file: string): string[] {
-  const sourceFile = ts.createSourceFile(
-    file,
-    readFileSync(file, 'utf8'),
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  return collectModuleSpecifiers(parseSourceFile(file)).filter((specifier) =>
+    AGENT_DEEP_IMPORT.test(specifier),
   );
-
-  const specifiers: string[] = [];
-  const visit = (node: ts.Node): void => {
-    for (const specifier of moduleSpecifiers(node)) {
-      if (AGENT_DEEP_IMPORT.test(specifier)) {
-        specifiers.push(specifier);
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return specifiers;
 }
 
 function collectHostAgentDeepImportSpecifiers(host: Host): string[] {
