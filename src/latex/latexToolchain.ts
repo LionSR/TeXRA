@@ -44,6 +44,20 @@ const TOOL_PURPOSES: Record<LatexToolName, string> = {
   latexindent: 'LaTeX formatting',
 };
 
+/**
+ * Tools whose absence `texra doctor` reports as a failing row (and therefore a
+ * nonzero exit), not a warning.
+ *
+ * Known residual, stated rather than hidden: `latexmk` is required here even
+ * though {@link SUPPORTED_LATEX_COMPILERS} accepts a pdflatex-only machine and
+ * `compileLatex2Pdf` falls back to a single pdflatex pass on it (degraded —
+ * bibliography, cross-references, and index may be incomplete). So a
+ * pdflatex-only install passes the `latex.compiler` check and still exits
+ * nonzero on the `latex.latexmk` row. That predates this list becoming the
+ * single compiler definition and is deliberately left alone: demoting latexmk
+ * to a warning changes `doctorExitCode` for a real machine configuration,
+ * which is a product decision, not a consolidation.
+ */
 const REQUIRED_TOOLS = new Set<LatexToolName>(['latexmk']);
 
 /** Probe the LaTeX tools used by both the extension and CLI surfaces. */
