@@ -16,21 +16,22 @@ import {
   workflowCallDetail,
 } from '@shared/copy/workflowCall';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { assertNever } from '@utils/core';
 
 function statusIcon(call: WorkflowCallProgress): TemplateResult {
   switch (call.status) {
     case 'planned':
     case 'running':
-      return waIcon('circle');
+      return waIcon(terminalStatusIcon('running'));
     case 'completed':
     case 'cached':
-      return waIcon('check');
+      return waIcon(terminalStatusIcon('completed'));
     case 'skipped':
     case 'cancelled':
-      return waIcon('circle-stop');
+      return waIcon(terminalStatusIcon('cancelled'));
     case 'failed':
-      return waIcon('circle-exclamation');
+      return waIcon(terminalStatusIcon('failed'));
     default:
       return assertNever(call, 'Unhandled workflow call status');
   }

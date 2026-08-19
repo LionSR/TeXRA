@@ -5,6 +5,30 @@ import { css, html, type CSSResult, type TemplateResult } from 'lit';
 
 // Local imports
 import type { ProviderKeyStatus } from '@shared/schemas';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+
+/**
+ * Abstract terminal-run outcome, independent of any one surface's status
+ * union (`StreamPhase`, `WorkflowCallProgress['status']`, ...). Callers
+ * classify their own domain-specific status into one of these buckets; this
+ * module is the single source of truth for which icon each bucket gets.
+ */
+export type TerminalStatusKind =
+  'cancelled' | 'completed' | 'failed' | 'running';
+
+const TERMINAL_STATUS_ICON: Readonly<
+  Record<TerminalStatusKind, TeXRAIconName>
+> = {
+  failed: 'circle-exclamation',
+  completed: 'check',
+  cancelled: 'circle-stop',
+  running: 'circle',
+};
+
+/** The steady wa-icon name for a terminal-run status bucket. */
+export function terminalStatusIcon(kind: TerminalStatusKind): TeXRAIconName {
+  return TERMINAL_STATUS_ICON[kind];
+}
 
 type WaTagVariant = 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
 
