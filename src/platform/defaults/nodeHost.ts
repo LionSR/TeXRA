@@ -1,20 +1,21 @@
 /**
  * Node host composition helpers.
  *
- * The two Node composition roots (the `texra` CLI runtime and the Electron
- * desktop main process) wire the same platform skeleton and the same
- * post-`initPlatform` agent-runtime registration. This module owns the shared
- * ingredients so the hosts cannot drift; each host still performs the actual
- * `initPlatform(...)` call in its own composition root.
+ * All three composition roots (the `texra` CLI runtime, the Electron desktop
+ * main process, and the VS Code extension host) wire the same platform
+ * skeleton from the same ingredients. This module owns them so the hosts
+ * cannot drift; each host still performs the actual `initPlatform(...)` call
+ * in its own composition root.
  *
  * This file is a composition helper, not a core platform abstraction: it
- * deliberately reaches "up" into `@agent` and `@tools` for the registration
+ * deliberately reaches "up" into `@agent` and `@skills` for the registration
  * helpers, mirroring what each host's composition root would otherwise inline.
- * Nothing in `@agent` / `@tools` imports it back, so there is no cycle.
+ * Nothing in `@agent` / `@skills` imports it back, so there is no cycle. The
+ * direct Lean LSP registration lives in `nodeAgentRuntime.ts` instead, so that
+ * adapter stays out of hosts that only need the composition helpers.
  */
 
 // Local imports
-import { registerAgentFeatures } from '@agent/features';
 import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
@@ -22,27 +23,27 @@ import {
   defaultSkillSources,
   type SkillSourceOptions,
 } from '@skills/skillSources';
-import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 // Local file imports
-import {
-  JsonConfigProvider,
-  type JsonConfigProviderOptions,
-} from './jsonConfigProvider';
 import { nodeFileLocks } from './fileLocks';
+import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
 import { createNodeWorkspace } from './nodeWorkspace';
 import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
 import { platform } from '../platform';
+import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type {
   AgentDirectoriesPort,
   AgentResumePort,
+  ConfigProvider,
   LifecycleHost,
   StateStore,
   StorageProvider,
   ToolAvailabilityHost,
+  ToolMissingHandler,
 } from '../interfaces';
+import type { LanguageModelPort } from '../languageModel';
 import type { Platform } from '../platform';
 import type { PlatformSecrets } from '../secrets';
 
@@ -52,8 +53,13 @@ import type { PlatformSecrets } from '../secrets';
  * the no-op tool-availability host) are filled in by the helper.
  */
 export interface NodePlatformServices {
-  /** Workspace + optional global config stores backing the config provider. */
-  readonly configStores: JsonConfigProviderOptions;
+  /**
+   * Config source: the workspace + global stores to build the file-backed
+   * provider from, or an already-constructed provider for hosts that resolve
+   * configuration some other way (the SDK's process-local memory provider, the
+   * extension's transition-aware subclass).
+   */
+  readonly config: JsonConfigProviderOptions | ConfigProvider;
   readonly globalState: StateStore;
   readonly workspaceState: StateStore;
   readonly storage: StorageProvider;
@@ -65,6 +71,16 @@ export interface NodePlatformServices {
   readonly getWorkspacePath: () => string | undefined;
   /** Host-specific availability overrides merged over the no-op defaults. */
   readonly toolAvailability?: Partial<ToolAvailabilityHost>;
+  /** Editor-host subscription models; defaults to the unavailable port. */
+  readonly languageModel?: LanguageModelPort;
+  /** Optional process-host capability; absent means no-op (see `Platform`). */
+  readonly toolMissingHandler?: ToolMissingHandler;
+}
+
+function toConfigProvider(
+  config: JsonConfigProviderOptions | ConfigProvider,
+): ConfigProvider {
+  return 'workspace' in config ? new JsonConfigProvider(config) : config;
 }
 
 export interface NodeAgentDirectoryBootstrapOptions {
@@ -83,16 +99,18 @@ export interface NodeRuntimeSkillOptions {
 const bootstrappedAgentDirectoryResources = new Map<string, string>();
 
 /**
- * Assemble the platform services for a Node host (CLI, desktop).
+ * Assemble the platform services for a Node-family host (CLI, desktop,
+ * extension) or an SDK embedder.
  *
- * Centralizes the default building blocks both hosts pass to `initPlatform`
- * (`nodeFilesystem`, `createNodeWorkspace`, `JsonConfigProvider`, the no-op
- * tool-availability host) while preserving the rule that only composition
- * roots call `initPlatform(...)`.
+ * Centralizes the default building blocks every host would otherwise restate
+ * in its own `initPlatform` literal (`nodeFilesystem`, `createNodeWorkspace`,
+ * `nodeFileLocks`, the config provider, the no-op tool-availability host)
+ * while preserving the rule that only composition roots call
+ * `initPlatform(...)`.
  */
 export function createNodePlatform(services: NodePlatformServices): Platform {
   return {
-    config: new JsonConfigProvider(services.configStores),
+    config: toConfigProvider(services.config),
     globalState: services.globalState,
     workspaceState: services.workspaceState,
     fs: nodeFilesystem,
@@ -103,41 +121,24 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
     lifecycle: services.lifecycle,
     agentResume: services.agentResume,
     agentDirectories: services.agentDirectories,
-    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
+    languageModel: services.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     toolAvailability: {
       ...NO_TOOL_AVAILABILITY_HOST,
       ...services.toolAvailability,
     },
-    // Missing-tool reporting remains an optional process-host capability.
-    // Neither Node host has a corresponding UI, so omission is the no-op.
+    // Missing-tool reporting remains an optional process-host capability;
+    // omitting it is the no-op, which is what both Node hosts want.
+    toolMissingHandler: services.toolMissingHandler,
   };
 }
 
 /**
- * Register the singleton agent runtime for a Node host after `initPlatform`.
+ * Register runtime skill sources for a host.
  *
- * Both Node hosts share this exact post-init sequence: the conditional
- * tool-injection features (memory + goal) and the direct Lean language
- * services. Centralized so the hosts cannot drift; the CLI previously skipped
- * `registerAgentFeatures`, silently losing the memory and goal tool
- * injections.
- *
- * Call exactly once per process: `registerAgentFeatures` and
- * `registerDirectLeanLanguageServices` register a singleton / shutdown handler
- * that throws or double-registers on a second call.
- */
-export function initNodeAgentRuntime(lifecycle: LifecycleHost): void {
-  registerAgentFeatures();
-  registerDirectLeanLanguageServices(lifecycle);
-}
-
-/**
- * Register runtime skill sources for a Node host.
- *
- * The CLI and desktop hosts use the same precedence: explicit custom roots,
- * project skills, user skills, and bundled skills. The CLI supplies custom and
- * interop options from command-line flags; desktop uses the defaults so it
- * always gets project, user, and bundled runtime skills.
+ * All three hosts use the same precedence: explicit custom roots, project
+ * skills, user skills, and bundled skills. The CLI supplies custom and interop
+ * options from command-line flags; desktop and the extension use the defaults
+ * so they always get project, user, and bundled runtime skills.
  */
 export function initializeNodeRuntimeSkills(
   options: NodeRuntimeSkillOptions,
@@ -154,11 +155,13 @@ export function initializeNodeRuntimeSkills(
 }
 
 /**
- * Reconcile packaged agent directories for a Node host after `initPlatform`.
+ * Reconcile packaged agent directories for a host after `initPlatform`.
  *
- * The CLI and desktop hosts use different version-state keys, but the
- * resources-path re-entry rule is the same: a process only reconciles a given
- * host channel again when its active packaged resources path changes.
+ * Hosts use different version-state keys, but the resources-path re-entry rule
+ * is the same: a process only reconciles a given host channel again when its
+ * active packaged resources path changes. Reconciliation failures are reported
+ * and swallowed by `bootstrapPlatformAgentDirectories` — a broken agent
+ * directory must not abort startup.
  */
 export async function bootstrapNodeAgentDirectories(
   options: NodeAgentDirectoryBootstrapOptions,

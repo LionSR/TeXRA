@@ -32,13 +32,6 @@ import type { StateStore, StorageProvider } from '../interfaces';
 const STATE_FILE_NAME = 'state.json';
 
 /**
- * Reports why the project config store could not be used. Falling back to the
- * internal store is a degradation, so every host has to say so out loud rather
- * than swallow the cause.
- */
-export type ConfigStoreWarn = (message: string) => void;
-
-/**
  * Whether a write through a `JsonStore` at `filePath` could succeed:
  * `flush()` creates the containing directory on demand and then writes a temp
  * file into it, so the deepest existing ancestor of `filePath` must be
@@ -64,6 +57,10 @@ async function canCreateOrWrite(filePath: string): Promise<boolean> {
 /**
  * Open the store backing the workspace config target.
  *
+ * `warn` reports why the project store could not be used: falling back to the
+ * internal store is a degradation, so every host says so out loud rather than
+ * swallowing the cause.
+ *
  * A workspace uses its `.texra/config.json`, shared by all three hosts.
  * Sessions without a workspace, read-only projects without an existing
  * config, and projects whose config file cannot be read (missing permissions,
@@ -73,7 +70,7 @@ async function canCreateOrWrite(filePath: string): Promise<boolean> {
 export async function openTexraWorkspaceConfigStore(
   storage: StorageProvider,
   workspaceRoot: string | undefined,
-  warn: ConfigStoreWarn,
+  warn: (message: string) => void,
 ): Promise<JsonStore> {
   if (workspaceRoot) {
     const projectConfigPath = workspaceTexraConfigPath(workspaceRoot);
@@ -100,7 +97,7 @@ export async function openTexraWorkspaceConfigStore(
 export async function openTexraConfigStores(
   storage: StorageProvider,
   workspaceRoot: string | undefined,
-  warn: ConfigStoreWarn,
+  warn: (message: string) => void,
 ): Promise<JsonConfigProviderOptions> {
   const [workspace, global] = await Promise.all([
     openTexraWorkspaceConfigStore(storage, workspaceRoot, warn),

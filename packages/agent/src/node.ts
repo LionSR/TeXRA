@@ -5,18 +5,14 @@ import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 
 // Local imports - platform defaults
-import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
-import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFileLocks } from '@platform/defaults/fileLocks';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createNodePlatform } from '@platform/defaults/nodeHost';
 import {
   createNodeStorageProvider,
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 
 /** Filesystem locations used by the default Node platform. */
 export interface NodePlatformOptions {
@@ -46,25 +42,18 @@ const environmentSecrets: PlatformSecrets = {
  */
 export function nodePlatform(options: NodePlatformOptions): Platform {
   const workspaceDir = options.workspaceDir ?? process.cwd();
-  const storageDir = options.storageDir ?? DEFAULT_NODE_STORAGE_ROOT;
-  const globalState = new MemoryStateStore();
-  const workspaceState = new MemoryStateStore();
-  const storage = createNodeStorageProvider({
-    storageRoot: storageDir,
-    workspacePath: workspaceDir,
-  });
-  const lifecycle = createLifecycleHost();
-
-  return {
+  return createNodePlatform({
+    // Process-local configuration: an embedder's settings must not be read
+    // from, or written to, the user's `.texra/config.json`.
     config: new MemoryConfigProvider(),
-    globalState,
-    workspaceState,
-    fs: nodeFilesystem,
-    workspace: createNodeWorkspace(() => workspaceDir),
-    storage,
-    fileLocks: nodeFileLocks,
+    globalState: new MemoryStateStore(),
+    workspaceState: new MemoryStateStore(),
+    storage: createNodeStorageProvider({
+      storageRoot: options.storageDir ?? DEFAULT_NODE_STORAGE_ROOT,
+      workspacePath: workspaceDir,
+    }),
     secrets: environmentSecrets,
-    lifecycle,
+    lifecycle: createLifecycleHost(),
     agentResume: {
       tryResumeStream: async () => false,
     },
@@ -73,7 +62,6 @@ export function nodePlatform(options: NodePlatformOptions): Platform {
       builtIn: async () => '',
       builtInToolUse: async () => '',
     },
-    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    toolAvailability: NO_TOOL_AVAILABILITY_HOST,
-  };
+    getWorkspacePath: () => workspaceDir,
+  });
 }
