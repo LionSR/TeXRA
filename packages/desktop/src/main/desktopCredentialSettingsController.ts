@@ -435,70 +435,81 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     }
   }
 
-  private async signOutChatGpt(): Promise<void> {
+  private async signOutSubscription(options: {
+    displayName: string;
+    signOut: () => Promise<void>;
+    refresh: () => Promise<void>;
+  }): Promise<void> {
     try {
-      await codexCoordinator().signOut();
+      await options.signOut();
       await this.options.notifications.showInfoMessage(
-        'Signed out of ChatGPT.',
+        `Signed out of ${options.displayName}.`,
       );
     } catch (error) {
       await this.options.notifications.showErrorMessage(
-        `ChatGPT sign-out failed: ${toErrorMessage(error)}`,
+        `${options.displayName} sign-out failed: ${toErrorMessage(error)}`,
       );
       this.options.onError(error);
     } finally {
-      await this.refreshAfterChatGptAuthChange();
+      await options.refresh();
     }
   }
 
+  private async signOutChatGpt(): Promise<void> {
+    await this.signOutSubscription({
+      displayName: 'ChatGPT',
+      signOut: () => codexCoordinator().signOut(),
+      refresh: () => this.refreshAfterChatGptAuthChange(),
+    });
+  }
+
   private async signOutGrok(): Promise<void> {
+    await this.signOutSubscription({
+      displayName: 'Grok',
+      signOut: () => xaiCoordinator().signOut(),
+      refresh: () => this.refreshAfterGrokAuthChange(),
+    });
+  }
+
+  private async setSubscriptionPreference(options: {
+    displayName: string;
+    enabled: boolean;
+    setPrefer: (enabled: boolean) => Promise<{ effective: boolean }>;
+    refresh: () => Promise<void>;
+  }): Promise<void> {
     try {
-      await xaiCoordinator().signOut();
-      await this.options.notifications.showInfoMessage('Signed out of Grok.');
+      const update = await options.setPrefer(options.enabled);
+      if (update.effective !== options.enabled) {
+        await this.options.notifications.showWarningMessage(
+          `A more specific setting still keeps ${options.displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+        );
+      }
     } catch (error) {
       await this.options.notifications.showErrorMessage(
-        `Grok sign-out failed: ${toErrorMessage(error)}`,
+        `${options.displayName} subscription preference update failed: ${toErrorMessage(error)}`,
       );
       this.options.onError(error);
     } finally {
-      await this.refreshAfterGrokAuthChange();
+      await options.refresh();
     }
   }
 
   private async setChatGptPreferSubscription(enabled: boolean): Promise<void> {
-    try {
-      const update = await setPreferCodexSubscription(enabled);
-      if (update.effective !== enabled) {
-        await this.options.notifications.showWarningMessage(
-          `A more specific setting still keeps ChatGPT subscription ${update.effective ? 'enabled' : 'disabled'}.`,
-        );
-      }
-    } catch (error) {
-      await this.options.notifications.showErrorMessage(
-        `ChatGPT subscription preference update failed: ${toErrorMessage(error)}`,
-      );
-      this.options.onError(error);
-    } finally {
-      await this.refreshAfterChatGptAuthChange();
-    }
+    await this.setSubscriptionPreference({
+      displayName: 'ChatGPT',
+      enabled,
+      setPrefer: setPreferCodexSubscription,
+      refresh: () => this.refreshAfterChatGptAuthChange(),
+    });
   }
 
   private async setGrokPreferSubscription(enabled: boolean): Promise<void> {
-    try {
-      const update = await setPreferXaiSubscription(enabled);
-      if (update.effective !== enabled) {
-        await this.options.notifications.showWarningMessage(
-          `A more specific setting still keeps Grok subscription ${update.effective ? 'enabled' : 'disabled'}.`,
-        );
-      }
-    } catch (error) {
-      await this.options.notifications.showErrorMessage(
-        `Grok subscription preference update failed: ${toErrorMessage(error)}`,
-      );
-      this.options.onError(error);
-    } finally {
-      await this.refreshAfterGrokAuthChange();
-    }
+    await this.setSubscriptionPreference({
+      displayName: 'Grok',
+      enabled,
+      setPrefer: setPreferXaiSubscription,
+      refresh: () => this.refreshAfterGrokAuthChange(),
+    });
   }
 
   async postProfileData(): Promise<void> {
