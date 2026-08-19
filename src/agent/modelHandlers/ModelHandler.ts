@@ -80,6 +80,7 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory, MESSAGE_TYPES, OUTPUT_END_TAG } from '@shared/schemas';
 import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
+import { isObject } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 import {
@@ -572,7 +573,7 @@ export abstract class ModelHandler<
 
   /** Route of the credential a client built by this handler captured, if known. */
   getCredentialRouteForClient(client: C): ModelCredentialRoute | undefined {
-    return typeof client === 'object' && client !== null
+    return isObject(client)
       ? this.clientWireIdentities.get(client)?.route
       : undefined;
   }
@@ -584,10 +585,9 @@ export abstract class ModelHandler<
    * treats it as opaque.
    */
   getWireRouteKey(client: C): string {
-    const wireIdentity =
-      typeof client === 'object' && client !== null
-        ? this.clientWireIdentities.get(client)
-        : undefined;
+    const wireIdentity = isObject(client)
+      ? this.clientWireIdentities.get(client)
+      : undefined;
     return JSON.stringify([
       this.config.provider,
       wireIdentity?.route ?? 'configured',
@@ -1099,10 +1099,9 @@ export abstract class ModelHandler<
   createResponse(
     options: CreateResponseOptions<M, C>,
   ): Promise<CreateResponseResult<Resp, M>> {
-    const identity =
-      typeof options.client === 'object' && options.client !== null
-        ? this.clientWireIdentities.get(options.client)
-        : undefined;
+    const identity = isObject(options.client)
+      ? this.clientWireIdentities.get(options.client)
+      : undefined;
     const credentialRoute = identity?.route;
     return this.withCreateResponseGuard(async () => {
       this.activeAttemptCredentialRoute = credentialRoute;
