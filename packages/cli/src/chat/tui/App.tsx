@@ -493,7 +493,6 @@ export function App(props: AppProps): React.JSX.Element {
             childRosters,
             parentStream,
             streamId: foregroundReader.streamId,
-            streams,
           }),
         );
         return (
@@ -513,7 +512,6 @@ export function App(props: AppProps): React.JSX.Element {
             childRosters,
             parentStream,
             streamId: foregroundReader.streamId,
-            streams,
           }),
         );
         return (

@@ -157,14 +157,10 @@ function SessionRow({
   const stageLabel = formatStageLabel(streamState?.stage);
   // The resolved model is per-agent identity (a workflow run's grandchildren
   // can each resolve a different model); the list-root row is the conversation
-  // itself, whose model already rides the status bar. A background bash stream
-  // inherits its parent's configuration, but the shell does not use a model.
-  const identity = session.identity ?? metadata?.identity;
-  const model =
-    !isListRoot && identity?.kind !== 'process'
-      ? metadata?.config?.model
-      : undefined;
-  const modelLabel = model ? getRuntimeModelLabel(model) : undefined;
+  // itself, whose model already rides the status bar. `buildStreamTabInfo`
+  // already leaves `modelLabel` unset for a process stream (a shell uses no
+  // model) and for a config whose model has not resolved.
+  const modelLabel = isListRoot ? undefined : session.info?.modelLabel;
   // The right-aligned `elapsed · ↓tokens` column is pushed to the terminal edge
   // so the figures line up across rows. Lower-priority inline segments yield;
   // rows drop the column entirely on narrow terminals (see

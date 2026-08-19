@@ -131,10 +131,6 @@ export function sessionHeaderIdentityLine(
   const parentStreamId =
     context.streamId && parentStream?.get(context.streamId);
   if (context.streamId && parentStreamId && parentStream && context.streams) {
-    const metadata = streamMetadataFor(context.streamId);
-    const model = getRuntimeModelLabel(
-      metadata?.config?.model || meta.model || '—',
-    );
     const view = streamViewForId({
       activeStreamId: context.streamId,
       childRosters: context.childStreamEntries ?? new Map(),
@@ -142,8 +138,12 @@ export function sessionHeaderIdentityLine(
       streamId: context.streamId,
       streams: context.streams,
     });
+    // The shared tab projection owns the model label; the session's own model
+    // is the fallback for a stream whose config has not resolved.
+    const model =
+      view.info?.modelLabel ?? getRuntimeModelLabel(meta.model || '—');
     const streamKind =
-      metadata?.identity?.kind === 'multiAgentWorkflow'
+      view.info?.identity?.kind === 'multiAgentWorkflow'
         ? 'workflow script'
         : 'subagent';
     const phase = ancestorWorkflowPhaseHeading({

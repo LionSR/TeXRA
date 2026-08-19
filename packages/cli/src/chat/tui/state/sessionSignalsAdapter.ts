@@ -6,6 +6,7 @@ import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
 import type {
   PresentedStreamId,
   SessionRendererPort,
+  SessionRenderSlice,
 } from '@controllers/session/SessionRendererPort';
 import { SessionState } from '@controllers/session/SessionState';
 import type { StreamArtifactReader } from '@controllers/session/StreamArtifactProjection';
@@ -25,6 +26,7 @@ import {
   isTranscriptSettlementPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
+import { assertNever } from '@utils/core';
 import {
   activeStreamId,
   focusStream,
@@ -81,13 +83,30 @@ class TuiSessionRenderer implements SessionRendererPort {
     }
   }
 
-  onParentStreamChanged(
-    _childStreamId: StreamTabId,
-    _parentStreamId: StreamTabId | null,
-  ): void {
-    // The applier already landed the edge on `SessionState` metadata; the
-    // CLI's topology snapshot re-derives from there.
-    invalidateChildStreams();
+  invalidate(streamId: StreamTabId, slice: SessionRenderSlice): void {
+    switch (slice) {
+      case 'files':
+      case 'compileFailures':
+        // Renderers read `StreamArtifactProjection` directly. The write itself
+        // is proof of established provenance for this session — a live fact
+        // must not wait on the focus-driven disk preload
+        // (`markArtifactStreamHydrated`'s other caller) that exists only to
+        // seed a stream cold, or a background (never-focused, or focus-raced)
+        // workflow's output files never surface.
+        return markArtifactStreamHydrated(streamId);
+      case 'parentStreamId':
+      case 'queuedFollowUps':
+        // The applier already landed the edge / the session-owned queue on
+        // `SessionState`; the CLI's topology snapshot and `queuedFollowUpsFor`
+        // re-derive from there at paint.
+        return invalidateChildStreams();
+      case 'goalPaused':
+        return appendLocalAssistantTranscript(
+          GOAL_PAUSED_TRANSCRIPT_NOTICE,
+          streamId,
+        );
+    }
+    assertNever(slice, 'Unhandled session render slice');
   }
 
   onStreamStatusChanged(
@@ -153,25 +172,10 @@ class TuiSessionRenderer implements SessionRendererPort {
     invalidateChildStreams();
   }
 
-  onFilesChanged(streamId: StreamTabId): void {
-    // Renderers read `StreamArtifactProjection` directly. The write itself is
-    // proof of established provenance for this session — a live fact must not
-    // wait on the focus-driven disk preload (`markArtifactStreamHydrated`'s
-    // other caller) that exists only to seed a stream cold, or a background
-    // (never-focused, or focus-raced) workflow's output files never surface.
-    markArtifactStreamHydrated(streamId);
-  }
-
   onMissingOutputsChanged(streamId: StreamTabId): void {
     // Renderers read `StreamArtifactProjection` directly; a disk-restored
-    // clear invalidates the memo like any other change. See `onFilesChanged`
-    // for why the write marks the stream hydrated rather than only bumping.
-    markArtifactStreamHydrated(streamId);
-  }
-
-  onCompileFailuresChanged(streamId: StreamTabId): void {
-    // Renderers read `StreamArtifactProjection` directly. See
-    // `onFilesChanged` for why the write marks the stream hydrated.
+    // clear invalidates the memo like any other change. See `invalidate` for
+    // why the write marks the stream hydrated rather than only bumping.
     markArtifactStreamHydrated(streamId);
   }
 
@@ -182,7 +186,7 @@ class TuiSessionRenderer implements SessionRendererPort {
   ): void {
     // The latest-usage gauge is payload-only (no synchronous shared read);
     // the cumulative sum is `StreamArtifactProjection.cumulativeUsage`. See
-    // `onFilesChanged` for why the write marks the stream hydrated.
+    // `invalidate` for why the write marks the stream hydrated.
     patchStream(streamId, (slice) => ({ ...slice, usage: latestUsage }));
     markArtifactStreamHydrated(streamId);
   }
@@ -190,19 +194,13 @@ class TuiSessionRenderer implements SessionRendererPort {
   // Live todos/plan are readable from the snapshot store synchronously: a
   // live update is applied to `getWorkPlan` before the stream seeds
   // (StreamSnapshotStore eager-apply overlay), so renderers read the store.
-  // See `onFilesChanged` for why the write marks the stream hydrated.
+  // See `invalidate` for why the write marks the stream hydrated.
   onTodosChanged(streamId: StreamTabId, _todos: TodoItem[]): void {
     markArtifactStreamHydrated(streamId);
   }
 
   onPlanChanged(streamId: StreamTabId, _plan: Plan | null): void {
     markArtifactStreamHydrated(streamId);
-  }
-
-  onQueuedFollowUpsChanged(_streamId: StreamTabId): void {
-    // The session-owned queue is the single source; renderers read
-    // `queuedFollowUpsFor` at paint.
-    invalidateChildStreams();
   }
 
   onInquiryThreadUpdated(_thread: InquiryThreadUpdatedEvent): void {}
@@ -212,10 +210,6 @@ class TuiSessionRenderer implements SessionRendererPort {
     _active: boolean,
     _details?: { status?: GoalStatus; objective?: string },
   ): void {}
-
-  onGoalPaused(streamId: StreamTabId): void {
-    appendLocalAssistantTranscript(GOAL_PAUSED_TRANSCRIPT_NOTICE, streamId);
-  }
 
   syncStreamContent(
     _stream: PresentedStreamId,
