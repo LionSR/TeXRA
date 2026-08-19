@@ -1,43 +1,14 @@
 import {
+  fileLocationAddressPath,
   roundIndexedEntries,
   runIdentityDisplayName,
   type CompileFailure,
-  type FileLocation,
   type OutputFileInfo,
   type RoundIndexed,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import { filterNotNullish } from '@utils/core';
-
-/**
- * Reference to a run-storage file the way an agent prompt addresses it:
- * `/executions/<executionId>/files/<relativePath>`. The one definition of that
- * convention — the compile-fixer prompt builder and the progress view's
- * copy-run-context button both address run storage through it.
- */
-export function runStorageFilePath(
-  executionId: string,
-  relativePath: string,
-): string {
-  return `/executions/${executionId}/files/${relativePath}`;
-}
-
-/**
- * How a location reads in copied text. A run-storage location carries the
- * execution that owns it, so the path resolves without the caller supplying
- * one; workspace paths stay relative because that is how the user (and an
- * agent's file tools) refer to them.
- */
-function locationPath(location: FileLocation): string {
-  switch (location.kind) {
-    case 'runStorage':
-      return runStorageFilePath(location.executionId, location.relativePath);
-    case 'workspace':
-      return location.relativePath;
-    case 'external':
-      return location.absolutePath;
-  }
-}
 
 export interface WorkflowRunContextInput {
   stream: StreamTabInfo;
@@ -80,7 +51,9 @@ export function formatWorkflowRunContext(
     for (const [round, files] of outputs) {
       for (const file of files) {
         const source = file.source ? ` (source: ${file.source})` : '';
-        lines.push(`- r${round}: ${locationPath(file.location)}${source}`);
+        lines.push(
+          `- ${formatRoundStageLabel({ index: round })}: ${fileLocationAddressPath(file.location)}${source}`,
+        );
       }
     }
   }
@@ -90,7 +63,7 @@ export function formatWorkflowRunContext(
     for (const [round, rows] of failures) {
       for (const failure of rows) {
         lines.push(
-          `- r${round} ${failure.displayName}: log ${locationPath(failure.log)}`,
+          `- ${formatRoundStageLabel({ index: round })} ${failure.displayName}: log ${fileLocationAddressPath(failure.log)}`,
         );
       }
     }

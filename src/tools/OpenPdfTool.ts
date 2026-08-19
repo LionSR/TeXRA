@@ -7,8 +7,12 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import type { FileLocation } from '@shared/schemas';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import {
+  fileLocationDisplayPath,
+  ToolError,
+  type FileLocation,
+  type ToolResult,
+} from '@shared/schemas';
 import {
   currentToolRoot,
   resolveWorkspaceRelativePath,
@@ -47,10 +51,7 @@ export class OpenPdfTool extends defineTool({
     }
 
     const location = resolvePdfLocation(input.path);
-    const displayPath =
-      location.kind === 'workspace' || location.kind === 'runStorage'
-        ? location.relativePath
-        : location.absolutePath;
+    const displayPath = fileLocationDisplayPath(location);
 
     if (!hasExtension(location.absolutePath, '.pdf')) {
       throw new ToolError(`open_pdf only opens PDF files: ${displayPath}`);

@@ -18,10 +18,11 @@ import {
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { fileLocationDisplayPath } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { getComparablePath, pathToLocation } from '@utils/files/fileLocation';
+import { pathToLocation } from '@utils/files/fileLocation';
 
 interface MediaLogRecorder extends AgentTrace {
   debugMessages: string[];
@@ -201,7 +202,7 @@ describe('MediaAttachmentProcessor', () => {
   it('processes PDF fixtures using native ingestion when supported', async () => {
     const pdfPath = await createPdfFixture();
     const pdfLocation = pathToLocation(pdfPath);
-    const displayPath = getComparablePath(pdfLocation);
+    const displayPath = fileLocationDisplayPath(pdfLocation);
     const stub = createMediaLogRecorder();
     const processor = createProcessor(stub, {
       supportsVision: true,
@@ -260,7 +261,7 @@ describe('MediaAttachmentProcessor', () => {
 
     expectAudioResult(
       results,
-      getComparablePath(audioLocation),
+      fileLocationDisplayPath(audioLocation),
       'audio/wav',
       audioPath,
     );
@@ -328,7 +329,7 @@ describe('MediaAttachmentProcessor', () => {
 
       expectAudioResult(
         results,
-        getComparablePath(audioLocation),
+        fileLocationDisplayPath(audioLocation),
         mediaType,
         audioPath,
       );
@@ -343,7 +344,7 @@ describe('MediaAttachmentProcessor', () => {
   it('reports empty media fixtures as failed loads', async () => {
     const emptyPath = await createEmptyFixture();
     const emptyLocation = pathToLocation(emptyPath);
-    const displayPath = getComparablePath(emptyLocation);
+    const displayPath = fileLocationDisplayPath(emptyLocation);
     const stub = createMediaLogRecorder();
     const processor = createProcessor(stub, { supportsVision: true });
 
@@ -370,7 +371,7 @@ describe('MediaAttachmentProcessor', () => {
       Buffer.from('not-png'),
     );
     const mediaLocation = pathToLocation(mediaPath);
-    const displayPath = getComparablePath(mediaLocation);
+    const displayPath = fileLocationDisplayPath(mediaLocation);
     const stub = createMediaLogRecorder();
     const processor = createProcessor(stub, { supportsVision: true });
     const fsBackedExists = absoluteFsAny.exists;

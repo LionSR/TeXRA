@@ -76,7 +76,7 @@ describe('formatWorkflowRunContext', () => {
         'Goal: Rewrite the introduction',
         '',
         'Outputs:',
-        '- r2: /executions/a1b2c3d4/files/answer.tex (source: main.tex)',
+        '- r3: /executions/a1b2c3d4/files/answer.tex (source: main.tex)',
       ].join('\n'),
     );
   });
@@ -109,8 +109,8 @@ describe('formatWorkflowRunContext', () => {
     });
 
     // A blank source drops the parenthetical rather than printing "()".
-    expect(text).toContain('- r1: chapter.tex\n');
-    expect(text).toContain('- r1: /elsewhere/appendix.tex');
+    expect(text).toContain('- r2: chapter.tex\n');
+    expect(text).toContain('- r2: /elsewhere/appendix.tex');
     expect(text).not.toContain('(source: )');
   });
 
@@ -133,7 +133,7 @@ describe('formatWorkflowRunContext', () => {
       compileFailures: {},
     });
 
-    expect(text.indexOf('- r2:')).toBeLessThan(text.indexOf('- r10:'));
+    expect(text.indexOf('- r3:')).toBeLessThan(text.indexOf('- r11:'));
   });
 
   it('lists compile failures with their log paths', () => {
@@ -144,7 +144,7 @@ describe('formatWorkflowRunContext', () => {
     });
 
     expect(text).toContain(
-      '- r2 answer.tex: log /executions/a1b2c3d4/files/answer.log',
+      '- r3 answer.tex: log /executions/a1b2c3d4/files/answer.log',
     );
   });
 
