@@ -52,7 +52,7 @@ function fillColor(percent: number): string {
 /**
  * Free-tier decision for the visible footer badge: `null` when the route has
  * no badge (plain cost), otherwise `free` (subscription route with zero
- * cost) plus the badge's label forms. Only
+ * cost) plus the badge's compact label. Only
  * {@link UsagePanel.renderCostRoute} consumes this; the aria summary's shared
  * {@link usageCostLabel} re-derives the same `subscription && cost === 0`
  * predicate from `usageRouteBadge`, so changing a subscription route touches
@@ -61,12 +61,11 @@ function fillColor(percent: number): string {
 function usageRouteDecision(
   cost: number,
   route: UsageRoute | undefined,
-): { free: boolean; label: string; compactLabel: string } | null {
+): { free: boolean; compactLabel: string } | null {
   const badge = usageRouteBadge(route);
   if (!badge) return null;
   return {
     free: badge.subscription && cost === 0,
-    label: badge.label,
     compactLabel: badge.compactLabel,
   };
 }
