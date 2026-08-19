@@ -28,11 +28,6 @@ const log = createLog('PersistedFlow');
 export const FLOW_RECORD_SCHEMA_VERSION = 2;
 const START_NODE_ID = 'start';
 
-interface NodeRecord {
-  action?: string;
-  nodeId?: string;
-}
-
 interface FlowCursor {
   /** The next graph-local node path, or null when the flow has reached a terminal edge. */
   nextNodeId: string | null;
@@ -42,22 +37,13 @@ interface FlowCursor {
 
 export interface FlowRecord {
   schemaVersion?: number;
-  flowName: string;
   shared: unknown;
-  createdAt: string;
   /**
-   * Authoritative replay cursor. `nodes[]` is only an audit log: it can be
-   * capped or moved later without changing resume semantics. Every write path
-   * stamps a cursor; a record without one is rejected as unsupported.
+   * Authoritative replay cursor — the whole of the resume contract. Every
+   * write path stamps one; a record without one is rejected as unsupported.
    */
   cursor: FlowCursor;
-  nodes: NodeRecord[];
 }
-
-const PersistedFlowNodeRecordSchema = z.looseObject({
-  action: z.string().optional(),
-  nodeId: z.string().optional(),
-});
 
 const PersistedFlowCursorSchema = z.looseObject({
   nextNodeId: z.string().nullable(),
@@ -66,11 +52,8 @@ const PersistedFlowCursorSchema = z.looseObject({
 
 const PersistedFlowRecordObjectSchema = z.looseObject({
   schemaVersion: z.int().min(1).max(FLOW_RECORD_SCHEMA_VERSION).optional(),
-  flowName: z.string(),
   shared: z.unknown(),
-  createdAt: z.string(),
   cursor: PersistedFlowCursorSchema,
-  nodes: z.array(PersistedFlowNodeRecordSchema),
 });
 
 /**
@@ -196,11 +179,14 @@ interface StepResult<S> {
  * This enables:
  * - Resume from any node on crash/restart
  * - Distributed execution (different processes can resume)
- * - Execution audit trail via node history
  *
  * Key design principles:
  * - Only shared state is persisted (not services - they're runtime dependencies)
- * - Node history tracks actions, not outputs (minimal storage)
+ * - `cursor` is the whole resume contract: the next graph-local node path plus
+ *   the last action. The record keeps no step history — nothing reads one.
+ * - `schemaVersion` gates readability: a record stamped newer than
+ *   FLOW_RECORD_SCHEMA_VERSION is rejected as `unsupported-record` rather than
+ *   parsed on a guess.
  * - Resume replays by navigating the graph, not re-executing nodes
  *
  * @template S - Shared state type (must be serializable via structuredClone)
@@ -248,7 +234,7 @@ export class PersistedFlow<
    * Optional write-through projection callback.
    *
    * Called (and awaited) after every persist (stepWithResult, setShared,
-   * resetNodeHistory) so derived views (todos, conversation) stay current.
+   * rewindToStart) so derived views (todos, conversation) stay current.
    * Errors are swallowed — the authoritative flow blob is already written.
    */
   private projection:
@@ -369,7 +355,7 @@ export class PersistedFlow<
     const key = flowKey(this.runId);
     const flow = await this.loadRecord();
 
-    if (!flow || !Array.isArray(flow.nodes)) {
+    if (!flow) {
       throw new Error('Invalid or corrupted flow record');
     }
 
@@ -395,13 +381,11 @@ export class PersistedFlow<
     const action = await cursor._run(shared);
     const waiting = action === FlowTransition.WAITING;
     const next = waiting ? cursor : cursor.getNextNode(action);
-    const cursorId = this.idForNode(cursor);
     const nextNodeId = next ? this.idForNode(next) : null;
 
     // Invalidate cache before mutation: if kv.write fails, the next read
     // falls through to KVStore which has the correct pre-mutation state.
     this.cachedRecord = null;
-    flow.nodes.push({ action, nodeId: cursorId });
     flow.cursor = {
       nextNodeId,
       ...(action !== undefined ? { lastAction: action } : {}),
@@ -435,13 +419,12 @@ export class PersistedFlow<
   }
 
   /**
-   * Reset the node history so the next stepWithResult() starts from the
+   * Rewind the replay cursor so the next stepWithResult() starts from the
    * beginning of the flow graph. Used by round-looping subclasses to restart
    * the graph without embedding loop edges in it.
    */
-  protected async resetNodeHistory(shared: S): Promise<void> {
+  protected async rewindToStart(shared: S): Promise<void> {
     await this.commitShared(shared, (flow) => {
-      flow.nodes = [];
       flow.cursor = { nextNodeId: this.idForNode(this.start) };
     });
   }
@@ -541,11 +524,8 @@ export class PersistedFlow<
 
     const record: FlowRecord = {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
-      flowName: 'texra',
       shared: this.serializeShared(shared),
-      createdAt: new Date().toISOString(),
       cursor: { nextNodeId: this.idForNode(this.start) },
-      nodes: [],
     };
     await this.kv.write(flowKey(this.runId), record);
     this.cachedRecord = record;

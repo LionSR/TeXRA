@@ -418,11 +418,8 @@ describe('completedRunArchive facade', () => {
       },
     });
     await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
       shared: persistedResumeState.shared,
-      createdAt: new Date().toISOString(),
       cursor: { nextNodeId: 'start' },
-      nodes: [],
     });
 
     const session = createTestSession({ transcripts: logs });

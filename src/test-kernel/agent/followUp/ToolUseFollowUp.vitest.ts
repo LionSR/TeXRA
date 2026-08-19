@@ -67,11 +67,8 @@ function durableResumabilityDecision(
     resumable: true,
     cause: resumability.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
     flowRecord: {
-      flowName: 'texra',
       shared: { continuationGenerationId: generationId },
-      createdAt: '2026-08-13T12:00:00.000Z',
       cursor: { nextNodeId: 'start' },
-      nodes: [],
     },
   };
 }
