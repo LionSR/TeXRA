@@ -9,11 +9,11 @@ import {
   FileInteractionState,
   WorkPlanState,
 } from '@agent/core/state/AgentWorkspaceState';
-import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import { platform, type Platform } from '@platform/platform';
 import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import type { Plan, StreamTabId } from '@shared/schemas';
+import { withToolEnvironment } from '@test/support/toolEnvironment';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore } from '@tools/goal';
@@ -93,7 +93,7 @@ function submitPlanDecision(
   decision: PlanApprovalResult,
 ): boolean {
   return decisions.submitPlan(
-    (approval.payload as { approvalId: string }).approvalId,
+    (approval.payload as { requestId: string }).requestId,
     decision,
   );
 }

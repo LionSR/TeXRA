@@ -17,7 +17,7 @@ import {
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 const proposal = {
-  proposalId: 'proposal-1',
+  requestId: 'proposal-1',
   streamId: 'stream-1',
   agentCategory: AgentCategory.ToolUse,
   agent: 'search',
@@ -35,7 +35,6 @@ function recordingHandlers(
   const unused = undefined as unknown as never;
   return buildApprovalRequestHandlerSet({
     renderer: new LitSessionRenderer(
-      unused,
       unused,
       unused,
       unused,
@@ -72,12 +71,12 @@ describe('ApprovalRequestHandlerSet helpers', () => {
       permission: { kind: PERMISSION_KIND.PROPOSAL, data: proposal },
     });
 
-    expect(handlers.proposal.dismiss(proposal.proposalId)).toBe(true);
+    expect(handlers.proposal.dismiss(proposal.requestId)).toBe(true);
     expect(messages).toContainEqual({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
       action: 'resolve',
       kind: PERMISSION_KIND.PROPOSAL,
-      id: proposal.proposalId,
+      id: proposal.requestId,
     });
   });
 
@@ -94,8 +93,8 @@ describe('ApprovalRequestHandlerSet helpers', () => {
     expect(show).toHaveBeenCalledWith(proposal);
     expect(messages).toEqual([]);
 
-    expect(handlers.proposal.dismiss(proposal.proposalId)).toBe(true);
-    expect(dismiss).toHaveBeenCalledWith(proposal.proposalId);
+    expect(handlers.proposal.dismiss(proposal.requestId)).toBe(true);
+    expect(dismiss).toHaveBeenCalledWith(proposal.requestId);
     expect(messages).toEqual([]);
   });
 

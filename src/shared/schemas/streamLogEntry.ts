@@ -27,7 +27,6 @@ import { WorkflowCallProgressSchema } from './workflowCallProgress';
 
 const StreamingTextDataSchema = z.looseObject({
   status: z.enum(['running', 'completed']).optional(),
-  archivedRole: z.string().optional(),
   spillPath: z.string().optional(),
 });
 

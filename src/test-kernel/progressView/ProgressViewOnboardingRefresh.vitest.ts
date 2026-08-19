@@ -338,7 +338,7 @@ describe('progress-view onboarding refresh wiring', () => {
       method: 'submitProposalDecision' as const,
       message: {
         command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-        proposalId: 'proposal-a',
+        requestId: 'proposal-a',
         action: 'approve',
         model: 'gemini31p',
         agent: 'critic',
@@ -353,7 +353,7 @@ describe('progress-view onboarding refresh wiring', () => {
       method: 'submitPlanDecision' as const,
       message: {
         command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-        approvalId: 'plan-a',
+        requestId: 'plan-a',
         action: 'reject',
         feedback: 'state the invariant first',
       },

@@ -528,7 +528,7 @@ describe('SubscriptionUsageService', () => {
     [true, GLM_CODING_PLAN_USAGE_URL, GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL],
     [false, GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL, GLM_CODING_PLAN_USAGE_URL],
   ])(
-    'returns the newer GLM region when the older request resolves last: China=%s',
+    'serves concurrent GLM region requests from independent cache keys: China=%s',
     async (initialUseChina, olderUrl, newerUrl) => {
       let useChina = initialUseChina;
       const responses = new Map<string, (response: Response) => void>();
@@ -572,7 +572,8 @@ describe('SubscriptionUsageService', () => {
         olderUrl,
         newerUrl,
       ]);
-      expect(olderCaller).toStrictEqual(newer);
+      expect(newer.windows[0]?.percentUsed).toBe(80);
+      expect(olderCaller.windows[0]?.percentUsed).toBe(10);
     },
   );
 
@@ -607,76 +608,6 @@ describe('SubscriptionUsageService', () => {
       expect(http).not.toHaveBeenCalled();
     },
   );
-
-  it('keeps a newer GLM success when an older region resolver fails later', async () => {
-    let rejectOlder!: (error: Error) => void;
-    const olderRegion = new Promise<boolean>((_resolve, reject) => {
-      rejectOlder = reject;
-    });
-    let regionCall = 0;
-    const http = vi.fn<SubscriptionUsageHttp>(async () =>
-      jsonResponse({
-        success: true,
-        data: {
-          limits: [{ type: 'TOKENS_LIMIT', percentage: 80, unit: 3 }],
-        },
-      }),
-    );
-    const service = serviceWith(
-      http,
-      credentials({
-        useGlmChina: () => (regionCall++ === 0 ? olderRegion : false),
-      }),
-    );
-
-    const olderRequest = service.getUsage('glmCodingPlan');
-    const newer = await service.getUsage('glmCodingPlan');
-    rejectOlder(new Error('stale region lookup failed'));
-    const olderCaller = await olderRequest;
-
-    expect(newer).toMatchObject({
-      state: 'available',
-      windows: [expect.objectContaining({ percentUsed: 80 })],
-    });
-    expect(olderCaller).toStrictEqual(newer);
-  });
-
-  it('lets a newer GLM region failure supersede an older in-flight result', async () => {
-    let resolveOlder!: (response: Response) => void;
-    const olderResponse = new Promise<Response>((resolve) => {
-      resolveOlder = resolve;
-    });
-    let regionCall = 0;
-    const http = vi.fn<SubscriptionUsageHttp>(() => olderResponse);
-    const service = serviceWith(
-      http,
-      credentials({
-        useGlmChina: () => {
-          if (regionCall++ === 0) return true;
-          return Promise.reject(new Error('new region lookup failed'));
-        },
-      }),
-    );
-
-    const olderRequest = service.getUsage('glmCodingPlan');
-    await vi.waitFor(() => expect(http).toHaveBeenCalledOnce());
-    const newer = await service.getUsage('glmCodingPlan');
-    resolveOlder(
-      jsonResponse({
-        success: true,
-        data: {
-          limits: [{ type: 'TOKENS_LIMIT', percentage: 10, unit: 3 }],
-        },
-      }),
-    );
-    const olderCaller = await olderRequest;
-
-    expect(newer).toMatchObject({
-      state: 'unavailable',
-      reason: 'request_failed',
-    });
-    expect(olderCaller).toStrictEqual(newer);
-  });
 
   it('does not fall back across GLM hosts when the selected region fails', async () => {
     const http = vi.fn<SubscriptionUsageHttp>(async () =>
@@ -868,7 +799,10 @@ describe('SubscriptionUsageService', () => {
     expect(http).toHaveBeenCalledTimes(2);
   });
 
-  it('replaces an invalidated in-flight snapshot instead of returning old-account usage', async () => {
+  // Pins the D16 return-path choice (define-out-of-existence §1e): the caller
+  // already waiting on an invalidated fetch accepts one stale read, but the
+  // stale result never enters the cache — later callers see new-account usage.
+  it('keeps an invalidated in-flight snapshot out of the cache', async () => {
     const responses: Array<(response: Response) => void> = [];
     const http = vi.fn<SubscriptionUsageHttp>(
       () =>
@@ -892,9 +826,13 @@ describe('SubscriptionUsageService', () => {
       newAccountRequest,
     ]);
     expect(oldCallerSnapshot).toMatchObject({
+      windows: [expect.objectContaining({ percentUsed: 10 })],
+    });
+    expect(newCallerSnapshot).toMatchObject({
       windows: [expect.objectContaining({ percentUsed: 80 })],
     });
-    expect(oldCallerSnapshot).toStrictEqual(newCallerSnapshot);
+    expect(await service.getUsage('kimiCode')).toBe(newCallerSnapshot);
+    expect(http).toHaveBeenCalledTimes(2);
   });
 
   it('deduplicates concurrent requests for the same provider', async () => {

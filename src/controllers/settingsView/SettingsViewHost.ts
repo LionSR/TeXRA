@@ -35,7 +35,6 @@ interface SettingsViewHostOptions {
   readonly memoryPrompt: MemoryControllerOptions['prompt'];
   readonly respond?: SettingsRespond;
   readonly modelSelectionExtras?: ModelSelectionExtras;
-  readonly beforeModelSelectionMessage?: () => Awaitable<void>;
   readonly controllers?: {
     readonly memory?: SettingsMemoryController;
     readonly modelSelection?: SettingsModelSelectionController;
@@ -140,7 +139,6 @@ export class SettingsViewHost {
   }
 
   async sendModelSelectionData(respond?: SettingsRespond): Promise<void> {
-    await this.options.beforeModelSelectionMessage?.();
     await this.post(
       await this.modelSelectionController.buildModelSelectionMessage(),
       respond,
@@ -155,27 +153,11 @@ export class SettingsViewHost {
     await this.postModelSelectionMutation(options);
   }
 
-  async setHelperModel(
-    modelName: string,
-    options?: SettingsViewHostMutationOptions & { respond?: SettingsRespond },
-  ): Promise<void> {
-    await this.modelSelectionController.setHelperModel(modelName);
-    await this.postModelSelectionMutation(options);
-  }
-
   async setReasoningLevel(
     input: SetReasoningLevelInput,
     options?: SettingsViewHostMutationOptions & { respond?: SettingsRespond },
   ): Promise<void> {
     await this.modelSelectionController.setReasoningLevel(input);
-    await this.postModelSelectionMutation(options);
-  }
-
-  async setPreferShortModelNames(
-    enabled: boolean,
-    options?: SettingsViewHostMutationOptions & { respond?: SettingsRespond },
-  ): Promise<void> {
-    await this.modelSelectionController.setPreferShortModelNames(enabled);
     await this.postModelSelectionMutation(options);
   }
 

@@ -154,7 +154,7 @@ type TestableBridge = {
  * interactions, kept structural so tests can post plain fixture objects. */
 type BridgeInteractions = {
   requestPlanApproval?: (request: {
-    approvalId: string;
+    requestId: string;
     streamId: StreamTabId;
     plan: { objective: string };
     goalEnabled: boolean;
@@ -303,7 +303,7 @@ type ProgressMessage = {
     compileFailures: Record<string, unknown>;
   };
   activeState?: unknown;
-  permission?: { data?: { approvalId?: string } };
+  permission?: { data?: { requestId?: string } };
   executionId?: string;
   stdout?: string;
   stderr?: string;
@@ -987,9 +987,10 @@ describe('DesktopProgressBridge', () => {
     });
 
     expect(messages).toContainEqual({
-      command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-      agentName: 'missing-writer',
-      customDirSet: true,
+      command: MAIN_VIEW_COMMANDS.SET_BANNER,
+      banner: 'agentConfig',
+      visible: true,
+      data: { agentName: 'missing-writer', customDirSet: true },
     });
     expect(messages).toHaveLength(1);
     expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
@@ -1206,7 +1207,7 @@ describe('DesktopProgressBridge', () => {
 
     messages.length = 0;
     const result = bridgeInteractions(bridge).requestPlanApproval?.({
-      approvalId: 'plan-host-interaction',
+      requestId: 'plan-host-interaction',
       streamId: 'stream-plan' as StreamTabId,
       plan: { objective: 'Check the desktop host interaction port.' },
       goalEnabled: false,
@@ -1214,7 +1215,7 @@ describe('DesktopProgressBridge', () => {
 
     await waitForShownPermission(messages, {
       kind: PERMISSION_KIND.PLAN_APPROVAL,
-      data: { approvalId: 'plan-host-interaction' },
+      data: { requestId: 'plan-host-interaction' },
     });
 
     const handlePlan = assertSupported(
@@ -1224,7 +1225,7 @@ describe('DesktopProgressBridge', () => {
     );
     await handlePlan({
       command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-      approvalId: 'plan-host-interaction',
+      requestId: 'plan-host-interaction',
       action: 'approve',
     });
 
@@ -1242,7 +1243,7 @@ describe('DesktopProgressBridge', () => {
 
     messages.length = 0;
     const result = bridgeInteractions(bridge).requestAgentProposal?.({
-      proposalId: 'proposal-host-interaction',
+      requestId: 'proposal-host-interaction',
       streamId: 'stream-proposal',
       agentCategory: AgentCategory.Workflow,
       agent: 'proofreader',
@@ -1258,7 +1259,7 @@ describe('DesktopProgressBridge', () => {
 
     await waitForShownPermission(messages, {
       kind: PERMISSION_KIND.PROPOSAL,
-      data: { proposalId: 'proposal-host-interaction' },
+      data: { requestId: 'proposal-host-interaction' },
     });
 
     const handleProposal = assertSupported(
@@ -1268,7 +1269,7 @@ describe('DesktopProgressBridge', () => {
     );
     await handleProposal({
       command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-      proposalId: 'proposal-host-interaction',
+      requestId: 'proposal-host-interaction',
       action: 'approve',
     });
 
@@ -1766,7 +1767,7 @@ describe('DesktopProgressBridge', () => {
           replayWhenAttached: true,
         });
         void session.interactions.requestPlanApproval?.({
-          approvalId: 'close-during-attachment',
+          requestId: 'close-during-attachment',
           streamId: 'attachment-close-stream' as StreamTabId,
           plan: { objective: 'Close while replaying this approval.' },
           goalEnabled: false,
@@ -2010,7 +2011,7 @@ describe('DesktopProgressBridge', () => {
     activateStream(bridge, 'plan-delete-stream');
 
     const result = bridgeInteractions(bridge).requestPlanApproval?.({
-      approvalId: 'plan-cancel-on-delete',
+      requestId: 'plan-cancel-on-delete',
       streamId: 'plan-delete-stream' as StreamTabId,
       plan: { objective: 'Check cancellation on stream delete.' },
       goalEnabled: false,
@@ -2018,7 +2019,7 @@ describe('DesktopProgressBridge', () => {
 
     await waitForShownPermission(messages, {
       kind: PERMISSION_KIND.PLAN_APPROVAL,
-      data: { approvalId: 'plan-cancel-on-delete' },
+      data: { requestId: 'plan-cancel-on-delete' },
     });
 
     await deleteStreamViaInbound(bridge, 'plan-delete-stream' as StreamTabId);
@@ -2494,7 +2495,7 @@ describe('DesktopProgressBridge', () => {
     // Register the pending proposal the way production does: through the
     // session's typed host interactions, not a host progress event.
     const result = bridgeInteractions(bridge).requestAgentProposal?.({
-      proposalId: 'proposal-1',
+      requestId: 'proposal-1',
       streamId: 'stream-1',
       agentCategory: AgentCategory.Workflow,
       agent: 'proofreader',
@@ -2519,7 +2520,7 @@ describe('DesktopProgressBridge', () => {
     );
     await handleProposal({
       command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-      proposalId: 'proposal-1',
+      requestId: 'proposal-1',
       action: 'setup',
     });
 
@@ -2880,7 +2881,7 @@ describe('DesktopProgressBridge', () => {
       owner.close();
       const pendingApproval =
         owner.processSession.interactions.requestPlanApproval?.({
-          approvalId: 'approval-during-reopen-load',
+          requestId: 'approval-during-reopen-load',
           streamId,
           plan: { objective: 'Wait for canonical state.' },
           goalEnabled: false,
@@ -2942,7 +2943,7 @@ describe('DesktopProgressBridge', () => {
               PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
             ).filter(
               (message) =>
-                message.permission?.data?.approvalId ===
+                message.permission?.data?.requestId ===
                 'approval-during-reopen-load',
             ),
           ).toHaveLength(1);
@@ -3010,7 +3011,7 @@ describe('DesktopProgressBridge', () => {
         const planPromise = bridgeInteractions(
           owner.bridgeA,
         ).requestPlanApproval?.({
-          approvalId: 'plan-rebound',
+          requestId: 'plan-rebound',
           streamId,
           plan: { objective: 'Prove approvals reach the new window.' },
           goalEnabled: false,
@@ -3020,7 +3021,7 @@ describe('DesktopProgressBridge', () => {
         // Its presentation moves to the currently attached window.
         await waitForShownPermission(messagesB, {
           kind: PERMISSION_KIND.PLAN_APPROVAL,
-          data: { approvalId: 'plan-rebound' },
+          data: { requestId: 'plan-rebound' },
         });
         expect(
           progressMessages(messagesA, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
@@ -3193,14 +3194,14 @@ describe('DesktopProgressBridge', () => {
       const { bridgeB } = await owner.reopen(messagesB);
 
       const approval = bridgeInteractions(owner.bridgeA).requestPlanApproval?.({
-        approvalId: 'plan-second-window-close',
+        requestId: 'plan-second-window-close',
         streamId,
         plan: { objective: 'Survive a second window close.' },
         goalEnabled: false,
       });
       expect(approval).toBeDefined();
       await waitForShownPermission(messagesB, {
-        data: { approvalId: 'plan-second-window-close' },
+        data: { requestId: 'plan-second-window-close' },
       });
 
       const staleInteractionsB = bridgeB.hostInteractions;
@@ -3210,7 +3211,7 @@ describe('DesktopProgressBridge', () => {
       try {
         await bridgeC.waitUntilReady();
         await waitForShownPermission(messagesC, {
-          data: { approvalId: 'plan-second-window-close' },
+          data: { requestId: 'plan-second-window-close' },
         });
         let settled = false;
         void approval?.then(() => {
@@ -3247,21 +3248,21 @@ describe('DesktopProgressBridge', () => {
       const pendingBeforeClose = bridgeInteractions(
         owner.bridgeA,
       ).requestPlanApproval?.({
-        approvalId: 'plan-before-close',
+        requestId: 'plan-before-close',
         streamId,
         plan: { objective: 'Preserve the pending approval.' },
         goalEnabled: false,
       });
       expect(pendingBeforeClose).toBeDefined();
       await waitForShownPermission(messagesA, {
-        data: { approvalId: 'plan-before-close' },
+        data: { requestId: 'plan-before-close' },
       });
 
       owner.close();
       const pendingWhileClosed = bridgeInteractions(
         owner.bridgeA,
       ).requestPlanApproval?.({
-        approvalId: 'plan-while-closed',
+        requestId: 'plan-while-closed',
         streamId,
         plan: { objective: 'Buffer the approval until repair.' },
         goalEnabled: false,
@@ -3292,13 +3293,13 @@ describe('DesktopProgressBridge', () => {
           isApprovalBypassedForStream(streamId, bridgeSession(bridgeB)),
         ).toBe(true);
 
-        for (const approvalId of ['plan-before-close', 'plan-while-closed']) {
-          await waitForShownPermission(messagesB, { data: { approvalId } });
+        for (const requestId of ['plan-before-close', 'plan-while-closed']) {
+          await waitForShownPermission(messagesB, { data: { requestId } });
         }
 
-        for (const approvalId of ['plan-before-close', 'plan-while-closed']) {
+        for (const requestId of ['plan-before-close', 'plan-while-closed']) {
           expect(
-            bridgeB.hostInteractions.submitPlanDecision(approvalId, {
+            bridgeB.hostInteractions.submitPlanDecision(requestId, {
               action: 'approve',
             }),
           ).toBe(true);
@@ -3325,14 +3326,14 @@ describe('DesktopProgressBridge', () => {
         const planPromise = bridgeInteractions(
           owner.bridgeA,
         ).requestPlanApproval?.({
-          approvalId: 'plan-rebound-delete',
+          requestId: 'plan-rebound-delete',
           streamId,
           plan: { objective: 'Cancel through the durable owner.' },
           goalEnabled: false,
         });
         expect(planPromise).toBeDefined();
         await waitForShownPermission(messagesB, {
-          data: { approvalId: 'plan-rebound-delete' },
+          data: { requestId: 'plan-rebound-delete' },
         });
 
         await deleteStreamViaInbound(bridgeB, streamId);
@@ -3357,7 +3358,7 @@ describe('DesktopProgressBridge', () => {
       owner.close();
       const pendingApproval =
         owner.processSession.interactions.requestPlanApproval({
-          approvalId: 'plan-requested-while-headless',
+          requestId: 'plan-requested-while-headless',
           streamId,
           plan: { objective: 'Restore the detached approval stream.' },
           goalEnabled: false,
@@ -3374,7 +3375,7 @@ describe('DesktopProgressBridge', () => {
           ).filter(
             (message) =>
               message.action === 'show' &&
-              message.permission?.data?.approvalId ===
+              message.permission?.data?.requestId ===
                 'plan-requested-while-headless',
           );
           expect(approvalShows).toHaveLength(1);
@@ -3523,7 +3524,7 @@ describe('DesktopProgressBridge', () => {
       owner.close();
       const pendingApproval =
         owner.processSession.interactions.requestPlanApproval({
-          approvalId: 'headless-remove-approval',
+          requestId: 'headless-remove-approval',
           streamId: childStreamId,
           plan: { objective: 'This must be released.' },
           goalEnabled: false,

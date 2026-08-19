@@ -88,13 +88,13 @@ describe('createTuiHostInteractions', () => {
   it('cancels a queued plan approval for the target stream, leaving other streams untouched', async () => {
     const interactions = tuiInteractions();
     const planResult = interactions.requestPlanApproval?.({
-      approvalId: 'approval-a',
+      requestId: 'approval-a',
       streamId: 'stream-a',
       plan,
       goalEnabled: false,
     });
     const otherStreamResult = interactions.requestPlanApproval?.({
-      approvalId: 'approval-b',
+      requestId: 'approval-b',
       streamId: 'stream-b',
       plan,
       goalEnabled: false,
@@ -119,7 +119,7 @@ describe('createTuiHostInteractions', () => {
   it('settles plan decisions through the shared mapper: goal action kept, silent rejection omits feedback', async () => {
     const interactions = tuiInteractions();
     const goalResult = interactions.requestPlanApproval?.({
-      approvalId: 'approval-goal',
+      requestId: 'approval-goal',
       streamId: 'stream-a',
       plan,
       goalEnabled: true,
@@ -134,7 +134,7 @@ describe('createTuiHostInteractions', () => {
     });
 
     const rejected = interactions.requestPlanApproval?.({
-      approvalId: 'approval-reject',
+      requestId: 'approval-reject',
       streamId: 'stream-a',
       plan,
       goalEnabled: false,
@@ -150,7 +150,7 @@ describe('createTuiHostInteractions', () => {
   it('cancels a queued agent proposal for the target stream', async () => {
     const interactions = tuiInteractions();
     const proposalResult = interactions.requestAgentProposal?.({
-      proposalId: 'proposal-a',
+      requestId: 'proposal-a',
       streamId: 'stream-a',
       ...proposal,
     });
@@ -237,7 +237,7 @@ describe('createTuiHostInteractions', () => {
   it('a retry-kind cancel leaves a queued plan approval on the same stream pending', async () => {
     const interactions = tuiInteractions();
     const planResult = interactions.requestPlanApproval?.({
-      approvalId: 'approval-kind',
+      requestId: 'approval-kind',
       streamId: 'stream-a',
       plan,
       goalEnabled: false,

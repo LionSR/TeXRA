@@ -236,13 +236,13 @@ pause/complete only affect autonomous goals; with no goal running they return gu
     streamId: string,
     workPlanState: WorkPlanState,
   ): Promise<ToolResult> {
-    const approvalId = `plan-${generateShortId()}`;
+    const requestId = `plan-${generateShortId()}`;
     const goalEnabled = isGoalEnabled();
 
     logger.info('Requesting approval for plan objective');
 
     const interaction = currentSession().interactions.requestPlanApproval({
-      approvalId,
+      requestId,
       streamId,
       plan,
       goalEnabled,

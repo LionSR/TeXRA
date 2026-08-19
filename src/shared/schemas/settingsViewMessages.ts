@@ -759,16 +759,6 @@ const OpenProviderKeyUrlMessageSchema = providerCommand(
   CMD.OPEN_PROVIDER_KEY_URL,
 );
 
-const SetProviderStreamingMessageSchema = providerCommand(
-  CMD.SET_PROVIDER_STREAMING,
-).extend({ enabled: z.boolean() });
-
-const SetProviderEndpointMessageSchema = providerCommand(
-  CMD.SET_PROVIDER_ENDPOINT,
-).extend({ endpoint: z.string() });
-
-const SetGlobalStreamingMessageSchema = enabledFlag(CMD.SET_GLOBAL_STREAMING);
-
 const SetProviderSettingMessageSchema = z.object({
   command: z.literal(CMD.SET_PROVIDER_SETTING),
   key: z.string().min(1),
@@ -785,18 +775,12 @@ const SetModelEnabledMessageSchema = modelCommand(CMD.SET_MODEL_ENABLED).extend(
   { enabled: z.boolean() },
 );
 
-const SetHelperModelMessageSchema = modelCommand(CMD.SET_HELPER_MODEL);
-
 const SetModelReasoningLevelMessageSchema = modelCommand(
   CMD.SET_MODEL_REASONING_LEVEL,
 ).extend({
   /** The reasoning level to set, or undefined/null to reset to model default. */
   level: ReasoningLevelSchema.nullable(),
 });
-
-const SetPreferShortModelNamesMessageSchema = enabledFlag(
-  CMD.SET_PREFER_SHORT_MODEL_NAMES,
-);
 
 const RequestModelAccessMessageSchema = modelCommand(CMD.REQUEST_MODEL_ACCESS);
 
@@ -1015,16 +999,11 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetProviderKeyMessageSchema,
     RemoveProviderKeyMessageSchema,
     OpenProviderKeyUrlMessageSchema,
-    SetProviderStreamingMessageSchema,
-    SetProviderEndpointMessageSchema,
-    SetGlobalStreamingMessageSchema,
     SetProviderSettingMessageSchema,
     OpenExternalUrlMessageSchema,
     // Model selection messages
     SetModelEnabledMessageSchema,
-    SetHelperModelMessageSchema,
     SetModelReasoningLevelMessageSchema,
-    SetPreferShortModelNamesMessageSchema,
     RequestModelAccessMessageSchema,
     ClearCopilotRouteMessageSchema,
     // Agent selection messages

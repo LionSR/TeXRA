@@ -335,58 +335,6 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     );
   });
 
-  it.each([
-    {
-      name: 'provider streaming',
-      run: (fixture: Fixture) =>
-        assertSupported(
-          fixture.controller.profileHandlers.setProviderStreaming,
-        )({
-          command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING,
-          provider: 'openai',
-          enabled: false,
-        }),
-    },
-    {
-      name: 'provider endpoint',
-      run: (fixture: Fixture) =>
-        assertSupported(fixture.controller.profileHandlers.setProviderEndpoint)(
-          {
-            command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT,
-            provider: 'openai',
-            endpoint: 'https://example.com/v1',
-          },
-        ),
-    },
-    {
-      name: 'global streaming',
-      run: (fixture: Fixture) =>
-        assertSupported(fixture.controller.profileHandlers.setGlobalStreaming)({
-          command: SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING,
-          enabled: false,
-        }),
-    },
-  ])('persists $name before refreshing profile data', async ({ run }) => {
-    const fixture = await createFixture();
-    let finishUpdate: (() => void) | undefined;
-    vi.spyOn(fixture.globalState, 'update').mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          finishUpdate = resolve;
-        }),
-    );
-
-    const action = run(fixture);
-    await vi.waitFor(() => expect(finishUpdate).toBeTypeOf('function'));
-    expect(fixture.posted).toEqual([]);
-
-    finishUpdate?.();
-    await action;
-    expect(fixture.posted.map(commandOf)).toEqual([
-      SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-    ]);
-  });
-
   it('delegates Researcher Access sign-in and sign-out without stale posts', async () => {
     const fixture = await createFixture();
 

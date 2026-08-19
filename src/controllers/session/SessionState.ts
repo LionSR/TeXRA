@@ -14,12 +14,10 @@ import { createLog } from '@logger/logUtils';
 import {
   type ActiveChildInfo,
   type ConversationProgress,
-  type ExecutionId,
   type StreamStage,
-  type RunIdentity,
+  type StreamIdentityFields,
   type StreamPhase,
   type StreamTabId,
-  type UserFollowUpSupport,
   AgentCategory,
 } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
@@ -39,17 +37,13 @@ interface SessionStreamConfigDetails {
   workingDirectory?: string;
 }
 
-/** Canonical current metadata used by every session stream consumer. */
-export interface SessionStreamMetadata {
-  /** The run's identity, verbatim from `run.start` or the durable store. */
-  identity?: RunIdentity;
-  userFollowUpSupport?: UserFollowUpSupport;
-  agentCategory?: AgentCategory;
-  isRemote?: boolean;
-  creationTimestamp: number;
-  executionId?: ExecutionId;
-  parentStreamId?: StreamTabId;
-  description?: string;
+/**
+ * Canonical current metadata used by every session stream consumer. The
+ * identity/pointer fields are the shared {@link StreamIdentityFields} shape
+ * (declared once beside `StreamTabInfoSchema`), so this record and the wire
+ * tab info cannot drift apart field-by-field.
+ */
+export interface SessionStreamMetadata extends StreamIdentityFields {
   config?: SessionStreamConfigDetails;
 }
 

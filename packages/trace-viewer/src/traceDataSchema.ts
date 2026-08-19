@@ -1,27 +1,16 @@
 /**
  * Runtime validation for trace data loaded from `trace.json` or
- * `window.__TEXRA_TRACE__`. The shared document schema owns the format; this
- * external boundary only tightens snapshot-version handling so a future
- * snapshot is rejected instead of normalized as a legacy omission.
+ * `window.__TEXRA_TRACE__`. The shared document schema owns the format,
+ * including snapshot-version handling: a missing `schemaVersion` is a legacy
+ * omission, a future one is rejected rather than normalized.
  */
 import { z } from 'zod';
 
+import { TraceStreamLogEntrySchema } from '@shared/schemas';
 import { TraceDocumentSchema } from '@transcript/traceDocumentSchema';
-import {
-  STREAM_SNAPSHOT_SCHEMA_VERSION,
-  StreamSnapshotSchema,
-  TraceStreamLogEntrySchema,
-} from '@shared/schemas';
-
-const TraceStreamSnapshotSchema = StreamSnapshotSchema.extend({
-  schemaVersion: z
-    .literal(STREAM_SNAPSHOT_SCHEMA_VERSION)
-    .prefault(STREAM_SNAPSHOT_SCHEMA_VERSION),
-});
 
 export const TraceDataSchema = TraceDocumentSchema.extend({
   entries: z.array(TraceStreamLogEntrySchema),
-  snapshot: TraceStreamSnapshotSchema,
 });
 
 export type TraceData = z.infer<typeof TraceDataSchema>;

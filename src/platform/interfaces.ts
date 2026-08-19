@@ -202,9 +202,15 @@ export type ShutdownPhase =
   (typeof SHUTDOWN_PHASE)[keyof typeof SHUTDOWN_PHASE];
 
 export interface LifecycleHost {
+  /**
+   * Register a shutdown handler. `signal` fires at the phase's
+   * join-with-deadline: a handler that can be safely cut short should race it
+   * and settle; the drain aborts-then-advances past any handler that has not
+   * settled shortly after the deadline.
+   */
   onShutdown(
     phase: ShutdownPhase,
-    callback: () => void | Promise<void>,
+    callback: (signal: AbortSignal) => void | Promise<void>,
   ): Disposable;
   runShutdown(): Promise<void>;
 }

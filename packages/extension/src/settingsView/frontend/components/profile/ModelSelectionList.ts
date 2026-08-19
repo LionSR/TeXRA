@@ -37,6 +37,8 @@ import {
 
 // Local imports - profile view styles and events
 import { readSelectValue } from '@shared/utils/selectTemplates';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { postStateSetting } from '../shared/stateSettingRows';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -111,9 +113,7 @@ export class ModelSelectionList extends LitElement {
   }
 
   private handleHelperModelChange(e: Event): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL, {
-      modelName: readSelectValue(e),
-    });
+    postStateSetting(GlobalStateKey.HELPER_MODEL, readSelectValue(e));
   }
 
   private handleReasoningLevelChange(modelName: string, e: Event): void {
@@ -360,9 +360,10 @@ export class ModelSelectionList extends LitElement {
             ?checked=${this.preferShortModelNames}
             @change=${(e: Event) => {
               const enabled = (e.target as WaSwitch).checked;
-              postMessage(SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES, {
+              postStateSetting(
+                GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
                 enabled,
-              });
+              );
             }}
           >
             Use short model names

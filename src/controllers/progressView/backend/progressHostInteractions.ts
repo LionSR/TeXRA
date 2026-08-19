@@ -301,8 +301,7 @@ export function createProgressHostInteractions(
       });
       handlers().proposal.completeWhere(
         (item) =>
-          item.streamId === streamId &&
-          item.proposalId !== initiatingProposalId,
+          item.streamId === streamId && item.requestId !== initiatingProposalId,
         { action: 'approve' },
       );
       await options.getToolEditApprovals().approvePendingForStream(streamId);

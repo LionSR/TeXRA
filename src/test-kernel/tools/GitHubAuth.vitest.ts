@@ -5,7 +5,7 @@ import { installPlatform } from '@test/support/setupPlatform';
 /** Secret/env fixture for one row of a token-precedence table. */
 interface TokenCase {
   readonly name: string;
-  /** Real process env, read only while no platform is initialized. */
+  /** Real process env, stubbed to prove tokens only flow via the secrets port. */
   readonly processEnv?: Record<string, string>;
   /** Value persisted under `GITHUB_TOKEN_STORAGE_KEY`, if any. */
   readonly secret?: string;
@@ -42,18 +42,8 @@ afterEach(() => {
 describe('getGitHubToken', () => {
   it.each<TokenCase & { expected: string }>([
     {
-      name: 'uses the GITHUB_TOKEN fallback before platform initialization',
-      processEnv: { GITHUB_TOKEN: 'github-env-token' },
-      expected: 'github-env-token',
-    },
-    {
-      name: 'uses the GH_TOKEN fallback before platform initialization',
-      processEnv: { GH_TOKEN: 'gh-env-token' },
-      expected: 'gh-env-token',
-    },
-    {
-      name: 'prefers GH_TOKEN over GITHUB_TOKEN',
-      processEnv: {
+      name: 'prefers GH_TOKEN over GITHUB_TOKEN from the secrets env port',
+      secretsEnv: {
         GITHUB_TOKEN: 'github-env-token',
         GH_TOKEN: 'gh-env-token',
       },
@@ -61,18 +51,9 @@ describe('getGitHubToken', () => {
     },
     {
       name: 'ignores blank environment token values',
-      processEnv: { GITHUB_TOKEN: '   ', GH_TOKEN: 'gh-env-token' },
+      secretsEnv: { GITHUB_TOKEN: '   ', GH_TOKEN: 'gh-env-token' },
       expected: 'gh-env-token',
     },
-  ])('$name', async (tokenCase) => {
-    stubProcessEnv(tokenCase);
-
-    const { getGitHubToken } = await import('@tools/github/githubAuth');
-
-    await expect(getGitHubToken()).resolves.toBe(tokenCase.expected);
-  });
-
-  it.each<TokenCase & { expected: string }>([
     {
       name: 'prefers the platform secret when the platform is initialized',
       processEnv: {

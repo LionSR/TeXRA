@@ -12,24 +12,6 @@ const logger: Pick<AgentTrace, 'info'> = { info };
 const GOOGLE_KEYLESS_ERROR =
   'Persisted Google sessions without a model-handler identity cannot be resumed.';
 
-/** Keyless flow state whose only model hint is the MODEL channel variable. */
-function keylessFlowState(modelVariable: string) {
-  return {
-    messages: [
-      {
-        type: 'user_input',
-        content: [{ type: 'text', text: 'continue' }],
-      },
-    ],
-    stateSlices: {
-      userChannels: {
-        input: {},
-        transient: { MODEL: modelVariable },
-      },
-    },
-  };
-}
-
 describe('model handler compatibility inference', () => {
   beforeEach(() => {
     info.mockClear();
@@ -37,19 +19,13 @@ describe('model handler compatibility inference', () => {
 
   it('rejects keyless Google transcripts without inspecting their format', () => {
     expect(() =>
-      inferPersistedFlowModelHandlerCompatibilityKey(
-        'gpt54',
-        keylessFlowState('gemini35f'),
-      ),
-    ).toThrow(GOOGLE_KEYLESS_ERROR);
-    expect(info).not.toHaveBeenCalled();
-  });
-
-  it('prefers the persisted model id over the MODEL variable', () => {
-    expect(() =>
-      inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
-        modelId: 'gemini35f',
-        ...keylessFlowState('gpt54'),
+      inferPersistedFlowModelHandlerCompatibilityKey('gemini35f', {
+        messages: [
+          {
+            type: 'user_input',
+            content: [{ type: 'text', text: 'continue' }],
+          },
+        ],
       }),
     ).toThrow(GOOGLE_KEYLESS_ERROR);
     expect(info).not.toHaveBeenCalled();

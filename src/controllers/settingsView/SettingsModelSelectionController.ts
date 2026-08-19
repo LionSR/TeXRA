@@ -183,13 +183,6 @@ export class SettingsModelSelectionController {
     );
   }
 
-  async setPreferShortModelNames(enabled: boolean): Promise<void> {
-    await this.deps.globalState.update(
-      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-      enabled,
-    );
-  }
-
   private getReasoningLevelOverrides(): Record<string, string> {
     return this.deps.globalState.get<Record<string, string>>(
       GlobalStateKey.REASONING_LEVELS,

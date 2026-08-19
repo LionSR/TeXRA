@@ -776,8 +776,9 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES,
-        enabled: true,
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+        value: true,
       }),
     ).toBe(true);
     await flushAsyncWork();

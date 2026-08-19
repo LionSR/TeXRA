@@ -174,8 +174,8 @@ export function TodosPlanPanel(
     ? readStreamArtifacts(activeStreamId)
     : undefined;
   if (!slice) return null;
-  const todos = artifacts?.todos ?? slice.todos;
-  const plan = artifacts?.plan ?? slice.plan;
+  const todos = artifacts?.todos ?? [];
+  const plan = artifacts?.plan ?? null;
   if (todos.length === 0 && !plan) return null;
   // Like the child list above it, the panel owns one blank separator row so
   // the todo checklist never sits flush against its neighbor. If the gap and
