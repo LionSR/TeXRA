@@ -95,8 +95,6 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
 vi.mock('@tools/delegation/childStream', () => ({
   createRehydratedChildStream: mocks.createRehydratedChildStream,
   childStreamDescription: (raw: string) => raw,
-  getChildStreamId: (executionId: string, prefix: string) =>
-    `${prefix}#${executionId}`,
 }));
 
 vi.mock('@tools/approval', () => ({

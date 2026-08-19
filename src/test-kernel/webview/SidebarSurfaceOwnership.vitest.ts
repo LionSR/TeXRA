@@ -58,7 +58,9 @@ vi.mock('@agent/core/definition/AgentDataclass', () => ({
 vi.mock('@commands/setup/setupAssistantCommand', () => ({
   hasAnyUsableSetupCredential: vi.fn(async () => false),
 }));
-vi.mock('@common/state', () => ({ consumePendingState: () => undefined }));
+vi.mock('@common/state/pendingStateManager', () => ({
+  consumePendingState: () => undefined,
+}));
 vi.mock('@common/files/fileTypeUtils', () => ({
   EXTENSION_CATEGORIES: [],
   getFilterExtensions: () => [],

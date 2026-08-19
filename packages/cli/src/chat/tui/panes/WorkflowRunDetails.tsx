@@ -24,6 +24,7 @@ import {
 import {
   STREAM_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
+  fileLocationDisplayPath,
   outputDiffCounts,
   outputDisplayName,
   roundIndexedEntries,
@@ -188,7 +189,11 @@ function workflowRunDetailGroups(
           key: `output:${round}:${file.location.absolutePath}:${index}`,
           // Neutral bullet, not `›` — POINTER means "focused row / your
           // input" everywhere else, and these are static file rows.
-          text: `    • ${safeTerminalText(outputDisplayName(file))}${diff}`,
+          text: `    • ${safeTerminalText(
+            file.location.kind === 'external'
+              ? fileLocationDisplayPath(file.location)
+              : outputDisplayName(file),
+          )}${diff}`,
           tone: 'neutral',
           role: 'output',
         });

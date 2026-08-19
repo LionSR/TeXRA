@@ -10,12 +10,7 @@ export function getSharedLocalResourceRoots(
   return [
     vscode.Uri.joinPath(extensionUri, 'src', viewFolder),
     vscode.Uri.joinPath(extensionUri, 'dist', viewFolder),
-    vscode.Uri.joinPath(extensionUri, 'dist', 'shared'),
     vscode.Uri.joinPath(extensionUri, 'src', 'common', 'styles'),
-    vscode.Uri.joinPath(extensionUri, 'src', 'shared', 'styles'),
-    vscode.Uri.joinPath(extensionUri, 'src', 'common', 'modules'),
-    vscode.Uri.joinPath(extensionUri, 'src', 'common', 'webview'),
-    vscode.Uri.joinPath(extensionUri, 'src', 'common', 'constants'),
   ];
 }
 

@@ -1,8 +1,8 @@
 import { ModelProvider, type ModelConfig, ReasoningEffort } from 'llm-zoo';
 
 import {
-  hasConfigurableReasoningEffort,
   LEVEL_TO_EFFORT,
+  supportsReasoningLevel,
 } from '@agent/modelHandlers/support/reasoningEffort';
 import { preferredCopilotRouteModels } from '@model/copilotRouting';
 import { resolveModelSource } from '@model/openRouterRouting';
@@ -283,12 +283,4 @@ export class SettingsModelSelectionController {
       item.reasoningLevel = parsed.data;
     }
   }
-}
-
-function supportsReasoningLevel(config: ModelConfig): boolean {
-  return (
-    hasConfigurableReasoningEffort(config.capabilities) ||
-    (config.provider === ModelProvider.DEEPSEEK &&
-      config.capabilities.supportsReasoning)
-  );
 }

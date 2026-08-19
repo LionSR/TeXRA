@@ -312,11 +312,8 @@ describe('CLI workflow run command', () => {
       resumable: true,
       cause: 'interrupted-with-flow',
       flowRecord: {
-        flowName: 'texra',
         shared: {},
-        createdAt: '2026-08-13T00:00:00.000Z',
         cursor: { nextNodeId: 'start' },
-        nodes: [],
       },
     });
     mocks.withExpandedRunInputs.mockImplementation(
@@ -975,11 +972,8 @@ describe('CLI workflow run command', () => {
         resumable: true,
         cause: 'interrupted-with-flow',
         flowRecord: {
-          flowName: 'texra',
           shared: { lastError: { message: 'provider failed' } },
-          createdAt: '2026-08-13T00:00:00.000Z',
           cursor: { nextNodeId: 'start' },
-          nodes: [],
         },
       }),
     ).toBe(false);

@@ -4,6 +4,7 @@ import { getBasename } from '@utils/core';
 import {
   type FileLocation,
   FileLocationSchema,
+  fileLocationShortDisplayPath,
   type OutputFileInfo,
   OutputFileInfoSchema,
 } from './output';
@@ -77,23 +78,17 @@ function getDisplayName(
   revised: OutputFileInfo,
   baseLocation: FileLocation | null,
 ): string {
-  // Prefer original path from lineage
+  // Prefer the original file's own name, from lineage.
   const original = revised.lineage?.original;
   if (original) {
-    const path =
-      ('relativePath' in original ? original.relativePath : null) ||
-      original.absolutePath;
-    const basename = getBasename(path);
+    const basename = getBasename(fileLocationShortDisplayPath(original));
     if (basename) return basename;
   }
 
-  // Fall back to base location
+  // Fall back to how the base location reads.
   if (baseLocation) {
-    if ('relativePath' in baseLocation && baseLocation.relativePath) {
-      return baseLocation.relativePath;
-    }
-    const basename = getBasename(baseLocation.absolutePath);
-    if (basename) return basename;
+    const basePath = fileLocationShortDisplayPath(baseLocation);
+    if (basePath) return basePath;
   }
 
   return 'unknown';

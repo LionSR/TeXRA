@@ -13,10 +13,10 @@ import type {
   AgentSource,
 } from '@agent/index';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import { globalSM } from '@common/state';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import { createLog } from '@logger/logUtils';
+import { platform, tryGlobalState } from '@platform/platform';
 import { AGENT_SOURCE } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -40,7 +40,9 @@ class AgentDirectoryManager {
     this.directoryService = createPlatformAgentDirectories({
       channel: CHANNEL,
       customDirectoryStore: {
-        get: () => globalSM?.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
+        get: () =>
+          tryGlobalState()?.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, '') ??
+          '',
       },
       issueReporter: {
         report: (message, docsId) =>
@@ -94,7 +96,10 @@ class AgentDirectoryManager {
 
     await AbsoluteFS.ensureDir(selectedPath);
 
-    await globalSM.update(GlobalStateKey.CUSTOM_AGENT_DIR, selectedPath);
+    await platform().globalState.update(
+      GlobalStateKey.CUSTOM_AGENT_DIR,
+      selectedPath,
+    );
 
     return selectedPath;
   }
@@ -119,7 +124,7 @@ class AgentDirectoryManager {
 
   /**
    * Refresh file watchers after the custom agent directory changes.
-   * Called by the settings view after updating CUSTOM_AGENT_DIR in globalSM.
+   * Called by the settings view after updating CUSTOM_AGENT_DIR in global state.
    */
   async refreshAfterDirChange(): Promise<void> {
     if (this.onAgentYamlChange) {

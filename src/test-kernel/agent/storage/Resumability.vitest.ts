@@ -5,8 +5,8 @@ import {
   deriveResumability,
   finalizeExecution,
   getExecutionStore,
-  RESUMABILITY_CAUSE,
 } from '@agent/storage';
+import { RESUMABILITY_CAUSE } from '@agent/storage/resumability';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   FLOW_RECORD_SCHEMA_VERSION,
@@ -23,11 +23,8 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 
 const BASE_FLOW_RECORD: FlowRecord = {
-  flowName: 'texra',
   shared: { messages: [] },
-  createdAt: '2026-07-05T00:00:00.000Z',
   cursor: { nextNodeId: 'start' },
-  nodes: [],
 };
 
 describe('deriveResumability', () => {

@@ -8,7 +8,7 @@
  *
  * If a user-configurable allowlist is ever needed (to opt specific bots
  * back in), it should live in the TeXRA settings UI (Git tab, backed by
- * workspaceSM), not as a VS Code configuration contribution. This module
+ * workspace state), not as a VS Code configuration contribution. This module
  * intentionally has no knobs — repo-level subscription policy is not a
  * user-tunable preference.
  */

@@ -8,10 +8,10 @@ import { createSignedInProbe, type SignedInProbe } from '../signedInProbe';
 const signedIn = createSignedInProbe();
 
 /**
- * Install the app's ChatGPT sign-in probe, or pass `null` to restore the
- * signed-out default. Called once per process from the host composition root.
+ * Install the app's ChatGPT sign-in probe. Called once per process from the
+ * host composition root.
  */
-export function setCodexSignedInProbe(next: SignedInProbe | null): void {
+export function setCodexSignedInProbe(next: SignedInProbe): void {
   signedIn.setProbe(next);
 }
 

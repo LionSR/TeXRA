@@ -153,7 +153,7 @@ export function getWebSocketEnabled(): boolean {
 /**
  * Whether to route all API calls through OpenRouter. Catalog-modeled (see
  * `stateSettings.ts`); the legacy VS Code config fallback this used to carry
- * for pre-globalSM-migration users was dead code — `StateStore.get(key,
+ * for pre-global-state-migration users was dead code — `StateStore.get(key,
  * defaultValue)` always resolves to `defaultValue` once the platform is
  * initialized, so the config fallback could only ever fire before
  * initialization, at which point `getConfig` also just returns its own

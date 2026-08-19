@@ -24,11 +24,11 @@ import {
   type ManualCriticismEntry,
   type SessionEventHub,
 } from '@agent/runtime';
-import { globalSM } from '@common/state';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { createLog } from '@logger/logUtils';
+import { tryGlobalState } from '@platform/platform';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -56,8 +56,10 @@ function mapSeverity(severity: number): vscode.DiagnosticSeverity {
 
 export function isInlineCriticismEnabled(): boolean {
   return (
-    globalSM?.get<boolean>(GlobalStateKey.INLINE_CRITICISM_ENABLED, false) ===
-    true
+    tryGlobalState()?.get<boolean>(
+      GlobalStateKey.INLINE_CRITICISM_ENABLED,
+      false,
+    ) === true
   );
 }
 
@@ -210,7 +212,10 @@ export function registerInlineCriticism(
 export async function setInlineCriticismEnabled(
   enabled: boolean,
 ): Promise<void> {
-  await globalSM?.update(GlobalStateKey.INLINE_CRITICISM_ENABLED, enabled);
+  await tryGlobalState()?.update(
+    GlobalStateKey.INLINE_CRITICISM_ENABLED,
+    enabled,
+  );
   if (!extensionContext) {
     throw new Error(
       'setInlineCriticismEnabled called before registerInlineCriticism',

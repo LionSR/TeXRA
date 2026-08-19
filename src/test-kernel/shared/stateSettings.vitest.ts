@@ -23,6 +23,7 @@ import {
   STATE_SETTINGS,
   settingEnumChoices,
   settingEnumOptions,
+  modelsTabSettings,
   settingsViewSettingByKey,
   settingsViewSnapshotEntries,
   SETTINGS_SNAPSHOT_COMMANDS,
@@ -499,7 +500,33 @@ describe('catalog-derived settings snapshots', () => {
         true,
         `${snapshot} arm rejected its own builder output`,
       );
+
+      for (const omittedKey of Object.keys(message.values)) {
+        const partialValues = Object.fromEntries(
+          Object.entries(message.values).filter(([key]) => key !== omittedKey),
+        );
+        assert.equal(
+          dispatchSettingsViewOutbound({ ...posted, values: partialValues }, {
+            [message.command]: () => {},
+          } as never),
+          false,
+          `${snapshot} arm accepted missing key ${omittedKey}`,
+        );
+      }
     }
+  });
+
+  it('keeps the historical OpenAI Models-tab control order', () => {
+    assert.deepEqual(
+      modelsTabSettings('openai').map(({ entry }) => entry.key),
+      [
+        'texra.model.gpt5ReasoningSummary',
+        'texra.model.useOpenAIResponsesAPI',
+        'texra.model.useBackgroundResponses',
+        'texra.model.openaiParallelToolCalls',
+        'texra.websocket.openai',
+      ],
+    );
   });
 });
 

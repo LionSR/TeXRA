@@ -20,6 +20,7 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import type {
   ToolResult,
@@ -49,7 +50,6 @@ import { deriveExecutionId } from '@utils/core/idHash';
 import {
   childStreamDescription,
   createRehydratedChildStream,
-  getChildStreamId,
 } from './childStream';
 
 // Local file imports
@@ -350,7 +350,9 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     // anchor and resume still replays completed calls (#8712). The journal
     // itself stays on the orchestrator store, where the checkpoint lives.
     const runExecutionId = deriveExecutionId({ checkpointId });
-    const runStreamId = getChildStreamId(runExecutionId, STREAM_PREFIX);
+    const runStreamId = getStreamTabId(STREAM_PREFIX, {
+      executionId: runExecutionId,
+    });
 
     // Captured now, while the launching tool call's ALS frame is live, so the
     // detached run can still roll its cost into the parent after this call

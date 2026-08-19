@@ -3,7 +3,8 @@ import type {
   MainViewStartupOptions,
 } from '@controllers/mainView/MainViewStartupController';
 import type { StateStore } from '@platform/interfaces';
-import type { DesktopThemeKind, MainViewExecuteMessage } from '@shared/schemas';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import type { MainViewExecuteMessage } from '@shared/schemas';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
 import {
@@ -12,6 +13,7 @@ import {
 } from './desktopLogIpc.js';
 import { createDesktopMainViewStartup } from './desktopMainViewStartup.js';
 import {
+  createCommandHandler,
   isDesktopCommandMessage,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
@@ -27,8 +29,6 @@ import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
 
 export interface DesktopMainViewIpcOptions {
-  debugMode?: boolean;
-  getTheme?: () => DesktopThemeKind;
   fileSelection: DesktopFileSelection;
   prompt: DesktopPromptIpc;
   settings: DesktopSettingsIpc;
@@ -76,10 +76,13 @@ export function installDesktopMainViewIpc(
   const bridge = installDesktopHostBridge(window, {
     onRendererMessage: handleRendererMessage,
   });
-  const viewState = createDesktopViewStateIpc(bridge, {
-    debugMode: options.debugMode,
-    getTheme: options.getTheme,
+  const banner = createCommandHandler({
+    // Banner state is frontend-owned, so renderer updates round-trip through
+    // the host just as they do in the extension.
+    [MAIN_VIEW_COMMANDS.SET_BANNER]: (message) =>
+      bridge.postToRenderer(message),
   });
+  const viewState = createDesktopViewStateIpc(bridge);
   const shell = createDesktopShellIpc(options.shellActions);
   const execution = createDesktopExecutionIpc({
     handleExecuteMessage: options.handleExecuteMessage,
@@ -97,6 +100,7 @@ export function installDesktopMainViewIpc(
     globalState: options.globalState,
   });
   const messageHandlers: DesktopMessageHandler[] = [
+    banner,
     startup,
     options.fileSelection,
     options.prompt,

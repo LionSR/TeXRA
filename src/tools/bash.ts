@@ -26,7 +26,10 @@ import {
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import { BASH_CHILD_STREAM_PREFIX } from '@agent/runtime/streamTab';
+import {
+  BASH_CHILD_STREAM_PREFIX,
+  getStreamTabId,
+} from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { platform } from '@platform/platform';
 import {
@@ -64,7 +67,6 @@ import { nullishWithDefault } from './core/inputSchema';
 import {
   childStreamDescription,
   createChildStream,
-  getChildStreamId,
   type ChildStream,
 } from './delegation/childStream';
 import { parseWorkingDirectory } from './pathResolution';
@@ -420,7 +422,7 @@ export class BashTool extends defineTool({
       { name: 'bash', instruction: command },
       'bash',
       {
-        streamId: getChildStreamId(executionId, BASH_CHILD_STREAM_PREFIX),
+        streamId: getStreamTabId(BASH_CHILD_STREAM_PREFIX, { executionId }),
         identity: { kind: 'process', tool: 'bash' },
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
         parentExecutionId,

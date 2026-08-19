@@ -77,7 +77,6 @@ vi.mock('@common/webview', () => ({
   getSharedLocalResourceRoots: () => [],
   SIDEBAR_VIEWS: { MAIN: 'main', PROGRESS: 'progress' },
 }));
-vi.mock('@common/state', () => ({ workspaceSM: {} }));
 vi.mock('@agent/trace', () => ({
   createChannelTrace: () => ({ debug: vi.fn(), error: vi.fn() }),
 }));
@@ -107,9 +106,6 @@ vi.mock('@controllers/approval/ToolEditApprovalController', () => ({
   ToolEditApprovalController: class {
     dispose(): void {}
   },
-}));
-vi.mock('@controllers/progressView/backend/agentProposalTransport', () => ({
-  createAgentProposalTransport: () => ({}),
 }));
 vi.mock('@controllers/progressView/backend/progressBackendUiConfig', () => ({
   replayApprovalRequestHandlers: vi.fn(),

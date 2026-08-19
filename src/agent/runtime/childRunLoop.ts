@@ -11,14 +11,13 @@
 
 import PQueue from 'p-queue';
 
-import {
-  getExecutionStore,
-  type ChildTurnRef,
-  type ChildTurnState,
-  type ResultMeta,
-} from '@agent/storage';
+import { getExecutionStore, type ResultMeta } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
+import type {
+  ChildTurnRef,
+  ChildTurnState,
+} from '@agent/storage/ExecutionKVStore';
 import {
   onOwnedExecutionLeaseLost,
   captureOwnedExecutionLease,
@@ -277,8 +276,9 @@ export interface ChildRunLoopParams<TTurn> {
   readonly childStream?: ChildStreamPort;
   /**
    * The child's stream id, known deterministically upfront by every caller
-   * (agent-CLI: `createChildStream`'s own id; native: `getStreamTabId` — the
-   * same formula `buildAgentLaunchContext` derives internally) — never
+   * (one `getStreamTabId` formula either way — agent-CLI passes the launching
+   * tool's stream prefix, native passes the clean agent name, which is what
+   * `buildAgentLaunchContext` derives internally) — never
    * discovered mid-flight, so the loop can acquire the follow-up queue and
    * attach its interrupt handler before the first turn ever runs when a handle
    * already exists.
