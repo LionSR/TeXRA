@@ -15,6 +15,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import { diffWordsWithSpace } from 'diff';
 
 import type { FileListEntry } from '@shared/schemas';
 import { hljs } from '@shared/highlighting/hljs';
@@ -24,7 +25,6 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
-import { DIFF_DELETE, DIFF_INSERT, diffTextByChar } from '@utils/text/diff';
 
 // Local imports - formatter helpers
 import {
@@ -392,23 +392,25 @@ export function buildExecutionsPathDisplay(
 // Edit Diff Display (Inline Word-Level Diff)
 // ============================================================================
 
-/** Generate inline diff template showing changes between old and new text. */
+/**
+ * Generate inline diff template showing changes between old and new text.
+ *
+ * Word-level rather than character-level: whole-word runs are what a reader
+ * can scan, and they come from the same engine as every other diff in the
+ * product. The webview highlights inline spans while the terminal renders
+ * unified hunks — two correct paints of one payload for two media.
+ */
 function generateInlineDiff(oldText: string, newText: string): TemplateResult {
-  const diffs = diffTextByChar(oldText, newText, {
-    // Preserve diff_main's omitted-argument behavior (line-level speedup).
-    checkLines: true,
-    cleanupSemantic: true,
-  });
+  const parts = diffWordsWithSpace(oldText, newText);
 
-  return html`${diffs.map(([op, text]: [number, string]) => {
-    switch (op) {
-      case DIFF_DELETE:
-        return html`<span class="diff-inline-del">${text}</span>`;
-      case DIFF_INSERT:
-        return html`<span class="diff-inline-add">${text}</span>`;
-      default:
-        return text;
+  return html`${parts.map((part) => {
+    if (part.removed) {
+      return html`<span class="diff-inline-del">${part.value}</span>`;
     }
+    if (part.added) {
+      return html`<span class="diff-inline-add">${part.value}</span>`;
+    }
+    return part.value;
   })}`;
 }
 

@@ -215,7 +215,7 @@ export function collectLatexFencedBlocks(
 function documentSimilarity(a: string, b: string): number {
   if (a === b) return 1;
   const maxLength = Math.max(a.length, b.length, 1);
-  const distance = diffTextLevenshtein(a, b, { checkLines: true });
+  const distance = diffTextLevenshtein(a, b);
   return Math.max(0, 1 - distance / maxLength);
 }
 
