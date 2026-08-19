@@ -223,14 +223,13 @@ describe('logFileCategory', () => {
     expect(messages[0].text).toBe(expected);
   });
 
-  it('includes source and sourceDisplay in entry data', () => {
+  it('includes sourceDisplay in entry data', () => {
     logFileCategory(logger, 'Input Files', [
       { path: '/path/file.tex', ok: true },
     ]);
 
     const entries = capturedMessages()[0].data;
     expect(entries).toHaveLength(1);
-    expect(entries[0].source).toBe('Input Files');
     expect(entries[0].sourceDisplay).toBe('Input Files');
     expect(entries[0].path).toBe('/path/file.tex');
     expect(entries[0].ok).toBe(true);

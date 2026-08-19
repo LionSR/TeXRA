@@ -50,12 +50,13 @@ function fillColor(percent: number): string {
 }
 
 /**
- * Single owner of the free-tier decision for a usage route: `null` when the
- * route has no badge (plain cost), otherwise `free` (subscription route with
- * zero cost) plus the two label forms the summary and the visible footer use.
- * Both the shared {@link usageCostLabel} and
- * {@link UsagePanel.renderCostRoute} consume this, so changing a subscription
- * route touches one place.
+ * Free-tier decision for the visible footer badge: `null` when the route has
+ * no badge (plain cost), otherwise `free` (subscription route with zero
+ * cost) plus the badge's label forms. Only
+ * {@link UsagePanel.renderCostRoute} consumes this; the aria summary's shared
+ * {@link usageCostLabel} re-derives the same `subscription && cost === 0`
+ * predicate from `usageRouteBadge`, so changing a subscription route touches
+ * both.
  */
 function usageRouteDecision(
   cost: number,
@@ -317,7 +318,7 @@ export class UsagePanel extends LitElement {
     if (!this.usage) return '';
     const { inputTokens, outputTokens, cost } = this.usage;
     // The shared rule omits a zero-cost unknown route; the aria summary
-    // still states it as "$0.00".
+    // still states it as "$0.000".
     const costLabel =
       usageCostLabel(cost, this.usage.usageRoute) ?? formatCostUsd(cost);
     return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, ${costLabel}`;

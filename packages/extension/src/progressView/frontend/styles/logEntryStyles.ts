@@ -468,36 +468,10 @@ export const logEntryStyles = css`
     overflow: hidden;
   }
 
-  :host([terminal]) .log-line {
-    padding: 0;
-    line-height: 1.35;
-    word-break: normal;
-    overflow-wrap: anywhere;
-  }
-
   @container (max-width: 640px) {
     .log-container {
       padding-inline: var(--wa-space-xs);
     }
-  }
-
-  /* Bullet/timestamp prefix is noisy for raw process output. */
-  :host([terminal]) .log-line .timestamp {
-    display: none;
-  }
-
-  /* stdout renders at terminal foreground; stderr keeps a warn tint. */
-  :host([terminal]) .message-info,
-  :host([terminal]) .message-debug {
-    color: inherit;
-  }
-
-  :host([terminal]) .message-warn {
-    color: var(--wa-color-terminal-ansi-yellow, var(--color-warning));
-  }
-
-  :host([terminal]) .message-error {
-    color: var(--wa-color-terminal-ansi-red, var(--color-error));
   }
 `;
 
