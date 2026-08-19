@@ -373,13 +373,16 @@ export class SessionFactApplier {
             // presentation repair fails; any other rejection leaves the
             // barrier in place and is logged by the event-error wrapper,
             // because the stream may have deleted.
-            const { incarnation: expectedIncarnation } =
+            const { incarnation: expectedIncarnation, changedRosterParents } =
               this.state.beginStreamRemoval(streamId);
             this.registeredWithRenderer.delete(streamId);
             const { pending, created } = this.beginPendingDeletion(
               streamId,
               expectedIncarnation,
             );
+            // Establish tombstone and pending-fact ownership first. Renderer
+            // delivery is best-effort and cannot prevent durable deletion.
+            this.notifyRosterParents(changedRosterParents);
             let settled = false;
             const settleDeletion = (
               outcome: void | DeleteStreamResult | undefined,
@@ -390,11 +393,25 @@ export class SessionFactApplier {
               if (!created || settled) return;
               settled = true;
               this.finishPendingDeletion(streamId, pending);
-              const retired =
-                (outcome === 'active' ||
-                  outcome === 'failed' ||
-                  outcome === 'superseded') &&
-                this.state.retireStreamTombstone(streamId, expectedIncarnation);
+              const retained = outcome === 'active' || outcome === 'failed';
+              const retirement =
+                retained || outcome === 'superseded'
+                  ? this.state.retireStreamTombstone(
+                      streamId,
+                      expectedIncarnation,
+                    )
+                  : { retired: false, changedRosterParents: [] };
+              const commitment =
+                !retained && outcome !== 'superseded'
+                  ? this.state.commitStreamTombstone(
+                      streamId,
+                      expectedIncarnation,
+                    )
+                  : { committed: false, changedRosterParents: [] };
+              this.notifyRosterParents([
+                ...retirement.changedRosterParents,
+                ...commitment.changedRosterParents,
+              ]);
               // A retained deletion still lives: replay the facts buffered
               // while it was provisional so status/stage/roster/metadata are
               // not stuck stale. Replay only when the retirement above
@@ -403,7 +420,7 @@ export class SessionFactApplier {
               // deletion B owns) must never replay through that newer
               // barrier. A committed deletion discards them (the stream is
               // gone).
-              if ((outcome === 'active' || outcome === 'failed') && retired) {
+              if (retained && retirement.retired) {
                 this.replayDeferredFacts(pending.facts);
               }
             };
@@ -436,15 +453,15 @@ export class SessionFactApplier {
   }
 
   handleRunFact(streamId: StreamTabId, event: SessionRunFactEvent): void {
-    // A run fact for a removed stream is stale by definition — for
-    // `child.activity` the fact's stream is the parent, so this also keeps a
-    // late roster from re-minting a removed parent's state. A delayed
-    // `run.start` therefore cannot reopen a committed tombstone; the re-claim
-    // lives in `handleSessionFact`, on the workflow attachment that carries
-    // live-execution evidence for the new incarnation. A provisional barrier
-    // buffers the fact so a retained deletion can replay it.
+    // A run fact for a removed stream is stale by definition. A
+    // `child.activity` snapshot is authoritative for its parent even when some
+    // listed children are tombstoned: canonical state accepts the whole fact,
+    // while SessionState's shared read projection hides those child rows until
+    // settlement. A delayed `run.start` cannot reopen a committed tombstone;
+    // the re-claim lives in `handleSessionFact`, on the workflow attachment that
+    // carries live-execution evidence for the new incarnation.
     if (this.state.isStreamRemoved(streamId)) {
-      this.deferRunFact(streamId, event);
+      this.deferRunFact(streamId, streamId, event);
       return;
     }
     this.applyRunFact(streamId, event);
@@ -512,10 +529,11 @@ export class SessionFactApplier {
 
   /** Buffer a refused run fact for a provisional barrier, or drop it. */
   private deferRunFact(
+    removedStreamId: StreamTabId,
     streamId: StreamTabId,
     event: SessionRunFactEvent,
   ): void {
-    const pending = this.pendingDeletions.get(streamId);
+    const pending = this.pendingDeletions.get(removedStreamId);
     if (pending) pending.facts.push({ kind: 'run', streamId, event });
   }
 
@@ -548,9 +566,11 @@ export class SessionFactApplier {
     incarnation: number;
     created: boolean;
   } {
-    const { incarnation, created } = this.state.beginStreamRemoval(streamId);
+    const { incarnation, created, changedRosterParents } =
+      this.state.beginStreamRemoval(streamId);
     this.registeredWithRenderer.delete(streamId);
     if (created) this.beginPendingDeletion(streamId, incarnation);
+    this.notifyRosterParents(changedRosterParents);
     return { incarnation, created };
   }
 
@@ -572,10 +592,21 @@ export class SessionFactApplier {
     if (pending && pending.incarnation === incarnation) {
       this.finishPendingDeletion(streamId, pending);
     }
-    const retired =
-      outcome !== 'deleted' &&
-      this.state.retireStreamTombstone(streamId, incarnation);
-    if (retired && (outcome === 'active' || outcome === 'failed') && pending) {
+    const retained =
+      outcome === 'active' || outcome === 'failed' || outcome === undefined;
+    const retirement =
+      outcome !== 'deleted'
+        ? this.state.retireStreamTombstone(streamId, incarnation)
+        : { retired: false, changedRosterParents: [] };
+    const commitment =
+      outcome === 'deleted'
+        ? this.state.commitStreamTombstone(streamId, incarnation)
+        : { committed: false, changedRosterParents: [] };
+    this.notifyRosterParents([
+      ...retirement.changedRosterParents,
+      ...commitment.changedRosterParents,
+    ]);
+    if (retirement.retired && retained && pending) {
       this.replayDeferredFacts(pending.facts);
     }
   }
@@ -717,13 +748,6 @@ export class SessionFactApplier {
     parentStreamId: StreamTabId,
     next: StreamExecutionState['subagents'],
   ): void {
-    // Rows naming a removed child stay removed: a stale roster cannot put a
-    // tombstoned identity back. Both the incoming snapshot and the previously
-    // stored roster are filtered, so the retention step below cannot re-add a
-    // removed child as a finished row.
-    next = next.filter(
-      (child) => !this.state.isStreamRemoved(child.childStreamId),
-    );
     // Roster facts can arrive before RUNNING/config creates the parent state
     // (TUI child-event-order `roster-first`). Provision a ToolUse bucket so
     // retention still runs; a later run.config refreshes the real category.
@@ -732,9 +756,7 @@ export class SessionFactApplier {
     this.state.getOrCreateStreamState(parentStreamId, category);
 
     this.state.updateStreamState(parentStreamId, (prev) => {
-      const previous = prev.subagents.filter(
-        (child) => !this.state.isStreamRemoved(child.childStreamId),
-      );
+      const previous = prev.subagents;
       const liveBefore = previous.filter(
         (child) => child.finishedAt === undefined,
       );
@@ -784,6 +806,28 @@ export class SessionFactApplier {
     });
   }
 
+  private notifyRosterParents(parents: readonly StreamTabId[]): void {
+    withEventErrorHandling(
+      'SessionFacts',
+      'failed to notify roster changes',
+      () => {
+        if (!this.renderer.isAvailable()) return;
+        for (const parent of parents) {
+          const parentState = this.state.getStreamState(parent);
+          if (!parentState) continue;
+          withEventErrorHandling(
+            'SessionFacts',
+            `failed to notify roster changes for ${parent}`,
+            () =>
+              this.renderer.onBadgesChanged(parent, {
+                subagents: parentState.subagents,
+              }),
+          );
+        }
+      },
+    );
+  }
+
   /**
    * Apply a stream status transition into session state and notify the
    * renderer. Awaitable so callers that need rehydrate to finish (tests,
@@ -807,10 +851,8 @@ export class SessionFactApplier {
     // rehydrate can never overwrite a later phase.
     //
     // This pre-await write is deliberately residual: a removal landing during
-    // the rehydrate await below cannot undo it. That is safe because the child
-    // untrack path emits `child.activity` before `removeStream`, so the parent
-    // roster drop supersedes any status this row carries, and
-    // `updateChildRoster` filters tombstoned children before retention.
+    // the rehydrate await below hides the child through the shared roster
+    // projection, and a committed deletion later scrubs its canonical rows.
     const rosterParents = this.state.recordChildPhase(streamId, status);
 
     // Active phases keep the full log resident for runtime writes. Terminal
@@ -847,13 +889,7 @@ export class SessionFactApplier {
     if (!this.renderer.isAvailable()) return;
 
     // Push the rows just written whenever the parent holding them is on screen.
-    for (const parent of rosterParents) {
-      const parentState = this.state.getStreamState(parent);
-      if (!parentState) continue;
-      this.renderer.onBadgesChanged(parent, {
-        subagents: parentState.subagents,
-      });
-    }
+    this.notifyRosterParents(rosterParents);
 
     const isNewStream = !this.state.streamLogs.has(streamId);
     this.state.streamLogs.ensureStream(streamId);

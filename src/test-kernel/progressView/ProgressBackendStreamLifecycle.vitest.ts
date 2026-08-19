@@ -24,6 +24,7 @@ import * as logger from '@logger/logUtils';
 import {
   AgentCategory,
   STREAM_PHASE,
+  type ActiveChildInfo,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -57,6 +58,29 @@ function emitRemoveStream(
     scope: 'session',
     event: { type: 'removeStream', payload: { streamId } },
   });
+}
+
+function childRosterRow(
+  childStreamId: StreamTabId,
+  executionId = `execution:${childStreamId}` as ExecutionId,
+): ActiveChildInfo {
+  return {
+    executionId,
+    childStreamId,
+    agentName: 'orchestrator',
+    identity: { kind: 'agent', agent: 'orchestrator' },
+    status: STREAM_PHASE.RUNNING,
+    startedAt: 1,
+  };
+}
+
+function setChildRoster(
+  backend: RecordingTarget['backend'],
+  parent: StreamTabId,
+  subagents: ActiveChildInfo[],
+): void {
+  backend.state.getOrCreateStreamState(parent, AgentCategory.ToolUse);
+  backend.state.updateStreamState(parent, (state) => ({ ...state, subagents }));
 }
 
 function stubClearAll(
@@ -205,51 +229,148 @@ describe('ProgressBackend', () => {
     const { backend } = target;
     backend.setupEventListeners();
     const streamId = 'desktop-child-stream' as StreamTabId;
+    const parent = 'desktop-parent-stream' as StreamTabId;
+    const before = childRosterRow('desktop-before' as StreamTabId);
+    const child = childRosterRow(streamId);
+    const after = childRosterRow('desktop-after' as StreamTabId);
 
     try {
       backend.state.streamLogs.ensureStream(streamId);
       backend.state.getOrCreateStreamState(streamId, AgentCategory.ToolUse);
+      setChildRoster(backend, parent, [before, child, after]);
+      const badgesChanged = vi.spyOn(backend.renderer, 'onBadgesChanged');
 
       emitRemoveStream(target, streamId);
 
       await vi.waitFor(() => expect(deletedStreams).toEqual([streamId]));
       expect(backend.state.streamLogs.has(streamId)).toBe(false);
       expect(backend.state.getStreamState(streamId)).toBeUndefined();
+      expect(backend.state.getStreamState(parent)?.subagents).toEqual([
+        before,
+        after,
+      ]);
+      expect(badgesChanged).toHaveBeenLastCalledWith(parent, {
+        subagents: [before, after],
+      });
     } finally {
       await backend.state.clearAll();
     }
   });
 
-  it('retires a retained fact removal before rebuilding the selectable rail', async () => {
-    const backendRef: { current?: RecordingTarget['backend'] } = {};
-    const selectableAtRebuild: StreamTabId[][] = [];
-    const lifecycle = createLifecycleOptions({
-      rebuildRenderedStreams: vi.fn(async () => {
-        selectableAtRebuild.push(
-          backendRef.current?.state.selectableStreamNames() ?? [],
-        );
-      }),
+  it('projects simultaneous removals from the newest roster and settles them out of order', () => {
+    const { backend } = createIsolatedRecordingBackend();
+    const activeStream = 'retained-active-stream' as StreamTabId;
+    const failedStream = 'retained-failed-stream' as StreamTabId;
+    const deletedStream = 'committed-deleted-stream' as StreamTabId;
+    const parent = 'retained-fact-parent' as StreamTabId;
+    const before = childRosterRow('retained-before' as StreamTabId);
+    const activeChild = childRosterRow(activeStream);
+    const failedChild = childRosterRow(failedStream);
+    const deletedChild = childRosterRow(deletedStream);
+    const after = childRosterRow('retained-after' as StreamTabId);
+    setChildRoster(backend, parent, [
+      before,
+      activeChild,
+      failedChild,
+      deletedChild,
+      after,
+    ]);
+
+    const activeRemoval = backend.state.beginStreamRemoval(activeStream);
+    const failedRemoval = backend.state.beginStreamRemoval(failedStream);
+    const deletedRemoval = backend.state.beginStreamRemoval(deletedStream);
+    expect(backend.state.getStreamState(parent)?.subagents).toEqual([
+      before,
+      after,
+    ]);
+
+    const newestActive = { ...activeChild, agentName: 'reviewer' };
+    const newestFailed = { ...failedChild, agentName: 'researcher' };
+    const newestDeleted = { ...deletedChild, agentName: 'implementer' };
+    backend.applyRunFact(parent, {
+      type: 'child.activity',
+      parentStreamId: parent,
+      items: [after, newestFailed, newestDeleted, before, newestActive],
     });
-    const target = createIsolatedRecordingBackend(
-      createTestSession(),
-      lifecycle,
-    );
-    const { backend } = target;
-    backendRef.current = backend;
-    backend.setupEventListeners();
-    const streamId = 'retained-fact-stream' as StreamTabId;
-    backend.state.streamLogs.ensureStream(streamId);
-    vi.spyOn(backend.state, 'clearStream').mockResolvedValueOnce('failed');
+    expect(backend.state.getStreamState(parent)?.subagents).toEqual([
+      after,
+      before,
+    ]);
 
-    emitRemoveStream(target, streamId);
+    expect(
+      backend.state.retireStreamTombstone(
+        failedStream,
+        failedRemoval.incarnation,
+      ),
+    ).toEqual({ retired: true, changedRosterParents: [parent] });
+    expect(backend.state.getStreamState(parent)?.subagents).toEqual([
+      after,
+      newestFailed,
+      before,
+    ]);
 
-    await vi.waitFor(() =>
-      expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
-        syncActiveStream: true,
-      }),
+    expect(
+      backend.state.commitStreamTombstone(
+        deletedStream,
+        deletedRemoval.incarnation,
+      ),
+    ).toEqual({ committed: true, changedRosterParents: [parent] });
+    expect(backend.state.getStreamState(parent)?.subagents).toEqual([
+      after,
+      newestFailed,
+      before,
+    ]);
+
+    expect(
+      backend.state.retireStreamTombstone(
+        activeStream,
+        activeRemoval.incarnation,
+      ),
+    ).toEqual({ retired: true, changedRosterParents: [parent] });
+    expect(backend.state.getStreamState(parent)?.subagents).toEqual([
+      after,
+      newestFailed,
+      before,
+      newestActive,
+    ]);
+  });
+
+  it('keeps superseded settlements from revealing rows across parent and child reclaims', () => {
+    const { backend } = createIsolatedRecordingBackend();
+    const parent = 'reclaimed-parent' as StreamTabId;
+    const childStream = 'reclaimed-child' as StreamTabId;
+    const oldChild = childRosterRow(
+      childStream,
+      'old-execution' as ExecutionId,
     );
-    expect(selectableAtRebuild).toContainEqual([streamId]);
-    expect(backend.state.isStreamRemoved(streamId)).toBe(false);
+    setChildRoster(backend, parent, [oldChild]);
+
+    const childRemoval = backend.state.beginStreamRemoval(childStream);
+    const parentRemoval = backend.state.beginStreamRemoval(parent);
+    expect(backend.state.getStreamState(parent)?.subagents).toEqual([]);
+
+    backend.state.claimStreamIdentity(parent);
+    backend.state.claimStreamIdentity(childStream);
+    const newChild = childRosterRow(
+      childStream,
+      'new-execution' as ExecutionId,
+    );
+    backend.applyRunFact(parent, {
+      type: 'child.activity',
+      parentStreamId: parent,
+      items: [newChild],
+    });
+
+    expect(
+      backend.state.retireStreamTombstone(
+        childStream,
+        childRemoval.incarnation,
+      ),
+    ).toEqual({ retired: false, changedRosterParents: [] });
+    expect(
+      backend.state.retireStreamTombstone(parent, parentRemoval.incarnation),
+    ).toEqual({ retired: false, changedRosterParents: [] });
+    expect(backend.state.getStreamState(parent)?.subagents).toEqual([newChild]);
   });
 
   it('handles removeStream session facts before backend load', async () => {
@@ -271,12 +392,18 @@ describe('ProgressBackend', () => {
   it('refuses reserved stream identifiers before durable cleanup', async () => {
     const { backend } = createIsolatedRecordingBackend();
     const clearStream = vi.spyOn(backend.state, 'clearStream');
+    const stream = '' as StreamTabId;
+    const parent = 'reserved-command-parent' as StreamTabId;
+    const child = childRosterRow(stream);
+    setChildRoster(backend, parent, [child]);
 
-    await backend.deleteStream('' as StreamTabId);
+    await backend.deleteStream(stream);
     await backend.deleteStream('.' as StreamTabId);
     await backend.deleteStream('..' as StreamTabId);
 
     expect(clearStream).not.toHaveBeenCalled();
+    expect(backend.state.isStreamRemoved(stream)).toBe(false);
+    expect(backend.state.getStreamState(parent)?.subagents).toEqual([child]);
   });
 
   it('clears retry UI when stopping without deleting', async () => {
@@ -1134,17 +1261,38 @@ describe('ProgressBackend', () => {
     );
     backendRef.current = backend;
     const stream = 'retained-stream' as StreamTabId;
+    const parent = 'retained-command-parent' as StreamTabId;
+    const child = childRosterRow(stream);
+    const before = childRosterRow('retained-before' as StreamTabId);
+    const after = childRosterRow('retained-after' as StreamTabId);
+    const roster = [before, child, after];
     backend.state.streamLogs.ensureStream(stream);
-    vi.spyOn(backend.state, 'clearStream').mockResolvedValueOnce('failed');
+    setChildRoster(backend, parent, roster);
+    const badgesChanged = vi
+      .spyOn(backend.renderer, 'onBadgesChanged')
+      .mockImplementationOnce(() => {
+        throw new Error('renderer unavailable during roster scrub');
+      });
+    const clearStream = vi
+      .spyOn(backend.state, 'clearStream')
+      .mockResolvedValueOnce('failed');
 
     await backend.deleteStream(stream);
 
+    expect(clearStream).toHaveBeenCalledWith(stream, {
+      expectedIncarnation: 0,
+    });
     expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
     expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
       syncActiveStream: true,
     });
     expect(selectableAtRebuild).toContainEqual([stream]);
     expect(backend.state.isStreamRemoved(stream)).toBe(false);
+    expect(backend.state.getStreamState(parent)?.subagents).toEqual(roster);
+    expect(badgesChanged).toHaveBeenCalledWith(parent, {
+      subagents: [before, after],
+    });
+    expect(badgesChanged).toHaveBeenCalledWith(parent, { subagents: roster });
     expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(0, 1);
   });
 

@@ -473,7 +473,9 @@ export function createChatSessionController(
             },
             onIdle: () => {
               if (!session.streamId) return;
-              syncStreamLog(session.streamId, { forceFinal: true });
+              syncStreamLog(runtimeSession, session.streamId, {
+                forceFinal: true,
+              });
             },
           },
         ),
@@ -481,7 +483,7 @@ export function createChatSessionController(
       .then((result) => {
         session.runExitCode = runOutcomeExitCode(result.outcome);
         if (result.streamId) {
-          syncStreamLog(result.streamId, { forceFinal: true });
+          syncStreamLog(runtimeSession, result.streamId, { forceFinal: true });
         }
         notify('agentFinished');
       })
@@ -574,7 +576,7 @@ export function createChatSessionController(
       // the slice and drops the retired mark so `syncStreamLog` and
       // `focusStream` accept it again.
       patchStream(resolution.streamId, (slice) => ({ ...slice }));
-      syncStreamLog(resolution.streamId);
+      syncStreamLog(runtimeSession, resolution.streamId);
       focusStream(resolution.streamId);
       // Re-reconcile now that focus has moved: a stale in-flight preload for the
       // previous stream that re-added it during the awaited load above is cleared
@@ -640,7 +642,7 @@ export function createChatSessionController(
    */
   const settleResumedTurn = (outcome: TurnOutcome): void => {
     if (session.streamId) {
-      syncStreamLog(session.streamId, { forceFinal: true });
+      syncStreamLog(runtimeSession, session.streamId, { forceFinal: true });
     }
     session.runExitCode = runOutcomeExitCode(outcome);
     if (outcome !== STREAM_PHASE.WAITING) {

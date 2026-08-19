@@ -1218,17 +1218,23 @@ describe('createChatSessionController', () => {
     // this harness's storage-less platform now fails loudly (KVStore no
     // longer converts I/O errors into misses), which resume() treats as a
     // rehydration failure by contract.
-    const ctrl = createChatSessionController(
-      makeInit({ session, snapshotStore: makeResumeSnapshotStore({}) }),
-    );
+    const init = makeInit({
+      session,
+      snapshotStore: makeResumeSnapshotStore({}),
+    });
+    const ctrl = createChatSessionController(init);
 
     await ctrl.resume('exec-resume' as ExecutionId, makeResolvedResume());
     await session.runPromise;
 
     expect(session.runExitCode).toBe(CliExitCode.Success);
-    expect(mocks.syncStreamLog).toHaveBeenCalledWith('stream-resume', {
-      forceFinal: true,
-    });
+    expect(mocks.syncStreamLog).toHaveBeenCalledWith(
+      init.runtimeSession,
+      'stream-resume',
+      {
+        forceFinal: true,
+      },
+    );
     expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
   });
 
@@ -1513,9 +1519,8 @@ describe('createChatSessionController', () => {
         return true;
       },
     );
-    const ctrl = createChatSessionController(
-      makeInit({ session, snapshotStore }),
-    );
+    const init = makeInit({ session, snapshotStore });
+    const ctrl = createChatSessionController(init);
 
     await expect(ctrl.tryResumeStream('stream-1')).resolves.toBe(true);
 
@@ -1532,9 +1537,11 @@ describe('createChatSessionController', () => {
     expect(resumeOptions?.canAcquireResumeLease?.()).toBe(true);
     session.stopRequested = true;
     expect(resumeOptions?.canAcquireResumeLease?.()).toBe(false);
-    expect(mocks.syncStreamLog).toHaveBeenCalledWith('stream-1', {
-      forceFinal: true,
-    });
+    expect(mocks.syncStreamLog).toHaveBeenCalledWith(
+      init.runtimeSession,
+      'stream-1',
+      { forceFinal: true },
+    );
     expect(rootStreamId.get()).toBe('stream-1');
     expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
     expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
