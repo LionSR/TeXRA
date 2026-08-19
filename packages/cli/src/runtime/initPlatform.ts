@@ -73,6 +73,8 @@ function logAt(
   writeTextStderr(`[${level}] [${channel}] ${message}`);
 }
 
+// Malformed project config is actionable degradation, not routine progress
+// noise, so this deliberately bypasses quietLogs.
 function showPersistentConfigWarning(message: string): void {
   writeTextStderr(`[warn] [cli.config] ${message}`);
 }
