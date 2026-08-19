@@ -39,7 +39,6 @@ import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 import {
-  logErrorMessage,
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';

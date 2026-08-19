@@ -309,22 +309,6 @@ function envValue(
   return isNonEmptyString(value) ? value : undefined;
 }
 
-function pickEnum<T extends string>(
-  candidates: readonly (string | undefined)[],
-  allowed: readonly T[],
-  fallback: T,
-  warnings: string[],
-  label: string,
-): T {
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    if ((allowed as readonly string[]).includes(candidate))
-      return candidate as T;
-    warnings.push(`Ignoring invalid ${label} "${candidate}".`);
-  }
-  return fallback;
-}
-
 function pickEnvModel(
   env: Record<string, string | undefined>,
   warnings: string[],
@@ -412,20 +396,23 @@ export async function buildCliContext(
       `Ignoring invalid TEXRA_APPROVAL_POLICY "${candidate}".`,
     );
   }
+  let outputFormat: CliOutputFormat = 'text';
+  for (const candidate of [
+    init.globalArgs.outputFormat,
+    envValue(env, 'TEXRA_OUTPUT_FORMAT'),
+    loadedConfig.values.outputFormat,
+  ]) {
+    if (!candidate) continue;
+    if ((CLI_OUTPUT_FORMATS as readonly string[]).includes(candidate)) {
+      outputFormat = candidate as CliOutputFormat;
+      break;
+    }
+    configWarnings.push(`Ignoring invalid TEXRA_OUTPUT_FORMAT "${candidate}".`);
+  }
   return {
     cwd,
     mode: cliMode(init.globalArgs, ambient),
-    outputFormat: pickEnum(
-      [
-        init.globalArgs.outputFormat,
-        envValue(env, 'TEXRA_OUTPUT_FORMAT'),
-        loadedConfig.values.outputFormat,
-      ],
-      CLI_OUTPUT_FORMATS,
-      'text',
-      configWarnings,
-      'TEXRA_OUTPUT_FORMAT',
-    ),
+    outputFormat,
     approvalPolicy,
     quietLogs: init.globalArgs.quiet === true,
     stdoutIsTty: ambient.stdoutIsTty,

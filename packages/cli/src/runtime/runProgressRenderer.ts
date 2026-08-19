@@ -264,7 +264,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     return this.rootStreamId === streamId;
   }
 
-  isRootStream(streamId: StreamTabId): boolean {
+  private isRootStream(streamId: StreamTabId): boolean {
     return this.rootStreamId === streamId;
   }
 

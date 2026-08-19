@@ -94,7 +94,7 @@ export function runnableCliModelAccessEntries(
   return models.filter((entry) => entry.available);
 }
 
-function formatCliNoRunnableModelsRecovery(
+export function formatCliNoAvailableModelsRecovery(
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
   const configureKeyAction =
@@ -105,7 +105,7 @@ function formatCliNoRunnableModelsRecovery(
 export function formatCliNoRunnableModelsMessage(
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
-  return `${NO_RUNNABLE_MODEL_ACCESS_COPY}. ${formatCliNoRunnableModelsRecovery(options)}`;
+  return `${NO_RUNNABLE_MODEL_ACCESS_COPY}. ${formatCliNoAvailableModelsRecovery(options)}`;
 }
 
 function formatModelAccessStatus(model: ModelOptionData): string {
@@ -163,12 +163,6 @@ export function emptyModelListMessage(
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
   return formatCliNoRunnableModelsMessage(options);
-}
-
-export function formatCliNoAvailableModelsRecovery(
-  options: CliNoAvailableModelsRecoveryOptions = {},
-): string {
-  return formatCliNoRunnableModelsRecovery(options);
 }
 
 function toCliModelAccess(model: ModelOptionData): CliModelAccess {

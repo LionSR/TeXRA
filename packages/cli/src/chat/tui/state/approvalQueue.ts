@@ -85,7 +85,6 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   readonly rejectionReason?: string;
   /** Session bypass to activate before accepting this approval. */
   readonly bypass?: ApprovalBypassKind;
-  /** Credential mode to apply before accepting this approval. */
   /** Turn off the matching quota-fallback preference before accepting. */
   readonly disableQuotaRoute?: QuotaFallbackRouteId;
   /** Plan-only approval action when plain approve/reject is not specific enough. */
@@ -97,12 +96,12 @@ export interface PendingApproval {
   readonly decide: (decision: ApprovalDecision) => void;
 }
 
-export interface ApprovalQueueStatus {
+interface ApprovalQueueStatus {
   readonly depth: number;
   readonly kind: ApprovalQueueStatusKind;
 }
 
-export interface EnqueueApprovalOptions {
+interface EnqueueApprovalOptions {
   /** Called with the payload as presented, once, when the entry becomes the
    *  foreground modal. */
   readonly onPresent?: (payload: ApprovalPayload) => void;
