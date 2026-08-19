@@ -94,7 +94,6 @@ export function buildToolUseDetails(opts: {
   extraClasses?: ClassInfo;
   extraContent?: TemplateResult;
 }): TemplateResult {
-  const fullTimestamp = new Date(opts.row.timestamp).toISOString();
   const classes: ClassInfo = {
     'banner-details': true,
     'tool-use-details': true,
@@ -102,7 +101,7 @@ export function buildToolUseDetails(opts: {
     ...opts.extraClasses,
   };
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title', extraContent: opts.extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)} data-group-id=${ifDefined(opts.row.groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${opts.content}</div></wa-details>`;
+  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title', extraContent: opts.extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)} data-group-id=${ifDefined(opts.row.groupId)}>${opts.content}</div></wa-details>`;
 }
 
 type ToolSectionOptions = {
