@@ -10,6 +10,7 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
+import { codingPlanForUsageSetting } from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchSettingsViewInbound,
@@ -272,6 +273,9 @@ export function createDesktopSettingsIpc(
       await options.credentialSettingsController.refreshAfterProviderSettingChange(
         key,
       );
+    }
+    if (codingPlanForUsageSetting(key) !== undefined) {
+      await options.credentialSettingsController.postSubscriptionUsage();
     }
   }
 
