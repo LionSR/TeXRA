@@ -41,6 +41,10 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
+import {
   ALL_SETTINGS,
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_NAME,
@@ -698,6 +702,30 @@ describe('/config slash command wiring', () => {
 
     const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
     expect(props.readValue?.(markCommits)).toBe(false);
+  });
+
+  // Regression: `/config` used to persist `texra.approvalPolicy` with a bare
+  // `writeSetting`, so the stored value changed while the running session and
+  // the status bar kept enforcing the old policy.
+  it('applies an approval-policy write to the live session, not just the store', async () => {
+    const { stores, config } = makeFakeSettingsStores();
+    const applied: TexraApprovalPolicy[] = [];
+    registerBuiltinSlashCommands({
+      getConfigStores: () => stores,
+      onApprovalPolicySelect: (policy) => {
+        applied.push(policy);
+      },
+    });
+    openCliSlashCommandForm('config', '');
+    const props = renderConfigFormProps();
+
+    await props.writeValue?.(
+      entryByKey(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
+      'yolo',
+    );
+
+    expect(config.get(TEXRA_APPROVAL_POLICY_CONFIG_KEY, 'ask')).toBe('yolo');
+    expect(applied).toEqual(['yolo']);
   });
 
   it('persists writes through the accessor to the CLI store', async () => {
