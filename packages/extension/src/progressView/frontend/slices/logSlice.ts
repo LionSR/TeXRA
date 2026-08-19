@@ -4,7 +4,6 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  isToolUseState,
   type ProgressViewOutboundHandlerRegistry,
   type StreamLogEntry,
   type StreamLogTextDelta,
@@ -125,21 +124,19 @@ function applyEntry(
   streamState: StreamState,
   executionLabels: ExecutionLabels,
 ): EntryResult {
-  if (entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS) {
-    if (!isToolUseState(streamState)) return NO_CHANGE;
-    streamState.activeSkills = entry.data.skills;
-    return { logChanged: false, stateChanged: true, updatedIndices: [] };
-  }
-
   const compactionResult = syncCompactionProjectionChanges(
     streamLogs,
     applyCompactionActivityEntries(streamLogs.compactionProjection, [entry]),
   );
   // Internal records remain diagnostic-only. Raw compaction lifecycle records
-  // are replaced by the correlated stable row projected above.
+  // are replaced by the correlated stable row projected above. An active-skills
+  // snapshot projects no row either (`projectTranscriptRow`); this host has no
+  // surface for it, so it is not retained here — the durable transcript is
+  // where a reader goes for it (the CLI's `/status` does exactly that).
   if (
     entry.messageType === MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY ||
-    entry.messageType === MESSAGE_TYPES.INTERNAL
+    entry.messageType === MESSAGE_TYPES.INTERNAL ||
+    entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS
   ) {
     return { ...compactionResult, stateChanged: false };
   }

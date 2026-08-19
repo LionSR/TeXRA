@@ -23,6 +23,11 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Subagent stop preferences follow you between projects** — "Keep subagents
+  running" and "Allow orchestrator cancellation" are your preferences, not a
+  property of one folder, so they are now stored once per user and honored
+  everywhere. A value saved before this change is not carried over: set it
+  again if you had changed it, and the log says so when it finds one.
 - **GPT-5.6 ChatGPT-subscription sessions use the same 272k input budget as GPT-5.5** —
   matching the current Codex catalog, so history is compacted before the
   unofficial backend rejects a turn.
@@ -97,6 +102,15 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Usage telemetry is actually delivered** — the desktop app never started its
+  usage-log service, so the toggle in Settings collected entries that were
+  dropped at quit whenever fewer than ten had accumulated, and every entry
+  lacked its app name and version. Desktop now starts and drains the service
+  like the other surfaces.
+- **Retired models are swept from the desktop model list** — the startup
+  reconciliation the extension and CLI already ran now runs on desktop too, so
+  retired models leave the enabled list and stale Copilot route preferences are
+  cleared instead of failing later.
 - **Follow-up polish revises text again** — the desktop polish action no longer
   silently returns the original draft; it now applies the same bundled prompt
   template the extension uses.
@@ -116,6 +130,12 @@ All notable changes to this project will be documented in this file.
 
 #### Features
 
+- **`/status` lists the skills in effect** — a tool-use session now shows which
+  agent skills were loaded for the run, the same fact the transcript already
+  recorded.
+- **`/config` can toggle orchestrator cancellation** — "Allow orchestrator
+  cancellation" joins "Keep subagents running" in the CLI settings panel
+  instead of being editable only in the GUI surfaces.
 - **`/config` can store a GitHub token** — set, replace, or remove the personal
   access token used by GitHub subscriptions without leaving the CLI.
 - **`texra agents show` omits access-group tags** — remote agent details no

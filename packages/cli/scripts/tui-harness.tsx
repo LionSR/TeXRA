@@ -2314,6 +2314,8 @@ function appendHarnessStatus(): void {
       approvalBypasses: slice?.bypass,
       status: slice?.status,
       goal: GoalStore.getForStream(streamId),
+      // The harness never emits an ACTIVE_SKILLS snapshot.
+      activeSkills: [],
       queuedFollowUpMessages: defaultSession().followUps.getAll(streamId),
     }),
   );

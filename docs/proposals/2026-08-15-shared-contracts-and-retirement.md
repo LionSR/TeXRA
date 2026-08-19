@@ -32,14 +32,30 @@
 > dated-horizon retirements (#10601, #10887, #10888, #10890). §2.9 was
 > **counter-ruled** — see the row. What remains genuinely open: §2.2 item 3
 > (the CLI's own `ApprovalPayload` union), `SettingsCredentialActions` (§2.5),
-> the desktop `UsageLogService` / `refreshModelListStateIfNeeded` bootstrap
-> gaps (§2.5 / audit V2 — and `refreshModelListStateIfNeeded` is now
-> production-dead on _every_ host, which is worse than this doc claimed), and
-> §4b projection-zero, still gated on two supersessions the maintainer has not
-> granted. One stray from the §2.5 sweep worth a follow-up:
+> and §4b projection-zero, still gated on two supersessions the maintainer has
+> not granted. One stray from the §2.5 sweep worth a follow-up:
 > `SET_CHATGPT_PREFER_SUBSCRIPTION` survived the literal collapse. Read §7.6's
 > arithmetic as superseded — Wave D is withdrawn (substrate doc §7) and Wave
 > A's per-file nets came in well short of the table.
+
+> **Second reconciliation (2026-08-19, origin/main `82cc8b089d`).** §2.1's
+> **maintainer ruling is now EXECUTED**: `DETACH_SUBAGENTS_ON_STOP` and
+> `ALLOW_ORCHESTRATOR_KILL` are `slots: sameSlot('globalState')` rows keyed off
+> `GlobalStateKey`, both runtime readers read `platform().globalState`, and the
+> extension's `WORKTREE_SHARED_KEYS` no longer lists them — the
+> Memento-vs-shared split is closed for this class. Values left in the old
+> `workspaceState` slot are **abandoned, not migrated**, and each reader warns
+> once naming the key (`warnAbandonedSlotValue`). The desktop `UsageLogService`
+> bootstrap gap (§2.5 / audit V2) is also closed.
+>
+> **One claim in the block above is REFUTED.**
+> `refreshModelListStateIfNeeded` was never "production-dead on every host": it
+> has two live production callers at HEAD — `packages/extension/src/extension.ts`
+> and `packages/cli/src/runtime/initPlatform.ts` — and no commit in available
+> history removes either. The original V2 framing (desktop-only gap) was
+> correct; the escalation was a `src/`-only grep that missed `packages/`.
+> Desktop now calls it at platform init, so the row is closed on all three
+> hosts.
 
 Method: four sweeps on a fresh origin/main worktree — contract-surface
 census, dead-code/retirement hunt, catalog-fragmentation study
@@ -356,10 +372,16 @@ both hosts' handler entries — but the sweep left
 `SettingsCredentialActions` was never written:
 `src/controllers/settingsView/backend/` still holds only `SettingsAgentActions`,
 so the ~140/~180/19 L credential wiring and the CLI-only `sk-xxxxxx` rejection
-stand. The two desktop bootstrap gaps are unchanged and one is now worse —
-`refreshModelListStateIfNeeded` has **no production caller on any host**, so
-retired-model sweeps and stale-route clears run nowhere, not just not on
-desktop.
+stand.
+
+**Third item LANDED (2026-08-19).** Both desktop bootstrap gaps are closed in
+`initializeElectronPlatform`: `UsageLogService.initialize({}, app.getVersion(),
+'desktop')` with a BEFORE-phase `dispose()`, and `refreshModelListStateIfNeeded`
+against the desktop `globalState` store, in the CLI's ordering. The escalation
+recorded here — that `refreshModelListStateIfNeeded` had "no production caller
+on any host" — is **REFUTED**: it had two (`extension.ts`, CLI
+`initPlatform.ts`), both live and both untouched by any commit in available
+history. The original desktop-only framing was right.
 
 ### 2.6 "A stream" — 11 schemas, mostly disciplined, four defects
 

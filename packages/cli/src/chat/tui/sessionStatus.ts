@@ -32,6 +32,8 @@ export interface CliSessionStatusInput {
   readonly substate?: StreamSubstate;
   readonly activeChildSessions?: number;
   readonly goal?: CliSessionGoalStatus | null;
+  /** Skill names in effect for the focused tool-use stream, newest snapshot. */
+  readonly activeSkills: readonly string[];
   readonly queuedFollowUpMessages: readonly string[];
   /** Root execution id, when a run has started. Surfaces the resume command
    *  mid-session instead of only in the exit hint. */
@@ -103,6 +105,9 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     }`,
     ...((input.activeChildSessions ?? 0) > 0
       ? [`active ${BACKGROUND_TASK.inlinePlural}: ${input.activeChildSessions}`]
+      : []),
+    ...(input.activeSkills.length > 0
+      ? [`skills: ${input.activeSkills.join(', ')}`]
       : []),
     ...(input.goal
       ? [

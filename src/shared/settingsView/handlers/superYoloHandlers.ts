@@ -18,7 +18,7 @@ import {
   type NumberSetting,
   type UpdateReliabilityAndOrchestrationMessage,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -56,17 +56,17 @@ function readChildRunConcurrencyBudget(config: ConfigProvider): number {
 export function buildReliabilityAndOrchestrationMessage(
   ports: ReliabilityAndOrchestrationHandlerPorts,
 ): UpdateReliabilityAndOrchestrationMessage {
-  const { workspaceState } = ports;
+  const { globalState } = ports;
   return {
     // Compatibility-pinned wire literal — see settingsView/data.ts.
     command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
     reliabilitySettings: ports.getReliabilitySettings(),
-    allowOrchestratorKill: workspaceState.get<boolean>(
-      WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+    allowOrchestratorKill: globalState.get<boolean>(
+      GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
       true,
     ),
-    detachSubagentsOnStop: workspaceState.get<boolean>(
-      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+    detachSubagentsOnStop: globalState.get<boolean>(
+      GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
       false,
     ),
     childRunConcurrencyBudget: readChildRunConcurrencyBudget(ports.config),
