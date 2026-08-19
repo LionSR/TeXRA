@@ -120,9 +120,10 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
 }
 
 /**
- * Format a plain log line as TemplateResult. Phase headings share the shape:
- * on this host they only reach the transcript when a stream keeps its
- * lifecycle inline rather than in the task-group surface.
+ * Format a plain log line as TemplateResult. `PhaseRow` shares the shape and is
+ * in the union to keep the row dispatch exhaustive; this host routes every
+ * phase heading to its task-group surface (see `logSlice`), so that arm is
+ * unreachable here today.
  */
 export function formatDefaultLogMessageTemplate(
   row: LogRow | PhaseRow,

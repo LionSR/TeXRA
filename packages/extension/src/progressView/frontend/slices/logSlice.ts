@@ -57,10 +57,7 @@ function syncRow(
   entry: StreamLogEntry,
   executionLabels: ExecutionLabels,
 ): Pick<EntryResult, 'logChanged' | 'updatedIndices'> {
-  const row = projectTranscriptRow(entry, {
-    executionLabels,
-    projectLifecycleToTaskGroups: true,
-  });
+  const row = projectTranscriptRow(entry, { executionLabels });
   const existingIndex = streamLogs.rowIndex.get(entry.id);
 
   if (!row) {
@@ -158,8 +155,12 @@ function applyEntry(
     stateChanged = true;
   }
 
-  // Run/round/phase headings are this host's task-group surface, not
-  // transcript rows.
+  // Every non-`LOG` entry stops here: run/round/session lifecycle *and* phase
+  // headings are this host's task-group surface, which `upsertTaskGroupFromStreamLog`
+  // above has already fed. That is a stronger rule than the projector's
+  // `projectLifecycleToTaskGroups`, which the CLI needs because it keeps phase
+  // rows inline — so this host never reaches row projection for them and never
+  // passes that flag.
   if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) {
     return { ...compactionResult, stateChanged };
   }
