@@ -135,6 +135,18 @@ describe('SettingsModelSelectionController', () => {
     );
   });
 
+  it('refuses to disable the last remaining model', async () => {
+    const globalState = new FakeStateStore({
+      [GlobalStateKey.ENABLED_MODELS]: ['gpt55'],
+    });
+    const controller = createController({ globalState });
+
+    await expect(
+      controller.setModelEnabled({ modelName: 'gpt55', enabled: false }),
+    ).rejects.toThrow(/at least one model/i);
+    expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual(['gpt55']);
+  });
+
   it('falls back to default models when the persisted enabled list is empty', async () => {
     const controller = createController({
       globalState: new FakeStateStore({ [GlobalStateKey.ENABLED_MODELS]: [] }),
