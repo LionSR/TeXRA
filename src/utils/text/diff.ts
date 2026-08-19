@@ -41,7 +41,7 @@ export function diffTextLevenshtein(oldText: string, newText: string): number {
  * Approximate added/removed line counts for run bookkeeping.
  *
  * Deliberately not the numbers shown beside a diff body: those come from
- * `hunkLineChanges` over the very hunks the reader sees.
+ * `computeLineChangeSummary`, folded over the very hunks the reader sees.
  */
 export function diffLineChanges(
   oldText: string,

@@ -27,7 +27,7 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { applyPatchToText } from '@utils/text/diff';
 import { buildDiffHunks, unifiedDiffText } from '@utils/text/unifiedDiff';
-import { isNonEmptyString } from '@utils/text/stringUtils';
+import { countLines, isNonEmptyString } from '@utils/text/stringUtils';
 
 /**
  * Tool-edit approval request / result shapes.
@@ -170,16 +170,19 @@ export function firstChangedLine(
   const [hunk] = buildDiffHunks(original, proposed);
   if (!hunk) return null;
 
+  const lastProposedLine = Math.max(countLines(proposed) - 1, 0);
   let line = hunk.newStart;
   for (const text of hunk.lines) {
     const marker = text.at(0);
-    if (marker === '+') return line - 1;
+    if (marker === '+') return Math.min(line - 1, lastProposedLine);
     // A deletion has no line of its own in the proposed text; reveal the
     // position it was removed from.
-    if (marker === '-') return Math.max(line - 1, 0);
+    if (marker === '-') {
+      return Math.min(Math.max(line - 1, 0), lastProposedLine);
+    }
     line += 1;
   }
-  return Math.max(hunk.newStart - 1, 0);
+  return Math.min(Math.max(hunk.newStart - 1, 0), lastProposedLine);
 }
 
 // ============================================================================
