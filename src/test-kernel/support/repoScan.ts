@@ -15,12 +15,12 @@ export const REPO_ROOT = resolve(
 );
 
 /** The four host production roots most architecture ratchets scan. */
-export const ALL_HOST_PRODUCTION_ROOTS = [
+export const ALL_HOST_PRODUCTION_ROOTS = Object.freeze([
   'packages/cli/src',
   'packages/desktop/src',
   'packages/extension/src',
   'src',
-] as const;
+] as const);
 
 export const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 
