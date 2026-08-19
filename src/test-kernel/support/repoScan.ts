@@ -7,10 +7,20 @@ import { readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { expect } from 'vitest';
+
 export const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
   '../../..',
 );
+
+/** The four host production roots most architecture ratchets scan. */
+export const ALL_HOST_PRODUCTION_ROOTS = Object.freeze([
+  'packages/cli/src',
+  'packages/desktop/src',
+  'packages/extension/src',
+  'src',
+] as const);
 
 export const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 
@@ -55,6 +65,15 @@ export function productionFilesUnder(root: string): string[] {
     repoRelative: true,
     excludeTestKernel: true,
   });
+}
+
+/** Guards against a silently-vacuous scan across `roots` matching none of `min`. */
+export function expectRealCoverage(roots: readonly string[], min = 100): void {
+  const scanned = roots.reduce(
+    (total, root) => total + productionFilesUnder(root).length,
+    0,
+  );
+  expect(scanned).toBeGreaterThan(min);
 }
 
 /** Drop comments so a prose mention like "do not import from 'vscode'" can't
