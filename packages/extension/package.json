@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your 24/7 AI Theorist.",
-  "version": "0.40.3",
+  "version": "0.40.4",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.125.0"
