@@ -25,6 +25,10 @@ All notable changes to this project will be documented in this file.
 - **Gemini 3.7 Flash is available** — the new Flash model replaces Gemini 3.6
   Flash in the default model list at half the price. Existing selections of
   older Flash models keep working while Google serves them.
+- **GLM-5.3 is available** — Zhipu's new flagship coding model replaces
+  GLM-5.2 in the default model list, with a 1M-token context, reasoning-effort
+  tiers, and prompt caching. Existing GLM-5.2 selections keep working while
+  the provider serves them.
 - **Lean Project remotes are available after sign-in** — the hosted Lean
   agents no longer need a special access group.
 - **Grok subscription quota can fall back to an xAI API key** — when a SuperGrok
