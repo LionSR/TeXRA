@@ -1125,7 +1125,7 @@
     "@typescript-eslint/parser": "^8.67.0",
     "@typescript/native": "npm:typescript@^7.0.2",
     "@vscode/vsce": "^3.9.2",
-    "concurrently": "^10.0.4",
+    "concurrently": "^10.0.5",
     "esbuild": "^0.28.2",
     "eslint": "^10.8.1",
     "eslint-plugin-import-x": "^4.17.1",
