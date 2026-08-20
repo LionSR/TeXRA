@@ -1,6 +1,7 @@
 // Local imports - shared utilities
 import { postMessage } from '@shared/hostBridge';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { appendClipboardImageChips } from '@shared/utils/clipboard';
 import { insertTextAtCursor } from '@shared/utils/textarea';
 import {
   clipboardImageFiles,
@@ -24,7 +25,7 @@ export async function handleImagePaste(
   // async yield, so read plain text before the file reads below.
   const pastedText = event.clipboardData?.getData('text/plain') || '';
 
-  const pastedImageText = await Promise.all(
+  const pastedImageNames = await Promise.all(
     images.map(async ({ file, type }) => {
       const fileName = generatePastedImageName(getExtensionFromMimeType(type));
       const base64 = await readFileAsBase64(file);
@@ -39,18 +40,14 @@ export async function handleImagePaste(
         mediaType: type,
         fileName,
       });
-      return `[${fileName}]`;
+      return fileName;
     }),
   );
 
-  const imageChips = pastedImageText.filter(Boolean).join(' ');
-  let insertText = pastedText;
-  if (imageChips) {
-    if (insertText && !insertText.endsWith(' ') && !insertText.endsWith('\n')) {
-      insertText += ' ';
-    }
-    insertText += imageChips;
-  }
+  const insertText = appendClipboardImageChips(
+    pastedText,
+    pastedImageNames.filter(Boolean),
+  );
 
   if (insertText) {
     insertTextAtCursor(target, insertText);
