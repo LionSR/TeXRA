@@ -20,21 +20,21 @@ shape, no structural refactor is warranted, and no genuinely redundant
 abstraction was found to remove.** The delta since `-08-19` is entirely in the
 right direction — the frozen host-import surface is one specifier narrower per
 host — and the intervening merges (child-run lifecycle fixes #11222, and
-two indirection-removing refactors #11182 unused content-provider contract,
-#11078 shared html/markdown) add no wrapper layers. A speculative edit into this
+two indirection-removing refactors #11215 unused content-provider contract,
+#11212 shared html/markdown) add no wrapper layers. A speculative edit into this
 tree with the verdict already green would be net-negative.
 
 ## 1. Every `-08-19` tracked fact re-verifies at `74fab00`
 
-| Item                                         | `-08-19` state                                | `74fab00` state                                                                                                                                              |
-| -------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **L-3** (dead redaction branch)              | closed; `redactSecrets` single-arg            | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                                   |
-| **§6a** delegation-layer cycle               | resolved; no lazy `await import()`            | **still resolved.** `0` `await import(` under `src/tools/delegation/`; `0` lazy imports of `nativeSubagentStrategy` anywhere in `src/`. Static imports only. |
-| **C-1** (ambient ALS in cycle)               | closed by #10594 (`ToolPolicy` field)         | **still closed.** `ToolPolicy` interface + `createToolPolicy` + `readonly toolPolicy` field present (`src/agent/core/flows/BaseFlowServices.ts:26,36,56`).   |
-| **§6b** in-process multi-tenancy             | deliberate; throws on 2nd platform            | **unchanged, correctly.** Guards intact (`packages/agent/src/index.ts:235,242,268,277`). Maintainer decision, not a seam.                                    |
-| **L-1 tail** (log-only `createChannelTrace`) | ~7 non-test call sites                        | **unchanged at 7** (grep over `src/`+`packages/`, test-excluded). Low-value tail, not a defect.                                                              |
-| **M-3** `ModelHandler.ts` god-base           | 2,032 LoC (merge base)                        | **2,068 LoC** (`wc -l`). Modest; genuinely shared behavior, a long-horizon port-narrowing note, not a discrete removal.                                      |
-| **Version**                                  | 0.40.3 (`runFact.` retirement gated on v0.41) | **still 0.40.3.** Not yet due.                                                                                                                               |
+| Item                                         | `-08-19` state                                | `74fab00` state                                                                                                                                               |
+| -------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **L-3** (dead redaction branch)              | closed; `redactSecrets` single-arg            | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                                    |
+| **§6a** delegation-layer cycle               | resolved; no lazy `await import()`            | **still resolved.** `0` `await import(` under `src/tools/delegation/`; `0` lazy imports of `nativeSubagentStrategy` anywhere in `src/`. Static imports only.  |
+| **C-1** (ambient ALS in cycle)               | closed by #10594 (`ToolPolicy` field)         | **still closed.** `ToolPolicy` interface + `createToolPolicy` + `readonly toolPolicy` field present (`src/agent/core/flows/BaseFlowServices.ts:26,36,56`).    |
+| **§6b** in-process multi-tenancy             | deliberate; throws on 2nd platform            | **unchanged, correctly.** Guard intact — `tryPlatform()` / throw-on-second-platform (`packages/agent/src/index.ts:240-246`). Maintainer decision, not a seam. |
+| **L-1 tail** (log-only `createChannelTrace`) | ~7 non-test call sites                        | **unchanged at 7** (grep over `src/`+`packages/`, test-excluded). Low-value tail, not a defect.                                                               |
+| **M-3** `ModelHandler.ts` god-base           | 2,032 LoC (merge base)                        | **2,068 LoC** (`wc -l`). Modest; genuinely shared behavior, a long-horizon port-narrowing note, not a discrete removal.                                       |
+| **Version**                                  | 0.40.3 (`runFact.` retirement gated on v0.41) | **still 0.40.3.** Not yet due.                                                                                                                                |
 
 ## 2. Frozen host deep-import width — narrowed one per host, no widening
 
