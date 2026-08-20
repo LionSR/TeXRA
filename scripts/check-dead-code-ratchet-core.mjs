@@ -1,4 +1,5 @@
 const EMPTY_COUNTS = { files: 0, exports: 0, types: 0, duplicates: 0 };
+const KNIP_KINDS = new Set(Object.keys(EMPTY_COUNTS));
 
 // Flattens knip's per-issue-file shape (`{ file, files, exports, types,
 // duplicates }`) into one finding per unused symbol, keyed by (file,
@@ -32,22 +33,61 @@ export function extractFindings(issues) {
   return findings;
 }
 
+function normalizeFinding(finding) {
+  if (finding.kind) {
+    return finding;
+  }
+  if (KNIP_KINDS.has(finding.category)) {
+    return { ...finding, category: 'unused', kind: finding.category };
+  }
+  return finding;
+}
+
+function knipFindingKey(finding) {
+  const normalized = normalizeFinding(finding);
+  return `${normalized.file} ${normalized.kind} ${normalized.name}`;
+}
+
+export function classifyFindings(normalFindings, productionFindings) {
+  const normalKeys = new Set(normalFindings.map(knipFindingKey));
+  return [
+    ...normalFindings.map((finding) => ({
+      file: finding.file,
+      category: 'unused',
+      kind: finding.category,
+      name: finding.name,
+    })),
+    ...productionFindings
+      .filter((finding) => !normalKeys.has(knipFindingKey(finding)))
+      .map((finding) => ({
+        file: finding.file,
+        category: 'production-dead',
+        kind: finding.category,
+        name: finding.name,
+      })),
+  ].toSorted(compareFindings);
+}
+
 export function findingKey(finding) {
-  return `${finding.file} ${finding.category} ${finding.name}`;
+  const normalized = normalizeFinding(finding);
+  return `${normalized.file} ${normalized.category} ${normalized.kind} ${normalized.name}`;
 }
 
 export function compareFindings(a, b) {
+  const normalizedA = normalizeFinding(a);
+  const normalizedB = normalizeFinding(b);
   return (
-    a.file.localeCompare(b.file) ||
-    a.category.localeCompare(b.category) ||
-    a.name.localeCompare(b.name)
+    normalizedA.file.localeCompare(normalizedB.file) ||
+    normalizedA.category.localeCompare(normalizedB.category) ||
+    normalizedA.kind.localeCompare(normalizedB.kind) ||
+    normalizedA.name.localeCompare(normalizedB.name)
   );
 }
 
 // Diffs by identity, not by count: a finding is "new" only if no baseline
-// entry shares its (file, category, name), and a baseline entry is
-// "resolved" only if nothing in the current run matches it. Both lists come
-// back sorted for stable, readable CLI output.
+// entry shares its (file, category, kind, name), and a baseline entry is
+// "resolved" only if nothing in the current result matches it. Legacy baseline
+// rows whose category is a Knip kind are interpreted as category "unused".
 export function diffFindings(current, baseline) {
   const baselineKeys = new Set(baseline.map(findingKey));
   const currentKeys = new Set(current.map(findingKey));
@@ -64,7 +104,7 @@ export function diffFindings(current, baseline) {
 export function countByCategory(findings) {
   const counts = { ...EMPTY_COUNTS };
   for (const { category } of findings) {
-    counts[category] += 1;
+    counts[category] = (counts[category] ?? 0) + 1;
   }
   return counts;
 }
