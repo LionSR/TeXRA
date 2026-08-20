@@ -23,13 +23,10 @@ import { cliProgressWriter, emitCliResult } from './output';
 
 export interface DefineSubscriptionAuthCommandOptions {
   readonly providerId: SubscriptionProviderId;
-  readonly commandName: string;
   readonly rootDescription: string;
   readonly loginDescription: string;
   readonly logoutDescription: string;
   readonly statusDescription: string;
-  /** Registered ndjson discriminator; the status record appends '-status'. */
-  readonly ndjsonKind: 'chatgpt-auth' | 'grok-auth';
   /**
    * Provider-specific login payload fields (Codex carries `accountId`; Grok
    * does not). Kept as explicit configuration so the difference stays visible
@@ -50,6 +47,8 @@ export function defineSubscriptionAuthCommand(
   options: DefineSubscriptionAuthCommandOptions,
 ): CommandDef<typeof GLOBAL_ARGS> {
   const provider = subscriptionProvider(options.providerId);
+  /** Registered ndjson discriminator; the status record appends '-status'. */
+  const ndjsonKind = `${options.providerId}-auth` as const;
 
   async function runLogin(
     context: CliContext,
@@ -78,7 +77,7 @@ export function defineSubscriptionAuthCommand(
     const signedIn = `Signed in with ${provider.displayName} as ${account.label}.`;
     emitCliResult(context, {
       json: payload,
-      ndjson: { kind: options.ndjsonKind, ...payload },
+      ndjson: { kind: ndjsonKind, ...payload },
       text: update.effective
         ? `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`
         : `${signedIn}\n${provider.displayName} subscription preference could not be enabled because a more specific setting overrides the config.`,
@@ -135,7 +134,7 @@ export function defineSubscriptionAuthCommand(
       };
       emitCliResult(context, {
         json: payload,
-        ndjson: { kind: options.ndjsonKind, ...payload },
+        ndjson: { kind: ndjsonKind, ...payload },
         text: subscriptionSignOutOutcomeMessage(options.providerId, update),
       });
       return CliExitCode.Success;
@@ -155,7 +154,7 @@ export function defineSubscriptionAuthCommand(
       const { label, ...status } = statusResult.value;
       emitCliResult(context, {
         json: status,
-        ndjson: { kind: `${options.ndjsonKind}-status`, ...status },
+        ndjson: { kind: `${ndjsonKind}-status`, ...status },
         text: status.signedIn
           ? `Signed in with ${provider.displayName} as ${label}.`
           : `Not signed in with ${provider.displayName}.`,
@@ -166,7 +165,7 @@ export function defineSubscriptionAuthCommand(
 
   return defineCommand({
     meta: {
-      name: options.commandName,
+      name: options.providerId,
       description: options.rootDescription,
     },
     args: { ...GLOBAL_ARGS },

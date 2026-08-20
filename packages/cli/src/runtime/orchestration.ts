@@ -89,7 +89,6 @@ export interface BuildCliOrchestrationItemsInput {
    */
   readonly history: readonly CliHistoryEntry[];
   readonly toolUseAgents: readonly AgentEntry[];
-  readonly includeMultiAgentLoginHint?: boolean;
   readonly modelAccess?: CliModelAccessStatus;
   readonly account?: CliAccountStatus;
   readonly presetLaunchBlockReason?: CliPresetLaunchBlockReason;

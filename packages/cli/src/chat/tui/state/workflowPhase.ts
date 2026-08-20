@@ -2,10 +2,6 @@
 
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import type { TranscriptRowOf } from '@shared/transcript';
-import {
-  formatWorkflowPhaseHeading,
-  type WorkflowPhaseHeading,
-} from '@shared/copy/workflowCall';
 
 import { currentWorkflowAttemptId, type StreamSlice } from './cliState';
 
@@ -17,7 +13,7 @@ import { currentWorkflowAttemptId, type StreamSlice } from './cliState';
 export function currentWorkflowPhaseHeading(
   slice: StreamSlice | undefined,
   category: AgentCategory | undefined,
-): WorkflowPhaseHeading | undefined {
+): TranscriptRowOf<'phase'> | undefined {
   if (!slice || category !== AgentCategory.Workflow) return undefined;
   const currentAttemptId = currentWorkflowAttemptId(
     slice.workflowAttemptId,
@@ -30,12 +26,7 @@ export function currentWorkflowPhaseHeading(
       (currentAttemptId === undefined ||
         (currentAttemptId !== null && row.attemptId === currentAttemptId)),
   );
-  if (!phase) return undefined;
-  return {
-    phaseLabel: phase.phaseLabel,
-    phaseIndex: phase.phaseIndex,
-    phaseTotal: phase.phaseTotal,
-  };
+  return phase;
 }
 
 /** Nearest workflow-script ancestor's current phase, walking parent links. */
@@ -44,16 +35,16 @@ export function ancestorWorkflowPhaseHeading(init: {
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-}): WorkflowPhaseHeading | undefined {
+}): TranscriptRowOf<'phase'> | undefined {
   let id: StreamTabId | undefined = init.streamId;
   const seen = new Set<StreamTabId>();
   while (id && !seen.has(id)) {
     seen.add(id);
-    const heading = currentWorkflowPhaseHeading(
+    const phase = currentWorkflowPhaseHeading(
       init.streams.get(id),
       init.categoryOf(id),
     );
-    if (heading) return heading;
+    if (phase) return phase;
     id = init.parentStream.get(id);
   }
   return undefined;
@@ -63,10 +54,10 @@ export function ancestorWorkflowPhaseHeading(init: {
 export function focusedSessionLocationText(init: {
   readonly isChildStream: boolean;
   readonly label: string;
-  readonly phaseHeading?: WorkflowPhaseHeading;
+  readonly phaseHeading?: string;
 }): string | undefined {
   if (!init.isChildStream) return undefined;
   return init.phaseHeading
-    ? `${formatWorkflowPhaseHeading(init.phaseHeading)} › ${init.label}`
+    ? `${init.phaseHeading} › ${init.label}`
     : init.label;
 }
