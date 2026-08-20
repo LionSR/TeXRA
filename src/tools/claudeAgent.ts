@@ -226,7 +226,7 @@ export async function runStreamedTurn(params: {
     model: params.model,
     permissionMode: params.permissionMode,
     effort: params.effort,
-    env: params.env,
+    env: { ...params.env, CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' },
     systemPrompt: { type: 'preset', preset: 'claude_code' },
     settingSources: ['user', 'project', 'local'],
   };
