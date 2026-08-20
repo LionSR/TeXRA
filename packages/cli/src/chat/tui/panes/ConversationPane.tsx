@@ -7,7 +7,6 @@ import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import {
-  formatWorkflowPhaseHeading,
   latestWorkflowCallsById,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
@@ -193,7 +192,7 @@ export function workflowRunStatusSummary(
   );
   const segments: WorkflowStatusSegment[] = [];
   if (phase) {
-    segments.push({ text: formatWorkflowPhaseHeading(phase), tone: 'muted' });
+    segments.push({ text: phase.heading, tone: 'muted' });
   }
   if (total > 0) {
     segments.push({ text: `${done}/${total} done`, tone: 'muted' });
