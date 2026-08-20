@@ -14,9 +14,6 @@ export abstract class BaseWebviewProvider {
   protected readonly _disposables = new DisposableStore();
   protected _viewDisposables = new DisposableStore();
 
-  protected abstract contentProvider: {
-    getHtmlContent(webview: vscode.Webview): string;
-  };
   protected abstract messageHandler: {
     handleMessage(
       message: unknown,
