@@ -26,12 +26,13 @@ export const mainViewStyles: CSSResult = css`
     min-height: 0;
   }
 
+  /* Delta over the shared viewHeaderLayoutStyles box (composed by MainApp
+     ahead of this sheet). The markup is rendered by the shared
+     renderViewHeader helper (@shared/wa/viewHeader), not this component's
+     own template, so a class-name grep of MainApp.ts alone will not find
+     it — do not delete this as dead code without checking there first. */
   .view-header {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
     padding: 0 var(--wa-space-3xs) var(--wa-space-2xs);
-    flex-shrink: 0;
   }
 
   .main-content {

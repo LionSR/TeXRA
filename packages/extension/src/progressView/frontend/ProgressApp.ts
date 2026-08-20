@@ -18,7 +18,11 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { Signal, SignalWatcher } from '@shared/signals';
-import { designTokens, viewTabStyles } from '@shared/styles';
+import {
+  designTokens,
+  viewTabStyles,
+  viewHeaderLayoutStyles,
+} from '@shared/styles';
 import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderViewHeader } from '@shared/wa/viewHeader';
@@ -75,7 +79,12 @@ const ProgressAppBase = SignalWatcher(
 @customElement('progress-app')
 export class ProgressApp extends ProgressAppBase {
   // Static 'styles' override lost through mixin type erasure; still works at runtime.
-  static styles = [designTokens, viewTabStyles, progressAppStyles];
+  static styles = [
+    designTokens,
+    viewTabStyles,
+    viewHeaderLayoutStyles,
+    progressAppStyles,
+  ];
 
   // --- Signal-based state ---
   // State lives at module scope in `progressState.ts` (PRD: docs/prds/2026-05-08-electron-shell-layout.md § 7.A)
