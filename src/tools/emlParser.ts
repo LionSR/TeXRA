@@ -2,7 +2,7 @@
 import PostalMime from 'postal-mime';
 
 // Local imports
-import { createHtmlToMarkdown } from '@tools/htmlToMarkdown';
+import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
 
 import type { Address, Attachment, Email } from 'postal-mime';
 
