@@ -221,7 +221,7 @@ function accessModeSegment(access: CliModelAccessRoute): StatusBarSegment {
 function subscriptionProbeFailureSegment(): StatusBarSegment {
   return {
     text: 'subscription status unavailable',
-    compactText: 'subscription unknown',
+    compactText: 'sub unknown',
     color: COLOR_WARNING,
     compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
   };
