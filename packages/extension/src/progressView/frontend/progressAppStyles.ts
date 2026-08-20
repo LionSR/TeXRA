@@ -23,13 +23,13 @@ export const progressAppStyles = css`
     overflow: hidden;
   }
 
+  /* Delta over the shared viewHeaderLayoutStyles box (composed by
+     ProgressApp ahead of this sheet). The markup is rendered by the shared
+     renderViewHeader helper (@shared/wa/viewHeader), not this component's
+     own template. */
   .view-header {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
     padding: var(--wa-space-2xs) var(--wa-space-2xs) 0;
     border-bottom: var(--border-thin) solid var(--color-border);
-    flex-shrink: 0;
   }
 
   /* The full-width view-header border is the single seam under the tab row.
