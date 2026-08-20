@@ -30,7 +30,8 @@ interface StreamTabInfoInputs {
  */
 export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const { streamId, metadata } = inputs;
-  const { identity, config } = metadata;
+  const { config, ...identityFields } = metadata;
+  const { identity } = identityFields;
 
   // A stream whose identity hasn't resolved yet (no `run.start` seen, no
   // durable record hydrated) has no RunIdentity to name it by. Its id's
@@ -72,19 +73,13 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const model = identity?.kind === 'agent' ? config?.model : undefined;
 
   return {
+    ...identityFields,
     name: streamId,
     label: identityName,
-    identity,
-    userFollowUpSupport: metadata.userFollowUpSupport,
-    agentCategory: metadata.agentCategory,
     model,
     modelLabel: model ? getRuntimeModelLabel(model) : undefined,
     command,
     isRemote,
-    creationTimestamp: metadata.creationTimestamp,
-    executionId: metadata.executionId,
-    parentStreamId: metadata.parentStreamId,
-    description: metadata.description,
     worktree,
   };
 }
