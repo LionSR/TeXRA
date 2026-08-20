@@ -20,6 +20,7 @@ import type {
   UpdateChatGptAuthStatusMessage,
   UpdateGrokAuthStatusMessage,
 } from '@shared/schemas';
+import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 
 import {
   withHandlerErrorHandling,
@@ -64,11 +65,11 @@ export class SubscriptionHandlers {
     const { displayName } = this.provider;
     await withHandlerErrorHandling(
       this.ctx,
-      `${displayName} sign-out failed`,
+      ACCOUNT_OUTCOME.signOutFailed(displayName),
       async () => {
         await this.provider.signOut();
         void vscode.window.showInformationMessage(
-          `Signed out of ${displayName}.`,
+          ACCOUNT_OUTCOME.signedOut(displayName),
         );
         await this.refreshState();
       },
