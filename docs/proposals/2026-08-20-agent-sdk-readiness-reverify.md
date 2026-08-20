@@ -36,6 +36,13 @@ tree with the verdict already green would be net-negative.
 | **M-3** `ModelHandler.ts` god-base           | 2,032 LoC (merge base)                        | **2,068 LoC** (`wc -l`). Modest; genuinely shared behavior, a long-horizon port-narrowing note, not a discrete removal.                                       |
 | **Version**                                  | 0.40.3 (`runFact.` retirement gated on v0.41) | **still 0.40.3.** Not yet due.                                                                                                                                |
 
+Also re-verified from `-08-19 §2`: the **L-2** process-global log sink remains
+module-singleton (`channels` / `mainOutputChannel` / `outputChannelFactory` /
+`outputSinksTrusted` at `src/logger/logUtils.ts:54-57`; `createRedactingSink` →
+`redactSecrets`) with no `platform().log` port — one facet of §6b, deliberate;
+and the logger-core line counts hold (logUtils 256 / redaction 101 /
+channelTrace 82).
+
 ## 2. Frozen host deep-import width — narrowed one per host, no widening
 
 `config/ratchets/host-agent-import-baseline.json` (distinct `@agent/*` deep-import
