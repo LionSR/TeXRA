@@ -34,6 +34,7 @@ import {
   type SettingsViewInboundHandlerRegistry,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
+import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -318,7 +319,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       });
       await provider.setPreferSubscription(true);
       await this.options.notifications.showInfoMessage(
-        `Signed in with ${provider.displayName} as ${account.label}.`,
+        ACCOUNT_OUTCOME.signedInAs(provider.displayName, account.label),
       );
     } catch (error) {
       await this.options.notifications.showErrorMessage(
@@ -406,11 +407,14 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     try {
       await provider.signOut();
       await this.options.notifications.showInfoMessage(
-        `Signed out of ${provider.displayName}.`,
+        ACCOUNT_OUTCOME.signedOut(provider.displayName),
       );
     } catch (error) {
       await this.options.notifications.showErrorMessage(
-        `${provider.displayName} sign-out failed: ${toErrorMessage(error)}`,
+        ACCOUNT_OUTCOME.signOutFailedWithReason(
+          provider.displayName,
+          toErrorMessage(error),
+        ),
       );
       this.options.onError(error);
     } finally {

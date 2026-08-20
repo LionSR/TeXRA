@@ -11,6 +11,7 @@ import {
   type SubscriptionSignInPresenter,
 } from '@controllers/modelAccess/subscriptionProviders';
 import type { ConfigTarget } from '@platform/interfaces';
+import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { tryOpenBrowser } from './browser';
@@ -165,5 +166,5 @@ export function subscriptionSignOutOutcomeMessage(
   result: CliSubscriptionSignOutResult,
 ): string {
   const { displayName } = subscriptionProvider(providerId);
-  return `Signed out of ${displayName}.\n${subscriptionSignOutPreferenceMessage(providerId, result)}`;
+  return `${ACCOUNT_OUTCOME.signedOut(displayName)}\n${subscriptionSignOutPreferenceMessage(providerId, result)}`;
 }

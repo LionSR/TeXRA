@@ -29,6 +29,7 @@ import {
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import {
+  ACCOUNT_OUTCOME,
   CHATGPT_AUTH,
   GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
@@ -192,10 +193,13 @@ export async function logoutFromChat(
   if (target === 'texra' || target === 'all') {
     try {
       await signOutCliSupabase();
-      lines.push(`Signed out of ${RESEARCHER_ACCESS.label}.`);
+      lines.push(ACCOUNT_OUTCOME.signedOut(RESEARCHER_ACCESS.label));
     } catch (error: unknown) {
       lines.push(
-        `${RESEARCHER_ACCESS.label} sign-out failed: ${toErrorMessage(error)}`,
+        ACCOUNT_OUTCOME.signOutFailedWithReason(
+          RESEARCHER_ACCESS.label,
+          toErrorMessage(error),
+        ),
       );
     }
   }
@@ -207,10 +211,12 @@ export async function logoutFromChat(
     try {
       const update = await signOutCliSubscription(providerId);
       refreshSubscriptionPreferenceViews();
-      lines.push(`Signed out of ${label}.`);
+      lines.push(ACCOUNT_OUTCOME.signedOut(label));
       lines.push(subscriptionSignOutPreferenceMessage(providerId, update));
     } catch (error: unknown) {
-      lines.push(`${label} sign-out failed: ${toErrorMessage(error)}`);
+      lines.push(
+        ACCOUNT_OUTCOME.signOutFailedWithReason(label, toErrorMessage(error)),
+      );
     }
   }
 
