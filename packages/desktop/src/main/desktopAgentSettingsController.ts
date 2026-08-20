@@ -11,16 +11,16 @@ import type {
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
-import {
-  AGENT_TEMPLATE_FILES,
-  DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
-  renderAgentTemplateString,
-} from '@agent/templates/agentTemplateRenderer';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
+import {
+  templateAgentCategoryLabel,
+  templateAgentNamePrompt,
+  writeTemplateAgentFile,
+} from '@controllers/settingsView/backend/templateAgentCreation';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -187,10 +187,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         }),
       showInfoMessage: notifications.showInfoMessage,
       showErrorMessage: notifications.showErrorMessage,
-      formatOpenAgentYamlError: (reason, name) =>
-        reason === 'missingAgent'
-          ? `Agent not found: ${name}`
-          : `No configuration file found for agent: ${name}`,
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
       run: async (command, failureMessage, action) => {
         if (
@@ -373,10 +369,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       return;
     }
 
-    const categoryLabel = data.category === 'toolUse' ? 'Tool Use' : 'Workflow';
     const name = await this.prompts.promptText({
-      title: `New ${categoryLabel} agent`,
-      prompt: `Enter a name for the new ${categoryLabel} agent (without .yaml extension)`,
+      title: `New ${templateAgentCategoryLabel(data.category)} agent`,
+      prompt: templateAgentNamePrompt(data.category),
     });
     if (!name) return;
 
@@ -396,28 +391,11 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         customDir,
       });
 
-      if (await AbsoluteFS.exists(plan.filePath)) {
-        await this.notifications.showErrorMessage(
-          `A file named "${plan.fileName}" already exists in the custom agents folder.`,
-        );
+      const written = await writeTemplateAgentFile(plan, this.resourcesPath);
+      if (!written.ok) {
+        await this.notifications.showErrorMessage(written.message);
         return;
       }
-
-      const raw = await AbsoluteFS.read(
-        path.join(
-          this.resourcesPath,
-          'templates',
-          AGENT_TEMPLATE_FILES[plan.templateKind],
-        ),
-      );
-      await AbsoluteFS.write(
-        plan.filePath,
-        renderAgentTemplateString(raw, {
-          AGENT_NAME: plan.baseName,
-          DESCRIPTION: plan.description,
-          TOOLS_YAML: DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
-        }),
-      );
 
       await this.directory.openPath(plan.filePath);
       await this.notifications.showInfoMessage(

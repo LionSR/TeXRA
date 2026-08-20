@@ -15,16 +15,15 @@ import {
   loadAgents,
   refresh as refreshAgents,
 } from '@agent/index';
-import {
-  AGENT_TEMPLATE_FILES,
-  DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
-  renderAgentTemplateString,
-} from '@agent/templates/agentTemplateRenderer';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
+import {
+  templateAgentNamePrompt,
+  writeTemplateAgentFile,
+} from '@controllers/settingsView/backend/templateAgentCreation';
 import type { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
@@ -99,10 +98,6 @@ export class AgentHandlers {
       showErrorMessage: async (message) => {
         await showLoggedMessage(this.ctx.channel, message);
       },
-      formatOpenAgentYamlError: (reason, name) =>
-        reason === 'missingAgent'
-          ? `Agent "${name}" could not be found. It may have been removed or renamed. Check the Agents tab in Settings to see available agents.`
-          : `No configuration file found for agent "${name}". The agent definition may be incomplete — try re-creating it from the Agents tab.`,
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
       run: (_command, failureMessage, action) =>
         withHandlerErrorHandling(this.ctx, failureMessage, action),
@@ -435,9 +430,8 @@ export class AgentHandlers {
       this.ctx,
       'Failed to create agent from template',
       async () => {
-        const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
         const name = await vscode.window.showInputBox({
-          prompt: `Enter a name for the new ${categoryLabel} agent (without .yaml extension)`,
+          prompt: templateAgentNamePrompt(category),
           placeHolder: 'my_agent',
           validateInput: (value) =>
             this.directoryController.validateTemplateName(value),
@@ -453,27 +447,15 @@ export class AgentHandlers {
           customDir,
         });
 
-        if (await AbsoluteFS.exists(templatePlan.filePath)) {
-          await vscode.window.showWarningMessage(
-            `A file named "${templatePlan.fileName}" already exists in the custom agents folder.`,
-          );
+        const written = await writeTemplateAgentFile(
+          templatePlan,
+          path.join(this.ctx.extensionContext.extensionPath, 'resources'),
+        );
+        if (!written.ok) {
+          await vscode.window.showWarningMessage(written.message);
           return;
         }
 
-        const templatePath = path.join(
-          this.ctx.extensionContext.extensionPath,
-          'resources',
-          'templates',
-          AGENT_TEMPLATE_FILES[templatePlan.templateKind],
-        );
-        const templateRaw = await AbsoluteFS.read(templatePath);
-        const template = renderAgentTemplateString(templateRaw, {
-          AGENT_NAME: templatePlan.baseName,
-          DESCRIPTION: templatePlan.description,
-          TOOLS_YAML: DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
-        });
-
-        await AbsoluteFS.write(templatePlan.filePath, template);
         const doc = await vscode.workspace.openTextDocument(
           vscode.Uri.file(templatePlan.filePath),
         );

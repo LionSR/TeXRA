@@ -23,7 +23,6 @@
       "@agent/index/platformAgentDirectories",
       "@agent/runtime",
       "@agent/storage",
-      "@agent/templates/agentTemplateRenderer",
       "@agent/trace"
     ],
     "extension": [
