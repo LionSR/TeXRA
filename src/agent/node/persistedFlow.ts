@@ -352,7 +352,6 @@ export class PersistedFlow<
    * so callers can use it directly without Object.assign.
    */
   protected async stepWithResult(): Promise<StepResult<S>> {
-    const key = flowKey(this.runId);
     const flow = await this.loadRecord();
 
     if (!flow) {
@@ -383,18 +382,11 @@ export class PersistedFlow<
     const next = waiting ? cursor : cursor.getNextNode(action);
     const nextNodeId = next ? this.idForNode(next) : null;
 
-    // Invalidate cache before mutation: if kv.write fails, the next read
-    // falls through to KVStore which has the correct pre-mutation state.
-    this.cachedRecord = null;
     flow.cursor = {
       nextNodeId,
       ...(action !== undefined ? { lastAction: action } : {}),
     };
-    flow.shared = this.serializeShared(shared);
-    await this.kv.write(key, stampFlowRecordSchemaVersion(flow));
-    this.cachedRecord = flow;
-    this.cachedSharedTrusted = true;
-    await this.fireProjection(shared);
+    await this.persistRecord(flow, shared);
 
     return {
       hasMore: !waiting,
@@ -494,22 +486,34 @@ export class PersistedFlow<
 
   /**
    * Persist new shared state (with an optional record mutation), keeping the
-   * in-memory cache consistent. The cache is invalidated before the write so a
-   * failed write falls back to the authoritative KVStore state on the next read.
+   * in-memory cache consistent.
    */
   private async commitShared(
     shared: S,
     mutate?: (flow: FlowRecord) => void,
   ): Promise<void> {
-    const key = flowKey(this.runId);
     const flow = await this.loadRecord();
     if (!flow) {
       throw new Error('Invalid or corrupted flow record');
     }
-    this.cachedRecord = null;
     mutate?.(flow);
+    await this.persistRecord(flow, shared);
+  }
+
+  /**
+   * Write `flow` (with `shared` serialized onto it) to the KV store and keep
+   * the in-memory cache and write-through projection consistent. Shared tail
+   * of every write path (stepWithResult, commitShared): the cache is
+   * invalidated before the write so a failed write falls back to the
+   * authoritative KVStore state on the next read.
+   */
+  private async persistRecord(flow: FlowRecord, shared: S): Promise<void> {
+    this.cachedRecord = null;
     flow.shared = this.serializeShared(shared);
-    await this.kv.write(key, stampFlowRecordSchemaVersion(flow));
+    await this.kv.write(
+      flowKey(this.runId),
+      stampFlowRecordSchemaVersion(flow),
+    );
     this.cachedRecord = flow;
     this.cachedSharedTrusted = true;
     await this.fireProjection(shared);

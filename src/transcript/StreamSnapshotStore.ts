@@ -822,11 +822,23 @@ export class StreamSnapshotStore {
     return rounds;
   }
 
+  // Shallow copies: each write is queued, so snapshot the record at call time
+  // rather than letting later round mutations leak into a pending write.
   private writeOutputFiles(stream: StreamTabId): void {
-    // Shallow copy: the write is queued, so snapshot the record at call time
-    // rather than letting later round mutations leak into a pending write.
     this.write(stream, STREAM_DATA_KEYS.OUTPUT_FILES, {
       ...this.records.get(stream)?.outputFiles,
+    });
+  }
+
+  private writeMissingOutputs(stream: StreamTabId): void {
+    this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {
+      ...this.records.get(stream)?.missingOutputs,
+    });
+  }
+
+  private writeCompileFailures(stream: StreamTabId): void {
+    this.write(stream, STREAM_DATA_KEYS.COMPILE_FAILURES, {
+      ...this.records.get(stream)?.compileFailures,
     });
   }
 
@@ -945,10 +957,7 @@ export class StreamSnapshotStore {
           this.getOrCreateRecord(stream),
           patch,
         ),
-      () =>
-        this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {
-          ...this.records.get(stream)?.missingOutputs,
-        }),
+      () => this.writeMissingOutputs(stream),
     );
   }
 
@@ -975,10 +984,7 @@ export class StreamSnapshotStore {
           this.getOrCreateRecord(stream),
           patch,
         ),
-      () =>
-        this.write(stream, STREAM_DATA_KEYS.COMPILE_FAILURES, {
-          ...this.records.get(stream)?.compileFailures,
-        }),
+      () => this.writeCompileFailures(stream),
     );
   }
 
@@ -2162,10 +2168,10 @@ export class StreamSnapshotStore {
           this.writeUsage(stream);
           break;
         case STREAM_DATA_KEYS.MISSING_OUTPUTS:
-          this.write(stream, key, { ...record.missingOutputs });
+          this.writeMissingOutputs(stream);
           break;
         case STREAM_DATA_KEYS.COMPILE_FAILURES:
-          this.write(stream, key, { ...record.compileFailures });
+          this.writeCompileFailures(stream);
           break;
         case STREAM_DATA_KEYS.WORK_PLAN:
           this.writeWorkPlan(stream, record.workPlan);

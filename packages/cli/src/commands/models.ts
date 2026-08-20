@@ -137,13 +137,22 @@ const modelsShowCommand = defineCliCommand({
   run: (context, ctx) => showModel(context, ctx.args.id),
 });
 
-async function listEnabledModels(context: CliContext): Promise<number> {
+/** Shared by `enabled`/`enable`/`disable`: init the platform or report the error. */
+async function initCliPlatformOrReport(
+  context: CliContext,
+): Promise<number | undefined> {
   try {
     await initCliPlatform({ ...context, quietLogs: true });
+    return undefined;
   } catch (error) {
     writeTextStderr(formatCliModelListError(error));
     return CliExitCode.ModelOrNetworkError;
   }
+}
+
+async function listEnabledModels(context: CliContext): Promise<number> {
+  const initError = await initCliPlatformOrReport(context);
+  if (initError !== undefined) return initError;
   const catalog = listCliEnabledModelCatalog();
   const enabled = getEnabledModels();
   emitCliResult(
@@ -171,12 +180,8 @@ async function setModelEnabled(
   id: string,
   enabled: boolean,
 ): Promise<number> {
-  try {
-    await initCliPlatform({ ...context, quietLogs: true });
-  } catch (error) {
-    writeTextStderr(formatCliModelListError(error));
-    return CliExitCode.ModelOrNetworkError;
-  }
+  const initError = await initCliPlatformOrReport(context);
+  if (initError !== undefined) return initError;
   try {
     const result = await setCliModelEnabled(id, enabled);
     emitCliResult(context, {

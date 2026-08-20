@@ -405,14 +405,20 @@ export function toggleSummaryBar(
   return { ...state, summaryBarVisible: !state.summaryBarVisible };
 }
 
+// Shared by the dimension setters below: every stored size is a rounded,
+// clamped pixel/percent value.
+function clampedDimension(value: number, min: number, max: number): number {
+  return clamp(Math.round(value), min, max);
+}
+
 export function setBottomPanelHeight(
   state: DesktopTaskShellState,
   height: number,
 ): DesktopTaskShellState {
   return {
     ...state,
-    bottomPanelHeight: clamp(
-      Math.round(height),
+    bottomPanelHeight: clampedDimension(
+      height,
       BOTTOM_PANEL_MIN_HEIGHT,
       BOTTOM_PANEL_MAX_HEIGHT,
     ),
@@ -425,11 +431,7 @@ export function setSidebarWidth(
 ): DesktopTaskShellState {
   return {
     ...state,
-    sidebarWidth: clamp(
-      Math.round(width),
-      SIDEBAR_MIN_WIDTH,
-      SIDEBAR_MAX_WIDTH,
-    ),
+    sidebarWidth: clampedDimension(width, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH),
   };
 }
 
@@ -439,8 +441,8 @@ export function setProjectSectionPosition(
 ): DesktopTaskShellState {
   return {
     ...state,
-    projectSectionPosition: clamp(
-      Math.round(position),
+    projectSectionPosition: clampedDimension(
+      position,
       PROJECT_SECTION_MIN_POSITION,
       PROJECT_SECTION_MAX_POSITION,
     ),
@@ -453,8 +455,8 @@ export function setWorkbenchWidth(
 ): DesktopTaskShellState {
   return {
     ...state,
-    workbenchWidth: clamp(
-      Math.round(width),
+    workbenchWidth: clampedDimension(
+      width,
       WORKBENCH_MIN_WIDTH,
       WORKBENCH_MAX_WIDTH,
     ),

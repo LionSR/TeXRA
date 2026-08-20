@@ -306,10 +306,6 @@ function webviewHosts(reader: string): SettingHonoredBy {
   return { vscode: { reader }, desktop: { reader } };
 }
 
-type SettingInput = Omit<StateSettingEntry, 'surfaces'> & {
-  readonly surfaces?: undefined;
-};
-
 type SurfacedSettingInput = Omit<
   StateSettingEntry,
   'surfaces' | 'description' | 'category'
@@ -318,11 +314,6 @@ type SurfacedSettingInput = Omit<
   readonly category: string;
   readonly surfaces: SettingSurfaces;
 };
-
-/** A row no catalog-driven UI renders: storage and runtime facts only. */
-function setting(entry: SettingInput): StateSettingEntry {
-  return entry;
-}
 
 /**
  * A row at least one settings UI renders. Display copy is required at the call
