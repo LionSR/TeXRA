@@ -3,6 +3,7 @@ import { formatError } from '@common/errors';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
   listGitHubSubscriptionEntries,
+  noActiveGitHubSubscriptionMessage,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
 import { appSignals } from '@eventBus/AppSignals';
@@ -35,6 +36,7 @@ import {
   GITHUB_TOKEN_REMOVED_MESSAGE,
   GITHUB_TOKEN_SAVED_MESSAGE,
   GITHUB_TOKEN_STORAGE_KEY,
+  gitHubTokenRejectedMessage,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
 import { StorageFS } from '@utils/files/storageFS';
@@ -358,7 +360,7 @@ export function createDesktopSettingsIpc(
     // Marking a stored token as rejected would need a new status on the wire.
     appSignals.on('githubTokenInvalid', ({ message }) =>
       runAsync(
-        options.ui.showErrorMessage(`GitHub token rejected: ${message}`),
+        options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
       ),
     ),
   );
@@ -381,7 +383,7 @@ export function createDesktopSettingsIpc(
     const removed = unsubscribeGitHubKey(data.key);
     if (removed === 0) {
       await options.ui.showInfoMessage(
-        `No active subscription for ${data.key}.`,
+        noActiveGitHubSubscriptionMessage(data.key),
       );
       return;
     }

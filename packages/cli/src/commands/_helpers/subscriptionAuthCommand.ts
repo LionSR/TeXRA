@@ -15,6 +15,7 @@ import {
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 
 import { withCliAuthError } from './cliAuthError';
 import { defineCliCommand } from './defineCliCommand';
@@ -74,7 +75,10 @@ export function defineSubscriptionAuthCommand(
       ...options.loginPayloadExtras?.(account),
       preferSubscription: update.effective,
     };
-    const signedIn = `Signed in with ${provider.displayName} as ${account.label}.`;
+    const signedIn = ACCOUNT_OUTCOME.signedInAs(
+      provider.displayName,
+      account.label,
+    );
     emitCliResult(context, {
       json: payload,
       ndjson: { kind: ndjsonKind, ...payload },
@@ -156,7 +160,7 @@ export function defineSubscriptionAuthCommand(
         json: status,
         ndjson: { kind: `${ndjsonKind}-status`, ...status },
         text: status.signedIn
-          ? `Signed in with ${provider.displayName} as ${label}.`
+          ? ACCOUNT_OUTCOME.signedInAs(provider.displayName, label)
           : `Not signed in with ${provider.displayName}.`,
       });
       return CliExitCode.Success;

@@ -11,6 +11,7 @@ import {
 } from '@controllers/modelAccess/subscriptionProviders';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
@@ -121,7 +122,7 @@ export async function signInWithSubscription(
 
   if (update.effective) {
     void vscode.window.showInformationMessage(
-      `Signed in with ${displayName} as ${account.label}. ${displayName} subscription is enabled for ${modelFamily}.`,
+      `${ACCOUNT_OUTCOME.signedInAs(displayName, account.label)} ${displayName} subscription is enabled for ${modelFamily}.`,
     );
     return true;
   }

@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 
 import {
   listGitHubSubscriptionEntries,
+  noActiveGitHubSubscriptionMessage,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
 import { SecretManager } from '@frontend/secretManager';
@@ -93,7 +94,7 @@ export class GitHubSubscriptionHandlers {
     const removed = unsubscribeGitHubKey(data.key);
     if (removed === 0) {
       void vscode.window.showInformationMessage(
-        `No active subscription for ${data.key}.`,
+        noActiveGitHubSubscriptionMessage(data.key),
       );
     }
   }
