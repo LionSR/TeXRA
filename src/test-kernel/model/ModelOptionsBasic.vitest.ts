@@ -150,7 +150,7 @@ describe('computeModelListVersion', () => {
   });
 
   it('preserves the established hash for the current preferred set', () => {
-    expect(MODEL_LIST_VERSION).toBe(80_458_026);
+    expect(MODEL_LIST_VERSION).toBe(3_975_990_547);
   });
 
   it('does not change when a non-preferred catalogue model retires', () => {

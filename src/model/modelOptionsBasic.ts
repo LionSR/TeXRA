@@ -49,7 +49,7 @@ export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   'kimi26T',
   'kimi3',
   // Current non-retired GLM flagship.
-  'glm52',
+  'glm53',
   // Current non-retired xAI flagship — API key or experimental Grok OAuth.
   'grok45',
 ];
