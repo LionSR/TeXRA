@@ -27,6 +27,7 @@ import { stopSpinnerMotion } from '@shared/wa/spinner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { copyWithFeedback } from '@shared/utils/clipboard';
 import { getBasename } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatBytes } from '@utils/text/stringUtils';
 
 // Local imports - formatter helpers
@@ -320,7 +321,10 @@ function highlightCode(text: string, language: string): string {
   try {
     // Returns HTML with syntax highlighting spans
     return hljs.highlight(text, { language, ignoreIllegals: true }).value;
-  } catch {
+  } catch (error) {
+    console.warn(
+      `[progressView] Syntax highlighting failed for ${language} (${text.length} chars); rendering plain text: ${toErrorMessage(error)}`,
+    );
     return text;
   }
 }
