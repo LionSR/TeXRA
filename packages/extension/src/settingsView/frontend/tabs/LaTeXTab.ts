@@ -639,7 +639,7 @@ export class LaTeXTab extends LitElement {
     const enabled = new Set(effective);
     const isCustom =
       effective.length !== opts.defaultValue.length ||
-      effective.some((value, index) => value !== opts.defaultValue[index]);
+      effective.some((value) => !opts.defaultValue.includes(value));
     return html`
       <div class="settings-row replacement-groups-row">
         <div class="settings-row-text">
