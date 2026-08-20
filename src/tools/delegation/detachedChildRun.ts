@@ -139,6 +139,7 @@ export async function startDetachedChildRunLoop<TTurn>(
   return runWithOwnedExecutionLeaseLaunchGuard(input.executionId, async () => {
     let childStream: ChildStream | undefined;
     let launch: DetachedChildRunLaunch<TTurn>;
+    let autoCloseOnLaunchFailure = false;
     let completion: Promise<void>;
     try {
       if (input.createChildStream) {
@@ -147,6 +148,7 @@ export async function startDetachedChildRunLoop<TTurn>(
       } else {
         launch = await input.buildLaunch();
       }
+      autoCloseOnLaunchFailure = launch.strategy.autoCloseChildStream === true;
       ({ completion } = startChildRunLoop({
         ...(childStream !== undefined && { childStream }),
         childStreamId: input.childStreamId,
@@ -172,6 +174,7 @@ export async function startDetachedChildRunLoop<TTurn>(
           await childStream.finalize({
             outcome: { kind: 'failed', error },
             persistence: { kind: 'finalize', flowRecord: 'delete' },
+            ...(autoCloseOnLaunchFailure && { autoClose: true }),
           });
         } catch (finalizeError) {
           throw new AggregateError(
