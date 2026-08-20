@@ -277,6 +277,11 @@ export type StreamIdentityFields = z.infer<typeof StreamIdentityFieldsSchema>;
  */
 export const StreamTabInfoSchema = StreamIdentityFieldsSchema.extend({
   name: z.string(),
+  /**
+   * Canonical display name. When `identity` is present, every producer must
+   * set this to `runIdentityDisplayName(identity)`. Only identity-less legacy
+   * or pending streams may use the stream-id-derived fallback.
+   */
   label: z.string(),
   model: z.string().optional(),
   modelLabel: z.string().optional(),
