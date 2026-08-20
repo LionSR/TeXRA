@@ -77,7 +77,7 @@ export const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * Host-neutral catalog for every TeXRA setting a host can store, honor, or
  * render.
  *
- * One row answers all four questions that used to be answered in six places:
+ * One row carries the catalog facts that used to be answered in six places:
  *
  * - **`slots`** — where each host stores the value (`config` /
  *   `workspaceState` / `globalState`). Replaces the old `store` + `cliStore`
@@ -86,6 +86,9 @@ export const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  *   file as evidence. Replaces `CLI_CORE_SETTING_PATHS`,
  *   `EXTENSION_ONLY_CORE_SETTING_PATHS`, and the reader-file registry that
  *   used to live in the guardrail suite as a third copy of the same knowledge.
+ * - **`writtenBy`** — exceptional host write evidence when a host must recognize
+ *   a config key that its runtime does not honor. This is not an exhaustive
+ *   writer catalog.
  * - **`surfaces`** — which catalog-driven *UI* renders the row (settings view,
  *   CLI `/config`, the Models tab's per-provider controls). Replaces the
  *   display half of the old `hosts` field, `settingsViewSnapshot`, and the
@@ -152,6 +155,15 @@ interface SettingHonor {
 /** Which hosts' runtimes honor the setting, and how that is known. */
 type SettingHonoredBy = {
   readonly [H in SettingHost]?: SettingHonor;
+};
+
+/** Evidence for an exceptional host write to a setting it does not honor. */
+interface SettingWriter {
+  readonly writer: string;
+}
+
+type SettingWrittenBy = {
+  readonly [H in SettingHost]?: SettingWriter;
 };
 
 /** One provider's control group in the Models tab. */
@@ -221,6 +233,11 @@ export interface StateSettingEntry {
   readonly configTarget?: 'global' | 'workspace';
   /** Which hosts' runtimes read the value, with the reading file as evidence. */
   readonly honoredBy: SettingHonoredBy;
+  /**
+   * Exceptional host writes that require config-key recognition even though
+   * that host's runtime does not honor the value. Not an exhaustive writer list.
+   */
+  readonly writtenBy?: SettingWrittenBy;
   /** Which catalog-driven UIs render the row. */
   readonly surfaces?: SettingSurfaces;
   /** Write-time consequences applied by every write path. */
@@ -587,11 +604,18 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
   'latexdiff.tempFileLocation': {
     honoredBy: everyHost('src/tools/approval/latexPreview.ts'),
   },
-  // Only the extension's git commands read the commit count, but the setup
-  // assistant's `update_config` tool writes it from any host, so a CLI-written
-  // value must not then be reported as unknown.
+  // Only the extension's git commands read the commit count. The setup
+  // assistant's host-neutral `update_config` writer is recorded separately so
+  // a CLI-written value is recognized without mislabeling the writer as a reader.
   'git.numberOfCommitsToShow': {
-    honoredBy: everyHost('src/tools/setup/ConfigTools.ts'),
+    honoredBy: {
+      vscode: {
+        reader: 'packages/extension/src/commands/git/gitCommands.ts',
+      },
+    },
+    writtenBy: {
+      cli: { writer: 'src/tools/setup/ConfigTools.ts' },
+    },
   },
   'agentReview.runOnCommit': {
     honoredBy: {
@@ -1538,12 +1562,14 @@ export const CLI_STATE_SETTINGS: readonly SurfacedSettingEntry[] =
   SURFACED_SETTINGS.filter((entry) => entry.surfaces.cliConfig === true);
 
 /**
- * Canonical `texra.*` keys the CLI reads from `.texra/config.json` — the
- * unknown-key whitelist's catalog half. Derived from the two facts that decide
- * it: the CLI's runtime honors the row, and the CLI's slot for it is `config`.
+ * Canonical `texra.*` keys the CLI reads or writes in `.texra/config.json` —
+ * the unknown-key whitelist's catalog half. A config-backed row belongs when
+ * the CLI runtime honors it or the catalog records an exceptional CLI writer.
  */
 export const CLI_CONFIG_SLOT_KEYS: readonly string[] = ALL_SETTINGS.filter(
-  (entry) => entry.honoredBy.cli !== undefined && entry.slots.cli === 'config',
+  (entry) =>
+    entry.slots.cli === 'config' &&
+    (entry.honoredBy.cli !== undefined || entry.writtenBy?.cli !== undefined),
 ).map((entry) => entry.key);
 
 /** Models tab controls for one provider, in catalog order. */
