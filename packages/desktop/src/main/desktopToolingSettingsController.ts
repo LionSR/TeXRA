@@ -1,5 +1,5 @@
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
+import type { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { appSignals } from '@eventBus/AppSignals';
 import { platform } from '@platform/platform';
@@ -9,6 +9,7 @@ import type {
   ToolCommandKind,
   ToolDashboardItem,
 } from '@shared/schemas';
+import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
@@ -56,7 +57,8 @@ interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePo
     run(command: string): Promise<void>;
   };
   readonly latexToolingController: LatexToolingController;
-  readonly latexConfigPersistenceController: LatexConfigPersistenceController;
+  /** @deprecated Test-only compatibility seam; production snapshots use the catalog. */
+  readonly latexConfigPersistenceController?: LatexConfigPersistenceController;
 }
 
 export interface DesktopToolingSettingsController {
@@ -117,9 +119,14 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
 
   postLatexConfigValues(): void {
     this.options.renderer.postToRenderer(
-      this.options.latexConfigPersistenceController.buildConfigMessage(
-        (key) => this.options.workspaceState.get(key),
-        platform().config,
+      buildSettingsSnapshotMessage(
+        'latex',
+        {
+          config: platform().config,
+          workspaceState: this.options.workspaceState,
+          globalState: this.options.globalState,
+        },
+        'desktop',
       ),
     );
   }
