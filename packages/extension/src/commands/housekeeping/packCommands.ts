@@ -50,8 +50,7 @@ export async function handlePack(config: PackConfig): Promise<void> {
   await runFileOp(config, {
     runSingle: runPackSingle,
     runMultiple: runPackMultiple,
-    runRunDir: (executionId, agent, model, inputFile) =>
-      runPackRunDir(executionId, agent, model, inputFile),
+    runRunDir: runPackRunDir,
     showResult: showPackResult,
   });
 }

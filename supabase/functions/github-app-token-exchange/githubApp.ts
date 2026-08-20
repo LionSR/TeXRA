@@ -46,7 +46,7 @@ async function githubJson<T>(path: string, token: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-export interface GitHubRepositoryIdentity {
+interface GitHubRepositoryIdentity {
   id: number;
   ownerId: number;
   defaultBranch: string;

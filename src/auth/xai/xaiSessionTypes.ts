@@ -57,12 +57,10 @@ export const XaiDeviceCodeSchema = z.object({
 });
 export type XaiDeviceCode = z.infer<typeof XaiDeviceCodeSchema>;
 
-export type XaiAuthErrorKind = SubscriptionOAuthErrorKind;
-
 export class XaiAuthError extends SubscriptionOAuthError {
   constructor(
     message: string,
-    kind: XaiAuthErrorKind,
+    kind: SubscriptionOAuthErrorKind,
     status?: number,
     options?: ErrorOptions,
   ) {
