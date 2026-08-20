@@ -14,10 +14,10 @@ import {
   retryTransientFetch,
   toFetchToolError,
 } from '@tools/timeouts';
-import { createHtmlToMarkdown } from '@tools/htmlToMarkdown';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
 
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
 const WEB_FETCH_RETRIES = 2;
