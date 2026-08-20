@@ -26,6 +26,14 @@ export const mainViewStyles: CSSResult = css`
     min-height: 0;
   }
 
+  .view-header {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    padding: 0 var(--wa-space-3xs) var(--wa-space-2xs);
+    flex-shrink: 0;
+  }
+
   .main-content {
     flex: 1;
     display: flex;
