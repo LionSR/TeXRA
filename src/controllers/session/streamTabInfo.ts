@@ -3,7 +3,11 @@ import { getStreamTabDisplayName } from '@agent/runtime/streamTab';
 import type { SessionStreamMetadata } from '@controllers/session/SessionState';
 import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
-import { getCleanAgentName, runIdentityDisplayName } from '@shared/schemas';
+import {
+  getCleanAgentName,
+  projectStreamIdentityFields,
+  runIdentityDisplayName,
+} from '@shared/schemas';
 
 interface StreamTabInfoInputs {
   streamId: string;
@@ -30,7 +34,8 @@ interface StreamTabInfoInputs {
  */
 export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const { streamId, metadata } = inputs;
-  const { config, ...identityFields } = metadata;
+  const { config } = metadata;
+  const identityFields = projectStreamIdentityFields(metadata);
   const { identity } = identityFields;
 
   // A stream whose identity hasn't resolved yet (no `run.start` seen, no

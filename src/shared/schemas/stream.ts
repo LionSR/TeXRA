@@ -266,6 +266,25 @@ const StreamIdentityFieldsSchema = z.object({
 });
 export type StreamIdentityFields = z.infer<typeof StreamIdentityFieldsSchema>;
 
+const STREAM_IDENTITY_FIELD_KEYS = Object.keys(
+  StreamIdentityFieldsSchema.shape,
+) as readonly (keyof StreamIdentityFields)[];
+
+/**
+ * Project a wider session record onto the canonical identity/pointer shape.
+ * Seed every declared key so optional `undefined` fields retain the stable wire
+ * shape that existing host patches expose, while Zod strips undeclared fields.
+ */
+export function projectStreamIdentityFields(
+  source: StreamIdentityFields,
+): StreamIdentityFields {
+  return StreamIdentityFieldsSchema.parse(
+    Object.fromEntries(
+      STREAM_IDENTITY_FIELD_KEYS.map((key) => [key, source[key]]),
+    ),
+  );
+}
+
 /**
  * One flat wire shape per stream tab. The parsed {@link RunIdentitySchema}
  * struct travels verbatim — renderers key on `identity.kind` instead of
