@@ -13,7 +13,6 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { StreamPhase, StreamTabId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
-import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { safeHomedir } from '@utils/system/platformPaths';
 
@@ -151,7 +150,7 @@ export function sessionHeaderIdentityLine(
       streamId: context.streamId,
       streams: context.streams,
     });
-    const phaseText = phase ? formatWorkflowPhaseHeading(phase) : undefined;
+    const phaseText = phase?.heading;
     return phaseText
       ? `${streamKind}: ${view.label} · ${phaseText} · parent: ${view.parentLabel} · model: ${model}`
       : `${streamKind}: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;

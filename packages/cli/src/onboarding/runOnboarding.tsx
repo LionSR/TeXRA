@@ -205,7 +205,6 @@ async function runOnboardingFlow(options: {
   readonly firstRun: boolean;
   readonly colorEnabled?: boolean;
 }): Promise<CliOnboardingResult> {
-  const picker = onboardingPicker(options);
   // `interactive`: both callers reject non-TTY output before reaching this
   // flow. Keep that product boundary authoritative when a real PTY also has CI
   // set; Ink otherwise disables interactive rendering from its CI heuristic.
@@ -214,8 +213,11 @@ async function runOnboardingFlow(options: {
   const chosen = await renderCliPrompt<OnboardingResolution>(
     (resolve) => (
       <OnboardingApp
-        pickerSubtitle={picker.subtitle}
-        pickerItems={picker.items}
+        pickerSubtitle={
+          options.firstRun
+            ? 'No provider API key is configured. Choose how to power model calls:'
+            : 'Choose how to power model calls:'
+        }
         onResolve={resolve}
       />
     ),
@@ -260,7 +262,6 @@ type Screen = 'picker' | 'chatgpt-progress' | 'key-provider' | 'key-entry';
 
 interface OnboardingAppProps {
   readonly pickerSubtitle: string;
-  readonly pickerItems: readonly OnboardingPickerItem[];
   readonly onResolve: (resolution: OnboardingResolution) => void;
 }
 
@@ -282,7 +283,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
     return (
       <PickerStep
         subtitle={props.pickerSubtitle}
-        items={props.pickerItems}
+        items={ONBOARDING_PICKER_ITEMS}
         error={error}
         onSelect={(choice) => {
           if (choice === 'skip') {
@@ -394,48 +395,24 @@ type OnboardingChoice = 'chatgpt' | 'key' | 'skip';
 type OnboardingSetupPath = Exclude<OnboardingChoice, 'skip'>;
 type OnboardingPickerItem = SelectItem<OnboardingChoice>;
 
-const SETUP_PATH_PICKER_ITEMS: Record<
-  OnboardingSetupPath,
-  OnboardingPickerItem
-> = {
-  chatgpt: {
+/** Every entry point offers the same credential paths, in this order. */
+const ONBOARDING_PICKER_ITEMS: readonly OnboardingPickerItem[] = [
+  {
     value: 'chatgpt',
     label: ONBOARDING_CHOICE_CHATGPT.label,
     description: ONBOARDING_CHOICE_CHATGPT.description,
   },
-  key: {
+  {
     value: 'key',
     label: ONBOARDING_CHOICE_API_KEY.label,
     description: ONBOARDING_CHOICE_API_KEY.description,
   },
-};
-
-const SKIP_PICKER_ITEM: OnboardingPickerItem = {
-  value: 'skip',
-  label: ONBOARDING_CHOICE_SKIP_LABEL,
-  description: 'Set up later with `texra setup`',
-};
-
-interface OnboardingPicker {
-  readonly subtitle: string;
-  readonly items: readonly OnboardingPickerItem[];
-}
-
-/** Picker copy for one entry point; both offer the same credential paths. */
-function onboardingPicker(props: {
-  readonly firstRun: boolean;
-}): OnboardingPicker {
-  return {
-    subtitle: props.firstRun
-      ? 'No provider API key is configured. Choose how to power model calls:'
-      : 'Choose how to power model calls:',
-    items: [
-      SETUP_PATH_PICKER_ITEMS.chatgpt,
-      SETUP_PATH_PICKER_ITEMS.key,
-      SKIP_PICKER_ITEM,
-    ],
-  };
-}
+  {
+    value: 'skip',
+    label: ONBOARDING_CHOICE_SKIP_LABEL,
+    description: 'Set up later with `texra setup`',
+  },
+];
 
 /** Screen each non-skip picker choice opens (skip resolves the gate instead). */
 const PICKER_CHOICE_SCREENS: Record<OnboardingSetupPath, Screen> = {
