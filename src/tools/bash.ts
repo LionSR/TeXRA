@@ -537,16 +537,16 @@ export class BashTool extends defineTool({
         // A background shell is an external process on no model budget, like
         // the agent-CLI children (see the child-run concurrency budget note).
         budgeted: false,
-        buildLaunch: async () => {
-          const childStream = createChildStream(executionId, parentStreamId, {
+        createChildStream: () =>
+          createChildStream(executionId, parentStreamId, {
             streamPrefix: BASH_CHILD_STREAM_PREFIX,
             run: { kind: 'process', tool: 'bash' },
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
             description: command,
             config: syntheticConfig,
-          });
+          }),
+        buildLaunch: async (childStream) => {
           return {
-            childStream,
             strategy: createBackgroundBashStrategy({
               executionId,
               command,
