@@ -598,7 +598,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   ): Promise<GoogleGenAI> {
     const credential = await this.resolveClientCredential(selection);
     return resolveGoogleClient({
-      sdkLabel: this.sdkLabel,
+      sdkLabel: 'Interactions',
       credential,
       logger: this.logger,
       cached: this.googleClient,
@@ -755,11 +755,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // ===========================================================================
   // Capability getters / auth (REUSE / PORT from the chat handler)
   // ===========================================================================
-
-  /** `apiVersion` is left unset for v0 — see spec §6.4. */
-  protected get sdkLabel(): string {
-    return 'Interactions';
-  }
 
   /**
    * Optional `resolution` field for an Interactions media `Content`: Gemini 3

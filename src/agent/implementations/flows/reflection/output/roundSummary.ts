@@ -36,7 +36,6 @@ export async function summarizeRound(
   currRound: number,
   options: {
     endTurn: boolean;
-    stage?: StageHandle;
     mapping?: RoundFileMapping;
     isRewrite?: boolean;
     /** Snapshot-resolved base files. Required for in-place workflows so
@@ -49,7 +48,7 @@ export async function summarizeRound(
   return withOutputStage(
     deps,
     `Finalize r${currRound}`,
-    options.stage,
+    undefined,
     async (scope): Promise<RoundSummary> => {
       const data = ensureRoundData(state, currRound);
       data.rawOutput ??= outputFile;

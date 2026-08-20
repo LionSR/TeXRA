@@ -13,7 +13,7 @@ const log = createLog('AgentRegister');
 export async function promptToAddAgentToConfig(
   agentName: string,
   source: AgentSource,
-  category: 'workflow' | 'toolUse' = 'workflow',
+  category: 'workflow' | 'toolUse',
 ): Promise<void> {
   const roster = createWorkspaceAgentRosterController();
   const current = roster.getVisibleAgents(category).map((entry) => entry.name);

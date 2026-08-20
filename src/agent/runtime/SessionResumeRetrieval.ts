@@ -44,9 +44,9 @@ interface WorkflowResumeData {
   readonly modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
 }
 
-export type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
+type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 
-export interface SessionResumeRetrievalOptions {
+interface SessionResumeRetrievalOptions {
   readonly parentStreamId?: StreamTabId | undefined;
 }
 

@@ -1257,7 +1257,7 @@ export async function settleLiveSessionExecutions(
 let cachedDefaultSession: SessionHandle | undefined;
 let defaultSessionFallbackWarned = false;
 
-export type DefaultSessionInit = Omit<SessionHandleInit, 'flushers'>;
+type DefaultSessionInit = Omit<SessionHandleInit, 'flushers'>;
 
 /** Install the process-default session after its transcript store is valid. */
 export function initializeDefaultSession(

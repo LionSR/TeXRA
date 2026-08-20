@@ -101,25 +101,6 @@ function selectedAgentId(session: SessionContextValue): string {
   return session.agent[session.sessionType];
 }
 
-function getDesktopLaunchMode(session: SessionContextValue): DesktopLaunchMode {
-  if (session.sessionType === SESSION_TYPES.WORKFLOW) return 'workflow';
-  return session.launchTarget === 'team' ? 'team' : 'interactive';
-}
-
-function resolveSessionHintKey(session: SessionContextValue): SessionHintKey {
-  // The team hint describes the launcher, so it takes precedence over the
-  // orchestrator hint (which describes the selected agent). Workflows always
-  // use a single agent, even if stale restored state still says "team".
-  if (isTeamLaunch(session)) return 'team';
-  if (
-    session.sessionType === SESSION_TYPES.TOOL_USE &&
-    session.isOrchestratorSelected
-  ) {
-    return 'orchestrator';
-  }
-  return session.sessionType;
-}
-
 @customElement('instruction-panel')
 export class InstructionPanel extends LitElement {
   static override styles = [
@@ -158,7 +139,19 @@ export class InstructionPanel extends LitElement {
   private renderSessionHint(session: SessionContextValue): unknown {
     if (!this.showSessionHint) return nothing;
 
-    const hintKey = resolveSessionHintKey(session);
+    // The team hint describes the launcher, so it takes precedence over the
+    // orchestrator hint (which describes the selected agent). Workflows
+    // always use a single agent, even if stale restored state still says
+    // "team".
+    let hintKey: SessionHintKey = session.sessionType;
+    if (isTeamLaunch(session)) {
+      hintKey = 'team';
+    } else if (
+      session.sessionType === SESSION_TYPES.TOOL_USE &&
+      session.isOrchestratorSelected
+    ) {
+      hintKey = 'orchestrator';
+    }
     const copy = SESSION_HINT_COPY[hintKey];
     // `keyed` forces the wrapping div to be re-created when the hint key
     // changes, which restarts the `session-hint-fade` CSS animation defined
@@ -502,6 +495,12 @@ export class InstructionPanel extends LitElement {
   private renderDesktopLaunchMode(
     session: SessionContextValue,
   ): TemplateResult {
+    let launchMode: DesktopLaunchMode = 'interactive';
+    if (session.sessionType === SESSION_TYPES.WORKFLOW) {
+      launchMode = 'workflow';
+    } else if (session.launchTarget === 'team') {
+      launchMode = 'team';
+    }
     return html`
       <wa-select
         id="desktopLaunchMode"
@@ -509,7 +508,7 @@ export class InstructionPanel extends LitElement {
         aria-label="Run mode"
         size="xs"
         placement="top"
-        .value=${getDesktopLaunchMode(session)}
+        .value=${launchMode}
         @change=${this.handleDesktopLaunchModeChange}
       >
         ${waIcon('diagram-project', { slot: 'start' })}

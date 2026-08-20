@@ -19,10 +19,7 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
 }
 
 interface CopyFeedbackOptions {
-  defaultTitle?: string;
-  successTitle?: string;
   successClass?: string;
-  resetDelay?: number;
 }
 
 /**
@@ -39,14 +36,9 @@ export async function copyWithFeedback(
   }
 
   const defaultTitle =
-    options.defaultTitle ??
-    button.dataset.defaultTitle ??
-    button.getAttribute('title') ??
-    'Copy text';
-  const successTitle =
-    options.successTitle ?? button.dataset.successTitle ?? 'Copied!';
+    button.dataset.defaultTitle ?? button.getAttribute('title') ?? 'Copy text';
+  const successTitle = button.dataset.successTitle ?? 'Copied!';
   const successClass = options.successClass ?? 'copy-success';
-  const resetDelay = options.resetDelay ?? COPY_RESET_DELAY_MS;
 
   function setButtonState(title: string, showSuccess: boolean): void {
     button.classList.toggle(successClass, showSuccess);
@@ -71,7 +63,7 @@ export async function copyWithFeedback(
   const timeoutId = window.setTimeout(() => {
     setButtonState(defaultTitle, false);
     delete button.dataset.copyResetTimeoutId;
-  }, resetDelay);
+  }, COPY_RESET_DELAY_MS);
 
   button.dataset.copyResetTimeoutId = String(timeoutId);
   button.dataset.defaultTitle = defaultTitle;

@@ -57,10 +57,6 @@ export interface DesktopCommandPaletteOptions {
   getStreams?: () => readonly StreamTabInfo[];
   getShortcuts?: () => readonly DesktopShortcutEntry[];
   platform?: DesktopPlatform;
-  // Returning false suppresses ALL palette opens — both the global
-  // Cmd/Ctrl+K shortcut and any direct `controller.open()` call (e.g. while
-  // a first-run walkthrough is visible).
-  canOpen?: () => boolean;
 }
 
 const DESKTOP_SWITCH_STREAM_COMMAND_PREFIX = 'texra.desktop.switchStream:';
@@ -139,7 +135,6 @@ export function createDesktopCommandPalette({
   getStreams,
   getShortcuts,
   platform = getRendererPlatform(document.defaultView),
-  canOpen,
 }: DesktopCommandPaletteOptions): CommandPaletteController {
   const getEntries = (): CommandPaletteEntry[] => {
     const streams = actions.showStream == null ? [] : (getStreams?.() ?? []);
@@ -362,7 +357,6 @@ export function createDesktopCommandPalette({
   };
 
   const open = (): void => {
-    if (canOpen?.() === false) return;
     if (dialog.open) return;
     allEntries = getEntries();
     applyQuery('');
