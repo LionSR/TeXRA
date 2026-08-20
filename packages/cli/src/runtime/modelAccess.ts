@@ -53,7 +53,13 @@ export interface CliModelAccessListOptions {
   readonly models?: readonly string[];
 }
 
-export interface CliModelAccessEntryOptions extends CliModelAccessListOptions {
+/**
+ * Deliberately does NOT extend {@link CliModelAccessListOptions}:
+ * `loadCliModelAccessList` calls `getCliModelAccessList()` with no arguments,
+ * so a `models` filter passed here would be silently dropped. Keeping the
+ * field off the type makes that unrepresentable rather than ignored.
+ */
+export interface CliModelAccessEntryOptions {
   /** Optional preloaded list, used by commands that already fetched access. */
   readonly accessList?: readonly CliModelAccess[];
 }
