@@ -204,6 +204,7 @@ export async function buildClaudeAgentEnv(
 ): Promise<NodeJS.ProcessEnv> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
+  env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1';
   const oauthToken = env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
   if (oauthToken) {
     env.CLAUDE_CODE_OAUTH_TOKEN = oauthToken;
