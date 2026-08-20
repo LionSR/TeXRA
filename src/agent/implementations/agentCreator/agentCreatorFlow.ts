@@ -18,6 +18,7 @@ import { buildUserVarPassthrough } from '@agent/prompt/userVars';
 import { createLog } from '@logger/logUtils';
 import type { AgentCategory } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
+import type { RegisteredToolName } from '@tools/registry';
 import { createTexraNunjucksEnvironment } from '@utils/prompt';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -54,7 +55,7 @@ interface AgentBlueprint {
 
 interface ToolGroup {
   description: string;
-  tools: string[];
+  tools: readonly RegisteredToolName[];
   keywords: string[];
 }
 
