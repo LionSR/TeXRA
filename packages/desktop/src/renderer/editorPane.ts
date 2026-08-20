@@ -497,13 +497,15 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       return refreshPromise;
     }
     refreshPromise = (async () => {
-      do {
-        refreshQueued = false;
-        await refreshOnce();
-      } while (refreshQueued);
-    })().finally(() => {
-      refreshPromise = undefined;
-    });
+      try {
+        do {
+          refreshQueued = false;
+          await refreshOnce();
+        } while (refreshQueued);
+      } finally {
+        refreshPromise = undefined;
+      }
+    })();
     return refreshPromise;
   }
 
