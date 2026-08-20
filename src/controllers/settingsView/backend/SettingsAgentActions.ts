@@ -52,16 +52,27 @@ interface SettingsAgentActionsOptions {
   ) => Promise<boolean>;
   readonly showInfoMessage: (message: string) => Promise<void>;
   readonly showErrorMessage: (message: string) => Promise<void>;
-  readonly formatOpenAgentYamlError: (
-    reason: 'missingAgent' | 'missingPath',
-    agentName: string,
-  ) => string;
   readonly refreshAfterMutation: () => Promise<void>;
   readonly run: (
     command: AgentFileCommand,
     failureMessage: string,
     action: () => Promise<void>,
   ) => Promise<void>;
+}
+
+/**
+ * Why an agent's YAML could not be opened. The lookup and both failure modes
+ * are host-neutral — `planOpenAgentYaml` decides them — so the sentence lives
+ * beside the sibling `Agent not found or has no file` messages below rather
+ * than being a port each host answers in its own words.
+ */
+function openAgentYamlErrorMessage(
+  reason: 'missingAgent' | 'missingPath',
+  agentName: string,
+): string {
+  return reason === 'missingAgent'
+    ? `Agent "${agentName}" could not be found. It may have been removed or renamed. Check the Agents tab in Settings to see available agents.`
+    : `No configuration file found for agent "${agentName}". The agent definition may be incomplete — try re-creating it from the Agents tab.`;
 }
 
 /**
@@ -86,7 +97,7 @@ export function createSettingsAgentActions(
         });
         if (!result.ok) {
           await options.showErrorMessage(
-            options.formatOpenAgentYamlError(result.reason, message.agentName),
+            openAgentYamlErrorMessage(result.reason, message.agentName),
           );
           return;
         }
