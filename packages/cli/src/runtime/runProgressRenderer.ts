@@ -98,13 +98,6 @@ export function createRunProgressRenderer(
   });
 }
 
-export function attachRunProgressRenderer(
-  session: SessionHandle,
-  renderer: RunProgressRenderer | undefined,
-): () => void {
-  return renderer ? renderer.attach(session) : () => undefined;
-}
-
 /**
  * Everything the live line needs that no shared record carries: the run's
  * `AgentConfig` never lands on `SessionState` (the summary mirror keeps only

@@ -25,19 +25,15 @@ type OpenAIBackgroundTerminalState = Pick<
   'id' | 'status' | 'error' | 'incomplete_details'
 >;
 
-function setProviderHint(error: unknown, provider: string): void {
-  if (error && typeof error === 'object' && !('provider' in error)) {
-    (error as { provider?: string }).provider = provider;
-  }
-}
-
 /** Normalize OpenAI Responses errors at the provider boundary. */
 export function normalizeOpenAIResponseError(
   error: unknown,
   provider: string,
 ): ProviderError {
   tagOpenAISdkError(error, provider);
-  setProviderHint(error, provider);
+  if (error && typeof error === 'object' && !('provider' in error)) {
+    (error as { provider?: string }).provider = provider;
+  }
   return normalizeProviderError(error);
 }
 

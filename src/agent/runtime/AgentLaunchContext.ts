@@ -95,7 +95,7 @@ export interface AgentLaunchContext extends AgentCore {
   disposeTrace: () => void;
 }
 
-export interface AgentLaunchInput {
+interface AgentLaunchInput {
   config: AgentConfig;
   executionId: ExecutionId;
   streamTabIdOverride?: StreamTabId;

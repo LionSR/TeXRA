@@ -97,8 +97,8 @@ export async function showCliWorkPlan(
  * A tool-use run emits one ACTIVE_SKILLS snapshot at prompt-build time, so the
  * newest entry is the answer; older ones only exist across resumed lifetimes.
  * Read on demand rather than folded per delta — `/status` is a one-shot
- * command, and the projected `ConversationEntry[]` deliberately carries no row
- * for this message type (`projectTranscriptRow`), so the raw log is the source.
+ * command, and the transcript projection (`projectTranscriptRow`) deliberately
+ * carries no row for this message type, so the raw log is the source.
  */
 function activeSkillNamesFor(streamId: string | undefined): readonly string[] {
   if (streamId === undefined) return [];

@@ -16,7 +16,7 @@ import {
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
 
-export interface StreamStatusEmitOptions {
+interface StreamStatusEmitOptions {
   substate?: StreamSubstate;
 }
 

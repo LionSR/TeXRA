@@ -12,7 +12,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
  */
 
 /** Numeric range for a setting (used by Zod schemas and UI inputs). */
-export interface NumericRange {
+interface NumericRange {
   readonly min: number;
   readonly max?: number;
 }
@@ -24,8 +24,7 @@ export const LATEXDIFF_MATH_MARKUP_VALUES = [
   'coarse',
   'fine',
 ] as const;
-export type LatexdiffMathMarkupValue =
-  (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number];
+type LatexdiffMathMarkupValue = (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number];
 
 /** Allowed values for the LaTeX formatter selector. */
 export const LATEX_FORMATTER_VALUES = [
@@ -33,7 +32,7 @@ export const LATEX_FORMATTER_VALUES = [
   'tex-fmt',
   'none',
 ] as const;
-export type LatexFormatterValue = (typeof LATEX_FORMATTER_VALUES)[number];
+type LatexFormatterValue = (typeof LATEX_FORMATTER_VALUES)[number];
 
 /** Documented defaults — match the values that used to live in package.json. */
 export const LATEX_CONFIG_DEFAULTS = {
