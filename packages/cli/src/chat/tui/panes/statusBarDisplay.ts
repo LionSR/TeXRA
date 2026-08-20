@@ -132,6 +132,8 @@ export interface StatusBarDisplayInput {
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
   readonly modelAccess: CliModelAccessRoute;
+  /** The prospective subscription route could not be resolved. */
+  readonly subscriptionProbeFailed?: boolean;
   /** Latest quota snapshot for the subscription serving this model. */
   readonly subscriptionQuota?: SubscriptionUsageSnapshot;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
@@ -214,6 +216,15 @@ function accessModeSegment(access: CliModelAccessRoute): StatusBarSegment {
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
       };
+}
+
+function subscriptionProbeFailureSegment(): StatusBarSegment {
+  return {
+    text: 'subscription status unavailable',
+    compactText: 'subscription unknown',
+    color: COLOR_WARNING,
+    compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
+  };
 }
 
 function subscriptionQuotaSegment(
@@ -1047,7 +1058,9 @@ export function buildStatusBarDisplay(
   left.push(
     ...[
       rootActiveSegment(input),
-      accessModeSegment(input.modelAccess),
+      input.subscriptionProbeFailed
+        ? subscriptionProbeFailureSegment()
+        : accessModeSegment(input.modelAccess),
       subscriptionQuotaSegment(input.subscriptionQuota),
       approvalPolicySegment(input.approvalPolicy),
       locationSegment(input.location),
