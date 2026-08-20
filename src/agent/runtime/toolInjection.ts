@@ -9,7 +9,7 @@ import type { RegisteredToolName } from '@tools/registry';
  * after `initPlatform()`. Core flow code iterates the registry — it doesn't
  * know which features are registered.
  */
-export interface ConditionalToolInjection {
+interface ConditionalToolInjection {
   readonly toolName: RegisteredToolName;
   shouldInject(): boolean;
 }

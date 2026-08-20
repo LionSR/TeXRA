@@ -76,7 +76,6 @@ export async function openFileInEditor(
   filePath: string,
   options: {
     line?: number;
-    column?: number;
     preserveFocus?: boolean;
     save?: boolean;
     /** Reuse an already-visible editor without re-showing it. */
@@ -84,7 +83,7 @@ export async function openFileInEditor(
   } = {},
 ): Promise<{ editor: vscode.TextEditor; absolutePath: string } | undefined> {
   try {
-    const { line, column, save, reuseVisible } = options;
+    const { line, save, reuseVisible } = options;
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
     const existingEditor = findVisibleEditor(uri);
     const preserveFocus = options.preserveFocus ?? false;
@@ -95,10 +94,7 @@ export async function openFileInEditor(
         : await showDocument(uri, existingEditor, preserveFocus);
 
     if (line !== undefined) {
-      const position = new vscode.Position(
-        toZeroBasedLine(line),
-        column ? Math.max(0, column - 1) : 0,
-      );
+      const position = new vscode.Position(toZeroBasedLine(line), 0);
       editor.selection = new vscode.Selection(position, position);
       editor.revealRange(
         new vscode.Range(position, position),

@@ -48,7 +48,7 @@ import {
 
 const log = createLog('AgentToolResolution');
 
-export interface ResolveAgentToolsInput {
+interface ResolveAgentToolsInput {
   tools: AgentToolUseSetting['tools'];
   /** Registry to resolve tool definitions from. Defaults to the global registry. */
   registry?: IToolRegistry;

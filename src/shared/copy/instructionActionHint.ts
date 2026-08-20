@@ -30,7 +30,7 @@ const INSTRUCTION_ACTION_HINTS = {
   },
 } as const;
 
-export type InstructionActionHintStyle = keyof typeof INSTRUCTION_ACTION_HINTS;
+type InstructionActionHintStyle = keyof typeof INSTRUCTION_ACTION_HINTS;
 
 /**
  * The ` (hint, hint)` suffix for an instruction's action tokens, or `''` when

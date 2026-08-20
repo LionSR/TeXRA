@@ -1331,7 +1331,6 @@ const shortcutRegistry = bootstrapFailed
 if (shortcutRegistry) {
   commandPalette = createDesktopCommandPalette({
     document,
-    canOpen: () => true,
     actions: desktopRendererCommandActions,
     getStreams: () => streams$.get(),
     getShortcuts: () => shortcutRegistry.entries(),
