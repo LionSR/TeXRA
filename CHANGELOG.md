@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.40.3] - 2026-08-20
+
 ### Shared (all surfaces)
 
 #### Breaking Changes
@@ -72,26 +74,24 @@ All notable changes to this project will be documented in this file.
   is now refused with an explanation, the way `texra` already refused it.
   A failed key save or removal is also shown in the desktop app instead of
   only reaching the console.
+- **Delegating to a tool-use agent no longer fails on newer Node.js** —
+  launching a subagent no longer dies immediately with a request-body error.
+- **Command rejections preserve the user's actual instructions** — rejecting a
+  shell-backed action without a note no longer presents generated retry
+  guidance to the agent as though the user had written it.
+- **Read-only completion checks stay focused** — end-of-session review no
+  longer asks to inspect project plans, Git history, or pull requests when the
+  current task and its delegated results already contain the evidence needed.
+- **Tool-use chats no longer show misleading round jumps** — internal model
+  and tool calls no longer appear as skipped user-visible rounds after a chat
+  continues or resumes.
+- **Concurrent app starts refresh bundled agents safely** — simultaneous TeXRA
+  processes sharing one data directory no longer fail while updating built-in
+  agent definitions.
+- **Claude Code forks leave the original conversation unchanged** — an
+  incomplete fork now stops instead of continuing the original conversation.
 
 ### Extension (VS Code) and Desktop
-
-#### Bug Fixes
-
-- **Bold Greek letters render in the progress view** — shortcuts such as
-  bold alpha, eta, and sigma now display as the intended symbols instead of
-  unknown commands.
-- **The Progress terminal uses the host integrated terminal colors** —
-  background and text follow the dedicated terminal tokens instead of the
-  generic surface palette.
-
-- **Every max-style shortcut now resolves in the progress view** — math
-  operators, text labels, mathcal/mathbb letters, and tilde/hat/
-  differential shortcuts render as intended instead of unknown commands.
-- **Max-style shortcuts no longer shadow KaTeX built-ins** — the section
-  sign and the legacy bold switch render as intended, `\label` no longer
-  errors in rendered math, decorated-H effective-Hamiltonian forms keep
-  their accents, and equilibrium/steady-state eq/st subscripts no longer turn
-  into superscripts.
 
 #### Features
 
@@ -117,6 +117,29 @@ All notable changes to this project will be documented in this file.
   Copy button that puts the run, its output paths, and any compile failures on
   the clipboard as plain text, to paste into whichever chat you want. Running
   latexFixer on a compile failure is unchanged.
+
+#### Bug Fixes
+
+- **The last enabled model cannot be switched off** — Settings locks the
+  toggle on your final active model and explains why, so a chat can never be
+  left with no model to run on.
+- **Bold Greek letters render in the progress view** — shortcuts such as
+  bold alpha, eta, and sigma now display as the intended symbols instead of
+  unknown commands.
+- **The Progress terminal uses the host integrated terminal colors** —
+  background and text follow the dedicated terminal tokens instead of the
+  generic surface palette.
+- **Every max-style shortcut now resolves in the progress view** — math
+  operators, text labels, mathcal/mathbb letters, and tilde/hat/
+  differential shortcuts render as intended instead of unknown commands.
+- **Max-style shortcuts no longer shadow KaTeX built-ins** — the section
+  sign and the legacy bold switch render as intended, `\label` no longer
+  errors in rendered math, decorated-H effective-Hamiltonian forms keep
+  their accents, and equilibrium/steady-state eq/st subscripts no longer turn
+  into superscripts.
+- **Delegation approvals state their full run-wide scope** — approval controls
+  no longer imply that later automatic approvals are limited to tasks requested
+  by one agent.
 
 ### Desktop
 
@@ -213,35 +236,6 @@ All notable changes to this project will be documented in this file.
   required for continuation.
 - **Headless team progress identifies delegated tasks** — direct multi-agent
   runs show what the active child is checking, not only its generic agent name.
-
-### Extension (VS Code) and Desktop
-
-#### Bug Fixes
-
-- **Delegation approvals state their full run-wide scope** — approval controls
-  no longer imply that later automatic approvals are limited to tasks requested
-  by one agent.
-
-### Shared (all surfaces)
-
-#### Bug Fixes
-
-- **Delegating to a tool-use agent no longer fails on newer Node.js** —
-  launching a subagent no longer dies immediately with a request-body error.
-- **Command rejections preserve the user's actual instructions** — rejecting a
-  shell-backed action without a note no longer presents generated retry
-  guidance to the agent as though the user had written it.
-- **Read-only completion checks stay focused** — end-of-session review no
-  longer asks to inspect project plans, Git history, or pull requests when the
-  current task and its delegated results already contain the evidence needed.
-- **Tool-use chats no longer show misleading round jumps** — internal model
-  and tool calls no longer appear as skipped user-visible rounds after a chat
-  continues or resumes.
-- **Concurrent app starts refresh bundled agents safely** — simultaneous TeXRA
-  processes sharing one data directory no longer fail while updating built-in
-  agent definitions.
-- **Claude Code forks leave the original conversation unchanged** — an
-  incomplete fork now stops instead of continuing the original conversation.
 
 ## [0.40.2] - 2026-08-12
 
