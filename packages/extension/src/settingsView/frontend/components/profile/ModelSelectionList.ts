@@ -154,7 +154,16 @@ export class ModelSelectionList extends LitElement {
 
   private renderAvailabilityIcon(
     model: ModelSelectionItem,
+    isLastEnabledActiveModel: boolean,
   ): TemplateResult | typeof nothing {
+    if (isLastEnabledActiveModel) {
+      const title = 'At least one active model must stay enabled';
+      return waIcon('triangle-exclamation', {
+        className: 'model-row-icon model-row-icon--warning',
+        label: title,
+        title,
+      });
+    }
     if (!model.disabled) return nothing;
 
     // The backend resolves the label alongside `disabled`; the Models tab
@@ -173,11 +182,22 @@ export class ModelSelectionList extends LitElement {
   }
 
   private renderModelRow(model: ModelSelectionItem): TemplateResult {
+    // Retired rows remain removable and do not satisfy the usable-model floor.
+    const isLastEnabledActiveModel =
+      model.enabled &&
+      model.availability !== 'retired' &&
+      this.models.filter(
+        (candidate) =>
+          candidate.enabled && candidate.availability !== 'retired',
+      ).length === 1;
+
     return html`
       <div class="model-row">
         <wa-switch
           ?checked=${model.enabled}
-          ?disabled=${model.disabled && !model.enabled}
+          ?disabled=${
+            (model.disabled && !model.enabled) || isLastEnabledActiveModel
+          }
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
             postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED, {
@@ -193,7 +213,7 @@ export class ModelSelectionList extends LitElement {
               ? html`<span class="model-route">· ${model.routeLabel}</span>`
               : nothing
           }
-          ${this.renderAvailabilityIcon(model)}
+          ${this.renderAvailabilityIcon(model, isLastEnabledActiveModel)}
           ${
             isExpensiveModel(model.provider, model.name)
               ? waIcon('triangle-exclamation', {
