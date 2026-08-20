@@ -298,15 +298,6 @@ function everyHost(
   };
 }
 
-/** Every host can write the setting through one host-neutral module. */
-function everyHostWriter(writer: string): SettingWrittenBy {
-  return {
-    vscode: { writer },
-    desktop: { writer },
-    cli: { writer },
-  };
-}
-
 /**
  * Only the webview hosts honor the setting — the reader exists in shared code
  * but its effect has no headless counterpart. The row must say why.
@@ -622,7 +613,9 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
         reader: 'packages/extension/src/commands/git/gitCommands.ts',
       },
     },
-    writtenBy: everyHostWriter('src/tools/setup/ConfigTools.ts'),
+    writtenBy: {
+      cli: { writer: 'src/tools/setup/ConfigTools.ts' },
+    },
   },
   'agentReview.runOnCommit': {
     honoredBy: {
