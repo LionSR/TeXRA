@@ -3,8 +3,7 @@ import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 
 /**
- * The one HTML→Markdown converter configuration for tools that feed fetched or
- * parsed HTML into the model's context.
+ * The one HTML→Markdown converter configuration for model-facing context.
  *
  * `.remove(['style', 'script'])` matters for correctness, not tidiness:
  * Turndown's default rules keep the *text* of `<style>` and `<script>`
