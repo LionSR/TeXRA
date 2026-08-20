@@ -67,15 +67,16 @@ Do not create issues for:
 - Bot suggestions already addressed or dismissed.
 - Test-coverage suggestions ("add tests for X", "increase coverage", missing
   test remarks from reviewers or bots). This repository deliberately keeps its
-  test surface small because internal interfaces break often — see `AGENTS.md`
-  "Testing discipline". A missing test is the *default*, expected state of a
-  merged PR here, not a gap. File a test follow-up only when **both**: (a) the
-  gap is a reproduced, user-visible defect (not a refactor, not a comment or
-  doc fix) that shipped without a regression test, and (b) the PR body or a
-  reviewer explicitly weighed adding that test and chose not to for a stated
-  reason. "The fix works but nobody happened to write a test" is not
-  sufficient by itself — that describes most merged PRs in this repo by
-  design and is not follow-up-worthy on its own.
+  test surface small because internal interfaces break often. See `AGENTS.md`
+  "Testing discipline". The post-merge filing bar here is intentionally
+  stricter than that policy's review-time bar: a missing test is the _default_,
+  expected state of a merged PR, not a gap. File a test follow-up only when
+  **both**: (a) the gap is a reproduced, user-visible defect (not a refactor,
+  comment, or doc fix) that shipped without a regression test, and (b) the PR
+  body or a reviewer explicitly weighed adding that test and chose not to for
+  a stated reason. "The fix works but nobody happened to write a test" is not
+  sufficient by itself. That describes most merged PRs in this repo by design
+  and is not follow-up-worthy on its own.
 - Wording, precision, or clarity fixes to internal docs (proposals, PRDs,
   ADRs, planning docs) that change no code and no user-facing behavior —
   including bot-flagged "this claim is imprecise" or "this section is
@@ -84,8 +85,8 @@ Do not create issues for:
   which implementation decision would go wrong); otherwise skip.
 - Stale in-code comments or JSDoc that reference a renamed or deleted symbol
   but do not misdescribe current runtime behavior in a way that could cause a
-  future bug. Fix these inline in the same PR if trivial. They are not worth
-  a standing issue.
+  future bug. Leave these for an incidental cleanup rather than creating a
+  standing issue.
 - A finding whose only proposed action is itself "file more issues" or
   "survey X and open tickets" — meta-tracking work that adds process overhead
   without doing anything. Either do the survey now and file the results
@@ -102,9 +103,8 @@ to the maintainer in a single sentence, would they say "yes, file that" or
 where every unaddressed nitpick becomes a permanent open issue is worse than
 one that occasionally lets a nitpick go unfiled — err toward silence.
 
-When several minor findings from the same review are individually below the
-filing bar but related (e.g., two stale-comment fixes in the same file),
-prefer folding them into one issue over filing one each.
+When several related findings from the same review each pass the filing bar,
+prefer folding them into one coherent issue over filing one issue per finding.
 
 For each genuine follow-up, create an issue with:
 
