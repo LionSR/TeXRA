@@ -7,10 +7,10 @@
 import * as vscode from 'vscode';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
+import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
@@ -148,9 +148,6 @@ export class LatexSettingsHandlers {
     },
   });
 
-  private readonly configPersistenceController =
-    new LatexConfigPersistenceController();
-
   constructor(private readonly ctx: SettingsHandlerContext) {}
 
   async sendLatexSettingsStatus(webview: vscode.Webview): Promise<void> {
@@ -202,16 +199,17 @@ export class LatexSettingsHandlers {
     );
   }
 
-  /**
-   * Push current LaTeX/compile/diff config values to the webview. Each field
-   * is left undefined when no value is set in workspace storage so the UI
-   * can render the documented default rather than overwriting it on save.
-   */
+  /** Push the catalog-derived LaTeX/compile/diff settings snapshot. */
   async sendLatexConfigValues(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
-      this.configPersistenceController.buildConfigMessage(
-        (key) => platform().workspaceState.get(key),
-        platform().config,
+      buildSettingsSnapshotMessage(
+        'latex',
+        {
+          config: platform().config,
+          workspaceState: platform().workspaceState,
+          globalState: platform().globalState,
+        },
+        'vscode',
       ),
     );
   }
