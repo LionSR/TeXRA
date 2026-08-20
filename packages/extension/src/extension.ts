@@ -118,6 +118,29 @@ let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 // idempotency flag, so a stale module-level instance would silently swallow
 // handlers registered by a second activate() in the same process.
 let lifecycleHost: LifecycleHost | undefined;
+let extensionShutdownPromise: Promise<void> | undefined;
+
+function shutdownExtension(): Promise<void> {
+  if (extensionShutdownPromise) return extensionShutdownPromise;
+
+  const host = lifecycleHost;
+  const shutdownPromise = (async () => {
+    try {
+      await host?.runShutdown();
+    } finally {
+      if (lifecycleHost === host) lifecycleHost = undefined;
+      teardownDefaultSession();
+    }
+  })();
+  extensionShutdownPromise = shutdownPromise;
+  const clearShutdownPromise = () => {
+    if (extensionShutdownPromise === shutdownPromise) {
+      extensionShutdownPromise = undefined;
+    }
+  };
+  void shutdownPromise.then(clearShutdownPromise, clearShutdownPromise);
+  return shutdownPromise;
+}
 
 function installUnhandledRejectionSurface(
   subscriptions: vscode.Disposable[],
@@ -172,6 +195,23 @@ async function refreshApiKeyStatus() {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
+  try {
+    await activateExtension(context);
+  } catch (activationError) {
+    if (lifecycleHost !== undefined) {
+      try {
+        await shutdownExtension();
+      } catch (cleanupError) {
+        log.error('Extension cleanup after failed activation failed', {
+          data: cleanupError,
+        });
+      }
+    }
+    throw activationError;
+  }
+}
+
+async function activateExtension(context: vscode.ExtensionContext) {
   installUnhandledRejectionSurface(context.subscriptions);
   const workspaceFolders = vscode.workspace.workspaceFolders;
 
@@ -223,6 +263,7 @@ export async function activate(context: vscode.ExtensionContext) {
       }),
   });
   lifecycleHost = lifecycle;
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearVscodeLeanServerEntries());
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
@@ -294,6 +335,15 @@ export async function activate(context: vscode.ExtensionContext) {
       agentResponseTextConnector,
     ),
   });
+  // `disposeStatusListener` and `statusBarItem` are owned solely by
+  // `context.subscriptions` (see the push near the end of `activate`), matching
+  // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
+  registerAgentShutdownHandlers(lifecycle);
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+    runtimeSession.flushArtifacts(),
+  );
   await runtimeSession.waitUntilReady();
   runtimeSession.setApprovalPolicy(
     readPersistedTexraApprovalPolicy((key, fallback) =>
@@ -311,18 +361,9 @@ export async function activate(context: vscode.ExtensionContext) {
     cwd: workspaceRoot,
     resourcesPath: path.join(context.extensionPath, 'resources'),
   });
-  // `disposeStatusListener` and `statusBarItem` are owned solely by
-  // `context.subscriptions` (see the push near the end of `activate`), matching
-  // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
-  registerAgentShutdownHandlers(lifecycle);
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    runtimeSession.flushArtifacts(),
-  );
-  // First ON handler: every BEFORE handler above has had its turn at the runs
-  // it owns, so this settles what closing the window left mid-run — a durable
-  // CANCELLED outcome and a released lease instead of a record the next
+  // First settling ON handler: every BEFORE handler above has had its turn at
+  // the runs it owns, so this settles what closing the window left mid-run: a
+  // durable CANCELLED outcome and a released lease instead of a record the next
   // activation has to repair.
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
     settleLiveSessionExecutions(signal),
@@ -505,11 +546,6 @@ export async function activate(context: vscode.ExtensionContext) {
             : undefined;
         const editorType = vscode.env.appName || undefined;
         UsageLogService.initialize({}, extensionVersion, editorType);
-        // Not redundant with the shutdown hook: VS Code skips deactivate()
-        // when activate() throws, but always disposes subscriptions.
-        context.subscriptions.push({
-          dispose: () => void UsageLogService.dispose(),
-        });
       } catch (usageError) {
         log.warn(
           `Usage logging service failed to initialize: ${toErrorMessage(usageError)}`,
@@ -778,12 +814,5 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export async function deactivate() {
-  const host = lifecycleHost;
-  lifecycleHost = undefined;
-  try {
-    clearVscodeLeanServerEntries();
-    await host?.runShutdown();
-  } finally {
-    teardownDefaultSession();
-  }
+  await shutdownExtension();
 }
