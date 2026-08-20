@@ -95,9 +95,9 @@ function reconcileEnabledModels(
  * in runtimeModelRegistry.ts) deliberately excludes both kinds of config, so
  * the preference can never resolve to a route. Leaving it persisted would
  * strand the model behind the hard no-fallthrough error (#9635) on every
- * launch. Unlike the version-gated enabled-list deprecated sweep above, this
- * runs unconditionally: affected users may already have persisted the current
- * MODEL_LIST_VERSION before this migration shipped.
+ * launch. Like the retired-model sweep above, this runs unconditionally:
+ * affected users may already have persisted the current MODEL_LIST_VERSION
+ * before this migration shipped.
  */
 function reconcileCopilotRoutePreferences(
   currentModels: readonly string[],

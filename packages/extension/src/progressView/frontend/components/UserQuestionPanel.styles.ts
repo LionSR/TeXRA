@@ -46,7 +46,7 @@ export const userQuestionPanelStyles: CSSResult = css`
   /* wa-radio-group has no exposed "radios" CSS part in the pinned
      @awesome.me/webawesome build (only form-control/form-control-label/
      form-control-input/hint are rendered) — style the host directly, same
-     technique as ApiAccessSection.styles.ts's wa-radio-group.api-access-options. */
+     technique used for any themed wa-radio-group. */
   wa-radio-group {
     display: flex;
     flex-direction: column;
