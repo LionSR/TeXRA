@@ -284,7 +284,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
               parentStream,
               streamId: target.displayStreamId,
               streams,
-            }),
+            })?.heading,
     }),
     foreground: {
       inputActive: props.foregroundInputActive,

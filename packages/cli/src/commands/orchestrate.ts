@@ -188,7 +188,6 @@ async function runOrchestration(context: CliContext): Promise<number> {
       presetPlans: presetPlanSet.plans,
       history,
       toolUseAgents,
-      includeMultiAgentLoginHint: !presetPlanSet.remoteCatalogRefreshAttempted,
       modelAccess: launcherModelAccess,
       account: accountStatus,
       presetLaunchBlockReason,
