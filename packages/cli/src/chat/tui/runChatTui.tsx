@@ -111,11 +111,11 @@ import {
 } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
 
-export interface ChatResult {
+interface ChatResult {
   exitCode: number;
 }
 
-export interface RunChatInit {
+interface RunChatInit {
   /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
   readonly agentOverride?: string;
   /** `--model` override from the CLI; falls through `resolveChatDefaults`. */

@@ -97,7 +97,7 @@ export function triggerEscapeInterrupt(
   return true;
 }
 
-export type AppCtrlCAction = 'clear-draft' | 'delegate' | 'interrupt' | 'exit';
+type AppCtrlCAction = 'clear-draft' | 'delegate' | 'interrupt' | 'exit';
 
 export interface AppCtrlCState {
   readonly discardDraft: () => boolean;

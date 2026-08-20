@@ -115,15 +115,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     await this.host.info(message);
   };
 
+  /** Same discard-the-answer shape as `showInfo`, reused by the port bindings below. */
+  private readonly showWarning = async (message: string): Promise<void> => {
+    await this.host.warning(message);
+  };
+
+  private readonly showError = async (message: string): Promise<void> => {
+    await this.host.error(message);
+  };
+
   /** This host's bindings for the shared follow-up plan/polish interpreters. */
   private readonly followUpPorts: FollowUpApplyPorts = {
     showInfo: this.showInfo,
-    showWarning: async (message) => {
-      await this.host.warning(message);
-    },
-    showError: async (message) => {
-      await this.host.error(message);
-    },
+    showWarning: this.showWarning,
+    showError: this.showError,
     logError: (message, error) => {
       this.logger.error(this.channel, message, { data: error });
     },
@@ -262,17 +267,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         pickFormat: () => this.pickTranscriptExportFormat(),
         openPath: (filePath, kind) => this.openExportPath(filePath, kind),
         showInfo: this.showInfo,
-        showWarning: async (message) => {
-          await this.host.warning(message);
-        },
-        showError: async (message) => {
-          await this.host.error(message);
-        },
+        showWarning: this.showWarning,
+        showError: this.showError,
         reportDetail: (message, data) => {
           this.logger.error(this.channel, message, { data });
         },
         getController: () => Promise.resolve(this.getChatExportController()),
-        getTraceViewerTemplate: () => this.getTraceViewerTemplate(),
+        getTraceViewerTemplate: () =>
+          path.join(
+            this.provider.extensionPath,
+            'resources',
+            'traceViewer',
+            'index.html',
+          ),
       },
     };
 
@@ -439,9 +446,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           ]).then((result) => result ?? false),
         readFile: (file) => AbsoluteFS.read(file),
         showInfo: this.showInfo,
-        showError: async (message) => {
-          await this.host.error(message);
-        },
+        showError: this.showError,
         logError: (message, error) => {
           this.logger.error(this.channel, message, {
             data: error instanceof Error ? error : undefined,
@@ -593,15 +598,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private getChatExportController(): ChatExportController {
     this.chatExportController ??= new ChatExportController({ latexPreamble });
     return this.chatExportController;
-  }
-
-  private getTraceViewerTemplate(): string {
-    return path.join(
-      this.provider.extensionPath,
-      'resources',
-      'traceViewer',
-      'index.html',
-    );
   }
 
   private async pickTranscriptExportFormat(): Promise<

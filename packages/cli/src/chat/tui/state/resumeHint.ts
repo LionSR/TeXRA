@@ -93,12 +93,6 @@ function usageHasTokens(usage: TokenUsageStats): boolean {
   );
 }
 
-/** Session-level cost line. Empty when there is no cost to report and no
- *  known route to attribute. */
-function formatSessionCost(usage: TokenUsageStats): string | undefined {
-  return usageCostLabel(usage.cost, usage.usageRoute);
-}
-
 export function collectResumeUsage(
   streams: ReadonlyMap<StreamTabId, StreamSlice>,
 ): TokenUsageStats | undefined {
@@ -131,7 +125,8 @@ export function formatResumeUsage(
   if (cached > 0) lines.push(`(+ ${formatInteger(cached)} cached)`);
   lines.push(`output=${formatInteger(usage.outputTokens)}`);
   if (reasoning > 0) lines.push(`(reasoning ${formatInteger(reasoning)})`);
-  const costLine = formatSessionCost(usage);
+  // Empty when there is no cost to report and no known route to attribute.
+  const costLine = usageCostLabel(usage.cost, usage.usageRoute);
   return costLine
     ? `Token usage: ${lines.join(' ')}\nSession cost: ${costLine}`
     : `Token usage: ${lines.join(' ')}`;

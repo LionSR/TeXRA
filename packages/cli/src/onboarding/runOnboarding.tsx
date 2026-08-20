@@ -421,28 +421,20 @@ interface OnboardingPicker {
   readonly items: readonly OnboardingPickerItem[];
 }
 
-/** Picker copy and the credential paths offered, for one entry point. */
+/** Picker copy for one entry point; both offer the same credential paths. */
 function onboardingPicker(props: {
   readonly firstRun: boolean;
 }): OnboardingPicker {
-  const picker = (
-    subtitle: string,
-    setupPaths: readonly OnboardingSetupPath[],
-  ): OnboardingPicker => ({
-    subtitle,
+  return {
+    subtitle: props.firstRun
+      ? 'No provider API key is configured. Choose how to power model calls:'
+      : 'Choose how to power model calls:',
     items: [
-      ...setupPaths.map((path) => SETUP_PATH_PICKER_ITEMS[path]),
+      SETUP_PATH_PICKER_ITEMS.chatgpt,
+      SETUP_PATH_PICKER_ITEMS.key,
       SKIP_PICKER_ITEM,
     ],
-  });
-
-  if (!props.firstRun) {
-    return picker('Choose how to power model calls:', ['chatgpt', 'key']);
-  }
-  return picker(
-    'No provider API key is configured. Choose how to power model calls:',
-    ['chatgpt', 'key'],
-  );
+  };
 }
 
 /** Screen each non-skip picker choice opens (skip resolves the gate instead). */
@@ -475,24 +467,6 @@ function PickerStep(props: {
         onCancel={() => props.onSelect('skip')}
       />
     </OnboardingFrame>
-  );
-}
-
-function ProgressFrame(props: {
-  readonly title: string;
-  readonly spinnerLabel: string;
-  readonly children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <BorderedPanel
-      color={COLOR_HINT}
-      title={props.title}
-      footer={<LoadingIndicator label={props.spinnerLabel} />}
-    >
-      <Box marginTop={1} flexDirection="column">
-        {props.children}
-      </Box>
-    </BorderedPanel>
   );
 }
 
@@ -542,14 +516,19 @@ function ChatGptProgressStep(
   }, []);
 
   return (
-    <ProgressFrame
+    <BorderedPanel
+      color={COLOR_HINT}
       title={ONBOARDING_CHOICE_CHATGPT.label}
-      spinnerLabel="Waiting for ChatGPT sign-in… (Ctrl-C cancels)"
+      footer={
+        <LoadingIndicator label="Waiting for ChatGPT sign-in… (Ctrl-C cancels)" />
+      }
     >
-      {message.split('\n').map((line, index) => (
-        <Text key={`${index}:${line}`}>{line}</Text>
-      ))}
-    </ProgressFrame>
+      <Box marginTop={1} flexDirection="column">
+        {message.split('\n').map((line, index) => (
+          <Text key={`${index}:${line}`}>{line}</Text>
+        ))}
+      </Box>
+    </BorderedPanel>
   );
 }
 

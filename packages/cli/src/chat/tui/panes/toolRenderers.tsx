@@ -75,7 +75,7 @@ export function toolHeaderPreviewBudget(
   return available >= MIN_HEADER_PREVIEW ? available : 0;
 }
 
-export interface DisplayLineOptions {
+interface DisplayLineOptions {
   /** When false, emit the full text of every block instead of the head+tail
    *  slice. The ctrl+t print path sets this to include everything. */
   readonly elide?: boolean;

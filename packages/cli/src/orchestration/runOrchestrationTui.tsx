@@ -26,7 +26,7 @@ import {
 } from '../runtime/apiStatus';
 import type { CliModelAccess } from '../runtime/modelAccess';
 
-export interface OrchestrationAppProps {
+interface OrchestrationAppProps {
   readonly items: readonly CliOrchestrationItem[];
   readonly resumeItems?: readonly CliOrchestrationItem[];
   readonly agentItems?: readonly CliOrchestrationItem[];
@@ -45,7 +45,7 @@ export interface OrchestrationAppProps {
   readonly onResolve: (action: CliOrchestrationAction) => void;
 }
 
-export type OrchestrationLauncherStep =
+type OrchestrationLauncherStep =
   | { readonly kind: 'launcher' }
   | {
       readonly kind: 'model';
@@ -118,7 +118,7 @@ export function orchestrationBlockRowCost(
   return 1 + orchestrationLinesRowCost(lines, columns);
 }
 
-export interface OrchestrationLauncherLayout {
+interface OrchestrationLauncherLayout {
   readonly statusLines: readonly string[];
   readonly footerHints: readonly string[];
   readonly maxVisibleItems: number | undefined;
@@ -499,7 +499,7 @@ export function OrchestrationApp(
   );
 }
 
-export interface RunOrchestrationTuiOptions extends Omit<
+interface RunOrchestrationTuiOptions extends Omit<
   OrchestrationAppProps,
   'items' | 'onResolve'
 > {

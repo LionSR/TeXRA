@@ -34,12 +34,6 @@ async function probeCredential(
   });
 }
 
-function hasProviderApiKey(): Promise<boolean> {
-  return probeCredential('Provider API key', () =>
-    hasAnyUsableProviderApiKey(platform().secrets),
-  );
-}
-
 /** Never rejects: every probe resolves to false with a logged reason. */
 export async function hasCliRunCredential(): Promise<boolean> {
   const hasChatGptSubscription = await probeCredential(
@@ -51,5 +45,7 @@ export async function hasCliRunCredential(): Promise<boolean> {
     isXaiSubscriptionActive(XAI_SETUP_MODEL),
   );
   if (hasGrokSubscription) return true;
-  return hasProviderApiKey();
+  return probeCredential('Provider API key', () =>
+    hasAnyUsableProviderApiKey(platform().secrets),
+  );
 }

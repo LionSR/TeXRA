@@ -46,7 +46,6 @@ import {
   MESSAGE_TYPES,
   STREAM_PHASE,
   STREAM_LOG_ENTRY_TYPES,
-  USER_FOLLOW_UP_SUPPORT,
   TODO_STATUS,
   TOOL_USE_STATUS,
   type ActiveChildInfo,
@@ -606,18 +605,12 @@ function harnessModelStatus(
   }
 }
 
-function harnessModel(fixture: HarnessModelFixture): CliModelAccess {
-  return {
+function harnessOrchestrationModels(): readonly CliModelAccess[] {
+  const models = HARNESS_ORCHESTRATION_MODEL_FIXTURES.map((fixture) => ({
     model: fixture,
     available: isHarnessModelAvailable(fixture.availability),
     status: harnessModelStatus(fixture.availability),
-  };
-}
-
-function harnessOrchestrationModels(): readonly CliModelAccess[] {
-  const models = HARNESS_ORCHESTRATION_MODEL_FIXTURES.map((fixture) =>
-    harnessModel(fixture),
-  );
+  }));
   return SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS
     ? models.map((model) => ({
         ...model,
@@ -935,16 +928,6 @@ function makeChildEntries(agent: string, action: string): TranscriptRow[] {
     ),
     harnessTextRow(`${agent}-assistant`, 'assistant', assistantText, 2, false),
   ];
-}
-
-function harnessMessageEntry(
-  id: string,
-  text: string,
-  kind: 'assistant' | 'error' | 'user' = 'assistant',
-  seqNo = 1,
-  settled = true,
-): TranscriptRow {
-  return harnessTextRow(id, kind, text, seqNo, settled);
 }
 
 function makeEditApprovalRequest() {
@@ -2099,18 +2082,7 @@ function markHarnessInterrupted(): void {
   // applier retains each vanished row, and its displayed status comes from
   // the phase-merge of the real per-child transitions below.
   emitChildRoster(STREAM_ID, []);
-  patchStream(STREAM_ID, (slice) => ({
-    ...slice,
-    entries: [
-      ...slice.entries,
-      harnessMessageEntry(
-        'harness-interrupted',
-        'Harness interrupt requested.',
-        'assistant',
-        slice.entries.length + 1,
-      ),
-    ],
-  }));
+  appendHarnessAssistantTranscript('Harness interrupt requested.', STREAM_ID);
   setStreamStatusInCliState({
     streamId: STREAM_ID,
     status: STREAM_PHASE.CANCELLED,
@@ -2144,18 +2116,10 @@ function markHarnessStreamInterrupted(streamId: StreamTabId): void {
       ),
     );
   }
-  patchStream(streamId, (slice) => ({
-    ...slice,
-    entries: [
-      ...slice.entries,
-      harnessMessageEntry(
-        `harness-focused-interrupted-${streamId}`,
-        `Harness focused interrupt requested for ${streamId}.`,
-        'assistant',
-        slice.entries.length + 1,
-      ),
-    ],
-  }));
+  appendHarnessAssistantTranscript(
+    `Harness focused interrupt requested for ${streamId}.`,
+    streamId,
+  );
   setStreamStatusInCliState({
     streamId: streamId,
     status: STREAM_PHASE.CANCELLED,
@@ -2194,10 +2158,10 @@ function appendHarnessTranscript(
     ...slice,
     entries: [
       ...slice.entries,
-      harnessMessageEntry(
+      harnessTextRow(
         `harness-local-${Date.now()}-${slice.entries.length}`,
-        text,
         role,
+        text,
         slice.entries.length + 1,
         options.finalized,
       ),
@@ -2265,36 +2229,18 @@ function markHarnessExecutionStopped(executionId: string): void {
   );
   if (!executionRow) return;
 
-  const messageId = `harness-killed-${executionId}-${Date.now()}`;
   emitChildRoster(
     STREAM_ID,
     activeSubagentRows.filter((child) => child.executionId !== executionId),
   );
-  patchStream(STREAM_ID, (slice) => ({
-    ...slice,
-    entries: [
-      ...slice.entries,
-      harnessMessageEntry(
-        messageId,
-        `Harness kill requested for ${executionId}.`,
-        'assistant',
-        slice.entries.length + 1,
-      ),
-    ],
-  }));
-
-  patchStream(executionRow.childStreamId, (slice) => ({
-    ...slice,
-    entries: [
-      ...slice.entries,
-      harnessMessageEntry(
-        `${messageId}-${executionRow.childStreamId}`,
-        'Harness kill requested for this sub-workflow.',
-        'assistant',
-        slice.entries.length + 1,
-      ),
-    ],
-  }));
+  appendHarnessAssistantTranscript(
+    `Harness kill requested for ${executionId}.`,
+    STREAM_ID,
+  );
+  appendHarnessAssistantTranscript(
+    'Harness kill requested for this sub-workflow.',
+    executionRow.childStreamId,
+  );
   // The real transition stamps CANCELLED onto the retained roster row via
   // the adapter's phase-merge, and projects the slice status with it.
   defaultSession().status.transition(

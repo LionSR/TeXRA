@@ -122,7 +122,6 @@ const CATEGORY_ORDER: ToolCategory[] = [
   'workflow',
   'system',
 ];
-const TOOLS_TAB_CATEGORIES = new Set<ToolCategory>(CATEGORY_ORDER);
 
 @customElement('tools-tab')
 export class ToolsTab extends LitElement {
@@ -249,7 +248,7 @@ export class ToolsTab extends LitElement {
   }
 
   private visibleItems(): ToolDashboardItem[] {
-    return this.items.filter((item) => TOOLS_TAB_CATEGORIES.has(item.category));
+    return this.items.filter((item) => CATEGORY_ORDER.includes(item.category));
   }
 
   private renderSummary(

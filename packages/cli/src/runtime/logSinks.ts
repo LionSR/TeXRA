@@ -12,11 +12,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * Previously lived in `@logger/structuredLogger`; inlined here because the
  * CLI is the only consumer.
  */
-export interface LogFields {
+interface LogFields {
   readonly [key: string]: unknown;
 }
 
-export interface LogRecord {
+interface LogRecord {
   readonly ts: string;
   readonly level: LogLevel;
   readonly message: string;

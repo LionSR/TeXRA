@@ -336,9 +336,11 @@ function createWindow(options: {
   const onboardingIpcRef: {
     current?: DesktopOnboardingIpc;
   } = {};
-  const showErrorMessage = async (message: string) => {
-    await dialog.showMessageBox(window, { message, type: 'error' });
-  };
+  const showMessageBoxOfType =
+    (type: 'error' | 'info' | 'warning') => async (message: string) => {
+      await dialog.showMessageBox(window, { type, message });
+    };
+  const showErrorMessage = showMessageBoxOfType('error');
   const reportAsyncError = (error: unknown) => {
     console.error('Desktop asynchronous operation failed:', error);
     void showErrorMessage(
@@ -356,12 +358,8 @@ function createWindow(options: {
   installDesktopNavigationPolicy(window.webContents, {
     onAsyncError: reportAsyncError,
   });
-  const showInfoMessage = async (message: string) => {
-    await dialog.showMessageBox(window, { type: 'info', message });
-  };
-  const showWarningMessage = async (message: string) => {
-    await dialog.showMessageBox(window, { type: 'warning', message });
-  };
+  const showInfoMessage = showMessageBoxOfType('info');
+  const showWarningMessage = showMessageBoxOfType('warning');
   // Shared shape for the "confirm this action" dialog: a warning with a
   // confirm button (defaulted, id 0) and a 'Cancel' button (id 1), collapsed
   // to a boolean. Used by confirmAcceptFile, the agent-settings confirm
