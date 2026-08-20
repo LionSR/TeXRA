@@ -45,9 +45,9 @@ interface TemplateAgentFilePlan {
 /**
  * Render a planned template agent into its file.
  *
- * Refuses rather than overwrites when the file already exists, and reports the
- * refusal as a message instead of a code, matching `planOpenAgentYaml` and the
- * rest of this directory: the condition is host-neutral, so the sentence is too.
+ * Refuses rather than overwrites when the file already exists. Unlike the
+ * `reason` codes returned by `planOpenAgentYaml`, this reports a host-neutral
+ * sentence that both settings hosts can present directly.
  * `resourcesRoot` is the packaged `…/resources` directory that holds
  * `templates/<kind>.yaml`.
  */
