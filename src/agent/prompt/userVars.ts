@@ -430,8 +430,14 @@ async function getFileVars(
         ? await getXmlFormatFromReadableFiles(allFiles)
         : { xml: null, readableFiles: [], skipped: [] };
     const primaryFile = readableFiles[0];
-    if (primaryFile != null) {
-      await setVarFromFile(primaryFile, prefix, userVars);
+    const primaryFileOk =
+      primaryFile == null
+        ? false
+        : await setVarFromFile(primaryFile, prefix, userVars);
+    if (primaryFile != null && !primaryFileOk) {
+      logger.warn(
+        `Failed to load primary file into prompt variables: ${primaryFile}`,
+      );
     }
 
     // A dropped file changes what the model sees, so report it on the run's own
@@ -442,14 +448,9 @@ async function getFileVars(
       );
     }
 
-    // The card is derived from the same read that fills the list vars
-    // (`ALL_*S`, `*_FILES`, `LIST_OF_ALL_*S`), so a row's `ok` and that file's
-    // presence in the prompt XML come from one probe and cannot disagree.
-    //
-    // NOT closed here: `setVarFromFile` above re-reads the primary file to fill
-    // `*_FILE`/`*_CONTENT`, and swallows its own failure on a module channel.
-    // A row can therefore still read `ok` while that one pair is null. Separate
-    // probe, separate call path — it needs its own change.
+    // The list rows use the read that fills the list vars. The primary row also
+    // reflects the second read that fills its `*_FILE`/`*_CONTENT` pair, so the
+    // card cannot report success while those prompt variables remain null.
     //
     // Tool-use agents get no card. Media files are excluded: they have no user
     // vars (display-only in Init) and MediaExtractionNode already logs them
@@ -463,7 +464,10 @@ async function getFileVars(
       logFileCategory(
         logger,
         cardLabel,
-        allFiles.map((file) => ({ path: file, ok: readable.has(file) })),
+        allFiles.map((file) => ({
+          path: file,
+          ok: file === primaryFile ? primaryFileOk : readable.has(file),
+        })),
       );
     }
 
