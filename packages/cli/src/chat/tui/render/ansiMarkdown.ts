@@ -17,6 +17,7 @@ import pico from 'picocolors';
 
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { createLog } from '@logger/logUtils';
 import {
   createMarkdownProcessor,
   type MarkdownProcessorRenderEnv,
@@ -26,6 +27,7 @@ import {
   createMarkdownRenderer,
   type MarkdownItInstance,
 } from '@shared/markdown/createMarkdownRenderer';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';
 
 /** SGR open/close codes wrapped through String.fromCharCode so the ESC byte
@@ -33,6 +35,7 @@ import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';
  *  raw control chars). */
 const ESC = String.fromCharCode(27);
 const sgr = (code: number): string => `${ESC}[${code}m`;
+const log = createLog('cli.ansiMarkdown');
 
 interface AnsiMarkdownStyle {
   readonly enabled: boolean;
@@ -72,8 +75,10 @@ function highlightForTui(
   if (lang && supportsLanguage(lang)) {
     try {
       return highlight(trimmed, { language: lang, ignoreIllegals: true });
-    } catch {
-      // fall through to plain rendering
+    } catch (error) {
+      log.warn(
+        `Syntax highlighting failed for ${lang} (${trimmed.length} chars); rendering plain text: ${toErrorMessage(error)}`,
+      );
     }
   }
   return style.gray(trimmed);
