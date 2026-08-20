@@ -5,10 +5,7 @@ import {
   parseCliModelAccessSelection,
   type CliModelAccessSelection,
 } from '@cli/runtime/modelAccessRoute';
-import {
-  type CliModelAccessSelectionResult,
-  updateCliModelAccess,
-} from '@cli/runtime/modelAccessSelection';
+import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
 import type { ApiProvider } from '@model/apiProviders';
 import { collapseWhitespace } from '@utils/text/stringUtils';
@@ -21,14 +18,6 @@ import {
 
 const MODEL_ACCESS_USAGE =
   'Usage: /api chatgpt | grok | kimi-code | glm-code | status';
-
-/** Apply an access selection to the TUI and refresh dependent views. */
-function completeModelAccessSelection(
-  access: CliModelAccessSelectionResult,
-): string {
-  refreshSubscriptionPreferenceViews();
-  return collapseWhitespace(access.message);
-}
 
 /** Save a provider key and refresh access-dependent TUI views. */
 export async function applyCliProviderApiKey(
@@ -63,7 +52,8 @@ async function applyCliModelAccessSelectionWithSignal(
       output.writeProgress(message, { copyable: true }),
     signal,
   });
-  output.appendOutcome(completeModelAccessSelection(access));
+  refreshSubscriptionPreferenceViews();
+  output.appendOutcome(collapseWhitespace(access.message));
 }
 
 export function applyCliModelAccessSelection(

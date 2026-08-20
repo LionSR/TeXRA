@@ -179,13 +179,13 @@ export interface DesktopCommandActions {
   toggleSummaryBar(): void;
 }
 
-export interface DesktopSettingsTabMessage {
+interface DesktopSettingsTabMessage {
   command: typeof SETTINGS_VIEW_COMMANDS.SET_TAB;
   tab: SettingsTabPanelName;
   agentSubTab?: AgentCategory;
 }
 
-export interface DesktopMainViewResetMessage {
+interface DesktopMainViewResetMessage {
   command: typeof MAIN_VIEW_COMMANDS.STATE_RESTORE;
   isResetOperation: true;
 }

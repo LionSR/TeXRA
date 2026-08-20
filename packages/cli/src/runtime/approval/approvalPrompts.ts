@@ -100,8 +100,7 @@ export function warnApprovalDenied(context: CliContext, gate?: string): void {
  * switch decision, the retry request message, and the auto-switch) switch on
  * this instead of re-deriving precedence from overlapping predicates.
  */
-export type CliRetryAction =
-  `disable-quota-route:${QuotaFallbackRouteId}` | 'none';
+type CliRetryAction = `disable-quota-route:${QuotaFallbackRouteId}` | 'none';
 
 const DISABLE_QUOTA_ROUTE_PREFIX = 'disable-quota-route:';
 

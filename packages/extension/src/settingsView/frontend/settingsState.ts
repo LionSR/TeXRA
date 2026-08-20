@@ -71,16 +71,6 @@ interface ProviderKeyModalTarget {
   displayName: string;
 }
 
-const DEFAULT_CHATGPT_AUTH: ChatGptAuthStatus = {
-  signedIn: false,
-  preferSubscription: false,
-};
-
-const DEFAULT_GROK_AUTH: GrokAuthStatus = {
-  signedIn: false,
-  preferSubscription: false,
-};
-
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is
 // declared.
@@ -299,10 +289,12 @@ export const githubTokenStatus = trackedSignal<'secret' | 'env' | 'none'>(
   () => 'none',
 );
 export const chatgptAuth = trackedSignal<ChatGptAuthStatus>(() => ({
-  ...DEFAULT_CHATGPT_AUTH,
+  signedIn: false,
+  preferSubscription: false,
 }));
 export const grokAuth = trackedSignal<GrokAuthStatus>(() => ({
-  ...DEFAULT_GROK_AUTH,
+  signedIn: false,
+  preferSubscription: false,
 }));
 export const subscriptionUsage =
   trackedSignal<SubscriptionUsageSnapshots | null>(() => null);

@@ -5,7 +5,7 @@ import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Valid documentation identifiers for error messages. */
-export type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
+type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
 
 /** Log a formatted error message and return it. */
 export function logErrorMessage(

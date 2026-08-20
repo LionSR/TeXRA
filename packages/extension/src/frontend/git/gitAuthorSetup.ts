@@ -9,12 +9,10 @@ import { platform } from '@platform/platform';
 import {
   applyGitAuthorSettings,
   readGitAuthorSettingsFromState,
-  type GitAuthorSettings,
 } from '@utils/system/gitAuthorSettings';
 
-/** Apply settings and return them so callers can forward without re-reading. */
-export function applyGitAuthorConfig(): GitAuthorSettings {
-  return applyGitAuthorSettings(
+export function applyGitAuthorConfig(): void {
+  applyGitAuthorSettings(
     readGitAuthorSettingsFromState(platform().workspaceState),
   );
 }

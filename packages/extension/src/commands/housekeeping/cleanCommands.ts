@@ -67,7 +67,7 @@ export async function handleClean(config: CleanConfig): Promise<void> {
   await runFileOp(config, {
     runSingle: runCleanSingle,
     runMultiple: runCleanMultiple,
-    runRunDir: (executionId) => runCleanRunDir(executionId),
+    runRunDir: runCleanRunDir,
     showResult: showCleanResult,
   });
 }

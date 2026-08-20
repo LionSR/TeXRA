@@ -250,22 +250,6 @@ export function createChatSessionController(
     return streamId ? { streamId, followUps } : undefined;
   };
 
-  const restoreRecoveryFollowUps = (
-    recovery: SupersededInterruptedRecovery | undefined,
-    lease: FollowUpRecoveryLease,
-  ): void => {
-    runtimeSession.followUps.queue(lease).restore(recovery?.followUps ?? []);
-    if (recovery?.followUps.length) {
-      runtimeSession.events.emit({
-        scope: 'session',
-        event: {
-          type: 'updateQueuedFollowUps',
-          payload: { streamId: lease.streamId },
-        },
-      });
-    }
-  };
-
   const restoreInterruptedRecovery = (
     recovery: SupersededInterruptedRecovery | undefined,
   ): void => {
@@ -736,9 +720,20 @@ export function createChatSessionController(
                   onFollowUpQueueReady: (lease) => {
                     if (options.onFollowUpQueueReady) {
                       options.onFollowUpQueueReady(lease);
-                    } else {
-                      const recovery = supersedeInterruptedRecovery();
-                      restoreRecoveryFollowUps(recovery, lease);
+                      return;
+                    }
+                    const recovery = supersedeInterruptedRecovery();
+                    runtimeSession.followUps
+                      .queue(lease)
+                      .restore(recovery?.followUps ?? []);
+                    if (recovery?.followUps.length) {
+                      runtimeSession.events.emit({
+                        scope: 'session',
+                        event: {
+                          type: 'updateQueuedFollowUps',
+                          payload: { streamId: lease.streamId },
+                        },
+                      });
                     }
                   },
                   isCancellationRequested,

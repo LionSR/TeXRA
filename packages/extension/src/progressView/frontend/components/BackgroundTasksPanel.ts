@@ -394,15 +394,21 @@ export class BackgroundTasksPanel extends LitElement {
   /**
    * Shared section shape: guard against an empty list, build the
    * `.section-content` rows, and either return them bare (single populated
-   * section under the outer panel) or wrap them in the counted disclosure
-   * header via {@link renderSectionDetails}.
+   * section under the outer panel) or wrap them in a counted nested quiet
+   * disclosure (`<wa-details class="collapsible-quiet">`) with the section
+   * label in the summary slot.
    */
   private renderSectionRows<T>(
     items: readonly T[],
     key: (item: T) => unknown,
     renderItem: (item: T, index: number) => TemplateResult,
     withHeader: boolean,
-    section: Omit<Parameters<typeof renderSectionDetails>[0], 'content'>,
+    section: {
+      icon: TeXRAIconName;
+      label: string;
+      counts: readonly string[];
+      open: boolean;
+    },
   ): TemplateResult | typeof nothing {
     if (items.length === 0) return nothing;
 
@@ -411,7 +417,19 @@ export class BackgroundTasksPanel extends LitElement {
     `;
     if (!withHeader) return content;
 
-    return renderSectionDetails({ ...section, content });
+    return html`
+      <wa-details class="collapsible-quiet" ?open=${section.open}>
+        <div slot="summary" class="section-label">
+          ${waIcon(section.icon)}
+          <span
+            >${section.label}${section.counts.map(
+              (count) => html` &middot; ${count}`,
+            )}</span
+          >
+        </div>
+        ${content}
+      </wa-details>
+    `;
   }
 
   private renderTaskItem(
@@ -498,29 +516,6 @@ export class BackgroundTasksPanel extends LitElement {
   private navigateToStream(streamId: string): void {
     this.dispatchEvent(ProgressEvents.streamSwitch({ streamId }));
   }
-}
-
-/** Nested quiet disclosure wrapping one section's rows, with a counted label. */
-function renderSectionDetails(options: {
-  icon: TeXRAIconName;
-  label: string;
-  counts: readonly string[];
-  open: boolean;
-  content: TemplateResult;
-}): TemplateResult {
-  return html`
-    <wa-details class="collapsible-quiet" ?open=${options.open}>
-      <div slot="summary" class="section-label">
-        ${waIcon(options.icon)}
-        <span
-          >${options.label}${options.counts.map(
-            (count) => html` &middot; ${count}`,
-          )}</span
-        >
-      </div>
-      ${options.content}
-    </wa-details>
-  `;
 }
 
 /**

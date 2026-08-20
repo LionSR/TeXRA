@@ -199,11 +199,6 @@ export async function signOutCliSupabase(): Promise<void> {
   );
 }
 
-/** Fresh access token for the stored CLI session. */
-export async function getCliSessionAccessToken(): Promise<string | null> {
-  return initializeCliSupabaseAuth().ensureFreshToken();
-}
-
 export async function getCliAuthProfile(): Promise<CliAuthProfile> {
   const authCoordinator = initializeCliSupabaseAuth();
 

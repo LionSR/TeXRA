@@ -142,23 +142,6 @@ const SECTIONS: readonly SectionConfig[] = [
  */
 const PANEL_MARKER_SELECTOR = '[data-request-panel]';
 
-function renderPanel(
-  section: SectionConfig,
-  permission: PermissionPayload,
-  armed: boolean,
-): TemplateResult {
-  // `armed` marks the panel the y/n accelerators will act on. Sections render
-  // in a fixed kind order while the accelerators target the newest request,
-  // so with mixed kinds pending the top panel on screen is not the one a
-  // keypress hits. Without a visible mark that divergence is invisible, and
-  // the action it triggers can be executing a shell command.
-  return staticHtml`<${section.tag}
-    data-request-panel
-    ?data-armed=${armed}
-    .permission=${permission}
-  ></${section.tag}>`;
-}
-
 function externalInquiryKeys(
   permissions: readonly PermissionPayload[],
 ): string[] {
@@ -351,7 +334,16 @@ export class RequestPanels extends LitElement {
     permission: PermissionPayload,
     armed: boolean,
   ): TemplateResult {
-    const panel = renderPanel(config, permission, armed);
+    // `armed` marks the panel the y/n accelerators will act on. Sections render
+    // in a fixed kind order while the accelerators target the newest request,
+    // so with mixed kinds pending the top panel on screen is not the one a
+    // keypress hits. Without a visible mark that divergence is invisible, and
+    // the action it triggers can be executing a shell command.
+    const panel = staticHtml`<${config.tag}
+      data-request-panel
+      ?data-armed=${armed}
+      .permission=${permission}
+    ></${config.tag}>`;
     if (!this.multiRunPending) return panel;
     const streamId = permission.data.streamId;
     if (!streamId) return panel;

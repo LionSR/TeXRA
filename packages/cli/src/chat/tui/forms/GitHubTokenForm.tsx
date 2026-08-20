@@ -87,7 +87,11 @@ export function GitHubTokenForm(
 
   if (entering) {
     return (
-      <GitHubTokenEntryForm
+      <CredentialEntryForm
+        title="Set GitHub token"
+        helper={<Text dimColor>Get a token: {GITHUB_TOKEN_CREATE_URL}</Text>}
+        placeholder="enter your GitHub token (hidden)"
+        savedHint="Stored in TeXRA secrets on Enter — or set GH_TOKEN / GITHUB_TOKEN."
         error={error}
         saving={saving}
         onCancel={() => {
@@ -156,23 +160,6 @@ export function GitHubTokenForm(
         });
       }}
       onCancel={props.onCancel}
-    />
-  );
-}
-
-function GitHubTokenEntryForm(props: {
-  readonly error?: string;
-  readonly saving?: boolean;
-  readonly onSubmit: (token: string) => void;
-  readonly onCancel: () => void;
-}): React.JSX.Element {
-  return (
-    <CredentialEntryForm
-      title="Set GitHub token"
-      helper={<Text dimColor>Get a token: {GITHUB_TOKEN_CREATE_URL}</Text>}
-      placeholder="enter your GitHub token (hidden)"
-      savedHint="Stored in TeXRA secrets on Enter — or set GH_TOKEN / GITHUB_TOKEN."
-      {...props}
     />
   );
 }

@@ -1,6 +1,7 @@
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { ExecResult } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -195,7 +196,7 @@ async function runInstallGithubAction(
     return CliExitCode.Usage;
   }
 
-  let checkout: ReturnType<typeof git>;
+  let checkout: ExecResult;
   if (branchExists) {
     checkout = git(root, 'checkout', branch);
   } else {

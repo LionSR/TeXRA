@@ -51,27 +51,6 @@ export function defineSubscriptionAuthCommand(
 ): CommandDef<typeof GLOBAL_ARGS> {
   const provider = subscriptionProvider(options.providerId);
 
-  function emitLogin(
-    context: CliContext,
-    account: SubscriptionAccount,
-    preferenceEffective: boolean,
-  ): void {
-    const payload = {
-      authenticated: true,
-      email: account.email ?? null,
-      ...options.loginPayloadExtras?.(account),
-      preferSubscription: preferenceEffective,
-    };
-    const signedIn = `Signed in with ${provider.displayName} as ${account.label}.`;
-    emitCliResult(context, {
-      json: payload,
-      ndjson: { kind: options.ndjsonKind, ...payload },
-      text: preferenceEffective
-        ? `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`
-        : `${signedIn}\n${provider.displayName} subscription preference could not be enabled because a more specific setting overrides the config.`,
-    });
-  }
-
   async function runLogin(
     context: CliContext,
     init: { device: boolean; noBrowser: boolean },
@@ -89,7 +68,21 @@ export function defineSubscriptionAuthCommand(
     if (!signInResult.ok) return CliExitCode.ModelOrNetworkError;
 
     const update = await provider.setPreferSubscription(true);
-    emitLogin(context, signInResult.value, update.effective);
+    const account = signInResult.value;
+    const payload = {
+      authenticated: true,
+      email: account.email ?? null,
+      ...options.loginPayloadExtras?.(account),
+      preferSubscription: update.effective,
+    };
+    const signedIn = `Signed in with ${provider.displayName} as ${account.label}.`;
+    emitCliResult(context, {
+      json: payload,
+      ndjson: { kind: options.ndjsonKind, ...payload },
+      text: update.effective
+        ? `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`
+        : `${signedIn}\n${provider.displayName} subscription preference could not be enabled because a more specific setting overrides the config.`,
+    });
     invalidateModelOptionsCache();
     return CliExitCode.Success;
   }

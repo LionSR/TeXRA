@@ -36,7 +36,7 @@ const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 
 const ESC_SLASH_PREFIX = '\u001B/';
 
-export interface BaseTextInputProps {
+interface BaseTextInputProps {
   readonly value: string;
   readonly placeholder?: string;
   readonly focus?: boolean;
@@ -87,7 +87,7 @@ export interface BaseTextInputProps {
   readonly masked?: boolean;
 }
 
-export interface TextInputDisplayWindow {
+interface TextInputDisplayWindow {
   readonly value: string;
   readonly cursor: number;
   readonly clipped: boolean;
