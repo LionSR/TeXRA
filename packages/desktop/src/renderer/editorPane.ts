@@ -28,6 +28,7 @@ import {
   monacoThemeForHostTheme,
   type MonacoModule,
 } from '@shared/monaco/monacoLoader';
+import { KeyedMutex } from '@utils/core';
 
 import { getDesktopChromeFontSize } from './desktopTypography';
 import {
@@ -100,6 +101,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   let treeError: string | undefined;
   let treeLoading = true;
   let refreshPromise: Promise<void> | undefined;
+  let refreshQueued = false;
+  let refreshGeneration = 0;
   let treeRevision = 0;
   const expandedDirectories = new Set<string>();
   const directoryChildren = new Map<string, readonly EditorTreeNode[]>();
@@ -108,6 +111,10 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   // One model per opened file so switching tabs preserves each file's undo
   // history and cursor — recreating a model on every switch would lose both.
   const models = new Map<string, TextModel>();
+  const pendingModelLoads = new Map<string, Promise<TextModel>>();
+  const modelSyncs = new KeyedMutex<string>();
+  const writeEpochs = new Map<string, number>();
+  const activeWrites = new Map<string, number>();
   const dirtyPaths = new Set<string>();
   const syncingPaths = new Set<string>();
 
@@ -350,6 +357,82 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     return editorLoad;
   }
 
+  async function readCurrentContents(path: string): Promise<string> {
+    // An initial open has no cached model for refresh to update. If a refresh
+    // starts during its read, read again before publishing the new model.
+    let generation = refreshGeneration;
+    let contents = await callbacks.readFile(path);
+    while (generation !== refreshGeneration) {
+      generation = refreshGeneration;
+      contents = await callbacks.readFile(path);
+    }
+    return contents;
+  }
+
+  function loadModel(
+    path: string,
+    loadedMonaco: MonacoModule,
+  ): Promise<TextModel> {
+    const loaded = models.get(path);
+    if (loaded) return Promise.resolve(loaded);
+    const pending = pendingModelLoads.get(path);
+    if (pending) return pending;
+
+    const load = readCurrentContents(path).then((contents) => {
+      const model = loadedMonaco.editor.createModel(
+        contents,
+        monacoLanguageForPath(path),
+      );
+      // Track dirty per file. `onDidChangeContent` fires for programmatic
+      // edits too, which is correct here: only reads and saves are
+      // programmatic, and both reset the flag explicitly.
+      model.onDidChangeContent(() => {
+        if (syncingPaths.has(path)) return;
+        if (dirtyPaths.has(path)) return;
+        dirtyPaths.add(path);
+        callbacks.onDirtyChange(path, true);
+        renderTree();
+      });
+      models.set(path, model);
+      return model;
+    });
+    const ownedLoad = load.finally(() => {
+      if (pendingModelLoads.get(path) === ownedLoad) {
+        pendingModelLoads.delete(path);
+      }
+    });
+    pendingModelLoads.set(path, ownedLoad);
+    return ownedLoad;
+  }
+
+  function syncCleanModel(path: string, model: TextModel): Promise<void> {
+    return modelSyncs.runExclusive(path, async () => {
+      if (dirtyPaths.has(path)) return;
+      const version = model.getVersionId();
+      const generation = refreshGeneration;
+      const writeEpoch = writeEpochs.get(path) ?? 0;
+      const contents = await callbacks.readFile(path);
+      // The read crosses IPC. Recheck all local state so an edit, save, or
+      // newer refresh can supersede this result while it is in flight.
+      if (
+        dirtyPaths.has(path) ||
+        (activeWrites.get(path) ?? 0) > 0 ||
+        model.getVersionId() !== version ||
+        refreshGeneration !== generation ||
+        (writeEpochs.get(path) ?? 0) !== writeEpoch ||
+        model.getValue() === contents
+      ) {
+        return;
+      }
+      syncingPaths.add(path);
+      try {
+        model.setValue(contents);
+      } finally {
+        syncingPaths.delete(path);
+      }
+    });
+  }
+
   async function open(path: string): Promise<void> {
     const request = ++latestOpenRequest;
     const target = await ensureEditor();
@@ -357,34 +440,9 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     try {
       let model = models.get(path);
       if (!model) {
-        const contents = await callbacks.readFile(path);
-        model = monaco.editor.createModel(
-          contents,
-          monacoLanguageForPath(path),
-        );
-        // Track dirty per file. `onDidChangeContent` fires for programmatic
-        // edits too, which is correct here: only reads and saves are
-        // programmatic, and both reset the flag explicitly.
-        model.onDidChangeContent(() => {
-          if (syncingPaths.has(path)) return;
-          if (dirtyPaths.has(path)) return;
-          dirtyPaths.add(path);
-          callbacks.onDirtyChange(path, true);
-          renderTree();
-        });
-        models.set(path, model);
-      } else if (!dirtyPaths.has(path)) {
-        const contents = await callbacks.readFile(path);
-        // The read crosses IPC. Recheck dirty state in case the user edited the
-        // cached model while it was in flight; their local change always wins.
-        if (!dirtyPaths.has(path) && model.getValue() !== contents) {
-          syncingPaths.add(path);
-          try {
-            model.setValue(contents);
-          } finally {
-            syncingPaths.delete(path);
-          }
-        }
+        model = await loadModel(path, monaco);
+      } else {
+        await syncCleanModel(path, model);
       }
       // Several tree clicks can race the first Monaco load and IPC reads.
       // Populate every requested model, but only the newest request may choose
@@ -398,8 +456,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     }
   }
 
-  function refresh(): Promise<void> {
-    if (refreshPromise) return refreshPromise;
+  async function refreshOnce(): Promise<void> {
     treeRevision += 1;
     const revision = treeRevision;
     treeLoading = true;
@@ -408,7 +465,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     loadingDirectories.clear();
     directoryErrors.clear();
     renderTree();
-    refreshPromise = callbacks
+    const treeRefresh = callbacks
       .listFiles('')
       .then((listedFiles) => {
         if (revision !== treeRevision) return;
@@ -423,9 +480,30 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       .finally(() => {
         if (revision !== treeRevision) return;
         treeLoading = false;
-        refreshPromise = undefined;
         renderTree();
       });
+    const modelRefreshes = [...models].map(([path, model]) =>
+      syncCleanModel(path, model).catch((error: unknown) =>
+        callbacks.onError(error),
+      ),
+    );
+    await Promise.all([treeRefresh, ...modelRefreshes]);
+  }
+
+  function refresh(): Promise<void> {
+    refreshGeneration += 1;
+    if (refreshPromise) {
+      refreshQueued = true;
+      return refreshPromise;
+    }
+    refreshPromise = (async () => {
+      do {
+        refreshQueued = false;
+        await refreshOnce();
+      } while (refreshQueued);
+    })().finally(() => {
+      refreshPromise = undefined;
+    });
     return refreshPromise;
   }
 
@@ -434,6 +512,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     const model = path ? models.get(path) : undefined;
     if (!path || !model) return;
     const savedVersion = model.getVersionId();
+    activeWrites.set(path, (activeWrites.get(path) ?? 0) + 1);
+    writeEpochs.set(path, (writeEpochs.get(path) ?? 0) + 1);
     try {
       await callbacks.writeFile(path, model.getValue());
       if (model.getVersionId() !== savedVersion) return;
@@ -442,6 +522,11 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       renderTree();
     } catch (error) {
       callbacks.onError(error);
+    } finally {
+      const remainingWrites = (activeWrites.get(path) ?? 1) - 1;
+      if (remainingWrites === 0) activeWrites.delete(path);
+      else activeWrites.set(path, remainingWrites);
+      writeEpochs.set(path, (writeEpochs.get(path) ?? 0) + 1);
     }
   }
 
