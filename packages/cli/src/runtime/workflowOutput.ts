@@ -308,21 +308,12 @@ export async function resolveWorkflowOutput(
       );
     }
 
-    return {
-      ...result,
-      workingDirectory: context.cwd,
-      runDirectory,
-      copiedOutputs,
-    };
+    return { ...baseResult, copiedOutputs };
   }
 
   const finalOutput = finalWorkflowOutput(result.outputs);
   if (!outputFile || !finalOutput) {
-    return {
-      ...result,
-      workingDirectory: context.cwd,
-      runDirectory,
-    };
+    return baseResult;
   }
 
   const targetPath = joinCwdRelative(outputFile, context.cwd);
@@ -331,12 +322,7 @@ export async function resolveWorkflowOutput(
     await fs.copyFile(finalOutput.absolutePath, targetPath);
   }
 
-  return {
-    ...result,
-    workingDirectory: context.cwd,
-    runDirectory,
-    copiedOutput: targetPath,
-  };
+  return { ...baseResult, copiedOutput: targetPath };
 }
 
 export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {

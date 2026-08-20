@@ -565,6 +565,16 @@ export class SessionState {
     return changedParents;
   }
 
+  /** Drop the ephemeral status/session/execution/metadata-cache state a
+   *  cleared stream leaves behind. Callers still own tombstoning it in
+   *  `_removedStreams` and, for `clearAll`, scrubbing rosters. */
+  private clearEphemeralStreamState(stream: StreamTabId): void {
+    this.streamStatus.clearStream(stream);
+    this._sessionState.delete(stream);
+    this._streamStates.delete(stream);
+    this._streamMetadataCache.delete(stream);
+  }
+
   private incarnationOf(stream: StreamTabId): number {
     return this._streamIncarnations.get(stream) ?? 0;
   }
@@ -602,10 +612,7 @@ export class SessionState {
       return 'superseded';
     }
 
-    this.streamStatus.clearStream(stream);
-    this._sessionState.delete(stream);
-    this._streamStates.delete(stream);
-    this._streamMetadataCache.delete(stream);
+    this.clearEphemeralStreamState(stream);
     this._removedStreams.set(stream, expectedIncarnation);
 
     return 'deleted';
@@ -646,10 +653,7 @@ export class SessionState {
     });
     const retained = new Set([...deletion.active, ...deletion.failed]);
     const clearIdentity = (stream: StreamTabId): void => {
-      this.streamStatus.clearStream(stream);
-      this._sessionState.delete(stream);
-      this._streamStates.delete(stream);
-      this._streamMetadataCache.delete(stream);
+      this.clearEphemeralStreamState(stream);
       this.scrubStreamFromRosters(stream);
       this._removedStreams.set(stream, this.incarnationOf(stream));
     };
