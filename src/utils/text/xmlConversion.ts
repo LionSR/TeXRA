@@ -4,12 +4,11 @@
  */
 
 // Third-party imports
-import TurndownService from 'turndown';
-import { gfm } from 'turndown-plugin-gfm';
 import { execa } from 'execa';
 
 // Local imports - common
 import { createLog } from '@logger/logUtils';
+import { createHtmlToMarkdown } from '@tools/htmlToMarkdown';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
@@ -88,16 +87,7 @@ function convertLatexToMarkdown(latex: string): string {
  * Internal helper for formatContent fallback.
  */
 function convertHtmlToMarkdown(html: string): string {
-  const turndownService = new TurndownService({
-    bulletListMarker: '-',
-    codeBlockStyle: 'fenced',
-    emDelimiter: '*',
-    headingStyle: 'atx',
-    strongDelimiter: '**',
-  });
-  turndownService.use(gfm);
-
-  return turndownService.turndown(html);
+  return createHtmlToMarkdown().turndown(html);
 }
 
 /**
