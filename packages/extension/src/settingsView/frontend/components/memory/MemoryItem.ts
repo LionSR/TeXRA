@@ -27,6 +27,7 @@ import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
+import { getBasename } from '@utils/core';
 import {
   formatBytes,
   formatResultCount,
@@ -200,7 +201,7 @@ export class MemoryItem extends LitElement {
    */
   private renderActionGroup(): TemplateResult {
     const pinned = this.item?.pinned === true;
-    const memoryName = this.item?.displayPath?.split('/').pop() ?? '';
+    const memoryName = getBasename(this.item?.displayPath);
     const actions = [
       {
         id: 'memory-pin-button',

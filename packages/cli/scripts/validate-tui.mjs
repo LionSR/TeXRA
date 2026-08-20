@@ -43,6 +43,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { parseArgs as parseCittyArgs } from 'citty';
+import PQueue from 'p-queue';
 
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
@@ -4287,7 +4288,7 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
   let exited = null;
   let rawOutput = '';
   const childEventFrames = new Map();
-  let writeQueue = Promise.resolve();
+  const writeQueue = new PQueue({ concurrency: 1 });
   if (scenario.env?.HARNESS_CHILD_EVENT_ORDER) {
     term.parser.registerOscHandler(CHILD_EVENT_ORDER_MARKER_OSC, (data) => {
       if (!data.startsWith(CHILD_EVENT_ORDER_MARKER_PREFIX)) return false;
@@ -4297,7 +4298,7 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     });
   }
   const frameSnapshot = async () => {
-    await writeQueue;
+    await writeQueue.onIdle();
     return renderFrame(term);
   };
   const childEnv = scenarioChildEnv(scenario, cols, rows);
@@ -4334,9 +4335,7 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
   child.onData((d) => {
     lastData = Date.now();
     rawOutput += d;
-    writeQueue = writeQueue.then(
-      () => new Promise((resolve) => term.write(d, resolve)),
-    );
+    writeQueue.add(() => new Promise((resolve) => term.write(d, resolve)));
   });
 
   // boot: wait for the interactive input/status area to settle. Static
