@@ -8,7 +8,7 @@ import { execa } from 'execa';
 
 // Local imports - common
 import { createLog } from '@logger/logUtils';
-import { createHtmlToMarkdown } from '@tools/htmlToMarkdown';
+import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
