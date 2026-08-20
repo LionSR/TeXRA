@@ -97,6 +97,7 @@ import {
   refreshToolAvailability,
   seedDisabledToolDefaults,
 } from '@tools/toolAvailability';
+import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
@@ -603,12 +604,10 @@ export async function activate(context: vscode.ExtensionContext) {
   const disposeGitHubAuthListener = appSignals.on(
     'githubTokenInvalid',
     ({ message }) => {
-      log.error(`GitHub token rejected: ${message}`);
+      const rejected = gitHubTokenRejectedMessage(message);
+      log.error(rejected);
       void vscode.window
-        .showErrorMessage(
-          `GitHub token rejected: ${message}`,
-          'Open Git settings',
-        )
+        .showErrorMessage(rejected, 'Open Git settings')
         .then((choice) => {
           if (choice === 'Open Git settings') {
             void vscode.commands.executeCommand('texra.showGitSettings');

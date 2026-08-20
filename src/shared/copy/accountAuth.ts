@@ -53,6 +53,31 @@ export const GROK_AUTH = {
 } as const;
 
 /**
+ * Sign-in / sign-out outcome sentences that read the same for any account,
+ * parameterized by the provider's display name.
+ *
+ * All three hosts drive these from the one `subscriptionProvider(id)`
+ * descriptor and reported the outcome in their own words: the CLI auth command
+ * and launcher, the desktop credential controller, and the extension's
+ * settings handlers. One outcome of one operation on one account gets one
+ * sentence.
+ */
+export const ACCOUNT_OUTCOME = {
+  signedInAs: (providerDisplayName: string, accountLabel: string): string =>
+    `Signed in with ${providerDisplayName} as ${accountLabel}.`,
+  signedOut: (providerDisplayName: string): string =>
+    `Signed out of ${providerDisplayName}.`,
+  /** Prefix only — the extension appends the reason through its own logger. */
+  signOutFailed: (providerDisplayName: string): string =>
+    `${providerDisplayName} sign-out failed`,
+  signOutFailedWithReason: (
+    providerDisplayName: string,
+    reason: string,
+  ): string =>
+    `${ACCOUNT_OUTCOME.signOutFailed(providerDisplayName)}: ${reason}`,
+} as const;
+
+/**
  * Researcher Access fields that only the account surfaces need. The program
  * name itself stays on {@link RESEARCHER_ACCESS} in `onboarding.ts`.
  */
@@ -70,5 +95,5 @@ export const RESEARCHER_ACCESS_AUTH = {
   startingBrowser: (provider: string): string =>
     `Opening browser for ${RESEARCHER_ACCESS.label} ${provider} sign-in...`,
   signedIn: (accountLabel: string): string =>
-    `Signed in with ${RESEARCHER_ACCESS.label} as ${accountLabel}.`,
+    ACCOUNT_OUTCOME.signedInAs(RESEARCHER_ACCESS.label, accountLabel),
 } as const;
