@@ -17,6 +17,7 @@ export { designTokens } from './litStyles';
 export { selectStyles, compactFormControlStyles } from './selectStyles';
 export { requestPanelSharedStyles, sp } from './requestPanelSharedStyles';
 export { viewTabStyles } from './viewTabStyles';
+export { viewHeaderLayoutStyles } from './viewHeaderStyles';
 
 // Shared inline wa-callout banner chrome (agent-config, api-key, dependency,
 // login, getting-started, workflow-hint banners)
