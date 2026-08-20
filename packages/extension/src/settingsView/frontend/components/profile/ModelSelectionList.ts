@@ -173,11 +173,19 @@ export class ModelSelectionList extends LitElement {
   }
 
   private renderModelRow(model: ModelSelectionItem): TemplateResult {
+    const isLastEnabledModel =
+      model.enabled &&
+      model.availability !== 'retired' &&
+      this.models.filter(
+        (candidate) =>
+          candidate.enabled && candidate.availability !== 'retired',
+      ).length === 1;
+
     return html`
       <div class="model-row">
         <wa-switch
           ?checked=${model.enabled}
-          ?disabled=${model.disabled && !model.enabled}
+          ?disabled=${(model.disabled && !model.enabled) || isLastEnabledModel}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
             postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED, {
