@@ -165,11 +165,8 @@ async function runOrchestration(context: CliContext): Promise<number> {
     const history = await listCliHistoryEntries();
     const presets = readCliMultiAgentPresets();
     const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
-    const launchContext = context;
     const presetLaunchBlockReason =
-      launchContext.approvalPolicy === 'never'
-        ? 'delegation-denied'
-        : undefined;
+      context.approvalPolicy === 'never' ? 'delegation-denied' : undefined;
     const [modelAccess, authProfile] = await Promise.all([
       readCliModelAccessStatus(),
       getCliAuthProfile(),
@@ -204,7 +201,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       loadCliApiStatus(),
     ]);
     const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
-      launchContext,
+      context,
       models,
     );
     const { runOrchestrationTui } =
@@ -229,7 +226,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     switch (action.kind) {
       case 'chat': {
         const { runChat } = await import('../chat/tui/runChatTui');
-        const result = await runChat(launchContext, {
+        const result = await runChat(context, {
           agentOverride: action.agent,
           modelOverride: action.model,
         });
@@ -272,10 +269,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
             return 'cancel';
           },
           signIn: async () => {
-            const code = await runLoginCommand(
-              launchContext,
-              loginInitFromArgs({}),
-            );
+            const code = await runLoginCommand(context, loginInitFromArgs({}));
             return (
               code === CliExitCode.Success &&
               (await SupabaseClient.isAuthenticated())
@@ -308,7 +302,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         const rootAgent = plan.rootAgent;
         writeMissingPresetAgents(plan);
         const { runChat } = await import('../chat/tui/runChatTui');
-        const result = await runChat(launchContext, {
+        const result = await runChat(context, {
           agentOverride: rootAgent.name,
           teamName: plan.preset.name,
           modelOverride: action.model,
@@ -320,7 +314,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         return result.exitCode;
       }
       case 'resume':
-        return runResumeExecution(launchContext, action.id);
+        return runResumeExecution(context, action.id);
       case 'browse-resumes':
       case 'configure-model-access':
       case 'browse-agents':
@@ -347,7 +341,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
               );
             } else {
               const result = await updateCliModelAccess(
-                launchContext,
+                context,
                 {
                   kind: 'subscription-preference',
                   provider: action.provider,
@@ -361,7 +355,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
             await signOutCliSupabase();
             writeTextStdout('Signed out of TeXRA.');
           } else {
-            await runLoginCommand(launchContext, loginInitFromArgs({}));
+            await runLoginCommand(context, loginInitFromArgs({}));
           }
           invalidateModelOptionsCache();
         } catch (error: unknown) {
@@ -371,11 +365,9 @@ async function runOrchestration(context: CliContext): Promise<number> {
       }
       case 'set-model-access': {
         try {
-          const result = await updateCliModelAccess(
-            launchContext,
-            action.access,
-            { writeProgress: writeTextStdout },
-          );
+          const result = await updateCliModelAccess(context, action.access, {
+            writeProgress: writeTextStdout,
+          });
           writeTextStdout(result.message);
         } catch (error: unknown) {
           writeErrorStderr(error);

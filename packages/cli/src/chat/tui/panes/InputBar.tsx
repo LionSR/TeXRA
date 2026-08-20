@@ -49,7 +49,7 @@ import type { InputHistory } from '../history/inputHistory';
 
 const CSI_SEQUENCE_TAIL_RE = /^\[[0-?]*[ -/]*[@-~]$/u;
 
-export interface InputBarProps {
+interface InputBarProps {
   /** Forwarded to BaseTextInput; called only on real (non-paste) Enter.
    *  `mediaFiles` carries absolute paths of any pasted-image attachments. */
   readonly onSubmit: (value: string, mediaFiles?: readonly string[]) => void;

@@ -76,14 +76,6 @@ class AgentDirectoryManager {
     return this.getDirectoryService().getDirectory(source);
   }
 
-  /**
-   * Get all local agent directories (excludes Remote).
-   * Returns directories in priority order: Custom, BuiltIn, BuiltInToolUse.
-   */
-  async getAllLocal(): Promise<AgentDirectoryEntry[]> {
-    return this.getDirectoryService().getAllLocal();
-  }
-
   async custom(): Promise<string> {
     return this.getDirectoryService().custom();
   }
@@ -166,7 +158,7 @@ class AgentDirectoryManager {
         return;
       }
 
-      const directories = await this.getAllLocal();
+      const directories = await this.getDirectoryService().getAllLocal();
       if (!this.onAgentYamlChange) {
         return;
       }

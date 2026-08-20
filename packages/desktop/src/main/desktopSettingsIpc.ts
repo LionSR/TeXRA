@@ -136,12 +136,10 @@ export function createDesktopSettingsIpc(
     },
   });
 
-  function readCurrentGitAuthorSettings() {
-    return readGitAuthorSettingsFromState(workspaceState);
-  }
-
   function applyCurrentGitAuthorSettings() {
-    return applyGitAuthorSettings(readCurrentGitAuthorSettings());
+    return applyGitAuthorSettings(
+      readGitAuthorSettingsFromState(workspaceState),
+    );
   }
 
   const settingsStores: SettingsStores = {

@@ -21,7 +21,6 @@ import {
   dispatchSettingsViewOutbound,
   SETTINGS_TAB_PANEL_BY_NAME,
   type SettingsTabPanelName,
-  type SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
@@ -177,12 +176,8 @@ export class SettingsApp extends SettingsAppBase {
     }, delay);
   }
 
-  /** Outbound message handlers composed from the settings state slices. */
-  private readonly messageHandlers: SettingsViewOutboundHandlerRegistry =
-    settingsViewHandlers;
-
   protected override handleMessage(raw: unknown): void {
-    dispatchSettingsViewOutbound(raw, this.messageHandlers, (error) => {
+    dispatchSettingsViewOutbound(raw, settingsViewHandlers, (error) => {
       this.logMessageSchemaError('[SettingsApp]', raw, error);
     });
   }

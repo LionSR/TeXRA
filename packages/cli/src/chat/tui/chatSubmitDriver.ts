@@ -52,7 +52,7 @@ import {
 import type { ChatSessionController } from '../chatSessionController';
 import type { SkillActivation } from './forms/SkillsListForm';
 
-export interface PreparedChatInstruction {
+interface PreparedChatInstruction {
   readonly instruction: string;
   readonly displayInstruction?: string;
   readonly reservedSkillActivations: readonly SkillActivation[];
@@ -109,7 +109,7 @@ export function chatTuiFocusedChildFollowUpRoute(): FocusedChildFollowUpRoute {
   });
 }
 
-export interface ChatSubmitDriverDeps {
+interface ChatSubmitDriverDeps {
   readonly session: TuiSession;
   readonly chatController: ChatSessionController;
   readonly followUpQueue: PQueue;
@@ -122,7 +122,7 @@ export interface ChatSubmitDriverDeps {
   readonly getSlashCommandContext: () => SlashCommandContext;
 }
 
-export interface ChatSubmitDriver {
+interface ChatSubmitDriver {
   readonly handleSubmittedLine: (
     line: string,
     mediaFiles?: readonly string[],
