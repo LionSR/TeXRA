@@ -8,6 +8,7 @@ import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import { createLog } from '@logger/logUtils';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import type {
@@ -16,6 +17,7 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { approvalQueueStatus } from '../state/approvalQueue';
 import { terminalCapabilities } from '../state/terminalCapabilities';
@@ -53,6 +55,7 @@ import {
 
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
+const log = createLog('cli.tui');
 interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
   /** True when the focused stream has a composer for slash commands and text. */
@@ -122,6 +125,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     readonly model: string;
     readonly preferenceVersion: number;
     readonly route?: UsageRoute;
+    readonly failed?: true;
   }>();
   const resolutionCurrent =
     subscriptionResolution?.model === accessModel &&
@@ -129,6 +133,10 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const prospectiveRoute = resolutionCurrent
     ? subscriptionResolution?.route
     : undefined;
+  const subscriptionProbeFailed =
+    resolutionCurrent &&
+    subscriptionResolution?.failed === true &&
+    statusSlice?.usage?.usageRoute === undefined;
   const modelAccess = resolveCliModelAccessRoute({
     usageRoute: statusSlice?.usage?.usageRoute,
     prospectiveRoute,
@@ -160,11 +168,15 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
             route,
           });
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (subscriptionDesiredKeyRef.current !== readKey) return;
+          log.warn(
+            `subscription route probe failed for ${accessModel}: ${toErrorMessage(error)}`,
+          );
           setSubscriptionResolution({
             model: accessModel,
             preferenceVersion: codexPreferenceVersion,
+            failed: true,
           });
         })
         .finally(() => {
@@ -260,6 +272,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,
     modelAccess,
+    subscriptionProbeFailed,
     subscriptionQuota,
     transcriptMode: sessionMeta.transcriptMode,
     approvalPolicy: sessionMeta.approvalPolicy,
