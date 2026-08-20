@@ -504,7 +504,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
           childStreamId: runStreamId,
           agentName: meta.name,
           recordCost,
-          buildLaunch: async () => {
+          createChildStream: async () => {
             // A deterministic execution id may retain the prior attempt's report.
             // Clear it before starting this attempt so an interruption before
             // delivery cannot be mistaken for a newly persisted result.
@@ -513,7 +513,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             // meta.name deliberately reuses one deterministic stream across
             // launches. Reserve its writer while rehydrating so transcript
             // eviction cannot race a resumed run.
-            const childStream = await createRehydratedChildStream(
+            return createRehydratedChildStream(
               runExecutionId,
               runScope.streamId,
               {
@@ -524,7 +524,8 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
                 config: runConfig,
               },
             );
-
+          },
+          buildLaunch: async (childStream) => {
             // A proposal-bypass approval carries the same explicit child edit
             // grant as delegate_agent/delegate_workflow. A human one-off approval
             // inherits only the parent's ordinary per-kind bypass state.
@@ -536,7 +537,6 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             );
 
             return {
-              childStream,
               strategy: createWorkflowScriptStrategy({
                 executionId: runExecutionId,
                 logger: childStream.logger,

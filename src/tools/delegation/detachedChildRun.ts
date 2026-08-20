@@ -3,12 +3,12 @@
  *
  * Every detached child run (delegate_agent/subagent, delegate_multi_agents)
  * starts with the same lifecycle: hold the owned-execution lease launch guard
- * while starting the child run loop, and attach a completion error trace so a
- * late loop failure is diagnosed. Callers keep their own execution-id
- * derivation, approval wiring, and result shaping; this module owns the
- * guard-and-trace skeleton so its invariant (a throw inside the guard releases
- * the lease; a late loop failure is surfaced) lives in one place, plus the
- * native-agent registration that mints the child's stream id.
+ * from child-stream creation through child-run-loop handoff, and attach a
+ * completion error trace so a late loop failure is diagnosed. Callers keep
+ * their own execution-id derivation, approval wiring, and result shaping; this
+ * module owns the guard-and-trace skeleton so its invariant (a throw inside
+ * the guard releases the lease; a late loop failure is surfaced) lives in one
+ * place, plus native-agent registration that mints the child's stream id.
  */
 
 // Local imports
@@ -73,13 +73,8 @@ export async function registerChildExecution(input: {
   return { childStreamId, runWithOwnership };
 }
 
-/** The strategy + stream wiring a launch site supplies inside the guard. */
+/** The strategy wiring a launch site supplies inside the guard. */
 interface DetachedChildRunLaunch<TTurn> {
-  /**
-   * Pre-reserved child stream for the loop to own/finalize. Native strategies
-   * omit this — `executeAgent` already owns handle creation for every turn.
-   */
-  readonly childStream?: ChildStream;
   /** Provider-specific run strategy for the child loop. */
   readonly strategy: ChildRunStrategy<TTurn>;
   /**
@@ -89,7 +84,7 @@ interface DetachedChildRunLaunch<TTurn> {
   readonly onLoopFailed?: (error: unknown) => void;
 }
 
-export interface DetachedChildRunInput<TTurn> {
+interface DetachedChildRunInputBase {
   readonly executionId: ExecutionId;
   readonly parentStreamId: StreamTabId;
   /** The child stream tab id the run is registered under. */
@@ -109,45 +104,86 @@ export interface DetachedChildRunInput<TTurn> {
   readonly onTurnSettled?: ChildRunLoopParams<never>['onTurnSettled'];
   /** Publish caller-owned state after final artifacts drain, before lease release. */
   readonly afterArtifactsDrained?: ChildRunLoopParams<never>['afterArtifactsDrained'];
-  /**
-   * Build the strategy (and any attempt-scoped setup) INSIDE the lease launch
-   * guard: a throw here must release the owned-execution lease. A function
-   * (rather than a pre-built value) so the build runs lazily inside the guard.
-   */
-  readonly buildLaunch: () => Promise<DetachedChildRunLaunch<TTurn>>;
 }
+
+export type DetachedChildRunInput<TTurn> = DetachedChildRunInputBase &
+  (
+    | {
+        /** Create the stream inside the lease guard, before any stream-dependent setup. */
+        readonly createChildStream: () => ChildStream | Promise<ChildStream>;
+        /** Build attempt-scoped setup around the stream retained by the launch guard. */
+        readonly buildLaunch: (
+          childStream: ChildStream,
+        ) => Promise<DetachedChildRunLaunch<TTurn>>;
+      }
+    | {
+        /** Native strategies let `executeAgent` own handle creation for every turn. */
+        readonly createChildStream?: undefined;
+        /**
+         * Build the strategy (and any attempt-scoped setup) inside the lease launch
+         * guard so a throw releases the owned-execution lease.
+         */
+        readonly buildLaunch: () => Promise<DetachedChildRunLaunch<TTurn>>;
+      }
+  );
 
 /**
  * Run the shared detached-child launch choreography: hold the owned-execution
- * lease launch guard while starting the child run loop, and attach the
- * completion error trace. Returns the launched loop's stream id and completion
- * so in-band callers can await it.
+ * lease launch guard while creating any child stream and handing it to the run
+ * loop, then attach the completion error trace. Returns the launched loop's
+ * stream id and completion so in-band callers can await it.
  */
 export async function startDetachedChildRunLoop<TTurn>(
   input: DetachedChildRunInput<TTurn>,
 ): Promise<{ childStreamId: StreamTabId; completion: Promise<void> }> {
   return runWithOwnedExecutionLeaseLaunchGuard(input.executionId, async () => {
-    const { childStream, strategy, onLoopFailed } = await input.buildLaunch();
-    const { completion } = startChildRunLoop({
-      ...(childStream !== undefined && { childStream }),
-      childStreamId: input.childStreamId,
-      parentStreamId: input.parentStreamId,
-      executionId: input.executionId,
-      agentName: input.agentName,
-      strategy,
-      ...(input.recordCost !== undefined && { recordCost: input.recordCost }),
-      ...(input.notify !== undefined && { notify: input.notify }),
-      ...(input.onTurnSettled !== undefined && {
-        onTurnSettled: input.onTurnSettled,
-      }),
-      ...(input.afterArtifactsDrained !== undefined && {
-        afterArtifactsDrained: input.afterArtifactsDrained,
-      }),
-      // Every detached native/workflow child takes one shared-budget slot per
-      // turn; an awaited in-band child rides its idle parent's slot instead.
-      budgeted: input.budgeted ?? true,
-    });
-    if (onLoopFailed) void completion.catch(onLoopFailed);
+    let childStream: ChildStream | undefined;
+    let launch: DetachedChildRunLaunch<TTurn>;
+    let completion: Promise<void>;
+    try {
+      if (input.createChildStream) {
+        childStream = await input.createChildStream();
+        launch = await input.buildLaunch(childStream);
+      } else {
+        launch = await input.buildLaunch();
+      }
+      ({ completion } = startChildRunLoop({
+        ...(childStream !== undefined && { childStream }),
+        childStreamId: input.childStreamId,
+        parentStreamId: input.parentStreamId,
+        executionId: input.executionId,
+        agentName: input.agentName,
+        strategy: launch.strategy,
+        ...(input.recordCost !== undefined && { recordCost: input.recordCost }),
+        ...(input.notify !== undefined && { notify: input.notify }),
+        ...(input.onTurnSettled !== undefined && {
+          onTurnSettled: input.onTurnSettled,
+        }),
+        ...(input.afterArtifactsDrained !== undefined && {
+          afterArtifactsDrained: input.afterArtifactsDrained,
+        }),
+        // Every detached native/workflow child takes one shared-budget slot per
+        // turn; an awaited in-band child rides its idle parent's slot instead.
+        budgeted: input.budgeted ?? true,
+      }));
+    } catch (error) {
+      if (childStream) {
+        try {
+          await childStream.finalize({
+            outcome: { kind: 'failed', error },
+            persistence: { kind: 'finalize', flowRecord: 'delete' },
+          });
+        } catch (finalizeError) {
+          throw new AggregateError(
+            [error, finalizeError],
+            `Detached child execution ${input.executionId} failed and its child stream could not be finalized`,
+          );
+        }
+      }
+      throw error;
+    }
+
+    if (launch.onLoopFailed) void completion.catch(launch.onLoopFailed);
     return {
       childStreamId: childStream?.childStreamId ?? input.childStreamId,
       completion,
