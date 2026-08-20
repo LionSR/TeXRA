@@ -9,7 +9,12 @@ import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { SignalWatcher } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
-import { designTokens, commonViewStyles, viewTabStyles } from '@shared/styles';
+import {
+  designTokens,
+  commonViewStyles,
+  viewTabStyles,
+  viewHeaderLayoutStyles,
+} from '@shared/styles';
 import {
   dispatchMainView,
   type ActionDetail,
@@ -133,6 +138,7 @@ export class MainApp extends MainAppBase {
     designTokens,
     commonViewStyles,
     viewTabStyles,
+    viewHeaderLayoutStyles,
     mainViewStyles,
   ];
 
