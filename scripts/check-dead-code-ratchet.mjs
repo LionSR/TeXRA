@@ -1,21 +1,16 @@
 #!/usr/bin/env node
-// Ratchets knip's dead-code findings: fails CI when a PR introduces a newly
-// unused file/export/type/duplicate-export group that isn't already recorded
-// in the checked-in baseline (config/ratchets/knip-baseline.json), rather
-// than blocking on the existing debt. Burning the baseline down is a
-// separate, scheduled sweep.
+// Ratchets Knip's normal and production dead-code findings against one
+// checked-in baseline (config/ratchets/knip-baseline.json), rather than
+// blocking on the existing debt. Burning the baseline down is a separate,
+// scheduled sweep.
 //
-// Each finding is identified by (file, category, name) -- deliberately never
-// by line number, so an unrelated edit that shifts lines above a dead export
-// does not spuriously "resolve" it in the baseline. This mirrors the
-// by-identity ratchet pattern used elsewhere (see
-// src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts) rather than
-// this script's previous count-based threshold, which let any new unused
-// export land silently as long as some other unused export was deleted in
-// the same PR.
+// Each finding is identified by (file, category, kind, name), deliberately
+// never by line number. `category` records whether the normal run found it as
+// unused or only the production run found it as production-dead; `kind`
+// preserves Knip's files/exports/types/duplicates classification.
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +27,7 @@ const baselinePath = path.join(
 );
 
 export {
+  classifyFindings,
   compareFindings,
   countByCategory,
   diffFindings,
@@ -41,6 +37,7 @@ export {
   readBaseline,
 } from './check-dead-code-ratchet-core.mjs';
 import {
+  classifyFindings,
   countByCategory,
   diffFindings,
   extractFindings,
@@ -48,30 +45,47 @@ import {
   readBaseline,
 } from './check-dead-code-ratchet-core.mjs';
 
-function runKnip() {
+function runKnip({ production = false } = {}) {
   const knipBin = path.join(rootDir, 'node_modules', '.bin', 'knip');
-  const result = spawnSync(
-    knipBin,
-    [
-      '--no-progress',
-      '--include',
-      'files,exports,types,duplicates',
-      '--reporter',
-      'json',
-    ],
-    { cwd: rootDir, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
-  );
+  const args = [
+    '--no-progress',
+    '--include',
+    'files,exports,types,duplicates',
+    '--reporter',
+    'json',
+  ];
+  if (production) {
+    args.push('--production');
+  }
+  const result = spawnSync(knipBin, args, {
+    cwd: rootDir,
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+  });
   if (result.error) {
     throw result.error;
   }
-  // knip exits 1 whenever it finds any issue at all, which is expected here
-  // (the whole point is to enumerate existing issues), so a non-zero status
-  // is only a real failure if it didn't produce parseable JSON.
+  // Knip exits 1 whenever it finds any issue at all, which is expected here.
+  // A non-zero status is only a real failure if it did not produce JSON.
   return parseKnipIssues(result.stdout, result.stderr);
 }
 
+function findStrayBuildArtifacts(findings) {
+  const artifacts = new Map();
+  for (const finding of findings) {
+    if (finding.category !== 'files' || !/\.tsx?$/.test(finding.file)) {
+      continue;
+    }
+    const artifact = finding.file.replace(/\.tsx?$/, '.js');
+    if (existsSync(path.join(rootDir, artifact))) {
+      artifacts.set(artifact, { artifact, source: finding.file });
+    }
+  }
+  return [...artifacts.values()];
+}
+
 function formatFinding(finding) {
-  return `[${finding.category}] ${finding.file}: ${finding.name}`;
+  return `[${finding.category}/${finding.kind}] ${finding.file}: ${finding.name}`;
 }
 
 function main() {
@@ -79,32 +93,51 @@ function main() {
     readFileSync(baselinePath, 'utf8'),
     baselinePath,
   );
-  const current = extractFindings(runKnip());
+  const normalFindings = extractFindings(runKnip());
+  const productionFindings = extractFindings(runKnip({ production: true }));
+  const strayArtifacts = findStrayBuildArtifacts([
+    ...normalFindings,
+    ...productionFindings,
+  ]);
+
+  if (strayArtifacts.length > 0) {
+    console.error(
+      '\nDead-code ratchet failed: stray build artifact(s) shadow TypeScript source:',
+    );
+    for (const { artifact, source } of strayArtifacts) {
+      console.error(
+        `  - ${artifact} shadows ${source}; delete ${artifact} and re-run`,
+      );
+    }
+    process.exit(1);
+  }
+
+  const current = classifyFindings(normalFindings, productionFindings);
   const { newFindings, resolvedFindings } = diffFindings(current, baseline);
   const counts = countByCategory(current);
 
   console.log(
-    `knip dead-code findings: ${current.length} current (unusedFiles=${counts.files}, ` +
-      `unusedExports=${counts.exports}, unusedTypes=${counts.types}, ` +
-      `duplicateExports=${counts.duplicates}) vs ${baseline.length} baselined`,
+    `knip dead-code findings: ${normalFindings.length} normal, ${productionFindings.length} production; ` +
+      `${current.length} combined (unused=${counts.unused ?? 0}, ` +
+      `productionDead=${counts['production-dead'] ?? 0}) vs ${baseline.length} baselined`,
   );
 
   if (newFindings.length > 0) {
     console.error(
-      `\nDead-code ratchet failed: this PR introduces ${newFindings.length} unused file(s)/export(s)/type(s) not in the baseline.`,
+      `\nDead-code ratchet failed: this PR introduces ${newFindings.length} finding(s) not in the baseline.`,
     );
     for (const finding of newFindings) {
       console.error(`  - ${formatFinding(finding)}`);
     }
     console.error(
-      '\nRun `npm run check:dead-code` to see the newly introduced dead code, then either ' +
-        'remove it or, if the addition is intentional, add it to config/ratchets/knip-baseline.json in this PR ' +
-        '(keep the "findings" array sorted by file, then category, then name).',
+      '\nRun `npm run check:dead-code-ratchet` as the authoritative dead-code check, then either ' +
+        'remove the finding or, if the addition is intentional, add it to config/ratchets/knip-baseline.json in this PR ' +
+        '(keep the "findings" array sorted by file, category, kind, then name).',
     );
     process.exit(1);
   }
 
-  console.log('Dead-code ratchet OK: no new unused files/exports/types found.');
+  console.log('Dead-code ratchet OK: no new findings.');
   if (resolvedFindings.length > 0) {
     console.log(
       `\n${resolvedFindings.length} baseline entries are no longer found (fixed!). Remove them from ` +
