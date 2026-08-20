@@ -192,9 +192,8 @@ const SetTabMessageSchema = z.object({
  * line per *snapshot*, never per setting.
  *
  * A snapshot absent from this map is one whose payload is not a plain list of
- * catalog rows (`profile`, `models`) or whose builder lives behind a
- * controller this module does not own (`latex`); those arms still declare
- * their own shape below or in their own module.
+ * catalog rows (`profile`, `models`); those arms still declare their own shape
+ * below or in their own module.
  */
 export const SETTINGS_SNAPSHOT_COMMANDS = {
   approval: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
@@ -202,6 +201,7 @@ export const SETTINGS_SNAPSHOT_COMMANDS = {
   'agent-skills': SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS,
   telemetry: SETTINGS_VIEW_COMMANDS.UPDATE_TELEMETRY_SETTINGS,
   'multi-agent': SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
+  latex: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
 } as const satisfies Partial<Record<SettingsViewSnapshot, string>>;
 
 /** A snapshot whose whole payload is derived from the settings catalog. */
@@ -638,10 +638,7 @@ export const LatexConfigValuesSchema = z.object({
 export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
 
 /** Outbound: backend → frontend current LaTeX/compile/diff config values. */
-const UpdateLatexConfigValuesMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES),
-  values: LatexConfigValuesSchema,
-});
+const UpdateLatexConfigValuesMessageSchema = snapshotMessage('latex');
 export type UpdateLatexConfigValuesMessage = z.infer<
   typeof UpdateLatexConfigValuesMessageSchema
 >;
