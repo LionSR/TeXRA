@@ -1,6 +1,6 @@
-import { Box, Text, useWindowSize } from 'ink';
+import { Box, Text, useStderr, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
@@ -8,7 +8,6 @@ import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { createLog } from '@logger/logUtils';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import type {
@@ -55,7 +54,6 @@ import {
 
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
-const log = createLog('cli.tui');
 interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
   /** True when the focused stream has a composer for slash commands and text. */
@@ -75,6 +73,7 @@ interface StatusBarProps {
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionUsage = useMemo(() => new SubscriptionUsageService(), []);
+  const { write: writeStderr } = useStderr();
   const activeStreamId = useSignal(activeStreamIdSignal);
   const streams = useSignal(streamsSignal);
   const parentStream = useSignal(parentStreamSignal);
@@ -147,21 +146,35 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // immediately when the read's inputs change, matching the old effect deps.
   // Scope the in-flight guard by read key so a pending lookup for the old
   // model/preference cannot suppress the reset-triggered re-fire. Completions
-  // also check the latest desired key so a superseded promise cannot overwrite
-  // a newer resolution (resolutionCurrent would then hide the current route).
+  // also check the latest desired key and request generation so a superseded
+  // promise cannot overwrite a newer resolution, including when a key is reused.
+  // Failure reports stay latched per key until that key probes successfully.
   const subscriptionInFlightKeyRef = useRef<string | null>(null);
-  const subscriptionDesiredKeyRef = useRef(
-    `${accessModel}:${codexPreferenceVersion}`,
-  );
-  subscriptionDesiredKeyRef.current = `${accessModel}:${codexPreferenceVersion}`;
+  const subscriptionRequestGenerationRef = useRef(0);
+  const reportedSubscriptionProbeFailureKeysRef = useRef(new Set<string>());
+  const subscriptionReadKey = `${accessModel}:${codexPreferenceVersion}`;
+  const subscriptionDesiredKeyRef = useRef(subscriptionReadKey);
+  useLayoutEffect(() => {
+    if (subscriptionDesiredKeyRef.current !== subscriptionReadKey) {
+      subscriptionDesiredKeyRef.current = subscriptionReadKey;
+      subscriptionRequestGenerationRef.current += 1;
+    }
+  }, [subscriptionReadKey]);
   usePollingInterval(
     () => {
-      const readKey = `${accessModel}:${codexPreferenceVersion}`;
+      const readKey = subscriptionReadKey;
       if (subscriptionInFlightKeyRef.current === readKey) return;
       subscriptionInFlightKeyRef.current = readKey;
+      const requestGeneration = ++subscriptionRequestGenerationRef.current;
       void activeSubscriptionUsageRoute(accessModel)
         .then((route) => {
-          if (subscriptionDesiredKeyRef.current !== readKey) return;
+          if (
+            subscriptionDesiredKeyRef.current !== readKey ||
+            subscriptionRequestGenerationRef.current !== requestGeneration
+          ) {
+            return;
+          }
+          reportedSubscriptionProbeFailureKeysRef.current.delete(readKey);
           setSubscriptionResolution({
             model: accessModel,
             preferenceVersion: codexPreferenceVersion,
@@ -169,10 +182,18 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
           });
         })
         .catch((error: unknown) => {
-          if (subscriptionDesiredKeyRef.current !== readKey) return;
-          log.warn(
-            `subscription route probe failed for ${accessModel}: ${toErrorMessage(error)}`,
-          );
+          if (
+            subscriptionDesiredKeyRef.current !== readKey ||
+            subscriptionRequestGenerationRef.current !== requestGeneration
+          ) {
+            return;
+          }
+          if (!reportedSubscriptionProbeFailureKeysRef.current.has(readKey)) {
+            reportedSubscriptionProbeFailureKeysRef.current.add(readKey);
+            writeStderr(
+              `[warn] [cli.tui] subscription route probe failed for ${accessModel}: ${toErrorMessage(error)}\n`,
+            );
+          }
           setSubscriptionResolution({
             model: accessModel,
             preferenceVersion: codexPreferenceVersion,
@@ -180,13 +201,13 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
           });
         })
         .finally(() => {
-          if (subscriptionInFlightKeyRef.current === readKey) {
+          if (subscriptionRequestGenerationRef.current === requestGeneration) {
             subscriptionInFlightKeyRef.current = null;
           }
         });
     },
     CODEX_SUBSCRIPTION_REFRESH_MS,
-    `${accessModel}:${codexPreferenceVersion}`,
+    subscriptionReadKey,
   );
 
   const subscriptionUsageProvider = subscriptionUsageProviderForStatus({
