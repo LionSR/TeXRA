@@ -1325,13 +1325,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
   }
 
-  protected createAssistantMessageForPrefillText(text: string): MessageParam {
-    return {
-      role: 'assistant',
-      content: [textBlock(text)],
-    };
-  }
-
   protected appendUserText(messages: MessageParam[], text: string): void {
     messages.push({ role: 'user', content: [textBlock(text)] });
   }

@@ -3,7 +3,7 @@
  *
  * Host-neutral. When the user submits an answer (or drops an open
  * inquiry), this module synthesizes the `[inquiry] …` continuation
- * text, hands it to `sendFollowUp` for the parent stream, and delegates
+ * text, hands it to `submitFollowUp` for the parent stream, and delegates
  * queued-stream wake/release policy to the follow-up owner so exited
  * cycles (WAITING / children_running) can pick the message up when the
  * parent stream is still resumable.

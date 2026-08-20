@@ -28,25 +28,20 @@ import {
 const DEFAULT_CACHE_TTL_MS = 30_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 
-const CODING_PLAN_PROVIDER_NAMES = Object.fromEntries(
-  CODING_PLAN_SUBSCRIPTIONS.map((plan) => [
-    plan.usageProvider,
-    plan.credentialName,
-  ]),
-) as Record<
-  (typeof CODING_PLAN_SUBSCRIPTIONS)[number]['usageProvider'],
-  string
->;
+type CodingPlanUsageProvider =
+  (typeof CODING_PLAN_SUBSCRIPTIONS)[number]['usageProvider'];
 
-const CODING_PLAN_DEFAULT_NAMES = Object.fromEntries(
-  CODING_PLAN_SUBSCRIPTIONS.map((plan) => [
-    plan.usageProvider,
-    plan.displayName,
-  ]),
-) as Record<
-  (typeof CODING_PLAN_SUBSCRIPTIONS)[number]['usageProvider'],
-  string
->;
+function mapCodingPlanSubscriptions(
+  field: 'credentialName' | 'displayName',
+): Record<CodingPlanUsageProvider, string> {
+  return Object.fromEntries(
+    CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.usageProvider, plan[field]]),
+  ) as Record<CodingPlanUsageProvider, string>;
+}
+
+const CODING_PLAN_PROVIDER_NAMES = mapCodingPlanSubscriptions('credentialName');
+
+const CODING_PLAN_DEFAULT_NAMES = mapCodingPlanSubscriptions('displayName');
 
 const PROVIDER_NAMES: Record<SubscriptionUsageProvider, string> = {
   chatgpt: 'ChatGPT',

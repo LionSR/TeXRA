@@ -380,6 +380,7 @@ export class RequestPanels extends LitElement {
 
     const index = this.externalInquiryIndex;
     const current = perms[index];
+    const currentKey = getPermissionKey(current);
     const nav = html`
       <div class="external-inquiry-requests__nav">
         <wa-button
@@ -413,11 +414,11 @@ export class RequestPanels extends LitElement {
         ${this.renderSectionHeader(config, nav)}
         <div class="${config.cssClass}__list">
           ${keyed(
-            getPermissionKey(current),
+            currentKey,
             this.renderRequest(
               config,
               current,
-              getPermissionKey(current) === this.armedPermissionKey(),
+              currentKey === this.armedPermissionKey(),
             ),
           )}
         </div>

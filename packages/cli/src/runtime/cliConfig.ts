@@ -236,48 +236,62 @@ export function parseCliConfigValues(value: unknown): CliConfigValues {
   return isObject(value) ? pickConfigValues(value) : {};
 }
 
-export async function loadWorkspaceCliConfig(
-  cwd: string,
-): Promise<LoadedCliConfig> {
-  const filePath = workspaceTexraConfigPath(cwd);
+/**
+ * Read and JSON-parse a TeXRA config file, distinguishing "file does not
+ * exist" (silently defaulted by both callers) from a read/parse/shape
+ * problem (surfaced as a single warning) from a successfully parsed object.
+ * Shared by {@link loadWorkspaceCliConfig} and {@link loadUserApprovalPolicy},
+ * which otherwise duplicate this read-catch-parse-validate sequence.
+ */
+type JsonConfigFileResult =
+  | { readonly status: 'missing' }
+  | { readonly status: 'warning'; readonly warning: string }
+  | { readonly status: 'ok'; readonly parsed: Record<string, unknown> };
+
+async function readJsonConfigFile(
+  filePath: string,
+): Promise<JsonConfigFileResult> {
   let raw: string;
   try {
     raw = await readFile(filePath, 'utf8');
   } catch (error: unknown) {
-    if (isFileNotFoundError(error)) {
-      return { values: {}, warnings: [] };
-    }
+    if (isFileNotFoundError(error)) return { status: 'missing' };
     return {
-      path: filePath,
-      values: {},
-      warnings: [`Could not read ${filePath}: ${toErrorMessage(error)}`],
+      status: 'warning',
+      warning: `Could not read ${filePath}: ${toErrorMessage(error)}`,
     };
   }
 
   const parseResult = safeParseJson(raw);
   if (parseResult.isErr()) {
     return {
-      path: filePath,
-      values: {},
-      warnings: [
-        `Could not parse ${filePath}: ${toErrorMessage(parseResult.error)}`,
-      ],
+      status: 'warning',
+      warning: `Could not parse ${filePath}: ${toErrorMessage(parseResult.error)}`,
     };
   }
   const parsed = parseResult.value;
-
   if (!isObject(parsed)) {
     return {
-      path: filePath,
-      values: {},
-      warnings: [`Ignoring ${filePath}; expected a JSON object.`],
+      status: 'warning',
+      warning: `Ignoring ${filePath}; expected a JSON object.`,
     };
   }
+  return { status: 'ok', parsed };
+}
 
+export async function loadWorkspaceCliConfig(
+  cwd: string,
+): Promise<LoadedCliConfig> {
+  const filePath = workspaceTexraConfigPath(cwd);
+  const result = await readJsonConfigFile(filePath);
+  if (result.status === 'missing') return { values: {}, warnings: [] };
+  if (result.status === 'warning') {
+    return { path: filePath, values: {}, warnings: [result.warning] };
+  }
   return {
     path: filePath,
-    values: parseCliConfigValues(parsed),
-    warnings: collectValidationWarnings(filePath, parsed),
+    values: parseCliConfigValues(result.parsed),
+    warnings: collectValidationWarnings(filePath, result.parsed),
   };
 }
 
@@ -307,30 +321,11 @@ export async function loadUserApprovalPolicy(
     resolveGlobalStoragePath(storageRoot),
     TEXRA_CONFIG_FILE_NAME,
   );
-  let raw: string;
-  try {
-    raw = await readFile(filePath, 'utf8');
-  } catch (error: unknown) {
-    if (isFileNotFoundError(error)) return { warnings: [] };
-    return {
-      warnings: [`Could not read ${filePath}: ${toErrorMessage(error)}`],
-    };
-  }
+  const result = await readJsonConfigFile(filePath);
+  if (result.status === 'missing') return { warnings: [] };
+  if (result.status === 'warning') return { warnings: [result.warning] };
 
-  const parseResult = safeParseJson(raw);
-  if (parseResult.isErr()) {
-    return {
-      warnings: [
-        `Could not parse ${filePath}: ${toErrorMessage(parseResult.error)}`,
-      ],
-    };
-  }
-  const parsed = parseResult.value;
-  if (!isObject(parsed)) {
-    return { warnings: [`Ignoring ${filePath}; expected a JSON object.`] };
-  }
-
-  const stored = parsed[TEXRA_APPROVAL_POLICY_CONFIG_KEY];
+  const stored = result.parsed[TEXRA_APPROVAL_POLICY_CONFIG_KEY];
   if (stored === undefined) return { warnings: [] };
   // Same normalization the catalog row applies for every other host, so a
   // hand-edited " Yolo" reads the same way in all three.

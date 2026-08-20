@@ -1,6 +1,5 @@
 // Active text-draft registration for foreground TUI inputs.
 
-// Third-party imports
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 
 export type DraftDiscarder = () => boolean;

@@ -362,8 +362,8 @@ export class ZoteroAddTool extends defineTool({
       )
       .join('\n');
 
-    // Throw ToolError if all items failed
-    if (successCount === 0 && items.length > 0) {
+    // Throw ToolError if all items failed (items.length >= 1 per schema)
+    if (successCount === 0) {
       throw new ToolError(
         `Failed to add all ${errorCount} ${pluralize(errorCount, 'item')} to Zotero:\n${output}`,
       );
