@@ -302,19 +302,16 @@ export function buildCliAgentItems(
   toolUseAgents: readonly AgentEntry[],
 ): CliOrchestrationItem[] {
   // Order by the implicit-default priority (`pickDefaultToolUseAgent`) so the
-  // first row is the agent a bare Enter starts. Names are matched the way the
-  // default picker matches them — on the source-stripped `agentName`, not the
-  // raw entry name, so a custom agent carrying a source prefix still ranks.
+  // first row is the agent a bare Enter starts. Stable sorting preserves roster
+  // input order when no preferred name is visible, matching the picker's final
+  // fallback. `agentName` keeps name normalization owned by the same helper.
   const unprioritized = DEFAULT_AGENT_PRIORITY.length;
   const priorityOf = (name: string): number => {
     const index = DEFAULT_AGENT_PRIORITY.indexOf(agentName(name));
     return index === -1 ? unprioritized : index;
   };
   return implicitDefaultToolUseAgents(toolUseAgents)
-    .toSorted((left, right) => {
-      const byPriority = priorityOf(left.name) - priorityOf(right.name);
-      return byPriority || left.name.localeCompare(right.name);
-    })
+    .toSorted((left, right) => priorityOf(left.name) - priorityOf(right.name))
     .map((agent) => ({
       value: { kind: 'chat', agent: agentKeyOf(agent) },
       label: agent.name,
