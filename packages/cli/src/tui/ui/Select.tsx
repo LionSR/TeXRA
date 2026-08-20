@@ -50,11 +50,9 @@ export interface SelectProps<T> {
   /** Disable direct 1-9/a-z activation for arrow-only lists. */
   readonly hotkeys?: boolean;
   /** Set false when this Select is a standalone focus target rather than a
-   *  cyclic menu: a move past either edge reports `onBoundaryEscape` instead
-   *  of wrapping. Defaults to true (existing wrap-around behavior). */
+   *  cyclic menu: a move past either edge clamps instead of wrapping.
+   *  Defaults to true (existing wrap-around behavior). */
   readonly wrap?: boolean;
-  /** Called when `wrap` is false and a move would cross the top/bottom edge. */
-  readonly onBoundaryEscape?: (direction: -1 | 1) => void;
   /** Defaults to `'single'`: hotkeys (1-9, then a-z) select-and-close via
    *  `onSelect`; Enter does the same on the highlighted row; Space is
    *  unhandled. In `'multi'`, Space and hotkeys instead toggle membership via
@@ -323,7 +321,6 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       wrap: props.wrap,
     });
     if (props.wrap === false && next === current) {
-      props.onBoundaryEscape?.(direction);
       return;
     }
     highlightRef.current = next;

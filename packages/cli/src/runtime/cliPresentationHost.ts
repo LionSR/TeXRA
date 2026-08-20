@@ -19,10 +19,7 @@ import {
   type Logger,
   type LogSink,
 } from './logSinks';
-import {
-  attachRunProgressRenderer,
-  createRunProgressRenderer,
-} from './runProgressRenderer';
+import { createRunProgressRenderer } from './runProgressRenderer';
 import { missingAgentMessage } from './agents';
 import type { CliContext } from './cliContext';
 
@@ -139,7 +136,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
 
   return {
     attachRunProgressRenderer: (session) =>
-      attachRunProgressRenderer(session, runProgress),
+      runProgress ? runProgress.attach(session) : () => undefined,
     prepareInteractivePrompt: () => runProgress?.preserve(),
     emitApprovalBypassState({ streamId, kind, bypassActive }) {
       if (closed || context.outputFormat !== 'ndjson') return;

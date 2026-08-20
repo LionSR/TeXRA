@@ -24,7 +24,7 @@ interface ResolvedResumeState {
   readonly parentStreamId?: StreamTabId;
 }
 
-export type ResumeStateResolution =
+type ResumeStateResolution =
   | { readonly status: 'resolved'; readonly state: ResolvedResumeState }
   | { readonly status: 'read-failed'; readonly error: unknown }
   | {

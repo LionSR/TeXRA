@@ -26,7 +26,7 @@ export interface GoogleClientCache {
 }
 
 interface ResolveGoogleClientParams {
-  /** SDK surface label used in debug logs, e.g. `'Native'` or `'Interactions'`. */
+  /** SDK surface label used in debug logs, e.g. `'Interactions'`. */
   sdkLabel: string;
   credential: ResolvedClientCredential;
   logger: AgentTrace;

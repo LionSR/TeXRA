@@ -41,7 +41,6 @@ export interface OAuthFormEndpoint<
   readonly ErrorType: ProviderAuthErrorCtor;
   readonly tokenResponseSchema: z.ZodType<TTokens>;
   readonly requestTimeoutMs?: number;
-  readonly formHeaders?: Readonly<Record<string, string>>;
 }
 
 /** Combine an optional caller signal with a request timeout. */
@@ -55,10 +54,7 @@ export function oauthRequestSignal(
 
 /** Form-urlencoded POST. Throws the provider error type on network failure. */
 export async function postOAuthForm(
-  endpoint: Pick<
-    OAuthFormEndpoint,
-    'ErrorType' | 'requestTimeoutMs' | 'formHeaders'
-  >,
+  endpoint: Pick<OAuthFormEndpoint, 'ErrorType' | 'requestTimeoutMs'>,
   url: string,
   body: URLSearchParams,
   signal?: AbortSignal,
@@ -66,7 +62,7 @@ export async function postOAuthForm(
   try {
     return await fetch(url, {
       method: 'POST',
-      headers: { ...DEFAULT_FORM_HEADERS, ...endpoint.formHeaders },
+      headers: DEFAULT_FORM_HEADERS,
       body,
       signal: oauthRequestSignal(
         endpoint.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,

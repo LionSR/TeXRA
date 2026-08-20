@@ -74,7 +74,7 @@ export function createReviewIssue(report: ReviewIssueReport): ReviewIssue {
   };
 }
 
-export interface ReviewInstructionInput {
+interface ReviewInstructionInput {
   /** Human-readable description of the diff base (e.g. "main branch (origin/main)"). */
   baseDescription: string;
   changedFiles: string[];
