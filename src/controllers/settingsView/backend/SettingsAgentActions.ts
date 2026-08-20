@@ -129,7 +129,7 @@ export function createSettingsAgentActions(
           ? path.relative(sourceDir, entryPath)
           : path.basename(entryPath);
         const targetPath = path.join(customDir, relativePath);
-        if (!isInside(customDir, targetPath)) {
+        if (!isStrictlyWithin(customDir, targetPath)) {
           await options.showErrorMessage(
             'Refusing to copy: target path escapes the custom agents directory.',
           );
@@ -166,7 +166,7 @@ export function createSettingsAgentActions(
         }
 
         const customDir = await options.getCustomAgentDirectory();
-        if (!isInside(customDir, entryPath)) {
+        if (!isStrictlyWithin(customDir, entryPath)) {
           await options.showErrorMessage(
             'Refusing to delete: file is not inside the custom agents directory.',
           );
@@ -197,7 +197,3 @@ const FAILURE_MESSAGES: Readonly<Record<AgentFileCommand, string>> = {
   deleteCustomAgent: 'Failed to delete custom agent',
   revealAgentFile: 'Failed to reveal agent file',
 };
-
-function isInside(parentDir: string, candidatePath: string): boolean {
-  return isStrictlyWithin(path.resolve(parentDir), path.resolve(candidatePath));
-}

@@ -24,7 +24,7 @@ import type {
  * {@link ExecutionInteractionOwnership.ownerOf} can answer with the scope
  * itself instead of a parallel identity.
  */
-export interface ExecutionInteractionScope {
+interface ExecutionInteractionScope {
   /**
    * Claim `executionId` and everything it goes on to spawn: once the run's
    * handle is tracked, its child stream is owned too, so descendants join this

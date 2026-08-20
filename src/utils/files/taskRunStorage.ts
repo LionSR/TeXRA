@@ -61,12 +61,10 @@ export class TaskRunFileService {
 
     await ensureRunDir(this.executionId);
 
-    const linkTargets = new Set<FileLocation>(baseFiles);
-
-    // Add extra link files, filtering out any null/undefined entries
-    for (const extra of options.linkFiles ?? []) {
-      if (extra) linkTargets.add(extra);
-    }
+    const linkTargets = new Set<FileLocation>([
+      ...baseFiles,
+      ...(options.linkFiles ?? []),
+    ]);
 
     await Promise.all(
       baseFiles.map((target) => this.captureOriginalSnapshot(target)),

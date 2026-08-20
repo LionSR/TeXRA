@@ -74,13 +74,13 @@ export interface RestartRepairOptions {
 }
 
 /** One stream skipped because its execution's owner is provably alive. */
-export interface ActiveOwnerSkip {
+interface ActiveOwnerSkip {
   readonly streamId: StreamTabId;
   readonly executionId: ExecutionId;
   readonly owner: InstanceOwnerRecord;
 }
 
-export interface RestartRepairResult {
+interface RestartRepairResult {
   /**
    * Streams left untouched because a live owner holds their execution. The
    * caller watches each owner's instance exit and re-runs repair on that

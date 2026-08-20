@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
     // Description comes from YAML (parsed client-side), not DB
     const { data: agent, error: agentError } = await userClient
       .from('remote_agents')
-      .select('id, name, storage_path, visibility, agent_category')
+      .select('name, storage_path, visibility, agent_category')
       .eq('name', body.agentName)
       .single();
 

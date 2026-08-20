@@ -30,7 +30,7 @@ import {
 import type { SessionHostInteractions } from './HostInteractions';
 import type { SessionHandle } from './SessionHandle';
 
-export type TerminalResultToast =
+type TerminalResultToast =
   | {
       readonly type: 'instruction';
       readonly payload: RequestShowInstructionPayload;
