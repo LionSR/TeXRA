@@ -15,6 +15,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { RecordingButtonController } from '@shared/litControllers/RecordingButtonController';
+import { appendClipboardImageChips } from '@shared/utils/clipboard';
 import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
 import {
   clipboardImageFiles,
@@ -208,7 +209,7 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
   ): Promise<void> {
     const target = this.textAreaEl;
     if (!target) return;
-    let insertText = event.clipboardData?.getData('text/plain') || '';
+    const pastedText = event.clipboardData?.getData('text/plain') || '';
     const added = (
       await Promise.all(
         files.map(
@@ -229,11 +230,10 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
     ).filter(filterNotNullish);
     if (pasteRevision !== transientState.imagePasteRevision) return;
     if (added.length === 0) return;
-    const chipText = added.map(({ fileName }) => `[${fileName}]`).join(' ');
-    if (insertText && !insertText.endsWith(' ') && !insertText.endsWith('\n')) {
-      insertText += ' ';
-    }
-    insertText += chipText;
+    const insertText = appendClipboardImageChips(
+      pastedText,
+      added.map(({ fileName }) => fileName),
+    );
     transientState.pendingImages = [...transientState.pendingImages, ...added];
     if (
       this.isConnected &&
