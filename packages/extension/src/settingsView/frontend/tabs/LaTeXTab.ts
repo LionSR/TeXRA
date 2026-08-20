@@ -637,7 +637,9 @@ export class LaTeXTab extends LitElement {
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
     const enabled = new Set(effective);
-    const isCustom = opts.currentValue !== undefined;
+    const isCustom =
+      effective.length !== opts.defaultValue.length ||
+      effective.some((value, index) => value !== opts.defaultValue[index]);
     return html`
       <div class="settings-row replacement-groups-row">
         <div class="settings-row-text">
@@ -687,6 +689,7 @@ export class LaTeXTab extends LitElement {
     currentValue: Record<string, string> | undefined;
   }): TemplateResult {
     const value = opts.currentValue ?? {};
+    const isCustom = Object.keys(value).length > 0;
     const error = this.replacementJsonErrors[opts.field];
     const controlId = `latex-setting-${opts.field}`;
     return html`
@@ -715,12 +718,8 @@ export class LaTeXTab extends LitElement {
           }
         </div>
         <div class="settings-row-control">
-          ${this.renderSettingStatusIcon(opts.currentValue !== undefined)}
-          ${
-            opts.currentValue !== undefined
-              ? this.renderResetButton(opts.field, '{}')
-              : nothing
-          }
+          ${this.renderSettingStatusIcon(isCustom)}
+          ${isCustom ? this.renderResetButton(opts.field, '{}') : nothing}
         </div>
       </div>
     `;
@@ -894,7 +893,7 @@ export class LaTeXTab extends LitElement {
     currentValue: boolean | undefined;
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
-    const isCustom = opts.currentValue !== undefined;
+    const isCustom = effective !== opts.defaultValue;
     // No status icon: the switch already carries the on/off state, matching
     // the toggle rows in the other settings tabs.
     const controlId = `latex-setting-${opts.field}`;
@@ -960,7 +959,7 @@ export class LaTeXTab extends LitElement {
     max?: number;
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
-    const isCustom = opts.currentValue !== undefined;
+    const isCustom = effective !== opts.defaultValue;
     const controlId = `latex-setting-${opts.field}`;
     return this.renderConfigRow({
       label: opts.label,
@@ -1013,7 +1012,7 @@ export class LaTeXTab extends LitElement {
     withDescription: boolean;
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
-    const isCustom = opts.currentValue !== undefined;
+    const isCustom = effective !== opts.defaultValue;
     const controlId = `latex-setting-${opts.field}`;
     const options = catalogEnumChoices<LatexConfigValueFor<F>>(
       LATEX_CONFIG_FIELD_TO_KEY[opts.field],

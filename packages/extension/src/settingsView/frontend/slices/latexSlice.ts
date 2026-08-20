@@ -7,7 +7,14 @@
  */
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
+import type {
+  LatexConfigValues,
+  SettingsViewOutboundHandlerRegistry,
+} from '@shared/schemas';
+import {
+  LATEX_FIELD_TO_KEY,
+  LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
+} from '@shared/constants/latexConfig';
 
 import {
   inlineCriticismEnabled,
@@ -17,6 +24,11 @@ import {
   latexSettingsStatus,
 } from '../settingsState';
 
+const LATEX_CONFIG_FIELD_TO_KEY = {
+  ...LATEX_FIELD_TO_KEY,
+  ...LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
+} as const satisfies Record<keyof LatexConfigValues, string>;
+
 export const latexHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS]: (data) => {
     latexSettingsStatus.set(data.settings);
@@ -24,7 +36,14 @@ export const latexHandlers = {
   },
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES]: (data) => {
-    latexConfigValues.set(data.values);
+    latexConfigValues.set(
+      Object.fromEntries(
+        Object.entries(LATEX_CONFIG_FIELD_TO_KEY).map(([field, key]) => [
+          field,
+          data.values[key],
+        ]),
+      ) as LatexConfigValues,
+    );
     latexConfigValuesLoaded.set(true);
   },
 
