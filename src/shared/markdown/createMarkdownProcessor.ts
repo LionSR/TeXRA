@@ -475,7 +475,7 @@ function applyEnvironmentShields(
 ): string {
   if (matches.length === 0) return content;
   const { lineStarts, lineEnds } = lineBoundaries(content);
-  const sorted = [...matches].sort((a, b) => a.start - b.start);
+  const sorted = matches.toSorted((a, b) => a.start - b.start);
   const pieces: string[] = [];
   let copiedUntil = 0;
   for (const match of sorted) {
