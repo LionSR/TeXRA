@@ -3,7 +3,7 @@
  *
  * A snapshot is exactly "the catalog rows tagged for it", so this reads that
  * list rather than naming fields: the approval/safety, git-author, agent-skills,
- * telemetry, and multi-agent snapshots all come from here. Per-row defaults,
+ * telemetry, multi-agent, and LaTeX snapshots all come from here. Per-row defaults,
  * validation, storage slot, and legacy normalization already live on the
  * catalog row and are applied by `readSetting`, so a snapshot builder has
  * nothing left of its own to say.

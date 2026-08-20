@@ -3,7 +3,6 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   LatexConfigValuesSchema,
   type LatexConfigValues,
-  type UpdateLatexConfigValuesMessage,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
@@ -17,6 +16,12 @@ import {
 interface CoreConfigReader {
   get(key: string): unknown;
   isExplicitlySet(key: string): boolean;
+}
+
+/** Legacy frontend-keyed shape retained only for direct compatibility tests. */
+interface LegacyLatexConfigValuesMessage {
+  readonly command: typeof SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES;
+  readonly values: LatexConfigValues;
 }
 
 /** Builds storage-backed LaTeX config snapshots without host side effects. */
@@ -53,11 +58,11 @@ export class LatexConfigPersistenceController {
     return values as LatexConfigValues;
   }
 
-  /** Wraps the current config values into the outbound settings-view message shape. */
+  /** Legacy wrapper retained for direct consumers of this persistence helper. */
   buildConfigMessage(
     readStoredValue: (key: WorkspaceStateKey) => unknown,
     coreConfig?: CoreConfigReader,
-  ): UpdateLatexConfigValuesMessage {
+  ): LegacyLatexConfigValuesMessage {
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
       values: this.buildConfigValues(readStoredValue, coreConfig),

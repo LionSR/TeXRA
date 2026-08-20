@@ -36,7 +36,6 @@ import {
   TEAM_LAUNCH_CONTINUE_LABEL,
   TEAM_LAUNCH_SIGN_IN_LABEL,
 } from '@common/teams/TeamPlan';
-import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
@@ -873,7 +872,6 @@ function createWindow(options: {
         }),
         onDetectionError: reportBackgroundError,
       }),
-      latexConfigPersistenceController: new LatexConfigPersistenceController(),
     },
   );
   const settingsUi: DesktopSettingsUiHost = {
