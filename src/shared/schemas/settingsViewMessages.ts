@@ -639,9 +639,6 @@ export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
 
 /** Outbound: backend → frontend current LaTeX/compile/diff config values. */
 const UpdateLatexConfigValuesMessageSchema = snapshotMessage('latex');
-export type UpdateLatexConfigValuesMessage = z.infer<
-  typeof UpdateLatexConfigValuesMessageSchema
->;
 
 /** Outbound: backend → frontend inline criticism toggle state */
 const UpdateInlineCriticismEnabledMessageSchema = z.object({
