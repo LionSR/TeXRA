@@ -28,7 +28,7 @@ CLAUDE.md
 # Multi-file, external-assets trace-viewer build (shared-assets/site-hosting
 # export mode) — CLI-only (packages/cli/src/runtime/history.ts), never
 # referenced by the extension host. resources/traceViewer (the single-file
-# build historyHandlers.ts actually loads) is unaffected.
+# build ProgressViewMessageHandler.ts actually loads) is unaffected.
 #
 # No `!resources/**` line exists in this file (deliberately — see below), so
 # this plain ignore line works: vsce applies every `!`-negated line *after*

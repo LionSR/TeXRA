@@ -64,10 +64,10 @@ export interface CliLoginOptions {
   signal?: AbortSignal;
 }
 
-export const CLI_MANUAL_AUTH_URL_PROMPT =
+const CLI_MANUAL_AUTH_URL_PROMPT =
   'Open this URL in a browser that can reach this terminal session:';
 
-export const CLI_MANUAL_AUTH_REMOTE_HINT =
+const CLI_MANUAL_AUTH_REMOTE_HINT =
   'Remote SSH/container users may need to forward the callback port.';
 
 export function formatCliManualAuthUrlMessage(url: string): string {
