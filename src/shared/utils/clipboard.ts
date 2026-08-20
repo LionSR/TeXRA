@@ -2,6 +2,16 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 export const COPY_RESET_DELAY_MS = 2000;
 
+export function appendClipboardImageChips(
+  text: string,
+  fileNames: readonly string[],
+): string {
+  if (fileNames.length === 0) return text;
+  const boundary =
+    text && !text.endsWith(' ') && !text.endsWith('\n') ? ' ' : '';
+  return `${text}${boundary}${fileNames.map((name) => `[${name}]`).join(' ')}`;
+}
+
 /**
  * Copy text to clipboard with LF-normalized line endings.
  */
