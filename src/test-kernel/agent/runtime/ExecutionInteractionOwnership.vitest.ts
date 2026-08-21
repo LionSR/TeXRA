@@ -1,7 +1,7 @@
 // Interaction-ownership index (D3/T5): which host-interaction generation owns
 // each live execution. Pins the release rule a host depends on — surfaces stay
 // attached while any inheriting run is alive, and one generation never inherits
-// another's runs. Design note: docs/design/execution-interaction-ownership.md.
+// another's runs. Design note: docs/design/2026-08-01-execution-interaction-ownership.md.
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';

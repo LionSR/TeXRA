@@ -8,7 +8,7 @@
  * without a later generation inheriting the earlier one's runs. Ownership is
  * decided from registry facts (handle registration, child-activation
  * reservation, parent/child stream lineage), so it lives here rather than in
- * each host. Design note: `docs/design/execution-interaction-ownership.md`.
+ * each host. Design note: `docs/design/2026-08-01-execution-interaction-ownership.md`.
  */
 
 import { DisposableStore } from '@platform/disposable';

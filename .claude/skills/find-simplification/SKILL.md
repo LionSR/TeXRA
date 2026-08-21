@@ -22,7 +22,7 @@ Treat these as intentional by default; removing an unused method *inside* one ca
 - The frozen `@agent/*` SDK surface (`packages/agent/`). There is no `@texra/core` workspace package (deleted by #7099); do not propose recreating it.
 - The trimmed PocketFlow engine (`src/agent/node/index.ts`). It deliberately lacks upstream `BatchNode`/`BatchFlow`, parallel variants, and the `params` channel — do not propose re-adding them, and do not propose replacing the engine without reading it first.
 - The four hosts (extension, desktop, CLI, trace-viewer) and the platform-ports composition root. Desktop has had no public release, which makes desktop state a *simplification* source (no migration machinery allowed), not a target.
-- The seven browser-reachable `@utils/*` modules enforced by `scripts/check-browser-safe-utils.mjs`. The constraint is intentional; reducing the reachable set is welcome, adding Node built-ins to it is a regression.
+- The six browser-reachable `@utils/*` modules enforced by `scripts/check-browser-safe-utils.mjs`. The constraint is intentional; reducing the reachable set is welcome, adding Node built-ins to it is a regression.
 
 ## What Counts As A Strong Candidate
 
