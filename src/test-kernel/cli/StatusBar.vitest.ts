@@ -103,28 +103,41 @@ function heavyUsage(usageRoute: UsageRoute): TokenUsage {
 }
 
 describe('CLI StatusBar display model', () => {
-  it('does not show prospective plan quota after completed API-key usage', () => {
+  it.each([
+    {
+      name: 'completed API-key usage over a prospective coding plan',
+      usageRoute: 'api-key',
+      prospectiveRoute: 'glm-coding-plan-subscription',
+      expected: undefined,
+    },
+    {
+      name: 'completed coding-plan usage over a prospective ChatGPT route',
+      usageRoute: 'kimi-code-subscription',
+      prospectiveRoute: 'chatgpt-subscription',
+      expected: 'kimiCode',
+    },
+    {
+      name: 'prospective ChatGPT route before completed usage exists',
+      usageRoute: undefined,
+      prospectiveRoute: 'chatgpt-subscription',
+      expected: 'chatgpt',
+    },
+    {
+      name: 'prospective coding-plan route before completed usage exists',
+      usageRoute: undefined,
+      prospectiveRoute: 'glm-coding-plan-subscription',
+      expected: 'glmCodingPlan',
+    },
+    {
+      name: 'prospective route without a quota provider',
+      usageRoute: undefined,
+      prospectiveRoute: 'xai-subscription',
+      expected: undefined,
+    },
+  ] as const)('$name', ({ usageRoute, prospectiveRoute, expected }) => {
     expect(
-      subscriptionUsageProviderForStatus({
-        usageRoute: 'api-key',
-        modelAccess: 'personal',
-        prospectiveCodingPlan: 'glmCodingPlan',
-      }),
-    ).toBeUndefined();
-    expect(
-      subscriptionUsageProviderForStatus({
-        usageRoute: undefined,
-        modelAccess: 'personal',
-        prospectiveCodingPlan: 'glmCodingPlan',
-      }),
-    ).toBeUndefined();
-    expect(
-      subscriptionUsageProviderForStatus({
-        usageRoute: undefined,
-        modelAccess: 'glm-code',
-        prospectiveCodingPlan: 'glmCodingPlan',
-      }),
-    ).toBe('glmCodingPlan');
+      subscriptionUsageProviderForStatus({ usageRoute, prospectiveRoute }),
+    ).toBe(expected);
   });
 
   it('uses clear compact labels for API access mode', () => {
