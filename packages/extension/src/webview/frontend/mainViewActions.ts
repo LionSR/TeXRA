@@ -101,7 +101,7 @@ export function refreshInstructionPlaceholder(): void {
  * commits before the set render (Lit flushes updates in a microtask queued
  * ahead of ours), so assistive tech observes a removal + insertion.
  */
-export function announce(message: string): void {
+function announce(message: string): void {
   statusAnnouncement$.set('');
   queueMicrotask(() => statusAnnouncement$.set(message));
 }
@@ -345,7 +345,7 @@ export function changeAgent(sessionType: SessionType, value: string): void {
 // Execute / panel actions
 // ---------------------------------------------------------------------------
 
-export function buildExecuteMessage(): MainViewExecuteMessage {
+function buildExecuteMessage(): MainViewExecuteMessage {
   const sessionType = sessionType$.get();
   const launchTarget =
     sessionType === SESSION_TYPES.WORKFLOW ? 'agent' : launchTarget$.get();

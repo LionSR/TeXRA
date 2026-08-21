@@ -30,7 +30,7 @@ interface TerminalTextUpdatePlan {
   textToWrite: string;
 }
 
-export function planTerminalTextUpdate(
+function planTerminalTextUpdate(
   renderedText: string,
   nextText: string,
 ): TerminalTextUpdatePlan {
@@ -47,7 +47,7 @@ export function planTerminalTextUpdate(
   };
 }
 
-export function countTerminalRows(text: string): number {
+function countTerminalRows(text: string): number {
   let rows = 1;
   for (const char of text) {
     if (char === '\n') rows += 1;
@@ -55,7 +55,7 @@ export function countTerminalRows(text: string): number {
   return rows;
 }
 
-export function nextTerminalRowCount(
+function nextTerminalRowCount(
   previousRowCount: number,
   updatePlan: TerminalTextUpdatePlan,
 ): number {
@@ -247,10 +247,9 @@ export class TerminalOutput extends LitElement {
         );
         const scrollback = Math.max(MIN_SCROLLBACK, rowCount);
         if (terminal.options.scrollback !== scrollback) {
-          terminal.options = {
-            ...terminal.options,
-            scrollback,
-          };
+          // xterm rejects whole-object options assignment ('cols'/'rows' are
+          // constructor-only); set the single option instead.
+          terminal.options.scrollback = scrollback;
         }
 
         if (updatePlan.reset) {
