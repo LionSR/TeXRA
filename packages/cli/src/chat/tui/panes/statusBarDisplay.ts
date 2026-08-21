@@ -15,10 +15,7 @@ import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
 import { STATUS_BAR_HORIZONTAL_PADDING } from '@cli/tui/ui/theme';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import {
-  codingPlanForUsageRoute,
-  CODING_PLAN_SUBSCRIPTIONS,
-} from '@shared/codingPlanSubscriptions';
+import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import {
   type ContextStateData,
   type SubscriptionUsageSnapshot,
@@ -68,23 +65,14 @@ type CtrlCAction = 'exit' | 'stop' | 'stop root';
 /** Choose the quota owner, preferring the route of completed usage. */
 export function subscriptionUsageProviderForStatus({
   usageRoute,
-  modelAccess,
-  prospectiveCodingPlan,
+  prospectiveRoute,
 }: {
   readonly usageRoute: UsageRoute | undefined;
-  readonly modelAccess: CliModelAccessRoute;
-  readonly prospectiveCodingPlan?: SubscriptionUsageProvider;
+  readonly prospectiveRoute: UsageRoute | undefined;
 }): SubscriptionUsageProvider | undefined {
-  if (usageRoute === 'chatgpt-subscription') return 'chatgpt';
-  const completedCodingPlan = codingPlanForUsageRoute(usageRoute);
-  if (completedCodingPlan) return completedCodingPlan.usageProvider;
-  if (usageRoute !== undefined) return undefined;
-  if (modelAccess === 'chatgpt') return 'chatgpt';
-  return CODING_PLAN_SUBSCRIPTIONS.find(
-    (plan) =>
-      plan.usageProvider === prospectiveCodingPlan &&
-      plan.cliProvider === modelAccess,
-  )?.usageProvider;
+  const route = usageRoute ?? prospectiveRoute;
+  if (route === 'chatgpt-subscription') return 'chatgpt';
+  return codingPlanForUsageRoute(route)?.usageProvider;
 }
 
 interface StatusBarSegment {
