@@ -25,7 +25,7 @@
     "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.233",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.234",
     "@openai/codex-sdk": "^0.147.0",
     "@playwright/test": "^1.62.1",
     "@types/semver": "^7.8.0",
@@ -43,7 +43,7 @@
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
     "@sentry/electron": "^7.16.0",
     "fix-path": "^5.0.0",
-    "lucide-static": "^1.31.0",
+    "lucide-static": "^1.32.0",
     "node-pty": "^1.1.0",
     "semver": "^7.8.5"
   }
