@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { describe, it } from 'vitest';
-import { ModelProvider, ReasoningEffort } from 'llm-zoo';
+import { MODEL_CONFIGS, ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
@@ -415,8 +415,12 @@ describe('ModelHandlerDeepSeek vision content normalization', () => {
     assert.equal(capturedParams.messages[0].content, 'describe this');
   });
 
-  it('keeps array content (and image parts) for a vision-enabled model', async () => {
-    const handler = createHandler({ capabilities: { supportsVision: true } });
+  it('keeps image parts for the registered DeepSeek vision model', async () => {
+    const config = MODEL_CONFIGS.deepseekvision;
+    assert.equal(config.fullName, 'deepseek-v4-flash-vision-exp');
+    assert.equal(config.capabilities.supportsVision, true);
+
+    const handler = new ModelHandlerDeepSeek(config);
     const content = [
       { type: 'text', text: 'describe this' },
       { type: 'image_url', image_url: { url: 'data:image/png;base64,AAA' } },

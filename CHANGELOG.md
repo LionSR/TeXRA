@@ -8,8 +8,8 @@ All notable changes to this project will be documented in this file.
 
 #### Features
 
-- **DeepSeek Vision is available** — `deepseekvision` (V4 Flash Vision, Exp)
-  accepts image attachments alongside text.
+- **DeepSeek V4 Flash Vision is available** — `deepseekvision` accepts image
+  attachments alongside text.
 
 ## [0.40.3] - 2026-08-20
 
