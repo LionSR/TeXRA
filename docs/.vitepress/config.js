@@ -182,7 +182,8 @@ const baseConfig = {
     },
     footer: {
       message: `<a href="${base}changelog">Changelog</a> · <a href="${base}terms">Terms of Service</a> · <a href="${base}providers">Providers</a> · <a href="${base}guide/open-source">Open Source</a>`,
-      copyright: 'Copyright © 2024-2026 TeXRA Team. All rights reserved.',
+      copyright:
+        'Copyright © 2024-2026 TeXRA Team. Code licensed under Apache-2.0.',
     },
   },
   ignoreDeadLinks: true,

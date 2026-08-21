@@ -2,7 +2,7 @@
   "name": "@texra-ai/agent",
   "version": "0.40.4",
   "description": "Embeddable TeXRA agent runtime",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "author": "TeXRA.ai",
   "homepage": "https://texra.ai",
   "repository": {
