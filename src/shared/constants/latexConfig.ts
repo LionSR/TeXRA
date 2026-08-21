@@ -1,3 +1,4 @@
+import type { LatexConfigValues } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 /**
@@ -86,3 +87,16 @@ export const LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY = {
   customReplacementsRegex: 'texra.latex.customReplacementsRegex',
   customReplacements: 'texra.latex.customReplacements',
 } as const;
+
+/**
+ * Every webview-facing LaTeX config field → its storage key, merging the
+ * WorkspaceState-backed {@link LATEX_FIELD_TO_KEY} and the core-config-backed
+ * {@link LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY}. The `satisfies` clause asserts
+ * the two maps together cover every `LatexConfigValues` field. Shared by the
+ * settings-view frontend (LaTeXTab, latexSlice) so the merged map is defined
+ * once rather than reassembled per consumer.
+ */
+export const LATEX_CONFIG_FIELD_TO_KEY = {
+  ...LATEX_FIELD_TO_KEY,
+  ...LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
+} as const satisfies Record<keyof LatexConfigValues, string>;
