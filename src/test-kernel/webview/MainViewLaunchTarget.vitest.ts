@@ -4,15 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - shared IPC and schemas
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema, AgentCategory } from '@shared/schemas';
-import type { SessionType, TeamOptionData } from '@shared/schemas';
+import type {
+  MainViewExecuteMessage,
+  SessionType,
+  TeamOptionData,
+} from '@shared/schemas';
 
 // Local imports - main-view actions, catalog slice, state, and test utilities
 import {
-  buildExecuteMessage,
   changeLaunchTarget,
   changeSessionType,
   changeTeam,
   changeWorkingDirectory,
+  sendExecuteMessage,
   validateTeamSelection,
 } from '@webview/frontend/mainViewActions';
 import { catalogHandlers } from '@webview/frontend/slices/catalogSlice';
@@ -65,6 +69,14 @@ const OPEN_ROOTS = [
 /** Flush the microtask queue so `announce`'s clear-then-set lands. */
 async function flushAnnouncements(): Promise<void> {
   await Promise.resolve();
+}
+
+/** Post the current form state and return the EXECUTE payload the host gets. */
+function captureExecuteMessage(): MainViewExecuteMessage {
+  sendExecuteMessage();
+  const call = mocks.postMessage.mock.calls.at(-1);
+  expect(call?.[0]).toBe(MAIN_VIEW_COMMANDS.EXECUTE);
+  return call?.[1] as MainViewExecuteMessage;
 }
 
 function stashDraft(sessionType: SessionType, text: string): void {
@@ -436,7 +448,7 @@ describe('main-view launch target', () => {
     });
   });
 
-  describe('buildExecuteMessage', () => {
+  describe('sendExecuteMessage', () => {
     it('sends only launchTarget and teamId as team identity', () => {
       sessionType$.set('toolUse');
       launchTarget$.set('team');
@@ -444,7 +456,7 @@ describe('main-view launch target', () => {
       agent$.set({ ...agent$.get(), toolUse: 'orchestrator' });
       model$.set('gpt-5.4');
 
-      const message = buildExecuteMessage();
+      const message = captureExecuteMessage();
 
       expect(message.session).toEqual({
         launchTarget: 'team',
@@ -459,7 +471,7 @@ describe('main-view launch target', () => {
     it('sends the selected working directory through the existing session payload', () => {
       workingDirectory$.set('/workspace/paper');
 
-      expect(buildExecuteMessage().session).toMatchObject({
+      expect(captureExecuteMessage().session).toMatchObject({
         launchTarget: 'agent',
         workingDirectory: '/workspace/paper',
       });
@@ -470,7 +482,7 @@ describe('main-view launch target', () => {
       launchTarget$.set('agent');
       selectedTeamId$.set('physicist');
 
-      expect(buildExecuteMessage().session).toEqual({
+      expect(captureExecuteMessage().session).toEqual({
         launchTarget: 'agent',
         teamId: undefined,
       });
@@ -481,7 +493,7 @@ describe('main-view launch target', () => {
       launchTarget$.set('team');
       selectedTeamId$.set('physicist');
 
-      expect(buildExecuteMessage().session).toEqual({
+      expect(captureExecuteMessage().session).toEqual({
         launchTarget: 'agent',
         teamId: undefined,
       });
@@ -492,7 +504,7 @@ describe('main-view launch target', () => {
       launchTarget$.set('team');
       selectedTeamId$.set('');
 
-      expect(buildExecuteMessage().session).toEqual({
+      expect(captureExecuteMessage().session).toEqual({
         launchTarget: 'team',
         teamId: undefined,
       });
