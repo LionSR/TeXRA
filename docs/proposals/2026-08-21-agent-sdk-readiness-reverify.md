@@ -174,11 +174,13 @@ verdict. The verification pass itself found no abstraction to remove; the one co
 change this session is the mechanical barrel consolidation in §7, landed at
 the maintainer's request as the shovel-ready step §4.3 named.
 
-## 7. Landed refactor — three Tier-1 barrels (this session)
+## 7. Landed refactor — Tier-1 door consolidation (this session)
 
 At the maintainer's request, the consensus shovel-ready step from §4.3 was
-executed rather than only recorded. This is a behavior-preserving surface
-change: no runtime logic moved, only the doors hosts import through.
+executed rather than only recorded, in two behavior-preserving moves: no
+runtime logic moved, only the doors hosts import through.
+
+### 7a. Three new barrels (`export` / `review` / `templates`)
 
 **Added** three curated public-surface barrels, each documented in the house
 style of `@agent/followUp` / `@agent/runtime` and re-exporting exactly the
@@ -211,11 +213,48 @@ schemas}`, `@agent/review/{reviewDiff,reviewIssues}`) plus
 | desktop   | 9      | 9      |
 | agent     | 7      | 7      |
 
-Three of the eight planned Tier-1 doors (§4.3) now exist. **Validation:**
-`npm run typecheck` exit 0; `hostAgentDeepImportRatchet.vitest.ts` green (no
-new edge, no stale headroom, baseline sorted); `check:dead-code-ratchet` no new
-findings; eslint + prettier clean; the full `src/test-kernel/architecture/`
-suite passes (104/104). The remaining doors (`export`/`review`/`templates` now
-done; `agentCreator` fronting and the `@agent/index` widening for
-`platformAgentDirectories` / `agentRegistry` / `BundledAgentDirectories`) stay
-open per §4.3 as they carry a design decision, not just a mechanical move.
+Three of the eight planned Tier-1 doors (§4.3) now exist.
+
+### 7b. Widening the existing `@agent/index` door
+
+The surface audit's second recommendation: hosts were deep-reaching
+`@agent/index/{agentRegistry,platformAgentDirectories,BundledAgentDirectories}`
+even though the barrel _already_ re-exported most of what they imported
+(`loadAgents`, `refresh`, `getVisibleAgents`, `getAgentsByCategory`,
+`computeAgentOptionsData`, `getAgent`). Only two symbols were genuinely absent
+from the door, both squarely part of the "agent registry / directory" public
+surface: `createPlatformAgentDirectories` and `BUNDLED_AGENT_DIRECTORY_NAMES`.
+
+**Added** those two re-exports to `src/agent/index/index.ts` and **re-routed**
+the six leaf importers (cli `runtime/initPlatform.ts`; desktop `main/index.ts`,
+`main/platform/index.ts`, `main/platform/paths.ts`,
+`main/desktopAgentSettingsController.ts`; extension
+`frontend/agents/AgentDirectoryManager.ts`) to `@agent/index`, retiring the
+three leaf specifiers.
+
+**Not done — `@agent/core/state/executionRequests`:** this leaf survives a
+door move because `desktopProgressFileActions.ts` reaches it through a _dynamic_
+`import('@agent/core/state/executionRequests')` (lazy-load), which the ratchet's
+AST scan counts (`src/test-kernel/support/repoScan.ts:150`). Routing the static
+importers through a barrel would leave the dynamic leaf live, so the baseline
+could not shrink — net churn for zero ratchet gain. Converting the dynamic
+import to eager is a load-cost decision, not a mechanical move; left for §4.
+
+### 7c. Combined result and validation
+
+| Package   | `c48e5cb` | 7a  | 7b (final) |
+| --------- | --------- | --- | ---------- |
+| cli       | 11        | 9   | **8**      |
+| desktop   | 9         | 9   | **6**      |
+| extension | 12        | 11  | **10**     |
+| agent     | 7         | 7   | 7          |
+
+Net this session: **−8 host deep-import specifiers** (cli −3, desktop −3,
+extension −2), four of the eight planned Tier-1 doors now in place
+(`export`, `review`, `templates`; `@agent/index` widened). **Validation** (run
+after each move): `npm run typecheck` exit 0; `hostAgentDeepImportRatchet.vitest.ts`
+green (no new edge, no stale headroom, baseline sorted); `check:dead-code-ratchet`
+no new findings; eslint + prettier clean; the full `src/test-kernel/architecture/`
+suite passes (104/104). Remaining doors — `agentCreator` fronting (its deepest
+specifier), plus the `core/state` door blocked by 7b's dynamic import — stay
+open per §4 as they carry a design decision, not just a mechanical move.
