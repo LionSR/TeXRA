@@ -44,46 +44,6 @@ export function loadRootPaths(rootDir) {
   return tsconfig.compilerOptions.paths;
 }
 
-// Aliases the root tsconfig defines that `packages/extension/tsconfig.json`
-// deliberately omits: each is only ever imported from repo-root `src/`
-// locations the extension's own tsconfig doesn't include (its `include` is
-// scoped to `packages/extension/src`), so adding them would widen what the
-// extension can *type-check* against without widening what it can actually
-// import at runtime. Verified by grepping for each alias's usage (2026-07):
-// `vscode-jsonrpc/node` and the rest below resolve only inside
-// `src/tools/lean/direct/jsonRpc.ts` and `src/test-kernel/**`.
-export const EXTENSION_EXCLUDED_ALIASES = [
-  'vscode-jsonrpc/node',
-  '@test/*',
-  '@cli/*',
-  '@desktop/*',
-];
-
-const EXTENSION_PREFIX = 'packages/extension/';
-
-/**
- * Derives `packages/extension/tsconfig.json`'s `paths` block from the root
- * map. Neither tsconfig sets `baseUrl`, so values resolve relative to the
- * file that declares them: root values under `packages/extension/` become
- * `./`-prefixed extension-relative values, and every other
- * (repo-root-relative) value gets a `./../../` prefix.
- */
-export function deriveExtensionPaths(rootPaths) {
-  return Object.fromEntries(
-    Object.entries(rootPaths)
-      .filter(([key]) => !EXTENSION_EXCLUDED_ALIASES.includes(key))
-      .map(([key, values]) => [
-        key,
-        values.map((value) => {
-          const repoRelative = value.replace(/^\.\//u, '');
-          return repoRelative.startsWith(EXTENSION_PREFIX)
-            ? `./${repoRelative.slice(EXTENSION_PREFIX.length)}`
-            : `./../../${repoRelative}`;
-        }),
-      ]),
-  );
-}
-
 /**
  * Derives `packages/desktop/tsconfig.paths.json`'s `paths` block from the
  * root map. With no `baseUrl`, desktop's values resolve relative to
