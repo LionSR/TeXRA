@@ -52,7 +52,7 @@ export const streamTabStyles = css`
   /* Pending approval — solid orange start rail. */
   .tab-container.has-pending-approval {
     --stream-status-color: var(--color-warning);
-    --stream-status-rail-color: var(--wa-color-chart-orange, #d18616);
+    --stream-status-rail-color: var(--color-chart-orange);
   }
 
   .tab-select-tooltip-anchor {
