@@ -112,6 +112,28 @@ function gateClearStream(backend: RecordingTarget['backend']): () => void {
   return releaseClear;
 }
 
+/**
+ * Starts deleting `stream` (gated by `gateClearStream`) and waits until
+ * `clearStream` has been invoked for it, so the caller can interleave a
+ * second action while the deletion sits mid-flight. Returns the still-pending
+ * deletion wrapped in an object — an async function returning a bare promise
+ * would chain onto it and defeat the point of not awaiting it here.
+ */
+async function beginGatedDeletion(
+  backend: RecordingTarget['backend'],
+  stream: StreamTabId,
+): Promise<{
+  deletion: ReturnType<RecordingTarget['backend']['deleteStream']>;
+}> {
+  const deletion = backend.deleteStream(stream);
+  await vi.waitFor(() =>
+    expect(backend.state.clearStream).toHaveBeenCalledWith(stream, {
+      expectedIncarnation: 0,
+    }),
+  );
+  return { deletion };
+}
+
 describe('ProgressBackend', () => {
   it('projects every approval bypass kind through one backend port', () => {
     const { backend, messages } = createRecordingBackend();
@@ -907,12 +929,7 @@ describe('ProgressBackend', () => {
     backend.state.streamLogs.ensureStream(deleting);
     backend.presentation.select(fallback);
 
-    const deletion = backend.deleteStream(deleting);
-    await vi.waitFor(() =>
-      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting, {
-        expectedIncarnation: 0,
-      }),
-    );
+    const { deletion } = await beginGatedDeletion(backend, deleting);
     await backend.activateStream(deleting);
     releaseClear();
     await deletion;

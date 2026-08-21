@@ -84,6 +84,16 @@ function expectOpenedPatchFile(openedPaths: readonly string[]): void {
   expect(path.extname(openedPaths[0])).toBe('.diff');
 }
 
+/** A promise/resolver pair used to pause a mock implementation mid-flight
+ * until the test is ready to release it. */
+function createGate(): { promise: Promise<void>; release: () => void } {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
+
 const tempDirs = useTempDirs();
 const hosts: DiffHost[] = [];
 
@@ -310,24 +320,18 @@ describe('createDesktopDiffHost', () => {
     const [original, proposed] = await prepareDiffPair();
     const diffDirsBefore = listDiffTempDirs();
 
-    let markReadStarted!: () => void;
-    const readStarted = new Promise<void>((resolve) => {
-      markReadStarted = resolve;
-    });
-    let releaseRead!: () => void;
-    const readGate = new Promise<void>((resolve) => {
-      releaseRead = resolve;
-    });
+    const readStarted = createGate();
+    const readGate = createGate();
     vi.mocked(readFile).mockImplementationOnce(async () => {
-      markReadStarted();
-      await readGate;
+      readStarted.release();
+      await readGate.promise;
       return 'a\n';
     });
 
     const disposePromise = host.dispose();
     const openPromise = host.openDiff(original, proposed, 'Compare');
 
-    await readStarted;
+    await readStarted.promise;
     let disposeSettled = false;
     void disposePromise.then(() => {
       disposeSettled = true;
@@ -335,7 +339,7 @@ describe('createDesktopDiffHost', () => {
     await Promise.resolve();
     expect(disposeSettled).toBe(false);
 
-    releaseRead();
+    readGate.release();
     await expect(openPromise).rejects.toThrow(
       'Desktop window closed before the diff could be opened.',
     );
@@ -357,22 +361,16 @@ describe('createDesktopDiffHost', () => {
       const [original, proposed] = await prepareDiffPair();
       const diffDirsBefore = listDiffTempDirs();
 
-      let markReadStarted!: () => void;
-      const readStarted = new Promise<void>((resolve) => {
-        markReadStarted = resolve;
-      });
-      let releaseRead!: () => void;
-      const readGate = new Promise<void>((resolve) => {
-        releaseRead = resolve;
-      });
+      const readStarted = createGate();
+      const readGate = createGate();
       vi.mocked(readFile).mockImplementationOnce(async () => {
-        markReadStarted();
-        await readGate;
+        readStarted.release();
+        await readGate.promise;
         return 'a\n';
       });
 
       const openPromise = host.openDiff(original, proposed, 'Compare');
-      await readStarted;
+      await readStarted.promise;
 
       const disposePromise = host.dispose();
       let removalTarget: string | undefined;
@@ -381,7 +379,7 @@ describe('createDesktopDiffHost', () => {
         throw new Error('simulated EBUSY removal failure');
       });
 
-      releaseRead();
+      readGate.release();
 
       await expect(openPromise).rejects.toThrow(
         'Desktop window closed before the diff could be opened.',
@@ -472,10 +470,7 @@ describe('createDesktopDiffHost', () => {
     const [original, proposed] = await prepareDiffPair();
     const diffDirsBefore = listDiffTempDirs();
 
-    let releaseRemoval!: () => void;
-    const removalGate = new Promise<void>((resolve) => {
-      releaseRemoval = resolve;
-    });
+    const removalGate = createGate();
     let removalTarget: string | undefined;
     const actualFs =
       await vi.importActual<typeof import('node:fs/promises')>(
@@ -483,7 +478,7 @@ describe('createDesktopDiffHost', () => {
       );
     vi.mocked(rm).mockImplementationOnce(async (target, options) => {
       removalTarget = String(target);
-      await removalGate;
+      await removalGate.promise;
       await actualFs.rm(
         target as string,
         options as Parameters<typeof actualFs.rm>[1],
@@ -504,7 +499,7 @@ describe('createDesktopDiffHost', () => {
     await sleep(25);
     expect(disposeSettled).toBe(false);
 
-    releaseRemoval();
+    removalGate.release();
     await expect(openPromise).rejects.toThrow(
       'Desktop window closed before the diff could be opened.',
     );
@@ -523,10 +518,7 @@ describe('createDesktopDiffHost', () => {
     const { host, openPath } = createHost();
     openPath.mockRejectedValue(new Error('editor unavailable'));
 
-    let releaseRemoval!: () => void;
-    const removalGate = new Promise<void>((resolve) => {
-      releaseRemoval = resolve;
-    });
+    const removalGate = createGate();
     let removalTarget: string | undefined;
     const actualFs =
       await vi.importActual<typeof import('node:fs/promises')>(
@@ -534,7 +526,7 @@ describe('createDesktopDiffHost', () => {
       );
     vi.mocked(rm).mockImplementationOnce(async (target, options) => {
       removalTarget = String(target);
-      await removalGate;
+      await removalGate.promise;
       await actualFs.rm(
         target as string,
         options as Parameters<typeof actualFs.rm>[1],
@@ -556,7 +548,7 @@ describe('createDesktopDiffHost', () => {
       .mock.calls.filter(([target]) => String(target) === removalTarget);
     expect(targetCalls).toHaveLength(1);
 
-    releaseRemoval();
+    removalGate.release();
     await expect(openPromise).rejects.toThrow('editor unavailable');
     await disposePromise;
 
@@ -576,14 +568,11 @@ describe('createDesktopDiffHost', () => {
       const { host, openPath } = createHost();
       openPath.mockRejectedValue(new Error('editor unavailable'));
 
-      let releaseRemoval!: () => void;
-      const removalGate = new Promise<void>((resolve) => {
-        releaseRemoval = resolve;
-      });
+      const removalGate = createGate();
       let removalTarget: string | undefined;
       vi.mocked(rm).mockImplementationOnce(async (target) => {
         removalTarget = String(target);
-        await removalGate;
+        await removalGate.promise;
         throw new Error('simulated removal failure');
       });
 
@@ -593,7 +582,7 @@ describe('createDesktopDiffHost', () => {
       });
 
       const disposePromise = host.dispose();
-      releaseRemoval();
+      removalGate.release();
 
       await expect(openPromise).rejects.toThrow('editor unavailable');
       await disposePromise;
@@ -617,22 +606,16 @@ describe('createDesktopDiffHost', () => {
       const { host, openPath } = createHost();
       const [original, proposed] = await prepareDiffPair();
 
-      let markReadStarted!: () => void;
-      const readStarted = new Promise<void>((resolve) => {
-        markReadStarted = resolve;
-      });
-      let releaseRead!: () => void;
-      const readGate = new Promise<void>((resolve) => {
-        releaseRead = resolve;
-      });
+      const readStarted = createGate();
+      const readGate = createGate();
       vi.mocked(readFile).mockImplementationOnce(async () => {
-        markReadStarted();
-        await readGate;
+        readStarted.release();
+        await readGate.promise;
         return 'a\n';
       });
 
       const openPromise = host.openDiff(original, proposed, 'Compare');
-      await readStarted;
+      await readStarted.promise;
 
       const disposePromise = host.dispose();
       let disposeSettled = false;
@@ -648,7 +631,7 @@ describe('createDesktopDiffHost', () => {
 
       // The hung setup is abandoned after the bound. Once it resumes, the
       // `disposed` branch still removes its own temp directory.
-      releaseRead();
+      readGate.release();
       await expect(openPromise).rejects.toThrow(
         'Desktop window closed before the diff could be opened.',
       );

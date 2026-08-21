@@ -203,6 +203,21 @@ function stubGlobalState(
   return { get: vi.fn(get), update: vi.fn() };
 }
 
+/** Stubs global-state reads so MODEL_LIST_VERSION is current, one model is
+ *  enabled, and two Copilot route models are stale — the fixture shared by
+ *  the Copilot-route-invalidation and project-config-degradation tests. */
+function stubStaleCopilotRouteModels(): void {
+  mocks.cliGlobalState.get.mockImplementation((key: string) => {
+    if (key === GlobalStateKey.MODEL_LIST_VERSION) return MODEL_LIST_VERSION;
+    if (key === GlobalStateKey.ENABLED_MODELS) return ['sonnet5T'];
+    if (key === GlobalStateKey.COPILOT_ROUTE_MODELS) {
+      return ['gemini36f', 'gemini31p'];
+    }
+    return undefined;
+  });
+  mocks.cliGlobalState.update.mockResolvedValue(undefined);
+}
+
 /**
  * Each signal-ownership test must observe installation from a clean slate:
  * `installCliShutdownSignalHandlers` guards on an idempotent, module-level
@@ -335,15 +350,7 @@ describe('CLI platform init', () => {
   it('invalidates and logs when only Copilot route preferences are cleared', async () => {
     expect(MODEL_CONFIGS.gemini36f?.deprecated).toBe(true);
     mocks.tryPlatform.mockReturnValueOnce(undefined);
-    mocks.cliGlobalState.get.mockImplementation((key: string) => {
-      if (key === GlobalStateKey.MODEL_LIST_VERSION) return MODEL_LIST_VERSION;
-      if (key === GlobalStateKey.ENABLED_MODELS) return ['sonnet5T'];
-      if (key === GlobalStateKey.COPILOT_ROUTE_MODELS) {
-        return ['gemini36f', 'gemini31p'];
-      }
-      return undefined;
-    });
-    mocks.cliGlobalState.update.mockResolvedValue(undefined);
+    stubStaleCopilotRouteModels();
     const stderrWrite = vi
       .spyOn(process.stderr, 'write')
       .mockImplementation(() => true);
@@ -373,15 +380,7 @@ describe('CLI platform init', () => {
 
   it('shows one project-config degradation warning with its cause in quiet mode', async () => {
     mocks.tryPlatform.mockReturnValueOnce(undefined);
-    mocks.cliGlobalState.get.mockImplementation((key: string) => {
-      if (key === GlobalStateKey.MODEL_LIST_VERSION) return MODEL_LIST_VERSION;
-      if (key === GlobalStateKey.ENABLED_MODELS) return ['sonnet5T'];
-      if (key === GlobalStateKey.COPILOT_ROUTE_MODELS) {
-        return ['gemini36f', 'gemini31p'];
-      }
-      return undefined;
-    });
-    mocks.cliGlobalState.update.mockResolvedValue(undefined);
+    stubStaleCopilotRouteModels();
     mocks.openTexraConfigStores.mockImplementationOnce(
       async (
         _storage: unknown,

@@ -53,12 +53,11 @@ const MULTI_MERGED = MULTI_FORMATTED.replace(
 );
 
 let dir: string;
-let emptyGitConfig = '';
 let gitEnv = process.env;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'format-staged-'));
-  emptyGitConfig = join(dir, 'empty-gitconfig');
+  const emptyGitConfig = join(dir, 'empty-gitconfig');
   writeFileSync(emptyGitConfig, '');
   // Isolate git from host global/system config so the fixture does not
   // inherit commit signing or a non-default core.hooksPath. This also keeps

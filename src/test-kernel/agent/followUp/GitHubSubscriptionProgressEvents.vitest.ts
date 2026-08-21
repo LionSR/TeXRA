@@ -26,10 +26,25 @@ import {
   PollingSourceBase,
   type BasePollSubscriptionState,
 } from '@tools/github/PollingSourceBase';
-import { StreamSubscriptionRegistry } from '@tools/github/StreamSubscriptionRegistry';
+import {
+  StreamSubscriptionRegistry,
+  type StreamSubscriptionRegistryOptions,
+} from '@tools/github/StreamSubscriptionRegistry';
 
 // Local file imports
 import { createRecordingHost } from '../progressTestUtils';
+
+function createTestRegistry(
+  source: RegistryTestSource,
+  overrides: Partial<StreamSubscriptionRegistryOptions<string, string>> = {},
+): StreamSubscriptionRegistry<string, string> {
+  return new StreamSubscriptionRegistry<string, string>({
+    name: 'test subscriptions',
+    source,
+    keyOf: (input) => input,
+    ...overrides,
+  });
+}
 
 function recordAppSignal<K extends keyof AppSignalPayloads>(
   event: K,
@@ -127,11 +142,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
   it('publishes githubSubscriptionsChanged through app signals', () => {
     const signal = recordAppSignal('githubSubscriptionsChanged');
     const source = new RegistryTestSource();
-    const registry = new StreamSubscriptionRegistry<string, string>({
-      name: 'test subscriptions',
-      source,
-      keyOf: (input) => input,
-    });
+    const registry = createTestRegistry(source);
 
     try {
       registry.bind('stream-a' as StreamTabId, 'owner/repo');
@@ -205,11 +216,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const host = createRecordingHost();
     const signal = recordAppSignal('githubSubscriptionsChanged');
     const source = new RegistryTestSource();
-    const registry = new StreamSubscriptionRegistry<string, string>({
-      name: 'test subscriptions',
-      source,
-      keyOf: (input) => input,
-    });
+    const registry = createTestRegistry(source);
 
     try {
       registry.bind('stream-a' as StreamTabId, 'owner/repo');
@@ -234,11 +241,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const source = new RegistryTestSource();
     const session = createTestSession();
     const lease = session.followUps.claimLive(streamId, 'flow')!;
-    const registry = new StreamSubscriptionRegistry<string, string>({
-      name: 'test subscriptions',
-      source,
-      keyOf: (input) => input,
-    });
+    const registry = createTestRegistry(source);
 
     try {
       withRunContext(
@@ -272,11 +275,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
     firstSession.followUps.claimLive(streamId, 'flow');
     const secondSession = createTestSession();
     const secondLease = secondSession.followUps.claimLive(streamId, 'flow')!;
-    const registry = new StreamSubscriptionRegistry<string, string>({
-      name: 'test subscriptions',
-      source,
-      keyOf: (input) => input,
-    });
+    const registry = createTestRegistry(source);
 
     try {
       withRunContext(
@@ -312,12 +311,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
       info: vi.fn(),
       warn: vi.fn(),
     };
-    const registry = new StreamSubscriptionRegistry<string, string>({
-      name: 'test subscriptions',
-      logger,
-      source,
-      keyOf: (input) => input,
-    });
+    const registry = createTestRegistry(source, { logger });
     const unhandledRejection = vi.fn();
     submitFollowUpMock.mockRejectedValueOnce(new Error('delivery failed'));
 
