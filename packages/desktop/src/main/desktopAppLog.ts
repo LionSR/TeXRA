@@ -18,8 +18,9 @@ import {
 } from 'electron';
 
 import { redactSecrets } from '@logger/redaction';
-import { normalizeFilePath, unique } from '@utils/core';
+import { normalizeFilePath } from '@utils/core';
 
+import { pathSeparatorVariants } from './desktopPathVariants.js';
 import type { DesktopLogSnapshot } from '../shared/desktopLogMessages.js';
 
 const LOG_FILE_NAME = 'texra-desktop.log';
@@ -171,20 +172,13 @@ function redactDesktopLogText(
   );
 }
 
-/** Both separator spellings of a prefix, so mixed-separator log text redacts. */
-function separatorVariants(prefix: string): string[] {
-  const forward = normalizeFilePath(prefix);
-  const backward = forward === '/' ? forward : forward.replaceAll('/', '\\');
-  return unique([prefix, forward, backward]);
-}
-
 function redactPathPrefixes(
   text: string,
   ...prefixes: readonly (string | undefined)[]
 ): string {
   return prefixes
     .filter((prefix): prefix is string => Boolean(prefix))
-    .flatMap(separatorVariants)
+    .flatMap(pathSeparatorVariants)
     .toSorted((a, b) => b.length - a.length)
     .reduce((redacted, prefix) => {
       if (prefix === '/') {
