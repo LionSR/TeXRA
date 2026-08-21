@@ -1322,7 +1322,7 @@
       "name": "workbenchTab"
     },
     {
-      "file": "src/agent/implementations/agentCreator/agentCreatorTemplates.ts",
+      "file": "src/agent/implementations/agentCreator/agentCreatorFlow.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "ParsedCreatorYamlSchema"
