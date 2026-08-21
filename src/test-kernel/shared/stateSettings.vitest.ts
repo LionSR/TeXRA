@@ -547,6 +547,47 @@ describe('catalog-derived settings snapshots', () => {
     }
   });
 
+  it('builds the LaTeX message from validated catalog values and defaults', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const { stores, workspaceState } = makeFakeSettingsStores();
+    void workspaceState.update(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE, false);
+    void workspaceState.update(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS, 25000);
+    void workspaceState.update(
+      WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+      'stale-bogus-value',
+    );
+    void workspaceState.update(WorkspaceStateKey.LATEX_FORMATTER, 'tex-fmt');
+
+    try {
+      const message = buildSettingsSnapshotMessage('latex', stores, 'desktop');
+
+      assert.equal(message.command, SETTINGS_SNAPSHOT_COMMANDS.latex);
+      assert.equal(
+        message.values[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE],
+        false,
+      );
+      assert.equal(
+        message.values[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS],
+        LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
+      );
+      assert.equal(
+        message.values[WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS],
+        25000,
+      );
+      assert.equal(
+        message.values[WorkspaceStateKey.LATEXDIFF_MATH_MARKUP],
+        LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
+      );
+      assert.equal(
+        message.values[WorkspaceStateKey.LATEX_FORMATTER],
+        'tex-fmt',
+      );
+      assert.equal(warn.mock.calls.length, 1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('keeps the historical OpenAI Models-tab control order', () => {
     assert.deepEqual(
       modelsTabSettings('openai').map(({ entry }) => entry.key),
