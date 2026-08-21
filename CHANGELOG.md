@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 #### Features
 
 - **DeepSeek Vision is available** — `deepseekvision` (V4 Flash Vision, Exp)
-  accepts image attachments alongside text, via llm-zoo 1.30.0.
+  accepts image attachments alongside text.
 
 ## [0.40.3] - 2026-08-20
 
