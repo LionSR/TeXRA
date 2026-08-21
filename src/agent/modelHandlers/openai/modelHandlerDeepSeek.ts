@@ -85,8 +85,12 @@ export class ModelHandlerDeepSeek extends ReasoningModelHandlerOpenAI<DeepSeekTo
     return clampReasoningEffortToHighOrMax(effort);
   }
 
-  /** DeepSeek requires merging consecutive roles and stringified content. */
-  protected override readonly convertContentToString = true;
+  /**
+   * DeepSeek requires merging consecutive roles and stringified content —
+   * except on the vision-capable entry, which needs the array content shape
+   * to carry image parts (see `@model/deepSeekVisionOverride`).
+   */
+  protected override readonly convertContentToStringUnlessVision = true;
   protected override readonly mergeConsecutiveRoles = true;
 
   /**
