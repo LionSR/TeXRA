@@ -16,11 +16,13 @@
 // a type-only edge all classify the way the compiler sees them. The ungated
 // guidance-references CI job installs devDependencies before running it.
 
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import ts from 'typescript';
+
+import { walkFiles } from './walkFiles.mjs';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const utilsDir = join(rootDir, 'src', 'utils');
@@ -57,19 +59,9 @@ const WORD_TO_NUMBER = {
 
 /** Recursive list of TypeScript source files under a directory. */
 function listSourceFiles(dir) {
-  const results = [];
-  const walk = (current) => {
-    for (const entry of readdirSync(current, { withFileTypes: true })) {
-      const full = join(current, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-      } else if (entry.isFile() && /\.tsx?$/.test(entry.name)) {
-        results.push(full);
-      }
-    }
-  };
-  walk(dir);
-  return results;
+  return walkFiles(dir, { include: (file) => /\.tsx?$/.test(file) }).map(
+    (entry) => entry.absolutePath,
+  );
 }
 
 /**
