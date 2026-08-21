@@ -11,7 +11,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { listBaseBranchCandidates } from '@agent/review/reviewDiff';
+import { listBaseBranchCandidates } from '@agent/review';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 
 export interface ReviewOptions {

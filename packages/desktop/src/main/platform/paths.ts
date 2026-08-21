@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { app } from 'electron';
 
-import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index/BundledAgentDirectories';
+import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index';
 import {
   getWorkspacePathInput,
   type WorkspacePathOptions,
