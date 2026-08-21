@@ -27,7 +27,6 @@ import type { ModelCell } from '@agent/runtime/ModelCell';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type {
   ModelCredentialRoute,
@@ -197,10 +196,7 @@ function createRetryNode(
   const requestRetry = vi.fn<RetryNodeKit['requestRetry']>();
   const session =
     sessionOverride ??
-    sessionWithInteractions(
-      { requestRetry, cancel: () => {} },
-      new StreamStatusMachine(new SessionEventHub()),
-    );
+    sessionWithInteractions({ requestRetry, cancel: () => {} });
   const streamStatus = session.status;
   const node = new ExposedRetryNode().setServices(
     retryServices(streamId, {
@@ -464,10 +460,10 @@ describe('ModelInvocationNode retry', () => {
       transcript.acquireWriter(streamId, streamId),
     );
     const requestRetry = vi.fn(async () => ({ action: 'retry' as const }));
-    const session = sessionWithInteractions(
-      { requestRetry, cancel: () => {} },
-      new StreamStatusMachine(new SessionEventHub()),
-    );
+    const session = sessionWithInteractions({
+      requestRetry,
+      cancel: () => {},
+    });
 
     class DiagnosticRetryNode extends ExposedRetryNode {
       attempts = 0;
@@ -596,16 +592,13 @@ describe('ModelInvocationNode retry', () => {
       .fn<() => Promise<unknown>>()
       .mockRejectedValueOnce(new Error('client preparation failed'))
       .mockResolvedValue({});
-    const session = sessionWithInteractions(
-      {
-        requestRetry: async () => ({
-          action: 'retry' as const,
-          decisionSource: 'automatic' as const,
-        }),
-        cancel: () => {},
-      },
-      new StreamStatusMachine(new SessionEventHub()),
-    );
+    const session = sessionWithInteractions({
+      requestRetry: async () => ({
+        action: 'retry' as const,
+        decisionSource: 'automatic' as const,
+      }),
+      cancel: () => {},
+    });
 
     class ClientPreparationRetryNode extends ExposedRetryNode {
       override async exec(): Promise<InvocationSuccess> {
@@ -1343,10 +1336,10 @@ describe('ModelInvocationNode retry', () => {
         await options?.prepareRetry?.('personal');
         return { action: 'retry' };
       });
-      const session = sessionWithInteractions(
-        { requestRetry, cancel: () => {} },
-        new StreamStatusMachine(new SessionEventHub()),
-      );
+      const session = sessionWithInteractions({
+        requestRetry,
+        cancel: () => {},
+      });
       const node = new ExposedRetryNode().setServices(
         retryServices(streamId, {
           config: { model, agentCategory: AgentCategory.ToolUse },

@@ -23,7 +23,6 @@ import {
   stripCriticizeAnnotations,
   wrapCritiqueInAlign,
 } from '@replacement/advanced';
-import type { ReplacementCategory } from '@replacement/types';
 import {
   NON_REGEX_REPLACEMENT_CATEGORIES,
   REGEX_REPLACEMENT_CATEGORIES,

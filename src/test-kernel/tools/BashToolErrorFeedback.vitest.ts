@@ -10,7 +10,7 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { OpenAIResponseToolCall } from '@agent/types/ModelHandlerContracts';
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
+import { BASH_APPROVAL_CONFIG_KEY, type ToolResult } from '@shared/schemas';
 import { BashTool } from '@tools/bash';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import * as execUtils from '@utils/system/execUtils';
@@ -65,6 +65,21 @@ function stubBashApprovalDisabled(): void {
   );
 }
 
+/** Round-trip a tool result through follow-up message construction and return
+ * the model-visible `function_call_output` text. */
+async function toolUseOutput(result: ToolResult) {
+  const { attachments, sanitizedResult } = extractToolAttachments(result);
+  const messages = await createHandler().createToolUseFollowUpMessages(
+    undefined,
+    createBashCall(),
+    sanitizedResult,
+    attachments,
+    AgentWorkspaceState.create(),
+  );
+  return messages.find((message) => message.type === 'function_call_output')
+    ?.output;
+}
+
 function createBashCall(): OpenAIResponseToolCall {
   return {
     provider: 'openai-response',
@@ -101,21 +116,11 @@ describe('BashTool error feedback', () => {
     expect(result.error).toContain('stderr failure details');
     expect(result.error).toContain('stdout failure guidance');
 
-    const { attachments, sanitizedResult } = extractToolAttachments(result);
-    const messages = await createHandler().createToolUseFollowUpMessages(
-      undefined,
-      createBashCall(),
-      sanitizedResult,
-      attachments,
-      AgentWorkspaceState.create(),
-    );
-    const toolResult = messages.find(
-      (message) => message.type === 'function_call_output',
-    );
+    const output = await toolUseOutput(result);
 
-    expect(toolResult?.output).toContain('Command failed');
-    expect(toolResult?.output).toContain('stderr failure details');
-    expect(toolResult?.output).toContain('stdout failure guidance');
+    expect(output).toContain('Command failed');
+    expect(output).toContain('stderr failure details');
+    expect(output).toContain('stdout failure guidance');
   });
 
   it.each([
@@ -199,20 +204,10 @@ describe('BashTool error feedback', () => {
     expect(rejected.error).toContain('Do not retry');
     expect(rejected.userInstruction).toBeUndefined();
 
-    const { attachments, sanitizedResult } = extractToolAttachments(rejected);
-    const messages = await createHandler().createToolUseFollowUpMessages(
-      undefined,
-      createBashCall(),
-      sanitizedResult,
-      attachments,
-      AgentWorkspaceState.create(),
-    );
-    const toolResult = messages.find(
-      (message) => message.type === 'function_call_output',
-    );
+    const output = await toolUseOutput(rejected);
 
-    expect(toolResult?.output).toContain('Do not retry');
-    expect(toolResult?.output).not.toContain('User feedback:');
+    expect(output).toContain('Do not retry');
+    expect(output).not.toContain('User feedback:');
   });
 
   it('does not present an approval-policy denial as user feedback', async () => {
@@ -228,20 +223,10 @@ describe('BashTool error feedback', () => {
     expect(rejected.error).not.toContain('User rejected command');
     expect(rejected.userInstruction).toBeUndefined();
 
-    const { attachments, sanitizedResult } = extractToolAttachments(rejected);
-    const messages = await createHandler().createToolUseFollowUpMessages(
-      undefined,
-      createBashCall(),
-      sanitizedResult,
-      attachments,
-      AgentWorkspaceState.create(),
-    );
-    const toolResult = messages.find(
-      (message) => message.type === 'function_call_output',
-    );
+    const output = await toolUseOutput(rejected);
 
-    expect(toolResult?.output).toContain('Denied by TeXRA approval policy.');
-    expect(toolResult?.output).not.toContain('User feedback:');
+    expect(output).toContain('Denied by TeXRA approval policy.');
+    expect(output).not.toContain('User feedback:');
   });
 
   it('preserves policy-denial provenance when its reason is blank', async () => {

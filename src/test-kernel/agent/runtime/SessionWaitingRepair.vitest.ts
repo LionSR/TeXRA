@@ -89,13 +89,15 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     });
   }
 
-  function mockDeferredProbe(deferred: DeferredResumability): void {
+  /** A single-implementation deferred probe, wired into the mock. */
+  function startDeferredProbe(): DeferredResumability {
+    const deferred = createDeferredResumability();
     deriveResumability.mockImplementation(() => deferred.promise);
+    return deferred;
   }
 
   it('does not overwrite status created during an absent-generation probe', async () => {
-    const deferred = createDeferredResumability();
-    mockDeferredProbe(deferred);
+    const deferred = startDeferredProbe();
 
     const pending = repair();
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle');
@@ -212,8 +214,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
 
   it('collapses concurrent probes for one stream onto the first', async () => {
     seedCancelled();
-    const deferred = createDeferredResumability();
-    mockDeferredProbe(deferred);
+    const deferred = startDeferredProbe();
 
     const first = repair();
     const second = repair();
@@ -280,8 +281,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
 
   it('does not join a stale probe after resume starts', async () => {
     seedCancelled();
-    const deferred = createDeferredResumability();
-    mockDeferredProbe(deferred);
+    const deferred = startDeferredProbe();
 
     const first = repair();
     await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
@@ -298,8 +298,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
 
   it('does not recreate a stream cleared during the probe', async () => {
     seedCancelled();
-    const deferred = createDeferredResumability();
-    mockDeferredProbe(deferred);
+    const deferred = startDeferredProbe();
 
     const pending = repair();
     await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
@@ -314,8 +313,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
 
   it('does not repair a replacement execution', async () => {
     seedCancelled();
-    const deferred = createDeferredResumability();
-    mockDeferredProbe(deferred);
+    const deferred = startDeferredProbe();
 
     const pending = repair();
     await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
@@ -362,8 +360,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
 
   it('does not repair a recreated terminal generation', async () => {
     seedCancelled();
-    const deferred = createDeferredResumability();
-    mockDeferredProbe(deferred);
+    const deferred = startDeferredProbe();
 
     const pending = repair();
     await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));
@@ -378,8 +375,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
   it('does not let a stale rejected probe poison the WAITING fast path', async () => {
     seedCancelled();
     const failure = new Error('resumability read failed');
-    const deferred = createDeferredResumability();
-    mockDeferredProbe(deferred);
+    const deferred = startDeferredProbe();
 
     const first = repair();
     await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledTimes(1));

@@ -210,6 +210,11 @@ async function spyOnTranscriptFlush() {
   return { store, flushSpy };
 }
 
+/** Lease-scope runner for tests that don't need to observe the wrapper. */
+function runOperationSync(operation: () => unknown): unknown {
+  return operation();
+}
+
 async function stubRunExecutionDeps(): Promise<void> {
   vi.clearAllMocks();
   mocks.close.mockResolvedValue(undefined);
@@ -259,10 +264,18 @@ async function stubRunExecutionDeps(): Promise<void> {
   });
   mocks.runAgent.mockImplementation(async (_request, options) => {
     options.onExecutionLeaseAcquired?.(
-      (operation: () => unknown) => operation(),
+      runOperationSync,
       'exec-1' as ExecutionId,
     );
     return COMPLETED_RUN;
+  });
+}
+
+/** Queues one cancelled, persisted outcome read for the next resolution. */
+function mockCancelledOutcome(): void {
+  mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+    outcome: RUN_OUTCOME.CANCELLED,
+    outcomePersisted: true,
   });
 }
 
@@ -786,7 +799,7 @@ describe('executeCliRequest', () => {
     const context = cliContext();
     mocks.runAgent.mockImplementationOnce(async (_request, options) => {
       options.onExecutionLeaseAcquired?.(
-        (operation: () => unknown) => operation(),
+        runOperationSync,
         'exec-1' as ExecutionId,
       );
       options.onApprovalPolicyDenial?.();
@@ -882,10 +895,7 @@ describe('executeCliRequest', () => {
       });
       expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
 
-      mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-        outcome: 'cancelled',
-        outcomePersisted: true,
-      });
+      mockCancelledOutcome();
       hangingRun.resolve(COMPLETED_RUN);
       await vi.waitFor(() =>
         expect(onInterruptedExecutionFinalized).toHaveBeenCalledOnce(),
@@ -953,15 +963,9 @@ describe('executeCliRequest', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.(
-      (operation: () => unknown) => operation(),
-      'exec-1' as ExecutionId,
-    );
+    publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
     publishRun?.();
-    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-      outcome: 'cancelled',
-      outcomePersisted: true,
-    });
+    mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
 
     await shutdown;
@@ -1014,15 +1018,9 @@ describe('executeCliRequest', () => {
       });
       await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
       const shutdown = platform.lifecycle.runShutdown();
-      publishLeaseScope?.(
-        (operation: () => unknown) => operation(),
-        'exec-1' as ExecutionId,
-      );
+      publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
       publishRun?.();
-      mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-        outcome: 'cancelled',
-        outcomePersisted: true,
-      });
+      mockCancelledOutcome();
       hangingRun.resolve(COMPLETED_RUN);
 
       await shutdown;
@@ -1108,7 +1106,7 @@ describe('executeCliRequest', () => {
     const run = executeCliRequest(baseRequest(), cliContext(), {});
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
     leaseOptions?.onExecutionLeaseAcquired?.(
-      (operation: () => unknown) => operation(),
+      runOperationSync,
       'exec-1' as ExecutionId,
     );
     leaseOptions?.onRun?.();
@@ -1138,15 +1136,12 @@ describe('executeCliRequest', () => {
 
     const shutdown = platform.lifecycle.runShutdown();
     leaseOptions?.onExecutionLeaseAcquired?.(
-      (operation: () => unknown) => operation(),
+      runOperationSync,
       'exec-1' as ExecutionId,
     );
     leaseOptions?.onRun?.();
     await leaseOptions?.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
-    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-      outcome: RUN_OUTCOME.CANCELLED,
-      outcomePersisted: true,
-    });
+    mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
 
     await shutdown;
@@ -1178,7 +1173,7 @@ describe('executeCliRequest', () => {
     });
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
     leaseOptions?.onExecutionLeaseAcquired?.(
-      (operation: () => unknown) => operation(),
+      runOperationSync,
       'exec-1' as ExecutionId,
     );
     leaseOptions?.onRun?.();
@@ -1299,7 +1294,7 @@ describe('executeCliRequest', () => {
     });
     const hangingRun = stubHangingRun((options) => {
       options.onExecutionLeaseAcquired?.(
-        (operation: () => unknown) => operation(),
+        runOperationSync,
         'exec-1' as ExecutionId,
       );
     });
@@ -1312,10 +1307,7 @@ describe('executeCliRequest', () => {
     const shutdown = platform.lifecycle.runShutdown();
     await Promise.resolve();
     expect(mocks.emit).not.toHaveBeenCalled();
-    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-      outcome: 'cancelled',
-      outcomePersisted: true,
-    });
+    mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
     await shutdown;
     expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
@@ -1404,12 +1396,9 @@ describe('executeCliConfig', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.((operation) => operation(), 'exec-1' as ExecutionId);
+    publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
     publishRun?.();
-    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-      outcome: RUN_OUTCOME.CANCELLED,
-      outcomePersisted: true,
-    });
+    mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
 
     await vi.waitFor(() =>
@@ -1447,12 +1436,9 @@ describe('executeCliConfig', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.((operation) => operation(), 'exec-1' as ExecutionId);
+    publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
     publishRun?.();
-    mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-      outcome: RUN_OUTCOME.CANCELLED,
-      outcomePersisted: true,
-    });
+    mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
 
     await shutdown;

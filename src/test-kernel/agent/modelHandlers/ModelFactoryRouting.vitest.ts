@@ -94,6 +94,16 @@ async function inspectHandler<T>(
   }
 }
 
+/** A signed-in Codex session with a token far from expiry. */
+function signedInCodexSession(): CodexSession {
+  return {
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    expiresAtMs: Date.now() + 10 * 60_000,
+    accountId: 'account-id',
+  };
+}
+
 const tempDirs: string[] = [];
 
 afterEach(async () => {
@@ -299,12 +309,7 @@ describe('Copilot route preference on a canonical base model', () => {
         config: { 'texra.chatgptCodex.preferSubscription': true },
         globalState: { 'texra.copilotRouteModels': ['gpt56'] },
         secrets: {
-          [CODEX_SESSION_SECRET_KEY]: JSON.stringify({
-            accessToken: 'access-token',
-            refreshToken: 'refresh-token',
-            expiresAtMs: Date.now() + 10 * 60_000,
-            accountId: 'account-id',
-          }),
+          [CODEX_SESSION_SECRET_KEY]: JSON.stringify(signedInCodexSession()),
         },
       },
       {
@@ -534,15 +539,6 @@ describe('OpenAI model handler routing', () => {
     requiresResponsesAPI: true,
     codexSubscription: true,
   };
-
-  function signedInCodexSession(): CodexSession {
-    return {
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      expiresAtMs: Date.now() + 10 * 60_000,
-      accountId: 'account-id',
-    };
-  }
 
   async function installSignedInCodexPlatform(
     globalState: Record<string, unknown> = {},

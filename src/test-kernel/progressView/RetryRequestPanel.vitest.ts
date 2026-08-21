@@ -79,6 +79,16 @@ function tailLine(text: string): string {
   return text.split('\n').at(-1) ?? '';
 }
 
+/** Rendered action buttons' `data-action` ids, in DOM order. */
+function actionButtonIds(element: RetryRequestPanel): (string | null)[] {
+  const buttons = [
+    ...(element.shadowRoot?.querySelectorAll(
+      '.retry-request__actions wa-button',
+    ) ?? []),
+  ];
+  return buttons.map((button) => button.getAttribute('data-action'));
+}
+
 describe('retry-request-panel', () => {
   it('does not offer the API-key switch for a Kimi Code-exclusive model', async () => {
     const element = await mountPanel({
@@ -89,14 +99,7 @@ describe('retry-request-panel', () => {
       },
     });
 
-    const buttons = [
-      ...(element.shadowRoot?.querySelectorAll(
-        '.retry-request__actions wa-button',
-      ) ?? []),
-    ];
-    expect(buttons.map((button) => button.getAttribute('data-action'))).toEqual(
-      ['retry', 'cancel'],
-    );
+    expect(actionButtonIds(element)).toEqual(['retry', 'cancel']);
   });
 
   it('does not map the k shortcut to the API-key switch for exclusive models', async () => {
@@ -124,28 +127,21 @@ describe('retry-request-panel', () => {
       },
     });
 
-    const buttons = [
-      ...(element.shadowRoot?.querySelectorAll(
-        '.retry-request__actions wa-button',
-      ) ?? []),
-    ];
-    expect(buttons.map((button) => button.getAttribute('data-action'))).toEqual(
-      ['useOwnApiKey', 'retry', 'cancel'],
-    );
+    expect(actionButtonIds(element)).toEqual([
+      'useOwnApiKey',
+      'retry',
+      'cancel',
+    ]);
   });
 
   it('marks retry action buttons with action ids for shared sizing styles', async () => {
     const element = await mountPanel();
 
-    const buttons = [
-      ...(element.shadowRoot?.querySelectorAll(
-        '.retry-request__actions wa-button',
-      ) ?? []),
-    ];
-
-    expect(buttons.map((button) => button.getAttribute('data-action'))).toEqual(
-      ['useOwnApiKey', 'retry', 'cancel'],
-    );
+    expect(actionButtonIds(element)).toEqual([
+      'useOwnApiKey',
+      'retry',
+      'cancel',
+    ]);
   });
 
   it('distinguishes a fresh direct-model run from retrying Copilot', async () => {
