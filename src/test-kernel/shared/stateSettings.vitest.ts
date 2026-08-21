@@ -185,6 +185,31 @@ describe('state settings catalog', () => {
     }
   });
 
+  it('every declared writer names an existing host-compatible file', () => {
+    for (const entry of ALL_SETTINGS) {
+      for (const host of SETTING_HOSTS) {
+        const write = entry.writtenBy?.[host];
+        if (!write) continue;
+        assert.ok(
+          existsSync(resolve(REPO_ROOT, write.writer)),
+          `${entry.key} ${host} writer does not exist: ${write.writer}`,
+        );
+        assert.ok(
+          !write.writer.startsWith('packages/extension/') || host === 'vscode',
+          `${entry.key} ${host} writer lives inside the extension host: ${write.writer}`,
+        );
+        assert.ok(
+          !write.writer.startsWith('packages/cli/') || host === 'cli',
+          `${entry.key} ${host} writer lives inside the CLI host: ${write.writer}`,
+        );
+        assert.ok(
+          !write.writer.startsWith('packages/desktop/') || host === 'desktop',
+          `${entry.key} ${host} writer lives inside the desktop host: ${write.writer}`,
+        );
+      }
+    }
+  });
+
   it('every editable CLI row documents a runtime-reachability path', () => {
     for (const entry of ALL_SETTINGS) {
       if (!entry.surfaces?.cliConfig) continue;
