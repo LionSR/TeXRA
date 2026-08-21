@@ -459,7 +459,7 @@ preserving every numerical result. Draft the YAML and walk me through testing it
 
 ## Remote Agents
 
-The following agents are available as [remote agents](./remote-agents.md) through the Researcher Access Program. Sign in to TeXRA to access them.
+The following agents are available as [remote agents](./remote-agents.md#remote-agent-access). Sign in to TeXRA to access them.
 
 ### `search`
 

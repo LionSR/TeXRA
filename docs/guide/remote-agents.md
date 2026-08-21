@@ -84,9 +84,9 @@ None of this is VS Code-only — the whole loop works from a terminal too:
 
 <p class="hero-caption">Sign in once and remote agents resolve by name everywhere: <code>agents show</code> reports <code>source: remote</code>, and <code>texra chat --agent search</code> runs it like any local agent.</p>
 
-## Researcher Access Program
+## Remote Agent Access
 
-The **Researcher Access Program** provides access to specialized remote agents designed for academic research and professional writing. It covers the hosted agent catalog only — remote agents run on the same credential as your built-in agents, your own provider API key or a provider subscription. Program members get access to:
+Signed-in researchers, academics, and technical writers can access specialized remote agents for academic research and professional writing. This only unlocks the hosted agent catalog. Remote agents still run on your own credential, the same provider API key or subscription as your built-in agents. Access includes:
 
 - **Specialized domain agents**: Agents tailored for specific research fields (mathematics, computer science, physics, etc.)
 - **Advanced reasoning capabilities**: Multi-step analysis and complex document processing
@@ -103,15 +103,15 @@ The **Researcher Access Program** provides access to specialized remote agents d
   ]"
 />
 
-<p class="hero-caption">What Researcher Access Program members get: domain-specific agents, advanced multi-step reasoning, early access to beta agents, and a direct line into how agents evolve.</p>
+<p class="hero-caption">What remote agent access gets you: domain-specific agents, advanced multi-step reasoning, early access to beta agents, and a direct line into how agents evolve.</p>
 
 Current remote agents include `search` (literature discovery), `simplifier` (code and writing simplification), and `orchestrator` (multi-agent coordination). See [Built-in Agents — Remote Agents](./built-in-agents.md#remote-agents) for details on each.
 
 Different agents may be available to different research groups based on their domain and needs.
 
-### Joining the Program
+### Requesting Access
 
-The Researcher Access Program is available to active researchers, academics, and technical writers. To join:
+Remote agent access is available to active researchers, academics, and technical writers. To request it:
 
 1. **Sign in** to TeXRA using your institutional or professional email
 2. **Contact us** at [contact@texra.ai](mailto:contact@texra.ai) with:
@@ -119,10 +119,10 @@ The Researcher Access Program is available to active researchers, academics, and
    - Brief description of your research area
    - How you plan to use remote agents
 
-We'll review your application and grant appropriate access within 1-2 business days.
+We'll review your request and grant appropriate access within 1-2 business days.
 
 ::: tip Free for Researchers
-TeXRA is committed to supporting academic research. The Researcher Access Program is **free for qualifying researchers and students** — we do not charge for remote agent access. Model calls made by those agents are still billed to your own provider account or subscription.
+TeXRA is committed to supporting academic research. Remote agent access is **free for qualifying researchers and students** — we do not charge for the hosted agent catalog. Model calls made by those agents are still billed to your own provider account or subscription.
 :::
 
 ## Managing Your Account
@@ -175,7 +175,7 @@ Remote agents are available only while you're signed in. To stop using them, sim
 
 ## Need Help?
 
-If you encounter any issues with remote agents or have questions about the Researcher Access Program:
+If you encounter any issues with remote agents or have questions about access:
 
 - **Email**: [contact@texra.ai](mailto:contact@texra.ai)
 - **Documentation**: [texra.ai/guide](https://texra.ai/guide)

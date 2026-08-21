@@ -9,9 +9,9 @@
 [![npm version](https://img.shields.io/npm/v/@texra-ai/cli?label=%40texra-ai%2Fcli)](https://www.npmjs.com/package/@texra-ai/cli)
 [![CLI downloads](https://img.shields.io/npm/dm/@texra-ai/cli?label=CLI%20downloads)](https://www.npmjs.com/package/@texra-ai/cli)
 
-An AI theorist for VS Code and the terminal. Multi-agent
-workflows for writing, reviewing, formalizing, and rendering academic
-work — with every change returned as a diff you approve.
+An AI theorist for VS Code and the terminal. It attempts real theory
+work — deriving results, checking derivations, formalizing proofs in
+Lean 4 — and takes on open problems in long autonomous runs.
 
 ## Install
 
@@ -30,7 +30,7 @@ Set `<PROVIDER>_API_KEY` to use your own credentials, sign in with a
 ChatGPT or Grok subscription, or add the API key for a Kimi Code or
 GLM Coding Plan subscription.
 
-### Researcher Access Program
+### Hosted agent catalog
 
 Academic researchers can sign in with GitHub or Google for
 complimentary access to the hosted agent catalog — the Orchestrator
@@ -39,7 +39,7 @@ Profile view in VS Code, or `texra login` in the terminal. The agents
 are free; their model calls run on your configured model credential,
 the same as your built-in agents.
 
-The program is sustained by the community. If TeXRA helps your
+Access is sustained by the community. If TeXRA helps your
 research, consider supporting it via
 [GitHub Sponsors](https://github.com/sponsors/texra-ai) or
 [Buy Me a Coffee](https://buymeacoffee.com/texra.ai) to keep it open
