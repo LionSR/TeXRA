@@ -9,7 +9,6 @@ import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
-import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
@@ -212,9 +211,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
 
   const subscriptionUsageProvider = subscriptionUsageProviderForStatus({
     usageRoute: statusSlice?.usage?.usageRoute,
-    modelAccess,
-    prospectiveCodingPlan:
-      codingPlanForUsageRoute(prospectiveRoute)?.usageProvider,
+    prospectiveRoute,
   });
   const [subscriptionQuotaRead, setSubscriptionQuotaRead] = useState<{
     readonly provider: SubscriptionUsageProvider;
