@@ -1,16 +1,8 @@
 import escapeRegExp from 'escape-string-regexp';
-import { unique } from '@utils/core';
+import { pathSeparatorVariants } from './desktopPathVariants.js';
 import type { ErrorEvent } from '@sentry/electron/main';
 
 const REDACTED_PATH = '<redacted-path>';
-
-function pathVariants(path: string): string[] {
-  const trimmed = path.trim();
-  if (!trimmed) return [];
-  const forward = trimmed.replaceAll('\\', '/');
-  const backward = forward.replaceAll('/', '\\');
-  return unique([trimmed, forward, backward]);
-}
 
 function scrubValue(value: unknown, scrubbers: readonly RegExp[]): unknown {
   if (typeof value === 'string') {
@@ -40,7 +32,7 @@ export function createDesktopCrashEventScrubber(
   sensitivePaths: readonly (string | undefined)[],
 ): (event: ErrorEvent) => ErrorEvent | null {
   const scrubbers = sensitivePaths
-    .flatMap((path) => (path ? pathVariants(path) : []))
+    .flatMap((path) => (path ? pathSeparatorVariants(path) : []))
     .filter((path) => path.length > 1)
     .sort((a, b) => b.length - a.length)
     .map((path) => new RegExp(escapeRegExp(path), 'gi'));
