@@ -9,6 +9,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports - test support
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { loadSourceModule } from './loadSourceModule.ts';
 
@@ -87,11 +88,8 @@ function expectOpenedPatchFile(openedPaths: readonly string[]): void {
 /** A promise/resolver pair used to pause a mock implementation mid-flight
  * until the test is ready to release it. */
 function createGate(): { promise: Promise<void>; release: () => void } {
-  let release!: () => void;
-  const promise = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  return { promise, release };
+  const { promise, resolve } = createDeferred<void>();
+  return { promise, release: resolve };
 }
 
 /** Pauses the next `readFile` call so a test can hold `openDiff` mid-flight

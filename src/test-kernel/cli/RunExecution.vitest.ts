@@ -1396,7 +1396,7 @@ describe('executeCliConfig', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.((operation) => operation(), 'exec-1' as ExecutionId);
+    publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
     publishRun?.();
     mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
@@ -1436,7 +1436,7 @@ describe('executeCliConfig', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.((operation) => operation(), 'exec-1' as ExecutionId);
+    publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
     publishRun?.();
     mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
