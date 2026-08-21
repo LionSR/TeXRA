@@ -26,6 +26,7 @@ import type { TranscriptWriter } from '@transcript/StreamLogStore';
 import { formatDuration } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { toDeliveryUsage } from './deliveryEnvelope';
 
 interface CreateChildStreamOptions {
   streamPrefix: string;
@@ -327,13 +328,9 @@ async function finalizeChildStream(
     if (options?.wallTimeMs != null) {
       logger.info(`Completed in ${formatDuration(options.wallTimeMs)}`);
     }
-    if (options?.usage) {
-      logger.info('Tokens', {
-        data: {
-          input: options.usage.input_tokens,
-          output: options.usage.output_tokens,
-        },
-      });
+    const usage = toDeliveryUsage(options?.usage);
+    if (usage) {
+      logger.info('Tokens', { data: usage });
     }
 
     // What the child saw, projected into the shared vocabulary. The stream
