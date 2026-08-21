@@ -7,7 +7,7 @@
     "npm:@supabase/postgrest-js@2.111.0": "2.111.0",
     "npm:@supabase/realtime-js@2.111.0": "2.111.0",
     "npm:@supabase/storage-js@2.111.0": "2.111.0",
-    "npm:llm-zoo@1.30.0": "1.30.0_zod@4.4.3",
+    "npm:llm-zoo@^1.30.0": "1.30.0_zod@4.4.3",
     "npm:zod@^4.4.3": "4.4.3"
   },
   "jsr": {
@@ -80,7 +80,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@supabase/supabase-js@2.111.0",
-      "npm:llm-zoo@1.30.0",
+      "npm:llm-zoo@^1.30.0",
       "npm:zod@^4.4.3"
     ]
   }
