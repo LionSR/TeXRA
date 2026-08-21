@@ -7,7 +7,7 @@ import {
   refreshRemoteCatalogForGaps,
   teamPlanHasGaps,
 } from '@common/teams/TeamPlan';
-import { byCategory, AgentCategory } from '@shared/schemas';
+import { byCategory } from '@shared/schemas';
 
 import { missingMultiAgentPresetMessage } from './agents';
 import { CliUsageError } from './cliContext';

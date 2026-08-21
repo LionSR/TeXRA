@@ -331,14 +331,10 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     quotaLimit?.message ?? glmCodingPlanRateLimitMessage;
   // Priority: an explicit SDK stamp wins; then the first matching
   // quota-fallback detector; then upstream-credit.
-  let exhaustionReason: ExhaustionReason | undefined = sdkExhaustionReason;
-  if (exhaustionReason === undefined) {
-    if (quotaLimit !== undefined) {
-      exhaustionReason = quotaLimit.exhaustionReason;
-    } else if (isUpstreamCreditDepleted) {
-      exhaustionReason = 'upstream-credit';
-    }
-  }
+  const exhaustionReason: ExhaustionReason | undefined =
+    sdkExhaustionReason ??
+    quotaLimit?.exhaustionReason ??
+    (isUpstreamCreditDepleted ? 'upstream-credit' : undefined);
   const isCredentialExhausted = exhaustionReason !== undefined;
 
   // Terminal failures (user abort, local disk-full): never retryable and never

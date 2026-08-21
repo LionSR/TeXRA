@@ -230,25 +230,21 @@ const UpdateBypassMessageSchema = StreamScopedBaseSchema.extend({
 // branch — a discriminated union enforces that at the type level instead of
 // leaving it a flat optional field a `polished`/`transcribed` sender could
 // set by mistake.
+const UpdateFollowUpTextMessageBase = {
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT),
+  stream: StreamTabIdSchema.nullish(),
+  text: z.string().nullish(),
+};
 const UpdateFollowUpTextMessageSchema = z.discriminatedUnion('kind', [
+  z.object({ ...UpdateFollowUpTextMessageBase, kind: z.literal('polished') }),
   z.object({
-    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT),
-    stream: StreamTabIdSchema.nullish(),
-    kind: z.literal('polished'),
-    text: z.string().nullish(),
-  }),
-  z.object({
-    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT),
-    stream: StreamTabIdSchema.nullish(),
+    ...UpdateFollowUpTextMessageBase,
     kind: z.literal('polishError'),
-    text: z.string().nullish(),
     error: z.string().optional(),
   }),
   z.object({
-    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT),
-    stream: StreamTabIdSchema.nullish(),
+    ...UpdateFollowUpTextMessageBase,
     kind: z.literal('transcribed'),
-    text: z.string().nullish(),
   }),
 ]);
 

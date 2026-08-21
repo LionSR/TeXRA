@@ -50,6 +50,21 @@ function formatFileListInstruction(init: {
   return [init.title, ...fileList, ...init.guidance].join('\n');
 }
 
+/** Shared by both assemblers below: label the instruction "Additional user
+ * instruction:" when file instructions already precede it, "User
+ * instruction:" when it stands alone; no-op when the instruction is empty. */
+function appendUserInstruction(
+  parts: string[],
+  fileInstruction: string | undefined,
+  instruction: string,
+): void {
+  if (!instruction) return;
+  parts.push(
+    fileInstruction ? 'Additional user instruction:' : 'User instruction:',
+    instruction,
+  );
+}
+
 export function formatToolUseAgentRunInstruction(init: {
   readonly inputFiles: readonly string[];
   readonly contextFiles: readonly string[];
@@ -62,13 +77,7 @@ export function formatToolUseAgentRunInstruction(init: {
   });
   if (fileInstruction) parts.push(fileInstruction);
 
-  const instruction = init.instruction.trim();
-  if (instruction) {
-    parts.push(
-      fileInstruction ? 'Additional user instruction:' : 'User instruction:',
-      instruction,
-    );
-  }
+  appendUserInstruction(parts, fileInstruction, init.instruction.trim());
   return parts.join('\n\n');
 }
 
@@ -144,13 +153,6 @@ export function formatMultiAgentRunInstruction(
     );
   }
 
-  if (instruction) {
-    parts.push(
-      inputFileInstruction
-        ? 'Additional user instruction:'
-        : 'User instruction:',
-      instruction,
-    );
-  }
+  appendUserInstruction(parts, inputFileInstruction, instruction);
   return parts.join('\n\n');
 }
