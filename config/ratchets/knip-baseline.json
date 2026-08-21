@@ -1352,48 +1352,6 @@
       "name": "resolveCommonRootFromGitdir"
     },
     {
-      "file": "packages/extension/src/progressView/frontend/components/TerminalOutput.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "countTerminalRows"
-    },
-    {
-      "file": "packages/extension/src/progressView/frontend/components/TerminalOutput.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "nextTerminalRowCount"
-    },
-    {
-      "file": "packages/extension/src/progressView/frontend/components/TerminalOutput.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "planTerminalTextUpdate"
-    },
-    {
-      "file": "packages/extension/src/webview/frontend/fileDropHandler.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "extractDroppedFilePaths"
-    },
-    {
-      "file": "packages/extension/src/webview/frontend/fileDropHandler.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "hasDroppedFilePayload"
-    },
-    {
-      "file": "packages/extension/src/webview/frontend/mainViewActions.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "announce"
-    },
-    {
-      "file": "packages/extension/src/webview/frontend/mainViewActions.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildExecuteMessage"
-    },
-    {
       "file": "packages/trace-viewer/src/traceDataSchema.ts",
       "category": "production-dead",
       "kind": "exports",
