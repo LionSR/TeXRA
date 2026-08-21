@@ -950,12 +950,7 @@ describe('ProgressBackend', () => {
     backend.state.streamLogs.ensureStream(deleting);
     backend.presentation.select(deleting);
 
-    const deletion = backend.deleteStream(deleting);
-    await vi.waitFor(() =>
-      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting, {
-        expectedIncarnation: 0,
-      }),
-    );
+    const { deletion } = await beginGatedDeletion(backend, deleting);
     backend.presentation.select('');
     releaseClear();
     await deletion;
@@ -986,12 +981,7 @@ describe('ProgressBackend', () => {
     }
     backend.presentation.select(deleting);
 
-    const deletion = backend.deleteStream(deleting);
-    await vi.waitFor(() =>
-      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting, {
-        expectedIncarnation: 0,
-      }),
-    );
+    const { deletion } = await beginGatedDeletion(backend, deleting);
     const activation = backend.activateStream(requested, 'pending-request');
     await vi.waitFor(() =>
       expect(finishRequestedPreload).toBeTypeOf('function'),
@@ -1033,12 +1023,7 @@ describe('ProgressBackend', () => {
         }),
     );
 
-    const deletion = backend.deleteStream(deleting);
-    await vi.waitFor(() =>
-      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting, {
-        expectedIncarnation: 0,
-      }),
-    );
+    const { deletion } = await beginGatedDeletion(backend, deleting);
     const activation = backend.activateStream(requested, 'failed-request');
     await vi.waitFor(() =>
       expect(rejectRequestedPreload).toBeTypeOf('function'),
@@ -1078,12 +1063,7 @@ describe('ProgressBackend', () => {
     }
     backend.presentation.select(deleting);
 
-    const deletion = backend.deleteStream(deleting);
-    await vi.waitFor(() =>
-      expect(backend.state.clearStream).toHaveBeenCalledWith(deleting, {
-        expectedIncarnation: 0,
-      }),
-    );
+    const { deletion } = await beginGatedDeletion(backend, deleting);
     await backend.activateStream(committed);
     vi.spyOn(backend.state.snapshots, 'preload').mockImplementationOnce(
       () =>

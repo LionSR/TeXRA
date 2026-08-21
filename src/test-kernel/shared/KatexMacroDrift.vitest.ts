@@ -32,6 +32,24 @@ function runtimeMaxStyleShortcutTokens(): Set<string> {
 }
 
 /**
+ * Tokens in `tokens` not covered by `hasKey` or the allowlist ("unexplained"),
+ * and allowlist entries no longer present in `tokens` ("stale"). Both are
+ * empty when the two tables agree.
+ */
+function driftAgainst<T extends string>(
+  tokens: ReadonlySet<T>,
+  hasKey: (token: T) => boolean,
+  allowlist: readonly T[],
+): { unexplained: T[]; staleAllowlist: T[] } {
+  return {
+    unexplained: [...tokens]
+      .filter((token) => !hasKey(token) && !allowlist.includes(token))
+      .toSorted(),
+    staleAllowlist: allowlist.filter((token) => !tokens.has(token)),
+  };
+}
+
+/**
  * Shortcuts that KaTeX renders but max-style replacement does not emit.
  * Keep this list explicit: a new katex-only key must be added here or
  * given a max-style destination, so the two tables cannot drift silently.
@@ -112,38 +130,23 @@ describe('katexMacros vs maxRules shortcuts', () => {
 
   it('keeps KaTeX keys and max-style destinations from drifting', () => {
     const shortcuts = maxStyleShortcutTokens();
-    const katexKeys = Object.keys(katexMacros);
+    const katexKeys = new Set(Object.keys(katexMacros));
 
-    const unexplainedKatex = katexKeys
-      .filter(
-        (key) =>
-          !shortcuts.has(key) &&
-          !KATEX_ONLY_SHORTCUTS.includes(
-            key as (typeof KATEX_ONLY_SHORTCUTS)[number],
-          ),
-      )
-      .toSorted();
-    const staleKatexAllowlist = KATEX_ONLY_SHORTCUTS.filter(
-      (key) => !katexKeys.includes(key),
+    const katexDrift = driftAgainst(
+      katexKeys,
+      (key) => shortcuts.has(key),
+      KATEX_ONLY_SHORTCUTS,
+    );
+    const maxDrift = driftAgainst(
+      shortcuts,
+      (token) => Object.hasOwn(katexMacros, token),
+      MAX_ONLY_SHORTCUTS,
     );
 
-    const unexplainedMax = [...shortcuts]
-      .filter(
-        (token) =>
-          !Object.hasOwn(katexMacros, token) &&
-          !MAX_ONLY_SHORTCUTS.includes(
-            token as (typeof MAX_ONLY_SHORTCUTS)[number],
-          ),
-      )
-      .toSorted();
-    const staleMaxAllowlist = MAX_ONLY_SHORTCUTS.filter(
-      (token) => !shortcuts.has(token),
-    );
-
-    expect(unexplainedKatex).toEqual([]);
-    expect(staleKatexAllowlist).toEqual([]);
-    expect(unexplainedMax).toEqual([]);
-    expect(staleMaxAllowlist).toEqual([]);
+    expect(katexDrift.unexplained).toEqual([]);
+    expect(katexDrift.staleAllowlist).toEqual([]);
+    expect(maxDrift.unexplained).toEqual([]);
+    expect(maxDrift.staleAllowlist).toEqual([]);
   });
 
   it('maps bold Greek destinations to KaTeX short forms at runtime', () => {
@@ -246,20 +249,13 @@ describe('katexMacros vs maxRules shortcuts', () => {
 
   it('keeps runtime max-style output resolvable by the renderer macros', () => {
     const runtimeShortcuts = runtimeMaxStyleShortcutTokens();
-    const unexplainedRuntime = [...runtimeShortcuts]
-      .filter(
-        (token) =>
-          !Object.hasOwn(katexMacros, token) &&
-          !RUNTIME_ONLY_SHORTCUTS.includes(
-            token as (typeof RUNTIME_ONLY_SHORTCUTS)[number],
-          ),
-      )
-      .toSorted();
-    const staleRuntimeAllowlist = RUNTIME_ONLY_SHORTCUTS.filter(
-      (token) => !runtimeShortcuts.has(token),
+    const drift = driftAgainst(
+      runtimeShortcuts,
+      (token) => Object.hasOwn(katexMacros, token),
+      RUNTIME_ONLY_SHORTCUTS,
     );
 
-    expect(unexplainedRuntime).toEqual([]);
-    expect(staleRuntimeAllowlist).toEqual([]);
+    expect(drift.unexplained).toEqual([]);
+    expect(drift.staleAllowlist).toEqual([]);
   });
 });
