@@ -2,7 +2,7 @@
 
 _Effective Date: February 9, 2026_
 
-_Last Updated: May 28, 2026_
+_Last Updated: August 21, 2026_
 
 ---
 
@@ -11,6 +11,8 @@ _Last Updated: May 28, 2026_
 By installing, accessing, or using TeXRA — including the Visual Studio Code extension, any web applications, APIs, desktop or mobile applications, or other software or services we make available now or in the future (collectively, the "Service") — you ("you" or "User") agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not install, access, or use the Service.
 
 These Terms are entered into between you and the TeXRA team ("we," "us," or "our"), the individuals developing and operating the Service. References to "TeXRA" refer to the Service and its associated offerings, not a corporate entity.
+
+The source code for the VS Code extension, desktop application, and command-line interface ("the Software") is published on GitHub under the Apache License, Version 2.0. Your rights to use, modify, and redistribute the Software's source code are governed by that license, not by these Terms — see Sections 4 and 7 below. These Terms govern your use of the hosted Service: your TeXRA account, the hosted research-agent catalog, and any other infrastructure we operate, which remain proprietary regardless of which license covers the Software.
 
 ## 2. Description of Service
 
@@ -24,11 +26,13 @@ You must be at least 18 years old, or the age of legal majority in your jurisdic
 
 ## 4. License Grant
 
-Subject to your compliance with these Terms, we grant you a limited, non-exclusive, non-transferable, non-sublicensable, revocable license to install and use the Service for your personal or internal business purposes. This license does not include the right to:
+**Software**: The VS Code extension, desktop application, and command-line interface are open source. Their source code is licensed under the Apache License, Version 2.0, which governs your rights to use, modify, and redistribute that code — including building on it or using it in a competing product. Nothing in these Terms restricts those rights; see the LICENSE file in the public repository.
 
-1. Modify, adapt, or create derivative works of the Service.
-2. Distribute, sublicense, lease, lend, or sell the Service to any third party.
-3. Use the Service to build a competing product or service.
+**Hosted Service**: Subject to your compliance with these Terms, we grant you a limited, non-exclusive, non-transferable, non-sublicensable, revocable license to access and use the hosted Service — your TeXRA account, the hosted research-agent catalog, and any other infrastructure we operate — for your personal or internal business purposes. This license does not include the right to:
+
+1. Modify, adapt, or create derivative works of the hosted Service's non-public infrastructure.
+2. Distribute, sublicense, lease, lend, or sell access to the hosted Service to any third party.
+3. Use the hosted Service, as distinct from the Software, to build a competing hosted offering.
 
 We reserve all rights not expressly granted in these Terms.
 
@@ -59,7 +63,8 @@ You agree not to use the Service to:
 
 ## 7. Intellectual Property
 
-- **Service**: TeXRA is proprietary software. All rights, title, and interest in the Service, including its code, design, documentation, and trademarks, are owned by the TeXRA team (and will be assigned to any successor entity upon incorporation). These Terms do not grant you any rights to use our trademarks, trade names, or branding.
+- **Software**: The source code for the VS Code extension, desktop application, and command-line interface is licensed under the Apache License, Version 2.0 (see LICENSE and NOTICE in the public repository). Copyright in that code is held by the TeXRA team and its contributors as reflected in that license and the project's commit history.
+- **Hosted Service**: All rights, title, and interest in the hosted Service not published as part of the Software — including our backend infrastructure, design, documentation, and trademarks — are owned by the TeXRA team (and will be assigned to any successor entity upon incorporation). These Terms do not grant you any rights to use our trademarks, trade names, or branding, regardless of which license covers the Software.
 - **Your Content**: You retain full ownership of all LaTeX documents, research materials, and other content you process through the Service ("Your Content"). We do not claim any ownership rights over Your Content.
 
 ## 8. Feedback

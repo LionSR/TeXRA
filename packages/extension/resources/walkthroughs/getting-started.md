@@ -12,7 +12,7 @@ A credential is the one step no agent can do for you. Three ways in:
 - **Add a coding-plan key** -- Kimi Code and GLM Coding Plan use membership or subscription API keys from their provider consoles.
 - **Use your own provider API key** -- Anthropic, OpenAI, Google, and more. Other chat subscriptions, including Claude Pro, do not include API access; you need a key from the provider's developer platform.
 
-Signing in with GitHub or Google (free for academics through the Researcher Access Program) unlocks the hosted remote-agent catalog, including the orchestrator. It is not a credential on its own -- remote agents run on the same credential as your built-in agents.
+Signing in with GitHub or Google unlocks the hosted remote-agent catalog, including the orchestrator. It is not a credential on its own -- remote agents run on the same credential as your built-in agents.
 
 You can also pick **Skip for now** and come back later, but nothing below runs without a credential.
 
