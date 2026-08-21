@@ -1,7 +1,6 @@
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 import type { ApiProvider } from '@model/apiProviders';
-import { withDeepSeekVisionOverride } from '@model/deepSeekVisionOverride';
 import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
 import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import { platform } from '@platform/platform';
@@ -193,8 +192,7 @@ export function invalidateRuntimeModelRegistry(): void {
 
 /** Resolve a static model config by its persisted id. */
 export function getRuntimeModelConfig(model: string): ModelConfig | undefined {
-  const config = MODEL_CONFIGS[model];
-  return config && withDeepSeekVisionOverride(config);
+  return MODEL_CONFIGS[model];
 }
 
 /** Resolve a persisted model id to its user-facing registry label. */
@@ -207,9 +205,7 @@ export function staticModelConfigEntries(): readonly (readonly [
   string,
   ModelConfig,
 ])[] {
-  return Object.entries(MODEL_CONFIGS).map(
-    ([id, config]) => [id, withDeepSeekVisionOverride(config)] as const,
-  );
+  return Object.entries(MODEL_CONFIGS);
 }
 
 /**
