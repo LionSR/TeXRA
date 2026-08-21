@@ -673,6 +673,7 @@
   ],
   "requiredPackagedPaths": [
     "LICENSE.txt",
+    "NOTICE.txt",
     "changelog.md",
     "readme.md",
     "resources/agents",

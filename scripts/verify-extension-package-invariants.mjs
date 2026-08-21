@@ -41,6 +41,7 @@ const MANIFEST_KEYS = [
 
 const REQUIRED_PACKAGED_PATHS = [
   'LICENSE.txt',
+  'NOTICE.txt',
   'changelog.md',
   'readme.md',
   'resources/agents',
