@@ -273,6 +273,7 @@ export async function executeCliWorkflowConfig(
     result.executionId,
     buildCliWorkflowResultMeta(result, {
       outcome: result.outcome,
+      copiedOutput: workflowResult.copiedOutput,
       copiedOutputs: workflowResult.copiedOutputs,
     }),
   );
