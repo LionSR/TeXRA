@@ -10,14 +10,13 @@
 import { z } from 'zod';
 
 import { SETTINGS_VIEW_CMD, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  LATEX_CONFIG_RANGES,
+import type {
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latexConfig';
-import {
-  NON_REGEX_REPLACEMENT_CATEGORIES,
-  REGEX_REPLACEMENT_CATEGORIES,
+import type {
+  NonRegexReplacementCategory,
+  RegexReplacementCategory,
 } from '@shared/constants/replacementCategories';
 import {
   createDispatcher,
@@ -598,44 +597,23 @@ const UpdateLatexSettingsStatusMessageSchema = z.object({
   settings: LatexSettingsStatusSchema,
 });
 
-/**
- * LaTeX/compile/diff configuration values, persisted in workspace storage. The
- * frontend tab edits these directly; the backend persists them via
- * `platform().workspaceState`.
- *
- * Each property is optional so the UI can render either the user-set value
- * (when defined) or the documented default (when undefined). Numeric ranges
- * and enum values come from `@shared/constants/latex` so this schema, the UI,
- * and the runtime readers all stay in lockstep.
- */
-export const LatexConfigValuesSchema = z.object({
-  workflowAutoCompile: z.boolean().optional(),
-  workflowAutoCompileTimeoutMs: z
-    .int()
-    .min(LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min)
-    .optional(),
-  workflowAutoOpenPdf: z.boolean().optional(),
-  workflowRejectOnCompileFailure: z.boolean().optional(),
-  latexdiffBetweenRounds: z.boolean().optional(),
-  latexdiffTimeoutMs: z
-    .int()
-    .min(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min)
-    .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max!)
-    .optional(),
-  latexdiffMathMarkup: z.enum(LATEXDIFF_MATH_MARKUP_VALUES).optional(),
-  latexdiffChangesOnly: z.boolean().optional(),
-  latexFormatter: z.enum(LATEX_FORMATTER_VALUES).optional(),
-  wrapCritiqueInAlign: z.boolean().optional(),
-  enabledReplacements: z
-    .array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES))
-    .optional(),
-  enabledReplacementsRegex: z
-    .array(z.enum(REGEX_REPLACEMENT_CATEGORIES))
-    .optional(),
-  customReplacementsRegex: z.record(z.string(), z.string()).optional(),
-  customReplacements: z.record(z.string(), z.string()).optional(),
-});
-export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
+/** Frontend field projection of the catalog-derived LaTeX snapshot. */
+export interface LatexConfigValues {
+  workflowAutoCompile?: boolean;
+  workflowAutoCompileTimeoutMs?: number;
+  workflowAutoOpenPdf?: boolean;
+  workflowRejectOnCompileFailure?: boolean;
+  latexdiffBetweenRounds?: boolean;
+  latexdiffTimeoutMs?: number;
+  latexdiffMathMarkup?: (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number];
+  latexdiffChangesOnly?: boolean;
+  latexFormatter?: (typeof LATEX_FORMATTER_VALUES)[number];
+  wrapCritiqueInAlign?: boolean;
+  enabledReplacements?: NonRegexReplacementCategory[];
+  enabledReplacementsRegex?: RegexReplacementCategory[];
+  customReplacementsRegex?: Record<string, string>;
+  customReplacements?: Record<string, string>;
+}
 
 /** Outbound: backend → frontend current LaTeX/compile/diff config values. */
 const UpdateLatexConfigValuesMessageSchema = snapshotMessage('latex');
