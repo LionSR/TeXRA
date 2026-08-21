@@ -515,14 +515,24 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
   'model.compactionThresholdPercent': {
     title: 'Compaction threshold',
     category: 'model',
-    honoredBy: everyHost('src/agent/modelHandlers/ModelHandler.ts'),
-    surfaces: { settingsView: 'multi-agent' },
+    honoredBy: everyHost('src/agent/modelHandlers/ModelHandler.ts', {
+      command:
+        'texra agents run <tool-use-agent> --instruction "answer a short question"',
+      through:
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/ModelHandler.ts',
+    }),
+    surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
   'model.retry.maxAttempts': {
     title: 'Automatic retries',
     category: 'model',
-    honoredBy: everyHost('src/agent/core/flows/ModelInvocationNode.ts'),
-    surfaces: { settingsView: 'multi-agent' },
+    honoredBy: everyHost('src/agent/core/flows/ModelInvocationNode.ts', {
+      command:
+        'texra agents run <tool-use-agent> --instruction "answer a short question"',
+      through:
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts -> src/agent/core/flows/ModelInvocationNode.ts',
+    }),
+    surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
   // Thin provider modules own the public prefer-switch surface; the shared
   // factory in subscriptionPreference.ts is not a separate consumer key.
