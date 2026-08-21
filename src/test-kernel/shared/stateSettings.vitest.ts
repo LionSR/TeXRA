@@ -433,6 +433,8 @@ describe('state settings catalog', () => {
     //    chat TUI stops the root run (Ctrl-C) or kills a subagent execution.
     //  - allow-orchestrator-kill is read by ExecutionsTool when an
     //    orchestrator asks to kill one of its own child executions.
+    //  - compaction threshold and retry attempts are read by the shared model
+    //    handler and invocation node used by headless CLI runs.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `honoredBy.cli` or `surfaces.cliConfig`.
@@ -468,6 +470,8 @@ describe('state settings catalog', () => {
         GlobalStateKey.GLM_CODING_PLAN,
         GlobalStateKey.DISABLED_TOOLS,
         AGENT_SKILLS_CONFIG_KEY,
+        MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
+        MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       ].sort(),
     );

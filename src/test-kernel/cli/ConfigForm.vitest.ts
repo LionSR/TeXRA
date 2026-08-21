@@ -258,6 +258,8 @@ describe('ConfigForm helpers', () => {
     [WorkspaceStateKey.GIT_AUTHOR_NAME, 'string'],
     [WorkspaceStateKey.LATEX_FORMATTER, 'enum'],
     [GlobalStateKey.DISABLED_TOOLS, 'form'],
+    ['texra.model.compactionThresholdPercent', 'number'],
+    ['texra.model.retry.maxAttempts', 'number'],
     [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS, 'number'],
   ])('classifies %s as a %s edit kind', (key, kind) => {
     expect(settingEditKind(entryByKey(key))).toBe(kind);
