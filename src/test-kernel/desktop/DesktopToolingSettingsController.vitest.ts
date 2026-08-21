@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 import { appSignals } from '@eventBus/AppSignals';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -105,7 +104,6 @@ function createFixture(overrides: FixtureOverrides = {}) {
         autoRevealExclude: true,
       }),
     }),
-    latexConfigPersistenceController: new LatexConfigPersistenceController(),
     ...overrides,
     dashboard,
   });

@@ -1,5 +1,4 @@
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import type { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { appSignals } from '@eventBus/AppSignals';
 import { platform } from '@platform/platform';
@@ -57,8 +56,6 @@ interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePo
     run(command: string): Promise<void>;
   };
   readonly latexToolingController: LatexToolingController;
-  /** @deprecated Test-only compatibility seam; production snapshots use the catalog. */
-  readonly latexConfigPersistenceController?: LatexConfigPersistenceController;
 }
 
 export interface DesktopToolingSettingsController {

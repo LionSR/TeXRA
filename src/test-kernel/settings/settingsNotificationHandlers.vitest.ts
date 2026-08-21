@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, AGENT_SOURCE } from '@shared/schemas';
 import type { AgentSelectionItem } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import {
   buildAgentSelectionMessage,
@@ -117,20 +115,6 @@ describe('settingsView notification message builders', () => {
     expect(message).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
       status,
-    });
-  });
-
-  it('LatexConfigPersistenceController.buildConfigMessage wraps buildConfigValues', () => {
-    const controller = new LatexConfigPersistenceController();
-    const stored = new Map<WorkspaceStateKey, unknown>([
-      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE, true],
-    ]);
-
-    const message = controller.buildConfigMessage((key) => stored.get(key));
-
-    expect(message).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-      values: controller.buildConfigValues((key) => stored.get(key)),
     });
   });
 });

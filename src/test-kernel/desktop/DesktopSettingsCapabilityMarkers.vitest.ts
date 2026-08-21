@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
@@ -115,7 +114,6 @@ function realToolingController(): DefaultDesktopToolingSettingsController {
         autoRevealExclude: false,
       }),
     }),
-    latexConfigPersistenceController: new LatexConfigPersistenceController(),
   });
 }
 

@@ -55,11 +55,12 @@ export const LATEX_CONFIG_RANGES = {
 } as const;
 
 /**
- * Webview-facing field name → WorkspaceStateKey. Single source of truth for
- * both read and write paths, replacing per-handler maps that previously
- * duplicated this list.
+ * Every frontend-facing LaTeX field → its canonical catalog key. Snapshot
+ * payloads arrive under these keys, so latexSlice uses this map to project
+ * them into frontend fields and LaTeXTab uses it for catalog-driven writes.
+ * The coverage check keeps both directions aligned with the frontend model.
  */
-export const LATEX_FIELD_TO_KEY = {
+export const LATEX_CONFIG_FIELD_TO_KEY = {
   workflowAutoCompile: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
   workflowAutoCompileTimeoutMs:
     WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
@@ -71,32 +72,9 @@ export const LATEX_FIELD_TO_KEY = {
   latexdiffMathMarkup: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
   latexdiffChangesOnly: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
   latexFormatter: WorkspaceStateKey.LATEX_FORMATTER,
-} as const;
-export type LatexConfigField = keyof typeof LATEX_FIELD_TO_KEY;
-
-/**
- * Replacement-related webview field name → core config key (`texra.latex.*`).
- * Unlike {@link LATEX_FIELD_TO_KEY} these live in core config, not
- * WorkspaceState. Shared by the settings-view frontend (LaTeXTab) and the
- * backend persistence controller so the two sides of the wire can't drift.
- */
-export const LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY = {
   wrapCritiqueInAlign: 'texra.latex.wrapCritiqueInAlign',
   enabledReplacements: 'texra.latex.enabledReplacements',
   enabledReplacementsRegex: 'texra.latex.enabledReplacementsRegex',
   customReplacementsRegex: 'texra.latex.customReplacementsRegex',
   customReplacements: 'texra.latex.customReplacements',
-} as const;
-
-/**
- * Every webview-facing LaTeX config field → its storage key, merging the
- * WorkspaceState-backed {@link LATEX_FIELD_TO_KEY} and the core-config-backed
- * {@link LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY}. The `satisfies` clause asserts
- * the two maps together cover every `LatexConfigValues` field. Shared by the
- * settings-view frontend (LaTeXTab, latexSlice) so the merged map is defined
- * once rather than reassembled per consumer.
- */
-export const LATEX_CONFIG_FIELD_TO_KEY = {
-  ...LATEX_FIELD_TO_KEY,
-  ...LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
 } as const satisfies Record<keyof LatexConfigValues, string>;
