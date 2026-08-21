@@ -87,8 +87,8 @@ export class ModelHandlerDeepSeek extends ReasoningModelHandlerOpenAI<DeepSeekTo
 
   /**
    * DeepSeek requires merging consecutive roles and stringified content —
-   * except on the vision-capable entry, which needs the array content shape
-   * to carry image parts (see `@model/deepSeekVisionOverride`).
+   * except on `deepseekvision` (llm-zoo 1.30.0), which needs the array
+   * content shape to carry image parts.
    */
   protected override readonly convertContentToStringUnlessVision = true;
   protected override readonly mergeConsecutiveRoles = true;

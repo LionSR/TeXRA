@@ -69,16 +69,13 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 ## DeepSeek Models
 
-| Model ID       | Use Case                          | Cost | Speed  |
-| :------------- | :--------------------------------- | :--- | :----- |
-| `deepseek`     | V4 Flash chat mode, vision         | $    | Fast   |
-| `deepseekT`    | V4 Flash with reasoning, vision    | $    | Medium |
-| `deepseekpro`  | V4 Pro chat mode                   | $    | Medium |
-| `deepseekproT` | V4 Pro with reasoning              | $    | Medium |
-
-`deepseek` and `deepseekT` route to DeepSeek's `deepseek-v4-flash-vision-exp`
-model, which accepts image attachments alongside text. The Pro tier has no
-documented vision variant yet.
+| Model ID         | Use Case                            | Cost | Speed  |
+| :--------------- | :----------------------------------- | :--- | :----- |
+| `deepseek`       | V4 Flash chat mode                   | $    | Fast   |
+| `deepseekT`      | V4 Flash with reasoning              | $    | Medium |
+| `deepseekvision` | V4 Flash Vision (Exp), image input   | $    | Fast   |
+| `deepseekpro`    | V4 Pro chat mode                     | $    | Medium |
+| `deepseekproT`   | V4 Pro with reasoning                | $    | Medium |
 
 ## Moonshot Kimi Models
 

@@ -157,8 +157,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.29.0
-        version: 1.29.0(zod@4.4.3)
+        specifier: ^1.30.0
+        version: 1.30.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -503,8 +503,8 @@ importers:
         specifier: ^2.0.2
         version: 2.0.2
       llm-zoo:
-        specifier: ^1.29.0
-        version: 1.29.0(zod@4.4.3)
+        specifier: ^1.30.0
+        version: 1.30.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -878,8 +878,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.29.0
-        version: 1.29.0(zod@4.4.3)
+        specifier: ^1.30.0
+        version: 1.30.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -1083,8 +1083,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.29.0
-        version: 1.29.0(zod@4.4.3)
+        specifier: ^1.30.0
+        version: 1.30.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -5035,8 +5035,8 @@ packages:
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
-  llm-zoo@1.29.0:
-    resolution: {integrity: sha512-7yayYqJzlthjNV16evWE/+qaHWzTowj8c6RIs1h8VsgF9TY/ykwfiegQy/qQ3uZ2wxYfc9YIloUYP0p8yFCM+Q==}
+  llm-zoo@1.30.0:
+    resolution: {integrity: sha512-H7dkb6+qSPEbuH/B/Q5QH0HcI+ibSXpKeXY/cik7dpkuxwS4taJBZs6E0/mqNHSddfqRKlzbcy1mvOdwtqMBtQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -10907,7 +10907,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@1.29.0(zod@4.4.3):
+  llm-zoo@1.30.0(zod@4.4.3):
     optionalDependencies:
       zod: 4.4.3
 
