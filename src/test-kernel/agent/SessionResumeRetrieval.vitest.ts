@@ -394,6 +394,46 @@ async function runResumedFlowToWaiting(
   expect(result.outcome).toBe(STREAM_PHASE.WAITING);
 }
 
+/**
+ * Rejects the flow's first in-flight node-step write with an abort error,
+ * optionally queuing a follow-up first. Models a cancellation landing
+ * mid-turn at the only writes that carry a cursor. `onlyStepWrite` narrows
+ * that further to the write that stamps `cursor.lastAction`, for tests that
+ * must distinguish a step write from any other cursor-bearing write.
+ */
+function abortOnFirstFlowStepWrite(
+  store: ReturnType<typeof getExecutionStore>,
+  getFlowContext: () => ToolUseSetupContext | undefined,
+  options: { onlyStepWrite?: boolean; followUpText?: string } = {},
+): { writeSpy: ReturnType<typeof vi.spyOn>; abortError: DOMException } {
+  const abortError = createAbortError();
+  const realWrite = store.write.bind(store);
+  let fired = false;
+  const writeSpy = vi
+    .spyOn(store, 'write')
+    .mockImplementation(async (key, value) => {
+      const isCursorWrite =
+        value !== null && typeof value === 'object' && 'cursor' in value;
+      const isTargetWrite = options.onlyStepWrite
+        ? isCursorWrite &&
+          (value.cursor as { lastAction?: string } | null)?.lastAction !==
+            undefined
+        : isCursorWrite;
+      if (!fired && isTargetWrite) {
+        fired = true;
+        if (options.followUpText) {
+          getFlowContext()?.session.appendFollowUp({
+            text: options.followUpText,
+          });
+        }
+        getFlowContext()?.interrupt();
+        throw abortError;
+      }
+      return realWrite(key, value);
+    });
+  return { writeSpy, abortError };
+}
+
 describe('retrieveSessionResumeData', () => {
   setupPlatform({ workspacePath: '/workspace' });
 
@@ -1423,31 +1463,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const storedShared = activeHandlerShared();
     const snapshot = buildToolUseResumeData(executionId, streamId);
     await writeFlowRecord(executionId, storedShared);
-    const abortError = createAbortError();
     // Reject the flow's first node-step persist with the provider's abort:
     // the run then fails mid-flight through the public storage boundary, the
     // same way a real cancellation reaches `runToolUseFlow` out of the flow.
-    // Only a step write stamps `cursor.lastAction` (the action the node just
-    // returned), so any other write passes through untouched.
-    const realWrite = store.write.bind(store);
-    let abortFired = false;
-    const writeSpy = vi
-      .spyOn(store, 'write')
-      .mockImplementation(async (key, value) => {
-        if (
-          !abortFired &&
-          value !== null &&
-          typeof value === 'object' &&
-          'cursor' in value &&
-          (value.cursor as { lastAction?: string } | null)?.lastAction !==
-            undefined
-        ) {
-          abortFired = true;
-          flowContext?.interrupt();
-          throw abortError;
-        }
-        return realWrite(key, value);
-      });
+    const { writeSpy, abortError } = abortOnFirstFlowStepWrite(
+      store,
+      () => flowContext,
+      { onlyStepWrite: true },
+    );
     const deleteSpy = vi.spyOn(store, 'delete');
     const dispositions: Array<'preserve' | 'delete'> = [];
 
@@ -1525,29 +1548,13 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     expect(recovery).toBeDefined();
     const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
-    const abortError = createAbortError();
     // The late input lands while the cancelled turn is mid-flight, modelled at
     // the flow's first node-step persist (the only writes carrying a cursor).
-    const realWrite = store.write.bind(store);
-    let abortFired = false;
-    const writeSpy = vi
-      .spyOn(store, 'write')
-      .mockImplementation(async (key, value) => {
-        if (
-          !abortFired &&
-          value !== null &&
-          typeof value === 'object' &&
-          'cursor' in value
-        ) {
-          abortFired = true;
-          flowContext?.session.appendFollowUp({
-            text: 'late active-turn input',
-          });
-          flowContext?.interrupt();
-          throw abortError;
-        }
-        return realWrite(key, value);
-      });
+    const { writeSpy, abortError } = abortOnFirstFlowStepWrite(
+      store,
+      () => flowContext,
+      { followUpText: 'late active-turn input' },
+    );
 
     try {
       await expect(
@@ -1587,28 +1594,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     expect(childLease).toBeDefined();
     const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
-    const abortError = createAbortError();
     // The queued input lands while the interrupted turn is mid-flight,
     // modelled at the flow's first node-step persist (the only writes
     // carrying a cursor).
-    const realWrite = store.write.bind(store);
-    let abortFired = false;
-    const writeSpy = vi
-      .spyOn(store, 'write')
-      .mockImplementation(async (key, value) => {
-        if (
-          !abortFired &&
-          value !== null &&
-          typeof value === 'object' &&
-          'cursor' in value
-        ) {
-          abortFired = true;
-          flowContext?.session.appendFollowUp({ text: 'queued for next turn' });
-          flowContext?.interrupt();
-          throw abortError;
-        }
-        return realWrite(key, value);
-      });
+    const { writeSpy, abortError } = abortOnFirstFlowStepWrite(
+      store,
+      () => flowContext,
+      { followUpText: 'queued for next turn' },
+    );
 
     try {
       await expect(

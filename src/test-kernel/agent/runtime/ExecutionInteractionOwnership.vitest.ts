@@ -44,19 +44,23 @@ function trackRun(
   );
 }
 
+/** A fresh registry with a scope that has claimed and tracked 'root'. */
+function openRootScope() {
+  const registry = createRegistry();
+  const onRelease = vi.fn();
+  const scope = registry.interactionOwnership.open(onRelease);
+  const rootStream = 'root-stream' as StreamTabId;
+
+  scope.claim('root');
+  trackRun(registry, 'root', rootStream, rootStream);
+
+  return { registry, onRelease, scope, rootStream };
+}
+
 describe('execution interaction ownership', () => {
   it('releases only once the owner finished and its last run was untracked', () => {
-    const registry = createRegistry();
-    const onRelease = vi.fn();
-    const scope = registry.interactionOwnership.open(onRelease);
+    const { registry, onRelease, scope } = openRootScope();
 
-    scope.claim('root');
-    trackRun(
-      registry,
-      'root',
-      'root-stream' as StreamTabId,
-      'root-stream' as StreamTabId,
-    );
     scope.finish();
     expect(onRelease).not.toHaveBeenCalled();
 
@@ -77,13 +81,8 @@ describe('execution interaction ownership', () => {
   });
 
   it('keeps a detached child of a finished root attached to its owner', () => {
-    const registry = createRegistry();
-    const onRelease = vi.fn();
-    const scope = registry.interactionOwnership.open(onRelease);
-    const rootStream = 'root-stream' as StreamTabId;
+    const { registry, onRelease, scope, rootStream } = openRootScope();
 
-    scope.claim('root');
-    trackRun(registry, 'root', rootStream, rootStream);
     // The child is never claimed by the host: it inherits through the stream
     // lineage of the root the host did claim.
     trackRun(registry, 'child', rootStream, 'child-stream' as StreamTabId);
@@ -98,13 +97,9 @@ describe('execution interaction ownership', () => {
   });
 
   it('inherits a grandchild through the child stream it already owns', () => {
-    const registry = createRegistry();
-    const scope = registry.interactionOwnership.open(vi.fn());
-    const rootStream = 'root-stream' as StreamTabId;
+    const { registry, scope, rootStream } = openRootScope();
     const childStream = 'child-stream' as StreamTabId;
 
-    scope.claim('root');
-    trackRun(registry, 'root', rootStream, rootStream);
     trackRun(registry, 'child', rootStream, childStream);
     trackRun(
       registry,
@@ -117,14 +112,9 @@ describe('execution interaction ownership', () => {
   });
 
   it('holds the owner across the gap between a child activation and its handle', () => {
-    const registry = createRegistry();
-    const onRelease = vi.fn();
-    const scope = registry.interactionOwnership.open(onRelease);
-    const rootStream = 'root-stream' as StreamTabId;
+    const { registry, onRelease, scope, rootStream } = openRootScope();
     const childStream = 'child-stream' as StreamTabId;
 
-    scope.claim('root');
-    trackRun(registry, 'root', rootStream, rootStream);
     registry.reserveChildActivation({
       executionId: 'child',
       parentStreamId: rootStream,
@@ -147,14 +137,9 @@ describe('execution interaction ownership', () => {
   });
 
   it('releases the owner when a reserved child activation fails to start', () => {
-    const registry = createRegistry();
-    const onRelease = vi.fn();
-    const scope = registry.interactionOwnership.open(onRelease);
-    const rootStream = 'root-stream' as StreamTabId;
+    const { registry, onRelease, scope, rootStream } = openRootScope();
     const childStream = 'child-stream' as StreamTabId;
 
-    scope.claim('root');
-    trackRun(registry, 'root', rootStream, rootStream);
     const releaseActivation = registry.reserveChildActivation({
       executionId: 'child',
       parentStreamId: rootStream,
@@ -232,13 +217,8 @@ describe('execution interaction ownership', () => {
   });
 
   it('stops observing the registry after an explicit release', () => {
-    const registry = createRegistry();
-    const onRelease = vi.fn();
-    const scope = registry.interactionOwnership.open(onRelease);
-    const rootStream = 'root-stream' as StreamTabId;
+    const { registry, onRelease, scope, rootStream } = openRootScope();
 
-    scope.claim('root');
-    trackRun(registry, 'root', rootStream, rootStream);
     scope.release();
     scope.release();
 

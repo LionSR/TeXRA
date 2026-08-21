@@ -45,6 +45,7 @@ import {
   STREAM_PHASE,
   TOOL_USE_STATUS,
   type StreamLogEntry,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
@@ -155,6 +156,10 @@ function transcriptEntry(id: string): StreamLogEntry | undefined {
 
 function streamSlice() {
   return streams.get().get(STREAM_ID);
+}
+
+function setStatus(status: StreamPhase): void {
+  setStreamStatusInCliState({ streamId: STREAM_ID, status });
 }
 
 function streamEntries(): readonly TranscriptRow[] {
@@ -299,10 +304,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         status: 'running',
       },
     });
-    setStreamStatusInCliState({
-      streamId: STREAM_ID,
-      status: STREAM_PHASE.CANCELLED,
-    });
+    setStatus(STREAM_PHASE.CANCELLED);
 
     // This exercises both terminal-status finalization entry points:
     // syncStreamLog's settled-prefix promotion and the explicit
@@ -373,10 +375,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     // re-created (un-retiring the stream identity).
     resetCliState();
     patchStream(STREAM_ID, (slice) => ({ ...slice }));
-    setStreamStatusInCliState({
-      streamId: STREAM_ID,
-      status: STREAM_PHASE.CANCELLED,
-    });
+    setStatus(STREAM_PHASE.CANCELLED);
     syncStreamLog(defaultSession(), STREAM_ID, { forceFinal: true });
 
     const plannedEntries = streamEntries();
@@ -472,10 +471,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       phase: STREAM_PHASE.CANCELLED,
       cause: STREAM_TRANSITION_CAUSE.USER_STOP,
     });
-    setStreamStatusInCliState({
-      streamId: STREAM_ID,
-      status: STREAM_PHASE.CANCELLED,
-    });
+    setStatus(STREAM_PHASE.CANCELLED);
     syncStreamLog(defaultSession(), STREAM_ID, { forceFinal: true });
 
     liveItems = appendItems(liveItems);
@@ -544,10 +540,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       ...slice,
       entries: syntheticEntry ? [syntheticEntry] : [],
     }));
-    setStreamStatusInCliState({
-      streamId: STREAM_ID,
-      status: STREAM_PHASE.CANCELLED,
-    });
+    setStatus(STREAM_PHASE.CANCELLED);
     syncStreamLog(defaultSession(), STREAM_ID);
     const coldItems = appendItems();
 
@@ -1040,10 +1033,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(finalizedFlags(entries)[phaseIndex]).toBe(true);
 
     // Finalize the stream so the settled prefix promotes into scrollback.
-    setStreamStatusInCliState({
-      streamId: STREAM_ID,
-      status: STREAM_PHASE.COMPLETED,
-    });
+    setStatus(STREAM_PHASE.COMPLETED);
     syncStreamLog(defaultSession(), STREAM_ID);
 
     const finalized = streamEntries();

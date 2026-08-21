@@ -36,6 +36,13 @@ export function createPRCurrentShaState(
   };
 }
 
+function dedupedById<T extends { id: number }>(): DedupedResource<T> {
+  return new DedupedResource<T>({
+    getId: (item) => item.id,
+    maxSeenIds: MAX_SEEN_IDS,
+  });
+}
+
 export function createPRSubscriptionState(
   overrides: Partial<PRSubscriptionState> = {},
 ): PRSubscriptionState {
@@ -44,18 +51,9 @@ export function createPRSubscriptionState(
     slug: 'owner/repo',
     ...createBasePollState(),
     initialized: true,
-    issueComments: new DedupedResource<GhIssueComment>({
-      getId: (comment) => comment.id,
-      maxSeenIds: MAX_SEEN_IDS,
-    }),
-    reviewComments: new DedupedResource<GhReviewComment>({
-      getId: (comment) => comment.id,
-      maxSeenIds: MAX_SEEN_IDS,
-    }),
-    reviews: new DedupedResource<GhReview>({
-      getId: (review) => review.id,
-      maxSeenIds: MAX_SEEN_IDS,
-    }),
+    issueComments: dedupedById<GhIssueComment>(),
+    reviewComments: dedupedById<GhReviewComment>(),
+    reviews: dedupedById<GhReview>(),
     lastFailedCheckKeys: new Set(),
     lastAnnotationKeys: new Set(),
     annotationLevelByListener: new Map(),

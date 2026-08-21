@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { type SupabaseSessionCoordinator } from '@auth/SupabaseSession';
-import { startLoopbackCallbackServer } from '@cli/runtime/supabaseAuthCallbackServer';
-
-type LoopbackServer = Awaited<ReturnType<typeof startLoopbackCallbackServer>>;
+import {
+  startLoopbackCallbackServer,
+  type LoopbackCallbackServer,
+} from '@cli/runtime/supabaseAuthCallbackServer';
 
 function stubCoordinator(
   overrides: {
@@ -18,7 +19,9 @@ function stubCoordinator(
   } as unknown as SupabaseSessionCoordinator;
 }
 
-async function fetchCallbackNonce(server: LoopbackServer): Promise<string> {
+async function fetchCallbackNonce(
+  server: LoopbackCallbackServer,
+): Promise<string> {
   const callbackPage = await fetch(`${server.redirectTo}?code=oauth-code`);
   const nonce = (await callbackPage.text()).match(/nonce: "([^"]+)"/)?.[1];
   expect(nonce).toBeDefined();
@@ -26,7 +29,7 @@ async function fetchCallbackNonce(server: LoopbackServer): Promise<string> {
 }
 
 function postCallbackCompletion(
-  server: LoopbackServer,
+  server: LoopbackCallbackServer,
   nonce: string,
 ): Promise<Response> {
   return fetch(`${server.redirectTo}/complete`, {

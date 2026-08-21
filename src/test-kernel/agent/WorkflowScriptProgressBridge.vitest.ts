@@ -79,6 +79,15 @@ function runScript(
   });
 }
 
+/** Collects activity-line strings reported through `onActivity`. */
+function collectActivities(): {
+  readonly activities: string[];
+  readonly onActivity: (line: string) => void;
+} {
+  const activities: string[] = [];
+  return { activities, onActivity: (line) => activities.push(line) };
+}
+
 /**
  * The current card set, one entry per `logId` — what a host progress tree
  * holds after applying every update.
@@ -200,7 +209,7 @@ return await agent('Inspect', { id: 'inspect' })`,
 
   it('marks declared tasks not reached by the script as skipped', async () => {
     const { trace, events } = recordingTrace();
-    const activities: string[] = [];
+    const { activities, onActivity } = collectActivities();
     await runScript(
       trace,
       'not-reached-plan',
@@ -215,7 +224,7 @@ return await agent('Inspect', { id: 'inspect' })`,
 }
 phase('Research')
 return await agent('Run one', { id: 'used' })`,
-      { onActivity: (line) => activities.push(line) },
+      { onActivity },
     );
 
     const unusedPlanned = workflowCallEvent(events, 'Unused task', 'planned');
@@ -583,7 +592,7 @@ return await agent('Second')`;
 
   it('enriches live finish lines with the reported model and duration', async () => {
     const { trace, events } = recordingTrace();
-    const activities: string[] = [];
+    const { activities, onActivity } = collectActivities();
     await runScript(
       trace,
       'model-duration',
@@ -598,7 +607,7 @@ return await agent('Draft')`,
           invocation.report?.({ costUsd: 0.02 });
           return 'done';
         },
-        onActivity: (line) => activities.push(line),
+        onActivity,
       },
     );
 
@@ -649,7 +658,7 @@ return await agent('Draft')`;
 
   it('preserves live metadata when the user skips a running call', async () => {
     const { trace, events } = recordingTrace();
-    const activities: string[] = [];
+    const { activities, onActivity } = collectActivities();
     let control!: WorkflowScriptControl;
     let markStarted: (() => void) | undefined;
     const started = new Promise<void>((resolve) => {
@@ -679,7 +688,7 @@ return await agent('Late skip')`,
         onControl: (handle) => {
           control = handle;
         },
-        onActivity: (line) => activities.push(line),
+        onActivity,
       },
     );
 
@@ -786,7 +795,7 @@ return await pending`,
 
   it('preserves the exact cause when a runner aborts a started phase', async () => {
     const { trace, events } = recordingTrace();
-    const activities: string[] = [];
+    const { activities, onActivity } = collectActivities();
     await expect(
       runScript(
         trace,
@@ -798,7 +807,7 @@ return await agent('Abort', { phase: 'Execution' })`,
             invocation.report?.({ model: 'abort-model', costUsd: 0.06 });
             throw new WorkflowRunAbortError('fatal runner error');
           },
-          onActivity: (line) => activities.push(line),
+          onActivity,
         },
       ),
     ).rejects.toThrow('fatal runner error');
@@ -829,7 +838,7 @@ return await agent('Abort', { phase: 'Execution' })`,
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       const { trace, events } = recordingTrace();
-      const activities: string[] = [];
+      const { activities, onActivity } = collectActivities();
       let markStarted: (() => void) | undefined;
       const started = new Promise<void>((resolve) => {
         markStarted = resolve;
@@ -849,7 +858,7 @@ return 'guest success'`,
             markStarted?.();
             return await new Promise<never>(() => undefined);
           },
-          onActivity: (line) => activities.push(line),
+          onActivity,
         },
       );
 

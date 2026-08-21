@@ -46,6 +46,15 @@ function stubComposedDispatcher(): ComposedDispatcherStub {
   return stub;
 }
 
+/** Compose the dispatcher and queue one 204 response — the boilerplate every
+ * wire-shape assertion below needs before making its call. */
+function stubOkResponse(): void {
+  stubComposedDispatcher();
+  transportMocks.undiciFetch.mockResolvedValueOnce(
+    new Response(null, { status: 204 }),
+  );
+}
+
 describe('long-running model transport', () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -113,10 +122,7 @@ describe('long-running model transport', () => {
   });
 
   it('does not set duplex on a direct string body', async () => {
-    stubComposedDispatcher();
-    transportMocks.undiciFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    stubOkResponse();
 
     await expect(
       longRunningModelFetch('https://api.example/v1/chat', {
@@ -132,10 +138,7 @@ describe('long-running model transport', () => {
   });
 
   it('does not set duplex on a direct ArrayBuffer body', async () => {
-    stubComposedDispatcher();
-    transportMocks.undiciFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    stubOkResponse();
     const body = new TextEncoder().encode('{"prompt":"hello"}').buffer;
 
     await expect(
@@ -152,10 +155,7 @@ describe('long-running model transport', () => {
   });
 
   it('sets duplex: half when a caller sends a stream body without it', async () => {
-    stubComposedDispatcher();
-    transportMocks.undiciFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    stubOkResponse();
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new TextEncoder().encode('{"ok":true}'));
@@ -177,10 +177,7 @@ describe('long-running model transport', () => {
   });
 
   it('preserves an explicit duplex value on a streamed body', async () => {
-    stubComposedDispatcher();
-    transportMocks.undiciFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    stubOkResponse();
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.close();
@@ -199,10 +196,7 @@ describe('long-running model transport', () => {
   });
 
   it('sets duplex: half for a stream-like body that is not a same-realm ReadableStream', async () => {
-    stubComposedDispatcher();
-    transportMocks.undiciFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    stubOkResponse();
     const body = {
       pipeTo: async () => undefined,
     };
@@ -237,10 +231,7 @@ describe('long-running model transport', () => {
   }
 
   it('rebuilds a cross-realm Request from primitives instead of forwarding it', async () => {
-    stubComposedDispatcher();
-    transportMocks.undiciFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    stubOkResponse();
     const request = foreignRequest({});
     expect(request instanceof Request).toBe(false);
 
@@ -260,10 +251,7 @@ describe('long-running model transport', () => {
   });
 
   it('reads a cross-realm Request body through its own arrayBuffer', async () => {
-    stubComposedDispatcher();
-    transportMocks.undiciFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    stubOkResponse();
     const bytes = new TextEncoder().encode('{"prompt":"hello"}').buffer;
     const request = foreignRequest({
       // The foreign stream itself cannot cross realms; its bytes can.
@@ -280,10 +268,7 @@ describe('long-running model transport', () => {
   });
 
   it('lets init fields win over a cross-realm Request', async () => {
-    stubComposedDispatcher();
-    transportMocks.undiciFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    stubOkResponse();
     const request = foreignRequest({ method: 'GET' });
 
     await longRunningModelFetch(request, {
@@ -302,10 +287,7 @@ describe('long-running model transport', () => {
   });
 
   it('forwards the duplex hint when an init stream body overrides a Request', async () => {
-    stubComposedDispatcher();
-    transportMocks.undiciFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    stubOkResponse();
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.close();
@@ -323,10 +305,7 @@ describe('long-running model transport', () => {
   });
 
   it('passes array-form init headers through untransformed', async () => {
-    stubComposedDispatcher();
-    transportMocks.undiciFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    stubOkResponse();
     const headers: [string, string][] = [
       ['content-type', 'application/json'],
       ['x-tuple', 'yes'],
@@ -341,10 +320,7 @@ describe('long-running model transport', () => {
   });
 
   it('keeps the input body when the init body is null', async () => {
-    stubComposedDispatcher();
-    transportMocks.undiciFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    stubOkResponse();
     const bytes = new TextEncoder().encode('{"prompt":"kept"}').buffer;
     const request = foreignRequest({
       body: { pipeTo: async () => undefined },
@@ -381,10 +357,7 @@ describe('long-running model transport', () => {
   });
 
   it('replaces the input headers wholesale when init supplies headers', async () => {
-    stubComposedDispatcher();
-    transportMocks.undiciFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    stubOkResponse();
     const request = foreignRequest({
       headers: new Headers({ 'x-input': 'dropped', 'x-also-input': 'gone' }),
     });

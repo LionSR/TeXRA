@@ -190,6 +190,29 @@ type BridgeTestContext = {
 
 const bridgeContexts = new WeakMap<TestableBridge, BridgeTestContext>();
 
+/** Constructs a `DesktopProgressBridge` and records the test-side context it
+ * was built with, so `bridgeContext` and friends can look it up later. Used
+ * everywhere a bridge is instantiated: the single-window harness and both
+ * windows of the process-owner (reopen) harness. */
+function instantiateBridge(
+  bridgeModule: DesktopAgentExecutionModule,
+  onMessage: (message: unknown) => void,
+  bridgeOptions: DesktopProgressBridgeOptions,
+  context: { session: SessionHandle; snapshots: ProgressSnapshotStore },
+): TestableBridge {
+  const bridge = new bridgeModule.DesktopProgressBridge(
+    onMessage,
+    bridgeOptions,
+  ) as unknown as TestableBridge;
+  bridgeContexts.set(bridge, {
+    session: context.session,
+    snapshots: context.snapshots,
+    ctor: bridgeModule.DesktopProgressBridge,
+    options: bridgeOptions,
+  });
+  return bridge;
+}
+
 function bridgeContext(bridge: TestableBridge): BridgeTestContext {
   const context = bridgeContexts.get(bridge);
   if (!context) {
@@ -519,16 +542,15 @@ async function createBridge(
       ...(options.openPath ? { openPath: options.openPath } : {}),
     }),
   };
-  const bridge = new bridgeModule.DesktopProgressBridge((message) => {
-    options.observeRendererMessage?.(message);
-    messages.push(message);
-  }, bridgeOptions) as unknown as TestableBridge;
-  bridgeContexts.set(bridge, {
-    session,
-    snapshots: progressSnapshotStore,
-    ctor: bridgeModule.DesktopProgressBridge,
-    options: bridgeOptions,
-  });
+  const bridge = instantiateBridge(
+    bridgeModule,
+    (message) => {
+      options.observeRendererMessage?.(message);
+      messages.push(message);
+    },
+    bridgeOptions,
+    { session, snapshots: progressSnapshotStore },
+  );
   const waitForPresentation = bridge.waitUntilReady.bind(bridge);
   bridge.waitUntilReady = async () => {
     await sessionReady;
@@ -2758,15 +2780,14 @@ describe('DesktopProgressBridge', () => {
           },
         }),
       };
-      const bridgeA = new bridgeModule.DesktopProgressBridge((message) => {
-        messages.push(message);
-      }, bridgeAOptions) as unknown as TestableBridge;
-      bridgeContexts.set(bridgeA, {
-        session: processSession,
-        snapshots: progressSnapshotStore,
-        ctor: bridgeModule.DesktopProgressBridge,
-        options: bridgeAOptions,
-      });
+      const bridgeA = instantiateBridge(
+        bridgeModule,
+        (message) => {
+          messages.push(message);
+        },
+        bridgeAOptions,
+        { session: processSession, snapshots: progressSnapshotStore },
+      );
       await bridgeA.waitUntilReady();
       const presentationBridges = new Set([bridgeA]);
       const createHandle = (
@@ -2829,16 +2850,15 @@ describe('DesktopProgressBridge', () => {
             },
           }),
         };
-        const bridgeB = new bridgeModule.DesktopProgressBridge((message) => {
-          reopenedMessages.push(message);
-          observeRendererMessage?.(message);
-        }, bridgeBOptions) as unknown as TestableBridge;
-        bridgeContexts.set(bridgeB, {
-          session: processSession,
-          snapshots: progressSnapshotStore,
-          ctor: bridgeModule.DesktopProgressBridge,
-          options: bridgeBOptions,
-        });
+        const bridgeB = instantiateBridge(
+          bridgeModule,
+          (message) => {
+            reopenedMessages.push(message);
+            observeRendererMessage?.(message);
+          },
+          bridgeBOptions,
+          { session: processSession, snapshots: progressSnapshotStore },
+        );
         presentationBridges.add(bridgeB);
         await bridgeB.waitUntilReady();
         return { bridgeB, errorsB, infosB, progressSnapshotStore };

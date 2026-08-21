@@ -289,7 +289,7 @@ describe('stream-tab lifecycle distinction', () => {
       ]),
       compact: true,
     });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settleChildRender();
     const row = tabs.shadowRoot?.querySelector('stream-tab');
 
     expect(

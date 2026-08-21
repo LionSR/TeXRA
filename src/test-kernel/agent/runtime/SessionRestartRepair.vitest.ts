@@ -105,6 +105,19 @@ async function seedSidecarFk(
   await snapshots.flush();
 }
 
+/** Writes a cancelled-but-resumable execution meta plus a valid flow record. */
+async function seedResumableExecution(
+  id: ExecutionId,
+): Promise<ReturnType<typeof getExecutionStore>> {
+  const executionStore = getExecutionStore(id);
+  await executionStore.writeMeta({
+    timestamp: META_TIMESTAMP,
+    outcome: RUN_OUTCOME.CANCELLED,
+  });
+  await executionStore.write(flowKey(id), validFlowRecord);
+  return executionStore;
+}
+
 /**
  * Mocks a pending workspace-storage root change, returning the commit mock so
  * callers can assert whether it was invoked.
@@ -301,13 +314,7 @@ describe('SessionHandle restart repair', () => {
     );
     await transcripts.flush();
     await seedSidecarFk(resumableStreamId, resumableExecutionId);
-
-    const executionStore = getExecutionStore(resumableExecutionId);
-    await executionStore.writeMeta({
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    await executionStore.write(flowKey(resumableExecutionId), validFlowRecord);
+    const executionStore = await seedResumableExecution(resumableExecutionId);
 
     const session = openDeferredSession(transcripts);
     await session.waitUntilReady();
@@ -377,13 +384,7 @@ describe('SessionHandle restart repair', () => {
     });
     await transcripts.flush();
     await seedSidecarFk(parkedStreamId, parkedExecutionId);
-
-    const executionStore = getExecutionStore(parkedExecutionId);
-    await executionStore.writeMeta({
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+    await seedResumableExecution(parkedExecutionId);
 
     const session = openDeferredSession(transcripts);
     vi.spyOn(
@@ -428,13 +429,7 @@ describe('SessionHandle restart repair', () => {
       executionId: summaryExecutionId,
     });
     await seedSidecarFk(settledStream, sidecarExecutionId);
-
-    const executionStore = getExecutionStore(sidecarExecutionId);
-    await executionStore.writeMeta({
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    await executionStore.write(flowKey(sidecarExecutionId), validFlowRecord);
+    await seedResumableExecution(sidecarExecutionId);
 
     const session = openDeferredSession(transcripts);
     await session.waitUntilReady();
@@ -452,13 +447,7 @@ describe('SessionHandle restart repair', () => {
     transcripts.ensureStream(parkedStreamId);
     await transcripts.flush();
     await seedSidecarFk(parkedStreamId, parkedExecutionId);
-
-    const executionStore = getExecutionStore(parkedExecutionId);
-    await executionStore.writeMeta({
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+    await seedResumableExecution(parkedExecutionId);
 
     const session = openDeferredSession(transcripts);
     const preload = vi.spyOn(session.snapshots, 'preload');
@@ -487,22 +476,8 @@ describe('SessionHandle restart repair', () => {
     await transcripts.flush();
     await seedSidecarFk(firstStreamId, firstExecutionId);
     await seedSidecarFk(secondStreamId, secondExecutionId);
-    await getExecutionStore(firstExecutionId).writeMeta({
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    await getExecutionStore(firstExecutionId).write(
-      flowKey(firstExecutionId),
-      validFlowRecord,
-    );
-    await getExecutionStore(secondExecutionId).writeMeta({
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    await getExecutionStore(secondExecutionId).write(
-      flowKey(secondExecutionId),
-      validFlowRecord,
-    );
+    await seedResumableExecution(firstExecutionId);
+    await seedResumableExecution(secondExecutionId);
     vi.spyOn(waitingDetection, 'detectWaitingStreams').mockResolvedValue(
       new Set([firstStreamId, secondStreamId]),
     );
@@ -551,13 +526,7 @@ describe('SessionHandle restart repair', () => {
     transcripts.ensureStream(parkedStreamId);
     await transcripts.flush();
     await seedSidecarFk(parkedStreamId, parkedExecutionId);
-
-    const executionStore = getExecutionStore(parkedExecutionId);
-    await executionStore.writeMeta({
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+    await seedResumableExecution(parkedExecutionId);
 
     let finishDetection: ((streams: Set<StreamTabId>) => void) | undefined;
     const detectionBlocked = new Promise<Set<StreamTabId>>((resolve) => {
@@ -595,13 +564,7 @@ describe('SessionHandle restart repair', () => {
     transcripts.ensureStream(parkedStreamId);
     await transcripts.flush();
     await seedSidecarFk(parkedStreamId, parkedExecutionId);
-
-    const executionStore = getExecutionStore(parkedExecutionId);
-    await executionStore.writeMeta({
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+    await seedResumableExecution(parkedExecutionId);
 
     const session = openDeferredSession(transcripts);
     const originalPreload = session.snapshots.preload.bind(session.snapshots);
@@ -631,13 +594,7 @@ describe('SessionHandle restart repair', () => {
       executionId: parkedExecutionId,
     });
     await transcripts.flush();
-
-    const executionStore = getExecutionStore(parkedExecutionId);
-    await executionStore.writeMeta({
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    await executionStore.write(flowKey(parkedExecutionId), validFlowRecord);
+    await seedResumableExecution(parkedExecutionId);
 
     const session = openDeferredSession(transcripts);
     await session.waitUntilReady();

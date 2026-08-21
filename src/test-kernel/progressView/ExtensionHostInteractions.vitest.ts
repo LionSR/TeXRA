@@ -74,19 +74,23 @@ function firstShowRequestId(show: ReturnType<typeof vi.fn>): string {
  * the same set on every call, because `cancel()` reaches all seven kinds and
  * has to find the requests `show()` recorded.
  */
-function createInteractions(options: {
-  presentationSink?: ReturnType<typeof createPresentationSink>;
-  setApprovalBypassState?: (update: HostApprovalBypassStateUpdate) => void;
-  session: SessionHandle;
-}) {
+function createInteractions(
+  options: {
+    presentationSink?: ReturnType<typeof createPresentationSink>;
+    setApprovalBypassState?: (update: HostApprovalBypassStateUpdate) => void;
+    session?: SessionHandle;
+  } = {},
+) {
   const handlers = createRecordingApprovalHandlers();
   const toolEditApprovals = createToolEditApprovals();
+  const session = options.session ?? createTestSession();
   return {
     handlers,
+    session,
     toolEditApprovals,
     interactions: createExtensionHostInteractions({
       interactions: options.presentationSink ?? createPresentationSink(),
-      session: options.session,
+      session,
       getApprovalHandlers: () => handlers,
       getToolEditApprovals: () =>
         toolEditApprovals as unknown as ReturnType<
@@ -127,8 +131,7 @@ function createDeferredPreparation() {
 describe('createExtensionHostInteractions', () => {
   it('forwards emit to the caller-supplied presentation host (#9251)', () => {
     const presentationSink = createPresentationSink();
-    const session = createTestSession();
-    const { interactions } = createInteractions({ presentationSink, session });
+    const { interactions } = createInteractions({ presentationSink });
 
     interactions.emit?.('requestShowError', { message: 'boom' });
 
@@ -139,10 +142,7 @@ describe('createExtensionHostInteractions', () => {
 
   it('forwards approval bypass state through the host port', () => {
     const setApprovalBypassState = vi.fn();
-    const { interactions } = createInteractions({
-      session: createTestSession(),
-      setApprovalBypassState,
-    });
+    const { interactions } = createInteractions({ setApprovalBypassState });
     const update = {
       streamId: 'stream:bypass',
       kind: 'bash',
@@ -155,8 +155,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('provides diagnostics and criticism capabilities', async () => {
-    const session = createTestSession();
-    const { interactions } = createInteractions({ session });
+    const { interactions } = createInteractions();
 
     await expect(
       interactions.readDiagnostics?.('/workspace/paper.tex'),
@@ -187,10 +186,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('approves already-pending delegated work only in the selected stream', async () => {
-    const session = createTestSession();
-    const { handlers, interactions, toolEditApprovals } = createInteractions({
-      session,
-    });
+    const { handlers, interactions, toolEditApprovals } = createInteractions();
 
     function requestProposal(requestId: string, instruction: string) {
       return interactions.requestAgentProposal?.({
@@ -260,12 +256,10 @@ describe('createExtensionHostInteractions', () => {
 
   it('shows and resolves plan approvals through existing handlers', async () => {
     const presentationSink = createPresentationSink();
-    const session = createTestSession();
-    const sessionEvents = recordSessionEvents(session);
-    const { handlers, interactions } = createInteractions({
+    const { handlers, interactions, session } = createInteractions({
       presentationSink,
-      session,
     });
+    const sessionEvents = recordSessionEvents(session);
 
     const resultPromise = interactions.requestPlanApproval?.({
       requestId: 'plan-a',
@@ -319,9 +313,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('rejects a request when its show transport fails synchronously', async () => {
-    const { handlers, interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { handlers, interactions } = createInteractions();
     handlers.transport.planApproval.show.mockImplementationOnce(() => {
       throw new Error('Progress view transport unavailable.');
     });
@@ -381,9 +373,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('does not let an old retry action resolve its replacement', async () => {
-    const { interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { interactions } = createInteractions();
     const first = interactions.requestRetry?.({
       requestId: 'retry:first',
       streamId: STREAM_A,
@@ -413,9 +403,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('prepares a progress-view retry before settling it', async () => {
-    const { interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { interactions } = createInteractions();
     const prepareRetry = vi.fn(async () => undefined);
     const result = interactions.requestRetry?.(
       {
@@ -436,9 +424,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('prepares the personal route for the API-key retry switch', async () => {
-    const { interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { interactions } = createInteractions();
     const prepareRetry = vi.fn(async () => undefined);
     const result = interactions.requestRetry?.(
       {
@@ -464,9 +450,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('denies a personal-credential retry when client preparation fails', async () => {
-    const { interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { interactions } = createInteractions();
     const prepareRetry = vi.fn(async () => {
       throw new Error('replacement client failed');
     });
@@ -492,9 +476,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('does not let a stale preparation settle its replacement request', async () => {
-    const { interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { interactions } = createInteractions();
     const first = createDeferredPreparation();
     const replacement = createDeferredPreparation();
 
@@ -539,9 +521,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('rejects a conflicting personal-credential selection while a plain retry prepares', async () => {
-    const { interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { interactions } = createInteractions();
     const preparation = createDeferredPreparation();
 
     const result = interactions.requestRetry?.(
@@ -579,9 +559,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('aborts an in-flight personal preparation when the retry is dismissed', async () => {
-    const { interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { interactions } = createInteractions();
     const preparation = createDeferredPreparation();
 
     const result = interactions.requestRetry?.(
@@ -664,9 +642,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('wraps cancel-path settlement when the dismiss transport throws', async () => {
-    const { handlers, interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { handlers, interactions } = createInteractions();
     const result = interactions.requestRetry?.({
       requestId: 'retry:cancel-settlement',
       streamId: STREAM_A,
@@ -719,9 +695,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('forwards a bash cancellation cause without user provenance', async () => {
-    const { handlers, interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { handlers, interactions } = createInteractions();
 
     const resultPromise = interactions.requestBashApproval?.({
       command: 'rm -rf build',
@@ -741,9 +715,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('rejects a resolution whose kind does not match the pending request', async () => {
-    const { handlers, interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { handlers, interactions } = createInteractions();
 
     const resultPromise = interactions.requestBashApproval?.({
       command: 'echo hi',
@@ -766,9 +738,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('a retry-kind cancel clears only the retry, leaving the plan approval pending', async () => {
-    const { handlers, interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { handlers, interactions } = createInteractions();
 
     const retryPromise = interactions.requestRetry?.({
       requestId: 'retry:scoped-cancel',
@@ -835,9 +805,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('cancels streamless user questions during unscoped cleanup', async () => {
-    const { handlers, interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { handlers, interactions } = createInteractions();
 
     const resultPromise = interactions.askUserQuestion?.({
       requestId: 'question-a',
@@ -869,9 +837,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('settles submitted user questions with their answers', async () => {
-    const { handlers, interactions } = createInteractions({
-      session: createTestSession(),
-    });
+    const { handlers, interactions } = createInteractions();
 
     const resultPromise = interactions.askUserQuestion?.({
       requestId: 'question-submit',

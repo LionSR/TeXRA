@@ -652,6 +652,7 @@ describe('attachTranscriptRecorder spill artifacts', () => {
     const streamId = 'stream:spill' as StreamTabId;
     const store = StreamLogStore.ephemeral('test');
     store.ensureStream(streamId);
+    const rows = (): StreamLogEntry[] => store.get(streamId)?.getRange(0) ?? [];
     const writes: Array<{ path: string; content: string }> = [];
     const firstToolOutput = 'first tool snapshot'.repeat(4_000);
     const recorder = attachTranscriptRecorder(
@@ -682,12 +683,7 @@ describe('attachTranscriptRecorder spill artifacts', () => {
       result: { toolName: 'read', output: firstToolOutput },
     });
     const liveToolData = ToolUseLogSchema.parse(
-      dataOf(
-        store
-          .get(streamId)
-          ?.getRange(0)
-          .find((candidate) => candidate.id === 'tool:spill'),
-      ),
+      dataOf(rows().find((candidate) => candidate.id === 'tool:spill')),
     );
     expect(liveToolData.output).toContain(
       'truncated while the tool is running',
@@ -707,11 +703,8 @@ describe('attachTranscriptRecorder spill artifacts', () => {
     recorder.flushPending();
     await recorder.flushSpills();
 
-    const entry = store.get(streamId)?.getRange(0).at(-1);
-    const modelEntry = store
-      .get(streamId)
-      ?.getRange(0)
-      .find((candidate) => candidate.id === output.id);
+    const entry = rows().at(-1);
+    const modelEntry = rows().find((candidate) => candidate.id === output.id);
     expect(modelEntry?.text?.length).toBeLessThan(50 * 1024);
     expect(modelEntry?.text).toContain('retained in run artifacts');
     expect(dataOf(modelEntry).spillPath).toBe(
