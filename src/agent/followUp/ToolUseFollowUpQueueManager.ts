@@ -305,14 +305,8 @@ export class ToolUseFollowUpQueue {
     lease: FollowUpConsumerLease,
     next: 'recoverable' | 'terminal',
   ): boolean {
-    const entry = this.entries.get(lease.streamId);
-    if (
-      !entry ||
-      entry.owner !== lease ||
-      entry.generation !== lease.generation
-    ) {
-      return false;
-    }
+    const entry = this.entryForLease(lease);
+    if (!entry) return false;
     entry.owner = undefined;
     if (next === 'recoverable') {
       entry.lifecycle = 'recoverable';
@@ -433,16 +427,22 @@ export class ToolUseFollowUpQueue {
   }
 
   private requireOwner(lease: FollowUpConsumerLease): QueueEntry {
-    const entry = this.entries.get(lease.streamId);
-    if (
-      !entry ||
-      entry.owner !== lease ||
-      entry.generation !== lease.generation
-    ) {
+    const entry = this.entryForLease(lease);
+    if (!entry) {
       throw new Error(
         `Follow-up consumer lease is stale for stream ${lease.streamId}.`,
       );
     }
     return entry;
+  }
+
+  /** The entry `lease` still owns, or `undefined` if it has gone stale. */
+  private entryForLease(lease: FollowUpConsumerLease): QueueEntry | undefined {
+    const entry = this.entries.get(lease.streamId);
+    return entry &&
+      entry.owner === lease &&
+      entry.generation === lease.generation
+      ? entry
+      : undefined;
   }
 }

@@ -192,6 +192,9 @@ Useful for finding the right lemma when you know roughly what type it should hav
     query: string,
     limit: number,
   ): Promise<{ query: string; result: ToolResult; hits: LoogleHit[] }> {
+    // Every failure path returns zero hits; only the success path below sets them.
+    const fail = (result: ToolResult) => ({ query, hits: [], result });
+
     try {
       const data = await this.fetchLoogle(query);
 
@@ -201,26 +204,22 @@ Useful for finding the right lemma when you know roughly what type it should hav
           suggestions.length > 0
             ? `\n\nSuggestions:\n${suggestions.map((s) => `  - ${s}`).join('\n')}`
             : '';
-        return {
-          query,
-          hits: [],
-          result: errorResult(`Error: ${data.error}${suggestionText}`, {
+        return fail(
+          errorResult(`Error: ${data.error}${suggestionText}`, {
             summary: 'No results',
           }),
-        };
+        );
       }
 
       const hits = data.hits.slice(0, limit);
 
       if (hits.length === 0) {
-        return {
-          query,
-          hits: [],
-          result: executed(
+        return fail(
+          executed(
             `No theorems found matching: ${query}\n\nTry a different type signature or name pattern.`,
             'No results',
           ),
-        };
+        );
       }
 
       const formatted = hits
@@ -238,24 +237,20 @@ Useful for finding the right lemma when you know roughly what type it should hav
       // already unwraps it to .originalError, so this is normally a no-op).
       const err = unwrapAbortError(error);
       if (isTimeoutError(err)) {
-        return {
-          query,
-          hits: [],
-          result: errorResult(
+        return fail(
+          errorResult(
             `Loogle API request timed out after ${LOOGLE_TIMEOUT_MS / 1000}s. ` +
               `The Loogle server may be overloaded. Retry the request. ` +
               `If it persists, try a simpler type signature or search by name instead.`,
             { summary: 'Timeout' },
           ),
-        };
+        );
       }
-      return {
-        query,
-        hits: [],
-        result: errorResult(`Error: ${toErrorMessage(err)}`, {
+      return fail(
+        errorResult(`Error: ${toErrorMessage(err)}`, {
           summary: 'Loogle search failed',
         }),
-      };
+      );
     }
   }
 
