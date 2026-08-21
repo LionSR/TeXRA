@@ -61,17 +61,17 @@ export class TaskRunFileService {
 
     await ensureRunDir(this.executionId);
 
-    const linkTargets = new Set<FileLocation>([
-      ...baseFiles,
-      ...(options.linkFiles ?? []),
-    ]);
+    const linkTargets = new Map<string, FileLocation>();
+    for (const target of [...baseFiles, ...(options.linkFiles ?? [])]) {
+      linkTargets.set(target.absolutePath, target);
+    }
 
     await Promise.all(
       baseFiles.map((target) => this.captureOriginalSnapshot(target)),
     );
 
     await Promise.all(
-      [...linkTargets].map(async (candidate) => {
+      [...linkTargets.values()].map(async (candidate) => {
         try {
           await this.mirrorWorkspaceFile(candidate);
         } catch (error) {

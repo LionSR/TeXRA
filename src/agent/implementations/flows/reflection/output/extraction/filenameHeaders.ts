@@ -16,6 +16,7 @@ import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
 } from '@utils/files/outputFileUtils';
+import type { NamedDocument } from '@utils/text/xmlExtraction';
 
 import {
   isClosingMarkdownFence,
@@ -318,7 +319,7 @@ export function extractFilenameHeaderDocuments(
     coalesceRepeatedName?: string | null;
     wrapperTag: string;
   },
-): Array<{ content: string; name: string }> | null {
+): NamedDocument[] | null {
   const {
     thinkingTag,
     roundDir,
@@ -327,7 +328,7 @@ export function extractFilenameHeaderDocuments(
     coalesceRepeatedName = null,
     wrapperTag,
   } = options;
-  const documents: Array<{ content: string; name: string }> = [];
+  const documents: NamedDocument[] = [];
   const reservedFinalPaths = new Set<string>();
   let currentName: string | null = null;
   let currentLines: string[] = [];

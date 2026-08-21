@@ -747,7 +747,8 @@ export interface FormProgress {
   readonly title: string;
   readonly message?: string;
   readonly copyableMessage?: string;
-  readonly archivedCopyableMessage?: string;
+  /** Whether `copyableMessage` has already been written to scrollback by `archiveCopyable`. */
+  readonly copyableMessageArchived?: boolean;
   readonly archiveCopyable?: () => void;
   readonly cancel: () => void;
   readonly dismiss: () => void;
