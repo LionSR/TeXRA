@@ -143,7 +143,11 @@ export interface WorkspaceStorageTransitionHooks {
 }
 
 export class SessionHandle {
-  /** Per-run execution handles; owns the process-output poller + status sub. */
+  /**
+   * Per-run execution handles: registration, lookup, change listeners, and
+   * subagent lineage. Owns the status subscription bound to the hub
+   * {@link status} publishes on.
+   */
   readonly executions: ExecutionRegistry;
   /** Execution-status subscriptions bound to agent stream lifecycles. */
   readonly subscriptions: ExecutionSubscriptionBinder;
