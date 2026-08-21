@@ -25,7 +25,6 @@ const BackgroundBashResultMetaSchema = z.strictObject({
 const CliWorkflowResultMetaSchema = z.strictObject({
   producer: z.literal('cliWorkflow'),
   result: WorkflowAgentFinalResultSchema,
-  /** Legacy single-file field, no longer written; kept so pre-existing persisted records still parse. */
   copiedOutput: z.string().optional(),
   copiedOutputs: z.array(z.string()).optional(),
 });
@@ -95,6 +94,7 @@ export function buildCliWorkflowResultMeta(
   flowResult: WorkflowFlowResult,
   options: {
     readonly outcome?: RunOutcome;
+    readonly copiedOutput?: string;
     readonly copiedOutputs?: readonly string[];
   } = {},
 ): Extract<ResultMeta, { producer: 'cliWorkflow' }> {
@@ -103,6 +103,9 @@ export function buildCliWorkflowResultMeta(
     result: buildAgentFinalResult({
       flowResult,
       outcome: options.outcome,
+    }),
+    ...(options.copiedOutput !== undefined && {
+      copiedOutput: options.copiedOutput,
     }),
     ...(options.copiedOutputs !== undefined && {
       copiedOutputs: [...options.copiedOutputs],

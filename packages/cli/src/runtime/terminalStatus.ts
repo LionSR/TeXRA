@@ -11,8 +11,8 @@ export type ExecuteAgentResult = Awaited<ReturnType<typeof runAgent>>;
 interface CliRunResultMetadata {
   readonly workingDirectory?: string;
   readonly runDirectory?: string;
-  /** Paths the workflow's outputs were copied to; a single-file copy is a one-element array. */
-  readonly copiedOutputs?: readonly string[];
+  readonly copiedOutput?: string;
+  readonly copiedOutputs?: string[];
 }
 
 // Intersecting distributes over the runAgent result union, attaching the
