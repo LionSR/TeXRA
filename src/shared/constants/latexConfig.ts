@@ -77,8 +77,9 @@ export type LatexConfigField = keyof typeof LATEX_FIELD_TO_KEY;
 /**
  * Replacement-related webview field name → core config key (`texra.latex.*`).
  * Unlike {@link LATEX_FIELD_TO_KEY} these live in core config, not
- * WorkspaceState. Shared by the settings-view frontend (LaTeXTab) and the
- * backend persistence controller so the two sides of the wire can't drift.
+ * WorkspaceState. Merged into {@link LATEX_CONFIG_FIELD_TO_KEY} for frontend
+ * field projection; its `LatexConfigValues` coverage check keeps that projection
+ * aligned with the catalog-derived LaTeX snapshot contract.
  */
 export const LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY = {
   wrapCritiqueInAlign: 'texra.latex.wrapCritiqueInAlign',
