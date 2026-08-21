@@ -28,7 +28,7 @@ import {
   getVisibleAgents,
   loadAgents,
   refresh,
-} from '@agent/index/agentRegistry';
+} from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   formatUnavailableTeamMembersMessage,
