@@ -47,11 +47,16 @@ function formatOutputText(content: unknown): string {
   // surface a spurious output section for tools that return `output: null`.
   if (content == null) return '';
   if (isObject(content) && Object.keys(content).length === 0) return '';
+  let serialized: string;
   try {
-    return yaml.stringify(content).trimEnd();
+    serialized = yaml.stringify(content);
   } catch {
+    // Tool output is an untyped provider/plugin payload, and YAML may reject
+    // cyclic or custom values. Only that serializer boundary is caught; this
+    // display fallback cannot hide tool execution or application logic failures.
     return String(content);
   }
+  return serialized.trimEnd();
 }
 
 /** Matches an exit code stated in prose, e.g. "Command failed (exit 7)" or

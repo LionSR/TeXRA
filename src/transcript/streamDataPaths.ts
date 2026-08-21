@@ -65,6 +65,9 @@ export function decodeStreamId(encoded: string): string | undefined {
   try {
     return decodeURIComponent(encoded);
   } catch {
+    // Directory names come from persisted storage and may contain malformed
+    // percent escapes. Skipping only that undecodable legacy entry is safe;
+    // decodeURIComponent is the sole operation here, so no application error is hidden.
     return undefined;
   }
 }

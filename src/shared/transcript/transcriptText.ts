@@ -94,12 +94,17 @@ export function stringifyPayload(value: unknown): PayloadText {
   if (typeof value === 'string') {
     return { text: transcriptText(value), language: 'plaintext' };
   }
+  let serialized: string;
   try {
-    return {
-      text: transcriptText(yaml.stringify(value).trimEnd()),
-      language: 'yaml',
-    };
+    serialized = yaml.stringify(value);
   } catch {
+    // Transcript payloads are untyped external data, and YAML may reject cyclic
+    // or custom values. Only serialization is caught, so plain-text display
+    // fallback cannot mask failures in transcript measurement or state handling.
     return { text: transcriptText(String(value)), language: 'plaintext' };
   }
+  return {
+    text: transcriptText(serialized.trimEnd()),
+    language: 'yaml',
+  };
 }

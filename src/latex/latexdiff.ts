@@ -279,14 +279,13 @@ export class LaTeXdiffService {
   }
 
   private async getGitRoot(cwd: string): Promise<string | null> {
-    try {
-      const result = await executeCommand(
-        ['git', 'rev-parse', '--show-toplevel'],
-        { channel: this.channel, cwd },
-      );
-      return result.success && result.stdout ? result.stdout.trim() : null;
-    } catch {
-      return null;
-    }
+    const result = await executeCommand(
+      ['git', 'rev-parse', '--show-toplevel'],
+      {
+        channel: this.channel,
+        cwd,
+      },
+    );
+    return result.success && result.stdout ? result.stdout.trim() : null;
   }
 }
