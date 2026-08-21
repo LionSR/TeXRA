@@ -32,6 +32,8 @@ files:
     filter:
       - '**/*'
   - package.json
+  - LICENSE.txt
+  - NOTICE.txt
   # The main bundle keeps node-pty external (see esbuild.main.mjs), so the real
   # package has to ship alongside it.
   - '**/node_modules/node-pty/**'

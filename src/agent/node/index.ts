@@ -1,3 +1,9 @@
+/**
+ * This file is a modified, trimmed derivative of PocketFlow-TypeScript
+ * (https://github.com/The-Pocket/PocketFlow-Typescript), MIT-licensed,
+ * Copyright (c) 2025 Victor Duarte and Zachary Huang. See /NOTICE.
+ */
+
 import { createLog } from '@logger/logUtils';
 
 /** Flow transition action - typically 'default' or a custom action name */
