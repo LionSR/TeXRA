@@ -71,6 +71,20 @@ interface ChildRunDeliveryFacts {
 }
 
 /**
+ * Renames an SDK/provider usage shape (`input_tokens`/`output_tokens`,
+ * optional across providers) into {@link ChildRunDeliveryFacts.usage}'s
+ * `{input, output}` shape, defaulting missing counts to 0. Single source for
+ * a mapping every child-run driver otherwise re-derives per provider.
+ */
+export function toDeliveryUsage(
+  usage: { input_tokens?: number; output_tokens?: number } | null | undefined,
+): { input: number; output: number } | null {
+  return usage
+    ? { input: usage.input_tokens ?? 0, output: usage.output_tokens ?? 0 }
+    : null;
+}
+
+/**
  * Build the `<...-result>` XML delivered to the parent's follow-up queue when
  * a child run's turn completes.
  */

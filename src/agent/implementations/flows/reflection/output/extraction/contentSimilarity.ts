@@ -9,6 +9,7 @@
 import escapeRegExp from 'escape-string-regexp';
 
 import { diffTextLevenshtein } from '@utils/text/diff';
+import type { NamedDocument } from '@utils/text/xmlExtraction';
 
 // ---------------------------------------------------------------------------
 // responseText
@@ -229,9 +230,9 @@ function documentSimilarity(a: string, b: string): number {
  */
 export function assignByContentSimilarity(
   candidates: readonly string[],
-  files: ReadonlyArray<{ name: string; content: string }>,
+  files: ReadonlyArray<NamedDocument>,
   minSimilarity = 0.15,
-): Array<{ content: string; name: string } | null> {
+): Array<NamedDocument | null> {
   const scores = candidates.map((candidate) =>
     files.map((file) => documentSimilarity(candidate, file.content)),
   );

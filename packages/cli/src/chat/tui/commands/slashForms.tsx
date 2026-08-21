@@ -56,14 +56,20 @@ function FormBusyFrame(props: {
       ? 0
       : 1 + wrappedRows(copyableMessage)) +
     wrappedRows(settled ? 'any key close' : 'Esc cancel');
+  // Once archived, the message has been written to scrollback and is no
+  // longer "live" for display/sizing purposes, even though the raw value is
+  // kept on `progress.copyableMessage` for archiveCopyable's own use.
+  const liveCopyableMessage = progress.copyableMessageArchived
+    ? undefined
+    : progress.copyableMessage;
   const copyableDoesNotFit =
-    progress.copyableMessage !== undefined &&
+    liveCopyableMessage !== undefined &&
     props.availableRows !== undefined &&
-    requiredRows(progress.copyableMessage) > props.availableRows;
+    requiredRows(liveCopyableMessage) > props.availableRows;
   useLayoutEffect(() => {
     if (copyableDoesNotFit) progress.archiveCopyable?.();
   }, [copyableDoesNotFit, progress]);
-  const spinnerFrozen = progress.copyableMessage !== undefined;
+  const spinnerFrozen = liveCopyableMessage !== undefined;
   const displayMessage = copyableDoesNotFit
     ? 'Authentication instructions are being written to scrollback.'
     : progress.message;
@@ -79,10 +85,10 @@ function FormBusyFrame(props: {
         displayMessage && <Text>{displayMessage}</Text>
       )}
       {!copyableDoesNotFit &&
-        progress.copyableMessage &&
-        progress.copyableMessage !== progress.message && (
+        liveCopyableMessage &&
+        liveCopyableMessage !== progress.message && (
           <Box marginTop={1}>
-            <Text>{progress.copyableMessage}</Text>
+            <Text>{liveCopyableMessage}</Text>
           </Box>
         )}
       <Box marginTop={1}>

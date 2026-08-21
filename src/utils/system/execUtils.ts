@@ -231,43 +231,66 @@ function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
  */
 type ExecuteCommandMode = 'process' | 'shell';
 
+export interface ExecuteCommandBaseOptions {
+  encoding?: ExecEncoding;
+  channel?: string;
+  truncate?: boolean;
+  env?: Record<string, string>;
+  timeout?: number;
+  cwd?: string;
+  stdin?: string;
+  /** Called with stdout chunks as they arrive, enabling live output streaming. */
+  onStdout?: (chunk: string) => void;
+  /** Called with stderr chunks as they arrive, enabling live error streaming. */
+  onStderr?: (chunk: string) => void;
+  /** Called with subprocess PID right after creation, before awaiting. */
+  onPid?: (pid: number) => void;
+  /** Set to false to skip buffering stdout/stderr in memory (use with onStdout/onStderr). */
+  buffer?: boolean;
+  /** Maximum decoded characters execa may retain per output stream before terminating the process. */
+  maxBuffer?: number;
+  stdout?: ExecOutput;
+  stderr?: ExecOutput;
+  /** Abort signal used to terminate the subprocess and any shell children. */
+  signal?: AbortSignal;
+  /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
+  quiet?: boolean;
+}
+
+/**
+ * Teardown strategy (see {@link ExecuteCommandMode}). Defaults from the
+ * command form: array → `'process'`, string → `'shell'`. Must match the
+ * command form — a mismatch throws rather than silently changing
+ * process-group/abort semantics.
+ */
+interface ExecuteCommandOptions extends ExecuteCommandBaseOptions {
+  mode?: ExecuteCommandMode;
+}
+
 /**
  * Execute external command with output handling and workspace path management.
+ *
+ * Overloaded on the command form so the array/string ↔ 'process'/'shell'
+ * {@link ExecuteCommandMode} pairing is caught at compile time rather than
+ * relying solely on the runtime mismatch check below. A caller that only
+ * knows the command form dynamically (`string | string[]`) falls through to
+ * the general signature, which keeps the runtime check as its only guard.
  */
 export async function executeCommand(
+  command: string[],
+  options?: ExecuteCommandBaseOptions & { mode?: 'process' },
+): Promise<ExecResult>;
+export async function executeCommand(
+  command: string,
+  options?: ExecuteCommandBaseOptions & { mode?: 'shell' },
+): Promise<ExecResult>;
+export async function executeCommand(
   command: string | string[],
-  options: {
-    encoding?: ExecEncoding;
-    channel?: string;
-    truncate?: boolean;
-    env?: Record<string, string>;
-    timeout?: number;
-    cwd?: string;
-    stdin?: string;
-    /** Called with stdout chunks as they arrive, enabling live output streaming. */
-    onStdout?: (chunk: string) => void;
-    /** Called with stderr chunks as they arrive, enabling live error streaming. */
-    onStderr?: (chunk: string) => void;
-    /** Called with subprocess PID right after creation, before awaiting. */
-    onPid?: (pid: number) => void;
-    /** Set to false to skip buffering stdout/stderr in memory (use with onStdout/onStderr). */
-    buffer?: boolean;
-    /** Maximum decoded characters execa may retain per output stream before terminating the process. */
-    maxBuffer?: number;
-    stdout?: ExecOutput;
-    stderr?: ExecOutput;
-    /** Abort signal used to terminate the subprocess and any shell children. */
-    signal?: AbortSignal;
-    /**
-     * Teardown strategy (see {@link ExecuteCommandMode}). Defaults from the
-     * command form: array → `'process'`, string → `'shell'`. Must match the
-     * command form — a mismatch throws rather than silently changing
-     * process-group/abort semantics.
-     */
-    mode?: ExecuteCommandMode;
-    /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
-    quiet?: boolean;
-  } = {},
+  options?: ExecuteCommandOptions,
+): Promise<ExecResult>;
+export async function executeCommand(
+  command: string | string[],
+  options: ExecuteCommandOptions = {},
 ): Promise<ExecResult> {
   // Make the teardown strategy explicit. Defaulting from the command form
   // keeps every existing caller's behavior identical; a caller that relies on
