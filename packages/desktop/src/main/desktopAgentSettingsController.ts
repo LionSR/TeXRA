@@ -3,14 +3,12 @@ import path from 'node:path';
 import {
   type AgentEntry,
   type AgentRosterController,
+  type computeAgentOptionsData,
   getAgent,
   getCustomAgentScanIssues,
+  type loadAgents,
+  type refresh,
 } from '@agent/index';
-import type {
-  computeAgentOptionsData,
-  loadAgents,
-  refresh,
-} from '@agent/index/agentRegistry';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';

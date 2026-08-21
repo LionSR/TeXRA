@@ -7,12 +7,12 @@ import * as vscode from 'vscode';
 import PQueue from 'p-queue';
 
 // Local imports
-import type {
-  AgentDirectoryEntry,
-  AgentDirectoryService,
-  AgentSource,
+import {
+  type AgentDirectoryEntry,
+  type AgentDirectoryService,
+  type AgentSource,
+  createPlatformAgentDirectories,
 } from '@agent/index';
-import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import { createLog } from '@logger/logUtils';

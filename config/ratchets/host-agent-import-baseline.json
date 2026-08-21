@@ -7,7 +7,6 @@
       "@agent/export",
       "@agent/followUp",
       "@agent/index",
-      "@agent/index/platformAgentDirectories",
       "@agent/runtime",
       "@agent/storage",
       "@agent/trace"
@@ -16,9 +15,6 @@
       "@agent/core/state/executionRequests",
       "@agent/followUp",
       "@agent/index",
-      "@agent/index/agentRegistry",
-      "@agent/index/BundledAgentDirectories",
-      "@agent/index/platformAgentDirectories",
       "@agent/runtime",
       "@agent/storage",
       "@agent/trace"
@@ -29,7 +25,6 @@
       "@agent/followUp",
       "@agent/implementations/agentCreator/agentCreatorFlow",
       "@agent/index",
-      "@agent/index/platformAgentDirectories",
       "@agent/review",
       "@agent/runtime",
       "@agent/storage",

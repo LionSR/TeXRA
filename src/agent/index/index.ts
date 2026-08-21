@@ -9,6 +9,9 @@ export {
   type AgentDirectoryEntry,
 } from './AgentDirectoryService';
 
+export { createPlatformAgentDirectories } from './platformAgentDirectories';
+export { BUNDLED_AGENT_DIRECTORY_NAMES } from './BundledAgentDirectories';
+
 export {
   AgentRosterController,
   InvalidAgentTeamError,
