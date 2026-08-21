@@ -278,7 +278,12 @@ function collectSubsystemEdges(): SubsystemEdge[] {
       continue;
     }
 
-    visitImports(parseSourceFile(file), file, from, edges);
+    visitImports(
+      parseSourceFile(file, { setParentNodes: false }),
+      file,
+      from,
+      edges,
+    );
   }
 
   return [...edges.entries()]
