@@ -111,28 +111,34 @@ describe('installTerminalTitleUpdates', () => {
   };
 
   it('shows root launch as running before the first stream status arrives', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
     rootRunPending.set(true);
 
     await flushTitleUpdate();
 
-    expectLastTitle('TeXRA — - — coauthor');
+    expectLastTitle('TeXRA — | — coauthor');
     updates.dispose();
   });
 
   it('stays running after the root id is published but before its status arrives', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
     enableOscTitles();
     rootRunPending.set(true);
     rootRunStreamId.set('status-pending-root');
 
     const updates = installTerminalTitleUpdates('/work/coauthor');
 
-    expectLastTitle('TeXRA — - — coauthor');
+    expectLastTitle('TeXRA — | — coauthor');
     updates.dispose();
   });
 
   it('uses every stream phase and gives queued approval precedence', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
     rootRunPending.set(true);
@@ -146,7 +152,7 @@ describe('installTerminalTitleUpdates', () => {
       status: STREAM_PHASE.RUNNING,
     });
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — - — coauthor');
+    expectLastTitle('TeXRA — | — coauthor');
 
     queueTitleApproval('title-transition');
     await flushTitleUpdate();
@@ -154,7 +160,7 @@ describe('installTerminalTitleUpdates', () => {
 
     clearApprovals();
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — - — coauthor');
+    expectLastTitle('TeXRA — | — coauthor');
 
     setStreamStatusInCliState({
       streamId: 'transition-child',
@@ -167,6 +173,7 @@ describe('installTerminalTitleUpdates', () => {
 
   it('animates running titles and stops the timer outside the running state', async () => {
     vi.useFakeTimers();
+    vi.setSystemTime(0);
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
     setStreamStatusInCliState({
@@ -175,11 +182,15 @@ describe('installTerminalTitleUpdates', () => {
     });
     await flushTitleUpdate();
 
-    expectLastTitle('TeXRA — - — coauthor');
-    vi.advanceTimersByTime(500);
+    // Frame comes from `loadingFrameAt(Date.now())` on the shared 1 Hz tick
+    // (see LOADING_FRAMES in LoadingIndicator.tsx), not a private timer, so
+    // each check advances a full second and the frame is whatever wall time
+    // projects to — not reset to index 0 on each animation restart.
+    expectLastTitle('TeXRA — | — coauthor');
+    vi.advanceTimersByTime(1000);
     expectLastTitle('TeXRA — / — coauthor');
-    vi.advanceTimersByTime(500);
-    expectLastTitle('TeXRA — \\ — coauthor');
+    vi.advanceTimersByTime(1000);
+    expectLastTitle('TeXRA — - — coauthor');
 
     queueTitleApproval('animated-root');
     await flushTitleUpdate();
@@ -188,13 +199,13 @@ describe('installTerminalTitleUpdates', () => {
 
     clearApprovals();
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — - — coauthor');
+    expectLastTitle('TeXRA — \\ — coauthor');
     updates.suspend();
     expectLastTitle('TeXRA — coauthor');
     expectNoTitleWrites();
 
     updates.resume();
-    expectLastTitle('TeXRA — - — coauthor');
+    expectLastTitle('TeXRA — / — coauthor');
     setStreamStatusInCliState({
       streamId: 'animated-root',
       status: STREAM_PHASE.WAITING,
