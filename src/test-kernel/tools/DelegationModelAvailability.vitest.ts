@@ -85,7 +85,7 @@ describe('delegation model availability', () => {
         availableModels: ['sonnet46T', 'deepseekT'],
       }),
     ).toThrow(
-      'Model "opus48T" is not currently available for delegation through a configured provider API key or subscription. Available models: sonnet46T, deepseekT.',
+      'Model "opus48T" is not currently available for delegation with the currently configured model access. Available models: sonnet46T, deepseekT.',
     );
   });
 
@@ -112,7 +112,7 @@ describe('delegation model availability', () => {
         availableModels: [],
       }),
     ).toThrow(
-      'No models are currently available for delegation. Add a provider API key or sign in with a supported provider subscription before delegating.',
+      'No models are currently available for delegation. Review or configure model access before delegating.',
     );
   });
 });
