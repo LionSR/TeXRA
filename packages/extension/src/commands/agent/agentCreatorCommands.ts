@@ -6,9 +6,9 @@ import {
   type AgentCreatorUI,
   type CreatorConfig,
   TOOL_GROUPS,
+  buildCreatorConfig,
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
-import { buildCreatorConfig } from '@agent/implementations/agentCreator/agentCreatorTemplates';
 import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
