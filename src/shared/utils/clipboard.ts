@@ -20,10 +20,14 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
     return false;
   }
 
+  const normalizedText = normalizeLineEndings(text);
   try {
-    await navigator.clipboard.writeText(normalizeLineEndings(text));
+    await navigator.clipboard.writeText(normalizedText);
     return true;
   } catch {
+    // Clipboard writes are a browser permission/capability boundary and reject
+    // when access is denied or unavailable. Only that browser call is caught;
+    // false suppresses success feedback without masking text-processing errors.
     return false;
   }
 }

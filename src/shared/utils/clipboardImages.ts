@@ -62,6 +62,9 @@ export function readFileAsBase64(file: File): Promise<string | null> {
     try {
       reader.readAsDataURL(file);
     } catch {
+      // Browsers may synchronously reject a clipboard-owned File that became
+      // unreadable before FileReader started. This matches reader.onerror: only
+      // that attachment is omitted, while the paste event and other files continue.
       resolve(null);
     }
   });
