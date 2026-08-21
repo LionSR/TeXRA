@@ -1,6 +1,8 @@
 import { writeSync } from 'node:fs';
 import { basename } from 'node:path';
 
+import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
+import { subscribeToSharedTick } from '@cli/tui/useLiveNowMs';
 import {
   formatSessionTitle,
   type SessionTitleState,
@@ -21,8 +23,6 @@ import { terminalCapabilities } from './state/terminalCapabilities';
 // can't inject terminal escape sequences into the title.
 // eslint-disable-next-line no-control-regex -- stripping C0/C1 controls
 const TITLE_INVALID_CHARS = /[\x00-\x1f\x7f-\x9f]/g;
-const RUNNING_TITLE_FRAMES = ['-', '/', '\\'] as const;
-const RUNNING_TITLE_INTERVAL_MS = 500;
 
 /** Project-aware terminal title, optionally annotated with live TUI state. */
 export function terminalTitleText(
@@ -77,34 +77,32 @@ export function installTerminalTitleUpdates(
   let disposed = false;
   let suspended = false;
   let lastTitle: string | undefined;
-  let runningFrame = 0;
-  let runningTimer: ReturnType<typeof setInterval> | undefined;
+  let stopSharedTick: (() => void) | undefined;
   const stopRunningAnimation = (): void => {
-    if (runningTimer === undefined) return;
-    clearInterval(runningTimer);
-    runningTimer = undefined;
+    stopSharedTick?.();
+    stopSharedTick = undefined;
   };
   const updateTitle = (title: string): void => {
     if (title === lastTitle) return;
     lastTitle = title;
     writeTerminalTitle(title);
   };
+  // Frame is derived from wall time via `loadingFrameAt`, the same 1 Hz
+  // rotation `LoadingIndicator` and the status bar use, so the tab title
+  // joins the shared clock instead of running its own interval.
   const runningTitle = (): string =>
-    terminalTitleText(cwd, 'running', RUNNING_TITLE_FRAMES[runningFrame]);
+    terminalTitleText(cwd, 'running', loadingFrameAt(Date.now()));
   const startRunningAnimation = (): void => {
-    if (runningTimer !== undefined) return;
+    if (stopSharedTick !== undefined) return;
     if (!terminalCapabilities.get().oscColorReports) return;
-    runningFrame = 0;
     updateTitle(runningTitle());
-    runningTimer = setInterval(() => {
+    stopSharedTick = subscribeToSharedTick(() => {
       if (!terminalCapabilities.get().oscColorReports) {
         stopRunningAnimation();
         return;
       }
-      runningFrame = (runningFrame + 1) % RUNNING_TITLE_FRAMES.length;
       updateTitle(runningTitle());
-    }, RUNNING_TITLE_INTERVAL_MS);
-    runningTimer.unref?.();
+    });
   };
   const synchronize = (): void => {
     if (suspended) return;
