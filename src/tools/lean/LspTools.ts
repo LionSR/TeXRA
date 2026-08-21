@@ -116,6 +116,14 @@ const LeanInspectInputSchema = z.strictObject({
 
 type LeanInspectInput = z.infer<typeof LeanInspectInputSchema>;
 
+/**
+ * Setup guidance appended when Lean diagnostics fail for a reason that is
+ * plausibly a missing/misconfigured toolchain rather than a bad file. Shared by
+ * the `toolchain_unavailable` branch and the catch-all below so the two stay in
+ * sync.
+ */
+const LEAN_TOOLCHAIN_HELP = `In VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that \`lake\` is on PATH, and make sure the file is inside a Lake project (lakefile.lean / lakefile.toml).`;
+
 const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
 
 If you expected errors:
@@ -155,7 +163,7 @@ Tips:
         // tool failure.
         if (result.kind === 'toolchain_unavailable') {
           return errorResult(
-            `Failed to get diagnostics for ${file}: ${result.message}\n\nIn VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that \`lake\` is on PATH, and make sure the file is inside a Lake project (lakefile.lean / lakefile.toml).`,
+            `Failed to get diagnostics for ${file}: ${result.message}\n\n${LEAN_TOOLCHAIN_HELP}`,
             { summary: 'Failed to get diagnostics' },
           );
         }
@@ -197,7 +205,7 @@ Tips:
       };
     } catch (error) {
       throw new ToolError(
-        `Error: ${toErrorMessage(error)}\n\nIn VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that \`lake\` is on PATH, and make sure the file is inside a Lake project (lakefile.lean / lakefile.toml).`,
+        `Error: ${toErrorMessage(error)}\n\n${LEAN_TOOLCHAIN_HELP}`,
         { cause: error, summary: 'Failed to get diagnostics' },
       );
     }
