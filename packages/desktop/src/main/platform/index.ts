@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { app } from 'electron';
 import { initializeBundledPrompts } from '@agent/runtime';
-import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/shared/workspacePath.js';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';

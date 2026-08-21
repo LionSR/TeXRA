@@ -4,12 +4,9 @@
     "cli": [
       "@agent/core/state/executionRequests",
       "@agent/core/state/TaskState",
-      "@agent/export/chatExportFormatter",
-      "@agent/export/loadChatExportInput",
-      "@agent/export/schemas",
+      "@agent/export",
       "@agent/followUp",
       "@agent/index",
-      "@agent/index/platformAgentDirectories",
       "@agent/runtime",
       "@agent/storage",
       "@agent/trace"
@@ -18,9 +15,6 @@
       "@agent/core/state/executionRequests",
       "@agent/followUp",
       "@agent/index",
-      "@agent/index/agentRegistry",
-      "@agent/index/BundledAgentDirectories",
-      "@agent/index/platformAgentDirectories",
       "@agent/runtime",
       "@agent/storage",
       "@agent/trace"
@@ -31,12 +25,10 @@
       "@agent/followUp",
       "@agent/implementations/agentCreator/agentCreatorFlow",
       "@agent/index",
-      "@agent/index/platformAgentDirectories",
-      "@agent/review/reviewDiff",
-      "@agent/review/reviewIssues",
+      "@agent/review",
       "@agent/runtime",
       "@agent/storage",
-      "@agent/templates/agentTemplateRenderer",
+      "@agent/templates",
       "@agent/trace"
     ],
     "agent": [

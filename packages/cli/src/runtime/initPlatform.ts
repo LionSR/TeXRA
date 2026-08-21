@@ -5,7 +5,7 @@ import {
   teardownDefaultSession,
   tryDefaultSession,
 } from '@agent/runtime';
-import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import { createPlatformAgentDirectories } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { setOutputChannelFactory } from '@logger/logUtils';

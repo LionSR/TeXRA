@@ -18,16 +18,17 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { AgentConfigSchema, currentSession, runAgent } from '@agent/runtime';
-import { collectReviewDiff, isPathInChangeSet } from '@agent/review/reviewDiff';
 import {
   buildFixInstruction,
   buildReviewInstruction,
+  collectReviewDiff,
   createReviewIssue,
+  isPathInChangeSet,
   normalizeReviewFilePath,
   type ReviewIssue,
   type ReviewIssueReport,
   type ReviewSeverity,
-} from '@agent/review/reviewIssues';
+} from '@agent/review';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import {
   showLoggedErrorMessage,
