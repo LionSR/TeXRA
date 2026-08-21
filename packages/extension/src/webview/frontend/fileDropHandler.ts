@@ -67,9 +67,7 @@ function hasFileUri(dataTransfer: DataTransfer, type: string): boolean {
 }
 
 /** Return true when the drag payload appears to contain files or file URIs. */
-export function hasDroppedFilePayload(
-  dataTransfer: DataTransfer | null,
-): boolean {
+function hasDroppedFilePayload(dataTransfer: DataTransfer | null): boolean {
   if (!dataTransfer) return false;
   const types = [...(dataTransfer.types ?? [])];
   return (
@@ -81,9 +79,7 @@ export function hasDroppedFilePayload(
 }
 
 /** Extract absolute paths or file URIs from a drop payload. */
-export function extractDroppedFilePaths(
-  dataTransfer: DataTransfer | null,
-): string[] {
+function extractDroppedFilePaths(dataTransfer: DataTransfer | null): string[] {
   if (!dataTransfer) return [];
 
   const paths = new Set<string>();
