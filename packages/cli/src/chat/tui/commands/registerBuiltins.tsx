@@ -145,14 +145,15 @@ function formSelectionHandler<T>({
       const title = busyTitle?.(value) ?? 'Working';
       const archiveCopyable = (): void => {
         const current = currentProgress();
-        if (!current?.copyableMessage) return;
+        if (!current?.copyableMessage || current.copyableMessageArchived) {
+          return;
+        }
         if (echoOnPersist) onPersist?.();
         appendLocalAssistantTranscript(current.copyableMessage);
         formProgress.set({
           ...current,
           message: 'Authentication instructions were written to scrollback.',
-          copyableMessage: undefined,
-          archivedCopyableMessage: current.copyableMessage,
+          copyableMessageArchived: true,
         });
       };
       formProgress.set({
@@ -181,9 +182,9 @@ function formSelectionHandler<T>({
           formProgress.set({
             ...current,
             message,
-            copyableMessage: options?.copyable
-              ? message
-              : current.copyableMessage,
+            ...(options?.copyable
+              ? { copyableMessage: message, copyableMessageArchived: false }
+              : {}),
           });
         },
       };
@@ -200,7 +201,7 @@ function formSelectionHandler<T>({
         .then(() => {
           const current = currentProgress();
           if (!current) return;
-          if (current.copyableMessage || current.archivedCopyableMessage) {
+          if (current.copyableMessage) {
             formProgress.set({ ...current, status: 'succeeded' });
           } else {
             close();
@@ -211,8 +212,7 @@ function formSelectionHandler<T>({
           if (!current) return;
           if (echoOnPersist) onPersist?.();
           const errorMessage = toErrorMessage(error);
-          const copyableMessage =
-            current.copyableMessage ?? current.archivedCopyableMessage;
+          const copyableMessage = current.copyableMessage;
           const persistedError = copyableMessage
             ? new Error(
                 `${collapseWhitespace(errorMessage)} · ${collapseWhitespace(
@@ -223,7 +223,7 @@ function formSelectionHandler<T>({
           await onError?.(persistedError);
           current = currentProgress();
           if (!current) return;
-          if (current.copyableMessage || current.archivedCopyableMessage) {
+          if (current.copyableMessage) {
             formProgress.set({
               ...current,
               status: 'failed',

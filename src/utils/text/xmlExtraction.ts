@@ -18,6 +18,12 @@ import { formatContent } from './xmlConversion';
 
 const log = createLog('xmlExtraction');
 
+/** A single extracted document: its LaTeX/text content and its `name` attribute. */
+export interface NamedDocument {
+  content: string;
+  name: string;
+}
+
 /**
  * Opening `<document … name="…">` tag fragment; group 1 is the name attribute
  * value. Case-sensitive to match the XML spec and the primary extraction path
@@ -75,9 +81,7 @@ export function extractTextFromTag(
  * Extract `<document name="...">` children from any content string.
  * Case-sensitive to match CDATA wrapping behavior.
  */
-function extractNamedDocuments(
-  content: string,
-): Array<{ content: string; name: string }> {
+function extractNamedDocuments(content: string): NamedDocument[] {
   const documentRegex = new RegExp(
     `${DOCUMENT_OPEN_TAG_WITH_NAME}(.*?)<\/${OUTPUT_DOCUMENT_TAG}>`,
     'gs',
@@ -96,7 +100,7 @@ function extractNamedDocuments(
 function extractMultipleTextFromTag(
   inputContent: string,
   containerTag?: string,
-): Array<{ content: string; name: string }> {
+): NamedDocument[] {
   // If containerTag is provided, try to extract content from within that container
   if (containerTag) {
     const containerRegex = new RegExp(
@@ -125,7 +129,7 @@ function extractMultipleTextFromTag(
 export function extractContentFromXMLbyTagMultiple(
   root: Record<string, unknown>,
   containerTag: string,
-): Array<{ content: string; name: string }> | null {
+): NamedDocument[] | null {
   if (!isObject(root)) {
     log.error(`Invalid root object. Structure: ${getObjectStructure(root)}`);
     return null;
@@ -174,7 +178,7 @@ export async function extractScratchpad(
 }
 
 export interface MultipleExtractionResult {
-  documents: { content: string; name: string }[] | null;
+  documents: NamedDocument[] | null;
   method: 'simple' | 'latex_document' | 'latex' | 'none';
 }
 

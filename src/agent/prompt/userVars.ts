@@ -430,14 +430,17 @@ async function getFileVars(
         ? await getXmlFormatFromReadableFiles(allFiles)
         : { xml: null, readableFiles: [], skipped: [] };
     const primaryFile = readableFiles[0];
-    const primaryFileOk =
-      primaryFile == null
-        ? false
-        : await setVarFromFile(primaryFile, prefix, userVars);
+    const primaryFileResult =
+      primaryFile == null ? null : await setVarFromFile(primaryFile, prefix);
+    const primaryFileOk = primaryFileResult != null;
     if (primaryFile != null && !primaryFileOk) {
       logger.warn(
         `Failed to load primary file into prompt variables: ${primaryFile}`,
       );
+    }
+    if (primaryFileResult != null) {
+      userVars[`${prefix}_FILE`] = primaryFileResult.file;
+      userVars[`${prefix}_CONTENT`] = primaryFileResult.content;
     }
 
     // A dropped file changes what the model sees, so report it on the run's own
@@ -520,10 +523,14 @@ async function getRequiredFileVars(
 
     assertNoFixedVarCollision(varName);
     const fullPath = path.resolve(agentPath, filePath);
-    const ok = await setVarFromFile(fullPath, varName, vars, true);
+    const result = await setVarFromFile(fullPath, varName, true);
+    if (result != null) {
+      vars[`${varName}_FILE`] = result.file;
+      vars[`${varName}_CONTENT`] = result.content;
+    }
     files.push({
       path: fullPath,
-      ok,
+      ok: result != null,
       varName,
       source: 'requiredFilesInternal',
     });

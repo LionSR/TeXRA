@@ -27,22 +27,20 @@ const ExecResultSchema = z.strictObject({
 
 export type ExecResult = z.infer<typeof ExecResultSchema>;
 
-/** Status values for file operations - single source of truth */
-const FileOpStatusSchema = z.enum([
-  'success',
-  'noFiles',
-  'missingParams',
-  'error',
+const FileOpResultSchema = z.discriminatedUnion('status', [
+  z.strictObject({
+    status: z.literal('success'),
+    /** Output directory if files were packed */
+    outputFolder: z.string().optional(),
+  }),
+  z.strictObject({ status: z.literal('noFiles') }),
+  z.strictObject({ status: z.literal('missingParams') }),
+  z.strictObject({
+    status: z.literal('error'),
+    /** Error message describing the failed operation */
+    error: z.string(),
+  }),
 ]);
-
-const FileOpResultSchema = z.strictObject({
-  /** Outcome of the pack or clean operation */
-  status: FileOpStatusSchema,
-  /** Output directory if files were packed */
-  outputFolder: z.string().optional(),
-  /** Error message when status is "error" */
-  error: z.string().optional(),
-});
 
 export type FileOpResult = z.infer<typeof FileOpResultSchema>;
 

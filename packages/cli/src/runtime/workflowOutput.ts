@@ -335,7 +335,7 @@ export async function resolveWorkflowOutput(
     ...result,
     workingDirectory: context.cwd,
     runDirectory,
-    copiedOutput: targetPath,
+    copiedOutputs: [targetPath],
   };
 }
 
@@ -343,16 +343,12 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
   if (
     result.outcome === RUN_OUTCOME.CANCELLED &&
     result.runDirectory &&
-    !result.copiedOutput &&
     !result.copiedOutputs?.length
   ) {
     return result.runDirectory;
   }
   if (result.copiedOutputs?.length) {
     return result.copiedOutputs.join('\n');
-  }
-  if (result.copiedOutput) {
-    return result.copiedOutput;
   }
 
   const finalOutput = finalWorkflowOutput(result.outputs);

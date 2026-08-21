@@ -242,7 +242,6 @@ function expectedResultMeta(options: {
   readonly outcome: string;
   readonly outputs: readonly unknown[];
   readonly compileFailures: readonly unknown[];
-  readonly copiedOutput?: string;
   readonly copiedOutputs?: readonly string[];
 }): Record<string, unknown> {
   const { outcome, outputs, compileFailures, ...copies } = options;
@@ -501,7 +500,7 @@ describe('CLI workflow run command', () => {
       ).resolves.toBe('polished');
       expect(mocks.writeResultMeta).toHaveBeenCalledWith(
         expectedResultMeta({
-          copiedOutput: path.join(root, 'polished.tex'),
+          copiedOutputs: [path.join(root, 'polished.tex')],
           outcome: RUN_OUTCOME.COMPLETED,
           outputs: [outputSummary],
           compileFailures: [compileFailure],
@@ -512,7 +511,7 @@ describe('CLI workflow run command', () => {
         outcome: RUN_OUTCOME.COMPLETED,
         workingDirectory: root,
         runDirectory: '/tmp/runs/exec-output',
-        copiedOutput: path.join(root, 'polished.tex'),
+        copiedOutputs: [path.join(root, 'polished.tex')],
       });
       // The v0.41 cut removed the three deprecated status projections, so the
       // emitted object is the run result plus its filesystem metadata, in the
@@ -526,7 +525,7 @@ describe('CLI workflow run command', () => {
         'compileFailures',
         'workingDirectory',
         'runDirectory',
-        'copiedOutput',
+        'copiedOutputs',
       ]);
       expect(emission?.ndjson).toEqual({
         kind: 'result',
