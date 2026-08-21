@@ -18,6 +18,7 @@ import { hasExtension, getExtensionLowercase } from '@utils/core/pathCore';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
   getMimeType,
+  isImageMimeType,
   OFFICE_EXTENSIONS,
   OFFICE_MIME_TYPES,
 } from '@utils/files/mimeUtils';
@@ -212,7 +213,7 @@ export class ReadFileTool extends defineTool({
 
     // Treat SVG as an image attachment so vision-capable models can inspect its rendered appearance
     // even though the underlying file is XML text.
-    if (mimeType?.startsWith('image/') || IMAGE_EXTENSIONS.has(extension)) {
+    if (isImageMimeType(mimeType) || IMAGE_EXTENSIONS.has(extension)) {
       return 'image';
     }
 

@@ -9,7 +9,7 @@ import {
 } from '@tools/pathResolution';
 import { wrapApiCall } from '@tools/utils';
 import { isNonEmptyString } from '@utils/core';
-import { getMimeType } from '@utils/files/mimeUtils';
+import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toPosixPath } from '@utils/core/pathCore';
 
@@ -73,7 +73,7 @@ export function buildBytesAttachment({
   bytes,
   description,
 }: BuildBytesAttachmentOptions): ToolFileAttachment {
-  if (mimeType.startsWith('image/') && isOversizedImage(bytes)) {
+  if (isImageMimeType(mimeType) && isOversizedImage(bytes)) {
     return {
       path,
       mimeType,
