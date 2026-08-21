@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import type { ReviewIssue, ReviewSeverity } from '@agent/review/reviewIssues';
+import type { ReviewIssue, ReviewSeverity } from '@agent/review';
 
 import { AgentReviewService, issueRange } from './AgentReviewService';
 

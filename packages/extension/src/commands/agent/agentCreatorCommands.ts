@@ -4,13 +4,13 @@ import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
+import { renderAgentTemplateString } from '@agent/templates';
 import {
   type AgentCreatorUI,
   type CreatorConfig,
   TOOL_GROUPS,
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
-import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';

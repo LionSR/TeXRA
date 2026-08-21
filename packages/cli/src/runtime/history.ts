@@ -14,8 +14,7 @@ import {
   type AgentExecutionListingEntry,
 } from '@agent/storage';
 import { tryDefaultSession, type AgentConfig } from '@agent/runtime';
-import { loadChatExportInput } from '@agent/export/loadChatExportInput';
-import type { ChatExportInput } from '@agent/export/schemas';
+import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { createSessionStores } from '@controllers/session/sessionStores';
 import {

@@ -1,7 +1,8 @@
 # Agent-SDK readiness — re-verification pass (2026-08-21)
 
-> **Status:** Verification-only, written 2026-08-21 against branch HEAD
-> `c48e5cb`. The scheduled audit routine re-ran the standing question — "review
+> **Status:** Written 2026-08-21 against branch HEAD `c48e5cb`; §7 records a
+> follow-up refactor landed later the same day at the maintainer's request. The
+> scheduled audit routine re-ran the standing question — "review
 > the agent core, model handler, logger, and surface for unnecessary abstraction
 > and unready surface; design subagent boundaries" — against the plan of record
 > ([`2026-07-09-agent-sdk-north-star.md`](./2026-07-09-agent-sdk-north-star.md))
@@ -14,8 +15,12 @@
 > alignment **holds**. Every `-08-20` tracked fact re-verifies at `c48e5cb`; the
 > frozen host deep-import lists are unchanged (no narrowing this window, no
 > widening); the only surface delta is the version bump 0.40.3 → 0.40.4.
-> **No abstraction to remove, nothing to land this pass.** Every claim below
-> carries a `file:line`, config path, or count checked at `c48e5cb`.
+> **No abstraction to remove.** The verification found nothing to refactor at
+> `c48e5cb`; the only code landed this session is the mechanical barrel
+> consolidation §7 records — the shovel-ready deep-import shrink §4.3 named,
+> executed afterward at the maintainer's request. §2's counts are the `c48e5cb`
+> snapshot before that change; §7 carries the after. Every claim below carries a
+> `file:line`, config path, or count checked at `c48e5cb`.
 
 ## 0. Verdict
 
@@ -33,16 +38,16 @@ this tree with the verdict already green would be net-negative.
 
 ## 1. Every `-08-20` tracked fact re-verifies at `c48e5cb`
 
-| Item                                         | `-08-20` state                          | `c48e5cb` state                                                                                                                                              |
-| -------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **L-3** (dead redaction branch)              | closed; `redactSecrets` single-arg      | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                                   |
-| **L-2** (process-global log sink)            | module-singleton, deliberate            | **unchanged.** `channels` / `mainOutputChannel` / `outputChannelFactory` / `outputSinksTrusted` at `src/logger/logUtils.ts:54-57`; no `platform().log` port. |
-| **C-1** (ambient ALS in cycle)               | closed by #10594 (`ToolPolicy` field)   | **still closed.** `readonly toolPolicy: ToolPolicy` present (`src/agent/core/flows/BaseFlowServices.ts:56`).                                                  |
-| **§6b** in-process multi-tenancy             | deliberate; throws on 2nd platform      | **unchanged, correctly.** Guard intact — "already using another platform in this process" (`packages/agent/src/index.ts:243`). Maintainer decision.          |
-| **M-3** `ModelHandler.ts` god-base           | 2,068 LoC                               | **still 2,068 LoC** (`wc -l`). Genuinely shared behavior; a long-horizon port-narrowing note, not a discrete removal.                                        |
-| **Logger-core line counts**                  | logUtils 256 / redaction 101 / cT 82    | **unchanged** (256 / 101 / 82).                                                                                                                              |
-| **Node flow engine**                         | single ~150-LoC file                    | **153 LoC** (`src/agent/node/index.ts`), `BaseNode`/`Flow` only. Matches CLAUDE.md.                                                                          |
-| **Version**                                  | 0.40.3 (`runFact.` retirement → v0.41)  | **0.40.4.** Still short of the v0.41 gate; retirement not yet due.                                                                                           |
+| Item                               | `-08-20` state                         | `c48e5cb` state                                                                                                                                              |
+| ---------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **L-3** (dead redaction branch)    | closed; `redactSecrets` single-arg     | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                                   |
+| **L-2** (process-global log sink)  | module-singleton, deliberate           | **unchanged.** `channels` / `mainOutputChannel` / `outputChannelFactory` / `outputSinksTrusted` at `src/logger/logUtils.ts:54-57`; no `platform().log` port. |
+| **C-1** (ambient ALS in cycle)     | closed by #10594 (`ToolPolicy` field)  | **still closed.** `readonly toolPolicy: ToolPolicy` present (`src/agent/core/flows/BaseFlowServices.ts:56`).                                                 |
+| **§6b** in-process multi-tenancy   | deliberate; throws on 2nd platform     | **unchanged, correctly.** Guard intact — "already using another platform in this process" (`packages/agent/src/index.ts:243`). Maintainer decision.          |
+| **M-3** `ModelHandler.ts` god-base | 2,068 LoC                              | **still 2,068 LoC** (`wc -l`). Genuinely shared behavior; a long-horizon port-narrowing note, not a discrete removal.                                        |
+| **Logger-core line counts**        | logUtils 256 / redaction 101 / cT 82   | **unchanged** (256 / 101 / 82).                                                                                                                              |
+| **Node flow engine**               | single ~150-LoC file                   | **153 LoC** (`src/agent/node/index.ts`), `BaseNode`/`Flow` only. Matches CLAUDE.md.                                                                          |
+| **Version**                        | 0.40.3 (`runFact.` retirement → v0.41) | **0.40.4.** Still short of the v0.41 gate; retirement not yet due.                                                                                           |
 
 ## 2. Frozen host deep-import width — unchanged, no widening
 
@@ -91,7 +96,7 @@ tool-use YAML agent**; and **only `agentCreator` is a genuine "logical agent not
 yet running as one"** — it runs inline in the extension host via an
 `AgentCreatorUI` port and is the deepest specifier in the baseline
 (`@agent/implementations/agentCreator/agentCreatorFlow`). No new boundary to
-invent; the SDK work is to *document* `ChildRunStrategy` / `AgentEngine` /
+invent; the SDK work is to _document_ `ChildRunStrategy` / `AgentEngine` /
 `SubagentRunOptions` as the canonical subagent SPI, not to design one.
 
 ## 4. Remaining open items (all pre-existing, none a defect)
@@ -113,7 +118,8 @@ verified detail to. All remain out of scope for a "land now" change.
    `configureUsage`. Proposal work, not churn — same theme as north-star
    "logger → event stream".
 3. **Shrinking the frozen deep-import lists — the concrete next mechanical
-   step is barrel consolidation.** Verified this pass: `src/agent/export/`,
+   step is barrel consolidation.** _Landed this session — see §7._ Verified
+   this pass: `src/agent/export/`,
    `src/agent/review/`, and `src/agent/templates/` have **no `index.ts` barrel**,
    so hosts reach leaf modules directly — cli into `@agent/export/{loadChatExportInput,schemas,chatExportFormatter}`,
    extension into `@agent/review/{reviewDiff,reviewIssues}` and
@@ -164,5 +170,52 @@ find a green verdict; this pass reached it by re-deriving from four independent
 area audits rather than diffing the prior entry, and the two refinements it adds
 (the shovel-ready barrel-consolidation step in §4.3, and the precise mechanism of
 the provider-type-leak floor in §4.4) sharpen the open record without changing the
-verdict. This pass lands no code change; the durable record is this verification
-entry.
+verdict. The verification pass itself found no abstraction to remove; the one code
+change this session is the mechanical barrel consolidation in §7, landed at
+the maintainer's request as the shovel-ready step §4.3 named.
+
+## 7. Landed refactor — three Tier-1 barrels (this session)
+
+At the maintainer's request, the consensus shovel-ready step from §4.3 was
+executed rather than only recorded. This is a behavior-preserving surface
+change: no runtime logic moved, only the doors hosts import through.
+
+**Added** three curated public-surface barrels, each documented in the house
+style of `@agent/followUp` / `@agent/runtime` and re-exporting exactly the
+symbols the hosts consume (no new dead exports):
+
+- `src/agent/export/index.ts` — `loadChatExportInput`, `formatChatAsMarkdown`,
+  type `ChatExportInput`.
+- `src/agent/review/index.ts` — `collectReviewDiff`, `isPathInChangeSet`,
+  `listBaseBranchCandidates`, `createReviewIssue`, `normalizeReviewFilePath`,
+  `buildReviewInstruction`, `buildFixInstruction`, and the `ReviewIssue` /
+  `ReviewIssueReport` / `ReviewSeverity` types.
+- `src/agent/templates/index.ts` — `renderAgentTemplateString`.
+
+**Re-routed** the six host import sites (cli `runtime/history.ts`,
+`commands/history.ts`; extension `frontend/review/{AgentReviewService,
+promptReviewOptions,AgentReviewTreeProvider}.ts`,
+`commands/agent/agentCreatorCommands.ts`) from the leaf specifiers to the
+barrel doors.
+
+**Shrank** `config/ratchets/host-agent-import-baseline.json` accordingly — the
+five leaf specifiers (`@agent/export/{loadChatExportInput,chatExportFormatter,
+schemas}`, `@agent/review/{reviewDiff,reviewIssues}`) plus
+`@agent/templates/agentTemplateRenderer` are gone, replaced by the three doors
+`@agent/export`, `@agent/review`, `@agent/templates`:
+
+| Package   | before | after  |
+| --------- | ------ | ------ |
+| cli       | 11     | **9**  |
+| extension | 12     | **11** |
+| desktop   | 9      | 9      |
+| agent     | 7      | 7      |
+
+Three of the eight planned Tier-1 doors (§4.3) now exist. **Validation:**
+`npm run typecheck` exit 0; `hostAgentDeepImportRatchet.vitest.ts` green (no
+new edge, no stale headroom, baseline sorted); `check:dead-code-ratchet` no new
+findings; eslint + prettier clean; the full `src/test-kernel/architecture/`
+suite passes (104/104). The remaining doors (`export`/`review`/`templates` now
+done; `agentCreator` fronting and the `@agent/index` widening for
+`platformAgentDirectories` / `agentRegistry` / `BundledAgentDirectories`) stay
+open per §4.3 as they carry a design decision, not just a mechanical move.
