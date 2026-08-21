@@ -11,6 +11,7 @@ import {
   vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
+import { walkFiles } from './walkFiles.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -32,16 +33,9 @@ function fileExists(filePath) {
 }
 
 function collectFiles(dir) {
-  const files = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const entryPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...collectFiles(entryPath));
-    } else if (entry.isFile()) {
-      files.push(entryPath);
-    }
-  }
-  return files.sort();
+  return walkFiles(dir)
+    .map((entry) => entry.absolutePath)
+    .sort();
 }
 
 const packageJson = readJson(path.join(desktopDir, 'package.json'));

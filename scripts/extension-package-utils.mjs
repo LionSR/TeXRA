@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { walkFiles } from './walkFiles.mjs';
+
 export const vscodeRuntimeImportPattern =
   /\b(?:import\s*\(\s*['"]vscode['"]\s*\)|import\s+[^;]*\s+from\s+['"]vscode['"]|(?:__require|require|requireFn)(?:\?\.)?\(\s*['"]vscode['"]\s*\))/;
 
@@ -52,23 +54,9 @@ export function readJson(filePath) {
 
 /** Return recursive file paths with stable VSIX-compatible separators. */
 export function collectRelativeFiles(directory) {
-  const visit = (currentDirectory, prefix) => {
-    const files = [];
-    for (const entry of fs.readdirSync(currentDirectory, {
-      withFileTypes: true,
-    })) {
-      const relativePath = path.posix.join(prefix, entry.name);
-      const absolutePath = path.join(currentDirectory, entry.name);
-      if (entry.isDirectory()) {
-        files.push(...visit(absolutePath, relativePath));
-      } else if (entry.isFile()) {
-        files.push(relativePath);
-      }
-    }
-    return files;
-  };
-
-  return visit(directory, '').sort();
+  return walkFiles(directory)
+    .map((entry) => entry.relativePath)
+    .sort();
 }
 
 function stable(value) {
