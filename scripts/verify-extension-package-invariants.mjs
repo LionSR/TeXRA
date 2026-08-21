@@ -10,6 +10,7 @@ import {
   readJson,
   withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
+import { walkFiles } from './walkFiles.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -152,13 +153,7 @@ function isBuildTimePackagedPath(relativePath) {
 function hasFiles(relativeDir) {
   const absoluteDir = path.join(packageDir, relativeDir);
   if (!fs.existsSync(absoluteDir)) return false;
-  const entries = fs.readdirSync(absoluteDir, { withFileTypes: true });
-  for (const entry of entries) {
-    const child = path.join(relativeDir, entry.name);
-    if (entry.isFile()) return true;
-    if (entry.isDirectory() && hasFiles(child)) return true;
-  }
-  return false;
+  return walkFiles(absoluteDir, { limit: 1 }).length > 0;
 }
 
 function buildSnapshot() {
