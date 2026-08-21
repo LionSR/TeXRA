@@ -9,7 +9,6 @@ import { spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -20,6 +19,8 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import YAML from 'yaml';
+
+import { walkFiles } from './walkFiles.mjs';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 // Tests point TEXRA_REMOTE_AGENTS_ROOT at a fixture checkout so --apply never
@@ -46,18 +47,9 @@ function loadPlacementConfig() {
 }
 
 function discoverYamlFiles(dir) {
-  const files = [];
-
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...discoverYamlFiles(path));
-    } else if (entry.isFile() && entry.name.endsWith('.yaml')) {
-      files.push(path);
-    }
-  }
-
-  return files;
+  return walkFiles(dir, {
+    include: (relativePath) => relativePath.endsWith('.yaml'),
+  }).map((entry) => entry.absolutePath);
 }
 
 function readAgentYaml(filePath) {
