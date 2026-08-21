@@ -449,6 +449,24 @@ describe('runtime model registry', () => {
     await expect(resolveRuntimeModelConfig('gpt55')).resolves.toBeDefined();
   });
 
+  it('patches the DeepSeek Flash entries onto the vision-capable model', () => {
+    for (const id of ['deepseek', 'deepseekT']) {
+      const config = getRuntimeModelConfig(id);
+      expect(config?.fullName).toBe('deepseek-v4-flash-vision-exp');
+      expect(config?.shortName).toBe('deepseek-v4-flash-vision-exp');
+      expect(config?.capabilities.supportsVision).toBe(true);
+      expect(config?.openrouterFullName).toBeUndefined();
+    }
+  });
+
+  it('leaves DeepSeek Pro without a documented vision variant', () => {
+    for (const id of ['deepseekpro', 'deepseekproT']) {
+      const config = getRuntimeModelConfig(id);
+      expect(config?.fullName).toBe('deepseek-v4-pro');
+      expect(config?.capabilities.supportsVision).toBe(false);
+    }
+  });
+
   it('returns the last-known route catalogue when rediscovery fails', async () => {
     await installModels(GEMINI_PRO);
     await refreshRuntimeModelRegistry();

@@ -89,7 +89,7 @@ function executedToolEntry(callId: string, toolName: string, output: string) {
  */
 async function captureRequestParams(
   handler: ModelHandlerDeepSeek,
-  content: string,
+  content: string | Array<Record<string, unknown>>,
   tools?: ToolDefinition[],
 ): Promise<any> {
   handler.setLogger({ ...noopTrace });
@@ -120,7 +120,7 @@ async function captureRequestParams(
 
   await handler.createResponse({
     client,
-    messages: [{ role: 'user', content }],
+    messages: [{ role: 'user', content }] as any,
     temperature: 0,
     tools,
   });
@@ -402,6 +402,29 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
 
     assert.equal(capturedParams.tools[0].function.name, 'delegate_workflow');
     assert.equal(capturedParams.tools[0].function.strict, undefined);
+  });
+});
+
+describe('ModelHandlerDeepSeek vision content normalization', () => {
+  it('strips array content to text for a non-vision model', async () => {
+    const capturedParams = await captureRequestParams(createHandler(), [
+      { type: 'text', text: 'describe this' },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,AAA' } },
+    ]);
+
+    assert.equal(capturedParams.messages[0].content, 'describe this');
+  });
+
+  it('keeps array content (and image parts) for a vision-enabled model', async () => {
+    const handler = createHandler({ capabilities: { supportsVision: true } });
+    const content = [
+      { type: 'text', text: 'describe this' },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,AAA' } },
+    ];
+
+    const capturedParams = await captureRequestParams(handler, content);
+
+    assert.deepEqual(capturedParams.messages[0].content, content);
   });
 });
 
