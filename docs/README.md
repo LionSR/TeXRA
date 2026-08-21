@@ -17,14 +17,14 @@ Git repository.
 
 ## Engineering documentation
 
-- `architecture/` documents current system boundaries and invariants,
-  including the agent state slices that travel through the flow engine
-  (`src/agent/node/index.ts`).
+- `architecture/` documents current system boundaries and invariants
+  (`YYYY-MM-DD-` prefix), including the agent state slices that travel through
+  the flow engine (`src/agent/node/index.ts`).
 - `dev/` contains development procedures, audits, release operations, and
   skill-authoring conventions.
-- `design/` contains UI and product design material.
-- `proposals/` and `prds/` contain plans and product requirements.
-- `reference/` contains technical reference material.
+- `design/` contains dated UI and product design notes (`YYYY-MM-DD-` prefix,
+  same convention as `proposals/` and `prds/`).
+- `proposals/` and `prds/` contain dated plans and product requirements.
 
 ## Hosted-service material
 

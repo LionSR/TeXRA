@@ -637,7 +637,7 @@ copies); the file-picker dropdown/banner policy (~60 L × 2); the
 4. **Extension bundle-size check** riding F5's `hostRuntime.ts` split (the
    inlining it deletes existed for bundle reasons; the gate proves the reason
    is gone).
-5. **Doc corrections:** `cli-runtime-round-trips.md` missing the
+5. **Doc corrections:** `2026-06-20-cli-runtime-round-trips.md` missing the
    `StreamSnapshotStore` edge; `state-of-the-architecture.md:1112-1113` stale
    trace-arm sentence; `cliState.ts:41-44` false "mirrors the webview" comment;
    `repairWaitingIfResumable`'s "all three hosts" doc becomes true via F1;

@@ -676,5 +676,5 @@ desktop also calls
 - `docs/proposals/2026-07-09-state-of-the-architecture.md:815-826` — the NS-4
   finding, including the empty-`builtIn()` trick and the residual unknown about
   hard-required built-in agent names.
-- `docs/architecture/agent-trace.md` — the run-scoped event channel an embedder
+- `docs/architecture/2026-06-20-agent-trace.md` — the run-scoped event channel an embedder
   reads for progress.

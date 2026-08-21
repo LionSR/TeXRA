@@ -147,7 +147,9 @@ frozen deep-import lists, not another lint rule.
   - `src/utils/prompt.ts` - Prompt builder utilities
 
 - `packages/extension/src/commands/` - VS Code commands grouped by domain
-- `packages/extension/src/settingsView/` - Unified settings webview combining Memory, History, Models, Agents, Multi-Agent, Tools, AI Agents, Git, LaTeX, and Goal tabs
+- `packages/extension/src/settingsView/` - Unified settings webview (Account &
+  Usage, Subscriptions, Providers & Models, Agents, Teams, Tools, Integrations,
+  Git, Shortcuts, LaTeX, Memory, Goals)
 - `packages/extension/src/progressView/` - Task tracking board webview
 - `packages/extension/src/webview/` - Main agent interaction webview
 - `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
@@ -496,14 +498,14 @@ Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
   - `FlowTransition.FINALIZE` - exit flow after finalization
   - `FlowTransition.COMPLETE` - return control to caller
 - **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. A failing `exec()` goes to `execFallback(prepRes, error)`, which by default rethrows; override it to convert the failure into something `post()` can route on. Retries are **not** a `BaseNode` feature: the manual-retry loop and its `shouldAutoRetry(error)` / `retryPrompt(prepRes, error)` / `signal` hooks live on `ModelInvocationNode` (`src/agent/core/flows/ModelInvocationNode.ts`), the only node that invokes a model. Do not re-add retry machinery to the kernel for a node that does not call a provider.
-- **Agent owns lifecycle**: Agents handle init/finalize; flows handle only execution logic. Nodes should throw errors directly (agent.run() catches).
+- **Agent owns lifecycle**: Agents handle init/finalize; flows handle only execution logic. Nodes should throw errors directly (`runFlowWithLifecycle` / `executeAgent` catch).
 
 The engine is local to this repo: `src/agent/node/index.ts` defines `BaseNode`
 and `Flow` — read it for the authoritative semantics. It is a trimmed
 descendant of upstream PocketFlow and does **not** implement the upstream
 `BatchNode`/`BatchFlow`, `ParallelBatchNode`/`ParallelBatchFlow`, or the
 `params`/`setParams` channel; do not write code against them. State slices that
-travel through the flows are described in `docs/architecture/pocketflow-state.md`.
+travel through the flows are described in `docs/architecture/2026-06-20-pocketflow-state.md`.
 
 **Webviews and UI**
 

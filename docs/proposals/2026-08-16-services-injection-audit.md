@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-16
 **Status:** Proposed
-**Evidence base:** three verified surveys of origin/main @ `3122ace2bc` (bags census, threading census, injection-seams census), an adversarial verification pass over every headline claim, and the prior-art register (AGENTS.md, review-checklist §13–§15, `docs/architecture/pocketflow-state.md`, the DI-cleanup and SSOT-consolidation plans, tournament ledger #8974). All file:line references are at that commit unless marked otherwise. Corrections from the adversarial pass are applied throughout; one survey claim was refuted outright and is recorded in §3 as a do-not-refile row.
+**Evidence base:** three verified surveys of origin/main @ `3122ace2bc` (bags census, threading census, injection-seams census), an adversarial verification pass over every headline claim, and the prior-art register (AGENTS.md, review-checklist §13–§15, `docs/architecture/2026-06-20-pocketflow-state.md`, the DI-cleanup and SSOT-consolidation plans, tournament ledger #8974). All file:line references are at that commit unless marked otherwise. Corrections from the adversarial pass are applied throughout; one survey claim was refuted outright and is recorded in §3 as a do-not-refile row.
 
 ---
 
@@ -116,7 +116,7 @@ Every candidate below is deletion-shaped: a field deleted, a resolution moved to
 ### C10 — Doc fixes _(zero-risk)_
 
 - `RunToolUseFlowInput.isSubagent` comment claims "delegation tools are filtered out" (`runToolUseFlow.ts:86`) and `ExecuteAgentOptions.isSubagent` claims "proposal tools are filtered out" (`executeAgent.ts:348`) — no tool-filtering site keys on `isSubagent`; its live effects are the prompt variant (`PromptBuilder.ts:200`), WAITING-suspend (`ToolUseWaitNode.ts:76/89/120`), and view/error-suppression defaults (`executeAgent.ts:409-412`).
-- `docs/architecture/pocketflow-state.md:69` says `shared.state.stateSlices`; the field is `shared.stateSlices` (`nodes/types.ts:55`).
+- `docs/architecture/2026-06-20-pocketflow-state.md:69` says `shared.state.stateSlices`; the field is `shared.stateSlices` (`nodes/types.ts:55`).
 
 ### C11 — `DesktopAgentLaunchOptions` as a Pick _(cosmetic tail)_
 
@@ -210,7 +210,7 @@ The seams census found 8 seams/families of the "one production impl; seam exists
 
 **PR 1 — agent-runtime dead-surface sweep** (C1, C2, C3, C5, C7, C8, plus the C10 comment fixes in the same files). One reviewable theme: fields with zero producers or zero readers on the launch/resume chain. Est. net ≈ −34 LoC, element delta ≈ −16, zero behavior change. Mechanical; highest confidence.
 
-**PR 2 — periphery deletions** (C4 `fallbackTeamId`, C9 `SettingsViewMessageHandler` param, `pocketflow-state.md:69` doc fix). Est. net ≈ −10. Separate because it crosses into controllers/extension territory with different reviewers.
+**PR 2 — periphery deletions** (C4 `fallbackTeamId`, C9 `SettingsViewMessageHandler` param, `2026-06-20-pocketflow-state.md:69` doc fix). Est. net ≈ −10. Separate because it crosses into controllers/extension territory with different reviewers.
 
 **PR 3 — session-default correctness** (C6, optionally C12). Small and correctness-flavored; kept out of PR 1 so the behavior-identical sweep stays trivially auditable. Net ≈ 0 to −4, with the C6 justification (deletes a latent `??`-divergence) stated in the body per the honesty bar.
 

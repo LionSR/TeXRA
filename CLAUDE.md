@@ -156,7 +156,7 @@ lower-level `executeAgent` only when you already own the `executionId` (subagent
 dispatch, resume paths). Resume a persisted tool-use session via
 `resumeToolUseFromResumeData`, not `runAgent`. PocketFlow conventions and the
 services/shared-store split: AGENTS.md "Patterns across the codebase"
-(PocketFlow architecture) and `docs/architecture/pocketflow-state.md`.
+(PocketFlow architecture) and `docs/architecture/2026-06-20-pocketflow-state.md`.
 
 **The flow engine is local, not upstream PocketFlow.** `src/agent/node/index.ts`
 (~150 lines) is the only definition of `BaseNode` and `Flow`. Upstream's
@@ -203,8 +203,8 @@ refactoring" and "Code quality rules".
 ## Docs
 
 `docs/guide/` and a few root docs are published on the texra.ai VitePress site;
-internal directories (`architecture/`, `design/`, `proposals/`, `prds/`,
-`reference/`, …) are excluded by `docs/.vitepress/publicDocs.js`.
+internal directories (`architecture/`, `design/`, `dev/`, `proposals/`, `prds/`,
+`supabase/`, …) are excluded by `docs/.vitepress/publicDocs.js`.
 
 **A doc landing at the `docs/` root can silently freeze the texra.ai deploy** if
 it trips the publish allowlist. Check `docs/.vitepress/publicDocs.js` and the
@@ -217,6 +217,8 @@ Load these when the work lands in their territory:
 
 - **code-review** — `/review`, PR audits, or any review of this repo. Generic
   passes miss the repo-specific rules; always include a `Verified` section.
+- **find-simplification** — hunting non-obvious deletion or collapse candidates
+  and recording them as dated proposals or tech-debt issues.
 - **texra-cli** — the Ink TUI, transcript rendering, terminal capabilities,
   headless output parity, and CLI flag/help design.
 - **releasing** — cutting a release: changelog, tags, GitHub Releases, desktop
