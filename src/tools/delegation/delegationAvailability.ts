@@ -203,7 +203,7 @@ export function withDelegationAgentAvailability(
 const AVAILABLE_MODELS_LINE = /^Available models:.*$/m;
 
 const NO_DELEGATION_MODELS_MESSAGE =
-  'No models are currently available for delegation. Add a provider API key or sign in with a supported provider subscription before delegating.';
+  'No models are currently available for delegation. Review or configure model access before delegating.';
 
 export function availableModelNamesFromOptions(
   models: readonly ModelOptionData[],
@@ -253,7 +253,7 @@ export function selectDelegationModelFromAvailableNames(input: {
   if (decision.unavailable) {
     const requestedModel = input.requestedModel?.trim() || null;
     throw new Error(
-      `Model "${requestedModel}" is not currently available for delegation through a configured provider API key or subscription. Available models: ${availableModels.join(', ')}.`,
+      `Model "${requestedModel}" is not currently available for delegation with the currently configured model access. Available models: ${availableModels.join(', ')}.`,
     );
   }
   return decision.model;
