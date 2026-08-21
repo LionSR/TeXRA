@@ -62,6 +62,7 @@ import {
 import {
   formatChildRunDelivery,
   formatChildRunError,
+  toDeliveryUsage,
 } from './delegation/deliveryEnvelope';
 import {
   buildCodexCommandToolLog,
@@ -144,9 +145,7 @@ function formatCodexDelivery(
     {
       wallTime: formatWallTimeSeconds(wallTimeMs),
       response: turn.finalResponse,
-      usage: turn.usage
-        ? { input: turn.usage.input_tokens, output: turn.usage.output_tokens }
-        : null,
+      usage: toDeliveryUsage(turn.usage),
     },
   );
 }

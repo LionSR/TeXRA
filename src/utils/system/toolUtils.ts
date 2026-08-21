@@ -29,7 +29,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { IS_WINDOWS, extendEnvPath } from './platformPaths';
 import { BinaryResolver } from './binaryResolver';
-import { executeCommand, executeCommandSync } from './execUtils';
+import {
+  executeCommand,
+  executeCommandSync,
+  type ExecuteCommandBaseOptions,
+} from './execUtils';
 
 const log = createLog('toolUtils');
 
@@ -329,7 +333,7 @@ export async function checkToolInstalled(
 type RunToolOptions = {
   /** Whether to show error messages for missing tools */
   showError?: boolean;
-} & Parameters<typeof executeCommand>[1];
+} & ExecuteCommandBaseOptions;
 
 /**
  * Run a tool after verifying it is installed.

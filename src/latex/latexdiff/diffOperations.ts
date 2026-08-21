@@ -218,7 +218,10 @@ export async function runLatexdiffViaWorkspaceScan(params: {
   // Per input file: round number → workspace-relative output path. A round
   // matched more than once (e.g. two legacy files matching the same round
   // regex) keeps a single entry, last match wins.
-  const inputToOutputsMap = new Map<string, Map<number, string>>();
+  const inputToOutputsMap = new Map<
+    string,
+    Array<{ round: number; outputPath: string }>
+  >();
 
   for (const candidateInput of configuredInputFiles) {
     const outputDirPath = path.dirname(candidateInput);
@@ -302,7 +305,10 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     // pre-refactor files.
 
     if (roundOutputs.size > 0) {
-      inputToOutputsMap.set(candidateInput, roundOutputs);
+      inputToOutputsMap.set(
+        candidateInput,
+        [...roundOutputs].map(([round, outputPath]) => ({ round, outputPath })),
+      );
       log.debug(
         `Found ${roundOutputs.size} matching outputs for ${candidateInput}`,
       );
@@ -318,9 +324,9 @@ export async function runLatexdiffViaWorkspaceScan(params: {
   const operations: DiffOperation[] = [];
 
   for (const [baseFile, roundOutputs] of inputToOutputsMap.entries()) {
-    const sorted = [...roundOutputs].sort(([a], [b]) => a - b);
+    const sorted = [...roundOutputs].sort((a, b) => a.round - b.round);
 
-    for (const [round, outputPath] of sorted) {
+    for (const { round, outputPath } of sorted) {
       const resolvedOutput = toAbsolute(outputPath);
 
       operations.push({
@@ -334,18 +340,18 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     }
 
     if (generateBetweenRoundDiffs) {
-      for (const [index, [toRound, currentPath]] of sorted.slice(1).entries()) {
-        const [fromRound, previousPath] = sorted[index];
-        const resolvedPrevious = toAbsolute(previousPath);
+      for (const [index, current] of sorted.slice(1).entries()) {
+        const previous = sorted[index];
+        const resolvedPrevious = toAbsolute(previous.outputPath);
 
         operations.push({
           type: 'between-rounds',
           base: pathToLocation(resolvedPrevious),
-          revised: pathToLocation(toAbsolute(currentPath)),
-          description: `${path.basename(previousPath)} (r${fromRound}→r${toRound})`,
+          revised: pathToLocation(toAbsolute(current.outputPath)),
+          description: `${path.basename(previous.outputPath)} (r${previous.round}→r${current.round})`,
           cwd: path.dirname(resolvedPrevious),
-          fromRound,
-          toRound,
+          fromRound: previous.round,
+          toRound: current.round,
         });
       }
     }

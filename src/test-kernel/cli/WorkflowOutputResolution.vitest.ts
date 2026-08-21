@@ -443,7 +443,7 @@ describe('CLI workflow output resolution', () => {
 
     expect(result).toMatchObject({
       workingDirectory: cwd,
-      copiedOutput: join(cwd, 'out', 'a.tex'),
+      copiedOutputs: [join(cwd, 'out', 'a.tex')],
     });
     await expect(readFile(join(cwd, 'out', 'a.tex'), 'utf8')).resolves.toBe(
       'A2',
@@ -475,7 +475,7 @@ describe('CLI workflow output resolution', () => {
     );
 
     expect(result).toMatchObject({
-      copiedOutput: join(cwd, 'out', 'paper.tex'),
+      copiedOutputs: [join(cwd, 'out', 'paper.tex')],
     });
     // Last of the final round: the CLI has always kept the later element on a
     // round tie, so the consolidation onto finalWorkflowOutput preserves it.
@@ -533,14 +533,13 @@ describe('CLI workflow output resolution', () => {
       ),
       workingDirectory: '/workspace',
       runDirectory: '/run',
-      copiedOutput: '/workspace/final.tex',
+      copiedOutputs: ['/workspace/final.tex'],
     };
 
     expect(formatWorkflowTextResult(result)).toBe('/workspace/final.tex');
     expect(
       formatWorkflowTextResult({
         ...result,
-        copiedOutput: undefined,
         copiedOutputs: [
           '/workspace/final/main.tex',
           '/workspace/final/appendix.tex',
