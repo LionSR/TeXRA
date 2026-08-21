@@ -26,6 +26,7 @@ import type {
   StreamTabId,
   TodoItem,
   TokenUsageStats,
+  WorkPlanSnapshot,
 } from '@shared/schemas';
 import {
   cleanupTempDirs,
@@ -34,6 +35,7 @@ import {
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
+import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
 import {
   stagedStreamDataDir,
   STREAM_DATA_DIR,
@@ -107,10 +109,8 @@ function toolUseConfig(agent = 'search', model = 'deepseekproT'): AgentConfig {
   });
 }
 
-type StagedDeletion = Awaited<
-  ReturnType<StreamSnapshotStore['stageDeleteStream']>
->;
-type WorkPlan = ReturnType<StreamSnapshotStore['getWorkPlan']>;
+type StagedDeletion = StagedStreamSnapshotDeletion;
+type WorkPlan = WorkPlanSnapshot;
 
 async function writeStreamFile(
   stream: StreamTabId,

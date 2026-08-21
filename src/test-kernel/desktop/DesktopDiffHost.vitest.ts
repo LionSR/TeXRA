@@ -94,6 +94,22 @@ function createGate(): { promise: Promise<void>; release: () => void } {
   return { promise, release };
 }
 
+/** Pauses the next `readFile` call so a test can hold `openDiff` mid-flight
+ * between the read starting and its result resolving. */
+function gateReadFile(): {
+  readStarted: ReturnType<typeof createGate>;
+  readGate: ReturnType<typeof createGate>;
+} {
+  const readStarted = createGate();
+  const readGate = createGate();
+  vi.mocked(readFile).mockImplementationOnce(async () => {
+    readStarted.release();
+    await readGate.promise;
+    return 'a\n';
+  });
+  return { readStarted, readGate };
+}
+
 const tempDirs = useTempDirs();
 const hosts: DiffHost[] = [];
 
@@ -320,13 +336,7 @@ describe('createDesktopDiffHost', () => {
     const [original, proposed] = await prepareDiffPair();
     const diffDirsBefore = listDiffTempDirs();
 
-    const readStarted = createGate();
-    const readGate = createGate();
-    vi.mocked(readFile).mockImplementationOnce(async () => {
-      readStarted.release();
-      await readGate.promise;
-      return 'a\n';
-    });
+    const { readStarted, readGate } = gateReadFile();
 
     const disposePromise = host.dispose();
     const openPromise = host.openDiff(original, proposed, 'Compare');
@@ -361,13 +371,7 @@ describe('createDesktopDiffHost', () => {
       const [original, proposed] = await prepareDiffPair();
       const diffDirsBefore = listDiffTempDirs();
 
-      const readStarted = createGate();
-      const readGate = createGate();
-      vi.mocked(readFile).mockImplementationOnce(async () => {
-        readStarted.release();
-        await readGate.promise;
-        return 'a\n';
-      });
+      const { readStarted, readGate } = gateReadFile();
 
       const openPromise = host.openDiff(original, proposed, 'Compare');
       await readStarted.promise;
@@ -606,13 +610,7 @@ describe('createDesktopDiffHost', () => {
       const { host, openPath } = createHost();
       const [original, proposed] = await prepareDiffPair();
 
-      const readStarted = createGate();
-      const readGate = createGate();
-      vi.mocked(readFile).mockImplementationOnce(async () => {
-        readStarted.release();
-        await readGate.promise;
-        return 'a\n';
-      });
+      const { readStarted, readGate } = gateReadFile();
 
       const openPromise = host.openDiff(original, proposed, 'Compare');
       await readStarted.promise;
