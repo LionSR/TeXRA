@@ -106,12 +106,13 @@ jobs:
 
       - name: TeXRA review
         if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
-        # texra-ai/texra-action v1.1.4 (GitHub App OIDC). Pin the reviewed
-        # release commit so PR review behavior only changes through an explicit
-        # workflow update. Empty github-token uses TeXRA GitHub App OIDC
+        # texra-ai/texra-action commit 2a327e4 (GitHub App OIDC), which removes
+        # the obsolete `--api-mode` CLI argument. Pin the reviewed upstream
+        # commit so PR review behavior only changes through an explicit workflow
+        # update. Empty github-token uses TeXRA GitHub App OIDC
         # (id-token: write above). Keep the secret-bearing review job read-only:
         # provider keys are present, so shell/tool mutations must stay disabled.
-        uses: texra-ai/texra-action/review@fb1fef5542fc9d68d2dcca24c54e1e1e25aee239
+        uses: texra-ai/texra-action/review@2a327e4f0419ce5a53e271611c89bc6c0268fa7d
         with:
           prompt-file: .trusted-review-prompt/.github/prompts/texra-code-review-prompt.md
           approval-policy: yolo
