@@ -32,6 +32,7 @@ import {
   WebSearchResultEntrySchema,
 } from '@agent/types/ServerTools';
 import { assertNever, isObject } from '@utils/core';
+import { isImageMimeType } from '@utils/files/mimeUtils';
 import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,
@@ -229,7 +230,7 @@ function googlePartToBlocks(part: Part): ContentBlock[] {
   const blob = part.inlineData ?? part.fileData;
   if (blob && typeof blob === 'object') {
     const { mimeType } = blob as { mimeType?: string };
-    return mimeType?.startsWith('image/')
+    return isImageMimeType(mimeType)
       ? [{ type: 'image' }]
       : [{ type: 'document' }];
   }

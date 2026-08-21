@@ -19,7 +19,7 @@ import type { AgentTrace } from '@agent/trace';
 import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
 import type { ToolFileAttachment } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
-import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
+import { isImageMimeType, OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 
 import { loadAttachmentBuffer, wipeBuffer } from '../utils/toolAttachmentUtils';
 import { toDataUrl } from '../support/dataUrl';
@@ -198,7 +198,7 @@ export async function uploadToolAttachments(
       uploaded.push({
         attachment,
         fileId: uploadedFile.id,
-        isImage: mimeType.startsWith('image/'),
+        isImage: isImageMimeType(mimeType),
       });
     } catch (err) {
       reportMediaAttachmentFailure(
@@ -235,7 +235,7 @@ export async function buildInlineAttachmentParts(
 
   for (const attachment of attachments) {
     const mimeType = attachment.mimeType ?? 'application/octet-stream';
-    const isImage = mimeType.startsWith('image/');
+    const isImage = isImageMimeType(mimeType);
     const isFileInput = INLINEABLE_FILE_MIME_TYPES.has(mimeType);
 
     if (!isImage && !isFileInput) {

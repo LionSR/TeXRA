@@ -29,6 +29,7 @@ import {
 } from '@agent/types/ConversationBlockTypes';
 import { extractWebFetchResultFields } from '@agent/types/ServerTools';
 import { assertNever, isObject } from '@utils/core';
+import { isImageMimeType } from '@utils/files/mimeUtils';
 
 const HIDDEN_PROVIDER_REASONING_MARKER = '[provider reasoning hidden]';
 
@@ -228,7 +229,7 @@ function formatConversationBlock(
       objectStringField(block.fileData, 'mime_type') ||
       objectStringField(block.image_url, 'mime_type') ||
       objectStringField(block.source, 'media_type');
-    return mimeType.startsWith('image/')
+    return isImageMimeType(mimeType)
       ? '[image attachment]'
       : '[document attachment]';
   }
