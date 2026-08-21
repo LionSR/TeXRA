@@ -109,8 +109,6 @@ describe('ExtractBibliographyTool', () => {
   });
 
   it('includes explicit bibliography path when provided', async () => {
-    const calls: { paths: string[]; keys: string[] }[] = [];
-
     await installPlatform({
       '/workspace/thesis.tex': '\\documentclass{article}',
       '/workspace/extra.bib': '@article{alpha,...}',
@@ -119,53 +117,40 @@ describe('ExtractBibliographyTool', () => {
       context: { citationKeys: ['alpha'] },
       summary: ['@article{alpha,...}'],
     });
-    vi.mocked(bibliographyModule.loadBibliographyEntries).mockImplementation(
-      async (paths, keys) => {
-        calls.push({ paths, keys });
-        return {
-          entries: new Map([['alpha', '@article{alpha,...}']]),
-          missingKeys: [],
-        };
-      },
-    );
+    const loadEntries = vi
+      .mocked(bibliographyModule.loadBibliographyEntries)
+      .mockResolvedValue({
+        entries: new Map([['alpha', '@article{alpha,...}']]),
+        missingKeys: [],
+      });
 
     const result = await new ExtractBibliographyTool().call({
       texPath: 'thesis.tex',
       bibPath: 'extra.bib',
     });
 
-    expect(calls).toHaveLength(1);
-    expect(calls[0].paths).toEqual(['extra.bib']);
-    expect(calls[0].keys).toEqual(['alpha']);
+    expect(loadEntries).toHaveBeenCalledOnce();
+    expect(loadEntries.mock.calls[0]).toEqual([['extra.bib'], ['alpha']]);
     expect(result.summary).toContain('Resolved 1 bibliography entry');
   });
 
   it('falls back to wildcard when only a bibliography path is supplied', async () => {
-    const calls: { paths: string[]; keys: string[] }[] = [];
-
     await installPlatform({
       '/workspace/standalone.tex': '\\documentclass{article}',
       '/workspace/refs.bib': '@article{alpha,...}',
     });
     mockBibliography({});
-    vi.mocked(bibliographyModule.loadBibliographyEntries).mockImplementation(
-      async (paths, keys) => {
-        calls.push({ paths, keys });
-        return {
-          entries: new Map(),
-          missingKeys: [],
-        };
-      },
-    );
+    const loadEntries = vi
+      .mocked(bibliographyModule.loadBibliographyEntries)
+      .mockResolvedValue({ entries: new Map(), missingKeys: [] });
 
     const result = await new ExtractBibliographyTool().call({
       texPath: 'standalone.tex',
       bibPath: 'refs.bib',
     });
 
-    expect(calls).toHaveLength(1);
-    expect(calls[0].paths).toEqual(['refs.bib']);
-    expect(calls[0].keys).toEqual(['*']);
+    expect(loadEntries).toHaveBeenCalledOnce();
+    expect(loadEntries.mock.calls[0]).toEqual([['refs.bib'], ['*']]);
     expect(result.summary).toContain(
       'No matching bibliography entries found for 1 citation key in standalone.tex.',
     );
