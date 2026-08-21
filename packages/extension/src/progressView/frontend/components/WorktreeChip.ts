@@ -102,7 +102,7 @@ export class WorktreeChip extends LitElement {
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background-color: var(--wa-color-chart-orange, #d18616);
+        background-color: var(--color-chart-orange);
         flex-shrink: 0;
       }
 
@@ -149,7 +149,7 @@ export class WorktreeChip extends LitElement {
 
       .ci-icon.ci-pending,
       .ci-icon.ci-running {
-        color: var(--wa-color-chart-orange, #d18616);
+        color: var(--color-chart-orange);
       }
 
       .ci-icon.ci-unknown {

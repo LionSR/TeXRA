@@ -20,6 +20,7 @@ export const designTokens: CSSResult = css`
     --color-info: var(--wa-color-chart-blue, #3794ff);
     --color-added: var(--wa-color-chart-green, #4caf50);
     --color-removed: var(--wa-color-chart-red, #f44336);
+    --color-chart-orange: var(--wa-color-chart-orange, #d18616);
 
     /* Status indicators (dependency installed/missing, tool available/missing).
        Distinct from --color-success/--color-error: these use the editor

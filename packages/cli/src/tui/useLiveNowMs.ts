@@ -9,7 +9,11 @@ type SharedTickSubscriber = () => void;
 const tickSubscribers = new Set<SharedTickSubscriber>();
 let tickTimer: ReturnType<typeof setInterval> | undefined;
 
-function subscribeToSharedTick(subscriber: SharedTickSubscriber): () => void {
+// Exported so non-React callers (e.g. the terminal-title updater) can join
+// the same 1 Hz registry instead of running a private setInterval.
+export function subscribeToSharedTick(
+  subscriber: SharedTickSubscriber,
+): () => void {
   tickSubscribers.add(subscriber);
   tickTimer ??= setInterval(() => {
     for (const tick of tickSubscribers) tick();
