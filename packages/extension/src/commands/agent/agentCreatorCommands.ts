@@ -1,13 +1,12 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import * as yaml from 'yaml';
-import { z } from 'zod';
 
 import {
   type AgentCreatorUI,
   type CreatorConfig,
   TOOL_GROUPS,
+  buildCreatorConfig,
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
 import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
@@ -19,34 +18,6 @@ import type { AgentCategory } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const CHANNEL = 'AgentCreator';
-
-// Validation only — no .trim() transform, so multiline block-scalar prompts
-// (including their trailing newline) pass through verbatim.
-const PromptStringSchema = z.string().refine((value) => value.trim() !== '', {
-  error: 'prompt must not be empty',
-});
-
-// Top level stays non-strict: templates carry metadata (name, description,
-// settings) that this loader does not consume. The prompts block is strict so
-// a misspelled key (e.g. `retryPromt`) fails the load instead of being
-// stripped and silently replaced by the built-in fallback.
-export const ParsedCreatorYamlSchema = z.object({
-  prompts: z.strictObject({
-    systemPrompt: PromptStringSchema,
-    userRequest: PromptStringSchema,
-    retryPrompt: PromptStringSchema.optional(),
-  }),
-});
-
-function parseCreatorTemplate(fileName: string, raw: string) {
-  const parsed = ParsedCreatorYamlSchema.safeParse(yaml.parse(raw));
-  if (!parsed.success) {
-    throw new Error(
-      `Invalid bundled agent-creator template ${fileName}: ${z.prettifyError(parsed.error)}`,
-    );
-  }
-  return parsed.data;
-}
 
 /** Cached after first load. Templates are bundled resources — stable for the session. */
 let creatorConfig: CreatorConfig | null = null;
@@ -69,19 +40,12 @@ async function loadCreatorConfig(
       ),
       AbsoluteFS.read(path.join(templatesDir, 'agentTemplate-toolUse.yaml')),
     ]);
-  const wf = parseCreatorTemplate('agentCreatorWorkflow.yaml', workflowYaml);
-  const tu = parseCreatorTemplate('agentCreatorToolUse.yaml', toolUseYaml);
-  const defaultRetry =
-    'The previous attempt failed validation: {{ VALIDATION_ERROR }}. Please fix and return only the YAML.';
-  creatorConfig = {
-    workflow: wf.prompts,
-    toolUse: tu.prompts,
-    retryPrompts: {
-      workflow: wf.prompts.retryPrompt ?? defaultRetry,
-      toolUse: tu.prompts.retryPrompt ?? defaultRetry,
-    },
-    templates: { workflowSingle, toolUse: toolUseTpl },
-  };
+  creatorConfig = buildCreatorConfig({
+    workflowYaml,
+    toolUseYaml,
+    workflowSingle,
+    toolUseTpl,
+  });
   return creatorConfig;
 }
 
