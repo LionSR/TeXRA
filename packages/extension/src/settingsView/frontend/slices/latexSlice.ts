@@ -11,10 +11,7 @@ import type {
   LatexConfigValues,
   SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
-import {
-  LATEX_FIELD_TO_KEY,
-  LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
-} from '@shared/constants/latexConfig';
+import { LATEX_CONFIG_FIELD_TO_KEY } from '@shared/constants/latexConfig';
 
 import {
   inlineCriticismEnabled,
@@ -23,11 +20,6 @@ import {
   latexSettingsLoaded,
   latexSettingsStatus,
 } from '../settingsState';
-
-const LATEX_CONFIG_FIELD_TO_KEY = {
-  ...LATEX_FIELD_TO_KEY,
-  ...LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
-} as const satisfies Record<keyof LatexConfigValues, string>;
 
 export const latexHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS]: (data) => {
