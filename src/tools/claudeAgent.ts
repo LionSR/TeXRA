@@ -70,6 +70,7 @@ import {
 import {
   formatChildRunDelivery,
   formatChildRunError,
+  toDeliveryUsage,
 } from './delegation/deliveryEnvelope';
 import {
   aggregateClaudeModelUsage,
@@ -178,12 +179,7 @@ function formatClaudeDelivery(
     {
       wallTime: formatWallTimeSeconds(wallTimeMs),
       response: turn.finalResponse,
-      usage: turn.usage
-        ? {
-            input: turn.usage.input_tokens ?? 0,
-            output: turn.usage.output_tokens ?? 0,
-          }
-        : null,
+      usage: toDeliveryUsage(turn.usage),
       lines: claudeCostLines(turn),
     },
   );

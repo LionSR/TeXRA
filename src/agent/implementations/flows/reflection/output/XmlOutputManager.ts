@@ -23,6 +23,7 @@ import {
   extractContentFromXMLbyTagMultiple,
   extractDocuments,
   extractTextFromTag,
+  type NamedDocument,
 } from '@utils/text/xmlExtraction';
 
 import {
@@ -77,7 +78,7 @@ export class XmlOutputManager {
   private extractMultipleDocumentsByRegex(
     outputContent: string,
     preferredName?: string,
-  ): Array<{ content: string; name: string }> | null {
+  ): NamedDocument[] | null {
     const result = extractDocuments(
       outputContent,
       OUTPUT_DOCUMENTS_TAG,
@@ -174,7 +175,7 @@ export class XmlOutputManager {
     round: number,
     thinkingTag: string,
     baseFiles: readonly FileLocation[],
-  ): Promise<Array<{ content: string; name: string }> | null> {
+  ): Promise<NamedDocument[] | null> {
     const blocks = this.collectLatexFencedBlocks(outputContent, thinkingTag);
     if (blocks.length === 0) return null;
 
@@ -191,7 +192,7 @@ export class XmlOutputManager {
     if (files.length === 0) return null;
 
     const documents = assignByContentSimilarity(blocks, files).filter(
-      (d): d is { content: string; name: string } => d !== null,
+      (d): d is NamedDocument => d !== null,
     );
     if (documents.length === 0) return null;
 
@@ -244,7 +245,7 @@ export class XmlOutputManager {
       OUTPUT_DOCUMENT_TAG,
     ]);
 
-    let documents: Array<{ content: string; name: string }> | null = null;
+    let documents: NamedDocument[] | null = null;
 
     try {
       const parser = new XMLParser(XML_PARSER_OPTIONS);
@@ -416,7 +417,7 @@ export class XmlOutputManager {
   }
 
   async processMultipleLatexDocuments(
-    latexDocuments: Array<{ content: string; name: string }>,
+    latexDocuments: NamedDocument[],
     outputLocation: FileLocation,
     round: number,
   ): Promise<OutputFileInfo[]> {

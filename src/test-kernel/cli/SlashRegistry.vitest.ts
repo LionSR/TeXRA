@@ -518,16 +518,14 @@ describe('slashRegistry', () => {
     );
     try {
       instance.rerender(activeForm.get()?.render(() => {}, 4));
-      await waitFor(
-        () => formProgress.get()?.archivedCopyableMessage === instruction,
-      );
+      await waitFor(() => formProgress.get()?.copyableMessageArchived === true);
       await waitFor(() => stdout.output.includes('scrollback'));
       expect(stdout.output).toContain('scrollback');
       expect(formProgress.get()).toMatchObject({
         status: 'succeeded',
         message: 'Authentication instructions were written to scrollback.',
-        copyableMessage: undefined,
-        archivedCopyableMessage: instruction,
+        copyableMessage: instruction,
+        copyableMessageArchived: true,
       });
       expect(
         streams
