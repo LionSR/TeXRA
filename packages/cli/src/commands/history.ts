@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { defineCommand } from 'citty';
 
-import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
+import { formatChatAsMarkdown } from '@agent/export';
 import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { type ExecutionId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/executionHistory';
