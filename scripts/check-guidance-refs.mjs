@@ -22,6 +22,8 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { walkFiles } from './walkFiles.mjs';
+
 // The optional root argument keeps fixture tests hermetic without duplicating
 // the production path-prefix configuration.
 const repoRoot = process.argv[2]
@@ -108,15 +110,10 @@ const BUILD_OUTPUT = /(^|\/)(dist|out|releases|node_modules)(\/|$)/;
 function markdownFilesIn(dir) {
   const abs = join(repoRoot, dir);
   if (!existsSync(abs)) return [];
-  const found = [];
-  for (const entry of readdirSync(abs, { withFileTypes: true })) {
-    const rel = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) {
-      if (ARCHIVAL_DIRS.includes(rel)) continue;
-      found.push(...markdownFilesIn(rel));
-    } else if (entry.name.endsWith('.md')) found.push(rel);
-  }
-  return found;
+  return walkFiles(abs, {
+    include: (relativePath) => relativePath.endsWith('.md'),
+    prune: (relativePath) => ARCHIVAL_DIRS.includes(`${dir}/${relativePath}`),
+  }).map((entry) => `${dir}/${entry.relativePath}`);
 }
 
 /** Strip fenced code blocks — those are examples, not live references. */
