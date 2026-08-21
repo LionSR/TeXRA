@@ -14,7 +14,6 @@ import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { createDeferred } from '@test/support/asyncTestUtils';
 
 const ROUTE = 'openai:subscription:gpt-5.6';
-const OTHER_ROUTE = 'anthropic:api-key:claude-opus';
 const MODEL_ROUTE = `${ROUTE}:model`;
 const OTHER_MODEL_ROUTE = 'openai:subscription:gpt-5.7:model';
 const TRANSIENT = new Error('temporary connection failure');

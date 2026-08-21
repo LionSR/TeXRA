@@ -5,10 +5,7 @@ import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
-import {
-  SessionEventHub,
-  type SessionEvent,
-} from '@agent/runtime/SessionEventHub';
+import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import {
   createRunProgressRenderer,

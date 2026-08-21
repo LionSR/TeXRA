@@ -73,10 +73,6 @@ function expiredSession(): SupabaseSession {
   });
 }
 
-function soonExpiringSession(): SupabaseSession {
-  return makeSession({ expiresAt: Date.now() + 30_000 });
-}
-
 function replacementSession(): SupabaseSession {
   return makeSession({
     accessToken: 'replacement-access',

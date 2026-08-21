@@ -38,6 +38,7 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 }));
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent } from '@agent/runtime/runAgent';
 import { getStreamTabId } from '@agent/runtime/streamTab';
@@ -50,8 +51,7 @@ const CONFIG = AgentConfigSchema.parse({
   model: 'test-model',
 });
 const flushArtifacts = vi.fn();
-let trackedHandle:
-  import('@agent/runtime/ExecutionHandle').AgentExecutionHandle | undefined;
+let trackedHandle: AgentExecutionHandle | undefined;
 // The real exit choreography over the fake's flushArtifacts and the mocked
 // lease verbs, so the existing renew/flush/complete/abandon assertions keep
 // observing the same tree through its one owner.

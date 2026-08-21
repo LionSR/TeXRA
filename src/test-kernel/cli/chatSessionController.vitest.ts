@@ -248,6 +248,11 @@ type ToolUseRunResult<Outcome> = {
   streamId: StreamTabId;
 };
 
+/** The subset of `executeAgent`'s options every mock implementation below reads. */
+type ExecuteAgentMockOptions = {
+  readonly onStreamResolved?: (id: StreamTabId) => void;
+};
+
 function makeInit(
   overrides: Partial<ChatSessionControllerInit> = {},
 ): ChatSessionControllerInit {
@@ -781,7 +786,7 @@ describe('createChatSessionController', () => {
       async (
         _config: unknown,
         executionId: ExecutionId,
-        options: { readonly onStreamResolved?: (id: StreamTabId) => void },
+        options: ExecuteAgentMockOptions,
       ) => {
         const rootHandle = testExecutionHandle({
           executionId,
@@ -889,7 +894,7 @@ describe('createChatSessionController', () => {
         async (
           _config: unknown,
           executionId: ExecutionId,
-          options: { readonly onStreamResolved?: (id: StreamTabId) => void },
+          options: ExecuteAgentMockOptions,
         ) => {
           rootAExecutionId = executionId;
           childAExecutionId = 'child-a-exec' as ExecutionId;
@@ -915,7 +920,7 @@ describe('createChatSessionController', () => {
         async (
           _config: unknown,
           executionId: ExecutionId,
-          options: { readonly onStreamResolved?: (id: StreamTabId) => void },
+          options: ExecuteAgentMockOptions,
         ) => {
           rootBExecutionId = executionId;
           trackRunningExecution(
@@ -987,7 +992,7 @@ describe('createChatSessionController', () => {
       async (
         _config: unknown,
         executionId: ExecutionId,
-        options: { readonly onStreamResolved?: (id: StreamTabId) => void },
+        options: ExecuteAgentMockOptions,
       ) => {
         trackRunningExecution(
           executions,

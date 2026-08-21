@@ -146,7 +146,6 @@ function tui(
   contextOverrides: Partial<CliContext> = {},
 ): {
   readonly presentationHost: CliRuntimeHost;
-  readonly cliContext: CliContext;
   readonly interactions: HostInteractions;
   readonly prepareRetry: ReturnType<typeof vi.fn>;
   readonly dispose: () => void;
@@ -170,7 +169,6 @@ function tui(
   onTestFinished(detachInteractions);
   return {
     presentationHost,
-    cliContext,
     interactions,
     prepareRetry,
     dispose: detachInteractions,
