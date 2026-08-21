@@ -56,6 +56,7 @@ import {
   DEFAULT_CORE_SETTINGS,
 } from '@shared/schemas';
 import { clamp, filterNotNullish } from '@utils/core';
+import { isImageMimeType } from '@utils/files/mimeUtils';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -1219,7 +1220,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       const mediaType = media.media_type ?? '';
       const classification = classifyMediaEntry(media);
 
-      if (classification === 'image' && mediaType.startsWith('image/')) {
+      if (classification === 'image' && isImageMimeType(mediaType)) {
         return [
           createInputText(`Image: ${media.file_name}`),
           {

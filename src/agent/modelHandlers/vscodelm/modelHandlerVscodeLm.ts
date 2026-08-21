@@ -42,7 +42,7 @@ import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';
-import { getMimeType } from '@utils/files/mimeUtils';
+import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 
 // Local file imports
 import { ModelHandler } from '../ModelHandler';
@@ -167,7 +167,7 @@ function requireSupportedMedia(
 
   const unsupported = mediaFiles.find(({ absolutePath }) => {
     const mimeType = getMimeType(absolutePath);
-    return mimeType !== 'application/pdf' && !mimeType?.startsWith('image/');
+    return mimeType !== 'application/pdf' && !isImageMimeType(mimeType);
   });
   if (unsupported) throw new Error(IMAGE_INPUT_ONLY_ERROR);
 }
@@ -335,7 +335,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     return mediaMessage.map((media) => {
       if (
         media.media_category !== 'image' ||
-        !media.media_type.startsWith('image/')
+        !isImageMimeType(media.media_type)
       ) {
         throw new Error(IMAGE_INPUT_ONLY_ERROR);
       }

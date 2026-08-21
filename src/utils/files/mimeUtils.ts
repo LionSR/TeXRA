@@ -51,6 +51,11 @@ export function getMimeType(filePath: string): string | null {
   return mime.lookup(filePath) || null;
 }
 
+/** True when the MIME type is in the `image/*` family. */
+export function isImageMimeType(mimeType: string | null | undefined): boolean {
+  return mimeType?.startsWith('image/') ?? false;
+}
+
 /** File extensions for binary office document formats (case-insensitive, with leading dot). */
 export const OFFICE_EXTENSIONS: ReadonlySet<string> = new Set([
   // Word processing
