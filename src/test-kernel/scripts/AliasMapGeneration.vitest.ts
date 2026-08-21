@@ -9,8 +9,6 @@ type TsconfigPaths = Record<string, string[]>;
 interface AliasUtilsModule {
   deriveBuildPaths(rootPaths: TsconfigPaths): TsconfigPaths;
   deriveDesktopPaths(rootPaths: TsconfigPaths): TsconfigPaths;
-  deriveExtensionPaths(rootPaths: TsconfigPaths): TsconfigPaths;
-  EXTENSION_EXCLUDED_ALIASES: readonly string[];
   loadRootPaths(rootDir: string): TsconfigPaths;
   parseJsonc(text: string): unknown;
   pathTargetExists(rootDir: string, target: string): boolean;
@@ -20,8 +18,6 @@ const rootDir = fileURLToPath(new URL('../../../', import.meta.url));
 const {
   deriveBuildPaths,
   deriveDesktopPaths,
-  deriveExtensionPaths,
-  EXTENSION_EXCLUDED_ALIASES,
   loadRootPaths,
   parseJsonc,
   pathTargetExists,
@@ -39,29 +35,6 @@ const SAMPLE_ROOT_PATHS = {
   '@desktop/*': ['./packages/desktop/src/*'],
 };
 
-describe('aliasUtils deriveExtensionPaths', () => {
-  const result = deriveExtensionPaths(SAMPLE_ROOT_PATHS);
-
-  it('rewrites packages/extension/-prefixed values as extension-relative', () => {
-    expect(result['@commands/*']).toEqual(['./src/commands/*']);
-  });
-
-  it('prepends ./../../ to repo-root-relative values', () => {
-    expect(result['@shared/*']).toEqual(['./../../src/shared/*']);
-  });
-
-  it('rewrites each entry of a multi-value alias independently', () => {
-    expect(result['@/*']).toEqual(['./src/*', './../../src/*']);
-  });
-
-  it('drops every deliberately excluded alias and keeps everything else', () => {
-    for (const excluded of EXTENSION_EXCLUDED_ALIASES) {
-      expect(result).not.toHaveProperty(excluded);
-    }
-    expect(Object.keys(result)).toEqual(['@/*', '@shared/*', '@commands/*']);
-  });
-});
-
 describe('aliasUtils deriveDesktopPaths', () => {
   const result = deriveDesktopPaths(SAMPLE_ROOT_PATHS);
 
@@ -73,10 +46,8 @@ describe('aliasUtils deriveDesktopPaths', () => {
     ]);
   });
 
-  it('excludes nothing, unlike deriveExtensionPaths', () => {
-    for (const excluded of EXTENSION_EXCLUDED_ALIASES) {
-      expect(result).toHaveProperty(excluded);
-    }
+  it('excludes nothing', () => {
+    expect(Object.keys(result)).toEqual(Object.keys(SAMPLE_ROOT_PATHS));
   });
 });
 
