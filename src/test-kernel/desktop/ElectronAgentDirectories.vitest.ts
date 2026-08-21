@@ -146,13 +146,14 @@ describe('desktop agent directory bootstrap', () => {
   it('skips same-resource re-entry but refreshes when the resource path changes', async () => {
     const { bootstrapNodeAgentDirectories, resourcesPath, storage } =
       await createHarness();
-
-    await bootstrapNodeAgentDirectories({
+    const options = {
       channel: 'desktop',
       resourcesPath,
       currentVersion: '1.2.3',
       versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-    });
+    };
+
+    await bootstrapNodeAgentDirectories(options);
     const copiedAgent = join(
       storage.getGlobalStoragePath(),
       'agents',
@@ -160,12 +161,7 @@ describe('desktop agent directory bootstrap', () => {
     );
     await writeFile(copiedAgent, 'name: locally-edited\n');
 
-    await bootstrapNodeAgentDirectories({
-      channel: 'desktop',
-      resourcesPath,
-      currentVersion: '1.2.3',
-      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-    });
+    await bootstrapNodeAgentDirectories(options);
     await expect(readFile(copiedAgent, 'utf8')).resolves.toBe(
       'name: locally-edited\n',
     );
@@ -181,10 +177,9 @@ describe('desktop agent directory bootstrap', () => {
     );
 
     await bootstrapNodeAgentDirectories({
-      channel: 'desktop',
+      ...options,
       resourcesPath: nextResourcesPath,
       currentVersion: '1.2.4',
-      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
     });
     await expect(readFile(copiedAgent, 'utf8')).resolves.toBe('name: next\n');
   });

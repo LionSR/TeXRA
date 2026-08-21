@@ -1201,32 +1201,60 @@ describe('App foreground Escape ownership', () => {
   });
 });
 
+// The two enqueue calls below recur across this describe block: a
+// stream-scoped approval on an unrelated stream (which must never satisfy an
+// assertion on its own) and a session-wide (streamId: '') approval that
+// should promote onto whatever stream ends up visible.
+function enqueueOtherStreamInquiry(
+  requestId: string,
+  question: string,
+  threadId: string,
+): void {
+  void enqueueApproval({
+    kind: 'externalInquiry',
+    data: {
+      requestId,
+      mode: 'followUp',
+      question,
+      threadId,
+      allowBypass: false,
+      streamId: 'other-stream',
+    },
+  });
+}
+
+function enqueueSessionInquiry(
+  requestId: string,
+  question: string,
+  threadId: string,
+): void {
+  void enqueueApproval({
+    kind: 'externalInquiry',
+    data: {
+      requestId,
+      mode: 'followUp',
+      question,
+      threadId,
+      allowBypass: false,
+      streamId: '',
+    },
+  });
+}
+
 describe('App approval surface ownership', () => {
   it('promotes a session-wide approval when a child becomes the scoped root', async () => {
     seedChildHierarchy();
     focusStream(ROOT);
-    void enqueueApproval({
-      kind: 'externalInquiry',
-      data: {
-        requestId: 'external-other-new-scope',
-        mode: 'followUp',
-        question: 'Wait outside the new scope.',
-        threadId: 'ei_000000000007',
-        allowBypass: false,
-        streamId: 'other-stream',
-      },
-    });
-    void enqueueApproval({
-      kind: 'externalInquiry',
-      data: {
-        requestId: 'external-session-new-scope',
-        mode: 'followUp',
-        question: 'Verify the newly scoped child.',
-        threadId: 'ei_000000000008',
-        allowBypass: false,
-        streamId: '',
-      },
-    });
+    enqueueOtherStreamInquiry(
+      'external-other-new-scope',
+      'Wait outside the new scope.',
+      'ei_000000000007',
+    );
+    enqueueSessionInquiry(
+      'external-session-new-scope',
+      'Verify the newly scoped child.',
+      'ei_000000000008',
+    );
     const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
 
     try {
@@ -1282,17 +1310,11 @@ describe('App approval surface ownership', () => {
       ],
     }));
     focusStream(CHILD);
-    void enqueueApproval({
-      kind: 'externalInquiry',
-      data: {
-        requestId: 'external-other-dashboard',
-        mode: 'followUp',
-        question: 'Wait outside the dashboard root.',
-        threadId: 'ei_000000000009',
-        allowBypass: false,
-        streamId: 'other-stream',
-      },
-    });
+    enqueueOtherStreamInquiry(
+      'external-other-dashboard',
+      'Wait outside the dashboard root.',
+      'ei_000000000009',
+    );
     void enqueueApproval({
       kind: 'planApproval',
       data: {
@@ -1324,28 +1346,16 @@ describe('App approval surface ownership', () => {
   it('promotes a session-wide approval against the post-Escape root', async () => {
     seedChildHierarchy();
     focusStream(CHILD);
-    void enqueueApproval({
-      kind: 'externalInquiry',
-      data: {
-        requestId: 'external-other-after-escape',
-        mode: 'followUp',
-        question: 'Wait outside the destination root.',
-        threadId: 'ei_000000000005',
-        allowBypass: false,
-        streamId: 'other-stream',
-      },
-    });
-    void enqueueApproval({
-      kind: 'externalInquiry',
-      data: {
-        requestId: 'external-session-after-escape',
-        mode: 'followUp',
-        question: 'Verify the destination root.',
-        threadId: 'ei_000000000006',
-        allowBypass: false,
-        streamId: '',
-      },
-    });
+    enqueueOtherStreamInquiry(
+      'external-other-after-escape',
+      'Wait outside the destination root.',
+      'ei_000000000005',
+    );
+    enqueueSessionInquiry(
+      'external-session-after-escape',
+      'Verify the destination root.',
+      'ei_000000000006',
+    );
     const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
 
     try {
@@ -1370,28 +1380,16 @@ describe('App approval surface ownership', () => {
   it('promotes a session-wide approval from a scoped-list root', async () => {
     seedChildHierarchy();
     focusStream(GRANDCHILD);
-    void enqueueApproval({
-      kind: 'externalInquiry',
-      data: {
-        requestId: 'external-other-scoped',
-        mode: 'followUp',
-        question: 'Wait outside the scoped list.',
-        threadId: 'ei_000000000003',
-        allowBypass: false,
-        streamId: 'other-stream',
-      },
-    });
-    void enqueueApproval({
-      kind: 'externalInquiry',
-      data: {
-        requestId: 'external-session-scoped',
-        mode: 'followUp',
-        question: 'Verify the scoped child session.',
-        threadId: 'ei_000000000004',
-        allowBypass: false,
-        streamId: '',
-      },
-    });
+    enqueueOtherStreamInquiry(
+      'external-other-scoped',
+      'Wait outside the scoped list.',
+      'ei_000000000003',
+    );
+    enqueueSessionInquiry(
+      'external-session-scoped',
+      'Verify the scoped child session.',
+      'ei_000000000004',
+    );
     const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
 
     try {
@@ -1425,28 +1423,16 @@ describe('App approval surface ownership', () => {
       agentCategory: AgentCategory.Workflow,
     });
     patchStream(ROOT, (slice) => ({ ...slice, entries: [] }));
-    void enqueueApproval({
-      kind: 'externalInquiry',
-      data: {
-        requestId: 'external-other',
-        mode: 'followUp',
-        question: 'Wait outside the active stream.',
-        threadId: 'ei_000000000001',
-        allowBypass: false,
-        streamId: 'other-stream',
-      },
-    });
-    void enqueueApproval({
-      kind: 'externalInquiry',
-      data: {
-        requestId: 'external-session',
-        mode: 'followUp',
-        question: 'Verify the workflow before it emits rows.',
-        threadId: 'ei_000000000002',
-        allowBypass: false,
-        streamId: '',
-      },
-    });
+    enqueueOtherStreamInquiry(
+      'external-other',
+      'Wait outside the active stream.',
+      'ei_000000000001',
+    );
+    enqueueSessionInquiry(
+      'external-session',
+      'Verify the workflow before it emits rows.',
+      'ei_000000000002',
+    );
     const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
 
     try {

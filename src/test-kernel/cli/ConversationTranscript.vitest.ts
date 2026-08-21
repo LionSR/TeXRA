@@ -19,6 +19,7 @@ import {
   orderedStaticTranscriptEntries,
   splitTranscriptEntries,
   terminalVisibleTranscriptText,
+  transcriptRowHeadline,
   trimAssistantTranscriptLead,
 } from '@cli/chat/tui/panes/transcriptEntries';
 import { hydratedTranscript } from '@cli/chat/tui/panes/TranscriptReader';
@@ -61,10 +62,6 @@ import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
-import {
-  isFinalizedTranscriptRow,
-  transcriptRowHeadline,
-} from '@cli/chat/tui/panes/transcriptEntries';
 import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
@@ -77,11 +74,7 @@ import {
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import {
-  transcriptText,
-  type ToolRow,
-  type TranscriptRow,
-} from '@shared/transcript';
+import type { ToolRow, TranscriptRow } from '@shared/transcript';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import { buildChildRosters } from '@test/support/childRosters';
 import {

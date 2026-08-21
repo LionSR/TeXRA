@@ -259,6 +259,28 @@ function holdCommand(): (result: ExecResult) => void {
   return (result) => resolve?.(result);
 }
 
+/**
+ * Set up a run trace whose emitted events are captured for inspection, and
+ * return a `dispose` that undoes both the subscription and the trace itself.
+ */
+function traceWithEvents(streamId: StreamTabId): {
+  trace: ReturnType<typeof createRunTrace>['trace'];
+  events: AgentEvent[];
+  dispose: () => void;
+} {
+  const runTrace = createRunTrace(streamId, StreamLogStore.ephemeral('test'));
+  const events: AgentEvent[] = [];
+  const unsubscribe = runTrace.trace.subscribe((event) => events.push(event));
+  return {
+    trace: runTrace.trace,
+    events,
+    dispose: () => {
+      unsubscribe();
+      runTrace.dispose();
+    },
+  };
+}
+
 /** Shared teardown for background-launch cases. */
 function detachBackgroundRun(
   recorded: ReturnType<typeof recordSessionEvents>,
@@ -512,19 +534,14 @@ describe('BashTool', () => {
   });
 
   it('keeps result status out of visible tool log output', async () => {
-    const runTrace = createRunTrace(
+    const { trace, events, dispose } = traceWithEvents(
       'ToolStatusLogTest' as StreamTabId,
-      StreamLogStore.ephemeral('test'),
     );
-    const events: AgentEvent[] = [];
-    const unsubscribe = runTrace.trace.subscribe((event) => {
-      events.push(event);
-    });
 
     try {
       const options = roundServices({
         toolName: 'empty',
-        logger: runTrace.trace,
+        logger: trace,
         streamId: 'tool-status-log' as StreamTabId,
         toolRegistry: new MapToolRegistry({}),
       });
@@ -564,7 +581,7 @@ describe('BashTool', () => {
               editedFiles: [],
               logRef: {
                 logId: undefined,
-                groupId: runTrace.trace.activeStageId(),
+                groupId: trace.activeStageId(),
               },
             } as any,
           ],
@@ -586,8 +603,7 @@ describe('BashTool', () => {
       ) as any;
       assert.equal(toolOutputMessage?.output, 'OK');
     } finally {
-      unsubscribe();
-      runTrace.dispose();
+      dispose();
     }
   });
 
@@ -944,20 +960,15 @@ describe('BashTool', () => {
       },
     );
 
-    const runTrace = createRunTrace(
+    const { trace, events, dispose } = traceWithEvents(
       'BashToolAbortTest' as StreamTabId,
-      StreamLogStore.ephemeral('test'),
     );
-    const events: AgentEvent[] = [];
-    const unsubscribe = runTrace.trace.subscribe((event) => {
-      events.push(event);
-    });
 
     const node = new ToolUseDispatchNode<OpenAI>();
     const bashTool = new BashTool();
     const options = roundServices({
       toolName: 'bash',
-      logger: runTrace.trace,
+      logger: trace,
       streamId: 'bash-tool' as StreamTabId,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
       abortSignal: runController.signal,
@@ -1004,8 +1015,7 @@ describe('BashTool', () => {
         assert.equal(failedEvent.logId, startedLogId);
       }
     } finally {
-      unsubscribe();
-      runTrace.dispose();
+      dispose();
     }
   });
 });

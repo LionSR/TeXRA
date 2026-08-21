@@ -99,9 +99,7 @@ describe('CLI retry request', () => {
 
   it('settles the approval queue from a real terminal k input', async () => {
     const { ink, React } = await loadInk();
-    const decision = enqueueApproval({
-      ...subscriptionLimitPayload(true),
-    });
+    const decision = enqueueApproval(subscriptionLimitPayload(true));
     const { instance, stdin } = renderInteractive(
       ink,
       React.createElement(ApprovalModal, {

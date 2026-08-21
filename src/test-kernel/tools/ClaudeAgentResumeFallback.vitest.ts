@@ -135,6 +135,10 @@ function fakeToolContexts(extra: Record<string, unknown> = {}): unknown {
   };
 }
 
+function fakePorts(): ChildRunPorts {
+  return { notify: () => {}, recordCost: () => {} };
+}
+
 function captureStrategy(): { strategy?: ChildRunStrategy<unknown> } {
   const captured: { strategy?: ChildRunStrategy<unknown> } = {};
   mocks.startChildRunLoop.mockImplementation(
@@ -308,8 +312,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     const [loopParams] = mocks.startChildRunLoop.mock.calls[0] as [
       { strategy: ChildRunStrategy<unknown> },
     ];
-    const ports: ChildRunPorts = { notify: () => {}, recordCost: () => {} };
-    await loopParams.strategy.launch(ports, new AbortController());
+    await loopParams.strategy.launch(fakePorts(), new AbortController());
 
     expect(mocks.query).toHaveBeenCalledTimes(1);
     const [callArgs] = mocks.query.mock.calls[0] as [
@@ -337,7 +340,7 @@ describe('claude_agent tool launch and resume fallback', () => {
 
     await new ClaudeAgentTool().call({ prompt: 'start Claude' });
     const turn = await captured.strategy?.launch?.(
-      { notify: () => {}, recordCost: () => {} },
+      fakePorts(),
       new AbortController(),
     );
     if (!turn) throw new Error('Expected a Claude turn result');
@@ -501,7 +504,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     expect(result.status).toBe('executed');
     expect(mocks.submitFollowUp).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
-    const ports: ChildRunPorts = { notify: () => {}, recordCost: () => {} };
+    const ports = fakePorts();
     const firstTurn = await captured.strategy?.launch?.(
       ports,
       new AbortController(),
@@ -574,7 +577,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     });
 
     expect(result.status).toBe('executed');
-    const ports: ChildRunPorts = { notify: () => {}, recordCost: () => {} };
+    const ports = fakePorts();
     const firstTurn = await captured.strategy?.launch?.(
       ports,
       new AbortController(),

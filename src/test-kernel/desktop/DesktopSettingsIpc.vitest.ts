@@ -156,6 +156,13 @@ function flushAsyncWork(): Promise<void> {
   );
 }
 
+function newStatePorts() {
+  return {
+    globalState: new FakeStateStore(),
+    workspaceState: new FakeStateStore(),
+  };
+}
+
 describe('desktop settings IPC', () => {
   beforeAll(async () => {
     ({ createDesktopSettingsIpc } = await loadSourceModule(
@@ -227,13 +234,9 @@ describe('desktop settings IPC', () => {
     const postSubscriptionUsage = vi.fn(async () => undefined);
     const onError = vi.fn();
     const credentialSettingsController =
-      createStubDesktopCredentialSettingsController(
-        {
-          globalState: new FakeStateStore(),
-          workspaceState: new FakeStateStore(),
-        },
-        { postSubscriptionUsage },
-      );
+      createStubDesktopCredentialSettingsController(newStatePorts(), {
+        postSubscriptionUsage,
+      });
     const { settings } = createSettingsFixture({
       credentialSettingsController,
       ui: { onError },
@@ -274,13 +277,9 @@ describe('desktop settings IPC', () => {
     );
     const onError = vi.fn();
     const credentialSettingsController =
-      createStubDesktopCredentialSettingsController(
-        {
-          globalState: new FakeStateStore(),
-          workspaceState: new FakeStateStore(),
-        },
-        { postSubscriptionUsage },
-      );
+      createStubDesktopCredentialSettingsController(newStatePorts(), {
+        postSubscriptionUsage,
+      });
     const { settings } = createSettingsFixture({
       credentialSettingsController,
       ui: { onError },
@@ -659,10 +658,7 @@ describe('desktop settings IPC', () => {
   });
 
   it('delegates profile and ChatGPT commands to the credential controller', async () => {
-    const state = {
-      globalState: new FakeStateStore(),
-      workspaceState: new FakeStateStore(),
-    };
+    const state = newStatePorts();
     const setProviderKey = vi.fn(async () => undefined);
     const signIn = vi.fn(async () => undefined);
     const signOut = vi.fn(async () => undefined);
@@ -954,10 +950,7 @@ describe('desktop settings IPC', () => {
   });
 
   it('refreshes credentials before conditionally refreshing the agent catalog', async () => {
-    const state = {
-      globalState: new FakeStateStore(),
-      workspaceState: new FakeStateStore(),
-    };
+    const state = newStatePorts();
     const events: string[] = [];
     const refreshAuthDependentData = vi.fn(async () => {
       events.push('credentials');
