@@ -33,9 +33,10 @@ import {
 } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { isKnownUnsupported } from '@shared/utils/dispatcher';
+import { getBasename } from '@utils/core';
 
 // Local imports - shared schemas and events
-import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { pluralize } from '@utils/text/stringUtils';
 import { agentSelectionPanelStyles } from './AgentSelectionPanel.styles';
 
@@ -458,7 +459,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
         ${
           agent.filePath
             ? html`<div class="agent-detail-path" title=${agent.filePath}>
-                ${agent.filePath.split(/[/\\]/).pop() ?? agent.filePath}
+                ${getBasename(agent.filePath)}
               </div>`
             : nothing
         }

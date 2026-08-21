@@ -84,6 +84,7 @@ import {
   ModelCompactionThresholdPercentSchema,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
+import { isImageMimeType } from '@utils/files/mimeUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 import {
@@ -159,7 +160,7 @@ function mediaAttachmentKindsFromEntries(
   entries: readonly MediaEntry[],
 ): MediaAttachmentKind[] {
   return entries.map((entry) =>
-    entry.media_category === 'image' && entry.media_type.startsWith('image/')
+    entry.media_category === 'image' && isImageMimeType(entry.media_type)
       ? 'image'
       : 'document',
   );

@@ -33,7 +33,7 @@ import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { normalizeFilePath } from '@utils/core';
+import { getBasename, normalizeFilePath } from '@utils/core';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
@@ -100,12 +100,12 @@ interface ParsedPath {
 /** Parse a path into directory and basename components */
 function parsePath(path: string): ParsedPath {
   const normalized = normalizeFilePath(path);
-  // With no slash, lastIndexOf is -1 and both slices already yield the
-  // fallbacks: '' for dir, the whole path for basename.
+  // With no slash, lastIndexOf is -1 and the dir slice already yields the
+  // fallback: '' for dir.
   const lastSlash = normalized.lastIndexOf('/');
   return {
     dir: normalized.slice(0, lastSlash + 1),
-    basename: normalized.slice(lastSlash + 1),
+    basename: getBasename(normalized),
   };
 }
 
