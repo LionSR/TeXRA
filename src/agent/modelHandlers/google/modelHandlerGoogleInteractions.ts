@@ -52,6 +52,7 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { filterNotNull, generateShortId, isNonEmptyString } from '@utils/core';
+import { isImageMimeType } from '@utils/files/mimeUtils';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -765,7 +766,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   } {
     // Interactions DocumentContent currently has no resolution field, so PDF
     // resolution cannot be selected until the SDK exposes it.
-    if (this.isGemini3Model() && mimeType.startsWith('image/')) {
+    if (this.isGemini3Model() && isImageMimeType(mimeType)) {
       return { resolution: 'high' };
     }
     return {};
@@ -1028,7 +1029,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * both sources — the only difference is the data/uri field.)
    */
   protected buildMedia(source: GoogleMediaSource, mimeType: string): Content {
-    if (mimeType.startsWith('image/')) {
+    if (isImageMimeType(mimeType)) {
       return {
         type: 'image',
         ...source,
