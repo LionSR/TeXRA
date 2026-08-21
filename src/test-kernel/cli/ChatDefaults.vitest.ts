@@ -21,6 +21,17 @@ import { GlobalStorageFS } from '@utils/files/storageFS';
 /** A cwd with no `.texra` directory, so the workspace tier finds nothing. */
 const NO_WORKSPACE = '/tmp/no-such-texra-workspace';
 
+/**
+ * Shared config layers exercised at both the workspace and user tiers: an
+ * unprefixed `texra.agent`/`texra.model` pair plus a prefixed `texra.chat`
+ * override, so tests can assert the command-specific layer wins.
+ */
+const CHAT_TIER_CONFIG = {
+  'texra.agent': 'generic',
+  'texra.model': 'gpt55',
+  'texra.chat': { agent: 'assistant', model: 'deepseekT' },
+};
+
 /** A missing user config, shaped like a genuine `fs` ENOENT rejection. */
 function enoentError(): NodeJS.ErrnoException {
   const error = new Error(
@@ -158,11 +169,7 @@ describe('CLI chat defaults', () => {
   });
 
   it('uses command-specific workspace defaults below environment overrides', async () => {
-    const workspace = await workspaceWithConfig({
-      'texra.agent': 'generic',
-      'texra.model': 'gpt55',
-      'texra.chat': { agent: 'assistant', model: 'deepseekT' },
-    });
+    const workspace = await workspaceWithConfig(CHAT_TIER_CONFIG);
 
     await expectChatDefaults(
       { cwd: workspace, envModel: 'sonnet46T' },
@@ -402,11 +409,7 @@ describe('CLI chat defaults', () => {
   });
 
   it('uses prefixed command-specific workspace defaults', async () => {
-    const workspace = await workspaceWithConfig({
-      'texra.agent': 'generic',
-      'texra.model': 'gpt55',
-      'texra.chat': { agent: 'assistant', model: 'deepseekT' },
-    });
+    const workspace = await workspaceWithConfig(CHAT_TIER_CONFIG);
 
     await expectChatDefaults(
       { cwd: workspace },
@@ -419,11 +422,7 @@ describe('CLI chat defaults', () => {
   });
 
   it('uses the shared config parser for prefixed user chat defaults', async () => {
-    mockedReadJson.mockResolvedValueOnce({
-      'texra.agent': 'generic',
-      'texra.model': 'gpt55',
-      'texra.chat': { agent: 'assistant', model: 'deepseekT' },
-    });
+    mockedReadJson.mockResolvedValueOnce(CHAT_TIER_CONFIG);
 
     await expectChatDefaults(
       { cwd: NO_WORKSPACE },

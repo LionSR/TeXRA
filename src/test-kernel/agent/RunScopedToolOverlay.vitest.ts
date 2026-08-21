@@ -44,6 +44,37 @@ function approvalGatedTool(name: string): ITool {
   return { ...tool(name), requiresApproval: true };
 }
 
+/**
+ * A model handler whose `createResponse` records the tools it was offered
+ * and then throws, stopping the flow right after tool assembly so the test
+ * can inspect exactly what the model saw.
+ */
+function stopAfterToolObservationHandler<T extends { name: string }>(
+  observedTools: T[][],
+) {
+  const stopAfterObservation = Object.assign(new Error('Tool list observed'), {
+    status: 401,
+  });
+  return {
+    capabilities: { supportsFunctionCalling: true, supportsVision: false },
+    config: { provider: 'test' },
+    supportsForcedToolChoice: false,
+    requiresPerCallSystemPrompt: false,
+    initializeMessages: async () => [{ role: 'user', content: 'test' }],
+    consumeInsertedAttachmentKinds: () => [],
+    getClient: async () => ({}),
+    getCredentialRouteForClient: () => undefined,
+    setOutputStreaming: () => {},
+    getWireRouteKey: () => 'test',
+    getModelRetryRouteKey: () => 'test:model',
+    extractAssistantText: () => undefined,
+    createResponse: async (options: { tools?: T[] }) => {
+      observedTools.push(options.tools ?? []);
+      throw stopAfterObservation;
+    },
+  };
+}
+
 describe('run-scoped tool overlay', () => {
   setupPlatform({ workspacePath: process.cwd() });
 
@@ -61,32 +92,7 @@ describe('run-scoped tool overlay', () => {
     const warn = vi.fn<typeof noopTrace.warn>();
     const logger = { ...noopTrace, warn };
     const observedTools: { name: string; forceFunctionCall?: boolean }[][] = [];
-    const stopAfterObservation = Object.assign(
-      new Error('Tool list observed'),
-      {
-        status: 401,
-      },
-    );
-    const modelHandler = {
-      capabilities: { supportsFunctionCalling: true, supportsVision: false },
-      config: { provider: 'test' },
-      supportsForcedToolChoice: false,
-      requiresPerCallSystemPrompt: false,
-      initializeMessages: async () => [{ role: 'user', content: 'test' }],
-      consumeInsertedAttachmentKinds: () => [],
-      getClient: async () => ({}),
-      getCredentialRouteForClient: () => undefined,
-      setOutputStreaming: () => {},
-      getWireRouteKey: () => 'test',
-      getModelRetryRouteKey: () => 'test:model',
-      extractAssistantText: () => undefined,
-      createResponse: async (options: {
-        tools?: { name: string; forceFunctionCall?: boolean }[];
-      }) => {
-        observedTools.push(options.tools ?? []);
-        throw stopAfterObservation;
-      },
-    };
+    const modelHandler = stopAfterToolObservationHandler(observedTools);
     const modelCell = testModelCell(modelHandler, CONFIG.model);
     // The run context reads the same cell the flow drives, as a launch does.
     const context = createRunContext({ runScope, modelCell });
@@ -149,28 +155,7 @@ describe('run-scoped tool overlay', () => {
       signal: new AbortController().signal,
     });
     const observedTools: { name: string }[][] = [];
-    const stopAfterObservation = Object.assign(
-      new Error('Tool list observed'),
-      { status: 401 },
-    );
-    const modelHandler = {
-      capabilities: { supportsFunctionCalling: true, supportsVision: false },
-      config: { provider: 'test' },
-      supportsForcedToolChoice: false,
-      requiresPerCallSystemPrompt: false,
-      initializeMessages: async () => [{ role: 'user', content: 'test' }],
-      consumeInsertedAttachmentKinds: () => [],
-      getClient: async () => ({}),
-      getCredentialRouteForClient: () => undefined,
-      setOutputStreaming: () => {},
-      getWireRouteKey: () => 'test',
-      getModelRetryRouteKey: () => 'test:model',
-      extractAssistantText: () => undefined,
-      createResponse: async (options: { tools?: { name: string }[] }) => {
-        observedTools.push(options.tools ?? []);
-        throw stopAfterObservation;
-      },
-    };
+    const modelHandler = stopAfterToolObservationHandler(observedTools);
     const modelCell = testModelCell(modelHandler, 'test-model');
     const config = AgentConfigSchema.parse({
       agent: 'chat',

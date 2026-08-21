@@ -160,6 +160,21 @@ function trackInterruptibleHandle(
   return handle;
 }
 
+/** The `LiveToolUseFlowContext` fixture shared by the tool-use-admission tests. */
+function createLiveToolUseFlowContext(
+  overrides: Partial<LiveToolUseFlowContext> = {},
+): LiveToolUseFlowContext {
+  return {
+    session: { appendFollowUp: vi.fn() },
+    modelHandler: { supportsManualCompaction: true },
+    requestImmediateCompaction: vi.fn(),
+    modelSwitchDisabledReason: vi.fn(),
+    switchModel: vi.fn(),
+    interrupt: vi.fn(),
+    ...overrides,
+  };
+}
+
 /** Tracks a handle genuinely suspended at WAITING, the state every waiting-kill test starts from. */
 function trackSuspendedWaitingHandle(
   registry: ExecutionRegistry,
@@ -1523,18 +1538,7 @@ describe('executionRegistry', () => {
     const { registry } = createRegistry();
     const executionId = 'exec-live-flow-context-test';
     const streamId = 'stream-live-flow-context-test' as StreamTabId;
-    const context: LiveToolUseFlowContext = {
-      session: {
-        appendFollowUp: vi.fn(),
-      },
-      modelHandler: {
-        supportsManualCompaction: true,
-      },
-      requestImmediateCompaction: vi.fn(),
-      modelSwitchDisabledReason: vi.fn(),
-      switchModel: vi.fn(),
-      interrupt: vi.fn(),
-    };
+    const context = createLiveToolUseFlowContext();
 
     try {
       const handle = createHandle(executionId, streamId, streamId, {
@@ -1562,19 +1566,10 @@ describe('executionRegistry', () => {
       'stream-manual-compaction-unsupported-test' as StreamTabId;
     const requestImmediateCompaction = vi.fn();
     const ownerSession = {} as SessionHandle;
-    const context: LiveToolUseFlowContext = {
+    const context = createLiveToolUseFlowContext({
       ownerSession,
-      session: {
-        appendFollowUp: vi.fn(),
-      },
-      modelHandler: {
-        supportsManualCompaction: true,
-      },
       requestImmediateCompaction,
-      modelSwitchDisabledReason: vi.fn(),
-      switchModel: vi.fn(),
-      interrupt: vi.fn(),
-    };
+    });
     const unsupportedContext: LiveToolUseFlowContext = {
       ...context,
       modelHandler: {
@@ -1637,18 +1632,7 @@ describe('executionRegistry', () => {
     const stoppedStreamId = 'stream-follow-up-stopped-test' as StreamTabId;
     const parentStreamId = 'stream-follow-up-parent-test' as StreamTabId;
     const childStreamId = 'stream-follow-up-child-test' as StreamTabId;
-    const context: LiveToolUseFlowContext = {
-      session: {
-        appendFollowUp: vi.fn(),
-      },
-      modelHandler: {
-        supportsManualCompaction: true,
-      },
-      requestImmediateCompaction: vi.fn(),
-      modelSwitchDisabledReason: vi.fn(),
-      switchModel: vi.fn(),
-      interrupt: vi.fn(),
-    };
+    const context = createLiveToolUseFlowContext();
 
     try {
       const activeHandle = createHandle(

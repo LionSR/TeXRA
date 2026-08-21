@@ -54,6 +54,41 @@ import { createRecordingHost } from '../progressTestUtils';
 
 const EXECUTION_ID = 'launch-context-test' as ExecutionId;
 
+/** Launches with an empty agent/model, asserting the shared missing-agent failure. */
+async function launchWithMissingAgent(
+  session: ReturnType<typeof createTestSession>,
+): Promise<void> {
+  await expect(
+    buildAgentLaunchContext({
+      config: AgentConfigSchema.parse({ agent: '', model: '' }),
+      executionId: EXECUTION_ID,
+      session,
+    }),
+  ).rejects.toThrow('Could not find agent');
+}
+
+/**
+ * Triggers `getAgentPath`'s queued (no live host attached) missing-agent
+ * failure and asserts the shared pending-presentation state, returning the
+ * thrown error so the caller can attach a host and assert on replay.
+ */
+async function triggerQueuedMissingAgentFailure(
+  owner: SessionHostInteractions,
+): Promise<unknown> {
+  let thrown: unknown;
+  await getAgentPath(
+    '__queued_missing_agent_for_launch_context_test__',
+    owner,
+    AgentCategory.ToolUse,
+  ).catch((error: unknown) => {
+    thrown = error;
+  });
+  expect(String(thrown)).toContain('Could not find agent');
+  expect(hasErrorPresentedMarker(thrown)).toBe(false);
+  expect(hasErrorPresentationPending(thrown)).toBe(true);
+  return thrown;
+}
+
 describe('AgentLaunchContext', () => {
   it('still rejects empty canonical values, now at agent resolution', async () => {
     // The pre-mint missing-field guard died with the model-keyed stream id
@@ -61,13 +96,7 @@ describe('AgentLaunchContext', () => {
     // dedicated field check, but it must still fail the launch.
     const session = createTestSession();
     try {
-      await expect(
-        buildAgentLaunchContext({
-          config: AgentConfigSchema.parse({ agent: '', model: '' }),
-          executionId: EXECUTION_ID,
-          session,
-        }),
-      ).rejects.toThrow('Could not find agent');
+      await launchWithMissingAgent(session);
     } finally {
       session.dispose();
     }
@@ -101,13 +130,7 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession({ interactions: recording.host });
 
     try {
-      await expect(
-        buildAgentLaunchContext({
-          config: AgentConfigSchema.parse({ agent: '', model: '' }),
-          executionId: EXECUTION_ID,
-          session,
-        }),
-      ).rejects.toThrow('Could not find agent');
+      await launchWithMissingAgent(session);
     } finally {
       session.dispose();
     }
@@ -129,13 +152,7 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession({ interactions: recording.host });
 
     try {
-      await expect(
-        buildAgentLaunchContext({
-          config: AgentConfigSchema.parse({ agent: '', model: '' }),
-          executionId: EXECUTION_ID,
-          session,
-        }),
-      ).rejects.toThrow('Could not find agent');
+      await launchWithMissingAgent(session);
     } finally {
       session.dispose();
     }
@@ -156,18 +173,7 @@ describe('AgentLaunchContext', () => {
     // actually renders on a live host.
     const recording = createRecordingHost({ emitDelivery: true });
     const owner = new SessionHostInteractions();
-    let thrown: unknown;
-
-    await getAgentPath(
-      '__queued_missing_agent_for_launch_context_test__',
-      owner,
-      AgentCategory.ToolUse,
-    ).catch((error: unknown) => {
-      thrown = error;
-    });
-    expect(String(thrown)).toContain('Could not find agent');
-    expect(hasErrorPresentedMarker(thrown)).toBe(false);
-    expect(hasErrorPresentationPending(thrown)).toBe(true);
+    const thrown = await triggerQueuedMissingAgentFailure(owner);
 
     owner.use(recording.interactions);
     await Promise.resolve();
@@ -188,18 +194,7 @@ describe('AgentLaunchContext', () => {
   it('emits the generic fallback when a queued missing-agent banner replay is not delivered', async () => {
     const recording = createRecordingHost({ emitDelivery: false });
     const owner = new SessionHostInteractions();
-    let thrown: unknown;
-
-    await getAgentPath(
-      '__queued_missing_agent_for_launch_context_test__',
-      owner,
-      AgentCategory.ToolUse,
-    ).catch((error: unknown) => {
-      thrown = error;
-    });
-    expect(String(thrown)).toContain('Could not find agent');
-    expect(hasErrorPresentedMarker(thrown)).toBe(false);
-    expect(hasErrorPresentationPending(thrown)).toBe(true);
+    const thrown = await triggerQueuedMissingAgentFailure(owner);
 
     owner.use(recording.interactions);
     await Promise.resolve();
@@ -224,18 +219,7 @@ describe('AgentLaunchContext', () => {
     // error stays presentation-pending and surfaces zero times (#10398).
     const events: Array<{ event: string; payload: unknown }> = [];
     const owner = new SessionHostInteractions();
-    let thrown: unknown;
-
-    await getAgentPath(
-      '__queued_missing_agent_for_launch_context_test__',
-      owner,
-      AgentCategory.ToolUse,
-    ).catch((error: unknown) => {
-      thrown = error;
-    });
-    expect(String(thrown)).toContain('Could not find agent');
-    expect(hasErrorPresentedMarker(thrown)).toBe(false);
-    expect(hasErrorPresentationPending(thrown)).toBe(true);
+    const thrown = await triggerQueuedMissingAgentFailure(owner);
 
     owner.use({
       emit: (event, payload) => {
@@ -304,13 +288,7 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession({ interactions: owner });
 
     try {
-      await expect(
-        buildAgentLaunchContext({
-          config: AgentConfigSchema.parse({ agent: '', model: '' }),
-          executionId: EXECUTION_ID,
-          session,
-        }),
-      ).rejects.toThrow('Could not find agent');
+      await launchWithMissingAgent(session);
 
       // The launch catch saw the pending-replay marker and left the fallback
       // to the queued targeted event; it must not have queued a duplicate.
