@@ -55,13 +55,16 @@ const TEMP_ID_LENGTH = 8;
 
 const latexdiffService = new LaTeXdiffService('ToolEditApproval');
 
-/** Silently attempt to delete a file, ignoring errors */
-async function silentUnlink(filePath: string): Promise<void> {
+/** Silently attempt to delete a file or directory, ignoring errors */
+async function silentDelete(
+  targetPath: string,
+  kind: 'file' | 'dir',
+): Promise<void> {
   await platform()
-    .fs.delete(filePath)
+    .fs.delete(targetPath)
     .catch((error) => {
-      // Best-effort temp cleanup; the file may already be gone.
-      debug('latexPreview', `Failed to delete temp file ${filePath}`, {
+      // Best-effort temp cleanup; the target may already be gone.
+      debug('latexPreview', `Failed to delete temp ${kind} ${targetPath}`, {
         data: error,
       });
     });
@@ -76,7 +79,9 @@ async function cleanupLatexAuxFiles(filePath: string): Promise<void> {
       ? globSync(`${basePathNoExt}${tempExt}`, { nodir: true })
       : [basePathNoExt + tempExt],
   );
-  await Promise.all(unlinkTargets.map(silentUnlink));
+  await Promise.all(
+    unlinkTargets.map((target) => silentDelete(target, 'file')),
+  );
 }
 
 /** Register cleanup function with entry, or run immediately if already settled */
@@ -167,17 +172,10 @@ async function createTempFileWithCleanup(
   await platform().fs.writeFile(tempPath, Buffer.from(content, 'utf8'));
 
   registerCleanup(entry, async () => {
-    await silentUnlink(tempPath);
+    await silentDelete(tempPath, 'file');
     await cleanupLatexAuxFiles(tempPath);
     if (location === 'workspaceTemp') {
-      await platform()
-        .fs.delete(tempDir)
-        .catch((error) => {
-          // Best-effort temp dir removal; it may be non-empty or already gone.
-          debug('latexPreview', `Failed to delete temp dir ${tempDir}`, {
-            data: error,
-          });
-        });
+      await silentDelete(tempDir, 'dir');
     }
   });
 
@@ -273,7 +271,7 @@ export async function runLatexdiff(
 
     const diffFilePath = result.diffPath;
     registerCleanup(entry, async () => {
-      await silentUnlink(diffFilePath);
+      await silentDelete(diffFilePath, 'file');
       await cleanupLatexAuxFiles(diffFilePath);
     });
 
