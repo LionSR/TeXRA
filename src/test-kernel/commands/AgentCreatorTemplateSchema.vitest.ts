@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import * as yaml from 'yaml';
 
-import { ParsedCreatorYamlSchema } from '@commands/agent/agentCreatorCommands';
+import { ParsedCreatorYamlSchema } from '@agent/implementations/agentCreator/agentCreatorFlow';
 
 // Schema-boundary contract for the bundled agent-creator templates (#8187):
 // malformed prompt blocks must fail loudly at load instead of silently

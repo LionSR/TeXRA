@@ -26,6 +26,10 @@ import {
   type ToolbarCommandDetail,
 } from './events';
 import { appState, setStreamStateForId } from './progressState';
+import {
+  approvalBypassMessage,
+  orderWithOptionalBypass,
+} from './permissionActionPolicy';
 
 export function handleStreamSwitch(
   event: CustomEvent<StreamEventDetail>,
@@ -192,42 +196,14 @@ export function runCompileFixer(): void {
   postMessage(PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER, { stream });
 }
 
-/**
- * Post an optional session-bypass-enable message before the terminal
- * protocol message it gates. Webview messages are delivered FIFO to the
- * extension host, and the bypass-enable message sets the per-stream bypass
- * synchronously when handled — so sending it first guarantees it lands
- * before the terminal message unblocks the agent, and the agent can't race
- * ahead and re-prompt the next gated action before bypass is live.
- */
+/** Post protocol messages, keeping any bypass-enable ordered ahead of the terminal message it gates. */
 function postWithOptionalBypass(
   bypassMessage: ProgressViewInboundMessage | undefined,
   message: ProgressViewInboundMessage,
 ): void {
-  if (bypassMessage) {
-    postPermissionMessage(bypassMessage);
+  for (const outbound of orderWithOptionalBypass(bypassMessage, message)) {
+    postPermissionMessage(outbound);
   }
-  postPermissionMessage(message);
-}
-
-/**
- * Build the session-bypass enable that accompanies the broader approve action.
- * The grant covers only the prompt's own kind, so an edit prompt never
- * auto-approves shell commands. Set-on (not toggle) is inversion-proof: a
- * stream can already carry that kind's bypass from the shield or from
- * delegated inheritance. The button only renders with a real stream (see
- * canBypass), but guard anyway.
- */
-function approvalBypassMessage(
-  streamId: string | undefined,
-  kind: typeof PERMISSION_KIND.TOOL_EDIT | typeof PERMISSION_KIND.BASH,
-): ProgressViewInboundMessage | undefined {
-  if (!streamId) return undefined;
-  return {
-    command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
-    stream: streamId,
-    kind,
-  };
 }
 
 export function handlePermissionAction(
