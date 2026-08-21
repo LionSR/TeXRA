@@ -19,7 +19,7 @@
     "ai"
   ],
   "author": "TeXRA Team",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "description": "Documentation for TeXRA - an AI theorist for VS Code and the terminal",
   "devDependencies": {
     "@awesome.me/webawesome": "^3.11.0",

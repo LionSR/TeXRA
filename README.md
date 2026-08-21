@@ -146,6 +146,7 @@ Contact: [contact@texra.ai](mailto:contact@texra.ai).
 
 ## License
 
-© TeXRA Team 2025–2026. All rights reserved.
+Licensed under the [Apache License, Version 2.0](LICENSE).
+© TeXRA Team 2024–2026.
 
 [Terms of Service](https://texra.ai/terms) · [Provider list](https://texra.ai/providers)

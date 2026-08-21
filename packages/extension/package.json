@@ -1028,7 +1028,7 @@
     "type": "git",
     "url": "https://github.com/texra-ai/texra-issues.git"
   },
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "author": "TeXRA.ai",
   "icon": "resources/logo-512x512.png",
   "keywords": [
