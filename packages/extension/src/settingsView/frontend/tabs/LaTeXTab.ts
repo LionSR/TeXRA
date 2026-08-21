@@ -54,8 +54,7 @@ import {
 } from '@shared/constants/replacementCategories';
 import {
   LATEX_CONFIG_DEFAULTS,
-  LATEX_FIELD_TO_KEY,
-  LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
+  LATEX_CONFIG_FIELD_TO_KEY,
   LATEX_CONFIG_RANGES,
 } from '@shared/constants/latexConfig';
 
@@ -87,11 +86,6 @@ import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import type WaTextarea from '@awesome.me/webawesome/dist/components/textarea/textarea.js';
-
-const LATEX_CONFIG_FIELD_TO_KEY = {
-  ...LATEX_FIELD_TO_KEY,
-  ...LATEX_REPLACEMENT_FIELD_TO_CONFIG_KEY,
-} as const satisfies Record<keyof LatexConfigValues, string>;
 
 /** Path keys in LatexSettingsStatus for tool paths. */
 type ToolPathKey =
