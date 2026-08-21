@@ -15,7 +15,7 @@ import {
 import { ensureArray } from '@utils/core';
 import { getPromptFileName } from '@utils/prompt';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { getMimeType } from '@utils/files/mimeUtils';
+import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import {
   countPdfPages,
@@ -88,7 +88,7 @@ export class MediaAttachmentProcessor {
   ): Promise<ProcessImageResult> {
     if (ext !== '.pdf') {
       const mimeType = getMimeType(mediaFile);
-      if (!mimeType?.startsWith('image/')) {
+      if (!mimeType || !isImageMimeType(mimeType)) {
         throw new Error(
           `Unsupported image extension: ${ext}. Image support: ${this.capabilities.supportsVision}`,
         );

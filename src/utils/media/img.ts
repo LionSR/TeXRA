@@ -10,7 +10,7 @@ import { fromPath } from 'pdf2pic';
 import { createLog } from '@logger/logUtils';
 import { generateShortId } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { getMimeType } from '@utils/files/mimeUtils';
+import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { createTexraTempDir } from '@utils/files/tempDir';
 import { getConfig } from '@utils/config/configUtils';
@@ -121,7 +121,7 @@ export async function getBase64EncodedMedia(
   let tempPath: string | null = null;
 
   try {
-    if (mimeType?.startsWith('image/')) {
+    if (isImageMimeType(mimeType)) {
       const resizedPath = await resizeImageIfNeeded(absolutePath);
       if (resizedPath !== absolutePath) {
         tempPath = resizedPath;
