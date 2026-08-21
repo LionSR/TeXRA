@@ -36,9 +36,10 @@ export class ModelHandlerDeepSeek extends ReasoningModelHandlerOpenAI<DeepSeekTo
    * attachment summaries are suppressed entirely. Not derived from
    * `capabilities.supportsVision` — that flag is about image understanding
    * in normal turns, not whether the tool-result format can carry an
-   * attachment summary; the two happen to both be false for DeepSeek today,
-   * but that's a coincidence, not a rule (#7101 triage: see the base
-   * getter's doc comment for why this stays a per-provider override).
+   * attachment summary. `deepseekvision` is proof the two are independent,
+   * not coincidental: it has `supportsVision: true` while this still
+   * returns `false` (#7101 triage: see the base getter's doc comment for
+   * why this stays a per-provider override).
    */
   protected override get canProcessToolResultAttachments(): boolean {
     return false;
