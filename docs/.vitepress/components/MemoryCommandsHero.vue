@@ -84,7 +84,8 @@ const calls = [
   flex-wrap: wrap;
   gap: var(--mk-space-7);
   padding: var(--mk-space-6) var(--mk-space-6);
-  border-radius: var(--mk-radius-md);
+  /* Row sits inside the 6px card behind 12px+ padding: concentric => near-square. */
+  border-radius: var(--mk-radius-sm);
   font-family: var(--vp-font-family-mono);
   font-size: var(--mk-fs-74);
   line-height: 1.5;
@@ -106,7 +107,20 @@ const calls = [
 .mc-dot--active {
   background: var(--mk-accent);
   box-shadow: 0 0 0 0 color-mix(in srgb, var(--mk-accent) 60%, transparent);
-  animation: mk-shpulse 1.8s infinite;
+  /* Local ring so the pulse reads in the accent (the shared mk-shpulse ring is
+     keyed to --color-success). */
+  animation: mc-pulse 1.8s infinite;
+}
+@keyframes mc-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--mk-accent) 50%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--mk-accent) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--mk-accent) 0%, transparent);
+  }
 }
 
 .mc-tool {

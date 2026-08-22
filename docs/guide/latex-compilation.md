@@ -2,21 +2,21 @@
 import DoctorSliceHero from '../.vitepress/components/DoctorSliceHero.vue';
 </script>
 
-# LaTeX Compilation Environment
+# LaTeX compilation environment
 
-While TeXRA focuses on AI-assisted editing and generation of LaTeX source code, several features rely on having a working LaTeX distribution installed on your system for tasks like compiling previews or processing generated `latexdiff` files.
+TeXRA's agents work on derivations, proofs, and the papers that record them. Most of that work happens in LaTeX source, so several features rely on a working LaTeX distribution on your system, such as compiling previews or processing generated `latexdiff` files.
 
-## Required LaTeX Distribution
+## Required LaTeX distribution
 
-You need a functional LaTeX distribution installed, such as:
+You need a working LaTeX distribution installed, such as:
 
 - **Windows**: MiKTeX or TeX Live
 - **macOS**: MacTeX (includes TeX Live)
-- **Linux**: TeX Live (often available via package manager)
+- **Linux**: TeX Live (often available through the package manager)
 
-Getting LaTeX set up correctly can sometimes feel like wrestling an octopus, but it's necessary for features like compiling diffs and TikZ previews.
+A working LaTeX installation is required for features like compiling diffs and TikZ previews.
 
-Ensure that the `latexmk` command is available (preferred for TeXRA) or at least `pdflatex`. These should be accessible from your system's command line. `texra doctor` verifies the whole toolchain in one go, on any platform:
+Make sure the `latexmk` command is available (preferred by TeXRA) or at least `pdflatex`. Both must be reachable from your system's command line. `texra doctor` verifies the whole toolchain in one pass, on any platform:
 
 <DoctorSliceHero
   :rows="[
@@ -27,31 +27,33 @@ Ensure that the `latexmk` command is available (preferred for TeXRA) or at least
   ]"
 />
 
-<p class="hero-caption">The doctor's LaTeX rows confirm each binary is on PATH — the same check works for extension and CLI users alike.</p>
+<p class="hero-caption">The doctor's LaTeX rows confirm each binary is on PATH. The same check works for extension and CLI users alike.</p>
 
-See the main [Installation Guide](./installation.md) for more details on installing LaTeX and other essential dependencies like Perl (required for `latexdiff`).
+Read the [installation guide](./installation.md) for details on installing LaTeX and other dependencies such as Perl (required for `latexdiff`).
 
 ## Integration with LaTeX Workshop
 
-TeXRA is designed to work smoothly alongside the popular [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension, which provides excellent compilation, previewing, and IntelliSense features.
-If the extension isn't detected, TeXRA will prompt you to install it so you can take advantage of these capabilities.
+TeXRA works alongside the [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension, which provides compilation, previewing, and IntelliSense.
+If the extension isn't detected and your workspace contains LaTeX files, TeXRA prompts you to install it. On a workspace without LaTeX files there is no prompt; you can still install it from the Dashboard's LaTeX tab.
 
-**Workflow Interaction:**
+**Workflow interaction:**
 
-TeXRA leverages LaTeX Workshop when available. For example, after generating a comparison file using its `latexdiff` features (see [LaTeX Diff guide](./latex-diff.md)), TeXRA attempts to automatically trigger LaTeX Workshop's build and view commands. This allows you to quickly compile and see the visualized changes in the resulting PDF.
+TeXRA uses LaTeX Workshop when available. For example, after generating a comparison file with its `latexdiff` features (read the [LaTeX diff guide](./latex-diff.md)), TeXRA attempts to trigger LaTeX Workshop's build and view commands automatically, so you can compile and see the visualized changes in the resulting PDF.
 
-**Recommended Setting:**
+**Recommended setting:**
 
-To keep your project directory clean, it's highly recommended to configure LaTeX Workshop to place its build output files (like `.aux`, `.log`, `.pdf`) into a separate subdirectory. TeXRA is aware of this common practice.
+To keep your project directory clean, configure LaTeX Workshop to place its build output files (such as `.aux`, `.log`, `.pdf`) in a separate subdirectory. TeXRA is aware of this common practice.
 
-LaTeX Workshop is a separate VS Code extension, so this one lives in VS Code's own settings rather than TeXRA's:
+The Dashboard's LaTeX tab applies this for you. Its recommended settings list includes **LaTeX Output Directory** (`latex-workshop.latex.outDir`, set to `%DIR%/build/`) and **Explorer Auto-Reveal Exclude** (so the `build/` folder stays out of the Explorer), each with an **Apply** button, plus **Apply All** to set both at once.
+
+If you prefer to set it by hand, LaTeX Workshop is a separate VS Code extension, so the setting lives in VS Code's own settings:
 
 1.  Open VS Code Settings (<wa-icon library="texra" name="gear"></wa-icon> icon or `Ctrl+,`).
 2.  Search for `Latex-workshop: Latex: Out Dir`.
-3.  Set the value to `./build` or `%DIR%/build`.
+3.  Set the value to `%DIR%/build/`.
 
-This directs build files to a `build/` subdirectory within your project, preventing clutter in your main source directory. While TeXRA primarily works with the source `.tex` files, having a clean setup benefits the overall workflow, especially when using LaTeX Workshop for compilation and previewing.
+This directs build files to a `build/` subdirectory in your project, keeping your main source directory uncluttered. TeXRA primarily works with the source `.tex` files, but a clean setup helps the overall workflow, especially when using LaTeX Workshop for compilation and previewing.
 
-## Alternative: Online Compilers (e.g., Overleaf)
+## Alternative: online compilers (e.g., Overleaf)
 
-Setting up and maintaining a local LaTeX distribution can sometimes be challenging due to complex dependencies or system configurations. If you encounter persistent issues with local compilation for previewing `latexdiff` outputs or TikZ figures, using an online LaTeX editor and compiler like [Overleaf](https://www.overleaf.com) can be a convenient alternative. You can upload the `.tex` files generated by TeXRA (like diff files or standalone TikZ files) to Overleaf to compile and view them there.
+Setting up and maintaining a local LaTeX distribution can be difficult because of complex dependencies or system configurations. If local compilation keeps failing when you preview `latexdiff` outputs or TikZ figures, an online LaTeX editor and compiler such as [Overleaf](https://www.overleaf.com) is an alternative. Upload the `.tex` files generated by TeXRA (such as diff files or standalone TikZ files) to Overleaf to compile and view them there.

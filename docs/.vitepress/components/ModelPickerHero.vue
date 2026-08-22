@@ -114,9 +114,10 @@ const items = [
   margin-top: var(--mk-space-4);
   background: var(--mk-bg-raised);
   border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
+  /* Concentric: menu(8) = item(4) + 4px padding. */
+  border-radius: var(--mk-radius-xl);
   padding: var(--mk-space-4);
-  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--mk-shadow-md);
 }
 .mp-item {
   position: relative;
@@ -150,7 +151,7 @@ const items = [
   border: 1px solid var(--mk-border-soft);
   border-radius: var(--mk-radius-md);
   padding: var(--mk-space-7) var(--mk-space-10);
-  box-shadow: 0 8px 22px -10px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--mk-shadow-md);
   font-family: var(--vp-font-family-base);
 }
 .mp-tip-arrow {

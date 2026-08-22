@@ -132,12 +132,18 @@
   color: var(--color-text-secondary);
   cursor: pointer;
   flex-shrink: 0;
+  transition-property: background-color, color, scale;
+  transition-duration: var(--mk-dur-fast), var(--mk-dur-fast), var(--mk-dur);
+  transition-timing-function: var(--mk-ease);
+}
+.m-act:active {
+  scale: var(--mk-press-scale);
 }
 .m-act wa-icon {
   font-size: var(--mk-space-12);
 }
 .m-act:hover {
-  background: rgba(127, 127, 127, 0.12);
+  background: var(--mk-hover-bg);
   color: var(--wa-color-text-normal);
 }
 .m-act-on {

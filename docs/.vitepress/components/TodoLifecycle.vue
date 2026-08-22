@@ -47,7 +47,7 @@
   border: 1px solid var(--mk-border-soft);
   border-radius: var(--mk-radius-lg);
   margin: var(--mk-space-16) auto;
-  max-width: var(--mk-size-420, 420px);
+  max-width: var(--mk-size-420);
   overflow: hidden;
   font-family: var(--vp-font-family-mono);
   font-size: var(--mk-fs-76);
