@@ -12,6 +12,7 @@ import { ResponsesWS } from 'openai/resources/responses/ws';
 import { WebSocketError } from 'openai/resources/responses/internal-base';
 
 import type { AgentTrace } from '@agent/trace';
+import { detectStatusCode } from '@common/errors/sdkError/errorInspection';
 import {
   attachPartialText,
   attachSdkErrorMetadata,
@@ -20,6 +21,7 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkError/errorPatterns';
+import { sdkErrorKindFromStatusCode } from '@common/errors/sdkError/sdkErrorKinds';
 
 import { wrapResponseError } from './openAIResponseErrors';
 import { ResponseStreamProcessor } from './ResponseStreamProcessor';
@@ -42,6 +44,26 @@ const WS_MAX_AGE_MS = 55 * 60 * 1000;
 const WS_KEEPALIVE_INTERVAL_MS = 30_000;
 /** WebSocket readyState value for an open connection. */
 const WS_OPEN = 1;
+
+/** Recover an HTTP status from the narrow error shape emitted by `ws` when an
+ *  upgrade is rejected. Structured SDK fields take precedence; the message
+ *  fallback accepts only `ws`'s complete canonical text. */
+function detectHandshakeStatusCode(error: Error): number | undefined {
+  const structuredStatusCode = detectStatusCode(error);
+  if (
+    structuredStatusCode !== undefined &&
+    structuredStatusCode >= 400 &&
+    structuredStatusCode <= 599
+  ) {
+    return structuredStatusCode;
+  }
+
+  const match = /^Unexpected server response: ([0-9]{3})$/.exec(error.message);
+  if (!match) return undefined;
+
+  const statusCode = Number(match[1]);
+  return statusCode >= 400 && statusCode <= 599 ? statusCode : undefined;
+}
 
 /** Close a socket during cleanup; an already-closed socket must not mask the original failure path. */
 function closeQuietly(connection: ResponsesWS): void {
@@ -134,6 +156,21 @@ export class OpenAIResponseWebSocketTransport {
 
     this.logger.debug('Opening WebSocket connection to Responses API');
     const ws = new ResponsesWS(client);
+    // The SDK forwards raw socket failures through this top-level emitter before
+    // our raw handshake listener runs. Bind the persistent guard immediately so
+    // a rejected HTTP upgrade cannot take the SDK's unhandled-rejection path.
+    // Capturing `ws` also prevents a late orphan error from invalidating a newer
+    // connection. During a request, its listener owns settlement and this guard
+    // deliberately stays passive.
+    ws.on('error', (error) => {
+      if (this.wsConnection !== ws || this.activeRequestSocket === ws) {
+        return;
+      }
+      this.logger.debug('WebSocket connection error: invalidating', {
+        data: { message: error.message },
+      });
+      this.closeWebSocket();
+    });
 
     // Wait for the socket to open, fail on error, or abort on signal.
     // If the handshake fails or is aborted, close the orphaned socket
@@ -144,25 +181,44 @@ export class OpenAIResponseWebSocketTransport {
         return;
       }
 
+      let settled = false;
       const cleanup = (): void => {
         ws.socket.off('open', onOpen);
         ws.socket.off('error', onError);
+        ws.off('error', onTopLevelError);
         signal?.removeEventListener('abort', onAbort);
       };
       const onOpen = (): void => {
+        if (settled) return;
+        settled = true;
         cleanup();
         resolve();
       };
-      const onError = (err: Error): void => {
+      const failHandshake = (err: Error): void => {
+        if (settled) return;
+        settled = true;
         cleanup();
         closeQuietly(ws);
+        const statusCode = detectHandshakeStatusCode(err);
         attachSdkErrorMetadata(err, {
           provider: 'openai',
-          kind: 'connection',
+          kind:
+            statusCode === undefined
+              ? 'connection'
+              : sdkErrorKindFromStatusCode(statusCode),
+          ...(statusCode === undefined ? {} : { statusCode }),
         });
         reject(err);
       };
+      const onError = (err: Error): void => {
+        failHandshake(err);
+      };
+      const onTopLevelError = (err: WebSocketError): void => {
+        failHandshake(err.cause instanceof Error ? err.cause : err);
+      };
       const onAbort = (): void => {
+        if (settled) return;
+        settled = true;
         cleanup();
         closeQuietly(ws);
         reject(new DOMException('The operation was aborted', 'AbortError'));
@@ -170,24 +226,12 @@ export class OpenAIResponseWebSocketTransport {
 
       ws.socket.once('open', onOpen);
       ws.socket.once('error', onError);
+      ws.on('error', onTopLevelError);
       signal?.addEventListener('abort', onAbort, { once: true });
     });
 
     this.wsConnection = ws;
     this.wsConnectionCreatedAt = Date.now();
-    // The SDK rejects globally when an error has no listener, so every socket
-    // keeps this guard even after it leaves the pool. Capturing `ws` prevents a
-    // late orphan error from invalidating a newer connection. During a request,
-    // its listener owns settlement and this guard deliberately stays passive.
-    ws.on('error', (error) => {
-      if (this.wsConnection !== ws || this.activeRequestSocket === ws) {
-        return;
-      }
-      this.logger.debug('WebSocket connection error: invalidating', {
-        data: { message: error.message },
-      });
-      this.closeWebSocket();
-    });
     this.startWsKeepalive(ws);
 
     this.logger.debug('WebSocket connection established');
