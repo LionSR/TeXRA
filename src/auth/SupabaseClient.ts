@@ -41,8 +41,8 @@ const log = createLog('SupabaseClient');
  * Extension OAuth stores the flow id beside its application nonce and passes it
  * directly to code exchange, so concurrent attempts select separate verifier
  * slots without adding another callback query parameter. Hosts that omit a flow
- * id retain auth-js's fixed-verifier fallback. The numbered slot ring is capped
- * at five, so abandoned verifier state remains bounded.
+ * id retain auth-js's fixed-verifier fallback. Flow-id slots are tracked in a
+ * five-entry index; concurrent starts in separate hosts can race that index.
  */
 function gotrueStorage(secrets: SessionSecretStore): SupportedStorage {
   // Writes are mirrored here so a secret-store failure degrades to the old

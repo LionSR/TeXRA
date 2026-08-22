@@ -15,6 +15,11 @@ const providerMocks = vi.hoisted(() => ({
     );
     return result;
   }),
+  secretDelete: vi.fn(async (key: string) => {
+    testDoubles.secrets.delete(key);
+  }),
+  secretGetStored: vi.fn(async (key: string) => testDoubles.secrets.get(key)),
+  secretListStoredKeys: vi.fn(async () => [...testDoubles.secrets.keys()]),
   signInWithOAuth: vi.fn(),
   signOut: vi.fn(async () => {}),
 }));
@@ -69,13 +74,12 @@ vi.mock('@platform/platform', () => ({
   platform: () => ({
     secrets: {
       get: async (key: string) => testDoubles.secrets.get(key),
-      getStored: async (key: string) => testDoubles.secrets.get(key),
+      getStored: providerMocks.secretGetStored,
       set: async (key: string, value: string) => {
         testDoubles.secrets.set(key, value);
       },
-      delete: async (key: string) => {
-        testDoubles.secrets.delete(key);
-      },
+      delete: providerMocks.secretDelete,
+      listStoredKeys: providerMocks.secretListStoredKeys,
     },
   }),
 }));
@@ -107,7 +111,10 @@ vi.mock('@model/computeModelOptions', () => ({
 }));
 
 // Local imports
-import { setExternalAuthCallbackResolver } from '@auth/config';
+import {
+  AUTH_CALLBACK_TIMEOUT_MS,
+  setExternalAuthCallbackResolver,
+} from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
@@ -145,12 +152,14 @@ function createProvider(options: {
   fire: ReturnType<typeof vi.fn>;
   clearSessionIfCurrent: ReturnType<typeof vi.fn>;
   getStoredSessionState: ReturnType<typeof vi.fn>;
+  showError: ReturnType<typeof vi.fn>;
   showSignInPrompt: ReturnType<typeof vi.fn>;
 } {
   const clearSessionIfCurrent = vi.fn(async () => true);
   const getStoredSessionState = vi.fn<() => Promise<StoredSessionState>>(
     async () => 'invalid',
   );
+  const showError = vi.fn();
   const showSignInPrompt = vi.fn();
   const session: SupabaseSession = {
     id: 'user-id',
@@ -172,7 +181,7 @@ function createProvider(options: {
   testDoubles.coordinator = coordinator;
   testDoubles.emitters.length = 0;
   const provider = new SupabaseAuthProvider({
-    showError: vi.fn(),
+    showError,
     showInfo: vi.fn(),
     showSignInPrompt,
   });
@@ -186,6 +195,7 @@ function createProvider(options: {
     fire: emitter.fire,
     clearSessionIfCurrent,
     getStoredSessionState,
+    showError,
     showSignInPrompt,
   };
 }
@@ -653,7 +663,9 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
     });
 
     const secondSignIn = second.provider.createSession([]);
-    await Promise.resolve();
+    await vi.waitFor(() =>
+      expect(providerMocks.runPkceOperation).toHaveBeenCalledTimes(2),
+    );
     expect(providerMocks.signInWithOAuth).not.toHaveBeenCalled();
 
     finishExchange();
@@ -738,6 +750,195 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
       },
       TEST_FLOW_ID,
     );
+  });
+
+  it('accepts another window callback while its own attempt remains live', async () => {
+    const ownFlowId = '1234567890abcdef1234567890abcdef';
+    seedPendingOAuthAttempt();
+    const { provider, session, coordinator } = createUnexpiredProvider();
+    const uriHandler = createUriHandlerHarness();
+    provider.setUriHandler(uriHandler.handler);
+    coordinator.loadSession.mockResolvedValue(null);
+    coordinator.createSessionFromCallback.mockResolvedValue({
+      success: true,
+      session,
+    });
+    providerMocks.signInWithOAuth.mockResolvedValue({
+      data: {
+        url: 'https://provider.example/authorize',
+        flowId: ownFlowId,
+      },
+      error: null,
+    });
+    let browserOpened!: () => void;
+    const browserLaunch = new Promise<void>((resolve) => {
+      browserOpened = resolve;
+    });
+    providerMocks.openExternal.mockImplementation(async () => {
+      browserOpened();
+      return true;
+    });
+
+    const ownSignIn = provider.createSession([]).catch(() => null);
+    await browserLaunch;
+    await uriHandler.fire({
+      path: '/auth-callback',
+      query: `code=other-window&app_nonce=${TEST_NONCE}`,
+    });
+    await uriHandler.fire({
+      path: '/auth-callback',
+      query: `code=replay&app_nonce=${TEST_NONCE}`,
+    });
+
+    expect(coordinator.createSessionFromCallback).toHaveBeenCalledOnce();
+    expect(coordinator.createSessionFromCallback).toHaveBeenCalledWith(
+      {
+        path: '/auth-callback',
+        query: expect.stringContaining('code=other-window'),
+      },
+      TEST_FLOW_ID,
+    );
+    provider.dispose();
+    await ownSignIn;
+  });
+
+  it.each(['read', 'delete'] as const)(
+    'contains a secret-store %s claim failure and accepts a later callback',
+    async (operation) => {
+      const secondNonce = 'ffffffffffffffffffffffffffffffff';
+      seedPendingOAuthAttempt();
+      seedPendingOAuthAttempt(secondNonce);
+      const { provider, session, coordinator, showError } =
+        createUnexpiredProvider();
+      const uriHandler = createUriHandlerHarness();
+      provider.setUriHandler(uriHandler.handler);
+      coordinator.loadSession.mockResolvedValue(null);
+      coordinator.createSessionFromCallback.mockResolvedValue({
+        success: true,
+        session,
+      });
+      const failure = new Error('secret backend unavailable: private detail');
+      if (operation === 'read') {
+        providerMocks.secretGetStored.mockRejectedValueOnce(failure);
+      } else {
+        providerMocks.secretDelete.mockRejectedValueOnce(failure);
+      }
+
+      await expect(
+        uriHandler.fire({
+          path: '/auth-callback',
+          query: `code=first&app_nonce=${TEST_NONCE}`,
+        }),
+      ).resolves.toBeUndefined();
+      await uriHandler.fire({
+        path: '/auth-callback',
+        query: `code=second&app_nonce=${secondNonce}`,
+      });
+
+      expect(coordinator.createSessionFromCallback).toHaveBeenCalledOnce();
+      expect(showError).toHaveBeenCalledWith(
+        'Sign-in failed: OAuth callback state could not be verified. Try again.',
+      );
+    },
+  );
+
+  it('sweeps malformed, expired, and flowless pending OAuth records', async () => {
+    const expiredNonce = '11111111111111111111111111111111';
+    const flowlessNonce = '22222222222222222222222222222222';
+    const malformedNonce = '33333333333333333333333333333333';
+    const validNonce = '44444444444444444444444444444444';
+    seedPendingOAuthAttempt(
+      expiredNonce,
+      Date.now() - AUTH_CALLBACK_TIMEOUT_MS - 1,
+    );
+    testDoubles.secrets.set(
+      `${PENDING_STATE_PREFIX}${flowlessNonce}`,
+      JSON.stringify({ nonce: flowlessNonce, createdAt: Date.now() }),
+    );
+    testDoubles.secrets.set(`${PENDING_STATE_PREFIX}${malformedNonce}`, '{');
+    seedPendingOAuthAttempt(validNonce);
+    testDoubles.secrets.set('unrelated', 'keep');
+    const { provider } = createUnexpiredProvider();
+    const uriHandler = createUriHandlerHarness();
+    provider.setUriHandler(uriHandler.handler);
+    providerMocks.signInWithOAuth.mockResolvedValue({
+      data: {
+        url: 'https://provider.example/authorize',
+        flowId: TEST_FLOW_ID,
+      },
+      error: null,
+    });
+    let browserOpened!: () => void;
+    const browserLaunch = new Promise<void>((resolve) => {
+      browserOpened = resolve;
+    });
+    providerMocks.openExternal.mockImplementation(async () => {
+      browserOpened();
+      return true;
+    });
+
+    const signIn = provider.createSession([]).catch(() => null);
+    await browserLaunch;
+
+    expect(
+      testDoubles.secrets.has(`${PENDING_STATE_PREFIX}${expiredNonce}`),
+    ).toBe(false);
+    expect(
+      testDoubles.secrets.has(`${PENDING_STATE_PREFIX}${flowlessNonce}`),
+    ).toBe(false);
+    expect(
+      testDoubles.secrets.has(`${PENDING_STATE_PREFIX}${malformedNonce}`),
+    ).toBe(false);
+    expect(
+      testDoubles.secrets.has(`${PENDING_STATE_PREFIX}${validNonce}`),
+    ).toBe(true);
+    expect(testDoubles.secrets.get('unrelated')).toBe('keep');
+    provider.dispose();
+    await signIn;
+  });
+
+  it('handles callback rejection while browser launch is still pending', async () => {
+    const { provider, coordinator } = createUnexpiredProvider();
+    const uriHandler = createUriHandlerHarness();
+    provider.setUriHandler(uriHandler.handler);
+    coordinator.createSessionFromCallback.mockResolvedValue({
+      success: false,
+      error: 'exchange failed',
+      isAuthError: true,
+    });
+    providerMocks.signInWithOAuth.mockResolvedValue({
+      data: {
+        url: 'https://provider.example/authorize',
+        flowId: TEST_FLOW_ID,
+      },
+      error: null,
+    });
+    let releaseBrowser!: () => void;
+    let browserOpened!: () => void;
+    const browserLaunch = new Promise<void>((resolve) => {
+      browserOpened = resolve;
+    });
+    providerMocks.openExternal.mockImplementation(async () => {
+      browserOpened();
+      await new Promise<void>((resolve) => {
+        releaseBrowser = resolve;
+      });
+      return true;
+    });
+
+    const signIn = provider.createSession([]);
+    await browserLaunch;
+    const redirectTo = providerMocks.signInWithOAuth.mock.calls[0][0].options
+      .redirectTo as string;
+    const nonce = redirectTo.split('/').at(-1);
+    await uriHandler.fire({
+      path: '/auth-callback',
+      query: `code=test&app_nonce=${nonce}`,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    releaseBrowser();
+
+    await expect(signIn).rejects.toThrow('OAuth error: exchange failed');
   });
 
   it('rejects missing, duplicate, malformed, mismatched, expired, and replayed callbacks', async () => {
