@@ -37,11 +37,8 @@ import type {
   ModelOptionData,
   ToolDefinition,
 } from '@shared/schemas';
-import { agentKeyOf, isModelOptionAvailable } from '@shared/schemas';
-import {
-  DELEGATION_TOOLS,
-  hasDelegationTool,
-} from '@shared/constants/delegationTools';
+import { isModelOptionAvailable } from '@shared/schemas';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { unique } from '@utils/core';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 
@@ -157,24 +154,14 @@ function activeDelegationScope(): AgentDelegationScope | undefined {
 /**
  * Resolve delegation targets from an explicitly captured scope, or — when none
  * is supplied — the active run scope, falling back to the durable roster.
- * Tool-use candidates also honor the active execution's recursion guard.
  */
 export function getDelegationAgents(
   category: AgentCategory,
   scope?: AgentDelegationScope,
 ): AgentEntry[] {
-  const agents = resolveDelegationScopeAgents(
+  return resolveDelegationScopeAgents(
     scope ?? activeDelegationScope(),
     category,
-  );
-  const context = tryUseRunContext();
-  const run = context?.kind === 'launch' ? context.runScope : context;
-  if (category !== 'toolUse') return agents;
-
-  return agents.filter(
-    (agent) =>
-      agentKeyOf(agent) !== run?.agentKey &&
-      !(run?.isSubagent && hasDelegationTool(agent.tools)),
   );
 }
 
