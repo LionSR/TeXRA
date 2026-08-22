@@ -1,6 +1,6 @@
-# Work Produced with TeXRA
+# Work produced with TeXRA
 
-This non-exhaustive list records public projects and papers that used TeXRA.
+A non-exhaustive list of public projects and papers that used TeXRA. To add yours, open an issue or a pull request on the [TeXRA repository](https://github.com/LionSR/TeXRA).
 
 ## Projects
 
@@ -12,6 +12,9 @@ This non-exhaustive list records public projects and papers that used TeXRA.
 
 ## Papers
 
+- [**Can Theoretical Physics Research Benefit from Language Agents?**](https://arxiv.org/abs/2506.06214),
+  Sirui Lu, Zhuo Jin, Tian-Jun Zhang, Pavel Kos, J. Ignacio Cirac, and Bernhard
+  Schölkopf (ICML 2026). The position paper behind TeXRA.
 - [**Quantum computer architecture with ions in tweezer arrays**](https://arxiv.org/abs/2606.27249),
   Benjamin F. Schiffer, Christopher Monroe, Peter Zoller, and J. Ignacio Cirac
   (2026).

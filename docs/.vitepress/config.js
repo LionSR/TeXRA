@@ -4,6 +4,81 @@ import { srcExclude } from './publicDocs.js';
 
 const base = '/';
 
+// Shared by every page that should show the guide navigation, including the
+// root-level work page, which would otherwise render with no sidebar.
+const guideSidebar = [
+  {
+    text: 'Getting Started',
+    items: [
+      { text: 'Introduction', link: '/guide/' },
+      { text: 'Installation', link: '/guide/installation' },
+      { text: 'First Run', link: '/guide/first-run' },
+      { text: 'Quick Start', link: '/guide/quick-start' },
+    ],
+  },
+  {
+    text: 'Agent System',
+    items: [
+      { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
+      {
+        text: 'Workflow Agents',
+        link: '/guide/agent-architecture.md',
+      },
+      { text: 'Custom Agents', link: '/guide/custom-agents' },
+      { text: 'Remote Agents', link: '/guide/remote-agents' },
+      {
+        text: 'Multi-agent workflows',
+        link: '/guide/multi-agent-workflows',
+      },
+      { text: 'Memory', link: '/guide/memory' },
+      { text: 'Models', link: '/guide/models' },
+    ],
+  },
+  {
+    text: 'Workflows',
+    items: [
+      { text: 'Polish a Draft', link: '/guide/workflows/polish-a-draft' },
+      { text: 'LaTeX Diff', link: '/guide/latex-diff' },
+      { text: 'Intelligent Merge', link: '/guide/intelligent-merge' },
+      { text: 'Research Tools', link: '/guide/research-tools' },
+      { text: 'Lean 4 Proofs', link: '/guide/lean' },
+      { text: 'LaTeX Tools', link: '/guide/latex-tools' },
+      {
+        text: 'Working with Figures',
+        link: '/guide/working-with-figures.md',
+      },
+      { text: 'TikZ Figures', link: '/guide/tikz-figures' },
+      { text: 'Multiple Output', link: '/guide/multiple-output' },
+    ],
+  },
+  {
+    text: 'Integrations',
+    items: [
+      {
+        text: 'Working with Overleaf',
+        link: '/guide/working-with-overleaf',
+      },
+      { text: 'TeXRA CLI', link: '/guide/texra-cli' },
+      { text: 'Code Review', link: '/guide/code-review' },
+      { text: 'Agent Integrations', link: '/guide/agent-integrations' },
+      { text: 'File Management', link: '/guide/file-management' },
+      { text: 'ProgressBoard', link: '/guide/progress-board' },
+    ],
+  },
+  {
+    text: 'Reference',
+    items: [
+      { text: 'Configuration', link: '/guide/configuration' },
+      { text: 'LaTeX Compilation', link: '/guide/latex-compilation.md' },
+      { text: 'Best Practices', link: '/guide/best-practices.md' },
+      { text: 'Troubleshooting', link: '/guide/troubleshooting' },
+      { text: 'Acknowledgments', link: '/guide/acknowledgments.md' },
+      { text: 'Open Source Projects', link: '/guide/open-source' },
+      { text: 'Work produced with TeXRA', link: '/work-using-texra' },
+    ],
+  },
+];
+
 const baseConfig = {
   title: 'TeXRA',
   base,
@@ -109,77 +184,8 @@ const baseConfig = {
       { text: 'GitHub', link: 'https://github.com/LionSR/TeXRA' },
     ],
     sidebar: {
-      '/guide/': [
-        {
-          text: 'Getting Started',
-          items: [
-            { text: 'Introduction', link: '/guide/' },
-            { text: 'Installation', link: '/guide/installation' },
-            { text: 'First Run', link: '/guide/first-run' },
-            { text: 'Quick Start', link: '/guide/quick-start' },
-          ],
-        },
-        {
-          text: 'Agent System',
-          items: [
-            { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
-            {
-              text: 'Workflow Agents',
-              link: '/guide/agent-architecture.md',
-            },
-            { text: 'Custom Agents', link: '/guide/custom-agents' },
-            { text: 'Remote Agents', link: '/guide/remote-agents' },
-            {
-              text: 'Multi-agent workflows',
-              link: '/guide/multi-agent-workflows',
-            },
-            { text: 'Memory', link: '/guide/memory' },
-            { text: 'Models', link: '/guide/models' },
-          ],
-        },
-        {
-          text: 'Workflows',
-          items: [
-            { text: 'Polish a Draft', link: '/guide/workflows/polish-a-draft' },
-            { text: 'LaTeX Diff', link: '/guide/latex-diff' },
-            { text: 'Intelligent Merge', link: '/guide/intelligent-merge' },
-            { text: 'Research Tools', link: '/guide/research-tools' },
-            { text: 'Lean 4 Proofs', link: '/guide/lean' },
-            { text: 'LaTeX Tools', link: '/guide/latex-tools' },
-            {
-              text: 'Working with Figures',
-              link: '/guide/working-with-figures.md',
-            },
-            { text: 'TikZ Figures', link: '/guide/tikz-figures' },
-            { text: 'Multiple Output', link: '/guide/multiple-output' },
-          ],
-        },
-        {
-          text: 'Integrations',
-          items: [
-            {
-              text: 'Working with Overleaf',
-              link: '/guide/working-with-overleaf',
-            },
-            { text: 'TeXRA CLI', link: '/guide/texra-cli' },
-            { text: 'Code Review', link: '/guide/code-review' },
-            { text: 'Agent Integrations', link: '/guide/agent-integrations' },
-            { text: 'File Management', link: '/guide/file-management' },
-            { text: 'ProgressBoard', link: '/guide/progress-board' },
-          ],
-        },
-        {
-          text: 'Reference',
-          items: [
-            { text: 'Configuration', link: '/guide/configuration' },
-            { text: 'LaTeX Compilation', link: '/guide/latex-compilation.md' },
-            { text: 'Best Practices', link: '/guide/best-practices.md' },
-            { text: 'Troubleshooting', link: '/guide/troubleshooting' },
-            { text: 'Acknowledgments', link: '/guide/acknowledgments.md' },
-            { text: 'Open Source Projects', link: '/guide/open-source' },
-          ],
-        },
-      ],
+      '/guide/': guideSidebar,
+      '/work-using-texra': guideSidebar,
     },
     socialLinks: [{ icon: 'github', link: 'https://github.com/texra-ai' }],
     search: {
