@@ -367,7 +367,10 @@ export const EQUATION_STYLE_REPLACEMENTS: RegexReplacementCategory = {
     // Unescape underscores in reference commands. LaTeX label names don't
     // require escaped underscores. Matches the whole \ref{...}/\cref{...}/
     // \eqref{...} span and strips every escaped underscore inside it in one
-    // pass, so references with more than one underscore are fully fixed.
+    // pass, so references with more than one underscore are fully fixed. The
+    // body must be brace-free to match, so a label containing a raw `{`
+    // (never legitimate LaTeX) is left untouched rather than partially
+    // fixed.
     '\\\\(cref|ref|eqref)\\{([^{}]*)\\}': (match, cmd, content) =>
       `\\${cmd ?? ''}{${(content ?? '').replaceAll('\\_', '_')}}`,
 
