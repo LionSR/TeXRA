@@ -13,14 +13,14 @@
  * query string (or ?error= on failure). No access/refresh token ever reaches
  * the bridge; the editor exchanges the code using a verifier it never shared.
  *
- * The editor scheme and extension id ride as PATH segments
- * (/auth-bridge/<ext>/<id>) so redirect_to carries no '?' that an OAuth
+ * The editor scheme, extension id, and application nonce ride as PATH segments
+ * (/auth-bridge/<ext>/<id>/<nonce>) so redirect_to carries no '?' that an OAuth
  * round-trip could mangle into the function name. The page reconstructs
- * `${ext}://${id}/auth-callback` + the original query so the extension's
- * callback handler reads the code exactly as it would from the raw redirect.
+ * `${ext}://${id}/auth-callback` + the original query, replacing any inbound
+ * app_nonce with the validated path nonce.
  *
  * Routes:
- * - GET /auth-bridge/<ext>/<id> - The bridge HTML page (no auth header).
+ * - GET /auth-bridge/<ext>/<id>/<nonce> - The bridge HTML page (no auth header).
  *
  * Security:
  * - ext is validated server-side AND in client JS against a fixed allowlist of
@@ -66,6 +66,7 @@ const ALLOWED_EXT_SCHEMES = [
  * scheme://publisher.name that an attacker could place in redirect_to.
  */
 const EXTENSION_ID_PATTERN = /^texra-ai\.[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+const APP_NONCE_PATTERN = /^[0-9a-f]{32}$/;
 
 // =============================================================================
 // Validation
@@ -79,6 +80,10 @@ function isAllowedExtScheme(value: string | null): value is string {
 
 function isValidExtensionId(value: string | null): value is string {
   return value !== null && EXTENSION_ID_PATTERN.test(value);
+}
+
+function isValidAppNonce(value: string | null): value is string {
+  return value !== null && APP_NONCE_PATTERN.test(value);
 }
 
 /** Percent-decode a single path segment, returning null on malformed input. */
@@ -95,33 +100,49 @@ function decodeSegment(value: string | undefined): string | null {
 // Server
 // =============================================================================
 
-Deno.serve((req: Request): Response => {
+export function handleRequest(req: Request): Response {
   if (req.method !== 'GET') {
     return htmlResponse(errorPageHtml('This page only responds to GET.'), 405);
   }
 
-  // ext/id are the two path segments after "auth-bridge"
-  // (/functions/v1/auth-bridge/<ext>/<id>). Read them from the path, never a
-  // query, so redirect_to carries no '?'.
+  // ext/id/nonce are path segments after "auth-bridge"
+  // (/functions/v1/auth-bridge/<ext>/<id>/<nonce>). Read them from the path,
+  // never a query, so redirect_to carries no '?'.
   const segments = new URL(req.url).pathname
     .split('/')
     .filter((segment) => segment.length > 0);
   const anchor = segments.lastIndexOf('auth-bridge');
   const ext = anchor >= 0 ? decodeSegment(segments[anchor + 1]) : null;
   const id = anchor >= 0 ? decodeSegment(segments[anchor + 2]) : null;
+  const nonceSegment = anchor >= 0 ? segments[anchor + 3] : undefined;
+  const nonce = decodeSegment(nonceSegment);
+  const hasExtraSegment = anchor >= 0 && segments[anchor + 4] !== undefined;
 
-  // Reject unknown editors / malformed ids before rendering anything. The raw
-  // value is never echoed into the HTML, so an invalid request gets a generic
-  // error page (no reflection).
-  if (!isAllowedExtScheme(ext) || !isValidExtensionId(id)) {
+  if (nonceSegment === undefined) {
+    return htmlResponse(
+      errorPageHtml('This sign-in link is missing its security nonce.'),
+      400,
+    );
+  }
+
+  // Require and validate the nonce before rendering anything. Raw values are
+  // never reflected into the HTML.
+  if (
+    !isAllowedExtScheme(ext) ||
+    !isValidExtensionId(id) ||
+    !isValidAppNonce(nonce) ||
+    hasExtraSegment
+  ) {
     return htmlResponse(
       errorPageHtml('This sign-in link is invalid or unsupported.'),
       400,
     );
   }
 
-  return htmlResponse(bridgePageHtml(ext, id), 200);
-});
+  return htmlResponse(bridgePageHtml(ext, id, nonce), 200);
+}
+
+if (import.meta.main) Deno.serve(handleRequest);
 
 // =============================================================================
 // Response helpers
@@ -220,7 +241,7 @@ ${bodyHtml}
  * script; both are also re-validated client-side before building the href, so a
  * mismatched or tampered URL never produces a javascript:/data: link.
  */
-function bridgePageHtml(ext: string, id: string): string {
+function bridgePageHtml(ext: string, id: string, nonce: string): string {
   return htmlDocument(`<h1 id="heading">Finish signing in to TeXRA</h1>
 <p id="lede" class="muted">Click the button below to return to your editor and complete sign-in.</p>
 <div class="actions">
@@ -235,8 +256,10 @@ function bridgePageHtml(ext: string, id: string): string {
   // tampered or reused URL can never inject a non-editor scheme into the href.
   var EXT = ${JSON.stringify(ext)};
   var ID = ${JSON.stringify(id)};
+  var APP_NONCE = ${JSON.stringify(nonce)};
   var ALLOWED = ${JSON.stringify(ALLOWED_EXT_SCHEMES)};
   var ID_RE = new RegExp(${JSON.stringify(EXTENSION_ID_PATTERN.source)});
+  var NONCE_RE = new RegExp(${JSON.stringify(APP_NONCE_PATTERN.source)});
   var DISPLAY = {
     'vscode': 'VS Code',
     'vscode-insiders': 'VS Code Insiders',
@@ -283,7 +306,11 @@ function bridgePageHtml(ext: string, id: string): string {
     linkCode.parentElement.hidden = true;
   }
 
-  if (ALLOWED.indexOf(EXT) === -1 || !ID_RE.test(ID)) {
+  if (
+    ALLOWED.indexOf(EXT) === -1 ||
+    !ID_RE.test(ID) ||
+    !NONCE_RE.test(APP_NONCE)
+  ) {
     fail('This sign-in link is invalid or unsupported.');
   } else {
     // Reconstruct the editor deep link: ${'$'}{EXT}://${'$'}{ID}/auth-callback plus
@@ -315,6 +342,14 @@ function bridgePageHtml(ext: string, id: string): string {
     } else if (hash && hash.length > 1) {
       tail = hash; // already starts with '#'
     }
+    var marker = tail.charAt(0) === '#' ? '#' : '?';
+    var callbackParams = new URLSearchParams(
+      tail.length > 1 ? tail.slice(1) : ''
+    );
+    // Ignore any inbound app_nonce and append the validated path nonce once.
+    callbackParams.delete('app_nonce');
+    callbackParams.append('app_nonce', APP_NONCE);
+    tail = marker + callbackParams.toString();
 
     var deepLink = base + tail;
     openLink.setAttribute('href', deepLink);
