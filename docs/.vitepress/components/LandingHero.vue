@@ -51,7 +51,7 @@ async function copyCli() {
 
 <template>
   <div class="lh">
-    <p class="lh-eyebrow">Multi-agent AI for theorists</p>
+    <p class="lh-eyebrow">Open-source multi-agent AI for theorists</p>
     <h1 class="lh-headline">
       Derive it, check it,<br />
       write it into your paper.
@@ -59,8 +59,8 @@ async function copyCli() {
     <p class="lh-tagline">
       You direct an orchestrator. It delegates to specialist agents that search
       real databases, compute in Wolfram, prove in Lean&nbsp;4, and hand back
-      every change as a diff you approve. In VS&nbsp;Code, its forks, and the
-      terminal.
+      every change as a diff you approve. Open source under Apache&nbsp;2.0, in
+      VS&nbsp;Code, its forks, and the terminal.
     </p>
 
     <div class="lh-actions">

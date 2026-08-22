@@ -220,6 +220,10 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
   </details>
 
   <details>
+    <summary>Is TeXRA open source?</summary>
+    <p>Yes. The extension, the CLI, and the agent runtime are published under the Apache 2.0 license, and you run them with your own model keys or subscriptions. Read the <a href="/guide/open-source">open source guide</a>.</p>
+  </details>
+  <details>
     <summary>Can I build custom agents?</summary>
     <p>Yes. Agents are YAML files you can modify or create from scratch. Read the <a href="/guide/custom-agents">custom agents guide</a>.</p>
   </details>

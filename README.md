@@ -9,9 +9,11 @@
 [![npm version](https://img.shields.io/npm/v/@texra-ai/cli?label=%40texra-ai%2Fcli)](https://www.npmjs.com/package/@texra-ai/cli)
 [![CLI downloads](https://img.shields.io/npm/dm/@texra-ai/cli?label=CLI%20downloads)](https://www.npmjs.com/package/@texra-ai/cli)
 
-An AI theorist for VS Code and the terminal. It attempts real theory
-work — deriving results, checking derivations, formalizing proofs in
-Lean 4 — and takes on open problems in long autonomous runs.
+An open-source AI theorist for VS Code and the terminal. It attempts real
+theory work: deriving results, checking derivations, formalizing proofs in
+Lean 4. It takes on open problems in long autonomous runs, with a team of
+specialist agents. Apache 2.0, and you bring your own model keys or
+subscriptions.
 
 ## Install
 
