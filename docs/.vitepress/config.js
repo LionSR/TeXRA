@@ -177,6 +177,7 @@ const baseConfig = {
             { text: 'Troubleshooting', link: '/guide/troubleshooting' },
             { text: 'Acknowledgments', link: '/guide/acknowledgments.md' },
             { text: 'Open Source Projects', link: '/guide/open-source' },
+            { text: 'Work produced with TeXRA', link: '/work-using-texra' },
           ],
         },
       ],
