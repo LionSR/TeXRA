@@ -197,15 +197,8 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     expect(steps).toHaveLength(1);
     const content = (steps[0] as Interactions.UserInputStep).content ?? [];
     expect(content.some((c) => c.type === 'image')).toBe(true);
-    // prefix + attached-files label + image + request, in order.
     expect((content[0] as Interactions.TextContent).text).toContain('PREFIX');
-    expect(
-      content.some(
-        (c) =>
-          c.type === 'text' &&
-          /Attached/.test((c as Interactions.TextContent).text),
-      ),
-    ).toBe(true);
+    expect(textOf(steps[0])).not.toContain('Attached');
     expect(textOf(steps[0])).toContain('REQUEST');
   });
 
@@ -225,9 +218,11 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     let uploadCalls = 0;
     handler.setClient({
       files: {
-        upload: async () => {
+        upload: async ({ file }: { file: string }) => {
           uploadCalls += 1;
-          return { uri: 'files/abc', mimeType: 'image/png' };
+          return file === '/x/big.png'
+            ? { uri: 'files/abc', mimeType: 'image/png' }
+            : { mimeType: 'image/png' };
         },
       },
     } as unknown as GoogleGenAI);
@@ -249,23 +244,34 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
         source_path: '/x/big.png',
         bytes_match_source: true,
       },
+      {
+        file_name: 'failed.png',
+        media_type: 'image/png',
+        media_category: 'image',
+        data: Buffer.from('also too big').toString('base64'),
+        source_path: '/x/failed.png',
+        bytes_match_source: true,
+      },
     ];
 
     const content = await handler.uploadEntries(entries);
 
-    expect(content).toHaveLength(2);
-    const inline = content[0] as Interactions.ImageContent;
+    expect(content).toHaveLength(4);
+    expect(content[0]).toEqual({ type: 'text', text: 'Image: small.png' });
+    const inline = content[1] as Interactions.ImageContent;
     expect(inline.type).toBe('image');
     expect(inline.data).toBeTruthy();
     expect(inline.uri).toBeUndefined();
     expect(inline.resolution).toBe('high');
 
-    const uploaded = content[1] as Interactions.ImageContent;
+    expect(content[2]).toEqual({ type: 'text', text: 'Image: big.png' });
+    const uploaded = content[3] as Interactions.ImageContent;
     expect(uploaded.type).toBe('image');
     expect(uploaded.uri).toBe('files/abc');
     expect(uploaded.data).toBeUndefined();
     expect(uploaded.resolution).toBe('high');
-    expect(uploadCalls).toBe(1);
+    expect(textOf({ type: 'user_input', content })).not.toContain('failed.png');
+    expect(uploadCalls).toBe(2);
   });
 
   it('builds typed Interactions media content for audio, video, and documents', async () => {
@@ -279,6 +285,20 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     } as unknown as GoogleGenAI);
 
     const entries: MediaEntry[] = [
+      {
+        file_name: 'paper.pdf_page_1',
+        media_type: 'image/png',
+        media_category: 'image',
+        data: Buffer.from('page 1').toString('base64'),
+        bytes_match_source: false,
+      },
+      {
+        file_name: 'paper.pdf_page_2',
+        media_type: 'image/png',
+        media_category: 'image',
+        data: Buffer.from('page 2').toString('base64'),
+        bytes_match_source: false,
+      },
       {
         file_name: 'sound.mp3',
         media_type: 'audio/mp3',
@@ -302,16 +322,33 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     const content = await handler.uploadEntries(entries);
 
     expect(content).toEqual([
+      { type: 'text', text: 'Image: paper.pdf_page_1' },
+      {
+        type: 'image',
+        data: Buffer.from('page 1').toString('base64'),
+        mime_type: 'image/png',
+        resolution: 'high',
+      },
+      { type: 'text', text: 'Image: paper.pdf_page_2' },
+      {
+        type: 'image',
+        data: Buffer.from('page 2').toString('base64'),
+        mime_type: 'image/png',
+        resolution: 'high',
+      },
+      { type: 'text', text: 'Audio: sound.mp3' },
       {
         type: 'audio',
         data: Buffer.from('audio').toString('base64'),
         mime_type: 'audio/mp3',
       },
+      { type: 'text', text: 'Video: clip.mp4' },
       {
         type: 'video',
         data: Buffer.from('video').toString('base64'),
         mime_type: 'video/mp4',
       },
+      { type: 'text', text: 'Document: paper.pdf' },
       {
         type: 'document',
         data: Buffer.from('pdf').toString('base64'),
