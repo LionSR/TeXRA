@@ -44,7 +44,6 @@ import {
 } from '@common/errors/sdkError/errorPatterns';
 import { composeLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import {
-  fileLocationShortDisplayPath,
   type FileLocation,
   type MediaAttachmentKind,
   type ToolDefinition,
@@ -53,7 +52,7 @@ import {
 } from '@shared/schemas';
 import { filterNotNull, generateShortId, isNonEmptyString } from '@utils/core';
 import { isImageMimeType } from '@utils/files/mimeUtils';
-import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
+import { joinNonEmpty } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
@@ -721,6 +720,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       inlineLimit: this.getInlineUploadLimitBytes(),
       logger: this.logger,
       buildMedia: (source, mimeType) => this.buildMedia(source, mimeType),
+      buildLabel: (media, fileName) =>
+        this.textMedia(
+          `${media.type[0].toUpperCase()}${media.type.slice(1)}: ${fileName}`,
+        ),
       onInsertedEntry: (entry) => insertedEntries.push(entry),
     });
     this.setCreatedMediaEntriesForAttachmentLog(insertedEntries);
@@ -736,21 +739,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       return [];
     }
 
-    const media = await this.createMediaForRound(mediaFiles, context);
-    if (media.length === 0) {
-      return [];
-    }
-
-    const label = mediaFiles
-      .map((loc) => fileLocationShortDisplayPath(loc))
-      .join(', ');
-    const verb = context === 'initial' ? 'Attached' : 'Processing';
-    return [
-      this.textMedia(
-        `\n${verb} ${pluralize(mediaFiles.length, 'file')}: ${label}`,
-      ),
-      ...media,
-    ];
+    return this.createMediaForRound(mediaFiles, context);
   }
 
   // ===========================================================================

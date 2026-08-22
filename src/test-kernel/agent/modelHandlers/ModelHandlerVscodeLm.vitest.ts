@@ -176,6 +176,7 @@ describe('ModelHandlerVscodeLm messages', () => {
         role: 'user',
         content: [
           { kind: 'text', text: 'system\n\nprefix\n\nrequest' },
+          { kind: 'text', text: 'Image: figure.png' },
           { kind: 'data', data, mimeType: 'image/png' },
         ],
       },
@@ -188,6 +189,7 @@ describe('ModelHandlerVscodeLm messages', () => {
       role: 'user',
       content: [
         { kind: 'text', text: 'next question' },
+        { kind: 'text', text: 'Image: figure.png' },
         { kind: 'data', data, mimeType: 'image/png' },
       ],
     });
@@ -199,11 +201,10 @@ describe('ModelHandlerVscodeLm messages', () => {
     await expect(
       handler.addMediaToUserMessage(withTrailingAssistant, [IMAGE_LOCATION]),
     ).resolves.toEqual(['image']);
-    expect(withTrailingAssistant.at(-2)?.content.at(-1)).toEqual({
-      kind: 'data',
-      data,
-      mimeType: 'image/png',
-    });
+    expect(withTrailingAssistant.at(-2)?.content.slice(-2)).toEqual([
+      { kind: 'text', text: 'Image: figure.png' },
+      { kind: 'data', data, mimeType: 'image/png' },
+    ]);
     expect(loadEntries).toHaveBeenCalledTimes(3);
   });
 
@@ -219,6 +220,25 @@ describe('ModelHandlerVscodeLm messages', () => {
     await expect(
       visionHandler.initializeMessages('', 'question', [AUDIO_LOCATION]),
     ).rejects.toThrow('audio and other native file inputs are not supported');
+
+    const brokenHandler = new ModelHandlerVscodeLm(modelConfig());
+    mockMediaEntries(brokenHandler, [
+      {
+        file_name: 'broken.png',
+        data: '',
+        media_type: 'image/png',
+        media_category: 'image',
+      },
+    ]);
+    const messages: LanguageModelMessage[] = [
+      { role: 'user', content: [{ kind: 'text', text: 'question' }] },
+    ];
+    await expect(
+      brokenHandler.addMediaToUserMessage(messages, [IMAGE_LOCATION]),
+    ).resolves.toEqual([]);
+    expect(messages).toEqual([
+      { role: 'user', content: [{ kind: 'text', text: 'question' }] },
+    ]);
   });
 
   it('does not insert empty text before a tool result', () => {

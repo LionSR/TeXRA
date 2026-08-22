@@ -50,6 +50,7 @@ import { toVscodeLmTools } from '../toolConversion';
 import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 
 type VscodeLmUsage = undefined;
+type VscodeLmMediaPart = LanguageModelTextPart | LanguageModelDataPart;
 
 interface VscodeLmResponse {
   readonly text: string;
@@ -190,7 +191,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
   VscodeLmToolCall,
   LanguageModelPort,
   VscodeLmResponse,
-  LanguageModelDataPart
+  VscodeLmMediaPart
 > {
   constructor(
     config: ModelConfig,
@@ -331,8 +332,8 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     ];
   }
 
-  createMediaContent(mediaMessage: MediaEntry[]): LanguageModelDataPart[] {
-    return mediaMessage.map((media) => {
+  createMediaContent(mediaMessage: MediaEntry[]): VscodeLmMediaPart[] {
+    return mediaMessage.flatMap((media): VscodeLmMediaPart[] => {
       if (
         media.media_category !== 'image' ||
         !isImageMimeType(media.media_type)
@@ -346,11 +347,14 @@ export class ModelHandlerVscodeLm extends ModelHandler<
       // this is the only consumer of raw bytes, so keeping both forms on every
       // entry would double the memory held for media the other handlers send
       // as base64.
-      return {
-        kind: 'data' as const,
-        data: Buffer.from(media.data, 'base64'),
-        mimeType: media.media_type,
-      };
+      return [
+        textPart(`Image: ${media.file_name}`),
+        {
+          kind: 'data',
+          data: Buffer.from(media.data, 'base64'),
+          mimeType: media.media_type,
+        },
+      ];
     });
   }
 

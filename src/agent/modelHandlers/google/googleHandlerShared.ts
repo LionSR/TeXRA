@@ -96,6 +96,7 @@ interface UploadGoogleMediaEntriesOptions<T> {
   inlineLimit: number;
   logger: AgentTrace;
   buildMedia: (source: GoogleMediaSource, mimeType: string) => T;
+  buildLabel: (media: T, fileName: string) => T;
   onInsertedEntry?: (entry: MediaEntry) => void;
 }
 
@@ -112,10 +113,20 @@ export async function uploadGoogleMediaEntries<T>(
     return [];
   }
 
-  const { getClient, inlineLimit, logger, buildMedia, onInsertedEntry } =
-    options;
+  const {
+    getClient,
+    inlineLimit,
+    logger,
+    buildMedia,
+    buildLabel,
+    onInsertedEntry,
+  } = options;
   const client = await getClient();
   const parts: T[] = [];
+  const appendMedia = (entry: MediaEntry, media: T): void => {
+    parts.push(buildLabel(media, entry.file_name), media);
+    onInsertedEntry?.(entry);
+  };
   let hadFailure = false;
   const failures: string[] = [];
 
@@ -130,8 +141,8 @@ export async function uploadGoogleMediaEntries<T>(
         logger.debug(
           `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
         );
-        parts.push(buildMedia({ data: inlinePayload }, mimeType));
-        onInsertedEntry?.(entry);
+        const media = buildMedia({ data: inlinePayload }, mimeType);
+        appendMedia(entry, media);
         continue;
       }
       logger.debug(
@@ -171,8 +182,8 @@ export async function uploadGoogleMediaEntries<T>(
       }
       const resolvedMimeType =
         uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
-      parts.push(buildMedia({ uri: fileUri }, resolvedMimeType));
-      onInsertedEntry?.(entry);
+      const media = buildMedia({ uri: fileUri }, resolvedMimeType);
+      appendMedia(entry, media);
     } catch (error) {
       hadFailure = true;
       failures.push(`${fileName}: ${getSdkErrorMessage(error)}`);
