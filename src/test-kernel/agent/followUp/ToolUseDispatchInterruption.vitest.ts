@@ -52,13 +52,14 @@ function createRoundFixture(abortOn: 'tool-call-extraction' | 'tool-b') {
     modelCell: testModelCell(
       roundModelHandler({
         createResponse,
-        createToolUseFollowUpMessages: vi.fn(
+        createBatchedToolUseFollowUpMessages: vi.fn(
           async (
-            _client: unknown,
-            call: { callId: string; name: string },
-            result: unknown,
+            entries: Array<{
+              call: { callId: string; name: string };
+              result: unknown;
+            }>,
           ) =>
-            [
+            entries.flatMap(({ call, result }) => [
               {
                 type: 'function_call',
                 call_id: call.callId,
@@ -70,7 +71,7 @@ function createRoundFixture(abortOn: 'tool-call-extraction' | 'tool-b') {
                 call_id: call.callId,
                 output: JSON.stringify(result),
               },
-            ] as ProviderMessage[],
+            ]) as ProviderMessage[],
         ),
         createUserFollowUpMessages: vi.fn(),
         extractResponse: (response: { toolCalls?: boolean }) => ({

@@ -1,9 +1,11 @@
 # Agent-SDK readiness — re-verification pass (2026-08-22)
 
-> **Status:** Verification-only, written 2026-08-22 against branch HEAD
-> `d455149`. The scheduled audit routine re-ran the standing question — "review
-> the agent core, model handler, logger, and surface for unnecessary abstraction
-> and unready surface; design subagent boundaries" — against the plan of record
+> **Status:** Written 2026-08-22 against branch HEAD `d455149`; §8 records a
+> follow-up refactor landed later the same day at the maintainer's request,
+> mirroring `-08-21 §7`. The scheduled audit routine re-ran the standing
+> question — "review the agent core, model handler, logger, and surface for
+> unnecessary abstraction and unready surface; design subagent boundaries" —
+> against the plan of record
 > ([`2026-07-09-agent-sdk-north-star.md`](./2026-07-09-agent-sdk-north-star.md))
 > and the three immediately-prior passes
 > ([`-08-19`](./2026-08-19-agent-sdk-readiness-reverify.md) at `391033e`,
@@ -15,10 +17,11 @@
 > alignment holds** — but, unlike the three prior green passes, it also surfaced
 > **two concrete behavior-preserving removals** (one on the public `IModelHandler`
 > port) and a **now-templated path to close the provider-SDK-type leak** (§4).
-> None is landed here (verification-only pass); all are recorded as shovel-ready
-> for a maintainer-requested follow-up, in the same discipline `-08-21 §7`
-> followed. Every claim below carries a `file:line`, config path, or count
-> checked at `d455149`.
+> The two removals (§4a, §4b) were landed at the maintainer's request — see §8
+> for the diff and validation; the leak-fix template (§4c) was **not** landed,
+> being design-gated rather than mechanical. Every claim below carries a
+> `file:line`, config path, or count checked at `d455149`; §8 carries the
+> post-landing state.
 
 ## 0. Verdict
 
@@ -35,9 +38,10 @@ reversal of the green verdict but a sharpening of it: the model-handler layer
 carries **one genuine pass-through wrapper on the port** (§4a) that the prior
 passes' core-focused audits had not reached, and the provider-type leak that
 `-08-21 §4.4` named as the floor on the SDK package's specifier count now has a
-verified, in-tree fix template (§4c). A speculative edit into the green tree
-without a maintainer request would still be net-negative; these are recorded, not
-landed.
+verified, in-tree fix template (§4c). At the maintainer's request the two
+mechanical removals (§4a, §4b) were landed this session (§8); the leak-fix
+template stayed unlanded because closing it is a manifest-design decision, not
+a mechanical move.
 
 ## 1. Every `-08-21` tracked fact re-verifies at `d455149`
 
@@ -110,7 +114,8 @@ carries interactive-UI design work, not a mechanical move.
 The three prior passes each reported "no abstraction to remove." This pass's
 model-handler audit reached, for the first time, a layer where two removals and a
 templated leak-fix are genuinely present. All are behavior-preserving and
-independently verified below; none is landed (verification-only pass).
+independently verified below. §4a and §4b were landed this session at the
+maintainer's request (§8); §4c was not (design-gated, see below).
 
 ### 4a. `createToolUseFollowUpMessages` — a pure pass-through wrapper on the public port
 
@@ -134,8 +139,7 @@ picked into the port (`IModelHandler.ts:67-68`). Inlining the call site onto
 removes **one port member and one base method** with zero behavior change —
 exactly CLAUDE.md's "a wrapper that only … gets inlined" rule, and the first
 clearly-removable member the SDK-relevant surface has surfaced across these
-passes. Shovel-ready; touches the frozen port surface, so recorded for a
-maintainer-requested follow-up rather than landed blind.
+passes. **Landed this session (§8)** at the maintainer's request.
 
 ### 4b. `createAssistantMessageForPrefillText` — a zero-override internal seam
 
@@ -144,7 +148,8 @@ maintainer-requested follow-up rather than landed blind.
 in-file callers (`:1549`, `:1613`). Speculative generality; inline to
 `this.createAssistantMessage(...)`. Internal only (not on the port), so lower
 value than §4a — contrast its sibling `createAssistantMessageForAccumulatedOutput`
-(`:1644`), which Anthropic genuinely overrides and correctly stays.
+(`:1644`), which Anthropic genuinely overrides and correctly stays. **Landed
+this session (§8)** alongside §4a.
 
 ### 4c. The provider-type leak now has a verified in-tree fix template (`U` → `M`/`T`)
 
@@ -249,13 +254,72 @@ None add a wrapper layer. Relevant to the audited areas:
 Four consecutive passes (`-08-19`, `-08-20`, `-08-21`, `-08-22`) now find a green
 top-line verdict, this one re-derived from four fresh independent area audits.
 The difference this pass is that the honest answer is no longer "nothing at all
-to remove": the model-handler layer carries one pass-through wrapper on the public
+to remove": the model-handler layer carried one pass-through wrapper on the public
 port (§4a), one zero-override internal seam (§4b), and the provider-type leak that
-gates the SDK package now has a verified in-tree fix template (§4c). All three are
-behavior-preserving and shovel-ready, and all three touch or gate the frozen
-surface — so, following the discipline of `-08-21` (where the shovel-ready step
-landed only at the maintainer's request), they are **recorded here, not landed**.
-The remaining structural work is unchanged and design-gated: the two open Tier-1
-doors, the injectable logger/usage ports, and the manifest decision on
-`IModelHandler`. Nothing is a defect; nothing warrants a speculative edit into the
-green tree absent a maintainer request.
+gates the SDK package now has a verified in-tree fix template (§4c). The two
+mechanical removals were behavior-preserving, independently verified, and — at the
+maintainer's request — landed this session (§8), following the same discipline
+`-08-21 §7` set: verify first, land only the consensus-mechanical items, leave the
+design-gated one recorded. §4c stayed unlanded because it is a manifest-design
+decision (whether `IModelHandler` can ever be a public export), not a mechanical
+move. The remaining structural work is unchanged and design-gated: the two open
+Tier-1 doors, the injectable logger/usage ports, and the manifest decision on
+`IModelHandler`. Nothing else found is a defect; nothing else warrants a
+speculative edit into the green tree absent a maintainer request.
+
+## 8. Landed refactor — two consensus-mechanical removals (this session)
+
+At the maintainer's request, the two behavior-preserving removals §4a and §4b
+named were executed rather than only recorded — both mechanical, both verified
+zero-behavior-change, neither touching the design-gated leak question in §4c.
+
+### 8a. Inlined `createToolUseFollowUpMessages` off the public port
+
+**Removed** the pass-through method from `ModelHandler.ts` (was `:1726-1741`)
+and its Pick entry from `IModelHandler.ts` (was `:67`). **Re-routed** the one
+production call site, `ToolUseDispatchNode.ts:611-625`, onto
+`createBatchedToolUseFollowUpMessages` with a single-element `entries` array,
+preserving the per-entry `assistantText` (only on `index === 0`) exactly as
+before. **Refreshed** the now-inaccurate doc comment on
+`createBatchedToolUseFollowUpMessages` (no longer "get the single-call path for
+free from `createToolUseFollowUpMessages` below") and the stale reference in
+`toolAttachmentUtils.ts:97` (OpenAI Responses' method name).
+
+**Updated** the twelve test call sites that exercised the removed method
+directly or mocked it, converting each to the batched shape (single-entry array
+in, `(entries, workspaceState, text, client)` argument order):
+`GoogleInteractionsLive.vitest.ts`, `GoogleInteractionsToolUse.vitest.ts` (×2),
+`ModelHandlerAnthropic.vitest.ts` (×2), `ModelHandlerOpenAIResponse.vitest.ts`,
+`ModelHandlerOpenAIToolUse.vitest.ts`, `SessionResumeRetrieval.vitest.ts`,
+`ToolUseDispatchParallel.vitest.ts`, `ToolUseDispatchInterruption.vitest.ts`,
+`ToolUseRoundFollowUpMedia.vitest.ts`, `BashToolErrorFeedback.vitest.ts`. One
+redundant test in `ModelHandlerOpenAIToolUse.vitest.ts` ("single follow-up path
+includes the attachment summary") was collapsed into the adjacent batched-path
+test it now duplicates, rather than converted — after the removal both exercised
+the identical call, so keeping both would have been test-budget churn for no
+added coverage (CLAUDE.md "Tests are a budget, not proof of work"). Google's
+override does not accept a `client` parameter (`modelHandlerGoogleInteractions.ts:1231-1239`
+takes only `entries`/`workspaceState`/`text`), so its three call sites pass three
+arguments, not four — caught by `tsc`, not asserted in advance.
+
+### 8b. Inlined `createAssistantMessageForPrefillText`
+
+**Removed** the zero-override `protected` hook (was `ModelHandler.ts:1652-1655`)
+and inlined its body at both call sites (`:1549`, `:1613`) to
+`this.createAssistantMessage(...)` directly. Internal-only; no port or test
+change needed.
+
+### 8c. Validation
+
+`npm run typecheck` — clean across `typecheck:workspace`, `typecheck:test-kernel`,
+`typecheck:agent` (the `@texra-ai/agent` SDK build — "Validated 725 declarations
+and 70 external packages"), `typecheck:cli`, `typecheck:trace-viewer`,
+`typecheck:desktop`. `npm run lint` (eslint) on all fourteen touched files — clean.
+`prettier --check` on all fourteen — clean. `npm run check:dead-code-ratchet` —
+"no new findings" (430 combined, matching the pre-change baseline exactly — the
+removed methods were live, not dead, so the ratchet is unaffected by design).
+Full `src/test-kernel/architecture/` suite — 104/104, matching the exact count
+`-08-21 §7c` recorded post-landing. The affected model-handler and follow-up test
+directories — 934 passed, 4 skipped (no newly-skipped or newly-failing tests).
+Net diff: **14 files changed, 96 insertions(+), 113 deletions(-)** — one public
+port member removed, one internal method removed, zero behavior change.

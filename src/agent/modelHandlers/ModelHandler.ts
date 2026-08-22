@@ -1546,7 +1546,7 @@ export abstract class ModelHandler<
     workspaceState.assembly.accumulatedOutput = fileContent;
     workspaceState.assembly.lastResponse = fileContent;
 
-    messages.push(this.createAssistantMessageForPrefillText(fileContent));
+    messages.push(this.createAssistantMessage(fileContent));
 
     if (hasEndTag(fileContent)) {
       this.logger.debug(
@@ -1610,7 +1610,7 @@ export abstract class ModelHandler<
     }
 
     if (supportsPrefill) {
-      messages.push(this.createAssistantMessageForPrefillText(text));
+      messages.push(this.createAssistantMessage(text));
       return;
     }
 
@@ -1647,11 +1647,6 @@ export abstract class ModelHandler<
     return this.createAssistantMessage(
       workspaceState.assembly.accumulatedOutput,
     );
-  }
-
-  /** Provider hook for assistant text used as prefill/resume context. */
-  protected createAssistantMessageForPrefillText(text: string): M {
-    return this.createAssistantMessage(text);
   }
 
   /**
@@ -1692,12 +1687,11 @@ export abstract class ModelHandler<
    * Build provider-specific follow-up messages carrying the results of one
    * model turn's tool calls.
    *
-   * This is the single follow-up contract: handlers implement the batched
-   * shape and get the single-call path for free from
-   * {@link createToolUseFollowUpMessages} below. Providers that must keep
-   * parallel calls in one assistant turn (thought signatures, DeepSeek-style
-   * `reasoning_content`) assemble them here; providers that never batch
-   * concatenate per entry.
+   * This is the single follow-up contract: callers pass a single-entry array
+   * for a lone tool call and the multi-entry array for a batch. Providers
+   * that must keep parallel calls in one assistant turn (thought signatures,
+   * DeepSeek-style `reasoning_content`) assemble them here; providers that
+   * never batch concatenate per entry.
    *
    * @param entries - One entry per tool call, in original model-response order.
    *   Each entry bundles the call with its own result and attachments, so
@@ -1718,26 +1712,6 @@ export abstract class ModelHandler<
     text: string | undefined,
     client: C | undefined,
   ): Promise<M[]>;
-
-  /**
-   * Build a provider-specific follow-up message containing a single tool
-   * result — the batched contract applied to one entry.
-   */
-  async createToolUseFollowUpMessages(
-    client: C | undefined,
-    call: T,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<M[]> {
-    return this.createBatchedToolUseFollowUpMessages(
-      [{ call, result, attachments }],
-      workspaceState,
-      text,
-      client,
-    );
-  }
 
   /**
    * Append a simple text follow-up from the user.

@@ -78,18 +78,7 @@ describe('ModelHandlerOpenAI tool-result attachment summaries', () => {
   const call = { raw: VALID_TOOL_CALL } as never;
   const result = { status: 'executed', output: 'done' } as const;
 
-  it('single follow-up path includes the attachment summary', async () => {
-    const messages = await newHandler().createToolUseFollowUpMessages(
-      undefined,
-      call,
-      result,
-      attachments,
-    );
-    const toolMsg = messages.find((m) => m.role === 'tool') as any;
-    assert.ok(String(toolMsg.content).includes('chart.png (image/png)'));
-  });
-
-  it('batched follow-up path includes the attachment summary — regression for parallel tool calls silently dropping it', async () => {
+  it('follow-up path includes the attachment summary — regression for parallel tool calls silently dropping it', async () => {
     const messages = await newHandler().createBatchedToolUseFollowUpMessages([
       { call, result, attachments },
     ] as never);
