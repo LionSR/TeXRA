@@ -51,9 +51,9 @@ export const DEVICE_AUTH_BASE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions
  * deep link from the URL and offers a real-click "Open in your editor" button.
  * With PKCE the page only ever carries a one-time ?code= (no tokens).
  *
- * The editor scheme and extension id ride as PATH segments
- * (/auth-bridge/<scheme>/<id>) so redirect_to carries no '?' that an OAuth
- * round-trip could mangle. The Supabase Redirect URLs allow-list entry is the
+ * The editor scheme, extension id, and callback nonce ride as PATH segments
+ * (/auth-bridge/<scheme>/<id>/<nonce>) so redirect_to carries no '?'
+ * that an OAuth round-trip could mangle. The Redirect URLs allow-list entry is the
  * globstar https://remote.texra.ai/functions/v1/auth-bridge** (it must span the
  * '/' and '.' in the path, which a single '*' cannot).
  */

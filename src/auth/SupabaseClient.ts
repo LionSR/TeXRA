@@ -1,3 +1,4 @@
+import PQueue from 'p-queue';
 import {
   createClient,
   SupabaseClient as Client,
@@ -37,11 +38,11 @@ const log = createLog('SupabaseClient');
  * This is the one shape `@supabase/auth-js` accepts, and it is only consulted
  * when `persistSession` is true — hence that flag below.
  *
- * A callback that carries no flow id (TeXRA's does not: the auth-bridge deep
- * link keeps `redirect_to` free of query parameters) clears the fixed verifier
- * key on exchange but leaves its numbered slot behind. GoTrue caps those at
- * five and evicts the oldest, so the leftovers are bounded and hold spent
- * verifiers, which are worthless without their single-use auth code.
+ * Extension OAuth stores the flow id beside its application nonce and passes it
+ * directly to code exchange, so concurrent attempts select separate verifier
+ * slots without adding another callback query parameter. Hosts that omit a flow
+ * id retain auth-js's fixed-verifier fallback. The numbered slot ring is capped
+ * at five, so abandoned verifier state remains bounded.
  */
 function gotrueStorage(secrets: SessionSecretStore): SupportedStorage {
   // Writes are mirrored here so a secret-store failure degrades to the old
@@ -98,6 +99,7 @@ export class SupabaseClient {
   private static instance: Client | null = null;
   private static config: { url: string; publicKey: string } | null = null;
   private static authProvider: AuthTokenProvider | null = null;
+  private static pkceOperations = new PQueue({ concurrency: 1 });
 
   /**
    * Error that occurred during initialization, if any.
@@ -121,6 +123,16 @@ export class SupabaseClient {
     this.authProvider = null;
     this.initError = null;
     this.readinessError = null;
+    this.pkceOperations = new PQueue({ concurrency: 1 });
+  }
+
+  /**
+   * Serialize PKCE callback exchange with OAuth initialization. Auth-js keeps
+   * each verifier in a flow-specific slot, while this queue prevents an older
+   * exchange from racing initialization in the same extension host.
+   */
+  static async runPkceOperation<T>(operation: () => Promise<T>): Promise<T> {
+    return this.pkceOperations.add(operation) as Promise<T>;
   }
 
   /**

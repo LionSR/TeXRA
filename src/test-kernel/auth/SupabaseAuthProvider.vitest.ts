@@ -1,10 +1,21 @@
 // Third-party imports
+import * as vscode from 'vscode';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const providerMocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   invalidateModelOptionsCache: vi.fn(),
   invalidateRemoteAgentsAfterSignOut: vi.fn(async () => {}),
+  openExternal: vi.fn(async () => true),
+  runPkceOperation: vi.fn((operation: () => Promise<unknown>) => {
+    const result = testDoubles.pkceTail.then(operation);
+    testDoubles.pkceTail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }),
+  signInWithOAuth: vi.fn(),
   signOut: vi.fn(async () => {}),
 }));
 
@@ -14,21 +25,59 @@ const providerMocks = vi.hoisted(() => ({
 const testDoubles = vi.hoisted(() => ({
   coordinator: null as Record<string, ReturnType<typeof vi.fn>> | null,
   emitters: [] as Array<{ fire: ReturnType<typeof vi.fn> }>,
+  pkceTail: Promise.resolve<unknown>(undefined),
+  secrets: new Map<string, string>(),
 }));
 
 vi.mock('vscode', () => ({
   EventEmitter: class {
-    readonly event = vi.fn();
-    dispose = vi.fn();
-    fire = vi.fn();
+    private readonly listeners = new Set<(value: unknown) => unknown>();
+    readonly event = vi.fn((listener: (value: unknown) => unknown) => {
+      this.listeners.add(listener);
+      return { dispose: () => this.listeners.delete(listener) };
+    });
+    dispose = vi.fn(() => this.listeners.clear());
+    fire = vi.fn((value: unknown) => {
+      for (const listener of this.listeners) void listener(value);
+    });
     constructor() {
       testDoubles.emitters.push(this);
     }
   },
+  env: {
+    uiKind: 1,
+    uriScheme: 'vscode',
+    openExternal: providerMocks.openExternal,
+  },
+  ProgressLocation: { Notification: 15 },
+  UIKind: { Desktop: 1, Web: 2 },
+  Uri: { parse: (value: string) => ({ value }) },
+  window: {
+    withProgress: vi.fn(async (_options, task) =>
+      task(
+        { report: vi.fn() },
+        {
+          isCancellationRequested: false,
+          onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
+        },
+      ),
+    ),
+  },
 }));
 
 vi.mock('@platform/platform', () => ({
-  platform: () => ({ secrets: {} }),
+  platform: () => ({
+    secrets: {
+      get: async (key: string) => testDoubles.secrets.get(key),
+      getStored: async (key: string) => testDoubles.secrets.get(key),
+      set: async (key: string, value: string) => {
+        testDoubles.secrets.set(key, value);
+      },
+      delete: async (key: string) => {
+        testDoubles.secrets.delete(key);
+      },
+    },
+  }),
 }));
 
 vi.mock('@auth/SupabaseAuthCoordinator', () => ({
@@ -37,9 +86,11 @@ vi.mock('@auth/SupabaseAuthCoordinator', () => ({
 
 vi.mock('@auth/SupabaseClient', () => ({
   SupabaseClient: {
+    runPkceOperation: providerMocks.runPkceOperation,
     getClient: () => ({
       auth: {
         getUser: providerMocks.getUser,
+        signInWithOAuth: providerMocks.signInWithOAuth,
         signOut: providerMocks.signOut,
       },
     }),
@@ -56,10 +107,33 @@ vi.mock('@model/computeModelOptions', () => ({
 }));
 
 // Local imports
+import { setExternalAuthCallbackResolver } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import type { SupabaseUriHandler } from '@frontend/auth/UriHandler';
+
+const PENDING_STATE_PREFIX = 'texra.extension.pendingOAuthState.';
+const TEST_NONCE = '0123456789abcdef0123456789abcdef';
+const TEST_FLOW_ID = 'abcdef0123456789abcdef0123456789';
+
+function seedPendingOAuthAttempt(
+  nonce = TEST_NONCE,
+  createdAt = Date.now(),
+  flowId = TEST_FLOW_ID,
+): void {
+  testDoubles.secrets.set(
+    `${PENDING_STATE_PREFIX}${nonce}`,
+    JSON.stringify({ nonce, createdAt, flowId }),
+  );
+}
+
+afterEach(() => {
+  testDoubles.secrets.clear();
+  testDoubles.pkceTail = Promise.resolve(undefined);
+  setExternalAuthCallbackResolver(null);
+  Object.assign(vscode.env, { uiKind: vscode.UIKind.Desktop });
+});
 
 function createProvider(options: {
   expiresAt: number;
@@ -127,6 +201,34 @@ function createExpiredProvider(
 
 function createUnexpiredProvider(): ReturnType<typeof createProvider> {
   return createProvider({ expiresAt: Date.now() + 60_000 });
+}
+
+function createUriHandlerHarness(): {
+  handler: SupabaseUriHandler;
+  fire(uri: { path: string; query: string }): Promise<void>;
+  listenerCount(): number;
+} {
+  const listeners = new Set<
+    (uri: { path: string; query: string }) => void | Promise<void>
+  >();
+  return {
+    handler: {
+      onDidReceiveCallback: (
+        listener: (uri: {
+          path: string;
+          query: string;
+        }) => void | Promise<void>,
+      ) => {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      },
+      handleUri: vi.fn(),
+    } as unknown as SupabaseUriHandler,
+    async fire(uri) {
+      await Promise.all([...listeners].map((listener) => listener(uri)));
+    },
+    listenerCount: () => listeners.size,
+  };
 }
 
 describe('SupabaseAuthProvider expired-session refresh', () => {
@@ -224,6 +326,7 @@ describe('SupabaseAuthProvider model availability', () => {
   // Listeners recompute model options from the session-change event, so an
   // event published ahead of the invalidation serves the stale option list.
   it('invalidates model availability before publishing a new session', async () => {
+    seedPendingOAuthAttempt();
     const { provider, session, coordinator, fire } = createUnexpiredProvider();
 
     // Drive the login path through its public seams: a late OAuth callback
@@ -246,7 +349,10 @@ describe('SupabaseAuthProvider model availability', () => {
     } as unknown as SupabaseUriHandler;
     provider.setUriHandler(handler);
 
-    await authCallback?.({ path: '/auth-callback', query: 'code=test' });
+    await authCallback?.({
+      path: '/auth-callback',
+      query: `code=test&app_nonce=${TEST_NONCE}`,
+    });
 
     expect(providerMocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(
@@ -276,5 +382,405 @@ describe('SupabaseAuthProvider model availability', () => {
 
     expect(coordinator.clearSession).toHaveBeenCalledOnce();
     expect(providerMocks.signOut).not.toHaveBeenCalled();
+  });
+
+  it('clears its pending OAuth attempt when signing out without a session', async () => {
+    const { provider, coordinator } = createUnexpiredProvider();
+    const uriHandler = createUriHandlerHarness();
+    provider.setUriHandler(uriHandler.handler);
+    coordinator.loadSession.mockResolvedValue(null);
+    let redirectTo = '';
+    providerMocks.signInWithOAuth.mockImplementation(async (input) => {
+      redirectTo = input.options.redirectTo;
+      return {
+        data: {
+          url: 'https://provider.example/authorize',
+          flowId: TEST_FLOW_ID,
+        },
+        error: null,
+      };
+    });
+    let browserOpened!: () => void;
+    const browserLaunch = new Promise<void>((resolve) => {
+      browserOpened = resolve;
+    });
+    providerMocks.openExternal.mockImplementation(async () => {
+      browserOpened();
+      return true;
+    });
+    const signIn = provider.createSession([]).catch(() => null);
+    await browserLaunch;
+
+    await expect(provider.removeStoredSession()).resolves.toBe(false);
+    await signIn;
+
+    const nonce = redirectTo.split('/').at(-1);
+    expect(
+      testDoubles.secrets.get(`${PENDING_STATE_PREFIX}${nonce}`),
+    ).toBeUndefined();
+  });
+});
+
+describe('SupabaseAuthProvider OAuth callback binding', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('persists and consumes a desktop nonce with the waiter armed before browser launch', async () => {
+    const { provider, session, coordinator } = createUnexpiredProvider();
+    const uriHandler = createUriHandlerHarness();
+    provider.setUriHandler(uriHandler.handler);
+    coordinator.createSessionFromCallback.mockResolvedValue({
+      success: true,
+      session,
+    });
+    providerMocks.getUser.mockResolvedValue({
+      data: { user: { id: session.id } },
+      error: null,
+    });
+
+    let redirectTo = '';
+    providerMocks.signInWithOAuth.mockImplementation(async (input) => {
+      redirectTo = input.options.redirectTo;
+      return {
+        data: {
+          url: 'https://provider.example/authorize',
+          flowId: TEST_FLOW_ID,
+        },
+        error: null,
+      };
+    });
+    providerMocks.openExternal.mockImplementation(async () => {
+      const nonce = redirectTo.split('/').at(-1);
+      expect(nonce).toMatch(/^[0-9a-f]{32}$/);
+      expect(uriHandler.listenerCount()).toBe(2);
+      expect(
+        JSON.parse(
+          testDoubles.secrets.get(`${PENDING_STATE_PREFIX}${nonce}`) ?? '',
+        ),
+      ).toEqual({
+        nonce,
+        createdAt: expect.any(Number),
+        flowId: TEST_FLOW_ID,
+      });
+      await uriHandler.fire({
+        path: '/auth-callback',
+        query: `code=one-time-code&app_nonce=${nonce}`,
+      });
+      return true;
+    });
+
+    await expect(provider.createSession([])).resolves.toMatchObject({
+      id: session.id,
+    });
+
+    expect(redirectTo).toMatch(
+      /\/auth-bridge\/vscode\/texra-ai\.texra\/[0-9a-f]{32}$/,
+    );
+    expect(coordinator.createSessionFromCallback).toHaveBeenCalledOnce();
+    const nonce = redirectTo.split('/').at(-1);
+    expect(
+      testDoubles.secrets.get(`${PENDING_STATE_PREFIX}${nonce}`),
+    ).toBeUndefined();
+  });
+
+  it('preserves web routing state bytes while carrying the application nonce separately', async () => {
+    Object.assign(vscode.env, { uiKind: vscode.UIKind.Web });
+    const callbackUrl =
+      'https://example.github.dev/extension-auth-callback?state=a%2Bb%2F%3D';
+    setExternalAuthCallbackResolver(async () => ({ fullUrl: callbackUrl }));
+    const { provider, session, coordinator } = createUnexpiredProvider();
+    const uriHandler = createUriHandlerHarness();
+    provider.setUriHandler(uriHandler.handler);
+    coordinator.createSessionFromCallback.mockResolvedValue({
+      success: true,
+      session,
+    });
+    providerMocks.getUser.mockResolvedValue({
+      data: { user: { id: session.id } },
+      error: null,
+    });
+
+    let redirectTo = '';
+    providerMocks.signInWithOAuth.mockImplementation(async (input) => {
+      redirectTo = input.options.redirectTo;
+      return {
+        data: {
+          url: 'https://provider.example/authorize',
+          flowId: TEST_FLOW_ID,
+        },
+        error: null,
+      };
+    });
+    providerMocks.openExternal.mockImplementation(async () => {
+      const nonce = new URL(redirectTo).searchParams.get('app_nonce');
+      await uriHandler.fire({
+        path: '/extension-auth-callback',
+        query: `code=one-time-code&app_nonce=${nonce}`,
+      });
+      return true;
+    });
+
+    await provider.createSession([]);
+
+    expect(redirectTo).toMatch(
+      new RegExp(
+        `^${callbackUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}&app_nonce=[0-9a-f]{32}$`,
+      ),
+    );
+  });
+
+  it('allows another live extension window to claim an attempt started by the first', async () => {
+    const first = createUnexpiredProvider();
+    const second = createUnexpiredProvider();
+    const firstHandler = createUriHandlerHarness();
+    const secondHandler = createUriHandlerHarness();
+    first.provider.setUriHandler(firstHandler.handler);
+    second.provider.setUriHandler(secondHandler.handler);
+    second.coordinator.loadSession.mockResolvedValue(null);
+    second.coordinator.createSessionFromCallback.mockResolvedValue({
+      success: true,
+      session: second.session,
+    });
+
+    const redirects: string[] = [];
+    providerMocks.signInWithOAuth.mockImplementation(async (input) => {
+      redirects.push(input.options.redirectTo);
+      return {
+        data: {
+          url: 'https://provider.example/authorize',
+          flowId:
+            redirects.length === 1
+              ? TEST_FLOW_ID
+              : '1234567890abcdef1234567890abcdef',
+        },
+        error: null,
+      };
+    });
+    let firstBrowserOpened!: () => void;
+    const firstBrowserLaunch = new Promise<void>((resolve) => {
+      firstBrowserOpened = resolve;
+    });
+    let secondBrowserOpened!: () => void;
+    const secondBrowserLaunch = new Promise<void>((resolve) => {
+      secondBrowserOpened = resolve;
+    });
+    providerMocks.openExternal.mockImplementation(async () => {
+      if (redirects.length === 1) firstBrowserOpened();
+      else secondBrowserOpened();
+      return true;
+    });
+
+    const firstSignIn = first.provider.createSession([]).catch(() => null);
+    await firstBrowserLaunch;
+    const firstNonce = redirects[0].split('/').at(-1);
+    await secondHandler.fire({
+      path: '/auth-callback',
+      query: `code=second-window&app_nonce=${firstNonce}`,
+    });
+    expect(second.coordinator.createSessionFromCallback).toHaveBeenCalledOnce();
+
+    const secondSignIn = second.provider.createSession([]).catch(() => null);
+    await secondBrowserLaunch;
+    const secondNonce = redirects[1].split('/').at(-1);
+    first.provider.dispose();
+    await firstSignIn;
+
+    expect(
+      testDoubles.secrets.get(`${PENDING_STATE_PREFIX}${secondNonce}`),
+    ).toBeDefined();
+    second.provider.dispose();
+    await secondSignIn;
+  });
+
+  it('waits for a claimed callback exchange before initializing the next PKCE flow', async () => {
+    seedPendingOAuthAttempt();
+    const first = createUnexpiredProvider();
+    const firstHandler = createUriHandlerHarness();
+    first.provider.setUriHandler(firstHandler.handler);
+    first.coordinator.loadSession.mockResolvedValue(null);
+
+    let exchangeStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      exchangeStarted = resolve;
+    });
+    let finishExchange!: () => void;
+    const exchangeGate = new Promise<void>((resolve) => {
+      finishExchange = resolve;
+    });
+    first.coordinator.createSessionFromCallback.mockImplementation(async () => {
+      exchangeStarted();
+      await exchangeGate;
+      throw new Error('first exchange failed');
+    });
+
+    const firstCallback = firstHandler.fire({
+      path: '/auth-callback',
+      query: `code=first&app_nonce=${TEST_NONCE}`,
+    });
+    await started;
+
+    const second = createUnexpiredProvider();
+    const secondHandler = createUriHandlerHarness();
+    second.provider.setUriHandler(secondHandler.handler);
+    second.coordinator.createSessionFromCallback.mockResolvedValue({
+      success: true,
+      session: second.session,
+    });
+    providerMocks.getUser.mockResolvedValue({
+      data: { user: { id: second.session.id } },
+      error: null,
+    });
+    const secondFlowId = '1234567890abcdef1234567890abcdef';
+    let redirectTo = '';
+    providerMocks.signInWithOAuth.mockImplementation(async (input) => {
+      redirectTo = input.options.redirectTo;
+      return {
+        data: {
+          url: 'https://provider.example/authorize',
+          flowId: secondFlowId,
+        },
+        error: null,
+      };
+    });
+    let browserOpened!: () => void;
+    const browserLaunch = new Promise<void>((resolve) => {
+      browserOpened = resolve;
+    });
+    providerMocks.openExternal.mockImplementation(async () => {
+      browserOpened();
+      return true;
+    });
+
+    const secondSignIn = second.provider.createSession([]);
+    await Promise.resolve();
+    expect(providerMocks.signInWithOAuth).not.toHaveBeenCalled();
+
+    finishExchange();
+    await firstCallback;
+    await browserLaunch;
+    expect(providerMocks.signInWithOAuth).toHaveBeenCalledOnce();
+
+    const secondNonce = redirectTo.split('/').at(-1);
+    await secondHandler.fire({
+      path: '/auth-callback',
+      query: `code=second&app_nonce=${secondNonce}`,
+    });
+    await expect(secondSignIn).resolves.toMatchObject({
+      id: second.session.id,
+    });
+    expect(second.coordinator.createSessionFromCallback).toHaveBeenCalledWith(
+      {
+        path: '/auth-callback',
+        query: expect.stringContaining('code=second'),
+      },
+      secondFlowId,
+    );
+  });
+
+  it('prevents a superseded callback from committing or clearing the newer attempt', async () => {
+    const { provider, session, coordinator } = createUnexpiredProvider();
+    const uriHandler = createUriHandlerHarness();
+    provider.setUriHandler(uriHandler.handler);
+    coordinator.createSessionFromCallback.mockResolvedValue({
+      success: true,
+      session,
+    });
+    providerMocks.getUser.mockResolvedValue({
+      data: { user: { id: session.id } },
+      error: null,
+    });
+
+    const redirects: string[] = [];
+    providerMocks.signInWithOAuth.mockImplementation(async (input) => {
+      redirects.push(input.options.redirectTo);
+      return {
+        data: {
+          url: 'https://provider.example/authorize',
+          flowId: TEST_FLOW_ID,
+        },
+        error: null,
+      };
+    });
+    let firstOpened!: () => void;
+    const firstBrowserLaunch = new Promise<void>((resolve) => {
+      firstOpened = resolve;
+    });
+    providerMocks.openExternal.mockImplementation(async () => {
+      if (redirects.length === 1) {
+        firstOpened();
+        return true;
+      }
+      const oldNonce = redirects[0].split('/').at(-1);
+      const newNonce = redirects[1].split('/').at(-1);
+      await uriHandler.fire({
+        path: '/auth-callback',
+        query: `code=old&app_nonce=${oldNonce}`,
+      });
+      await uriHandler.fire({
+        path: '/auth-callback',
+        query: `code=new&app_nonce=${newNonce}`,
+      });
+      return true;
+    });
+
+    const first = provider.createSession([]).catch(() => null);
+    await firstBrowserLaunch;
+    const second = provider.createSession([]);
+
+    await expect(first).resolves.toBeNull();
+    await expect(second).resolves.toMatchObject({ id: session.id });
+    expect(coordinator.createSessionFromCallback).toHaveBeenCalledOnce();
+    expect(coordinator.createSessionFromCallback).toHaveBeenCalledWith(
+      {
+        path: '/auth-callback',
+        query: expect.stringContaining('code=new'),
+      },
+      TEST_FLOW_ID,
+    );
+  });
+
+  it('rejects missing, duplicate, malformed, mismatched, expired, and replayed callbacks', async () => {
+    seedPendingOAuthAttempt();
+    const { provider, session, coordinator } = createUnexpiredProvider();
+    const uriHandler = createUriHandlerHarness();
+    provider.setUriHandler(uriHandler.handler);
+    coordinator.loadSession.mockResolvedValue(null);
+    coordinator.createSessionFromCallback.mockResolvedValue({
+      success: true,
+      session,
+    });
+
+    for (const query of [
+      'code=test',
+      `code=test&app_nonce=${TEST_NONCE}&app_nonce=${TEST_NONCE}`,
+      'code=test&app_nonce=not-a-nonce',
+      'code=test&app_nonce=ffffffffffffffffffffffffffffffff',
+    ]) {
+      await uriHandler.fire({ path: '/auth-callback', query });
+    }
+    expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
+
+    await uriHandler.fire({
+      path: '/auth-callback',
+      query: `code=test&app_nonce=${TEST_NONCE}`,
+    });
+    await uriHandler.fire({
+      path: '/auth-callback',
+      query: `code=test&app_nonce=${TEST_NONCE}`,
+    });
+    expect(coordinator.createSessionFromCallback).toHaveBeenCalledOnce();
+
+    seedPendingOAuthAttempt(TEST_NONCE, Date.now() - 10 * 60 * 1000 - 1);
+    const expired = createUnexpiredProvider();
+    const expiredHandler = createUriHandlerHarness();
+    expired.provider.setUriHandler(expiredHandler.handler);
+    await expiredHandler.fire({
+      path: '/auth-callback',
+      query: `code=test&app_nonce=${TEST_NONCE}`,
+    });
+    expect(
+      expired.coordinator.createSessionFromCallback,
+    ).not.toHaveBeenCalled();
   });
 });

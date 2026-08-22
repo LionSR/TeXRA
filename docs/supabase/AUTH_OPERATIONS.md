@@ -44,6 +44,35 @@ For Google, check:
    Google but no user appears, inspect the provider console and consent-screen
    status before assuming a Supabase hook or database problem.
 
+## Extension OAuth bridge release gate
+
+Any extension release that sends the callback nonce as the third
+`auth-bridge` path segment requires the matching `auth-bridge` Edge Function in
+production first. The old bridge does not append `app_nonce` to the editor deep
+link, so releasing the extension first would make desktop OAuth callbacks fail
+closed.
+
+Before publishing that extension build:
+
+1. Deploy the bridge without JWT verification:
+
+   ```sh
+   supabase functions deploy auth-bridge \
+     --no-verify-jwt \
+     --project-ref <production-project-ref>
+   ```
+
+2. Confirm the Auth redirect allow-list still contains
+   `https://remote.texra.ai/functions/v1/auth-bridge**`.
+3. Verify that the two-segment route without a nonce returns HTTP 400, a valid
+   three-segment route emits exactly one matching `app_nonce`, and malformed or
+   extra nonce segments also return HTTP 400.
+4. Only then publish the extension build and verify one desktop OAuth sign-in
+   and one VS Code web or Codespaces sign-in end to end.
+
+Do not reverse steps 1 and 4, and do not deploy the bridge from unreviewed local
+changes.
+
 ## Email first response checklist
 
 1. In Supabase Dashboard, open **Project Settings** -> **Authentication** ->
