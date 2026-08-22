@@ -189,19 +189,21 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   /** Convert a PKCE OAuth callback into a host-neutral session record. */
   async createSessionFromCallback(
     uri: AuthCallbackUriParts,
+    flowId?: string,
   ): Promise<SupabaseCallbackResult> {
     const parsedCode = parseAuthCallbackCode(uri);
     return parsedCode.success
-      ? this.createSessionViaCodeExchange(parsedCode.code)
+      ? this.createSessionViaCodeExchange(parsedCode.code, flowId)
       : parsedCode;
   }
 
   private async createSessionViaCodeExchange(
     code: string,
+    flowId?: string,
   ): Promise<SupabaseCallbackResult> {
     const { data, error } = await this.options
       .getClient()
-      .auth.exchangeCodeForSession(code);
+      .auth.exchangeCodeForSession(code, flowId ? { flowId } : undefined);
 
     if (error || !data.session) {
       // A missing verifier means this callback belongs to a sign-in attempt
