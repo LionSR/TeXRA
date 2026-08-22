@@ -325,4 +325,4 @@ Now that you've completed your first task with TeXRA, you can:
 - Discover how to use [intelligent merge](./intelligent-merge.md) for combining changes
 - Optimize your workflow with [custom configuration](./configuration.md)
 
-For any issues or questions, refer to the [troubleshooting](/guide/troubleshooting) section or check the [GitHub repository](https://github.com/texra-ai/texra-issues/issues).
+For any issues or questions, refer to the [troubleshooting](/guide/troubleshooting) section or check the [GitHub repository](https://github.com/LionSR/TeXRA/issues).

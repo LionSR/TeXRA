@@ -345,7 +345,7 @@ Most installation problems fall into one of four categories. Find your symptom a
 
 If you encounter persistent installation issues:
 
-1. Check the [GitHub Issues page](https://github.com/texra-ai/texra-issues/issues) for known problems
+1. Check the [GitHub Issues page](https://github.com/LionSR/TeXRA/issues) for known problems
 2. Look for error messages in the TeXRA ProgressBoard
 3. File a new issue with detailed information about your system and the specific error
 
