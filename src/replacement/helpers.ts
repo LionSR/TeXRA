@@ -50,14 +50,14 @@ export function generateXmlLatexConversions(
     // XML with end to LaTeX
     [`<end{${env}}>`, `\\end{${env}}`],
     [`</end{${env}}>`, `\\end{${env}}`],
-    // XML with braces to LaTeX
+    // XML with braces to LaTeX. Newline-suffixed spellings (`</env}\n`,
+    // `</begin{env}\n`) need no entry of their own: the entries below run
+    // first, rewrite the tag, and leave the trailing newline untouched.
     [`<${env}}`, `\\begin{${env}}`],
     [`</${env}}`, `\\end{${env}}`],
     [`</${env}\n`, `\\end{${env}}\n`],
-    [`</${env}}\n`, `\\end{${env}}\n`],
     // XML begin tags incorrectly closed with leading slash
     [`</begin{${env}}`, `\\begin{${env}}`],
-    [`</begin{${env}}\n`, `\\begin{${env}}\n`],
     [`</begin{${env}`, `\\begin{${env}}`],
     // LaTeX with incorrect XML ending
     [`\\end{${env}>}`, `\\end{${env}}`],
