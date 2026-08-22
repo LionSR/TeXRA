@@ -1,6 +1,6 @@
-# Work Produced with TeXRA
+# Work produced with TeXRA
 
-This non-exhaustive list records public projects and papers that used TeXRA.
+A non-exhaustive list of public projects and papers that used TeXRA. To add yours, open an issue or a pull request on the [TeXRA repository](https://github.com/LionSR/TeXRA).
 
 ## Projects
 

@@ -17,7 +17,7 @@ If TeXRA helps you push a derivation through, check a proof, or get a result out
 
 ## Research produced with TeXRA
 
-TeXRA grew out of research, and it is built to produce more of it. A selection of work by the TeXRA team and collaborators that uses these multi-agent workflows:
+TeXRA grew out of research, and it is built to produce more of it. A selection of work by the TeXRA team and collaborators that uses these multi-agent workflows (the fuller list is on [Work produced with TeXRA](/work-using-texra)):
 
 - **Lu, S., Jin, Z., Zhang, T. J., Kos, P., Cirac, J. I., & Schölkopf, B.** (2026). [_Can Theoretical Physics Research Benefit from Language Agents?_](https://arxiv.org/abs/2506.06214) International Conference on Machine Learning (ICML 2026).
   A position paper on how language agents can accelerate theoretical and computational physics, the motivation behind TeXRA.
