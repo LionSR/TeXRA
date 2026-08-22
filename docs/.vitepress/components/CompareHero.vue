@@ -227,11 +227,22 @@ import MockupFrame from './MockupFrame.vue';
   color: var(--mk-accent);
   font-size: var(--mk-space-12);
   cursor: pointer;
-  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--mk-shadow-md);
+  transition-property: background-color, border-color, scale;
+  transition-duration: var(--mk-dur-fast), var(--mk-dur-fast), var(--mk-dur);
+  transition-timing-function: var(--mk-ease);
+}
+.accept:active {
+  scale: var(--mk-press-scale);
 }
 .accept:hover {
   background: color-mix(in srgb, var(--mk-accent) 18%, transparent);
   border-color: color-mix(in srgb, var(--mk-accent) 60%, transparent);
+}
+.accept wa-icon {
+  /* optical centring: the left-pointing arrow's visual mass sits right of its
+     box, so shift it a hair toward the direction it points */
+  margin-left: calc(-1 * var(--mk-space-2));
 }
 
 /* On narrow screens the two panes stack like VS Code's inline diff. */

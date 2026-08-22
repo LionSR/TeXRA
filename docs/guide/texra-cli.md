@@ -8,8 +8,10 @@ import ConfigPrecedenceStack from '../.vitepress/components/ConfigPrecedenceStac
 
 # TeXRA CLI
 
-The TeXRA CLI provides a local `texra` command for running TeXRA agents from a
-terminal. It is published to npm as [`@texra-ai/cli`](https://www.npmjs.com/package/@texra-ai/cli).
+The TeXRA CLI brings TeXRA's theorist agents to the terminal: a local `texra`
+command for chatting with an agent, running long autonomous attempts at a
+problem, launching specialist teams, and running document workflows over your
+project. It is published to npm as [`@texra-ai/cli`](https://www.npmjs.com/package/@texra-ai/cli).
 
 ## Install
 
@@ -35,7 +37,22 @@ texra agents list
 texra config
 ```
 
-## Running Agents
+For a guided first run, use `texra setup`. It walks you through sign-in
+(TeXRA account, ChatGPT subscription, or an API key), checks your
+environment, shows the agent roster, and starts your first task:
+
+```bash
+texra setup
+```
+
+Working from an Overleaf or ShareLaTeX project? Clone it into a directory
+first, by URL, git URL, or 24-character project id:
+
+```bash
+texra clone <project> --cwd ./paper
+```
+
+## Running agents
 
 Run a workflow agent from a project directory:
 
@@ -46,16 +63,25 @@ texra run polish --input paper.tex --output paper.polished.tex --print
 <CliRunHero
   command="texra run polish --input paper.tex --output paper.polished.tex --print"
   :rounds="[
-    { label: 'r0 — draft revision', state: 'done' },
-    { label: 'r1 — critique and revise', state: 'done' },
+    { label: 'r0: draft revision', state: 'done' },
+    { label: 'r1: critique and revise', state: 'done' },
   ]"
   :outputs="['paper.polished.tex']"
 />
 
 <p class="hero-caption">Command in, rounds stream as progress, and the printed path is the success signal: the copied <code>--output</code> destination, or the generated file in run storage when no copy was requested.</p>
 
+Workflow agents that take an instruction, such as `polish`, accept it with
+`--instruction <text>` or `--instruction-file <file>`. When both are set, the
+file contents are passed first:
+
+```bash
+texra run polish --input paper.tex --instruction "Tighten the proof of Lemma 2"
+texra run polish --input paper.tex --instruction-file notes.md
+```
+
 Pass read-only context files with repeated `--context` flags. The agent can
-read these files through `{{ ALL_CONTEXTS }}`, but it should only emit revised
+read these files through `{{ ALL_CONTEXTS }}`, but it only emits revised
 documents for the selected inputs:
 
 ```bash
@@ -94,7 +120,7 @@ Model calls run on your own provider API keys, or on a provider subscription
 you already pay for. Signing in to TeXRA is a separate, optional step that
 unlocks the hosted research-agent catalog.
 
-**Bring your own provider keys.** Set the right environment variable for the
+**Bring your own provider keys.** Set the environment variable for the
 provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
 `GOOGLE_API_KEY`, …), then run the CLI normally:
 
@@ -118,12 +144,12 @@ Inside a chat, `/api` manages the same preferences: `/api chatgpt`, `/api grok`,
 `/api kimi-code`, and `/api glm-code` set which subscription serves its
 provider's models, and `/api status` prints how each model will be paid for.
 
-**CI pipelines.** Headless pipelines can't sign in interactively — store the
+**CI pipelines.** Headless pipelines can't sign in interactively. Store the
 provider API key as a CI secret and export it in the pipeline environment.
 With a provider key set, `texra run …` needs no other credentials.
 
 **Sign in to TeXRA (Researcher Access)** to use the hosted research-agent
-catalog — remote agents then resolve by name like any local agent. Sign-in does
+catalog. Remote agents then resolve by name like any local agent. Sign-in does
 not supply model access; runs still use the credentials above.
 
 ```bash
@@ -134,7 +160,7 @@ texra login --device        # device code: approve from a browser on any device
 ```
 
 When run interactively, a bare `texra login` asks which provider to use instead of
-silently defaulting. If you juggle multiple accounts, `--select-account` forces
+silently defaulting. If you use multiple accounts, `--select-account` forces
 the OAuth account chooser and `--login-hint <email>` suggests which account to
 use.
 
@@ -143,10 +169,10 @@ browser that can reach the terminal session; SSH and container sessions may need
 callback port forwarding.
 
 `--device` needs no callback at all: the CLI prints a short code and a
-verification URL, you open the URL in a browser on **any** device (your laptop,
-even your phone), sign in, and approve the code. This is the recommended path on
-SSH, WSL2, and containers — the interactive pickers offer it automatically when
-they detect a remote session.
+verification URL. Open the URL in a browser on any device, including your
+phone, sign in, and approve the code. This is the recommended path on SSH,
+WSL2, and containers. The interactive pickers offer it automatically when they
+detect a remote session.
 
 ```bash
 texra auth                  # same as `texra auth status`
@@ -157,10 +183,11 @@ texra logout
 `texra auth` on its own reports your account status and accepts the same flags
 as `texra auth status`, such as `--output-format json`.
 
-Run `texra doctor` any time to see which dependencies are detected, who you're
-signed in as, and which models the CLI can reach with the current credentials.
+Run `texra doctor` at any time to see which dependencies are detected, who you
+are signed in as, and which models the CLI can reach with the current
+credentials.
 
-## Interactive Chat
+## Interactive chat
 
 `texra chat` opens an interactive tool-use session in the terminal. It streams
 reasoning, tool calls, and diffs, and writes to the same run history as the VS
@@ -184,18 +211,18 @@ each model will be paid for, `/model` switches to
 another model from the same provider mid-session (the change applies
 immediately and persists on resume), `/skills` lists available skills and
 applies one to your next request, and `/resume` restores a stored execution.
-Chat requires an interactive terminal — for scripted, non-TTY runs use
+Chat requires an interactive terminal. For scripted, non-TTY runs use
 `texra agents run <agent>` with `--print` or
 `--output-format json|ndjson`. It accepts workspace `--input` and `--context`
 files plus an `--instruction` prompt for the tool-use agent. Use `texra run`
 for workflow agents that take input files and produce document-oriented
 outputs.
 
-## Multi-Agent Teams
+## Multi-agent teams
 
 The CLI can list, show, and run the same built-in teams as the
-extension's Multi-Agent settings tab — Lean Project, Physicist, Mathematician,
-Computer Scientist, and Software Engineer:
+extension's Teams settings tab: Lean Project, Physicist, Mathematician,
+Computer Scientist, and Software Engineer.
 
 ```bash
 texra multi-agent list
@@ -208,13 +235,15 @@ specialists. For example, the Software Engineer team's `engineer` lead delegates
 to `coder`, `codeReviewer`, `testEngineer`, and `codeSimplifier`. Pass `--input`
 and `--context` files as with `texra run`;
 read-only context files are included in the instruction the team receives.
+When the work splits cleanly, the lead can fan it out as a scripted
+[multi-agent workflow](./multi-agent-workflows.md).
 
 <CliMultiAgentHero />
 
-<p class="hero-caption">The lead delegates while child agents stream below it as numbered subagent rows — each one a focusable stream with its own scoped transcript.</p>
+<p class="hero-caption">The lead delegates while child agents stream below it as numbered subagent rows. Each one is a focusable stream with its own scoped transcript.</p>
 
 In an interactive team session, focusing a subagent shows only its own
-transcript — scroll back through its earlier output with normal terminal
+transcript. Scroll back through its earlier output with normal terminal
 scrolling and search. Each subagent keeps its own scoped history that persists
 across sessions, and resuming a subagent continues it where it left off.
 
@@ -235,7 +264,7 @@ skill folders from the workspace and home directory. When skills share a name,
 project and user skills take precedence over bundled ones. In chat, pick a
 skill with `/skills` to apply it to your next request.
 
-## Shell Completion
+## Shell completion
 
 TeXRA can print completion scripts for Bash, Zsh, and Fish:
 
@@ -256,7 +285,7 @@ Agent and model completion call back into `texra agents list` and
 export TEXRA_COMPLETION_DYNAMIC=0
 ```
 
-## Execution History
+## Execution history
 
 TeXRA stores completed executions in the workspace run store. List recent runs:
 
@@ -297,7 +326,7 @@ execution id and honors the headless globals (`--print`, `--output-format`,
 prints recent executions, with an id it continues the stored session. A
 missing or malformed id exits with code 2.
 
-## Tools and Integrations
+## Tools and integrations
 
 The CLI can inspect the same external agent integrations shown in the extension
 settings:
@@ -324,7 +353,28 @@ it only runs the command when passed `--run`. In the interactive TUI, `/tools`
 opens the same integration list and toggles integrations that support enabling
 or disabling.
 
-## Workspace Defaults
+## Models and memories
+
+List the models TeXRA knows about, and manage which ones appear in the
+`/model` picker and the lead-model picker:
+
+```bash
+texra models list
+texra models show deepseekproT
+texra models enabled
+texra models enable grok46
+texra models disable grok46
+```
+
+Inspect the notes agents have stored for this workspace (see
+[Memory](./memory.md)):
+
+```bash
+texra memory list
+texra memory show memories/<file>
+```
+
+## Workspace defaults
 
 Run `texra config` in a terminal to open the same configuration view available
 from the launcher's **Settings** row and from `/config` in a chat. Its **Agents**
@@ -352,7 +402,7 @@ texra config agents --workflow correct,polish --tool-use assistant,review
 texra config agents --default-agent builtInToolUse:assistant
 ```
 
-`texra agents list` and `texra multi-agent list|show|run` retain narrower
+`texra agents list` and `texra multi-agent list|show|run` keep narrower
 responsibilities: they inspect or run agents and teams, but do not alter the
 workspace roster. `texra init` writes initial command defaults and likewise
 does not change agent visibility.
@@ -385,20 +435,26 @@ defaults.
 
 Supported top-level keys are `texra.agent`, `texra.model`,
 `texra.outputFormat`, and `texra.approvalPolicy`; `texra.chat` and `texra.run`
-may set command-specific `agent` and `model` defaults. The built-in CLI model
-default is `deepseekproT`.
+may set command-specific `agent` and `model` defaults. Shared TeXRA settings
+the CLI honors, such as `texra.telemetry.enabled`, are also accepted. The
+built-in CLI model default is `deepseekproT`.
 
 The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
 `TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. Run
 `texra doctor` to see which workspace config file was loaded and whether any
 keys were ignored.
 
-Two switches are environment-only:
+Two more switches live in the environment:
 
 | Variable                              | Effect                                                                                                           |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `TEXRA_NO_TELEMETRY` / `DO_NOT_TRACK` | Turn off usage logging for rounds billed to your own API key ([Usage Logging](./configuration.md#usage-logging)) |
-| `TEXRA_NO_UPDATE_CHECK`               | Skip the daily check for a newer `texra` release                                                                 |
+| `TEXRA_NO_TELEMETRY` / `DO_NOT_TRACK` | Turn off usage logging for rounds billed to your own API key ([Usage logging](./configuration.md#usage-logging)) |
+| `TEXRA_NO_UPDATE_CHECK`               | Skip the daily check for a newer `texra` release (environment-only)                                              |
+
+Usage logging can also be turned off in the workspace file with
+`"texra.telemetry.enabled": false` in `.texra/config.json` (`texra doctor`
+prints this hint). The environment variables override a stored `true`, but
+not the reverse: they can only switch logging off.
 
 Both take `1`, `true`, or any other value; `0`, `false`, `no`, `off`, empty,
 and unset mean "leave it on".

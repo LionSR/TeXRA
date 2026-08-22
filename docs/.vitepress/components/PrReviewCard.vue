@@ -187,8 +187,8 @@
   font-weight: 600;
   letter-spacing: 0.03em;
   color: var(--color-warning);
-  background: rgba(210, 153, 34, 0.13);
-  border: 1px solid rgba(210, 153, 34, 0.3);
+  background: color-mix(in srgb, var(--color-warning) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
   border-radius: var(--mk-radius-pill);
   padding: 1px var(--mk-space-9);
 }
@@ -212,11 +212,12 @@
   color: var(--color-text-secondary);
 }
 
-/* Inline comment block */
+/* Inline comment block. Nested inside the 6px card behind 14px of padding,
+   so the concentric rule (outer = inner + padding) leaves it near-square. */
 .pr-inline {
   margin-top: var(--mk-space-14);
   border: 1px solid var(--mk-border);
-  border-radius: var(--mk-radius-lg);
+  border-radius: var(--mk-radius-sm);
   overflow: hidden;
 }
 .pr-file {
@@ -349,7 +350,7 @@
   padding: var(--mk-space-6) var(--mk-space-10);
   background: var(--mk-bg);
   border: 1px solid var(--mk-border);
-  border-radius: var(--mk-radius);
+  border-radius: var(--mk-radius-sm);
   font-size: var(--mk-fs-74);
   color: var(--color-text-tertiary);
 }

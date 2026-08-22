@@ -79,6 +79,7 @@ const items = [
 .fitem--drag {
   background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
   outline: 1px dashed var(--mk-accent);
+  box-shadow: var(--mk-shadow-sm);
   cursor: grabbing;
 }
 .fitem--drag .fi-grip {

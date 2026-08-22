@@ -170,7 +170,7 @@ const loopSteps = ['read', 'edit', 'run tool'];
   display: inline-block;
   width: var(--mk-space-8);
   height: var(--mk-space-8);
-  border-radius: 2px;
+  border-radius: var(--mk-radius-xs);
 }
 .ams-swatch--del {
   background: var(--mk-del-text);
@@ -190,7 +190,8 @@ const loopSteps = ['read', 'edit', 'run tool'];
   flex-direction: column;
   align-items: center;
   gap: var(--mk-space-4);
-  border-radius: var(--mk-radius-md);
+  /* Concentric: wraps 3px chips with 6px padding -> 10px. */
+  border-radius: var(--mk-radius-2xl);
   padding: var(--mk-space-6) var(--mk-space-8);
   border: 1px dashed var(--mk-syn-fn);
   background: color-mix(in srgb, var(--mk-syn-fn) 6%, transparent);

@@ -81,9 +81,42 @@
   --mk-radius: 4px;
   --mk-radius-md: 5px;
   --mk-radius-lg: 6px;
+  --mk-radius-xl: 8px; /* popovers/menus wrapping 4px rows with 4px padding */
+  --mk-radius-2xl: 10px; /* recessed lists wrapping 4px rows with 6px padding */
   --mk-radius-toggle: 10px; /* toggle-switch track */
   --mk-radius-window: 12px; /* outer window frame */
   --mk-radius-pill: 999px;
+  /* Concentric rule for nested surfaces: outer radius = inner radius + padding.
+     seg(6) = seg-opt(4) + 2; wa-menu(8) = wa-item(4) + 4; flist(10) = fitem(4) + 6. */
+
+  /* ---- Motion tokens ----
+     One easing for interactive state changes (hover / press / icon swaps) and a
+     softer ease-out for exits. Hover feedback stays under 150ms. Interactive
+     state changes use `transition` (interruptible), never keyframes; name the
+     transitioned properties — `transition: all` is a defect. */
+  --mk-ease: cubic-bezier(0.2, 0, 0, 1);
+  --mk-ease-exit: cubic-bezier(0, 0, 0.2, 1);
+  --mk-dur-fast: 120ms; /* hover colour / opacity */
+  --mk-dur: 180ms; /* press, icon cross-fade, toggles */
+  --mk-dur-slow: 240ms; /* exits, larger surfaces */
+  --mk-press-scale: 0.96; /* real buttons / links that act, on :active */
+
+  /* ---- Elevation (theme-adaptive) ----
+     Layered, transparent shadows express depth; borders express structure.
+     Light values are the base; html.dark below raises the alphas. */
+  --mk-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --mk-shadow-md:
+    0 2px 4px rgba(0, 0, 0, 0.06), 0 8px 20px -6px rgba(0, 0, 0, 0.16);
+  --mk-shadow-lg:
+    0 4px 8px rgba(0, 0, 0, 0.08), 0 24px 48px -16px rgba(0, 0, 0, 0.24);
+  /* Outer window frame: layered depth plus a faint brand tint. */
+  --mk-shadow-window:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 2px 6px rgba(0, 0, 0, 0.06),
+    0 24px 60px -20px rgba(0, 0, 0, 0.28),
+    0 8px 20px -12px rgba(111, 56, 122, 0.3);
+  /* 1px low-opacity outline for raster images / screenshots (principle 8).
+     Pure black on light, pure white on dark. Apply as a box-shadow layer. */
+  --mk-image-outline: 0 0 0 1px rgba(0, 0, 0, 0.08);
 
   /* Control / layout fixed sizes (widths, heights, larger dimensions). Named
      by their px value. Breakpoints (820px) are NOT tokenized — `@media` cannot
@@ -109,6 +142,7 @@
   --mk-size-280: 280px;
   --mk-size-300: 300px;
   --mk-size-320: 320px;
+  --mk-size-340: 340px;
   --mk-size-420: 420px;
   --mk-size-470: 470px;
   --mk-size-520: 520px;
@@ -207,6 +241,51 @@
   --mk-del-text: #ffb3b3;
   --mk-ins-text: #b6f0c0;
   --mk-hover-bg: rgba(255, 255, 255, 0.06);
+  --mk-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --mk-shadow-md:
+    0 2px 4px rgba(0, 0, 0, 0.3), 0 10px 26px -8px rgba(0, 0, 0, 0.6);
+  --mk-shadow-lg:
+    0 4px 8px rgba(0, 0, 0, 0.35), 0 24px 48px -16px rgba(0, 0, 0, 0.7);
+  --mk-shadow-window:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 24px 60px -20px rgba(0, 0, 0, 0.55),
+    0 8px 20px -12px rgba(111, 56, 122, 0.45);
+  --mk-image-outline: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* ---- Shared interaction rules ----
+   Hover feedback on every mockup control is a short colour/background fade; the
+   static cue (colour change) is always present without motion. Real controls
+   that act (the tool-use cards that switch the editor pane, editor tabs) press
+   with a scale on :active — decorative chrome that does nothing does not. */
+.mockup .act,
+.mockup .iact,
+.mockup .tab,
+.mockup .tcard,
+.mockup .dt,
+.mockup .wa-item,
+.mockup .fi-rm,
+.mockup .tc-file,
+.mockup .bt {
+  transition-property: background-color, color;
+  transition-duration: var(--mk-dur-fast);
+  transition-timing-function: var(--mk-ease);
+}
+.mockup .mk-pressable,
+.mockup button.tcard,
+.mockup button.tab {
+  transition-property: background-color, color, scale;
+  transition-duration: var(--mk-dur-fast), var(--mk-dur-fast), var(--mk-dur);
+  transition-timing-function: var(--mk-ease);
+}
+.mockup .mk-pressable:active,
+.mockup button.tcard:active,
+.mockup button.tab:active {
+  scale: var(--mk-press-scale);
+}
+/* Raster screenshots inside a mockup get the low-opacity outline. */
+.mockup img:not([src$='.svg']) {
+  box-shadow: var(--mk-image-outline);
 }
 
 /* ============================================
@@ -435,7 +514,7 @@
   padding: var(--mk-space-6);
   background: var(--mk-bg-deep);
   border: 1px solid var(--color-border);
-  border-radius: var(--mk-radius-md);
+  border-radius: var(--mk-radius-2xl);
 }
 .mockup .fitem {
   display: flex;
@@ -482,9 +561,9 @@
   min-width: var(--mk-size-180);
   background: var(--mk-bg-raised);
   border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
+  border-radius: var(--mk-radius-xl);
   padding: var(--mk-space-4);
-  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.75);
+  box-shadow: var(--mk-shadow-md);
 }
 .mockup .wa-item {
   display: flex;
@@ -642,7 +721,7 @@
   padding: var(--mk-space-22) var(--mk-space-26);
   border-radius: var(--mk-radius);
   font-family: 'Latin Modern Roman', Georgia, 'Times New Roman', serif;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--mk-shadow-md);
 }
 .mockup .pg-h {
   font-size: var(--mk-fs-105);
@@ -1115,6 +1194,7 @@
 }
 .mockup .tc-chev {
   align-self: center;
+  transition: transform var(--mk-dur) var(--mk-ease);
 }
 .mockup .tc-chev.open {
   transform: rotate(90deg);
@@ -1268,7 +1348,7 @@
   border-radius: var(--mk-radius-toggle);
   position: relative;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background-color var(--mk-dur) var(--mk-ease);
   flex-shrink: 0;
   padding: 0;
 }
@@ -1283,7 +1363,7 @@
   height: var(--mk-space-14);
   background: #fff;
   border-radius: 50%;
-  transition: transform 0.15s;
+  transition: transform var(--mk-dur) var(--mk-ease);
 }
 .mockup .switch.on .switch-knob {
   transform: translateX(14px);

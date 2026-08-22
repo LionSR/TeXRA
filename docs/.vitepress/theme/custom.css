@@ -12,6 +12,16 @@
 
   /* Home hero accent. */
   --vp-home-hero-name-color: var(--vp-c-brand-1);
+
+  /* 1px low-opacity outline for raster images / screenshots in prose. */
+  --tx-image-outline: 0 0 0 1px rgba(0, 0, 0, 0.08);
+
+  /* Motion tokens for surfaces outside `.mockup` (landing hero, launch page).
+     Values mirror the --mk-* motion set in mockup.css. */
+  --tx-ease: cubic-bezier(0.2, 0, 0, 1);
+  --tx-dur-fast: 120ms;
+  --tx-dur: 180ms;
+  --tx-press-scale: 0.96;
 }
 
 .dark {
@@ -23,6 +33,8 @@
   --vp-c-brand: var(--vp-c-brand-1);
   --vp-c-brand-light: var(--vp-c-brand-2);
   --vp-c-brand-dark: var(--vp-c-brand-3);
+
+  --tx-image-outline: 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 /* ---- Web Awesome in prose ----
@@ -77,6 +89,13 @@ wa-card:not(:defined) {
   font-size: 0.85rem;
   line-height: 1.5;
   color: var(--vp-c-text-3);
+}
+
+/* Raster screenshots in prose get a 1px low-opacity outline so light images
+   don't bleed into the page (pure black on light, pure white on dark). SVG
+   logos and the inline shields.io badges are excluded. */
+.vp-doc img:not([src$='.svg']):not([src*='shields.io']) {
+  box-shadow: var(--tx-image-outline);
 }
 
 /* Shields.io badge rows (e.g. on the Open Source page) must sit on one line.

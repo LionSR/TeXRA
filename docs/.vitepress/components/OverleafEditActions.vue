@@ -116,7 +116,11 @@ const actions = [
   align-items: center;
   gap: var(--mk-space-9);
   padding: var(--mk-space-6) var(--mk-space-7);
-  border-radius: var(--mk-radius-md);
+  /* Concentric: wraps the 2px icon tile with 6px padding -> 8px. */
+  border-radius: var(--mk-radius-xl);
+  transition-property: background-color;
+  transition-duration: var(--mk-dur-fast);
+  transition-timing-function: var(--mk-ease);
 }
 .oea-row:hover {
   background: var(--mk-bg-raised);
@@ -129,7 +133,7 @@ const actions = [
   justify-content: center;
   width: var(--mk-space-20);
   height: var(--mk-space-20);
-  border-radius: var(--mk-radius);
+  border-radius: var(--mk-radius-xs);
   background: var(--mk-bg-raised);
   color: var(--mk-syn-fn);
   font-size: var(--mk-fs-74);

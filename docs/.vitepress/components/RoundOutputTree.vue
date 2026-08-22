@@ -2,9 +2,10 @@
 // Frameless task-storage file tree for guide/agent-architecture.md
 // ("Processing (Key Stages)" / "Reflection Rounds"). Each round saves
 // r{round}/output.xml (the raw LLM response, dim) then the extracted
-// r{round}/output.tex (link-coloured), plus an optional latexdiff PDF.
+// r{round}/<input-stem>.tex (link-coloured, e.g. paper.tex), plus an
+// optional latexdiff PDF (<input-stem>_diff.pdf).
 // Round 0 is the draft; r1/r2 carry a small "reflection" tag. A caption
-// between output.xml and output.tex names the extraction step.
+// between output.xml and paper.tex names the extraction step.
 //
 // Standalone (no MockupFrame) — the focused tree composed inside the shared
 // <MockCard> primitive, so the card shell + inline mono header come for free
@@ -18,8 +19,8 @@ const rounds = [
     tag: 'Round 0 — draft',
     files: [
       { name: 'output.xml', kind: 'xml', note: 'raw LLM response' },
-      { name: 'output.tex', kind: 'tex', note: 'extracted output' },
-      { name: 'output.diff.pdf', kind: 'pdf', note: 'latexdiff vs input' },
+      { name: 'paper.tex', kind: 'tex', note: 'extracted, named after input' },
+      { name: 'paper_diff.pdf', kind: 'pdf', note: 'latexdiff vs input' },
     ],
   },
   {
@@ -28,8 +29,8 @@ const rounds = [
     tag: 'reflection',
     files: [
       { name: 'output.xml', kind: 'xml' },
-      { name: 'output.tex', kind: 'tex' },
-      { name: 'output.diff.pdf', kind: 'pdf' },
+      { name: 'paper.tex', kind: 'tex' },
+      { name: 'paper_diff.pdf', kind: 'pdf' },
     ],
   },
   {
@@ -38,8 +39,8 @@ const rounds = [
     tag: 'reflection',
     files: [
       { name: 'output.xml', kind: 'xml' },
-      { name: 'output.tex', kind: 'tex' },
-      { name: 'output.diff.pdf', kind: 'pdf' },
+      { name: 'paper.tex', kind: 'tex' },
+      { name: 'paper_diff.pdf', kind: 'pdf' },
     ],
   },
 ];
@@ -186,7 +187,7 @@ const icon = (kind) =>
   color: var(--mk-syn-fn);
 }
 .rot-f-ic.fi-pdf {
-  color: #e0524f;
+  color: var(--color-error);
 }
 .rot-f-ic.fi-xml {
   color: var(--mk-text-faint);

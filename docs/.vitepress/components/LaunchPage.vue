@@ -482,11 +482,17 @@ const launchCodespace = async () => {
   font-size: 1rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition-property: background-color, scale;
+  transition-duration: var(--tx-dur-fast), var(--tx-dur);
+  transition-timing-function: var(--tx-ease);
 }
 
 .launch-button:hover:not(:disabled) {
   background: var(--vp-c-brand-dark);
+}
+
+.launch-button:active:not(:disabled) {
+  scale: 0.96;
 }
 
 .launch-button:disabled {
@@ -554,13 +560,18 @@ const launchCodespace = async () => {
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.9rem;
-  transition: all 0.2s;
+  transition-property: background-color, scale;
+  transition-duration: var(--tx-dur-fast), var(--tx-dur);
+  transition-timing-function: var(--tx-ease);
   white-space: nowrap;
 }
 
 .copy-button:hover {
   background: var(--vp-c-brand-dark);
-  transform: translateY(-1px);
+}
+
+.copy-button:active {
+  scale: 0.96;
 }
 
 .script-info {
@@ -656,7 +667,9 @@ const launchCodespace = async () => {
   border: 2px solid var(--vp-c-divider);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition-property: background-color, border-color;
+  transition-duration: var(--tx-dur-fast);
+  transition-timing-function: var(--tx-ease);
 }
 
 .auth-option:hover {
@@ -735,14 +748,19 @@ const launchCodespace = async () => {
   text-decoration: none;
   border-radius: 6px;
   font-size: 0.9rem;
-  transition: all 0.2s;
+  transition-property: background-color, color, border-color, scale;
+  transition-duration:
+    var(--tx-dur-fast), var(--tx-dur-fast), var(--tx-dur-fast), var(--tx-dur);
+  transition-timing-function: var(--tx-ease);
   border: 1px solid var(--vp-c-brand-dimm);
 }
 
 .setup-link:hover {
   background: var(--vp-c-brand);
   color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.setup-link:active {
+  scale: 0.96;
 }
 </style>
