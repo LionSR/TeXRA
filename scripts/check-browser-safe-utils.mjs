@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Drift guard for the hand-maintained `src/utils` browser-safety facts in
-// CLAUDE.md and AGENTS.md.
+// CLAUDE.md, AGENTS.md, and src/README.md.
 //
 // The guidance files document the total number of TypeScript modules under
 // `src/utils/` and the exact set of `@utils/*` modules reachable from the
 // webview frontends. This script recomputes both from the tree and compares
-// them against BOTH guidance files, so a new file, a new frontend `@utils/*`
+// them against every documented source, so a new file, a new frontend `@utils/*`
 // import, a relative `./` import that pulls another utils module into the
 // closure, or prose that drifts in either file all fail the check.
 //
@@ -33,7 +33,7 @@ const frontendDirs = [
 ].map((entry) => join(rootDir, entry));
 
 // The canonical reachable set, cross-checked against the enumerated list in
-// both guidance files below.
+// all documented sources below.
 const EXPECTED_REACHABLE = [
   '@utils/core',
   '@utils/core/boundedIdSet',
@@ -504,6 +504,7 @@ function documentedList(text, capturePattern) {
 function documentedFacts() {
   const agents = readFileSync(join(rootDir, 'AGENTS.md'), 'utf8');
   const claude = readFileSync(join(rootDir, 'CLAUDE.md'), 'utf8');
+  const readme = readFileSync(join(rootDir, 'src', 'README.md'), 'utf8');
 
   const agentsTotal = agents.match(
     /There are (\d+) TypeScript modules under `src\/utils\/`/,
@@ -528,6 +529,13 @@ function documentedFacts() {
     agents,
     /exactly \w+ modules are reachable from[\s\S]*?—\s*([\s\S]*?)\.\s*Those \w+/,
   );
+  const readmeReachableWord = readme.match(
+    /Exactly (\w+) `utils` modules are\s+reachable from them today/,
+  )?.[1];
+  const readmeList = documentedList(
+    readme,
+    /Exactly \w+ `utils` modules are\s+reachable from them today\s+—\s*([\s\S]*?)\.\s*Adding an import/,
+  );
 
   if (
     agentsTotal == null ||
@@ -535,18 +543,25 @@ function documentedFacts() {
     claudeOther == null ||
     claudeReachableWord == null ||
     agentsReachableWord == null ||
+    readmeReachableWord == null ||
     claudeList == null ||
-    agentsList == null
+    agentsList == null ||
+    readmeList == null
   ) {
     console.error(
-      'Could not locate one or more documented src/utils facts in AGENTS.md / CLAUDE.md.',
+      'Could not locate one or more documented src/utils facts in AGENTS.md / CLAUDE.md / src/README.md.',
     );
     process.exit(1);
   }
 
   const claudeReachable = WORD_TO_NUMBER[claudeReachableWord.toLowerCase()];
   const agentsReachable = WORD_TO_NUMBER[agentsReachableWord.toLowerCase()];
-  if (claudeReachable == null || agentsReachable == null) {
+  const readmeReachable = WORD_TO_NUMBER[readmeReachableWord.toLowerCase()];
+  if (
+    claudeReachable == null ||
+    agentsReachable == null ||
+    readmeReachable == null
+  ) {
     console.error(
       'Could not parse the documented reachable-module count words.',
     );
@@ -559,8 +574,10 @@ function documentedFacts() {
     claudeOther: Number(claudeOther),
     claudeReachable,
     agentsReachable,
+    readmeReachable,
     claudeList,
     agentsList,
+    readmeList,
   };
 }
 
@@ -606,6 +623,11 @@ function main() {
       `CLAUDE.md reachable count drifted: documented ${facts.claudeReachable}, actual ${reachable.size}`,
     );
   }
+  if (facts.readmeReachable !== reachable.size) {
+    errors.push(
+      `src/README.md reachable count drifted: documented ${facts.readmeReachable}, actual ${reachable.size}`,
+    );
+  }
   if (facts.agentsTotal !== facts.claudeReachable + facts.claudeOther) {
     errors.push(
       `Cross-document total mismatch: AGENTS.md total ${facts.agentsTotal} != CLAUDE.md reachable (${facts.claudeReachable}) + other (${facts.claudeOther})`,
@@ -620,6 +642,7 @@ function main() {
   for (const [name, list] of [
     ['CLAUDE.md', facts.claudeList],
     ['AGENTS.md', facts.agentsList],
+    ['src/README.md', facts.readmeList],
   ]) {
     if (!sameSet(list, expectedSorted)) {
       errors.push(
@@ -638,7 +661,7 @@ function main() {
     console.error('Browser-safe utils drift guard failed:');
     for (const error of errors) console.error(`  - ${error}`);
     console.error(
-      'Update CLAUDE.md / AGENTS.md (and, if the reachable set changed, scripts/check-browser-safe-utils.mjs) to match the tree.',
+      'Update AGENTS.md / CLAUDE.md / src/README.md (and, if the reachable set changed, scripts/check-browser-safe-utils.mjs) to match the tree.',
     );
     process.exit(1);
   }
