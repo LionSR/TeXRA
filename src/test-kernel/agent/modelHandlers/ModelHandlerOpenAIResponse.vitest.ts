@@ -376,17 +376,23 @@ describe('ModelHandlerOpenAIResponse auxiliary requests', () => {
       } as OpenAIResponseToolCall['raw'],
     };
 
-    await handler.createToolUseFollowUpMessages(
-      client,
-      call,
-      { status: 'executed', output: 'done' },
+    await handler.createBatchedToolUseFollowUpMessages(
       [
         {
-          path: 'chart.png',
-          mimeType: 'image/png',
-          bytes: new Uint8Array([1, 2, 3]),
+          call,
+          result: { status: 'executed', output: 'done' },
+          attachments: [
+            {
+              path: 'chart.png',
+              mimeType: 'image/png',
+              bytes: new Uint8Array([1, 2, 3]),
+            },
+          ],
         },
       ],
+      undefined,
+      undefined,
+      client,
     );
 
     assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);

@@ -80,9 +80,9 @@ function createBlankTurnServices(
   const createResponse = vi.fn(async () => ({
     response: responses.shift() ?? { id: 'unexpected-blank', text: '' },
   }));
-  const createToolUseFollowUpMessages = vi.fn(
-    async (_client, call: { callId: string; name: string }) =>
-      [
+  const createBatchedToolUseFollowUpMessages = vi.fn(
+    async (entries: Array<{ call: { callId: string; name: string } }>) =>
+      entries.flatMap(({ call }) => [
         {
           type: 'function_call',
           call_id: call.callId,
@@ -90,7 +90,7 @@ function createBlankTurnServices(
           arguments: '{}',
         },
         toolResultMessage(call.callId),
-      ] as ProviderMessage[],
+      ]) as ProviderMessage[],
   );
 
   const services = {
@@ -98,7 +98,7 @@ function createBlankTurnServices(
     modelCell: testModelCell(
       roundModelHandler({
         createResponse,
-        createToolUseFollowUpMessages,
+        createBatchedToolUseFollowUpMessages,
         createUserFollowUpMessages,
         extractResponse: (response: { text?: string; toolCall?: boolean }) => ({
           text: response.text ?? '',

@@ -612,14 +612,13 @@ export class ToolUseDispatchNode<C> extends BaseNode<
         index,
         { call, result, attachments },
       ] of toolResults.entries()) {
-        const followUpMsgs = await modelHandler.createToolUseFollowUpMessages(
-          client,
-          call,
-          result,
-          attachments,
-          workspace,
-          index === 0 ? assistantText || undefined : undefined,
-        );
+        const followUpMsgs =
+          await modelHandler.createBatchedToolUseFollowUpMessages(
+            [{ call, result, attachments }],
+            workspace,
+            index === 0 ? assistantText || undefined : undefined,
+            client,
+          );
         shared.messages.push(...followUpMsgs);
       }
     }

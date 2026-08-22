@@ -258,18 +258,22 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       status: 'executed',
       output: 'found it',
     };
-    const followUp = await handler.createToolUseFollowUpMessages(
-      undefined,
-      call,
-      result,
+    const followUp = await handler.createBatchedToolUseFollowUpMessages(
       [
         {
-          path: 'img.png',
-          mimeType: 'image/png',
-          base64Data: Buffer.from('img-bytes').toString('base64'),
-        } as never,
+          call,
+          result,
+          attachments: [
+            {
+              path: 'img.png',
+              mimeType: 'image/png',
+              base64Data: Buffer.from('img-bytes').toString('base64'),
+            } as never,
+          ],
+        },
       ],
       workspace,
+      undefined,
     );
 
     // The handler must itself rebuild the assistant turn — thought (with its
@@ -448,12 +452,10 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
     // (ToolUseDispatchNode) does.
     handler.processThinkingBlock(resp1, workspace);
     const [call] = handler.extractToolUse(resp1);
-    const followUp = await handler.createToolUseFollowUpMessages(
-      undefined,
-      call,
-      { status: 'executed', output: 'ok' },
-      [],
+    const followUp = await handler.createBatchedToolUseFollowUpMessages(
+      [{ call, result: { status: 'executed', output: 'ok' }, attachments: [] }],
       workspace,
+      undefined,
     );
     messages.push(...followUp);
 

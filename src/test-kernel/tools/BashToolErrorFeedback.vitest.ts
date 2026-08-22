@@ -69,12 +69,11 @@ function stubBashApprovalDisabled(): void {
  * the model-visible `function_call_output` text. */
 async function toolUseOutput(result: ToolResult) {
   const { attachments, sanitizedResult } = extractToolAttachments(result);
-  const messages = await createHandler().createToolUseFollowUpMessages(
-    undefined,
-    createBashCall(),
-    sanitizedResult,
-    attachments,
+  const messages = await createHandler().createBatchedToolUseFollowUpMessages(
+    [{ call: createBashCall(), result: sanitizedResult, attachments }],
     AgentWorkspaceState.create(),
+    undefined,
+    undefined,
   );
   return messages.find((message) => message.type === 'function_call_output')
     ?.output;

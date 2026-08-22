@@ -64,7 +64,6 @@ export type IModelHandler<
   | 'processThinkingBlock'
   | 'extractToolUse'
   | 'extractServerToolData'
-  | 'createToolUseFollowUpMessages'
   | 'createBatchedToolUseFollowUpMessages'
   | 'createUserFollowUpMessages'
   | 'createAssistantMessageFromResponse'

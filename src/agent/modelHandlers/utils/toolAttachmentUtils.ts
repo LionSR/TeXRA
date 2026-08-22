@@ -94,7 +94,7 @@ interface UploadedAttachmentBase {
  * Runs a provider's upload call, then folds the uploaded set into a
  * `finalResult.files` copy of `result` — the block every handler's
  * tool-result follow-up path (Anthropic's `buildToolResultBlock`, OpenAI
- * Responses' `createToolUseFollowUpMessages`) repeated identically. Each
+ * Responses' `createBatchedToolUseFollowUpMessages`) repeated identically. Each
  * provider's actual upload call has its own signature and return shape
  * (Anthropic's also reports `unsupported`/`pageLimitExceeded`; OpenAI's does
  * not), so `upload` is the caller's own closure and its full return value is

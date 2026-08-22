@@ -262,11 +262,17 @@ describe('ModelHandlerAnthropic auxiliary requests', () => {
     handler.setLogger({ ...noopTrace });
     const { upload, withOptions } = createUploadClient('file-1');
 
-    await handler.createToolUseFollowUpMessages(
+    await handler.createBatchedToolUseFollowUpMessages(
+      [
+        {
+          call: createAnthropicToolCall('call-1'),
+          result: { status: 'executed', output: 'done' },
+          attachments: [chartAttachment()],
+        },
+      ],
+      undefined,
+      undefined,
       { withOptions } as never,
-      createAnthropicToolCall('call-1'),
-      { status: 'executed', output: 'done' },
-      [chartAttachment()],
     );
 
     assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
@@ -645,11 +651,17 @@ describe('ModelHandlerAnthropic message guards', () => {
       raw: call,
     } as const;
 
-    const [, resultMsg] = await handler.createToolUseFollowUpMessages(
+    const [, resultMsg] = await handler.createBatchedToolUseFollowUpMessages(
+      [
+        {
+          call: providerCall,
+          result: { status: 'executed', output: 'ok' },
+          attachments: [],
+        },
+      ],
+      undefined,
+      undefined,
       NO_UPLOAD_CLIENT,
-      providerCall,
-      { status: 'executed', output: 'ok' },
-      [],
     );
 
     const toolResultBlock = (resultMsg.content as ContentBlockParam[])[0];
