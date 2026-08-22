@@ -56,6 +56,8 @@ const ALLOWED_EXT_SCHEMES = [
   'trae',
   'positron',
   'pearai',
+  // Verified from Antigravity IDE 2.5.5's macOS bundle URL declaration.
+  'antigravity-ide',
 ] as const;
 
 /**
@@ -245,7 +247,8 @@ function bridgePageHtml(ext: string, id: string): string {
     'codium': 'VSCodium',
     'trae': 'Trae',
     'positron': 'Positron',
-    'pearai': 'PearAI'
+    'pearai': 'PearAI',
+    'antigravity-ide': 'Antigravity IDE'
   };
 
   // PKCE puts the one-time code (and any error) in the query string; read
