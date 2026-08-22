@@ -20,6 +20,7 @@ export const publicRootDocs = [
   'index.md',
   'launch.md',
   'providers.md',
+  'work-using-texra.md',
   'changelog.md',
   'terms.md',
 ];

@@ -1106,7 +1106,7 @@ describe('CLI model flag validation contract', () => {
 });
 
 describe('CLI crash report line', () => {
-  const bugsUrl = 'https://github.com/texra-ai/texra-issues/issues';
+  const bugsUrl = 'https://github.com/LionSR/TeXRA/issues';
 
   it('points unexpected crashes at the issue tracker', () => {
     expect(formatCrashReportLine(new Error('boom'), bugsUrl)).toBe(

@@ -6,7 +6,7 @@
   "homepage": "https://texra.ai",
   "repository": {
     "type": "git",
-    "url": "https://github.com/texra-ai/texra-issues.git"
+    "url": "https://github.com/LionSR/TeXRA.git"
   },
   "license": "Apache-2.0",
   "private": true,

@@ -226,7 +226,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>Where do I get help?</summary>
-    <p>Email <a href="mailto:contact@texra.ai">contact@texra.ai</a> or open an issue on <a href="https://github.com/texra-ai/texra-issues">GitHub</a>.</p>
+    <p>Email <a href="mailto:contact@texra.ai">contact@texra.ai</a> or open an issue on <a href="https://github.com/LionSR/TeXRA">GitHub</a>.</p>
   </details>
 </section>
 

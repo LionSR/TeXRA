@@ -136,12 +136,13 @@ The Setup Wizard checks for and helps install most of the above.
 - [Polish a draft](https://texra.ai/guide/workflows/polish-a-draft) — workflow example
 - [Models](https://texra.ai/guide/models)
 - [Custom Agents](https://texra.ai/guide/custom-agents)
+- [Work produced with TeXRA](https://texra.ai/work-using-texra)
 
 Full docs at [texra.ai/guide](https://texra.ai/guide/).
 
 ## Support
 
-Issues and feature requests: [GitHub](https://github.com/texra-ai/texra-issues/issues).
+Issues and feature requests: [GitHub](https://github.com/LionSR/TeXRA/issues).
 Contact: [contact@texra.ai](mailto:contact@texra.ai).
 
 ## License

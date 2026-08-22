@@ -1026,7 +1026,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/texra-ai/texra-issues.git"
+    "url": "https://github.com/LionSR/TeXRA.git"
   },
   "license": "Apache-2.0",
   "author": "TeXRA.ai",
@@ -1049,7 +1049,7 @@
     "GPT"
   ],
   "bugs": {
-    "url": "https://github.com/texra-ai/texra-issues/issues"
+    "url": "https://github.com/LionSR/TeXRA/issues"
   },
   "homepage": "https://texra.ai",
   "dependencies": {
