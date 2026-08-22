@@ -175,7 +175,7 @@ const targets = [
 .inq-caret {
   display: inline-block;
   width: 1px;
-  height: 1em;
+  height: var(--mk-space-1em);
   margin-left: 1px;
   background: var(--mk-accent);
   vertical-align: text-bottom;
@@ -204,7 +204,7 @@ const targets = [
   color: var(--color-text-secondary);
   background: var(--mk-bg-raised);
   border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-pill, 999px);
+  border-radius: var(--mk-radius-pill);
   padding: var(--mk-space-2) var(--mk-space-8);
 }
 .inq-chip wa-icon {

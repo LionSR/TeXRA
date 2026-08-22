@@ -167,7 +167,7 @@ const sevTag = {
   color: var(--color-text-secondary);
   background: var(--mk-bg-raised);
   border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-pill, 999px);
+  border-radius: var(--mk-radius-pill);
   padding: var(--mk-space-2) var(--mk-space-9);
 }
 .pb-filter.active {
@@ -203,7 +203,7 @@ const sevTag = {
   line-height: 1.5;
 }
 .pb-row--error {
-  background: rgba(220, 90, 90, 0.07);
+  background: color-mix(in srgb, var(--color-error) 7%, transparent);
 }
 .pb-row-main {
   display: flex;

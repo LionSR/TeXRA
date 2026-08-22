@@ -4,64 +4,65 @@ import RunParityHero from '../.vitepress/components/RunParityHero.vue';
 
 # TeXRA
 
-An AI theorist for VS Code and the terminal. It attempts real theory
-work — deriving results, checking derivations, formalizing proofs in
-Lean 4 — and takes on open problems in long autonomous runs.
+An AI theorist for VS Code, the desktop app, and the terminal. It
+attempts real theory work (deriving results, checking derivations,
+formalizing proofs in Lean 4) and takes on open problems in long
+autonomous runs with a team of specialist agents. Paper editing, LaTeX
+tooling, and figures come along as supporting capabilities.
 
 <GuideIntroHero />
 
-<p class="hero-caption">A single task, split across three specialists in the Progress view — click a delegation to see what it produced.</p>
+<p class="hero-caption">A single task, split across three specialists in the Progress view. Select a delegation to see what it produced.</p>
 
 ## Get started
 
-- [**Installation**](./installation.md) — VS Code extension or the `texra` CLI
-- [**First run**](./first-run.md) — open a `.tex` file, watch one agent work
-- [**Quick start**](./quick-start.md) — the longer walkthrough in VS Code
+- [**Installation**](./installation.md): VS Code extension or the `texra` CLI
+- [**First run**](./first-run.md): open a `.tex` file, watch one agent work
+- [**Quick start**](./quick-start.md): the longer walkthrough in VS Code
 
 ## Use it
 
-| Task                                       | Workflow                                                      |
-| ------------------------------------------ | ------------------------------------------------------------- |
-| Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)               |
-| Fix LaTeX errors and notation              | `correct` agent — see [Built-in Agents](./built-in-agents.md) |
-| Search literature, no fabricated citations | `assistant` — see [Research Tools](./research-tools.md)       |
-| Verify proofs and derivations              | `review` — see [Built-in Agents](./built-in-agents.md)        |
-| Formalize in Lean 4                        | [Lean 4 Proofs](./lean.md)                                    |
-| Build slides from a paper                  | `paper2slide` — see [Built-in Agents](./built-in-agents.md)   |
-| Generate TikZ figures                      | [TikZ Figures](./tikz-figures.md)                             |
+| Task                                       | Workflow                                                     |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| Verify proofs and derivations              | `review`, see [Built-in agents](./built-in-agents.md)        |
+| Formalize in Lean 4                        | [Lean 4 proofs](./lean.md)                                   |
+| Search literature, no fabricated citations | `assistant`, see [Research tools](./research-tools.md)       |
+| Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)              |
+| Fix LaTeX errors and notation              | `correct` agent, see [Built-in agents](./built-in-agents.md) |
+| Build slides from a paper                  | `paper2slide`, see [Built-in agents](./built-in-agents.md)   |
+| Generate TikZ figures                      | [TikZ figures](./tikz-figures.md)                            |
 
 ## Understand the system
 
-- [**Built-in Agents**](./built-in-agents.md) — the full catalog
-- [**Agent Architecture**](./agent-architecture.md) — workflow vs. tool-use, reflection, planning
-- [**Models**](./models.md) — picking a model for the job
-- [**Custom Agents**](./custom-agents.md) — define your own in YAML
+- [**Built-in agents**](./built-in-agents.md): the full catalog
+- [**Agent architecture**](./agent-architecture.md): workflow vs. tool-use, reflection, planning
+- [**Models**](./models.md): picking a model for the job
+- [**Custom agents**](./custom-agents.md): define your own in YAML
 
 ## Why multi-agent
 
-The gap between a result and a publishable manuscript is where most
-research time goes. A 40-page paper where notation must be consistent
-from Definition 2.1 through Appendix C. A bibliography where every
-`\cite` resolves to a real paper. Commutative diagrams that compile.
-A Lean formalization where the proof state needs careful tactic
-selection.
+Theory work is long chains of dependent steps. A derivation where one
+sign error in section 3 invalidates appendix C. A Lean formalization
+where the proof state needs careful tactic selection. A numerical
+cross-check that has to agree with the closed form. And then the
+manuscript: notation consistent from Definition 2.1 onward, every
+`\cite` resolving to a real paper, diagrams that compile.
 
 General-purpose chatbots make this worse, not better:
 
-- **Hallucinated citations** — no grounded search means fabricated references.
-- **Lost structure** — one prompt can't reason across theorem environments, `\label`/`\ref` graphs, BibTeX, and multi-file projects at once.
-- **No verification** — text output with no way to compile, diff, or type-check what changed.
-- **No tools** — no Mathlib search by type signature, no WolframScript, no TikZ compile.
+- **Hallucinated citations**: no grounded search means fabricated references.
+- **Lost structure**: one prompt can't reason across theorem environments, `\label`/`\ref` graphs, BibTeX, and multi-file projects at once.
+- **No verification**: text output with no way to check an algebra step, type-check a proof, or diff what changed.
+- **No tools**: no WolframScript, no Mathlib search by type signature, no compiler in the loop.
 
-TeXRA solves this by splitting the work across agents — each
-specialized, each grounded in real tools, each producing verifiable
-output.
+TeXRA splits the work across agents, each specialized, each grounded
+in real tools, each producing verifiable output.
 
 ## Two surfaces, one system
 
 The VS Code extension and the `texra` CLI share the same agents, the
 same sign-in, and the same run history. A run started in the CLI shows
-up in the extension's Progress Board, and vice versa.
+up in the extension's ProgressBoard, and vice versa.
 
 <RunParityHero />
 
@@ -137,16 +138,17 @@ to the model provider you chose. TeXRA does not sit between you and
 the provider. Your unpublished proofs, manuscripts, and API keys
 never leave your machine except to the provider endpoint.
 
-**Provider subscriptions** (ChatGPT, Grok, Kimi Code, GLM Coding Plan).
-Requests still go straight from your machine to that provider — ChatGPT
-and Grok via OAuth sign-in, Kimi Code and the GLM Coding Plan via a
-plan-specific key. Connect one from the **Dashboard → Subscriptions** tab
-(VS Code extension), or with `texra auth chatgpt login` / `/api` in the
-CLI.
+**Provider subscriptions** (ChatGPT, Grok, Kimi Code, GLM Coding Plan,
+and GitHub Copilot in VS Code). Requests still go straight from your
+machine to that provider: ChatGPT and Grok via OAuth sign-in, Kimi Code
+and the GLM Coding Plan via a plan-specific key. In the VS Code extension
+the **Dashboard → Subscriptions** tab can also route models through a
+GitHub Copilot subscription, with no provider API key needed. Connect one
+from that tab, or with `texra auth chatgpt login` / `/api` in the CLI.
 
-API keys, whichever mode you use, stay on your machine — VS Code's
+API keys, whichever mode you use, stay on your machine: VS Code's
 built-in Secret Storage in the extension, an owner-only `secrets.json`
-under `~/.texra` for the CLI. They can also be supplied via environment
+under `~/.texra` for the CLI. You can also supply them via environment
 variables or a `.env` file in your project (extension only).
 
 ## Support

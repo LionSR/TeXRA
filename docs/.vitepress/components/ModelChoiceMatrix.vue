@@ -90,7 +90,9 @@ const rows = [
   font-size: var(--mk-space-13);
   color: var(--mk-accent);
   flex-shrink: 0;
-  transform: translateY(2px);
+  transform: translateY(
+    var(--mk-space-2)
+  ); /* optical: baseline-align icon with text */
 }
 .mcm-use {
   font-weight: 600;

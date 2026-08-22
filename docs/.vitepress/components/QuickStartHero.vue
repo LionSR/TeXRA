@@ -113,4 +113,9 @@ import MockupFrame from './MockupFrame.vue';
 .board {
   width: var(--mk-size-320);
 }
+/* Optical alignment: the play triangle's visual centre sits left of its box,
+   so nudge it toward the label (1px hairline stays a literal, per mockup.css). */
+.run wa-icon {
+  transform: translateX(1px);
+}
 </style>

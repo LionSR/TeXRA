@@ -135,7 +135,7 @@ function toggle(id) {
             <wa-icon
               class="chev"
               library="texra"
-              :name="expanded === 'pinned' ? 'chevron-down' : 'chevron-right'"
+              name="chevron-right"
             ></wa-icon>
             Contents
           </button>
@@ -200,7 +200,7 @@ function toggle(id) {
             <wa-icon
               class="chev"
               library="texra"
-              :name="expanded === 'notation' ? 'chevron-down' : 'chevron-right'"
+              name="chevron-right"
             ></wa-icon>
             Contents
           </button>
@@ -254,7 +254,7 @@ function toggle(id) {
             <wa-icon
               class="chev"
               library="texra"
-              :name="expanded === 'figures' ? 'chevron-down' : 'chevron-right'"
+              name="chevron-right"
             ></wa-icon>
             Contents
           </button>
@@ -337,6 +337,9 @@ function toggle(id) {
   border-radius: var(--mk-radius);
   padding: var(--mk-space-4) var(--mk-space-9);
   cursor: pointer;
+  transition-property: background-color, color;
+  transition-duration: var(--mk-dur-fast);
+  transition-timing-function: var(--mk-ease);
 }
 .r-btn:hover {
   background: var(--mk-border-soft);
@@ -363,7 +366,8 @@ function toggle(id) {
 .mem-item {
   background: var(--mk-bg-soft);
   border: 1px solid var(--color-border);
-  border-radius: var(--mk-radius-lg);
+  /* Concentric: wraps .mem-preview (4px) with 10px vertical padding. */
+  border-radius: calc(var(--mk-radius) + var(--mk-space-10));
   padding: var(--mk-space-10) var(--mk-space-12);
   display: flex;
   flex-direction: column;
@@ -403,6 +407,9 @@ function toggle(id) {
   border-radius: var(--mk-radius-sm);
   color: var(--color-text-secondary);
   cursor: pointer;
+  transition-property: background-color, color;
+  transition-duration: var(--mk-dur-fast);
+  transition-timing-function: var(--mk-ease);
 }
 .m-act wa-icon {
   font-size: var(--mk-space-12);
@@ -441,9 +448,23 @@ function toggle(id) {
   color: var(--color-text-secondary);
   cursor: pointer;
   align-self: flex-start;
+  transition-property: color, scale;
+  transition-duration: var(--mk-dur-fast), var(--mk-dur);
+  transition-timing-function: var(--mk-ease);
 }
 .mem-coll:hover {
   color: var(--wa-color-text-normal);
+}
+.mem-coll:active {
+  scale: var(--mk-press-scale);
+}
+/* One chevron glyph; the open state rotates it (interruptible) rather than
+   swapping icon assets. The rotated glyph is the static cue. */
+.mem-coll .chev {
+  transition: transform var(--mk-dur) var(--mk-ease);
+}
+.mem-coll.open .chev {
+  transform: rotate(90deg);
 }
 .mem-coll wa-icon {
   font-size: var(--mk-space-11);

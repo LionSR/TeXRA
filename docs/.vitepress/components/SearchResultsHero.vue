@@ -114,7 +114,7 @@ const results = [
   gap: var(--mk-space-10);
   background: var(--mk-bg-soft);
   border: 1px solid var(--color-border);
-  border-radius: var(--mk-radius-lg);
+  border-radius: var(--mk-radius-md);
   padding: var(--mk-space-10) var(--mk-space-12);
 }
 .sr-main {
@@ -180,6 +180,9 @@ const results = [
   border-radius: var(--mk-radius);
   padding: var(--mk-space-4) var(--mk-space-10);
   cursor: pointer;
+  transition-property: background-color, color;
+  transition-duration: var(--mk-dur-fast);
+  transition-timing-function: var(--mk-ease);
 }
 .sr-cite:hover {
   background: var(--mk-border-soft);

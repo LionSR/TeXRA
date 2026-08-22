@@ -58,7 +58,7 @@ async function copyCli() {
     </h1>
     <p class="lh-tagline">
       You direct an orchestrator. It delegates to specialist agents that search
-      real databases, compute in Wolfram, prove in Lean&nbsp;4 — and hand back
+      real databases, compute in Wolfram, prove in Lean&nbsp;4, and hand back
       every change as a diff you approve. In VS&nbsp;Code, its forks, and the
       terminal.
     </p>
@@ -178,18 +178,19 @@ async function copyCli() {
   text-decoration: none !important;
   cursor: pointer;
   font-family: inherit;
-  transition:
-    transform 0.15s,
-    background-color 0.2s,
-    border-color 0.2s;
+  transition-property: background-color, border-color, scale;
+  transition-duration: var(--tx-dur-fast), var(--tx-dur-fast), var(--tx-dur);
+  transition-timing-function: var(--tx-ease);
 }
 .lh-btn:hover {
-  transform: translateY(-1px);
   text-decoration: none !important;
+}
+.lh-btn:active {
+  scale: var(--tx-press-scale);
 }
 .lh-btn-primary {
   background: var(--vp-c-brand-1);
-  color: #fff !important;
+  color: var(--vp-c-white) !important;
   border: 1px solid var(--vp-c-brand-1);
 }
 .lh-btn-primary:hover {
@@ -208,7 +209,9 @@ async function copyCli() {
 }
 .lh-caret {
   font-size: 0.7rem;
-  transition: transform 0.2s;
+  transition-property: transform;
+  transition-duration: var(--tx-dur);
+  transition-timing-function: var(--tx-ease);
 }
 .lh-caret.open {
   transform: rotate(180deg);
@@ -221,9 +224,10 @@ async function copyCli() {
   min-width: 230px;
   background: var(--vp-c-bg);
   border: 1px solid var(--vp-c-divider);
-  border-radius: 11px;
-  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.3);
-  padding: 0.4rem;
+  /* Concentric: 6px items + 6px padding = 12px. */
+  border-radius: 12px;
+  box-shadow: var(--vp-shadow-3);
+  padding: 6px;
   z-index: 40;
 }
 .lh-menu-item {
@@ -231,9 +235,12 @@ async function copyCli() {
   align-items: center;
   justify-content: space-between;
   padding: 0.55rem 0.7rem;
-  border-radius: 7px;
+  border-radius: 6px;
   text-decoration: none !important;
   color: var(--vp-c-text-1) !important;
+  transition-property: background-color;
+  transition-duration: var(--tx-dur-fast);
+  transition-timing-function: var(--tx-ease);
 }
 .lh-menu-item:hover {
   background: var(--vp-c-brand-soft);
@@ -295,12 +302,17 @@ async function copyCli() {
   color: var(--vp-c-text-2);
   background: var(--vp-c-bg-soft);
   border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
+  /* Concentric inside the 9px pill with 0.5rem (8px) padding: 9 - 8 -> 1px
+     would vanish, so keep a readable 4px and let the pill own the curve. */
+  border-radius: 4px;
   padding: 0.3rem 0.7rem;
   cursor: pointer;
-  transition:
-    color 0.15s,
-    border-color 0.15s;
+  transition-property: color, border-color, scale;
+  transition-duration: var(--tx-dur-fast), var(--tx-dur-fast), var(--tx-dur);
+  transition-timing-function: var(--tx-ease);
+}
+.lh-copy:active {
+  scale: var(--tx-press-scale);
 }
 .lh-copy:hover {
   color: var(--vp-c-brand-1);

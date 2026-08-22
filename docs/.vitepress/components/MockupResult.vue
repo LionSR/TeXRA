@@ -148,7 +148,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
 
 @media (max-width: 820px) {
   .page {
-    font-size: 0.78rem;
+    font-size: var(--mk-fs-78);
   }
 }
 </style>

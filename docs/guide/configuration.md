@@ -14,15 +14,15 @@ view; TeXRA does not contribute product settings to VS Code's Settings editor.
 
 The Dashboard groups the current controls by subject:
 
-- **Account** — sign-in status, telemetry, and subscription access (ChatGPT,
+- **Account**: sign-in status, telemetry, and subscription access (ChatGPT,
   Grok, Kimi Code, GLM Coding Plan, and Copilot).
-- **Models** — provider keys and model visibility.
-- **Agents** — available agents, active teams, orchestration, and session
+- **Models**: provider keys and model visibility.
+- **Agents**: available agents, active teams, orchestration, and session
   reliability.
-- **Capabilities** — tool availability, permissions, skills, connected coding
+- **Capabilities**: tool availability, permissions, skills, connected coding
   agents, and LaTeX processing.
-- **Workspace** — Git behavior and shortcuts.
-- **Data & Activity** — history, memory, and autonomous goals.
+- **Workspace**: Git behavior and shortcuts.
+- **Data & Activity**: memory and autonomous goals (the **Memory** and **Goals** tabs).
 
 Settings that benefit from an ordinary control appear directly in these views.
 File-handling rules and other internal implementation constants are not exposed
@@ -72,7 +72,7 @@ API keys, provider behavior, model visibility, and retry settings. Account
 connections that stand in for a provider key live in the **Account** group,
 under **Subscriptions**: ChatGPT, Grok, Kimi Code, the GLM Coding Plan, and
 Copilot. Researcher Access sign-in also sits in that group, under **Account &
-Usage** — it unlocks the hosted research-agent catalog and does not supply
+Usage**. It unlocks the hosted research-agent catalog and does not supply
 model access.
 
 Saved provider keys currently use each host's secure credential mechanism. They
@@ -86,22 +86,22 @@ controls. The CLI exposes the same skills switch from its launcher and settings
 view. Tools that are disabled globally are removed from an agent's available
 tool list even when its definition names them.
 
-The **Account & usage** view contains the telemetry switch. The environment
+The **Account & Usage** view contains the telemetry switch. The environment
 variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 ### Usage logging
 
-When telemetry is enabled and the user is signed in, TeXRA records model and
+When telemetry is enabled and you are signed in, TeXRA records model and
 provider names, agent category, token counts, cost, response time, route,
 stream identifier, version, and host. It does not send prompt text, document
 content, or file names. Turning telemetry off stops reporting for runs billed
-through the user's own provider key.
+through your own provider key.
 
 ## File discovery
 
 TeXRA uses built-in file extensions and exclusions when discovering inputs,
 context, edited files, and media. The former `texra.files.included.*` and
-`texra.files.ignored.*` settings have been removed; saved values for those keys
+`texra.files.ignored.*` settings have been removed. Saved values for those keys
 no longer affect discovery.
 
 ## LaTeX configuration
@@ -148,6 +148,6 @@ turn the option off after the investigation.
 4. Check `~/.texra/global-storage/config.json` for a user-wide value.
 5. Remove a saved key to return that setting to its current default.
 
-See [Models](./models.md), [LaTeX tools](./latex-tools.md),
-[Agent integrations](./agent-integrations.md), and [Memory](./memory.md) for
-feature-specific guidance.
+For feature-specific guidance, read [Models](./models.md),
+[LaTeX tools](./latex-tools.md), [Agent integrations](./agent-integrations.md),
+and [Memory](./memory.md).

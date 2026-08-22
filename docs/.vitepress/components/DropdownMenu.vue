@@ -108,9 +108,10 @@ defineProps({
   margin-top: var(--mk-space-4);
   background: var(--mk-bg-raised);
   border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
+  /* Concentric: menu(8) = item(4) + padding(4). */
+  border-radius: var(--mk-radius-xl);
   padding: var(--mk-space-4);
-  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--mk-shadow-md);
 }
 /* Single-column (default): the column wrapper is transparent so groups + items
    flow exactly as before. Multi-column: each group becomes a side-by-side

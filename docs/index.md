@@ -1,6 +1,6 @@
 ---
 layout: home
-title: TeXRA — Multi-agent AI for theorists
+title: 'TeXRA: an AI theorist for advancing theoretical science'
 titleTemplate: false
 ---
 
@@ -16,27 +16,27 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg>
     </span>
     <h3>Output you can check</h3>
-    <p>Citations resolve to real database entries. Figures compile from source. Edits arrive as diffs you read line by line before they touch your files.</p>
+    <p>Derivations are checked in Wolfram, proofs compile in Lean 4, citations resolve to real database entries. Edits arrive as diffs you read line by line before they touch your files.</p>
   </div>
   <div class="trust-card">
     <span class="trust-icon" aria-hidden="true">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="18.5" r="2.5"/><circle cx="19" cy="18.5" r="2.5"/><path d="M12 7.5v3.5M12 11h-7v5M12 11h7v5"/></svg>
     </span>
     <h3>A team of specialist agents</h3>
-    <p>An orchestrator splits the task and hands the pieces to researchers, numericists, reviewers, and formalizers — each with its own tools and model.</p>
+    <p>An orchestrator splits the task and hands the pieces to researchers, numericists, reviewers, and formalizers, each with its own tools and model.</p>
   </div>
   <div class="trust-card">
     <span class="trust-icon" aria-hidden="true">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
     </span>
     <h3>Three independent checks</h3>
-    <p>Prose reviewed by an LLM, algebra checked in Wolfram, proofs verified in Lean 4 — three layers of verification in one environment.</p>
+    <p>Prose reviewed by an LLM, algebra checked in Wolfram, proofs verified in Lean 4: three layers of verification in one environment.</p>
   </div>
 </section>
 
 <section class="architecture-section">
   <h2>One orchestrator, a team of specialists</h2>
-  <p class="arch-subtitle">You describe the task. The orchestrator breaks it into sub-tasks, delegates to specialist agents in parallel, and returns proposals you approve before they touch your files.</p>
+  <p class="arch-subtitle">You describe the problem. The orchestrator breaks it into sub-tasks, delegates to specialist agents in parallel, and returns results you approve before they touch your files.</p>
 
   <!-- Research Lifecycle -->
   <div class="lifecycle">
@@ -89,7 +89,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><path d="M8 21h8M12 17v4"/></svg>
       </div>
       <div class="phase-name">Present</div>
-      <div class="phase-agents">paper2slide</div>
+      <div class="phase-agents">paper2slide &middot; paper2poster</div>
       <div class="phase-desc">Beamer, poster</div>
     </div>
   </div>
@@ -106,7 +106,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
   <!-- Two paradigms -->
   <div class="paradigms">
     <div class="paradigm paradigm-workflow">
-      <div class="paradigm-label">Workflow Agents</div>
+      <div class="paradigm-label">Workflow agents</div>
       <div class="paradigm-flow">
         <span class="pf-node">Read project</span>
         <span class="pf-edge">&rarr;</span>
@@ -129,7 +129,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
       <div class="orch-desc">Breaks work into sub-tasks, delegates to specialized agents, coordinates results</div>
     </div>
     <div class="paradigm paradigm-tooluse">
-      <div class="paradigm-label">Tool-Use Agents</div>
+      <div class="paradigm-label">Tool-use agents</div>
       <div class="paradigm-flow">
         <span class="pf-node">Your question</span>
         <span class="pf-edge">&rarr;</span>
@@ -170,7 +170,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
     <div class="case-card">
       <span class="case-label">Write</span>
       <h3>Finalizing a 40-page paper on spectral graph theory</h3>
-      <p>The <code>correct</code> agent unifies notation — <code>\lambda_2</code> vs <code>\mu</code> for the same eigenvalue across sections — fixes label conflicts, and outputs a diff you review line by line.</p>
+      <p>The <code>correct</code> agent unifies notation (<code>\lambda_2</code> vs <code>\mu</code> for the same eigenvalue across sections), fixes label conflicts, and outputs a diff you review line by line.</p>
     </div>
     <div class="case-card">
       <span class="case-label">Verify</span>
@@ -182,10 +182,10 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
 <section class="bottom-cta">
   <h2>Start in under two minutes</h2>
-  <p>Install from the VS Code Marketplace, add your own API key or connect a provider subscription, and run your first agent.</p>
+  <p>Install the VS Code extension from the Marketplace, the desktop app, or the CLI (<code>npm install -g @texra-ai/cli</code>); add your own API key or connect a provider subscription, and run your first agent.</p>
   <div class="cta-buttons">
-    <a href="/guide/quick-start" class="cta-button cta-primary">Quick Start Guide</a>
-    <a href="/guide/built-in-agents" class="cta-button cta-secondary">Browse All Agents</a>
+    <a href="/guide/quick-start" class="cta-button cta-primary">Quick start guide</a>
+    <a href="/guide/built-in-agents" class="cta-button cta-secondary">Browse all agents</a>
     <a href="/guide/texra-cli" class="cta-button cta-secondary">Use the CLI</a>
   </div>
   <LandingCliStrip />
@@ -196,32 +196,32 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>What models does it support?</summary>
-    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, and more via OpenRouter. Bring your own API key, or use a provider subscription you already pay for (ChatGPT, Grok, Kimi Code, GLM Coding Plan) — each agent on a team can run a different model.</p>
+    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, and more via OpenRouter. Bring your own API key, or use a provider subscription you already pay for (ChatGPT, Grok, Kimi Code, GLM Coding Plan, and GitHub Copilot in VS Code). Each agent on a team can run a different model.</p>
   </details>
 
   <details>
     <summary>Does it work with Overleaf?</summary>
-    <p>Yes — via git sync. See the <a href="/guide/working-with-overleaf">Overleaf guide</a>.</p>
+    <p>Yes, via git sync. Read the <a href="/guide/working-with-overleaf">Overleaf guide</a>.</p>
   </details>
 
   <details>
     <summary>Does it work with Lean 4?</summary>
-    <p>Yes — Loogle search, proof state inspection, diagnostics, build and cache management. Requires the Lean 4 extension.</p>
+    <p>Yes: Loogle search, proof state inspection, diagnostics, build and cache management. In VS Code, TeXRA routes through the Lean 4 extension; in the CLI and desktop app it spawns its own Lean server, so you only need elan (<code>lake</code> on PATH) and a Lake project.</p>
   </details>
 
   <details>
     <summary>Can I use it without VS Code?</summary>
-    <p>Yes — the <code>@texra-ai/cli</code> terminal client runs the same agents and sign-in on your <code>.tex</code> projects, for scripts, CI, and remote machines. See the <a href="/guide/texra-cli">CLI guide</a>.</p>
+    <p>Yes. The standalone <a href="/guide/desktop">desktop app</a> gives you the full agent workflow, settings, and progress view without VS Code, and the <code>@texra-ai/cli</code> terminal client runs the same agents and sign-in on your <code>.tex</code> projects for scripts, CI, and remote machines. Read the <a href="/guide/texra-cli">CLI guide</a>.</p>
   </details>
 
   <details>
     <summary>Is my data private?</summary>
-    <p>Yes — model calls go directly from your machine to the provider, whether you use your own API key or a provider subscription. TeXRA does not sit between you and the model.</p>
+    <p>Yes. Model calls go directly from your machine to the provider, whether you use your own API key or a provider subscription. TeXRA does not sit between you and the model.</p>
   </details>
 
   <details>
     <summary>Can I build custom agents?</summary>
-    <p>Yes — agents are YAML files you can modify or create from scratch. See <a href="/guide/custom-agents">Custom Agents</a>.</p>
+    <p>Yes. Agents are YAML files you can modify or create from scratch. Read the <a href="/guide/custom-agents">custom agents guide</a>.</p>
   </details>
 
   <details>

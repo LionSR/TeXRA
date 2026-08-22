@@ -193,7 +193,7 @@ const expected = ['chapter2.tex', 'appendixA.tex'];
 }
 .ph-tag--ok {
   color: var(--color-success);
-  background: rgba(105, 176, 106, 0.16);
+  background: color-mix(in srgb, var(--color-success) 16%, transparent);
 }
 
 /* Stack to a single column on narrow screens; flip the arrow to point down. */

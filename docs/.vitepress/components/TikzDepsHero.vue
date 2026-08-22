@@ -165,6 +165,9 @@ const deps = [
   font-weight: 600;
   color: var(--color-text-link);
   cursor: pointer;
+  transition-property: color;
+  transition-duration: var(--mk-dur-fast);
+  transition-timing-function: var(--mk-ease);
 }
 .tdh-install:hover {
   text-decoration: underline;

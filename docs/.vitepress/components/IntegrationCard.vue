@@ -149,6 +149,9 @@ import StatusPill from './StatusPill.vue';
   border-radius: var(--mk-radius);
   padding: var(--mk-space-5) var(--mk-space-10);
   cursor: pointer;
+  transition-property: background-color, color;
+  transition-duration: var(--mk-dur-fast);
+  transition-timing-function: var(--mk-ease);
 }
 .r-btn:hover {
   background: var(--mk-border-soft);
@@ -192,7 +195,7 @@ import StatusPill from './StatusPill.vue';
   gap: var(--mk-space-8);
 }
 .ic-srow dt {
-  flex: 0 0 var(--mk-size-120, 120px);
+  flex: 0 0 var(--mk-size-120);
   font-size: var(--mk-fs-72);
   color: var(--color-text-secondary);
 }

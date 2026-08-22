@@ -119,7 +119,7 @@ const rows = [
 /* Mid-drag cue on one row (decorative — reorderability hint). */
 .mi-row--lift {
   border: 1px solid var(--mk-accent);
-  box-shadow: 0 var(--mk-space-3) var(--mk-space-10) rgba(0, 0, 0, 0.25);
+  box-shadow: var(--mk-shadow-md);
   transform: translateX(var(--mk-space-4));
 }
 

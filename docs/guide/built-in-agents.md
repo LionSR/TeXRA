@@ -4,9 +4,9 @@ import AgentModeShapes from '../.vitepress/components/AgentModeShapes.vue';
 import CliAgentsListHero from '../.vitepress/components/CliAgentsListHero.vue';
 </script>
 
-# Built-in Agent Reference
+# Built-in agent reference
 
-TeXRA ships with built-in agents for common research tasks—polishing prose, fixing errors, creating figures, converting formats, and more. Pick one from the dropdown in the TeXRA UI and you're ready to go.
+TeXRA ships with built-in agents for theory work and the writing around it: deriving and checking results, formalizing proofs, searching the literature, and, in support, polishing prose, fixing errors, creating figures, and converting formats. Pick one from the agent dropdown in the TeXRA UI.
 
 <DropdownMenu
   label="Agent"
@@ -46,17 +46,17 @@ TeXRA ships with built-in agents for common research tasks—polishing prose, fi
   ]"
 />
 
-<p class="hero-caption">The agent picker, split by the two agent classes — <code>tool-use</code> (left) and <code>workflow</code> (right) — with the selected agent (<code>polish</code>) highlighted.</p>
+<p class="hero-caption">The agent picker, split by the two agent classes, <code>tool-use</code> (left) and <code>workflow</code> (right), with the selected agent (<code>polish</code>) highlighted.</p>
 
-The same catalog is enumerable from any terminal:
+The same catalog is available from any terminal:
 
 <CliAgentsListHero />
 
-<p class="hero-caption">One <code>category &nbsp;name&nbsp; description</code> row per agent — tab-separated, stable for scripts; <code>--category workflow</code> filters, <code>--all</code> includes hidden agents.</p>
+<p class="hero-caption">One <code>category &nbsp;name&nbsp; description</code> row per agent, tab-separated and stable for scripts; <code>--category workflow</code> filters, <code>--all</code> includes hidden agents.</p>
 
-## Quick Reference
+## Quick reference
 
-Every built-in agent is one of two execution shapes — a tool-use loop or a
+Every built-in agent is one of two execution shapes, a tool-use loop or a
 workflow pipeline:
 
 <AgentCatalog />
@@ -65,26 +65,26 @@ The two shapes behave differently once they run:
 
 <AgentModeShapes />
 
-<p class="hero-caption">Tool-use agents loop — converse and call tools until done; workflow agents run a fixed input → edit → diff pipeline and hand back a versioned diff.</p>
+<p class="hero-caption">Tool-use agents loop: they converse and call tools until done. Workflow agents run a fixed input → edit → diff pipeline and hand back a versioned diff.</p>
 
-::: warning Important Note
-The underlying prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions as we continue to optimize them. If you require precise, unchanging behavior or wish to heavily customize the process, consider creating a [Custom Agent](./custom-agents.md) based on these examples.
+::: warning Prompts may change
+The prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions. If you need precise, unchanging behavior or want to customize the process in depth, create a [custom agent](./custom-agents.md) based on these examples.
 :::
 
-For details on the underlying structure and execution flow common to all agents, see the [Agent Architecture & Execution Flow](./agent-architecture.md) guide.
+For the structure and execution flow common to all agents, read the [agent architecture guide](./agent-architecture.md).
 
-## Conversational Agents
+## Conversational agents
 
 ### `assistant`
 
 ::: tip Opt-in
 `assistant` is not included in any of the [built-in teams](#built-in-teams).
-Enable it from the **Agents** tab if you want to use it.
+Enable it from the **Agents** tab to use it.
 :::
 
-A general-purpose scientific assistant with the broadest toolset of any built-in agent. It can read your project, edit files, run shell commands, search the literature (arXiv, Crossref, web), manage Zotero references, run Wolfram computations, work on Lean 4 proofs, and delegate to specialist agents or external AI coding agents (Codex, Claude Code)—all in a back-and-forth conversation.
+A general-purpose scientific assistant with the broadest toolset of any built-in agent. It can read your project, edit files, run shell commands, search the literature (arXiv, Crossref, web), manage Zotero references, run Wolfram computations, work on Lean 4 proofs, and delegate to specialist agents or external AI coding agents (Codex, Claude Code), all in a back-and-forth conversation.
 
-> **User story:** You just got reviewer comments back. Instead of manually hunting through a 40-page paper, you open `assistant` and paste the reviewer's feedback: "Address comment 3 about missing error bars in Table 2—add them and update the caption." The agent reads your files, makes the edits, and shows you a diff to approve.
+> **User story:** You just got reviewer comments back. Instead of hunting through a 40-page paper by hand, you open `assistant` and paste the reviewer's feedback: "Address comment 3 about missing error bars in Table 2: add them and update the caption." The agent reads your files, makes the edits, and shows you a diff to approve.
 
 **Best for:** General research assistance, literature search, code/LaTeX editing, computations, running compilations
 
@@ -95,11 +95,11 @@ Review my introduction in paper.tex and suggest improvements for clarity.
 Then update the file with your changes.
 ```
 
-## Problem-Solving Agents
+## Problem-solving agents
 
 ### `prover`
 
-A research mathematician for open and research-level problems — Erdős problems, conjectures posed at the end of papers, or questions from your own work. It checks the problem's current status in the literature first, computes small cases and hunts for counterexamples, lays out candidate lines of attack, and develops proofs lemma-by-lemma with adversarial self-verification. It reports honestly: SOLVED, DISPROVED, PARTIAL, or OPEN with the exact obstruction — partial progress (special cases, reductions, improved bounds) is written up as such, never oversold.
+A research mathematician for open and research-level problems: Erdős problems, conjectures posed at the end of papers, or questions from your own work. It checks the problem's current status in the literature first, computes small cases and hunts for counterexamples, lays out candidate lines of attack, and develops proofs lemma-by-lemma with adversarial self-verification. It reports honestly: SOLVED, DISPROVED, PARTIAL, or OPEN with the exact obstruction. Partial progress (special cases, reductions, improved bounds) is written up as such, never oversold.
 
 **Best for:** Attacking open problems, counterexample searches, turning conjectures into verified partial results
 
@@ -111,11 +111,11 @@ erdosproblems.com and arXiv first, compute small cases, then either prove it,
 disprove it, or report the strongest partial result you can rigorously verify.
 ```
 
-## Research & Discovery Agents
+## Research & discovery agents
 
 ### `research`
 
-A hands-on research agent that can edit your files **and** verify mathematics computationally. When you need to check a derivation or run a symbolic calculation alongside your writing, this is the one.
+A hands-on research agent that can edit your files **and** verify mathematics computationally. Use it when you need to check a derivation or run a symbolic calculation alongside your writing.
 
 **Best for:** Mathematical derivations, computational verification, multi-step research
 
@@ -139,11 +139,11 @@ Implement and run a convergence study for the solver in solver.py.
 Sweep the step size, plot the error, and report the observed order of accuracy.
 ```
 
-## Verification Agents
+## Verification agents
 
 ### `review`
 
-A meticulous scientific auditor that systematically verifies your research manuscript. It checks mathematical correctness, derivation soundness, notation consistency, code-manuscript agreement, and goal achievement — using Wolfram for computational verification.
+A scientific auditor that verifies your research manuscript. It checks mathematical correctness, derivation soundness, notation consistency, code-manuscript agreement, and goal achievement, using Wolfram for computational verification.
 
 **Best for:** Pre-submission audits, mathematical verification, notation consistency checks
 
@@ -155,7 +155,7 @@ consistency across all sections, and confirm that every stated goal in the
 abstract is actually delivered in the paper.
 ```
 
-## Formal Methods Agents
+## Formal methods agents
 
 ### `lean`
 
@@ -170,13 +170,13 @@ Formalize the proof of the theorem in Proofs/GroupTheory.lean. Start with an
 informal outline, then produce Lean code and iterate until it compiles.
 ```
 
-## Presentation & Simplification Agents
+## Presentation & simplification agents
 
 ### `presenter`
 
-Builds conference-ready Beamer presentations, posters, and visual materials from your project. Point it at your paper and it reads through your work, plans the slide structure, generates figures, and compiles the result—checking every slide visually before handing it back to you.
+Creates LaTeX Beamer presentations from research papers. Point it at your paper and it reads through your work, extracts figures, bibliography entries, and TikZ diagrams, writes the deck from the bundled slide template, and refines individual slides with `edit_file`. For posters, use the `paper2poster` workflow agent instead.
 
-**Best for:** Conference talks, poster sessions, seminar presentations, lightning talks
+**Best for:** Conference talks, seminar presentations, lightning talks
 
 **Example instruction:**
 
@@ -186,11 +186,11 @@ algorithm, key results, and future work. Use the metropolis theme and include Ti
 diagrams for the architecture.
 ```
 
-## Correction & Polishing Agents
+## Correction & polishing agents
 
 ### `correct`
 
-The `correct` agent focuses on fixing errors without changing the style or content of your document (think of it as a meticulous, slightly obsessive proofreader).
+The `correct` agent fixes errors without changing the style or content of your document.
 
 **Purpose:** Fix typos, grammatical errors, and LaTeX syntax issues.
 
@@ -212,13 +212,13 @@ Don't change the technical content or writing style.
 
 The `polish` agent improves the writing quality of your document while preserving essential technical content and meaning.
 
-> **User story:** Your draft is technically solid but reads like it was written at 3 AM (because it was). Select `polish`, tell it "Improve clarity for a CVPR audience—keep all equations and citations intact," and in a couple of minutes you'll have a version that reads like it went through a professional copyedit. Review the colour-coded diff to accept or reject each change.
+> **User story:** Your draft is technically solid but the writing is rough. Select `polish`, tell it "Improve clarity for a CVPR audience: keep all equations and citations intact," and in a couple of minutes you have a version that reads like it went through a professional copyedit. Review the colour-coded diff to accept or reject each change.
 
-This agent is ideal for refining drafts that are technically sound but need language improvements before submission.
+Use it for drafts that are technically sound but need language improvements before submission.
 
-#### Example Output
+#### Example output
 
-Try running `polish` on the [sample document](/examples/draft.pdf) to see a colour-coded diff showing exactly what changed. The agent produces versioned output files with latexdiff highlighting additions in blue and deletions in red.
+Run `polish` on the [sample document](/examples/draft.pdf) to see a colour-coded diff showing exactly what changed. The agent produces versioned output files with latexdiff highlighting additions in blue and deletions in red.
 
 <div class="agent-pdf-viewer">
   <iframe src="/examples/draft_polish_r1_gemini25p_diff.pdf" title="Polish Agent Example" class="agent-pdf-frame"></iframe>
@@ -255,7 +255,7 @@ Try running `polish` on the [sample document](/examples/draft.pdf) to see a colo
 }
 </style>
 
-## Content Generation & Transformation Agents
+## Content generation & transformation agents
 
 ### `paper2slide`
 
@@ -279,7 +279,7 @@ Use bullet points for clarity and add slide titles. Include the key figures and 
 
 ### `paper2poster`
 
-The `paper2poster` agent transforms papers into academic conference posters.
+The `paper2poster` agent converts papers into academic conference posters.
 
 **Purpose:** Create well-structured academic posters.
 
@@ -298,14 +298,14 @@ Highlight key figures and tables. Make it visually appealing with appropriate co
 ```
 
 ::: tip Creating figures
-There is no longer a dedicated `draw` agent. To generate or enhance TikZ figures, use a tool-use agent (`research` or `presenter`) and describe the figure — the agent writes compilable TikZ, compiles it, and visually verifies the result. See [Working with Figures](./working-with-figures.md) and [TikZ Figures](./tikz-figures.md).
+There is no longer a dedicated `draw` agent. To generate or improve TikZ figures, use a tool-use agent (`research` or `presenter`) and describe the figure. The agent writes compilable TikZ, compiles it, and visually verifies the result. Read [Working with figures](./working-with-figures.md) and [TikZ figures](./tikz-figures.md).
 :::
 
-## LaTeX & Build Agents
+## LaTeX & build agents
 
 ### `latexFixer`
 
-Diagnoses and fixes LaTeX compilation errors, warnings, and bad boxes. Point it at a project that won't compile (or compiles with ugly overfull boxes) and it reads the build log, locates the cause, and iterates until the document is clean.
+Diagnoses and fixes LaTeX compilation errors, warnings, and bad boxes. Point it at a project that does not compile (or compiles with overfull boxes) and it reads the build log, locates the cause, and iterates until the document is clean.
 
 **Best for:** Resolving build failures, clearing warnings, fixing overfull/underfull boxes
 
@@ -329,7 +329,7 @@ Produce a latexdiff PDF comparing the submitted version (v1/main.tex) with the
 current revision (main.tex), highlighting additions and deletions.
 ```
 
-## Figure & Media Agents
+## Figure & media agents
 
 ### `ocr`
 
@@ -351,7 +351,7 @@ Convert the handwritten derivation in [notes.png] into LaTeX, matching the notat
 
 ### `transcribe_audio`
 
-The `transcribe_audio` agent converts audio files (like lectures, podcasts, or personal notes) into text transcripts. (Note: Requires native audio support, see [Working with Figures](./working-with-figures.md)).
+The `transcribe_audio` agent converts audio files (like lectures, podcasts, or personal notes) into text transcripts. It requires native audio support; read [Working with figures](./working-with-figures.md).
 
 **Purpose:** Create searchable text versions of spoken audio content.
 
@@ -367,11 +367,11 @@ The `transcribe_audio` agent converts audio files (like lectures, podcasts, or p
 Transcribe the provided lecture audio file [lecture.mp3]. Provide the output as plain text, identifying different speakers if possible (e.g., Lecturer, Questioner 1).
 ```
 
-## Merge Agent
+## Merge agent
 
 ### `merge`
 
-Takes an AI-edited document and merges the improvements back into your original, keeping the best of both. It understands context, so it won't blindly overwrite your careful phrasing with generic rewrites.
+Takes an AI-edited document and merges the improvements back into your original, keeping the best of both. It understands context, so it does not overwrite your careful phrasing with generic rewrites.
 
 **Best for:** Applying AI-suggested edits from output files, incorporating reviewer suggestions, combining different drafts
 
@@ -383,12 +383,12 @@ improvements in clarity while maintaining the original's technical precision.
 Preserve mathematical notation and citations from the original.
 ```
 
-See [Intelligent Merge](./intelligent-merge.md) for details on the merge workflow.
+Read [Intelligent merge](./intelligent-merge.md) for details on the merge workflow.
 
-## Software Engineering Agents
+## Software engineering agents
 
 These agents make up the [Software Engineer team](#built-in-teams) for the code
-that accompanies a project — simulations, numerics, data pipelines, scripts,
+that accompanies a project: simulations, numerics, data pipelines, scripts,
 and small libraries. The Computer Scientist team also includes `coder` and
 `testEngineer` for implementing and pinning down experiment code.
 
@@ -407,33 +407,39 @@ then optimize the hot loops, and make sure the regression tests still pass.
 
 ### `coder`
 
-Implements features, makes surgical edits, and fixes bugs, then verifies the change builds and passes the project's checks.
+Implements features, makes focused edits, and fixes bugs, then verifies the change builds and passes the project's checks.
 
 **Best for:** Implementation, focused edits, bug fixes
 
 ### `codeReviewer`
 
-Reviews a diff or file for correctness, clarity, security, and convention fit, and reports prioritized findings. Read-only — it does not edit.
+Reviews a diff or file for correctness, clarity, security, and convention fit, and reports prioritized findings. It is read-only and does not edit.
 
 **Best for:** Pre-merge review, auditing generated code
 
+### `changeReviewer`
+
+Reviews the working tree's diff against the main branch, verifies each suspicion with repository tools and language-server diagnostics, and reports confirmed findings to the Agent Review (Find Issues) panel in Source Control. It is read-only, does not edit, and has no `bash` tool by design.
+
+**Best for:** Reviewing uncommitted changes before you commit
+
 ### `testEngineer`
 
-Writes and maintains tests — pins down existing behaviour, covers new code and edge cases, and keeps the suite fast and reliable.
+Writes and maintains tests: pins down existing behaviour, covers new code and edge cases, and keeps the suite fast and reliable.
 
 **Best for:** Adding coverage, characterization tests, keeping suites healthy
 
 ### `codeSimplifier`
 
-Refactors working code for clarity, reuse, and efficiency without changing its behaviour, then confirms the tests still pass. Quality only — it does not hunt for bugs.
+Refactors working code for clarity, reuse, and efficiency without changing its behaviour, then confirms the tests still pass. It works on quality only and does not hunt for bugs.
 
 **Best for:** Behaviour-preserving cleanup of research code
 
-## Setup & Meta Agents
+## Setup & meta agents
 
 ### `setup`
 
-A setup wizard that diagnoses your environment, installs missing dependencies, configures TeXRA, and orchestrates your first task. If you are new to TeXRA or moving to a new machine, start here.
+A setup wizard that diagnoses your environment, installs missing dependencies, configures TeXRA, and orchestrates your first task. If you are new to TeXRA or moving to a new machine, start with this agent.
 
 **Best for:** First-time setup, diagnosing missing dependencies, getting unblocked
 
@@ -457,13 +463,13 @@ Help me build a custom agent that rewrites abstracts to a 150-word limit while
 preserving every numerical result. Draft the YAML and walk me through testing it.
 ```
 
-## Remote Agents
+## Remote agents
 
 The following agents are available as [remote agents](./remote-agents.md#remote-agent-access). Sign in to TeXRA to access them.
 
 ### `search`
 
-Finds papers and web content for you. Give it a topic and it comes back with relevant preprints, published articles, and web resources. Read-only — it won't touch your files.
+Finds papers and web content for you. Give it a topic and it comes back with relevant preprints, published articles, and web resources. It is read-only and does not change your files.
 
 **Best for:** Literature reviews, finding citations, fact-checking
 
@@ -476,7 +482,7 @@ Focus on papers from 2023-2024 that address mathematical equation handling.
 
 ### `simplifier`
 
-Cuts through complexity in your code and writing. Whether it's duplicated logic across files, overly-abstract wrappers, or LLM-generated filler prose, `simplifier` cleans things up while preserving correctness.
+Removes complexity from your code and writing: duplicated logic across files, over-abstract wrappers, or LLM-generated filler prose. `simplifier` cleans them up while preserving correctness.
 
 **Best for:** Refactoring research code, tightening manuscript prose, cleaning up verbose AI-generated text
 
@@ -495,36 +501,36 @@ Coordinates multi-agent work on LaTeX research projects. It reads project contex
 
 ### `progressCheck`
 
-An end-of-session reviewer. It looks at what was just done and, when the session changed files or depends on wider project context, the project's standing goal and git/PR state. For self-contained read-only work, it stays with the request and the named agent reports. Read-only — it advises, but does not edit or delegate. Bundled with every [team](#built-in-teams) except Software Engineer.
+An end-of-session reviewer. It looks at what was just done and, when the session changed files or depends on wider project context, the project's standing goal and git/PR state. For self-contained read-only work, it stays with the request and the named agent reports. It is read-only: it advises, but does not edit or delegate. Bundled with every [team](#built-in-teams) except Software Engineer.
 
 **Best for:** Auditing what a team run actually delivered versus the goal
 
 ::: tip
-Additional remote agents may be available depending on your access level. In the VS Code extension, run **TeXRA: Show Agents** from the Command Palette for the full list. See [Remote Agents](./remote-agents.md) to sign in and sync them.
+Additional remote agents may be available depending on your access level. In the VS Code extension, run **TeXRA: Show Agents** from the Command Palette for the full list. Read [Remote agents](./remote-agents.md) to sign in and sync them.
 :::
 
-## Built-in Teams
+## Built-in teams
 
 Teams are predefined collections of agents for a discipline. Pick one from the
 **Teams** tab in the Dashboard, or run one from the CLI with
 `texra multi-agent run <team>`:
 
-| Team               | For                                                                                         | Lead agent         |
-| :----------------- | :------------------------------------------------------------------------------------------ | :----------------- |
-| Lean Project       | Lean 4 projects — theorem search, tactic simplification, and blueprints                     | `leanOrchestrator` |
-| Physicist          | Physics papers — derivations, numerical experiments, literature search, slides, and review  | `orchestrator`     |
-| Mathematician      | Math research — attacking open problems, proofs, Lean 4 formalization, and LaTeX correction | `orchestrator`     |
-| Computer Scientist | CS papers — algorithm design, code-driven experiments and ablations, tests, and review      | `orchestrator`     |
-| Software Engineer  | A project's code — implementation, review, debugging, and testing across specialists        | `engineer`         |
+| Team               | For                                                                                        | Lead agent         |
+| :----------------- | :----------------------------------------------------------------------------------------- | :----------------- |
+| Lean Project       | Lean 4 projects: theorem search, tactic simplification, and blueprints                     | `leanOrchestrator` |
+| Physicist          | Physics papers: derivations, numerical experiments, literature search, slides, and review  | `orchestrator`     |
+| Mathematician      | Math research: attacking open problems, proofs, Lean 4 formalization, and LaTeX correction | `orchestrator`     |
+| Computer Scientist | CS papers: algorithm design, code-driven experiments and ablations, tests, and review      | `orchestrator`     |
+| Software Engineer  | A project's code: implementation, review, debugging, and testing across specialists        | `engineer`         |
 
-Every team except Software Engineer bundles the `progressCheck` audit helper,
-and the paper-focused teams also include `latexFixer`. The Software Engineer
+Every team except Software Engineer bundles the `progressCheck` audit helper
+and `latexFixer`. The Software Engineer
 lead and its specialists run locally; some specialists in other teams are
 [remote agents](./remote-agents.md) that sync after you sign in.
 
-## Next Steps
+## Next steps
 
-- [Agent Architecture](./agent-architecture.md) - How agents work internally
-- [Research Tools](./research-tools.md) - Literature discovery and web tools
-- [Custom Agents](./custom-agents.md) - Create your own agents
-- [Models](./models.md) - AI model selection
+- [Agent architecture](./agent-architecture.md): how agents work internally
+- [Research tools](./research-tools.md): literature discovery and web tools
+- [Custom agents](./custom-agents.md): create your own agents
+- [Models](./models.md): AI model selection
