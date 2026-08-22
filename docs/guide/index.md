@@ -4,7 +4,7 @@ import RunParityHero from '../.vitepress/components/RunParityHero.vue';
 
 # TeXRA
 
-An AI theorist for VS Code, the desktop app, and the terminal. It
+An open-source AI theorist for VS Code and the terminal. It
 attempts real theory work (deriving results, checking derivations,
 formalizing proofs in Lean 4) and takes on open problems in long
 autonomous runs with a team of specialist agents. Paper editing, LaTeX
