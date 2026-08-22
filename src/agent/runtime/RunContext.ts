@@ -27,13 +27,7 @@ export interface LaunchRunContext extends RunContextCommon {
 type BareRunIdentity = Partial<
   Pick<
     RunScope,
-    | 'streamId'
-    | 'executionId'
-    | 'agentName'
-    | 'agentKey'
-    | 'isSubagent'
-    | 'workingDirectory'
-    | 'session'
+    'streamId' | 'executionId' | 'agentName' | 'workingDirectory' | 'session'
   >
 >;
 
@@ -135,8 +129,6 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     streamId: options.streamId,
     executionId: options.executionId,
     agentName: options.agentName,
-    agentKey: options.agentKey,
-    isSubagent: options.isSubagent,
     workingDirectory: options.workingDirectory,
     session: options.session,
     get model() {

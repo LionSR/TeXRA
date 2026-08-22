@@ -31,45 +31,6 @@ const roster = vi.hoisted(() => ({
       description: 'Out-of-scope tool-use agent',
       path: '/agents/outside-reviewer.yaml',
     },
-    {
-      category: 'toolUse',
-      source: 'custom',
-      name: 'child',
-      description: 'Current delegated child',
-      tools: ['delegate_agent'],
-      path: '/agents/child.yaml',
-    },
-    {
-      category: 'toolUse',
-      source: 'remote',
-      name: 'child',
-      description: 'Same-name leaf specialist',
-      tools: ['read_file'],
-      path: '/agents/remote-child.yaml',
-    },
-    {
-      category: 'toolUse',
-      source: 'custom',
-      name: 'coder',
-      description: 'Leaf specialist',
-      tools: ['read_file'],
-      path: '/agents/coder.yaml',
-    },
-    {
-      category: 'toolUse',
-      source: 'custom',
-      name: 'lead',
-      description: 'Delegation-capable lead',
-      tools: ['delegate_agent'],
-      path: '/agents/lead.yaml',
-    },
-    {
-      category: 'workflow',
-      source: 'custom',
-      name: 'child',
-      description: 'Same-name workflow agent',
-      path: '/agents/child-workflow.yaml',
-    },
   ],
 }));
 
@@ -96,13 +57,9 @@ import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   AgentPromptSchema,
-  AgentToolUseSettingSchema,
   AgentWorkflowSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { buildUserVars } from '@agent/prompt/userVars';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { createRunScope } from '@agent/runtime/RunScope';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentCategory } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -133,46 +90,5 @@ describe('buildUserVars delegation scope', () => {
     );
     expect(vars.WORKFLOW_AGENTS).not.toContain('outside-writer');
     expect(vars.TOOL_USE_AGENTS).not.toContain('outside-reviewer');
-  });
-
-  it('builds a fresh child prompt from immutable identity and lineage before a handle exists', async () => {
-    const delegationAgentScope = {
-      workflow: ['custom:child'],
-      toolUse: ['custom:child', 'remote:child', 'custom:coder', 'custom:lead'],
-    };
-    const runScope = createRunScope({
-      streamId: 'child-stream',
-      executionId: 'child-execution',
-      agentName: 'child',
-      agentKey: 'custom:child',
-      isSubagent: true,
-      delegationAgentScope,
-      session: {} as SessionHandle,
-      signal: new AbortController().signal,
-    });
-
-    const vars = await withRunContext(createRunContext({ runScope }), () =>
-      buildUserVars(
-        AgentConfigSchema.parse({ agent: 'child', model: 'test-model' }),
-        AgentToolUseSettingSchema.parse({
-          agentCategory: AgentCategory.ToolUse,
-        }),
-        AgentPromptSchema.parse({}),
-        '/agents/child',
-        { isOpenai: false, isAnthropic: false, isGoogle: false },
-        noopTrace,
-        { delegationAgentScope },
-      ),
-    );
-
-    expect(vars.TOOL_USE_AGENTS).toContain(
-      '- child: Same-name leaf specialist [read_file]',
-    );
-    expect(vars.TOOL_USE_AGENTS).toContain(
-      '- coder: Leaf specialist [read_file]',
-    );
-    expect(vars.TOOL_USE_AGENTS).not.toContain('Current delegated child');
-    expect(vars.TOOL_USE_AGENTS).not.toContain('Delegation-capable lead');
-    expect(vars.WORKFLOW_AGENTS).toBe('- child: Same-name workflow agent');
   });
 });
