@@ -67,6 +67,8 @@ const VSCODE_FREE_ZONE_DIRS = [
   'src/replacement',
   'src/eventBus',
   'src/hosts',
+  'src/common',
+  'src/utils',
   'packages/agent/src',
   'packages/extension/src/webview/frontend',
   'packages/extension/src/progressView/frontend',

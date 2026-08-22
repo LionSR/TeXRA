@@ -81,19 +81,28 @@ repo and the first thing to check on any diff.
 
 **VS Code-free zones** — must NOT import `vscode`:
 `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`,
-`src/shared/`, `src/replacement/`, `src/eventBus/`, `src/hosts/`, and the
-webview frontends — `packages/extension/src/webview/frontend/`,
+`src/shared/`, `src/replacement/`, `src/eventBus/`, `src/hosts/`,
+`src/common/`, `src/utils/`, and the webview frontends —
+`packages/extension/src/webview/frontend/`,
 `packages/extension/src/progressView/frontend/`, and
-`packages/extension/src/settingsView/frontend/`. Do not confuse these with
-`packages/extension/src/frontend/` (no view-name segment), which is the
-top-level extension-host frontend below and is VS Code-allowed.
+`packages/extension/src/settingsView/frontend/`. Do not confuse
+`src/common/` and `src/utils/` (repo-root, host-neutral, enforced VS
+Code-free) with `packages/extension/src/common/` below (extension-only,
+VS Code-allowed), or `packages/extension/src/frontend/` (no view-name
+segment, the top-level extension-host frontend, VS Code-allowed) with the
+VS Code-free webview frontends above. This list is enforced by
+`VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs` and mirrored in
+`src/test-kernel/architecture/dependencyDirection.vitest.ts` — keep both in
+sync with this list and with each other.
 
 **VS Code-allowed zones** — platform wiring belongs here:
 `packages/extension/src/extension.ts` (calls `initPlatform()` exactly once),
 `packages/extension/src/commands/`, `packages/extension/src/frontend/`,
 `packages/extension/src/common/`, `src/platform/` interface definitions, and
-`src/auth/`. Code under `src/utils/` remains host-agnostic; do not add `vscode`
-imports there merely because a utility is not browser-reachable.
+`src/auth/`. Within `src/utils/`, a browser-reachable module additionally
+stays free of Node built-ins — see the browser-safe note above; that is a
+stricter constraint layered on top of the VS Code-free rule, not a
+substitute for it.
 
 Reach host services through `platform()` from `@platform/platform` (config,
 state, log, fs, workspace, storage, secrets). When agnostic code needs a
