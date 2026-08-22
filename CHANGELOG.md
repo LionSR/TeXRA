@@ -4,12 +4,56 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.40.4] - 2026-08-22
+
 ### Shared (all surfaces)
 
 #### Features
 
-- **DeepSeek V4 Flash Vision is available** — `deepseekvision` accepts image
-  attachments alongside text.
+- **DeepSeek V4 Flash Vision (Exp) is available** — `deepseekvision` accepts
+  image attachments alongside text.
+
+#### Improvements
+
+- **TeXRA's client software is now open source under Apache 2.0** — the
+  extension, desktop app, CLI, and published libraries now carry the same
+  license and attribution notices. The hosted service remains governed by its
+  Terms of Service. The Researcher Access Program name has been retired, but
+  academic access to the hosted agent catalog is unchanged.
+
+#### Bug Fixes
+
+- **Google and VS Code models can tell attachments apart** — Google models now
+  receive each attachment's filename, and VS Code-hosted models receive a label
+  for every image, so models can match their analysis to the correct file.
+- **Nested delegation cannot create recursive lead-agent chains** — a delegated
+  lead no longer sees itself or another delegation-capable lead as a target,
+  preventing loops while keeping ordinary specialist delegation available.
+- **OpenAI WebSocket authentication failures use the normal recovery path** — a
+  rejected connection now reports the credential or access problem instead of
+  surfacing as an unhandled or generic connection failure.
+- **Delegation errors use current model-access guidance** — an unavailable model
+  no longer prompts you to switch the retired API mode and instead points you to
+  the configured model access that needs attention.
+
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Editor sign-in callbacks are bound to the sign-in attempt that created them** —
+  stale, mismatched, expired, duplicate, and replayed callbacks are rejected,
+  while a valid callback can still complete after a restart or in another
+  editor window.
+- **OAuth sign-in returns to Antigravity IDE** — the browser callback now
+  recognizes Antigravity and opens the TeXRA extension there to finish sign-in.
+
+### CLI
+
+#### Features
+
+- **Reliability controls are available in `texra config`** — command-line users
+  can now configure the compaction threshold and automatic retry limit without
+  opening the extension or desktop settings.
 
 ## [0.40.3] - 2026-08-20
 
