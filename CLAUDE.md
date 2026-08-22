@@ -82,8 +82,8 @@ repo and the first thing to check on any diff.
 **VS Code-free zones** — must NOT import `vscode`:
 `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`,
 `src/shared/`, `src/replacement/`, `src/eventBus/`, `src/hosts/`,
-`src/common/`, `src/utils/`, and the webview frontends —
-`packages/extension/src/webview/frontend/`,
+`src/common/`, `src/utils/`, `packages/agent/src/`, and the webview
+frontends — `packages/extension/src/webview/frontend/`,
 `packages/extension/src/progressView/frontend/`, and
 `packages/extension/src/settingsView/frontend/`. Do not confuse
 `src/common/` and `src/utils/` (repo-root, host-neutral, enforced VS
