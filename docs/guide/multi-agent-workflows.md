@@ -88,9 +88,9 @@ Ordinary JavaScript handles the rest: a `for` loop with awaited calls is a pipel
 
 ## Checkpoints and resume
 
-Every completed `agent()` call is written to a journal before its result is handed back to the script. The journal is keyed by the script's `meta.name`, and each entry records the call's prompt and options, plus the bytes of any files it read.
+Every completed `agent()` call is written to a journal before its result is handed back to the script. The journal is keyed by the script's `meta.name` together with the default agent and the lead's session, so resume works within the same session rather than across sessions. Each entry records the call's prompt and options, plus the bytes of any files it read.
 
-If the run times out, is interrupted, or fails partway through, nothing that finished is lost. The lead calls the tool again with the same `meta.name`, and calls whose prompt, options, and input files are unchanged replay from the journal at no cost, showing as **Saved result** in the progress view. Only the calls that did not finish, or that the lead changed in the script, run again. A new `meta.name` starts over from scratch.
+If the run times out, is interrupted, or fails partway through, nothing that finished is lost. The lead calls the tool again in the same session with the same `meta.name`, and calls whose prompt, options, and input files are unchanged replay from the journal at no cost, showing as **Saved result** in the progress view. Only the calls that did not finish, or that the lead changed in the script, run again. A new `meta.name` starts over from scratch.
 
 This also means the lead can edit a script after a failure rather than rewriting it. Every result points at the saved script file, and the tool accepts a path to that file instead of new source.
 
