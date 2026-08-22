@@ -77,7 +77,8 @@ additive: Tier 1's tap and release automation carry forward into Tier 2.
   `process.execPath`-anchored candidate and no embedded-asset branch.** This is the
   load-bearing runtime code change Tier 2 requires; the binary build also needs the
   CJS bundle target described in §8.1.
-- **Public repo:** `github.com/texra-ai/texra-issues`. Proposed tap:
+- **Public repo at the time:** `github.com/texra-ai/texra-issues`. The canonical
+  open-source repository is now `github.com/LionSR/TeXRA`. Proposed tap:
   `texra-ai/homebrew-tap` (referenced by users as `texra-ai/tap`).
 - **Published tarball coordinates** (for the Tier 1 formula):
   - url: `https://registry.npmjs.org/@texra-ai/cli/-/cli-0.38.6.tgz`
@@ -276,11 +277,11 @@ cask "texra" do
   version "0.39.0"
   on_arm do
     sha256 "..."
-    url "https://github.com/texra-ai/texra-issues/releases/download/v#{version}/texra-darwin-arm64.tar.gz"
+    url "https://github.com/LionSR/TeXRA/releases/download/v#{version}/texra-darwin-arm64.tar.gz"
   end
   on_intel do
     sha256 "..."
-    url "https://github.com/texra-ai/texra-issues/releases/download/v#{version}/texra-darwin-x64.tar.gz"
+    url "https://github.com/LionSR/TeXRA/releases/download/v#{version}/texra-darwin-x64.tar.gz"
   end
 
   name "TeXRA CLI"

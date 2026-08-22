@@ -104,8 +104,9 @@ const baseConfig = {
         activeMatch: '/guide/built-in-agents',
       },
       { text: 'Launch', link: '/launch' },
+      { text: 'Work', link: '/work-using-texra' },
       { text: 'Changelog', link: '/changelog', activeMatch: '/changelog' },
-      { text: 'GitHub', link: 'https://github.com/texra-ai/texra-issues' },
+      { text: 'GitHub', link: 'https://github.com/LionSR/TeXRA' },
     ],
     sidebar: {
       '/guide/': [

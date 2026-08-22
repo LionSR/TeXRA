@@ -7,10 +7,10 @@
   "homepage": "https://texra.ai",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/texra-ai/texra-issues.git"
+    "url": "git+https://github.com/LionSR/TeXRA.git"
   },
   "bugs": {
-    "url": "https://github.com/texra-ai/texra-issues/issues"
+    "url": "https://github.com/LionSR/TeXRA/issues"
   },
   "type": "module",
   "engines": {

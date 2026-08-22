@@ -91,7 +91,7 @@ describe('CLI package manifest discovery', () => {
   it('finds version and bug-report metadata from the source runtime layout', async () => {
     await expect(readCliVersion()).resolves.toMatch(/^\d+\.\d+\.\d+/);
     await expect(readCliBugsUrl()).resolves.toBe(
-      'https://github.com/texra-ai/texra-issues/issues',
+      'https://github.com/LionSR/TeXRA/issues',
     );
   });
 });

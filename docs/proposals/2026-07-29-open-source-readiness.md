@@ -138,14 +138,15 @@ repo.
 
 ### 3.1 The repo has two identities
 
-Code lives in `lionsr/texra` (private); issues live in the separate public
-`texra-ai/texra-issues`. Every published package points at the latter:
+At the time of this audit, code and issue tracking were split between a private
+repository and a separate public tracker. They are now consolidated at
+`LionSR/TeXRA`. Every published package should point at that canonical repository:
 
-- `packages/extension/package.json` — `repository`, `bugs` → `texra-issues`
+- `packages/extension/package.json` — `repository`, `bugs` → the canonical repository
 - `packages/cli/package.json` — same
 - `packages/desktop/package.json` — same
 - `README.md`, `docs/guide/{quick-start,installation,troubleshooting,acknowledgments,index}.md`,
-  `docs/index.md`, `docs/.vitepress/config.js` — all link to `texra-issues`
+  `docs/index.md`, `docs/.vitepress/config.js` — all link to the canonical repository
 - `.github/labels.yml:1` — "Source of truth for issue/PR labels on lionsr/texra"
 
 Settle the final home, update all of the above, and plan the issue migration so

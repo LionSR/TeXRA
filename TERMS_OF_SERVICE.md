@@ -184,5 +184,5 @@ These Terms, together with any additional terms you agree to when using particul
 If you have questions or concerns about these Terms, please contact us:
 
 - **Email**: contact@texra.ai
-- **GitHub**: [https://github.com/texra-ai/texra-issues](https://github.com/texra-ai/texra-issues)
+- **GitHub**: [https://github.com/LionSR/TeXRA](https://github.com/LionSR/TeXRA)
 - **Website**: [https://texra.ai](https://texra.ai)
