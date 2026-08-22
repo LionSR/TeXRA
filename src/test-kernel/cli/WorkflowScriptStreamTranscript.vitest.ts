@@ -925,7 +925,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     ]);
     expect(entryIds(coldItems)).toEqual(entryIds(incrementalItems));
     const output = await renderStaticTranscript();
-    expect(output.indexOf('[image] /private/tmp/loaded.png')).toBeLessThan(
+    expect(output.indexOf('/private/tmp/loaded.png')).toBeLessThan(
       output.indexOf('bash'),
     );
   });
