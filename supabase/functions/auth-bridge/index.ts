@@ -247,7 +247,8 @@ function bridgePageHtml(ext: string, id: string): string {
     'codium': 'VSCodium',
     'trae': 'Trae',
     'positron': 'Positron',
-    'pearai': 'PearAI'
+    'pearai': 'PearAI',
+    'antigravity-ide': 'Antigravity IDE'
   };
 
   // PKCE puts the one-time code (and any error) in the query string; read
