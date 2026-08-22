@@ -235,6 +235,8 @@ specialists. For example, the Software Engineer team's `engineer` lead delegates
 to `coder`, `codeReviewer`, `testEngineer`, and `codeSimplifier`. Pass `--input`
 and `--context` files as with `texra run`;
 read-only context files are included in the instruction the team receives.
+When the work splits cleanly, the lead can fan it out as a scripted
+[multi-agent workflow](./multi-agent-workflows.md).
 
 <CliMultiAgentHero />
 

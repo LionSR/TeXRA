@@ -251,6 +251,6 @@ A messy library is where AI agents hallucinate citations. A verified, deduplicat
 
 ## Contributing
 
-All of these projects are MIT-licensed and welcome contributions. To report a bug, add a model to llm-zoo, extend the Mathematica tools, or contribute a new agent skill, open an issue or a pull request on the project's GitHub repository.
+The satellite projects below are MIT-licensed and welcome contributions. To report a bug, add a model to llm-zoo, extend the Mathematica tools, or contribute a new agent skill, open an issue or a pull request on the project's GitHub repository.
 
 - [texra-ai on GitHub](https://github.com/texra-ai)
