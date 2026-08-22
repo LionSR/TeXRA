@@ -97,7 +97,7 @@ function dispatchHarness(opts: HarnessOptions) {
     onRoundFinalized: () => {},
     modelCell: testModelCell({
       requiresBatchedParallelToolResults: false,
-      createToolUseFollowUpMessages: async () => [],
+      createBatchedToolUseFollowUpMessages: async () => [],
       getClient: async () => opts.runClient ?? {},
       ...opts.modelHandlerOverrides,
     }),
