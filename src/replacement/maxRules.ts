@@ -368,8 +368,8 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   '\\boldsymbol{1}': '\\bone',
   '\\mathrm{d}': '\\dd',
 
-  // Fix specific cases
-  '\\boldsymbol{\\Sigma}': '\\bSig',
+  // Fix specific cases ('\boldsymbol{\Sigma}' is already generated above by the
+  // bold-Greek shortcuts, with the same destination).
   '\\bSigma': '\\bSig',
 
   // Special case for 'f' which uses 'bbf' instead of 'bf'

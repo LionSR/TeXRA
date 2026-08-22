@@ -27,8 +27,8 @@ export const CHARACTER_REPLACEMENTS: NonRegexReplacementCategory = {
     ansätze: 'ans{\\"a}tze',
     Rényi: "R{\\'e}nyi",
     Schrödinger: 'Schr{\\"o}dinger',
+    // Covers the plural too: the singular rewrite leaves the trailing 's'.
     'Schr{\\\\`o}dinger': 'Schr{\\"o}dinger',
-    'Schr{\\\\`o}dingers': 'Schr{\\"o}dingers',
   },
 };
 
@@ -211,8 +211,8 @@ export const GPTNESS_REPLACEMENTS: NonRegexReplacementCategory = {
     disseminates: 'distributes',
     disseminated: 'distributed',
     disseminating: 'distributing',
-    dissemination: 'distribution',
-    disseminations: 'distributions',
+    dissemination: 'distribution', // also covers the plural
+
     parsimonious: 'simple',
     embark: 'start',
     realm: 'area',
@@ -498,9 +498,9 @@ export const LATEX_XML_REPLACEMENTS: NonRegexReplacementCategory = {
       ]),
 
       // ===== 3. Special Case Handling =====
-      // Special cases for minipage
+      // Special cases for minipage. The literal `\n`-prefixed spelling needs no
+      // entry of its own: this rule rewrites the tag and leaves the prefix.
       '\\minipage}': '\\end{minipage}',
-      '\\n\\minipage}': '\\n\\end{minipage}',
 
       // Special case for item tag
       '<item>': '\\item',
@@ -592,17 +592,13 @@ export const PERSONAL_STYLE_REPLACEMENTS: NonRegexReplacementCategory = {
     'In~\\cref{': 'In \\cref{',
     'in~Sec': 'in Sec',
     'In~Sec': 'In Sec',
+    // The bare 'Eq' forms also cover 'Eqs'/'Eqs.': only the tilde is rewritten,
+    // so the trailing characters are carried through untouched.
     'by~Eq': 'by Eq',
-    'by~Eqs': 'by Eqs',
-    'by~Eqs.': 'by Eqs.',
     'see~Sec': 'see Sec',
     'See~Sec': 'See Sec',
     'from~Eq': 'from Eq',
     'From~Eq': 'From Eq',
-    'from~Eqs': 'from Eqs',
-    'From~Eqs': 'From Eqs',
-    'from~Eqs.': 'from Eqs.',
-    'From~Eqs.': 'From Eqs.',
     'cf.~Eq': 'cf. Eq',
     'to~App': 'to App',
     '~(\\ref{': ' (\\ref{',
