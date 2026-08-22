@@ -241,6 +241,9 @@ const rows = [
   color: var(--color-text-secondary);
   font-size: var(--mk-space-12);
   cursor: pointer;
+  transition-property: background-color, color;
+  transition-duration: var(--mk-dur-fast);
+  transition-timing-function: var(--mk-ease);
 }
 .key-btn:hover {
   background: var(--mk-hover-bg);

@@ -1,26 +1,39 @@
-# Open Source Projects
+# Open source projects
 
-TeXRA is built on the belief that great research tools benefit from community collaboration. We've open-sourced key components of our infrastructure so that developers, researchers, and tool builders can use and contribute to them independently.
+Research tools benefit from community collaboration. TeXRA's client software is open source, and so are several satellite projects it builds on, so developers, researchers, and tool builders can use and contribute to them independently.
+
+## TeXRA
+
+**The VS Code extension, desktop app, `texra` CLI, and published libraries.**
+
+[![GitHub](https://img.shields.io/github/stars/LionSR/TeXRA)](https://github.com/LionSR/TeXRA)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/LionSR/TeXRA/blob/main/LICENSE)
+
+TeXRA's client software is licensed under the Apache License 2.0: the agent runtime, the specialist agents that derive, check, and formalize results, and all three hosts over it. The hosted service (accounts, the relay, and the account-served agent catalog) remains governed by its Terms of Service.
+
+[TeXRA on GitHub](https://github.com/LionSR/TeXRA)
+
+---
 
 ## llm-zoo
 
-**One package to lookup any LLM's pricing, capabilities, and context window.**
+**One package to look up any LLM's pricing, capabilities, and context window.**
 
 [![npm](https://img.shields.io/npm/v/llm-zoo)](https://www.npmjs.com/package/llm-zoo)
 [![GitHub](https://img.shields.io/github/stars/texra-ai/llm-zoo)](https://github.com/texra-ai/llm-zoo)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/texra-ai/llm-zoo/blob/main/LICENSE)
 
-Keeping track of LLM pricing, context windows, and capabilities across providers is a moving target. **llm-zoo** solves this by providing a single, typed, zero-dependency package covering 100+ models from Claude, GPT, Gemini, DeepSeek, Grok, and more.
+Keeping track of LLM pricing, context windows, and capabilities across providers is hard. **llm-zoo** is a single, typed, zero-dependency package covering 140+ models from Claude, GPT, Gemini, DeepSeek, Grok, and more.
 
 ### Highlights
 
-- **100+ models** across Anthropic, OpenAI, Google, GLM, DeepSeek, MiniMax, xAI, Moonshot, Meta, DashScope, Copilot, and OpenRouter
-- **Zero dependencies** — lightweight with full TypeScript support
+- **140+ models** across Anthropic, OpenAI, Google, GLM, DeepSeek, MiniMax, xAI, Moonshot, Meta, DashScope, Copilot, and others, with OpenRouter tracked as an access route rather than a provider
+- **Zero dependencies**, with full TypeScript support
 - **Tree-shakeable** for efficient bundling
 - **Zod schemas** for runtime validation (Zod v4)
-- **Always current** — pricing and capabilities regularly updated
+- **Always current**: pricing and capabilities are updated regularly
 
-### Quick Start
+### Quick start
 
 ```bash
 npm install llm-zoo
@@ -58,14 +71,14 @@ const anthropicModels = from(ModelProvider.ANTHROPIC);
 | `compareCosts(models, usage)` | Side-by-side cost comparison                    |
 
 ::: tip Use Case
-llm-zoo powers TeXRA's model selection and cost estimation internally. If you're building LLM-powered tools, routing logic, or cost dashboards, it saves you from maintaining your own model registry.
+TeXRA uses llm-zoo for model selection and cost estimation. If you build LLM-powered tools, routing logic, or cost dashboards, it saves you from maintaining your own model registry.
 :::
 
-[GitHub Repository](https://github.com/texra-ai/llm-zoo) · [npm Package](https://www.npmjs.com/package/llm-zoo)
+[llm-zoo on GitHub](https://github.com/texra-ai/llm-zoo) · [llm-zoo on npm](https://www.npmjs.com/package/llm-zoo)
 
 ---
 
-## MCP Server for Mathematica
+## MCP server for Mathematica
 
 **A Model Context Protocol server that bridges MCP clients to a local Mathematica installation.**
 
@@ -77,15 +90,15 @@ Research in physics, mathematics, and engineering often requires symbolic comput
 ### Highlights
 
 - **Execute Mathematica code** from any MCP client
-- **Verify derivation steps** — validate that algebraic transformations are correct
-- **Multiple output formats** — text, LaTeX, or Mathematica expressions
-- **Lightweight** — Node.js server communicating over stdio
+- **Verify derivation steps**: checks that algebraic transformations are correct
+- **Multiple output formats**: text, LaTeX, or Mathematica expressions
+- **Lightweight**: a Node.js server communicating over stdio
 
-### Tools Provided
+### Tools provided
 
 #### `execute_mathematica`
 
-Run arbitrary Mathematica expressions and get results in your preferred format.
+Run any Mathematica expression and get the result in the format you choose.
 
 ```json
 {
@@ -110,7 +123,7 @@ Validate a sequence of mathematical steps. The server checks each transition usi
 - **Mathematica** installed locally with `wolframscript` available in your PATH
 - **Node.js** v16 or later
 
-### Quick Start
+### Quick start
 
 ```bash
 git clone https://github.com/texra-ai/mcp-server-mathematica.git
@@ -123,121 +136,121 @@ node build/index.js
 Then configure your MCP client to connect to the running server.
 
 ::: tip Use Case
-mcp-server-mathematica powers TeXRA's mathematical verification capabilities. It's especially useful for physicists and mathematicians who want AI assistants to check symbolic derivations against a proper computer algebra system rather than relying on LLM arithmetic alone.
+TeXRA's own agents run Mathematica through the built-in `wolfram` tool, which calls `wolframscript` directly. mcp-server-mathematica brings the same capability to other MCP clients such as Cursor and Claude Desktop. It is useful for physicists and mathematicians who want AI assistants to check symbolic derivations against a computer algebra system rather than rely on LLM arithmetic alone.
 :::
 
-[GitHub Repository](https://github.com/texra-ai/mcp-server-mathematica)
+[mcp-server-mathematica on GitHub](https://github.com/texra-ai/mcp-server-mathematica)
 
 ---
 
-## TeXRA Scientific Skills
+## TeXRA scientific skills
 
 **A collection of agent skills for scientific writing, peer review, and figure creation.**
 
 [![GitHub](https://img.shields.io/github/stars/texra-ai/texra-scientific-skills)](https://github.com/texra-ai/texra-scientific-skills)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/texra-ai/texra-scientific-skills/blob/main/LICENSE)
 
-The capabilities that power TeXRA, packaged as portable agent skills. **texra-scientific-skills** distributes specialized skills for working with LaTeX manuscripts, mathematical content, and scientific communication, usable as Claude Code plugins or Codex skill bundles.
+TeXRA's capabilities, packaged as portable agent skills. **texra-scientific-skills** distributes specialized skills for working with LaTeX manuscripts, mathematical content, and scientific communication, usable as Claude Code plugins or Codex skill bundles.
 
 ### Skills
 
-- **Inline Paper Critic** — adds compile-safe review comments to LaTeX manuscripts
-- **Literature Search** — discovers and synthesizes academic sources with proper grounding
-- **Manuscript Review** — audits technical documents for mathematical accuracy and consistency
-- **Math OCR** — converts handwritten math into LaTeX
-- **Mathematical Enhancer** — improves proofs, derivations, and mathematical clarity
-- **Scientific Presenter** — creates presentations and Beamer decks
-- **Scientific Simplifier** — streamlines code, LaTeX, and writing while preserving meaning
-- **TikZ Figure Builder** — creates and refines scientific diagrams with iterative compilation
-- **Writing Commenter** — provides inline editorial feedback
+- **Inline Paper Critic**: adds compile-safe review comments to LaTeX manuscripts
+- **Literature Search**: discovers and synthesizes academic sources with proper grounding
+- **Manuscript Review**: audits technical documents for mathematical accuracy and consistency
+- **Math OCR**: converts handwritten math into LaTeX
+- **Mathematical Enhancer**: improves proofs, derivations, and mathematical clarity
+- **Scientific Presenter**: creates presentations and Beamer decks
+- **Scientific Simplifier**: streamlines code, LaTeX, and writing while preserving meaning
+- **TikZ Figure Builder**: creates and refines scientific diagrams with iterative compilation
+- **Writing Commenter**: provides inline editorial feedback
 
-### Quick Start
+### Quick start
 
 ```text
 # Claude Code
 /plugin marketplace add texra-ai/texra-scientific-skills
 ```
 
-Skills use the standardized `SKILL.md` format and can also be installed via Codex or by symlinking individual skill directories into your agent's skills location.
+Skills use the standard `SKILL.md` format. You can also install them through Codex or by symlinking individual skill directories into your agent's skills location.
 
 ::: tip Use Case
 These skills bring TeXRA's research workflows to any agent system that supports the `SKILL.md` format, so your own AI assistant can draft, review, and illustrate scientific work.
 :::
 
-[GitHub Repository](https://github.com/texra-ai/texra-scientific-skills)
+[texra-scientific-skills on GitHub](https://github.com/texra-ai/texra-scientific-skills)
 
 ---
 
-## TeXRA Lean Skills
+## TeXRA Lean skills
 
 **Agent skills for Lean 4 and Mathlib formalization work.**
 
 [![GitHub](https://img.shields.io/github/stars/texra-ai/texra-lean-skills)](https://github.com/texra-ai/texra-lean-skills)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/texra-ai/texra-lean-skills/blob/main/LICENSE)
 
-**texra-lean-skills** helps AI agents assist with mathematical formalization in Lean 4, bridging informal mathematics and formal code. Distributed as a Claude Code plugin or Codex skills bundle following the standard skill format.
+**texra-lean-skills** helps AI agents assist with mathematical formalization in Lean 4, connecting informal mathematics and formal code. It is distributed as a Claude Code plugin or a Codex skills bundle in the standard skill format.
 
 ### Skills
 
-- **lean-blueprint** — authors and maintains documents connecting informal mathematics to Lean declarations
-- **lean-proof-assistant** — develops and debugs Lean proofs with goal inspection and lemma search
-- **lean-search** — locates existing Lean 4 and Mathlib lemmas, APIs, and formalization patterns
-- **lean-simplifier** — refactors code toward Mathlib-quality style while preserving meaning
-- **lean-tactic-improver** — turns repeated proof patterns into reusable project automation
+- **lean-blueprint**: authors and maintains documents connecting informal mathematics to Lean declarations
+- **lean-proof-assistant**: develops and debugs Lean proofs with goal inspection and lemma search
+- **lean-search**: locates existing Lean 4 and Mathlib lemmas, APIs, and formalization patterns
+- **lean-simplifier**: refactors code toward Mathlib-quality style while preserving meaning
+- **lean-tactic-improver**: turns repeated proof patterns into reusable project automation
 
-### Quick Start
+### Quick start
 
 ```text
 # Claude Code
 /plugin marketplace add texra-ai/texra-lean-skills
 ```
 
-Skills can also be installed via Codex or by symlinking individual skill directories into your agent's skills location.
+You can also install the skills through Codex or by symlinking individual skill directories into your agent's skills location.
 
 ::: tip Use Case
 If you formalize mathematics in Lean 4, these skills let AI assistants search Mathlib, draft and debug proofs, reuse project-specific proof patterns across sessions, and keep blueprints in sync with formal declarations.
 :::
 
-[GitHub Repository](https://github.com/texra-ai/texra-lean-skills)
+[texra-lean-skills on GitHub](https://github.com/texra-ai/texra-lean-skills)
 
 ---
 
-## Zotero Cleanup (zotcleanup)
+## Zotero cleanup (zotcleanup)
 
-**Point an AI agent at your Zotero library and let it fix the metadata — previewing every change before it writes.**
+**Point an AI agent at your Zotero library and let it fix the metadata, previewing every change before it writes.**
 
 [![GitHub](https://img.shields.io/github/stars/texra-ai/zotero-cleanup-skills)](https://github.com/texra-ai/zotero-cleanup-skills)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/texra-ai/zotero-cleanup-skills/blob/main/LICENSE)
 
-A working Zotero library accumulates rot. **zotcleanup** is a Claude Code / Codex skill plus independent, **dry-run-safe** scripts — built on [pyzotero](https://github.com/urschrei/pyzotero), arXiv, and Crossref — that fix it a reviewable pass at a time. Every value is looked up from a named authority (arXiv, Crossref, DBLP) above a match threshold; nothing is guessed, and nothing is written until you pass `--apply`.
+A working Zotero library accumulates errors. **zotcleanup** is a Claude Code / Codex skill plus independent, **dry-run-safe** scripts, built on [pyzotero](https://github.com/urschrei/pyzotero), arXiv, and Crossref, that fix it one reviewable pass at a time. Every value is looked up from a named authority (arXiv, Crossref, DBLP) above a match threshold; nothing is guessed, and nothing is written until you pass `--apply`.
 
 ### What it fixes
 
-- **Stale item types** — arXiv preprints that were published long ago but are still typed `preprint`
-- **Inconsistent venues** — one journal under several names (`Phys Rev Lett`, `Physical Review Letters`, …)
-- **Import gunk** — `{{braces}}`, `&amp;`, all-caps names, and broken escapes in titles and authors
-- **Placeholder DOIs** — ResearchGate / DataCite stand-ins replaced with the real DOI
-- **Unfiled references** — hundreds of loose items organized
+- **Stale item types**: arXiv preprints that were published long ago but are still typed `preprint`
+- **Inconsistent venues**: one journal under several names (`Phys Rev Lett`, `Physical Review Letters`, …)
+- **Import gunk**: `{{braces}}`, `&amp;`, all-caps names, and broken escapes in titles and authors
+- **Placeholder DOIs**: ResearchGate / DataCite stand-ins replaced with the real DOI
+- **Unfiled references**: hundreds of loose items organized
 
-### Quick Start
+### Quick start
 
 ```text
 # Claude Code
 /plugin marketplace add texra-ai/zotero-cleanup-skills
 ```
 
-The scripts also run standalone with [uv](https://docs.astral.sh/uv/) (Python ≥ 3.10) and your Zotero credentials — every command defaults to a dry run that previews changes before `--apply` writes them.
+The scripts also run standalone with [uv](https://docs.astral.sh/uv/) (Python ≥ 3.10) and your Zotero credentials. Every command defaults to a dry run that previews changes before `--apply` writes them.
 
 ::: tip Use Case
-A messy library is where AI agents hallucinate citations. A verified, deduplicated Zotero library gives TeXRA's research agents real DOIs and venues to cite — keeping [Research Tools](./research-tools.md) grounded.
+A messy library is where AI agents hallucinate citations. A verified, deduplicated Zotero library gives TeXRA's research agents real DOIs and venues to cite, keeping [Research tools](./research-tools.md) grounded.
 :::
 
-[GitHub Repository](https://github.com/texra-ai/zotero-cleanup-skills)
+[zotero-cleanup-skills on GitHub](https://github.com/texra-ai/zotero-cleanup-skills)
 
 ---
 
 ## Contributing
 
-All of these projects are MIT-licensed and welcome contributions. If you find a bug, want to add a model to llm-zoo, extend the Mathematica tools, or contribute a new agent skill — open an issue or submit a pull request on the respective GitHub repository.
+The satellite projects below are MIT-licensed and welcome contributions. To report a bug, add a model to llm-zoo, extend the Mathematica tools, or contribute a new agent skill, open an issue or a pull request on the project's GitHub repository.
 
 - [texra-ai on GitHub](https://github.com/texra-ai)

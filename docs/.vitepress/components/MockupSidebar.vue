@@ -173,14 +173,14 @@ const view = defineModel('view', { type: String, default: 'diff' });
    landing sidebar: background-task item, latexdiff result, and the in-progress
    spinner. */
 .board {
-  width: 340px;
+  width: var(--mk-size-340);
 }
 .sec-label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 0;
-  font-size: 0.68rem;
+  gap: var(--mk-space-6);
+  padding: var(--mk-space-4) 0;
+  font-size: var(--mk-fs-68);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -191,14 +191,14 @@ const view = defineModel('view', { type: String, default: 'diff' });
 .task {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 0;
+  gap: var(--mk-space-6);
+  padding: var(--mk-space-3) 0;
 }
 .task-ic {
   display: inline-flex;
   color: var(--mk-syn-fn);
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: var(--mk-space-13);
 }
 .task-name {
   color: var(--mk-text-dim);
@@ -206,32 +206,32 @@ const view = defineModel('view', { type: String, default: 'diff' });
 }
 .task-desc {
   color: var(--color-text-secondary);
-  font-size: 0.7rem;
+  font-size: var(--mk-fs-70);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .task-elapsed {
   color: var(--color-text-secondary);
-  font-size: 0.7rem;
+  font-size: var(--mk-fs-70);
   flex-shrink: 0;
 }
 .task-tag {
   margin-left: auto;
   flex-shrink: 0;
-  font-size: 0.64rem;
-  color: #e0b341;
-  background: rgba(215, 169, 62, 0.16);
-  border-radius: 4px;
-  padding: 1px 7px;
+  font-size: var(--mk-fs-64);
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 16%, transparent);
+  border-radius: var(--mk-radius);
+  padding: 1px var(--mk-space-7);
 }
 
 /* In-progress (warning) spinner on the active delegation card */
 .tc-sp {
-  width: 12px;
-  height: 12px;
+  width: var(--mk-space-12);
+  height: var(--mk-space-12);
   flex-shrink: 0;
-  border: 2px solid rgba(215, 169, 62, 0.3);
+  border: 2px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
   border-top-color: var(--color-warning);
   border-radius: 50%;
   animation: mk-spin 0.9s linear infinite;
@@ -241,13 +241,13 @@ const view = defineModel('view', { type: String, default: 'diff' });
 .ldiff {
   background: none;
   border: none;
-  padding: 4px 6px;
+  padding: var(--mk-space-4) var(--mk-space-6);
   cursor: pointer;
 }
 .ldiff-sum {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--mk-space-6);
   list-style: none;
   cursor: pointer;
 }
@@ -257,7 +257,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
 .ldiff-ic {
   color: var(--mk-accent);
   display: inline-flex;
-  font-size: 12px;
+  font-size: var(--mk-space-12);
 }
 .ldiff-lbl {
   color: var(--wa-color-text-normal);
@@ -265,15 +265,15 @@ const view = defineModel('view', { type: String, default: 'diff' });
 .ldiff-row {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 5px;
-  padding-left: 26px;
+  gap: var(--mk-space-5);
+  margin-top: var(--mk-space-5);
+  padding-left: var(--mk-space-26);
   color: var(--color-text-secondary);
 }
 .ldiff-ok {
   display: inline-flex;
   color: var(--color-success);
-  font-size: 11px;
+  font-size: var(--mk-space-11);
 }
 .ldiff-r {
   color: var(--color-text-secondary);
@@ -287,6 +287,10 @@ const view = defineModel('view', { type: String, default: 'diff' });
   color: var(--color-text-link);
   cursor: pointer;
 }
+.ldiff-file,
+.ldiff-link {
+  transition: color var(--mk-dur-fast) var(--mk-ease);
+}
 .ldiff-file:hover,
 .ldiff-link:hover {
   text-decoration: underline;
@@ -294,10 +298,10 @@ const view = defineModel('view', { type: String, default: 'diff' });
 
 @media (max-width: 820px) {
   .board-tabs {
-    gap: 10px;
+    gap: var(--mk-space-10);
   }
   .bt {
-    font-size: 0.68rem;
+    font-size: var(--mk-fs-68);
   }
 }
 </style>

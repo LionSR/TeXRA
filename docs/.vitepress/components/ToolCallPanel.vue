@@ -72,7 +72,7 @@ defineProps({
   align-self: center;
   width: var(--mk-space-8);
   height: var(--mk-space-8);
-  border-radius: 50%;
+  border-radius: var(--mk-radius-pill);
   background: var(--color-success);
   flex-shrink: 0;
 }

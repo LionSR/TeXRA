@@ -1,12 +1,12 @@
-# Working with TikZ Figures
+# Working with TikZ figures
 
 <script setup>
 import TikzTroubleshootCards from '../.vitepress/components/TikzTroubleshootCards.vue';
 </script>
 
-[TikZ](https://github.com/pgf-tikz/pgf) is a powerful LaTeX package for creating vector graphics programmatically. It's widely used in academia for diagrams, plots, and technical illustrations because of its high quality and seamless LaTeX integration. Mastering TikZ can feel like learning a new language — TeXRA is here to help.
+[TikZ](https://github.com/pgf-tikz/pgf) is a LaTeX package for creating vector graphics programmatically. It is widely used in academia for diagrams, plots, and technical illustrations because of its output quality and its integration with LaTeX. Learning TikZ can feel like learning a new language. TeXRA helps with that, so the figures that illustrate a derivation or a result take less of your time than the theory itself.
 
-TeXRA offers specialised features for TikZ, built around its tool-use agents — which write TikZ, compile it, and visually verify the result — together with dedicated extraction / compilation tools. This guide focuses on TikZ-specific workflows.
+TeXRA offers features built for TikZ, centered on its tool-use agents, which write TikZ, compile it, and visually verify the result, together with dedicated extraction and compilation tools. This guide covers the TikZ-specific workflows.
 
 ::: info No dedicated `draw` agent
 Earlier versions of TeXRA shipped a standalone `draw` agent. Figure generation
@@ -15,11 +15,11 @@ can write TikZ, compile it, inspect the rendered output, and iterate until it
 looks right.
 :::
 
-::: tip General Media Handling
-For managing other figure types (standard images, PDFs) and general media selection in the UI, see the [Working with Figures](./working-with-figures.md) guide.
+::: tip General media handling
+For other figure types (standard images, PDFs) and media selection in the UI, read the [Working with figures](./working-with-figures.md) guide.
 :::
 
-## <wa-icon library="texra" name="info"></wa-icon> What is TikZ? (A Brief Intro)
+## <wa-icon library="texra" name="info"></wa-icon> What is TikZ? (A brief intro)
 
 Instead of using a graphical editor, TikZ lets you describe graphics with commands inside your LaTeX document. For example:
 
@@ -34,11 +34,11 @@ Instead of using a graphical editor, TikZ lets you describe graphics with comman
 \end{document}
 ```
 
-This code draws a blue circle with text inside. TeXRA's tools help manage and generate this kind of code.
+This code draws a blue circle with text inside. TeXRA's tools help you manage and generate this kind of code.
 
-## <wa-icon library="texra" name="sparkle"></wa-icon> Generating TikZ with Agents
+## <wa-icon library="texra" name="sparkle"></wa-icon> Generating TikZ with agents
 
-A tool-use agent (`research` or `presenter`) acts as your AI graphics assistant for TikZ. It can:
+A tool-use agent (`research` or `presenter`) acts as your graphics assistant for TikZ. It can:
 
 1. <wa-icon library="texra" name="add"></wa-icon> **Create new TikZ figures** from a textual description.
 2. <wa-icon library="texra" name="edit"></wa-icon> **Enhance existing figures** with improvements or additions.
@@ -59,18 +59,18 @@ Because these are tool-use agents, they can compile the figure and inspect the r
   ]"
 />
 
-<p class="hero-caption">The agent writes, compiles, looks at the rendered PDF, and loops back to fix what it sees — a self-correcting draw cycle, not a one-shot generation.</p>
+<p class="hero-caption">The agent writes, compiles, looks at the rendered PDF, and loops back to fix what it sees: a self-correcting draw cycle, not a one-shot generation.</p>
 
 ![TikZ Figure Example](/images/tikz-figure-example.png)
 
-### Creating New Figures
+### Creating new figures
 
-1. Select a tool-use agent — `research` or `presenter` (<wa-icon library="texra" name="sparkle"></wa-icon>).
-2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>) — `sonnet5T`, `opus5T`, `gpt56`, or `gemini31p` are good choices for complex drawings.
-3. Provide a detailed description of the figure you want.
-4. Click Execute (<wa-icon library="texra" name="play"></wa-icon>).
+1. Select a tool-use agent, `research` or `presenter` (<wa-icon library="texra" name="sparkle"></wa-icon>).
+2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>). `sonnet5T`, `opus5T`, `gpt56`, and `gemini31p` are good choices for complex drawings.
+3. Describe the figure you want in detail.
+4. Select **Run agent** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 
-From the CLI, the same draw → compile → inspect loop shown below runs
+From the CLI, the same draw, compile, and inspect loop shown below runs
 headlessly (`texra run` is for workflow agents only; tool-use agents like
 `research` use `texra agents run`):
 
@@ -88,12 +88,12 @@ preprocessing, feature extraction, model training, and evaluation.
 Connect the steps with arrows and add appropriate labels.
 ```
 
-### Enhancing Existing Figures
+### Enhancing existing figures
 
 1. Select the input file (<wa-icon library="texra" name="file-code"></wa-icon>) containing the TikZ code.
 2. Select a tool-use agent (`research` or `presenter`).
-3. Provide instructions for the desired improvements.
-4. Execute (<wa-icon library="texra" name="play"></wa-icon>).
+3. Describe the improvements you want.
+4. Select **Run agent** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 
 **Example instruction:**
 
@@ -103,11 +103,11 @@ Use blue for input components, green for processing steps, and red for output.
 Add a legend explaining the color scheme and improve the layout for better readability.
 ```
 
-## <wa-icon library="texra" name="file-submodule"></wa-icon> TikZ Extraction
+## <wa-icon library="texra" name="file-submodule"></wa-icon> TikZ extraction
 
 TeXRA can pull TikZ figures out of your LaTeX source for separate processing.
 
-### Automatic Extraction
+### Automatic extraction
 
 1. Open the **Auto Extract** dropdown (<wa-icon library="texra" name="wand"></wa-icon>) next to the Media selector.
 2. Enable **TikZ Figures**.
@@ -126,7 +126,7 @@ TeXRA can pull TikZ figures out of your LaTeX source for separate processing.
   ] }]"
 />
 
-<p class="hero-caption">Open the wand <strong>Auto-extract</strong> menu in the Media group and check <strong>TikZ Figures</strong> — every <code>tikzpicture</code> in your selected files is then pulled out on the next run.</p>
+<p class="hero-caption">Open the wand <strong>Auto-extract</strong> menu in the Media group and check <strong>TikZ Figures</strong>. Every <code>tikzpicture</code> in your selected files is then pulled out on the next run.</p>
 
 When automatic extraction is enabled, TeXRA will:
 
@@ -135,7 +135,7 @@ When automatic extraction is enabled, TeXRA will:
 3. <wa-icon library="texra" name="output"></wa-icon> Compile the figures into standalone PDFs.
 4. <wa-icon library="texra" name="eye"></wa-icon> Make both the TikZ code and compiled PDFs available to the agent.
 
-### Manual Extraction Commands
+### Manual extraction commands
 
 You can also extract TikZ figures from the Command Palette:
 
@@ -145,7 +145,7 @@ You can also extract TikZ figures from the Command Palette:
 
 This creates standalone files for each TikZ figure in your document.
 
-### Agent Tool Calls
+### Agent tool calls
 
 Tool-use agents can invoke `extract_tikz_figures` to perform the same discovery and optional compilation steps programmatically:
 
@@ -161,13 +161,13 @@ Tool-use agents can invoke `extract_tikz_figures` to perform the same discovery 
 
 With `compile: true` the tool emits standalone PDFs (one per figure) and attaches them so multimodal models can read the binary output directly. Set `compile: false` if you only need a summary of labels or plan to edit the extracted TikZ code yourself.
 
-## <wa-icon library="texra" name="play-circle"></wa-icon> TikZ Compilation
+## <wa-icon library="texra" name="play-circle"></wa-icon> TikZ compilation
 
 Once extracted, TikZ figures can be compiled into viewable images.
 
-### Automatic Compilation
+### Automatic compilation
 
-With automatic extraction on, one source file fans out into one standalone document and one compiled PDF per figure — handed back to the agent:
+With automatic extraction on, one source file fans out into one standalone document and one compiled PDF per figure, handed back to the agent:
 
 <FlowSteps :steps="[
   { icon: 'file-code', title: 'Source', desc: 'One .tex file with several tikzpicture environments.', chips: [{ text: 'diagrams.tex', variant: 'info', icon: 'file-code' }] },
@@ -177,22 +177,22 @@ With automatic extraction on, one source file fans out into one standalone docum
   { icon: 'robot', title: 'Agent', desc: 'Sees both the TikZ code and the rendered output.', chips: [{ text: 'code + image', variant: 'accent' }] }
 ]" />
 
-<p class="hero-caption">The extract → compile → attach pipeline: each <code>tikzpicture</code> becomes its own standalone document and PDF. Rasterisation to PNG — only for models without native PDF support — needs GraphicsMagick / ImageMagick + Ghostscript.</p>
+<p class="hero-caption">The extract, compile, attach pipeline: each <code>tikzpicture</code> becomes its own standalone document and PDF. Rasterisation to PNG, only for models without native PDF support, needs GraphicsMagick / ImageMagick + Ghostscript.</p>
 
 Missing system dependencies show <wa-icon library="texra" name="warning"></wa-icon> on **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
 
-### Manual Compilation
+### Manual compilation
 
 1. Open the Command Palette (`Ctrl+Shift+P`).
 2. Run **TeXRA: Compile TikZ Figures from Current File**.
 
 This compiles all extracted figures into standalone PDFs.
 
-## <wa-icon library="texra" name="settings-gear"></wa-icon> Customising TikZ Processing
+## <wa-icon library="texra" name="settings-gear"></wa-icon> Customising TikZ processing
 
-Several settings tune how TeXRA handles TikZ. Access them from the **Dashboard → LaTeX** tab (<wa-icon library="texra" name="file-code"></wa-icon>), or set the keys below in `.texra/config.json` (CLI) or VS Code settings for power users.
+Several settings tune how TeXRA handles TikZ. They have no control on the Dashboard, so set the keys below as flat `texra.*` keys in `<project>/.texra/config.json` (project) or `~/.texra/global-storage/config.json` (user-wide). All three hosts read those files; TeXRA does not read VS Code settings.
 
-### TikZ Template
+### TikZ template
 
 The standalone document structure TeXRA uses for each extracted figure:
 
@@ -202,7 +202,7 @@ The standalone document structure TeXRA uses for each extracted figure:
 
 Customise this template to include additional packages or settings your figures need.
 
-### TikZ Input Directory
+### TikZ input directory
 
 If your TikZ figures depend on custom styles or macros, specify an input directory:
 
@@ -212,7 +212,7 @@ If your TikZ figures depend on custom styles or macros, specify an input directo
 
 The directory is added to the LaTeX search path when compiling figures.
 
-### Including Workspace in `TEXINPUTS`
+### Including workspace in `TEXINPUTS`
 
 By default TeXRA adds your workspace root to `TEXINPUTS`:
 
@@ -222,11 +222,11 @@ By default TeXRA adds your workspace root to `TEXINPUTS`:
 
 This helps LaTeX locate packages and styles stored elsewhere in the project.
 
-## <wa-icon library="texra" name="library"></wa-icon> Figure Libraries
+## <wa-icon library="texra" name="library"></wa-icon> Figure libraries
 
 Tool-use agents can reuse existing figures as references when creating new ones.
 
-### Using Reference Figures
+### Using reference figures
 
 1. Add previous TikZ figures to the **Context** section (<wa-icon library="texra" name="book"></wa-icon>).
 2. Mention them explicitly in your instructions.
@@ -240,33 +240,33 @@ the reference file, but add an attention mechanism between the encoder and decod
 Maintain the same visual style and color scheme as the reference figure.
 ```
 
-## <wa-icon library="texra" name="debug"></wa-icon> Troubleshooting TikZ Issues
+## <wa-icon library="texra" name="debug"></wa-icon> Troubleshooting TikZ issues
 
-When a figure won't build, jump to the matching failure mode and work through its checks.
+When a figure does not build, find the matching failure mode and work through its checks.
 
 <TikzTroubleshootCards />
 
-<p class="hero-caption">Three failure modes, each with its quick remedies — find your symptom, fix it, recompile.</p>
+<p class="hero-caption">Three failure modes, each with its remedies: find your symptom, fix it, recompile.</p>
 
-## <wa-icon library="texra" name="lightbulb"></wa-icon> Best Practices
+## <wa-icon library="texra" name="lightbulb"></wa-icon> Best practices
 
-### Effective TikZ Instructions
+### Effective TikZ instructions
 
 For best results when asking an agent to draw figures:
 
-1. <wa-icon library="texra" name="target"></wa-icon> **Be specific** — describe all elements and their relationships.
-2. <wa-icon library="texra" name="info"></wa-icon> **Provide context** — include purpose and intended audience.
-3. <wa-icon library="texra" name="symbol-color"></wa-icon> **Specify style** — mention colours, line styles, text formatting.
-4. <wa-icon library="texra" name="link"></wa-icon> **Reference examples** — point to similar figures when possible.
+1. <wa-icon library="texra" name="target"></wa-icon> **Be specific**: describe all elements and their relationships.
+2. <wa-icon library="texra" name="info"></wa-icon> **Provide context**: include purpose and intended audience.
+3. <wa-icon library="texra" name="symbol-color"></wa-icon> **Specify style**: mention colours, line styles, text formatting.
+4. <wa-icon library="texra" name="link"></wa-icon> **Reference examples**: point to similar figures when possible.
 
-### Figure Organisation
+### Figure organisation
 
 1. Use consistent naming conventions for figures.
 2. Store extracted figures in a dedicated directory.
 3. Include comments in TikZ code explaining complex parts.
 4. Maintain a library of reusable figure components.
 
-### Performance Considerations
+### Performance considerations
 
 TikZ compilation can be resource-intensive:
 
@@ -274,8 +274,8 @@ TikZ compilation can be resource-intensive:
 2. Use the `external` library for caching compiled figures.
 3. Keep simplified versions for drafts; full detail for finals.
 
-## Next Steps
+## Next steps
 
-- [LaTeX Diff](./latex-diff.md) — compare document versions including figures
-- [LaTeX Tools](./latex-tools.md) — the full set of LaTeX tools TeXRA plugs into
-- [Best Practices](./best-practices.md) — general tips for working with TeXRA
+- [LaTeX Diff](./latex-diff.md): compare document versions including figures
+- [LaTeX Tools](./latex-tools.md): the full set of LaTeX tools TeXRA plugs into
+- [Best practices](./best-practices.md): general tips for working with TeXRA

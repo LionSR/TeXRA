@@ -1,62 +1,62 @@
-# Remote Agents
+# Remote agents
 
 <script setup>
 import CliRemoteHero from '../.vitepress/components/CliRemoteHero.vue';
 </script>
 
-Remote agents are cloud-hosted AI agents maintained by the TeXRA team that extend your extension's capabilities with specialized functionality. They're automatically updated with the latest improvements and optimizations without requiring extension updates.
+Remote agents are cloud-hosted agents maintained by the TeXRA team. They add specialized capabilities to TeXRA and receive updates without an extension update.
 
-## What Are Remote Agents?
+## What are remote agents?
 
-Remote agents are pre-configured AI assistants hosted in the cloud that you can access directly from TeXRA. Unlike built-in agents, they:
+Remote agents are pre-configured agents hosted in the cloud that you can run directly from TeXRA. Unlike built-in agents, they:
 
-- Receive updates automatically without requiring extension updates
+- Receive updates automatically, without an extension update
 - Provide specialized capabilities for specific research domains
-- Load on-demand to keep your extension lightweight
+- Load on demand, so the extension stays small
 
-## Getting Started
+## Getting started
 
-### 1. Sign In to TeXRA
+### 1. Sign in to TeXRA
 
-To access remote agents, you need a TeXRA account:
+Remote agents require a TeXRA account:
 
 1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-2. Run the command: **TeXRA: Sign In**
-3. Choose your preferred sign-in method (GitHub or Google)
-4. Complete the authentication flow in your browser
-5. Return to VS Code once authenticated
+2. Run **TeXRA: Sign In**
+3. Choose a sign-in method (GitHub or Google)
+4. Complete the sign-in flow in your browser
+5. Return to VS Code once signed in
 
 ::: tip
-You can check your authentication status anytime by running **TeXRA: View Profile** from the Command Palette.
+To check your sign-in status at any time, run **TeXRA: View Profile** from the Command Palette.
 :::
 
-### 2. Browse Available Agents
+### 2. Browse available agents
 
-Once signed in, you can explore remote agents from the Agents tab:
+Once signed in, browse remote agents from the Agents tab:
 
 1. Open the Command Palette
-2. Run: **TeXRA: Show Agents** to open the Agents tab in Settings
-3. Select any remote agent in the list to see its details
-4. Click **Show in agent selector** to add it to your agent selector
+2. Run **TeXRA: Show Agents** to open the Agents tab in Settings
+3. Select a remote agent in the list to see its details
+4. Select **Show in agent selector** to add it to your agent selector
 
-Your account at a glance — your email and access level — sits on the Account & Usage tab (**TeXRA: View Profile**).
+Your email and access level sit on the Account & Usage tab (**TeXRA: View Profile**).
 
-The selected agent will appear in your main TeXRA view alongside your built-in agents.
+The selected agent appears in the main TeXRA view alongside your built-in agents.
 
-### 3. Use Remote Agents
+### 3. Use remote agents
 
-Remote agents work just like built-in agents:
+Remote agents work like built-in agents:
 
-1. Open the TeXRA view (click the TeXRA icon in the Secondary Side Bar)
+1. Open the TeXRA view (select the TeXRA icon in the Secondary Side Bar)
 2. Select your remote agent from the agent dropdown
 3. Choose your input file and model
-4. Click **Run** to execute the agent
+4. Select **Run** to start the agent
 
 ::: info
-Remote agents are marked with a cloud icon (☁️) in the agent selector to distinguish them from local agents.
+Remote agents carry a cloud icon (☁️) in the agent selector to set them apart from local agents.
 :::
 
-In the agent dropdown, your local agents sit above a **Remote** group whose entries each carry a cloud marker:
+The agent dropdown is a single flat list with no Local/Remote headers; remote agents are told apart only by the trailing cloud icon (tooltip: Remote agent, prompts loaded from cloud), and a **Browse all agents…** entry at the end opens Settings → Agents:
 
 <DropdownMenu
   label="Agent"
@@ -64,11 +64,9 @@ In the agent dropdown, your local agents sit above a **Remote** group whose entr
   valueIcon="cloud"
   maxWidth="320px"
   :groups="[
-    { label: 'Local', items: [
+    { items: [
       { name: 'polish', icon: 'sparkle' },
       { name: 'correct', icon: 'pencil' },
-    ] },
-    { label: 'Remote', items: [
       { name: 'search', icon: 'cloud', badge: 'in use', badgeVariant: 'accent', active: true },
       { name: 'simplifier', icon: 'cloud' },
       { name: 'orchestrator', icon: 'cloud' },
@@ -76,19 +74,19 @@ In the agent dropdown, your local agents sit above a **Remote** group whose entr
   ]"
 />
 
-<p class="hero-caption">The agent dropdown: remote agents (<code>search</code>, <code>simplifier</code>, <code>orchestrator</code>) carry a cloud marker that sets them apart from local agents like <code>polish</code> and <code>correct</code>.</p>
+<p class="hero-caption">The agent dropdown: one flat list where remote agents (<code>search</code>, <code>simplifier</code>, <code>orchestrator</code>) carry a cloud marker that sets them apart from local agents like <code>polish</code> and <code>correct</code>.</p>
 
-None of this is VS Code-only — the whole loop works from a terminal too:
+None of this is VS Code-only. The whole loop works from a terminal too:
 
 <CliRemoteHero />
 
 <p class="hero-caption">Sign in once and remote agents resolve by name everywhere: <code>agents show</code> reports <code>source: remote</code>, and <code>texra chat --agent search</code> runs it like any local agent.</p>
 
-## Remote Agent Access
+## Remote agent access
 
-Signed-in researchers, academics, and technical writers can access specialized remote agents for academic research and professional writing. This only unlocks the hosted agent catalog. Remote agents still run on your own credential, the same provider API key or subscription as your built-in agents. Access includes:
+Signed-in researchers, academics, and technical writers can use specialized remote agents for academic research and professional writing. Signing in only unlocks the hosted agent catalog. Remote agents still run on your own credential, the same provider API key or subscription as your built-in agents. Access includes:
 
-- **Specialized domain agents**: Agents tailored for specific research fields (mathematics, computer science, physics, etc.)
+- **Specialized domain agents**: Agents tailored for specific research fields (mathematics, computer science, physics, and others)
 - **Advanced reasoning capabilities**: Multi-step analysis and complex document processing
 - **Beta features**: Early access to experimental agents and capabilities
 - **Priority improvements**: Your feedback directly influences agent development
@@ -105,61 +103,61 @@ Signed-in researchers, academics, and technical writers can access specialized r
 
 <p class="hero-caption">What remote agent access gets you: domain-specific agents, advanced multi-step reasoning, early access to beta agents, and a direct line into how agents evolve.</p>
 
-Current remote agents include `search` (literature discovery), `simplifier` (code and writing simplification), and `orchestrator` (multi-agent coordination). See [Built-in Agents — Remote Agents](./built-in-agents.md#remote-agents) for details on each.
+Current remote agents include `search` (literature discovery), `simplifier` (code and writing simplification), and `orchestrator` (multi-agent coordination). Read the [remote agents section of the built-in agents guide](./built-in-agents.md#remote-agents) for details on each.
 
-Different agents may be available to different research groups based on their domain and needs.
+Different agents may be available to different research groups, depending on their domain and needs.
 
-### Requesting Access
+### Requesting access
 
 Remote agent access is available to active researchers, academics, and technical writers. To request it:
 
 1. **Sign in** to TeXRA using your institutional or professional email
 2. **Contact us** at [contact@texra.ai](mailto:contact@texra.ai) with:
    - Your name and affiliation
-   - Brief description of your research area
+   - A brief description of your research area
    - How you plan to use remote agents
 
-We'll review your request and grant appropriate access within 1-2 business days.
+We review each request and grant access within 1-2 business days.
 
-::: tip Free for Researchers
-TeXRA is committed to supporting academic research. Remote agent access is **free for qualifying researchers and students** — we do not charge for the hosted agent catalog. Model calls made by those agents are still billed to your own provider account or subscription.
+::: tip Free for researchers
+TeXRA supports academic research. Remote agent access is **free for qualifying researchers and students**: there is no charge for the hosted agent catalog. Model calls made by those agents are still billed to your own provider account or subscription.
 :::
 
-## Managing Your Account
+## Managing your account
 
-### View Your Profile
+### View your profile
 
-Check your account status:
+To check your account status:
 
-1. Open Command Palette
-2. Run: **TeXRA: View Profile**
+1. Open the Command Palette
+2. Run **TeXRA: View Profile**
 3. View your email and access level on the Account & Usage tab
 
 Run **TeXRA: Show Agents** to browse the remote agents available to you.
 
-### Sign Out
+### Sign out
 
 To sign out of your TeXRA account:
 
-1. Open Command Palette
-2. Run: **TeXRA: Sign Out**
+1. Open the Command Palette
+2. Run **TeXRA: Sign Out**
 3. Confirm sign out
 
-Your local agents will continue to work normally after signing out. You'll only lose access to remote agents until you sign in again.
+Your local agents continue to work after signing out. Only remote agents become unavailable until you sign in again.
 
-## Frequently Asked Questions
+## Frequently asked questions
 
 ### Do I need to sign in to use TeXRA?
 
-No. TeXRA works fully offline with built-in agents. You only need to sign in if you want access to remote agents from the cloud.
+No. TeXRA works fully offline with built-in agents. Sign in only if you want remote agents from the cloud.
 
 ### Are remote agents slower than built-in agents?
 
-Remote agents perform similarly to built-in agents. The agent configuration is loaded from the cloud, but the actual AI model execution happens using your configured API keys just like with built-in agents.
+Remote agents perform similarly to built-in agents. The agent configuration is loaded from the cloud, but the model runs with your configured API keys, as with built-in agents.
 
 ### Can I use remote agents offline?
 
-No. Remote agents require an internet connection to load their configurations. If you need offline access, use built-in agents instead.
+No. Remote agents require an internet connection to load their configurations. For offline work, use built-in agents instead.
 
 ### What happens to my documents?
 
@@ -171,13 +169,13 @@ Currently, remote agents are maintained by the TeXRA team. If you have ideas for
 
 ### How do I disable remote agents?
 
-Remote agents are available only while you're signed in. To stop using them, simply sign out — your built-in agents keep working. (In the CLI, run `texra auth logout`; in the VS Code extension, use the sign-out action in the account menu.)
+Remote agents are available only while you are signed in. To stop using them, sign out; your built-in agents keep working. (In the CLI, run `texra auth logout`; in the VS Code extension, use the sign-out action in the account menu.)
 
-## Need Help?
+## Need help?
 
-If you encounter any issues with remote agents or have questions about access:
+If you run into issues with remote agents or have questions about access:
 
 - **Email**: [contact@texra.ai](mailto:contact@texra.ai)
 - **Documentation**: [texra.ai/guide](https://texra.ai/guide)
 
-We typically respond to inquiries within 24-48 hours.
+We typically respond within 24-48 hours.

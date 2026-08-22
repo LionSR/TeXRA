@@ -2,7 +2,7 @@
 // Frameless "Round 1 — critique pass" card. After Round 0 writes a revision,
 // polish re-prompts itself to scan for the failure modes enumerated in
 // guide/workflows/polish-a-draft.md ("How the critique pass works"). This card
-// renders that checklist as five icon + label rows so the reader sees the
+// renders that checklist as six icon + label rows so the reader sees the
 // review at a glance instead of parsing a prose bullet list.
 //
 // The root carries `.mockup` so the shared `--mk-*` colour + dimensional tokens
@@ -29,6 +29,11 @@ const checks = [
     label: 'Generic filler',
     note: 'cuts empty phrasing',
     strike: 'provides crucial insights into…',
+  },
+  {
+    icon: 'pencil',
+    label: 'Plain technical English',
+    note: 'rewrites added sentences that are not concrete, plain, and said once',
   },
   {
     icon: 'target',
@@ -101,7 +106,7 @@ const checks = [
   padding: var(--mk-space-8) var(--mk-space-10);
   background: var(--mk-bg-soft);
   border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
+  border-radius: var(--mk-radius-md);
 }
 .crit-ic {
   display: inline-flex;

@@ -4,29 +4,29 @@ import QaChecklistCard from '../.vitepress/components/QaChecklistCard.vue';
 import ModelTierMatrixCard from '../.vitepress/components/ModelTierMatrixCard.vue';
 </script>
 
-# Best Practices
+# Best practices
 
-## Effective Prompting
+## Effective prompting
 
-Specific instructions reduce ambiguity - the model doesn't have to guess your intent and uses tokens more efficiently for your actual goal.
+Specific instructions reduce ambiguity: the model doesn't have to guess your intent and spends its tokens on your actual goal.
 
-### Be Specific
+### Be specific
 
 Instead of "Make this better", try:
 
 > Improve the clarity of the methodology section by simplifying complex sentences and adding transition phrases. Maintain all technical terminology.
 
-### Define Boundaries
+### Define boundaries
 
 State what should and should not change:
 
 > Enhance writing style in the introduction and discussion. Preserve all citations and mathematical expressions. Do not modify the results section.
 
-### Provide Context
+### Provide context
 
 > Polish this abstract for submission to Nature Physics. Target audience: physicists with expertise in quantum field theory.
 
-### Use Structured Instructions
+### Use structured instructions
 
 For complex tasks:
 
@@ -35,19 +35,19 @@ For complex tasks:
 > 3. Ensure consistent terminology
 > 4. Improve transitions between sections
 
-## Model Selection
+## Model selection
 
-Match model capability to task complexity - overpowered models waste money, underpowered ones produce poor results.
+Match model capability to task complexity: overpowered models waste money, underpowered ones produce poor results.
 
 <ModelTierMatrixCard />
 
 <p class="hero-caption">Find the row that matches your task, then pick one of the recommended model handles.</p>
 
-See the [AI Models Guide](./models.md) for detailed comparisons.
+Read the [AI models](./models.md) for detailed comparisons.
 
-## File Management
+## File management
 
-### Project Structure
+### Project structure
 
 ```
 project/
@@ -55,19 +55,19 @@ project/
 ├── chapters/
 ├── figures/
 ├── build/
-├── history/
-└── diffs/
+├── History/
+└── Diffs/
 ```
 
-### Best Practices
+### Best practices
 
-- Include only necessary files in selections
+- Include only the files the task needs in selections
 - Use the Pack button to preserve milestones
-- Clean unnecessary outputs regularly
+- Clean unneeded outputs regularly
 
-## Workflow Integration
+## Workflow integration
 
-### Staged Approach
+### Staged approach
 
 A typical project moves through five stages, each owned by one or more agents:
 
@@ -75,9 +75,9 @@ A typical project moves through five stages, each owned by one or more agents:
 
 <p class="hero-caption">A typical project flows from research to finalization, with each stage handed to the agent best suited for it.</p>
 
-### Quality Assurance
+### Quality assurance
 
-Always review AI-generated content - tick through the same checks after every run:
+Review AI-generated content after every run, using the same checks each time:
 
 <QaChecklistCard />
 
@@ -85,16 +85,16 @@ Always review AI-generated content - tick through the same checks after every ru
 
 Use [LaTeX Diff](./latex-diff.md) to visualize changes between versions.
 
-## LaTeX Tips
+## LaTeX tips
 
-- Use logical document structure with proper sectioning
-- Maintain clean preambles
+- Use a logical document structure with proper sectioning
+- Keep preambles clean
 - Use consistent label naming
 - Comment TikZ code for clarity
 - Use BibTeX consistently with a single bibliography file
 
-## Next Steps
+## Next steps
 
 - [Configuration](/guide/configuration): Customize TeXRA
-- [Custom Agents](/guide/custom-agents): Create specialized agents
+- [Custom agents](/guide/custom-agents): Create specialized agents
 - [Intelligent Merge](/guide/intelligent-merge): Merge document versions

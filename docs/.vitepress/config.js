@@ -8,7 +8,7 @@ const baseConfig = {
   title: 'TeXRA',
   base,
   description:
-    'Multi-agent AI system for scientific discovery. Specialized agents that polish LaTeX, search literature, generate figures, and build presentations — orchestrated in reproducible workflows inside VS Code.',
+    'An AI theorist for advancing theoretical science. A team of specialist agents derives results, checks derivations in Wolfram, formalizes proofs in Lean 4, and writes them into your paper, in VS Code and the terminal.',
   head: [
     ['link', { rel: 'icon', href: `${base}favicon.svg` }],
     [
@@ -129,6 +129,10 @@ const baseConfig = {
             },
             { text: 'Custom Agents', link: '/guide/custom-agents' },
             { text: 'Remote Agents', link: '/guide/remote-agents' },
+            {
+              text: 'Multi-agent workflows',
+              link: '/guide/multi-agent-workflows',
+            },
             { text: 'Memory', link: '/guide/memory' },
             { text: 'Models', link: '/guide/models' },
           ],

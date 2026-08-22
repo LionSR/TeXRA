@@ -66,10 +66,7 @@ const LOGO = withBase('/logo-icon-board.svg');
   overflow: hidden;
   position: relative;
   container: mockup-frame / inline-size;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.04) inset,
-    0 24px 60px -20px rgba(0, 0, 0, 0.55),
-    0 8px 20px -12px rgba(111, 56, 122, 0.45);
+  box-shadow: var(--mk-shadow-window);
 }
 .win-bar {
   display: flex;
