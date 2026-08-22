@@ -151,5 +151,5 @@ variables or a `.env` file in your project (extension only).
 
 ## Support
 
-Issues and feature requests: [GitHub](https://github.com/texra-ai/texra-issues).
+Issues and feature requests: [GitHub](https://github.com/LionSR/TeXRA).
 Contact: [contact@texra.ai](mailto:contact@texra.ai).
