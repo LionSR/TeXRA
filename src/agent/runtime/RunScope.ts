@@ -16,8 +16,12 @@ import type { SessionHandle } from './SessionHandle';
 export interface RunScope {
   readonly streamId: StreamTabId;
   readonly executionId: ExecutionId;
-  /** Agent name (e.g. "orchestrator", "search-agent"). */
+  /** Launch identifier, retained for display and compatibility. */
   readonly agentName: string;
+  /** Canonical `source:name` identity resolved for this launch. */
+  readonly agentKey?: string;
+  /** Immutable execution lineage; true when this run was delegated. */
+  readonly isSubagent?: boolean;
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
   readonly session: SessionHandle;
