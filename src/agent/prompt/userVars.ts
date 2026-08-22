@@ -270,13 +270,19 @@ function getBasicVars(
   providerFlags: ModelProviderFlags,
   options: BuildUserVarsOptions,
 ): BasicVars {
+  // Filter out the current agent so it doesn't see itself as a delegation target
+  const selfName = agentConfig.agent;
   const scope = options.delegationAgentScope ?? undefined;
   const workflowAgentsList = formatAgentList(
-    getDelegationAgents(AgentCategory.Workflow, scope),
+    getDelegationAgents(AgentCategory.Workflow, scope).filter(
+      (agent) => agent.name !== selfName,
+    ),
     { tools: 'none', collapseDescriptionNewlines: false },
   );
   const toolUseAgentsList = formatAgentList(
-    getDelegationAgents(AgentCategory.ToolUse, scope),
+    getDelegationAgents(AgentCategory.ToolUse, scope).filter(
+      (agent) => agent.name !== selfName,
+    ),
     { tools: 'inline', collapseDescriptionNewlines: false },
   );
 

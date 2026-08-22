@@ -420,7 +420,6 @@ export async function executeAgent(
       streamTabIdOverride: options.streamTabIdOverride,
       onBeforeActivation: options.onStreamResolved,
       suppressViewSwitch: options.isSubagent,
-      isSubagent: options.isSubagent,
       enforceCategory: options.enforceCategory,
       suppressErrorNotification:
         options.suppressErrorNotification ?? options.isSubagent,
@@ -571,7 +570,6 @@ async function resumeToolUseWithOwnedLease(
       // for this exact record; do not re-infer here.
       modelHandlerCompatibilityKey: resume.shared.modelHandlerCompatibilityKey,
       suppressViewSwitch: isSubagent,
-      isSubagent,
       // Host resume callers surface their own warning toast on failure;
       // skip the bus-level error to avoid double-notifying.
       suppressErrorNotification: true,
