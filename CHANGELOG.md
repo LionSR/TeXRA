@@ -20,6 +20,11 @@ All notable changes to this project will be documented in this file.
   license and attribution notices. The hosted service remains governed by its
   Terms of Service. The Researcher Access Program name has been retired, but
   academic access to the hosted agent catalog is unchanged.
+- **The website and user guide have been rewritten and expanded** — setup,
+  model, tool, and CLI guidance now matches the current product, a new
+  multi-agent workflows guide explains scripted orchestration and resumable
+  runs, and the site foregrounds theory work with clearer navigation and
+  consistent examples.
 
 #### Bug Fixes
 
