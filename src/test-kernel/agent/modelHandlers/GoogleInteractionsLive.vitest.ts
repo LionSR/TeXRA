@@ -250,12 +250,16 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
     expect(toolCalls.length).toBeGreaterThanOrEqual(1);
 
     // Build the follow-up exactly as the flow does, then append it.
-    const followUp = await handler.createToolUseFollowUpMessages(
-      client as never,
-      toolCalls[0],
-      { status: 'executed', output: 'Sunny, 22C' },
-      [],
+    const followUp = await handler.createBatchedToolUseFollowUpMessages(
+      [
+        {
+          call: toolCalls[0],
+          result: { status: 'executed', output: 'Sunny, 22C' },
+          attachments: [],
+        },
+      ],
       fakeWorkspace(),
+      undefined,
     );
     messages.push(...followUp);
 

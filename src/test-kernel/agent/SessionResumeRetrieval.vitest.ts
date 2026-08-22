@@ -230,20 +230,18 @@ function responseModelHandler(
     },
     extractToolUse: (response: unknown) =>
       (response as { toolCalls: SdkToolCall[] }).toolCalls,
-    createToolUseFollowUpMessages: async (
+    createBatchedToolUseFollowUpMessages: async (
+      entries: Array<{ call: SdkToolCall; result: unknown }>,
+      _workspace: AgentWorkspaceState | undefined,
+      assistantText: string | undefined,
       _client: unknown,
-      call: SdkToolCall,
-      result: unknown,
-      _attachments: unknown,
-      _workspace: AgentWorkspaceState,
-      assistantText?: string,
     ) => [
       ...(assistantText ? [{ role: 'assistant', content: assistantText }] : []),
-      {
+      ...entries.map(({ call, result }) => ({
         role: 'tool',
         tool_call_id: call.callId,
         content: JSON.stringify(result),
-      },
+      })),
     ],
     ...overrides,
   });
