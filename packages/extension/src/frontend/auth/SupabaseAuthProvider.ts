@@ -47,6 +47,7 @@ type PendingOAuthState = z.infer<typeof PendingOAuthStateSchema>;
 
 interface ExtensionAuthAttempt {
   readonly nonce: string;
+  readonly createdAt: number;
   cancel(): void;
 }
 
@@ -78,6 +79,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private readonly sessionCoordinator: SupabaseSessionCoordinator;
   private readonly secrets: PlatformSecrets;
   private readonly authCommitQueue = new PQueue({ concurrency: 1 });
+  private readonly callbackClaimQueue = new PQueue({ concurrency: 1 });
   private activeAttempt: ExtensionAuthAttempt | undefined;
 
   private readonly notifier: AuthNotifier;
@@ -114,10 +116,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     if (!stored) return null;
     try {
       const parsed = PendingOAuthStateSchema.safeParse(JSON.parse(stored));
-      return parsed.success ? parsed.data : null;
+      if (parsed.success) return parsed.data;
     } catch {
-      return null;
+      // The fixed diagnostic below deliberately excludes stored secret content.
     }
+    log.warn('Stored OAuth callback state is malformed and will be ignored');
+    return null;
   }
 
   private isPendingStateValid(state: PendingOAuthState): boolean {
@@ -132,27 +136,46 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     );
   }
 
-  private async beginAuthAttempt(attempt: ExtensionAuthAttempt): Promise<void> {
-    await this.persistPendingState({
-      nonce: attempt.nonce,
-      createdAt: Date.now(),
-    });
+  private async sweepPendingOAuthStates(): Promise<void> {
+    let keys: readonly string[];
+    try {
+      keys = await this.secrets.listStoredKeys();
+    } catch {
+      log.warn('Unable to inspect stored OAuth callback state for cleanup');
+      return;
+    }
+
+    for (const key of keys) {
+      if (!key.startsWith(PENDING_OAUTH_STATE_PREFIX)) continue;
+      const nonce = key.slice(PENDING_OAUTH_STATE_PREFIX.length);
+      try {
+        const state = await this.readPendingOAuthState(nonce);
+        if (!state?.flowId || !this.isPendingStateValid(state)) {
+          await this.secrets.delete(key);
+        }
+      } catch {
+        log.warn('Unable to clean up stored OAuth callback state');
+      }
+    }
   }
 
   private async bindPkceFlow(
-    nonce: string,
+    attempt: ExtensionAuthAttempt,
     flowId: string | null | undefined,
   ): Promise<void> {
     if (!flowId || !PKCE_FLOW_ID_PATTERN.test(flowId)) {
       throw new Error('OAuth initialization did not return a valid PKCE flow.');
     }
-    const pending = await this.readPendingOAuthState(nonce);
-    if (!pending || !this.isPendingStateValid(pending)) {
+    if (!this.isPendingStateValid(attempt)) {
       throw new Error(
         'Authentication attempt is no longer pending. Try again.',
       );
     }
-    await this.persistPendingState({ ...pending, flowId });
+    await this.persistPendingState({
+      nonce: attempt.nonce,
+      createdAt: attempt.createdAt,
+      flowId,
+    });
   }
 
   private async clearPendingAttempt(nonce: string): Promise<void> {
@@ -171,48 +194,48 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     query: string,
     expectedAttempt?: ExtensionAuthAttempt,
   ): Promise<ClaimedAuthCallback | null> {
-    const nonce = this.callbackNonce(query);
-    if (!nonce || (expectedAttempt && expectedAttempt.nonce !== nonce)) {
-      log.warn('OAuth callback rejected: invalid or stale attempt binding');
-      return null;
-    }
-
-    const pending = await this.readPendingOAuthState(nonce);
-    if (
-      !pending ||
-      !pending.flowId ||
-      pending.nonce !== nonce ||
-      !this.isPendingStateValid(pending)
-    ) {
-      if (pending && !this.isPendingStateValid(pending)) {
-        await this.clearPendingAttempt(nonce);
-      }
-      log.warn('OAuth callback rejected: invalid or stale attempt binding');
-      return null;
-    }
-
-    if (expectedAttempt && this.activeAttempt !== expectedAttempt) {
-      log.debug(
-        'OAuth callback ignored after its sign-in attempt was superseded',
-      );
-      return null;
-    }
-
-    const attempt = expectedAttempt ?? {
-      nonce,
-      cancel: () => {},
-    };
-    if (!expectedAttempt) {
-      if (this.activeAttempt) {
-        log.debug('OAuth callback ignored while another sign-in is active');
+    return this.callbackClaimQueue.add(async () => {
+      const nonce = this.callbackNonce(query);
+      if (!nonce || (expectedAttempt && expectedAttempt.nonce !== nonce)) {
+        log.warn('OAuth callback rejected: invalid or stale attempt binding');
         return null;
       }
-      this.activeAttempt = attempt;
-    }
 
-    await this.clearPendingAttempt(nonce);
-    if (this.activeAttempt !== attempt) return null;
-    return { attempt, flowId: pending.flowId };
+      try {
+        const pending = await this.readPendingOAuthState(nonce);
+        if (
+          !pending?.flowId ||
+          pending.nonce !== nonce ||
+          !this.isPendingStateValid(pending)
+        ) {
+          if (pending && !this.isPendingStateValid(pending)) {
+            await this.clearPendingAttempt(nonce);
+          }
+          log.warn('OAuth callback rejected: invalid or stale attempt binding');
+          return null;
+        }
+
+        if (expectedAttempt && this.activeAttempt !== expectedAttempt) {
+          log.debug(
+            'OAuth callback ignored after its sign-in attempt was superseded',
+          );
+          return null;
+        }
+
+        const attempt = expectedAttempt ?? {
+          nonce,
+          createdAt: pending.createdAt,
+          cancel: () => {},
+        };
+        await this.clearPendingAttempt(nonce);
+        if (expectedAttempt && this.activeAttempt !== attempt) return null;
+        return { attempt, flowId: pending.flowId };
+      } catch {
+        throw new Error(
+          'OAuth callback state could not be verified. Try again.',
+        );
+      }
+    }) as Promise<ClaimedAuthCallback | null>;
   }
 
   private invalidateActiveAttempt(): void {
@@ -271,28 +294,22 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     this._onDidChangeSessions.dispose();
   }
 
-  /**
-   * Handle a late PKCE auth callback URI.
-   * This runs for all auth callbacks, but only processes if no session exists
-   * and no OAuth flow is currently active.
-   */
+  /** Handle a persisted callback not owned by this window's active attempt. */
   private async handleLateAuthCallback(uri: vscode.Uri): Promise<void> {
-    // The active attempt owns its callback through waitForSession. This listener
-    // exists only for a callback that arrives after extension-host restart.
-    if (this.activeAttempt) return;
-
-    const claimed = await this.claimCallback(uri.query);
-    if (!claimed) return;
-    const { attempt, flowId } = claimed;
+    const nonce = this.callbackNonce(uri.query);
+    if (nonce && this.activeAttempt?.nonce === nonce) return;
 
     try {
+      const claimed = await this.claimCallback(uri.query);
+      if (!claimed) return;
+
       const existingSession = await this.sessionCoordinator.loadSession();
-      if (existingSession || this.activeAttempt !== attempt) return;
+      if (existingSession) return;
 
       const result = await SupabaseClient.runPkceOperation(() =>
         this.sessionCoordinator.createSessionFromCallback(
           { path: uri.path, query: uri.query },
-          flowId,
+          claimed.flowId,
         ),
       );
 
@@ -307,20 +324,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       }
 
       await this.runAuthCommit(async () => {
-        if (this.activeAttempt !== attempt) return;
         await this.storeSession(result.session);
-        if (this.activeAttempt !== attempt) {
-          await this.sessionCoordinator.clearSessionIfCurrent(result.session);
-          return;
-        }
         this.notifier.showInfo(`Signed in as ${result.session.account.label}`);
         log.info(`Late sign-in successful for ${result.session.account.label}`);
       });
     } catch (error) {
-      log.error(`Error processing auth callback: ${toErrorMessage(error)}`);
-      this.notifier.showError(`Sign-in failed: ${toErrorMessage(error)}`);
-    } finally {
-      if (this.activeAttempt === attempt) this.activeAttempt = undefined;
+      const message = toErrorMessage(error);
+      log.error(`Error processing auth callback: ${message}`);
+      this.notifier.showError(`Sign-in failed: ${message}`);
     }
   }
 
@@ -454,28 +465,28 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         this.invalidateActiveAttempt();
         const attempt: ExtensionAuthAttempt = {
           nonce: randomBytes(16).toString('hex'),
+          createdAt: Date.now(),
           cancel: () => {},
         };
         this.activeAttempt = attempt;
         const callback = this.waitForSession(attempt, token);
+        void callback.catch(() => {});
+        const interruptedError = () =>
+          new Error(
+            token.isCancellationRequested
+              ? 'Authentication cancelled. Try again.'
+              : 'Authentication attempt was superseded. Try again.',
+          );
 
         try {
           progress.report({ message: 'Waiting for authentication...' });
           // Finish any callback commit owned by the superseded attempt before
-          // publishing this attempt's pending state.
+          // initializing this attempt's PKCE flow.
           await this.runAuthCommit(async () => {});
-          if (this.activeAttempt !== attempt) {
-            throw new Error(
-              'Authentication attempt was superseded. Try again.',
-            );
-          }
+          if (this.activeAttempt !== attempt) throw interruptedError();
 
-          await this.beginAuthAttempt(attempt);
-          if (this.activeAttempt !== attempt) {
-            throw new Error(
-              'Authentication attempt was superseded. Try again.',
-            );
-          }
+          await this.sweepPendingOAuthStates();
+          if (this.activeAttempt !== attempt) throw interruptedError();
 
           const options = await this.buildOAuthOptions(attempt.nonce);
           const { data, error } = await SupabaseClient.runPkceOperation(() =>
@@ -490,12 +501,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
               `OAuth initialization failed: ${error?.message || 'Unknown error'}. Try again.`,
             );
           }
-          if (this.activeAttempt !== attempt) {
-            throw new Error(
-              'Authentication attempt was superseded. Try again.',
-            );
-          }
-          await this.bindPkceFlow(attempt.nonce, data.flowId);
+          if (this.activeAttempt !== attempt) throw interruptedError();
+          await this.bindPkceFlow(attempt, data.flowId);
 
           // The callback listener is already armed before the browser can send a
           // fast redirect back to the extension host.
@@ -514,11 +521,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
               await this.sessionCoordinator.clearSessionIfCurrent(session);
             }
           });
-          if (this.activeAttempt !== attempt) {
-            throw new Error(
-              'Authentication attempt was superseded. Try again.',
-            );
-          }
+          if (this.activeAttempt !== attempt) throw interruptedError();
 
           const sessions = await this.getSessions();
           if (sessions.length === 0) {
@@ -533,7 +536,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         } finally {
           attempt.cancel();
           if (this.activeAttempt === attempt) this.activeAttempt = undefined;
-          await this.clearPendingAttempt(attempt.nonce);
+          try {
+            await this.clearPendingAttempt(attempt.nonce);
+          } catch {
+            log.warn('Unable to clean up stored OAuth callback state');
+          }
         }
       },
     );
