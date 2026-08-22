@@ -52,6 +52,7 @@ import type {
 } from '@shared/schemas';
 import {
   AgentCategory,
+  agentKeyOf,
   INSTRUCTION_ACTION,
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -115,6 +116,8 @@ interface AgentLaunchInput {
   copilotRouteOverride?: CopilotRouteOverride;
   /** Cancel launch preparation and the resulting live run. */
   signal?: AbortSignal;
+  /** Whether persisted or fresh execution lineage marks this run as delegated. */
+  isSubagent?: boolean;
   /** Immutable per-run tool policy carried on the launch context for cycle flows. */
   toolPolicy?: ToolPolicy;
 }
@@ -482,24 +485,38 @@ async function assembleAgentLaunchContext(
     streamId,
     executionId,
     agentName: config.agent,
+    agentKey: agentKeyOf(resolution.entry),
+    isSubagent: input.isSubagent === true,
     workingDirectory,
     delegationAgentScope: fullConfig.delegationAgentScope,
     session,
     signal: runSignal,
   });
+  const toolPolicy = createToolPolicy(input.toolPolicy);
   const buildVars = () =>
-    buildUserVars(
-      config,
-      setting,
-      prompt,
-      agentPath,
-      {
-        isOpenai: modelHandler.config.provider === ModelProvider.OPENAI,
-        isAnthropic: modelHandler.config.provider === ModelProvider.ANTHROPIC,
-        isGoogle: modelHandler.config.provider === ModelProvider.GOOGLE,
-      },
-      agentLogger,
-      { delegationAgentScope: runScope.delegationAgentScope },
+    withRunContext(
+      createRunContext({
+        runScope,
+        modelCell,
+        approvalPromptsUnavailable: toolPolicy.approvalPromptsUnavailable,
+        runtimeUnavailableTools: toolPolicy.runtimeUnavailableTools,
+        stopAfterCycle: toolPolicy.stopAfterCycle,
+      }),
+      () =>
+        buildUserVars(
+          config,
+          setting,
+          prompt,
+          agentPath,
+          {
+            isOpenai: modelHandler.config.provider === ModelProvider.OPENAI,
+            isAnthropic:
+              modelHandler.config.provider === ModelProvider.ANTHROPIC,
+            isGoogle: modelHandler.config.provider === ModelProvider.GOOGLE,
+          },
+          agentLogger,
+          { delegationAgentScope: runScope.delegationAgentScope },
+        ),
     );
 
   const baseVars =
@@ -527,7 +544,7 @@ async function assembleAgentLaunchContext(
     setting,
     prompt,
     modelCell,
-    toolPolicy: createToolPolicy(input.toolPolicy),
+    toolPolicy,
     logger: agentLogger,
     parentStage,
     storageKey,

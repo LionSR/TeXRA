@@ -9,6 +9,13 @@ const mocks = vi.hoisted(() => ({
   currentSession: vi.fn(),
   submitFollowUp: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
+  delegationAgents: [] as Array<{
+    category: string;
+    source: string;
+    name: string;
+    path: string;
+    tools?: string[];
+  }>,
 }));
 
 vi.mock('@agent/runtime/RunContext', () => {
@@ -23,6 +30,15 @@ vi.mock('@agent/runtime/RunContext', () => {
 
 vi.mock('@agent/runtime/SessionHandle', () => ({
   currentSession: mocks.currentSession,
+}));
+
+vi.mock('@agent/index/agentRegistry', () => ({
+  resolveDelegationScopeAgents: (_scope: unknown, category: string) =>
+    mocks.delegationAgents.filter((agent) => agent.category === category),
+  findAgentByIdentifier: (
+    entries: Array<{ name: string }>,
+    identifier: string,
+  ) => entries.find((entry) => entry.name === identifier),
 }));
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
@@ -151,6 +167,36 @@ describe('DelegationTools', () => {
     expect(`${fieldDescriptions.join('\n')}\n${authoredHandoff}`).not.toContain(
       '\u2014',
     );
+  });
+});
+
+describe('DelegateAgentTool candidate enforcement', () => {
+  it('rejects a direct delegated-child call to a delegation-capable lead', async () => {
+    mocks.delegationAgents = [
+      {
+        category: 'toolUse',
+        source: 'custom',
+        name: 'lead',
+        path: '/agents/lead.yaml',
+        tools: ['delegate_agent'],
+      },
+    ];
+    mocks.tryUseRunContext.mockReturnValue({
+      kind: 'bare',
+      agentName: 'child',
+      agentKey: 'custom:child',
+      isSubagent: true,
+    });
+
+    const result = await new DelegateAgentTool().call({
+      agent: 'lead',
+      instruction: 'Delegate this again.',
+    });
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error: "Unknown toolUse agent 'lead'. Available:",
+    });
   });
 });
 

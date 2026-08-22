@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   acquireResumedExecutionLease: vi.fn(),
   buildVars: vi.fn(),
+  buildVarsRunScope: undefined as
+    { agentName: string; agentKey?: string; isSubagent?: boolean } | undefined,
   clearTerminalExecutionState: vi.fn(),
   completeOwnedExecutionLease: vi.fn(),
   createHandler: vi.fn(),
@@ -52,6 +54,7 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { useRunContext } from '@agent/runtime/RunContext';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
@@ -92,7 +95,12 @@ async function captureActivation(
   };
 
   mocks.resolve.mockReturnValueOnce({
-    entry: { path: '/agents/chat.yaml' },
+    entry: {
+      category: 'toolUse',
+      source: 'custom',
+      name: 'chat',
+      path: '/agents/chat.yaml',
+    },
   });
   mocks.load.mockResolvedValueOnce([
     { agentCategory: AgentCategory.ToolUse },
@@ -100,7 +108,12 @@ async function captureActivation(
   ]);
   mocks.createHandler.mockResolvedValueOnce(handler);
   mocks.createTrace.mockReturnValueOnce({ trace, dispose: vi.fn() });
-  mocks.buildVars.mockRejectedValueOnce(LAUNCH_FAILURE);
+  mocks.buildVars.mockImplementationOnce(() => {
+    const context = useRunContext();
+    mocks.buildVarsRunScope =
+      context.kind === 'launch' ? context.runScope : undefined;
+    throw LAUNCH_FAILURE;
+  });
 
   try {
     await expect(run(session)).rejects.toBe(LAUNCH_FAILURE);
@@ -134,6 +147,7 @@ function expectActivation(
 describe('native agent launch activation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.buildVarsRunScope = undefined;
     mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
     mocks.clearTerminalExecutionState.mockResolvedValue(undefined);
     mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
@@ -146,13 +160,29 @@ describe('native agent launch activation', () => {
   });
 
   it.each([
-    { label: 'child', isSubagent: true, suppressViewSwitch: true },
-    { label: 'root', isSubagent: undefined, suppressViewSwitch: false },
+    {
+      label: 'child with a bare identifier',
+      agent: 'chat',
+      isSubagent: true,
+      suppressViewSwitch: true,
+    },
+    {
+      label: 'root with a bare identifier',
+      agent: 'chat',
+      isSubagent: undefined,
+      suppressViewSwitch: false,
+    },
+    {
+      label: 'root with a source-qualified identifier',
+      agent: 'custom:chat',
+      isSubagent: undefined,
+      suppressViewSwitch: false,
+    },
   ])(
     'emits the expected activation payload for a fresh $label launch',
-    async ({ isSubagent, suppressViewSwitch }) => {
+    async ({ agent, isSubagent, suppressViewSwitch }) => {
       const payload = await captureActivation((session) =>
-        executeAgent(config, 'fresh-launch' as ExecutionId, {
+        executeAgent({ ...config, agent }, 'fresh-launch' as ExecutionId, {
           session,
           isSubagent,
           modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
@@ -160,6 +190,11 @@ describe('native agent launch activation', () => {
       );
 
       expectActivation(payload, suppressViewSwitch);
+      expect(mocks.buildVarsRunScope).toMatchObject({
+        agentName: agent,
+        agentKey: 'custom:chat',
+        isSubagent: isSubagent === true,
+      });
     },
   );
 
@@ -186,6 +221,10 @@ describe('native agent launch activation', () => {
 
       expectActivation(payload, suppressViewSwitch);
       expect(payload.streamId).toBe(streamId);
+      expect(mocks.buildVarsRunScope).toMatchObject({
+        agentKey: 'custom:chat',
+        isSubagent,
+      });
     },
   );
 });

@@ -14,12 +14,40 @@ const customReview = {
   name: 'review',
   path: '/agents/custom-review.yaml',
 } as const;
+const lead = {
+  category: 'toolUse',
+  source: 'custom',
+  name: 'lead',
+  path: '/agents/lead.yaml',
+  tools: ['delegate_agent'],
+} as const;
+const remoteLead = {
+  category: 'toolUse',
+  source: 'remote',
+  name: 'lead',
+  path: '/agents/remote-lead.yaml',
+  tools: ['read_file'],
+} as const;
+const leaf = {
+  category: 'toolUse',
+  source: 'custom',
+  name: 'leaf',
+  path: '/agents/leaf.yaml',
+  tools: ['read_file'],
+} as const;
+const workflow = {
+  category: 'workflow',
+  source: 'custom',
+  name: 'child',
+  path: '/agents/child-workflow.yaml',
+} as const;
 const remoteReviewScope = {
   workflow: [],
   toolUse: ['remote:review'],
 };
 const mocks = vi.hoisted(() => ({
   context: undefined as unknown,
+  agents: [] as unknown[],
 }));
 
 vi.mock('@agent/runtime/RunContext', () => ({
@@ -39,10 +67,11 @@ vi.mock('@agent/index/agentRegistry', () => {
       scope: { toolUse: readonly string[] } | undefined,
       category: string,
     ) => {
-      if (!scope) return [customReview];
+      if (!scope)
+        return mocks.agents.length > 0 ? mocks.agents : [customReview];
       return category === 'toolUse' && scope.toolUse.includes('remote:review')
         ? [remoteReview]
-        : [];
+        : mocks.agents.filter((agent: any) => agent.category === category);
     },
     findAgentByIdentifier: (
       entries: Array<{ source: string; name: string }>,
@@ -56,6 +85,7 @@ const { getDelegationAgent, getDelegationAgents } =
 
 describe('execution-scoped delegation agents', () => {
   beforeEach(() => {
+    mocks.agents = [];
     mocks.context = {
       kind: 'launch',
       runScope: {
@@ -89,5 +119,48 @@ describe('execution-scoped delegation agents', () => {
 
     expect(getDelegationAgents('toolUse')).toEqual([customReview]);
     expect(getDelegationAgent('toolUse', 'review')).toBe(customReview);
+  });
+
+  it.each(['lead', 'custom:lead'])(
+    'excludes only the exact current identity for launch identifier %s',
+    (agentName) => {
+      mocks.agents = [lead, remoteLead, leaf];
+      mocks.context = {
+        kind: 'launch',
+        runScope: {
+          agentName,
+          agentKey: 'custom:lead',
+          delegationAgentScope: {
+            workflow: [],
+            toolUse: ['custom:lead', 'remote:lead', 'custom:leaf'],
+          },
+          isSubagent: false,
+        },
+      };
+
+      expect(getDelegationAgents('toolUse')).toEqual([remoteLead, leaf]);
+      expect(getDelegationAgent('toolUse', 'custom:lead')).toBeUndefined();
+      expect(getDelegationAgent('toolUse', 'remote:lead')).toBe(remoteLead);
+    },
+  );
+
+  it('keeps leaf and workflow agents while excluding tool-use leads for a child', () => {
+    mocks.agents = [lead, leaf, workflow];
+    mocks.context = {
+      kind: 'launch',
+      runScope: {
+        agentName: 'child',
+        delegationAgentScope: {
+          workflow: ['child'],
+          toolUse: ['lead', 'leaf'],
+        },
+        agentKey: 'custom:child',
+        isSubagent: true,
+      },
+    };
+
+    expect(getDelegationAgents('toolUse')).toEqual([leaf]);
+    expect(getDelegationAgent('toolUse', 'lead')).toBeUndefined();
+    expect(getDelegationAgents('workflow')).toEqual([workflow]);
   });
 });
