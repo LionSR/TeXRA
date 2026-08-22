@@ -20,7 +20,7 @@ Use the alias, not a long relative chain.
 | `src/tools/`        | Tool implementations the agent can call (bash, file edits, delegation, search, setup)                                                                                                                    |
 | `src/shared/`       | Two things: wire contracts and message types (Zod schemas), **and** the shared browser UI kit (`wa/`, `styles/`, `litControllers/`, `markdown/`). Browser-reachable throughout                           |
 | `src/controllers/`  | Host-neutral orchestration — the layer hosts call into instead of driving `agent/` directly                                                                                                              |
-| `src/utils/`        | Host-agnostic helpers. Five modules are additionally browser-safe (see below)                                                                                                                            |
+| `src/utils/`        | Host-agnostic helpers. Six modules are additionally browser-safe (see below)                                                                                                                            |
 | `src/latex/`        | LaTeX compilation, diffing, formatting, and log parsing                                                                                                                                                  |
 | `src/common/`       | Cross-cutting helpers that are not wire contracts — notably `common/errors/` error classification                                                                                                        |
 | `src/auth/`         | Sign-in, session, and credential handling. **Core zones import this directly today** — `tools/setup/platform.ts`, `agent/remote/`, `telemetry/` all do. Decoupling it behind ports is proposed, not done |
@@ -47,10 +47,11 @@ services through `platform()` from `@platform/platform`; when it needs a
 capability the port does not expose, add a typed port rather than an import.
 
 **Does it run in a webview?** The webview frontends bundle for the browser, so
-anything they import must avoid Node built-ins. Exactly five `utils` modules are
+anything they import must avoid Node built-ins. Exactly six `utils` modules are
 reachable from them today — `@utils/core`, `@utils/core/boundedIdSet`,
-`@utils/errors/errorMessage`, `@utils/files/pastedImageName`,
-`@utils/text/stringUtils`. Adding an import to any of those five, or to their
+`@utils/core/keyedMutex`, `@utils/errors/errorMessage`,
+`@utils/files/pastedImageName`, `@utils/text/stringUtils`. Adding an import to
+any of those six, or to their
 transitive dependencies, can break a webview build in a way `tsc` will not catch.
 
 ## Picking between the general-sounding names
