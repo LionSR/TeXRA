@@ -364,20 +364,12 @@ export const EQUATION_STYLE_REPLACEMENTS: RegexReplacementCategory = {
     '([Aa]ppendix|[Pp]roblem|[Ss]olution|[Cc]hapter|[Aa]lgorithm|[Ff]igure|[Tt]able|[Ss]ection|[Ee]quation|[Ll]emma|[Cc]orollary|[Pp]roposition|[Tt]heorem|[Ee]qns\\.|[Ee]q\\.)~?\\s*\\ref':
       '$1~\\ref',
 
-    // Unescape underscores in reference commands
-    // LaTeX references (label names) don't require escaped underscores
-    // We use multiple unique patterns (with subtle regex variations) to handle multiple underscores
-    // Each pattern is applied sequentially, allowing iterative replacement
-    // Pass 1: Using non-greedy match
-    '(\\\\(?:cref|ref|eqref)\\{[^{}]*?)\\\\(_)': '$1$2',
-    // Pass 2: Using character class for 'r'
-    '(\\\\(?:c[r]ef|ref|eq[r]ef)\\{[^{}]*?)\\\\(_)': '$1$2',
-    // Pass 3: Using character class for 'e'
-    '(\\\\(?:cr[e]f|r[e]f|eqr[e]f)\\{[^{}]*?)\\\\(_)': '$1$2',
-    // Pass 4: Using character class for 'f'
-    '(\\\\(?:cre[f]|re[f]|eqre[f])\\{[^{}]*?)\\\\(_)': '$1$2',
-    // Pass 5: Using redundant grouping
-    '(\\\\(?:(?:cref)|(?:ref)|(?:eqref))\\{[^{}]*?)\\\\(_)': '$1$2',
+    // Unescape underscores in reference commands. LaTeX label names don't
+    // require escaped underscores. Matches the whole \ref{...}/\cref{...}/
+    // \eqref{...} span and strips every escaped underscore inside it in one
+    // pass, so references with more than one underscore are fully fixed.
+    '\\\\(cref|ref|eqref)\\{([^{}]*)\\}': (match, cmd, content) =>
+      `\\${cmd ?? ''}{${(content ?? '').replaceAll('\\_', '_')}}`,
 
     // Normalize blank lines immediately after equation environments begin
     [`\\\\begin\\{(${EQUATION_ENVIRONMENT_PATTERN})\\}([ \t]*\\r?\\n)(?:[ \t]*\\r?\\n)+`]:
