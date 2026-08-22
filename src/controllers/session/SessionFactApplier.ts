@@ -12,7 +12,6 @@ import { withEventErrorHandling } from '@controllers/session/eventErrorHandling'
 import {
   STREAM_PHASE,
   isGoalInFlight,
-  type ConversationProgress,
   type SetActiveStreamPayload,
   type SetParentStreamPayload,
   type StreamPhase,

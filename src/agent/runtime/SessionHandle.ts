@@ -529,6 +529,18 @@ export class SessionHandle {
     return this.restartRepairPromise;
   }
 
+  /**
+   * Whether a repair pass started for `generation` may no longer mutate: a
+   * later storage generation owns the stores, or session teardown aborted
+   * repair. Both reads are pure, so every checkpoint below re-reads them.
+   */
+  private isRepairSuperseded(generation: number): boolean {
+    return (
+      generation !== this.storageGeneration ||
+      this.restartRepairAbort.signal.aborted
+    );
+  }
+
   private async repairStoresAfterRestart(
     generation: number,
     reloadTranscripts = false,
@@ -547,12 +559,7 @@ export class SessionHandle {
       }
       if (generation !== this.storageGeneration) return false;
       await this.snapshots.preload([...this.computeStartupSeedSet()]);
-      if (
-        generation !== this.storageGeneration ||
-        this.restartRepairAbort.signal.aborted
-      ) {
-        return false;
-      }
+      if (this.isRepairSuperseded(generation)) return false;
       this.markUnfinishedStreamsRunning();
       await this.runRestartRepair(generation);
       return true;
@@ -577,12 +584,7 @@ export class SessionHandle {
         flushError,
       );
     }
-    if (
-      generation !== this.storageGeneration ||
-      this.restartRepairAbort.signal.aborted
-    ) {
-      return false;
-    }
+    if (this.isRepairSuperseded(generation)) return false;
     const storage = platform().storage;
     const storageRootChanged = storage.commitWorkspaceStorageChange?.(
       transitionHooks && { workspacePath: transitionHooks.workspacePath },
@@ -707,12 +709,7 @@ export class SessionHandle {
   }
 
   private async runRestartRepair(generation: number): Promise<void> {
-    if (
-      generation !== this.storageGeneration ||
-      this.restartRepairAbort.signal.aborted
-    ) {
-      return;
-    }
+    if (this.isRepairSuperseded(generation)) return;
     // Resident snapshot records already resolved their execution id from the
     // sidecar when they were seeded, so skip the disk read for them — the
     // bounded-startup invariant keeps settled history lazy (#9947). Only
@@ -794,12 +791,7 @@ export class SessionHandle {
           ),
       );
     }
-    if (
-      generation !== this.storageGeneration ||
-      this.restartRepairAbort.signal.aborted
-    ) {
-      return;
-    }
+    if (this.isRepairSuperseded(generation)) return;
 
     // Parked WAITING streams were deliberately left out of the bounded
     // startup seed, so hydrate their usage now — before repair publishes their
@@ -825,12 +817,7 @@ export class SessionHandle {
       },
       { concurrency: RESTART_REPAIR_IO_CONCURRENCY },
     );
-    if (
-      generation !== this.storageGeneration ||
-      this.restartRepairAbort.signal.aborted
-    ) {
-      return;
-    }
+    if (this.isRepairSuperseded(generation)) return;
 
     // The ownership scan, resumability detection, and usage preload are all
     // async. Refresh resident ownership once here so the map is current, then
