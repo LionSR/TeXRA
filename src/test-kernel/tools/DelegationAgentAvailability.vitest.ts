@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { withRunContext } from '@agent/runtime/RunContext';
 import type { ToolDefinition } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
@@ -279,6 +280,40 @@ describe('resolveAgentTools delegation roster annotation', () => {
     // The models line is refreshed in the same pass.
     expect(delegateAgent?.description).toContain('Available models: deepseekT');
     expect(mocks.getVisibleAgents).toHaveBeenCalledWith('toolUse');
+  });
+
+  it('annotates a delegated child with leaf agents but not delegation-capable leads', async () => {
+    mocks.getVisibleAgents.mockReturnValue([
+      {
+        category: 'toolUse',
+        source: 'custom',
+        name: 'lead',
+        path: '/agents/lead.yaml',
+        description: 'Delegate implementation work.',
+        tools: ['delegate_agent'],
+      },
+      {
+        category: 'toolUse',
+        source: 'custom',
+        name: 'coder',
+        path: '/agents/coder.yaml',
+        description: 'Implement focused changes.',
+        tools: ['read_file'],
+      },
+    ]);
+
+    const delegateAgent = await withRunContext(
+      {
+        kind: 'bare',
+        agentName: 'child',
+        agentKey: 'custom:child',
+        isSubagent: true,
+      } as never,
+      resolveDelegateAgent,
+    );
+
+    expect(delegateAgent?.description).toContain('- coder:');
+    expect(delegateAgent?.description).not.toContain('- lead:');
   });
 
   it('does not annotate a roster line onto non-delegation tools', async () => {
