@@ -37,6 +37,15 @@ class FakeResponsesWS extends EventEmitter {
   socket = new FakeSocket();
   send = vi.fn();
   close = vi.fn();
+
+  constructor() {
+    super();
+    this.socket.on('error', (cause: Error) => {
+      const error = new WebSocketError(cause.message, null);
+      error.cause = cause;
+      this.emit('error', error);
+    });
+  }
 }
 
 vi.mock('openai/resources/responses/ws', () => ({
@@ -96,14 +105,56 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
     socketControl.nextReadyState = WS_OPEN;
   });
 
-  it('tags a failed handshake as a connection failure', async () => {
+  it('handles a forwarded 401 handshake error as non-retryable authentication', async () => {
     socketControl.nextReadyState = 0;
     const transport = createTransport();
     const connection = internals(transport).getOrCreateWebSocket(fakeClient);
     const ws = createdSockets[0]!;
-    const error = new Error('TLS handshake failed');
+    const error = new Error('Unexpected server response: 401');
+
+    // The SDK's raw-socket listener runs first and forwards the failure to the
+    // top-level emitter. The transport must already guard that emitter so this
+    // raw event still reaches its handshake listener instead of escaping.
+    expect(() => ws.socket.emit('error', error)).not.toThrow();
+
+    await expect(connection).rejects.toBe(error);
+    expect(detectSdkErrorMetadata(error)).toMatchObject({
+      kind: 'authentication',
+      statusCode: 401,
+    });
+    expect(normalizeProviderError(error)).toMatchObject({
+      statusCode: 401,
+      userRetryable: false,
+    });
+    expect(ws.close).toHaveBeenCalledOnce();
+  });
+
+  it('falls back to the canonical response status when structured data is out of range', async () => {
+    socketControl.nextReadyState = 0;
+    const transport = createTransport();
+    const connection = internals(transport).getOrCreateWebSocket(fakeClient);
+    const ws = createdSockets[0]!;
+    const error = Object.assign(new Error('Unexpected server response: 401'), {
+      code: 1006,
+    });
 
     ws.socket.emit('error', error);
+
+    await expect(connection).rejects.toBe(error);
+    expect(detectSdkErrorMetadata(error)).toMatchObject({
+      kind: 'authentication',
+      statusCode: 401,
+    });
+  });
+
+  it('rejects when only the top-level emitter reports a handshake error', async () => {
+    socketControl.nextReadyState = 0;
+    const transport = createTransport();
+    const connection = internals(transport).getOrCreateWebSocket(fakeClient);
+    const ws = createdSockets[0]!;
+    const error = new WebSocketError('handshake failed', null);
+
+    ws.emit('error', error);
 
     await expect(connection).rejects.toBe(error);
     expect(detectSdkErrorMetadata(error)?.kind).toBe('connection');
