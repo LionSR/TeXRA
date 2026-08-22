@@ -12,7 +12,7 @@ Every time you select **Run agent** in TeXRA, an **agent** takes your files and 
 ::: tip When to use workflow mode
 Workflow agents are built for **deep, single-shot thinking**: deriving or checking equations step by step, rewriting a whole section, converting a paper to slides, or merging edits. They plan in a `<scratchpad>`, produce a full XML-wrapped output, and optionally reflect on it for another round, so runs with frontier reasoning models can take **10–30 minutes** to finish.
 
-If you want a faster turnaround (quick polishes, small corrections), pick a **smaller or faster model** in the model dropdown: output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, use a **tool-use agent** (`assistant`, `research`, `review`) instead: those stream back in seconds and skip the full workflow pipeline.
+If you want a faster turnaround (quick polishes, small corrections), pick a **smaller or faster model** in the model dropdown: output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, use a **tool-use agent** (`assistant`, `research`, `review`) instead: those stream back in seconds and skip the full workflow pipeline. For a problem too big for one agent, a team lead can run several workflow agents at once; read [Multi-agent workflows](./multi-agent-workflows.md).
 :::
 
 The `settings.agentCategory` key decides which of these two modes an agent runs in:
@@ -108,7 +108,7 @@ Reflection runs by default: `settings.rounds` defaults to 2 (Round 0 plus one re
 2.  **LLM interaction (Round 1):** The LLM generates a revised response.
 3.  **Processing:** TeXRA saves the refined output to a separate round path (`r{round}/<name>`, e.g. `r1/paper.tex` for the first reflection, `r2/paper.tex` for the next).
 
-Control how many rounds run by editing the agent YAML: adjust `settings.rounds` for the maximum number of passes, or add more entries to `userRequest`. The run stops early when the model signals it is finished or when no reflection prompt content is supplied.
+Control how many rounds run by editing the agent YAML: adjust `settings.rounds` for the maximum number of passes, or add more entries to `userRequest`. A run ends earlier only on failure or cancellation.
 
 This flow, with optional reflection rounds, lets TeXRA agents perform targeted tasks based on their definitions and your instructions. For examples of built-in agents, read the [Built-in agent reference](./built-in-agents.md).
 

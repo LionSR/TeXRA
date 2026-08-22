@@ -182,7 +182,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
 <section class="bottom-cta">
   <h2>Start in under two minutes</h2>
-  <p>Install the VS Code extension from the Marketplace, the desktop app, or the CLI (<code>npm install -g @texra-ai/cli</code>); add your own API key or connect a provider subscription, and run your first agent.</p>
+  <p>Install the VS Code extension from the Marketplace or the CLI (<code>npm install -g @texra-ai/cli</code>); add your own API key or connect a provider subscription, and run your first agent.</p>
   <div class="cta-buttons">
     <a href="/guide/quick-start" class="cta-button cta-primary">Quick start guide</a>
     <a href="/guide/built-in-agents" class="cta-button cta-secondary">Browse all agents</a>
@@ -211,7 +211,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>Can I use it without VS Code?</summary>
-    <p>Yes. The standalone <a href="/guide/desktop">desktop app</a> gives you the full agent workflow, settings, and progress view without VS Code, and the <code>@texra-ai/cli</code> terminal client runs the same agents and sign-in on your <code>.tex</code> projects for scripts, CI, and remote machines. Read the <a href="/guide/texra-cli">CLI guide</a>.</p>
+    <p>Yes. The <code>@texra-ai/cli</code> terminal client runs the same agents and sign-in on your <code>.tex</code> projects for scripts, CI, and remote machines. Read the <a href="/guide/texra-cli">CLI guide</a>.</p>
   </details>
 
   <details>

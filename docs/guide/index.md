@@ -36,6 +36,7 @@ tooling, and figures come along as supporting capabilities.
 
 - [**Built-in agents**](./built-in-agents.md): the full catalog
 - [**Agent architecture**](./agent-architecture.md): workflow vs. tool-use, reflection, planning
+- [**Multi-agent workflows**](./multi-agent-workflows.md): how a team lead fans work out to specialists in parallel
 - [**Models**](./models.md): picking a model for the job
 - [**Custom agents**](./custom-agents.md): define your own in YAML
 

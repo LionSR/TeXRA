@@ -526,7 +526,9 @@ Teams are predefined collections of agents for a discipline. Pick one from the
 Every team except Software Engineer bundles the `progressCheck` audit helper
 and `latexFixer`. The Software Engineer
 lead and its specialists run locally; some specialists in other teams are
-[remote agents](./remote-agents.md) that sync after you sign in.
+[remote agents](./remote-agents.md) that sync after you sign in. Every lead
+can also run its specialists in parallel as a
+[multi-agent workflow](./multi-agent-workflows.md).
 
 ## Next steps
 
