@@ -56,6 +56,8 @@ const ALLOWED_EXT_SCHEMES = [
   'trae',
   'positron',
   'pearai',
+  // Verified from Antigravity IDE 2.5.5's macOS bundle URL declaration.
+  'antigravity-ide',
 ] as const;
 
 /**
