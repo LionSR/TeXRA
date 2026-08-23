@@ -24,12 +24,6 @@ export const resumeCommand = defineCommand({
       required: true,
       description: 'Execution id from `texra history list`',
     },
-    reclaim: {
-      type: 'boolean',
-      default: false,
-      description:
-        'Take over a run held by a process that cannot be reached (never one that is provably alive)',
-    },
   },
   async run(ctx) {
     const id = parseCliHistoryId(ctx.args.id);
@@ -39,6 +33,6 @@ export const resumeCommand = defineCommand({
       return;
     }
     const context = await contextFromArgs(ctx.args, ctx.rawArgs);
-    setExitCode(await runResumeExecution(context, id, ctx.args.reclaim));
+    setExitCode(await runResumeExecution(context, id));
   },
 });

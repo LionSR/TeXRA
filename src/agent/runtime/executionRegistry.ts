@@ -8,10 +8,7 @@
 import PQueue from 'p-queue';
 
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
-import {
-  ExecutionLeaseLostError,
-  markOwnedExecutionLeaseUndurable,
-} from '@agent/storage/executionLease';
+import { ExecutionLeaseLostError } from '@agent/storage/executionLease';
 import { persistTerminalExecution } from '@agent/storage/terminalPersistence';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
@@ -1015,7 +1012,6 @@ export class ExecutionRegistry {
       const recoveryFailures = [error];
       if (!(error instanceof ExecutionLeaseLostError)) {
         try {
-          markOwnedExecutionLeaseUndurable(handle.executionId);
           const untracked = this.settleTerminal(handle, cancelledResult, {
             publish: false,
             untrackMode: 'ifCurrent',
@@ -1079,9 +1075,7 @@ export class ExecutionRegistry {
       await teardown;
     } catch (error) {
       // Transcript closure and terminal execution metadata are independent
-      // durable facts. Preserve the failed artifact fence, but still give the
-      // terminal status its own opportunity to reach disk.
-      markOwnedExecutionLeaseUndurable(handle.executionId);
+      // durable facts; the terminal status still gets its own chance to land.
       logger.warn(
         'Waiting-execution cleanup failed; continuing terminal persistence',
         { data: { executionId: handle.executionId, error } },

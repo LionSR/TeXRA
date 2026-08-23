@@ -4,7 +4,7 @@ import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
   acquireFreshExecutionLease,
-  completeOwnedExecutionLease,
+  releaseOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -20,6 +20,10 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import {
+  streamHeldMessage,
+  streamUnreadableMessage,
+} from '@shared/streams/streamStatusDisplay';
 import {
   startForeignInstance,
   writeForeignLease,
@@ -193,7 +197,7 @@ describe('SessionHandle restart repair', () => {
     await expect(getExecutionStore(executionId).readMeta()).resolves.toBeNull();
   });
 
-  it('shows a crashed run with a malformed checkpoint as unclassified, never finished', async () => {
+  it('shows a crashed run with a malformed checkpoint as unavailable, never finished', async () => {
     const transcripts = await StreamLogStore.open();
     appendRunningGroup(transcripts, streamId, 'crashed-running-group');
     await transcripts.flush();
@@ -210,13 +214,11 @@ describe('SessionHandle restart repair', () => {
 
     // A present-but-invalid checkpoint is unknown state: no phase, no outcome
     // written, the transcript left open, the flow record untouched, and the
-    // cause shown as malformed: Delete, not Resume, clears it.
+    // cause shown; Delete clears it.
     expect(session.status.get(streamId)).toBeUndefined();
-    expect(session.status.holdState(streamId)).toEqual({
-      kind: 'unclassified',
-      cause: 'invalid-flow',
-      retryable: false,
-    });
+    expect(session.status.holdState(streamId)).toBe(
+      streamUnreadableMessage('invalid-flow'),
+    );
     await expect(executionStore.readMeta()).resolves.toEqual(
       expect.not.objectContaining({ outcome: expect.anything() }),
     );
@@ -251,7 +253,7 @@ describe('SessionHandle restart repair', () => {
     expectClosedWith(transcripts, eagerStreamId, RUN_OUTCOME.CANCELLED);
   });
 
-  it('shows a stream with unreadable metadata as unclassified without failing readiness or the other streams', async () => {
+  it('shows a stream with unreadable metadata as unavailable without failing readiness or the other streams', async () => {
     const otherExecutionId = 'd00d1234' as ExecutionId;
     const otherStreamId = `other#${otherExecutionId}` as StreamTabId;
     const transcripts = await StreamLogStore.open();
@@ -276,11 +278,9 @@ describe('SessionHandle restart repair', () => {
     // Nothing known about the unreadable run: no phase, nothing written, the
     // transcript left open, and the cause shown as malformed (Delete clears it).
     expect(session.status.get(streamId)).toBeUndefined();
-    expect(session.status.holdState(streamId)).toEqual({
-      kind: 'unclassified',
-      cause: 'invalid-meta',
-      retryable: false,
-    });
+    expect(session.status.holdState(streamId)).toBe(
+      streamUnreadableMessage('invalid-meta'),
+    );
     await expect(executionStore.read('meta')).resolves.toEqual(malformedMeta);
     await expect(executionStore.read(flowKey(executionId))).resolves.toEqual(
       validFlowRecord,
@@ -763,11 +763,9 @@ describe('SessionHandle restart repair', () => {
     try {
       await session.waitUntilReady();
       // Live foreign owner: held, no phase, nothing written, transcript open.
-      expect(session.status.holdState(heldStreamId)).toMatchObject({
-        kind: 'held',
-        executionId: heldExecutionId,
-        hold: { provable: true, reclaimable: false },
-      });
+      expect(session.status.holdState(heldStreamId)).toBe(
+        streamHeldMessage(foreign.owner),
+      );
       expect(session.status.get(heldStreamId)).toBeUndefined();
       expect((await executionStore.readMeta())?.outcome).toBeUndefined();
       expect(transcripts.get(heldStreamId)?.getRange(0)).toHaveLength(1);
@@ -818,12 +816,12 @@ describe('SessionHandle restart repair', () => {
       expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
 
       session.dispose();
-      await completeOwnedExecutionLease(liveExecutionId);
+      await releaseOwnedExecutionLease(liveExecutionId);
 
       await expect(replacement).resolves.toBe(false);
       expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
     } finally {
-      await completeOwnedExecutionLease(liveExecutionId);
+      await releaseOwnedExecutionLease(liveExecutionId);
     }
   });
 

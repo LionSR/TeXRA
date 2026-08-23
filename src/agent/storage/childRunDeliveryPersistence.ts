@@ -9,10 +9,7 @@ import {
   persistChildRunReport,
   persistChildRunResultMeta,
 } from './childRunPersistence';
-import {
-  ExecutionLeaseLostError,
-  markOwnedExecutionLeaseUndurable,
-} from './executionLease';
+import { ExecutionLeaseLostError } from './executionLease';
 import type { ResultMeta } from './resultMeta';
 
 export async function persistChildRunDeliveryBestEffort(
@@ -33,7 +30,6 @@ export async function persistChildRunDeliveryBestEffort(
   ] as const) {
     if (result.kind !== 'failed') continue;
     if (result.err instanceof ExecutionLeaseLostError) throw result.err;
-    markOwnedExecutionLeaseUndurable(executionId);
     onFailure(kind, result.err);
   }
 }

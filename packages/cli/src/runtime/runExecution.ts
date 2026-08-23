@@ -9,7 +9,6 @@ import {
 import {
   deriveResumability,
   ExecutionLeaseLostError,
-  inspectExecutionLease,
   type ResumabilityDecision,
 } from '@agent/storage';
 import { validateExecutionRequest } from '@agent/core/state/executionRequests';
@@ -348,24 +347,12 @@ export async function executeCliRequest(
         const resumability = terminalStatusPersisted
           ? await deriveResumability(executionId)
           : undefined;
-        const canAdvertiseRecovery =
+        // The lease was released just above, so the checkpoint alone decides
+        // whether the recovery notice is usable.
+        if (
           resumability?.resumable === true &&
           options.onInterruptedExecutionFinalized !== undefined &&
-          (options.canAdvertiseInterruptedExecution?.(resumability) ?? true);
-        let lease:
-          Awaited<ReturnType<typeof inspectExecutionLease>> | undefined;
-        if (canAdvertiseRecovery) {
-          try {
-            lease = await inspectExecutionLease(executionId);
-          } catch {
-            // Lease inspection only decides whether the optional recovery
-            // notice is immediately usable. Failure suppresses that notice;
-            // it does not invalidate the durable cancellation above.
-          }
-        }
-        if (
-          canAdvertiseRecovery &&
-          (lease?.status === 'missing' || lease?.status === 'orphaned')
+          (options.canAdvertiseInterruptedExecution?.(resumability) ?? true)
         ) {
           settleRecoveryNoticeStarted();
           await options.onInterruptedExecutionFinalized(executionId);
