@@ -28,7 +28,6 @@ import {
 } from '@latex/latexdiff/runLatexdiff';
 import {
   latexdiffAllFailedMessage,
-  LATEXDIFF_GENERATE_FAILED_MESSAGE,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
 import { CHANNEL, latexdiffService } from '@latex/latexdiff/service';
@@ -202,7 +201,7 @@ async function prepareLatexdiffResultsAndScheduleViewer(
     for (const result of results) {
       const suffix = result.description ? ` (${result.description})` : '';
 
-      if (result.success && result.diffPath) {
+      if (result.success) {
         const opened = await openLatexdiffResult(result.diffPath, {
           scheduleViewer: false,
         });
@@ -215,10 +214,8 @@ async function prepareLatexdiffResultsAndScheduleViewer(
             lastViewerLocation = opened.diffLocation;
           }
         }
-      } else if (!result.success) {
-        log.warn(
-          `Failed to generate diff${suffix}: ${result.message ?? 'Unknown error'}`,
-        );
+      } else {
+        log.warn(`Failed to generate diff${suffix}: ${result.message}`);
       }
     }
     completedSetup = true;
@@ -253,8 +250,8 @@ async function runDiffAndOpen(
   log.info(`Running ${toolLabel} with math markup mode: ${mathMarkup}`);
 
   const result = await runDiff(mathMarkup);
-  if (!result.success || !result.diffPath) {
-    throw new Error(result.message ?? LATEXDIFF_GENERATE_FAILED_MESSAGE);
+  if (!result.success) {
+    throw new Error(result.message);
   }
   await openLatexdiffResult(result.diffPath);
 }
