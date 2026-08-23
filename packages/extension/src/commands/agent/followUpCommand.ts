@@ -8,9 +8,11 @@ import { submitProgressFollowUp } from '@controllers/progressView/progressFollow
 import type { StreamTabId } from '@shared/schemas';
 
 /**
- * Programmatic follow-up send (polish and transcription paths). The progress
- * view's composer does not route through here: its sends carry an admission
- * ack back to the webview via the shared command handlers.
+ * Programmatic follow-up send with no composer behind it. Its one caller is
+ * the workflow-file "user modified the suggested output" note posted by
+ * ProgressWorkflowFileActionsController (ProgressViewMessageHandler). The
+ * progress view's composer does not route through here: its sends carry an
+ * admission ack back to the webview via the shared command handlers.
  */
 export function registerFollowUpCommand(
   context: vscode.ExtensionContext,
