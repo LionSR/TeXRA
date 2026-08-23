@@ -148,15 +148,15 @@ describe('ToolUseFollowUpQueue ownership', () => {
     ).toEqual(['b']);
   });
 
-  it('never reopens a terminal stream', () => {
+  it('forgets a terminal stream so a late live-owner submission finds no owner', () => {
     const queues = new ToolUseFollowUpQueue();
     const id = stream('stream:terminal');
     const lease = queues.claimLive(id, 'flow')!;
     queues.release(lease, 'terminal');
 
-    expect(queues.claimLive(id, 'flow')).toBeUndefined();
-    expect(queues.submit(id, { text: 'late' }, 'recoverable')).toEqual({
-      kind: 'unavailable',
+    expect(queues.hasLiveOwner(id)).toBe(false);
+    expect(queues.submit(id, { text: 'late' }, 'live_owner')).toEqual({
+      kind: 'not_owned',
     });
   });
 
@@ -167,9 +167,8 @@ describe('ToolUseFollowUpQueue ownership', () => {
     const first = queues.claimChildRun(id, executionId)!;
     queues.release(first, 'terminal');
 
-    expect(queues.claimLive(id, 'flow')).toBeUndefined();
     expect(queues.submit(id, { text: 'late' }, 'live_owner')).toEqual({
-      kind: 'unavailable',
+      kind: 'not_owned',
     });
 
     const retry = queues.claimChildRun(id, executionId);
@@ -243,7 +242,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(queues.queue(live).drainItems()).toEqual([]);
   });
 
-  it('does not reopen a terminal stream for an unrelated execution', () => {
+  it('refuses a child claim for an unrelated execution', () => {
     const queues = new ToolUseFollowUpQueue();
     const executionId = 'owned-execution' as ExecutionId;
     const id = stream(`stream#${executionId}`);
@@ -253,7 +252,6 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(() =>
       queues.claimChildRun(id, 'unrelated-execution' as ExecutionId),
     ).toThrow('does not belong to execution');
-    expect(queues.claimLive(id, 'flow')).toBeUndefined();
   });
 
   it('restores only the authoritative persisted generation', () => {
@@ -309,15 +307,15 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(queues.currentGenerationId(id)).toBe('persisted-generation');
   });
 
-  it('deletion invalidates a live generation and rejects late input', () => {
+  it('deletion invalidates a live generation', () => {
     const queues = new ToolUseFollowUpQueue();
     const id = stream('stream:deleted');
     const lease = queues.claimLive(id, 'child')!;
 
     expect(queues.terminalize(id)).toBe(true);
     expect(queues.release(lease, 'recoverable')).toBe(false);
-    expect(queues.submit(id, { text: 'late' }, 'recoverable')).toEqual({
-      kind: 'unavailable',
+    expect(queues.submit(id, { text: 'late' }, 'live_owner')).toEqual({
+      kind: 'not_owned',
     });
   });
 

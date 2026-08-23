@@ -275,36 +275,6 @@ describe('submitFollowUp', () => {
     expect(tryResumeStream).toHaveBeenCalledTimes(1);
   });
 
-  it('delivers a final child result through the retained queue after child untracking', async () => {
-    const streamId = id('stream:final-child-delivery');
-    const session = fakeSession({
-      kind: 'no_session',
-      streamStatus: 'completed',
-    });
-    const parentFlow = session.followUps.claimLive(streamId, 'flow')!;
-    session.followUps.release(parentFlow, 'recoverable');
-    const tryResumeStream = mockTryResume();
-
-    await expect(
-      submitFollowUp(
-        streamId,
-        { text: 'final child result', origin: 'subagent_result' },
-        {
-          session,
-          resumePort: { tryResumeStream },
-          mode: 'child_delivery',
-        },
-      ),
-    ).resolves.toEqual({
-      status: 'queued',
-      reason: 'children_running',
-      continuation: 'resumed',
-    });
-
-    expect(tryResumeStream).toHaveBeenCalledTimes(1);
-    expect(session.followUps.getAll(streamId)).toEqual(['final child result']);
-  });
-
   it('trusts a matching retained generation after the parent completes', async () => {
     const streamId = id('stream:retained-child-generation');
     const generationId = 'a98f8f0a-b61a-4913-a88e-a934da14d4e5';
@@ -336,7 +306,7 @@ describe('submitFollowUp', () => {
     ]);
   });
 
-  it('does not let child delivery reopen a terminal parent queue', async () => {
+  it('refuses child delivery to a parent with no session', async () => {
     const streamId = id('stream:terminal-child-delivery');
     const session = fakeSession({
       kind: 'no_session',
@@ -354,7 +324,7 @@ describe('submitFollowUp', () => {
           mode: 'child_delivery',
         },
       ),
-    ).resolves.toEqual({ status: 'dropped' });
+    ).resolves.toEqual({ status: 'no_session', streamStatus: 'completed' });
     expect(tryResumeStream).not.toHaveBeenCalled();
   });
 
@@ -392,77 +362,7 @@ describe('submitFollowUp', () => {
     expect(session.followUps.getAll(streamId)).toEqual(['child result']);
   });
 
-  it('rejects terminal queues and never invokes recovery', async () => {
-    const streamId = id('stream:terminal');
-    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
-    const lease = session.followUps.claimLive(streamId, 'flow')!;
-    session.followUps.release(lease, 'terminal');
-    const tryResumeStream = mockTryResume();
-
-    await expect(
-      submitFollowUp(streamId, 'late', {
-        session,
-        resumePort: { tryResumeStream },
-      }),
-    ).resolves.toEqual({ status: 'dropped' });
-    expect(tryResumeStream).not.toHaveBeenCalled();
-  });
-
-  it('restores the persisted generation before admitting a durable producer', async () => {
-    const streamId = id('stream:persisted-generation');
-    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
-    const generationId = 'e63883b0-0fe0-48c7-9888-a2daeaab30a5';
-    mockPersistedExecution(session);
-    vi.spyOn(resumability, 'deriveResumability').mockResolvedValue(
-      durableResumabilityDecision(generationId),
-    );
-    const tryResumeStream = mockTryResume();
-
-    await expect(
-      submitFollowUp(streamId, 'answer after reload', {
-        session,
-        resumePort: { tryResumeStream },
-        expectedGenerationId: generationId,
-      }),
-    ).resolves.toMatchObject({
-      status: 'queued',
-      continuation: 'resumed',
-    });
-    expect(session.followUps.currentGenerationId(streamId)).toBe(generationId);
-  });
-
-  it('prefers quiet resident ownership before the persisted sidecar FK', async () => {
-    const streamId = id('stream:resident-generation');
-    const residentExecutionId = 'resident-execution' as ExecutionId;
-    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
-    session.snapshots.getRunMetadata = vi.fn(() => ({
-      executionId: residentExecutionId,
-    }));
-    vi.spyOn(session.snapshots, 'readPersistedExecutionId').mockResolvedValue(
-      'persisted-execution' as ExecutionId,
-    );
-    const generationId = '04d3201e-5df0-45a8-9f8b-76b2097ce574';
-    const deriveResumability = vi
-      .spyOn(resumability, 'deriveResumability')
-      .mockResolvedValue(durableResumabilityDecision(generationId));
-    const tryResumeStream = mockTryResume();
-
-    await expect(
-      submitFollowUp(streamId, 'resident generation answer', {
-        session,
-        resumePort: { tryResumeStream },
-        expectedGenerationId: generationId,
-      }),
-    ).resolves.toMatchObject({
-      status: 'queued',
-      continuation: 'resumed',
-    });
-
-    expect(deriveResumability).toHaveBeenCalledWith(residentExecutionId);
-    expect(session.snapshots.readPersistedExecutionId).not.toHaveBeenCalled();
-  });
-
-  it('serializes durable generation lookup before later ordinary admission', async () => {
+  it('does not hold ordinary admission behind a durable generation lookup', async () => {
     const streamId = id('stream:serialized-generation-lookup');
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
     const generationId = '5038fe96-7113-449a-82a9-3e58f292d1ba';
@@ -487,26 +387,26 @@ describe('submitFollowUp', () => {
       resumePort: { tryResumeStream },
     });
 
+    // Admission is synchronous: the ordinary submission is in the queue and
+    // owns the recovery before the durable producer's disk lookup settles.
     await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledOnce());
-    expect(tryResumeStream).not.toHaveBeenCalled();
-    expect(session.followUps.getAll(streamId)).toEqual([]);
+    expect(tryResumeStream).toHaveBeenCalledOnce();
+    expect(session.followUps.getAll(streamId)).toEqual(['ordinary follow-up']);
 
     lookup.resolve(durableResumabilityDecision(generationId));
 
-    await vi.waitFor(() =>
-      expect(session.followUps.getAll(streamId)).toEqual([
-        'durable inquiry',
-        'ordinary follow-up',
-      ]),
-    );
-    await expect(second).resolves.toMatchObject({
+    await expect(first).resolves.toMatchObject({
       status: 'queued',
       continuation: 'recovering',
     });
+    expect(session.followUps.getAll(streamId)).toEqual([
+      'ordinary follow-up',
+      'durable inquiry',
+    ]);
     expect(tryResumeStream).toHaveBeenCalledOnce();
 
     resumeBarrier.resolve(true);
-    await expect(first).resolves.toMatchObject({
+    await expect(second).resolves.toMatchObject({
       status: 'queued',
       continuation: 'resumed',
     });

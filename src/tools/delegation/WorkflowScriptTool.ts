@@ -11,11 +11,8 @@ import {
   parseWorkflowScript,
   readWorkflowScriptCheckpoint,
 } from '@agent/workflowScript';
-import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
-import {
-  ExecutionLeaseActiveError,
-  type OwnedExecutionLeaseScope,
-} from '@agent/storage/executionLease';
+import { registerExecution } from '@agent/storage/executionLifecycle';
+import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -442,12 +439,11 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       );
     }
 
-    let runWithOwnership: OwnedExecutionLeaseScope;
     try {
       // The durable record states only what the container run has: the
       // workflow's name and the real model its agent steps will use. The
       // fabricated AgentConfig above feeds the ephemeral live wire only.
-      runWithOwnership = await registerOwnedExecution(
+      await registerExecution(
         runExecutionId,
         {
           name: meta.name,
@@ -492,7 +488,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       );
     }
 
-    const runResult = runWithOwnership(async () => {
+    const runResult = (async () => {
       // Attempt-scoped setup runs inside the lease launch guard: it runs after
       // the deterministic run lease is held, so a throw here must release the
       // lease - otherwise the record survives for this process's lifetime and
@@ -613,7 +609,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
         ),
         scriptPath,
       );
-    });
+    })();
     return await runPhase(() => runResult);
   }
 }

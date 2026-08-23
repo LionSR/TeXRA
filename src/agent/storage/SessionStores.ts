@@ -9,7 +9,6 @@ import {
   type DeleteExecutionResult,
   type ExecutionStreamReference,
 } from '@agent/storage/executionListing';
-import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
@@ -32,9 +31,21 @@ interface GoalEntryStore {
   forget(stream: StreamTabId): Promise<void>;
 }
 
+/** The one execution-lifecycle step a stream deletion needs: wait its turn. */
+export interface ExecutionLifecycleLane {
+  runExecutionStep<T>(executionId: string, step: () => Promise<T>): Promise<T>;
+}
+
 export interface SessionStoresOptions {
   streamLogs: StreamLogStore;
   snapshots: StreamSnapshotStore;
+  /**
+   * The session's per-execution lifecycle lanes. A deletion takes a step on
+   * the stream's execution lane before it touches storage, so it cannot run
+   * under a live or still-disposing generation of that execution. Absent only
+   * for stores with no registry to serialize against.
+   */
+  executions?: ExecutionLifecycleLane;
   deleteExecution?: DeleteExecutionFn;
   listExecutionStreamReferences?: ListExecutionStreamReferencesFn;
   goalEntries?: GoalEntryStore;
@@ -78,6 +89,7 @@ type ExecutionDeletionOutcome =
 export class SessionStores {
   private readonly streamLogs: StreamLogStore;
   private readonly snapshots: StreamSnapshotStore;
+  private readonly executions: ExecutionLifecycleLane | undefined;
   private readonly deleteExecution: DeleteExecutionFn;
   private readonly listExecutionStreamReferences: ListExecutionStreamReferencesFn;
   private readonly goalEntries: GoalEntryStore | undefined;
@@ -109,6 +121,7 @@ export class SessionStores {
   constructor(options: SessionStoresOptions) {
     this.streamLogs = options.streamLogs;
     this.snapshots = options.snapshots;
+    this.executions = options.executions;
     this.deleteExecution = options.deleteExecution ?? deleteStoredExecution;
     this.listExecutionStreamReferences =
       options.listExecutionStreamReferences ?? listExecutionStreamReferences;
@@ -117,9 +130,16 @@ export class SessionStores {
     this.onChildrenDetached = options.onChildrenDetached;
   }
 
-  async waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void> {
+  /**
+   * Take the next step on the stream's execution lane: resolves once every
+   * earlier lifecycle step of that execution has returned and its live
+   * generation, if any, has disposed. A stream with no execution resolves at
+   * once.
+   */
+  async waitForExecutionQuiescence(stream: StreamTabId): Promise<void> {
     const executionId = await this.executionIdForStream(stream);
-    if (executionId) await waitForOwnedExecutionLeaseRelease(executionId);
+    if (!executionId || !this.executions) return;
+    await this.executions.runExecutionStep(executionId, async () => undefined);
   }
 
   /**
@@ -189,7 +209,7 @@ export class SessionStores {
     });
   }
 
-  deleteStreamAfterOwnedExecutionRelease(
+  deleteStreamAfterExecutionQuiescence(
     stream: StreamTabId,
     options?: {
       readonly shouldDelete?: () => boolean;
@@ -206,7 +226,7 @@ export class SessionStores {
         // than enqueueing a second read that could decide the stream has no
         // execution and delete it.
         try {
-          await this.waitForOwnedExecutionRelease(stream);
+          await this.waitForExecutionQuiescence(stream);
         } catch (error) {
           log.warn(
             `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,

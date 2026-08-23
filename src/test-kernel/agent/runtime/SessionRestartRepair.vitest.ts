@@ -5,7 +5,6 @@ import { flowKey } from '@agent/node/persistedFlow';
 import {
   acquireFreshExecutionLease,
   completeOwnedExecutionLease,
-  resetExecutionLeaseCoordinationForTests,
 } from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -26,6 +25,7 @@ import {
   writeForeignLease,
   writeOrphanedLease,
 } from '@test/support/executionLeaseFixtures';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   appendTranscriptEntry,
@@ -157,7 +157,6 @@ afterEach(async () => {
     );
   }
   clearStoreCache();
-  resetExecutionLeaseCoordinationForTests();
 });
 
 describe('SessionHandle restart repair', () => {
@@ -530,59 +529,40 @@ describe('SessionHandle restart repair', () => {
     ).toBeUndefined();
   });
 
-  it('waits for execution artifacts before replacing workspace stores', async () => {
+  it('refuses a storage-root change while an execution is live and changes nothing', async () => {
     const liveExecutionId = 'workspace-live' as ExecutionId;
-    const transcripts = await StreamLogStore.open();
-    const session = openDeferredSession(transcripts);
-    await acquireFreshExecutionLease(liveExecutionId);
-    const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
-
-    try {
-      const replacement = session.reloadAfterStorageRootChange();
-      await Promise.resolve();
-
-      expect(reload).not.toHaveBeenCalled();
-      await completeOwnedExecutionLease(liveExecutionId);
-      await replacement;
-
-      expect(reload).toHaveBeenCalledOnce();
-    } finally {
-      await completeOwnedExecutionLease(liveExecutionId);
-    }
-  });
-
-  it('keeps the old storage root pinned until execution artifacts finish', async () => {
-    const liveExecutionId = 'workspace-root-pinned' as ExecutionId;
     const transcripts = await StreamLogStore.open();
     const session = openDeferredSession(transcripts);
     const storage = platform().storage;
     let activeRoot = '/workspace/old-storage';
     vi.spyOn(storage, 'getStoragePath').mockImplementation(() => activeRoot);
+    const commit = vi.fn(() => {
+      activeRoot = '/workspace/new-storage';
+      return true;
+    });
     Object.assign(storage, {
       hasPendingWorkspaceStorageChange: () => true,
-      commitWorkspaceStorageChange: () => {
-        activeRoot = '/workspace/new-storage';
-        return true;
-      },
+      commitWorkspaceStorageChange: commit,
     });
-    await acquireFreshExecutionLease(liveExecutionId);
     const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
+    const flush = vi.spyOn(transcripts, 'flush');
+    session.executions.track(
+      testExecutionHandle({
+        executionId: liveExecutionId,
+        parentStreamId: 'workspace-live-stream' as StreamTabId,
+        childStreamId: 'workspace-live-stream' as StreamTabId,
+        agent: 'assistant',
+      }),
+    );
 
-    try {
-      const replacement = session.reloadAfterStorageRootChange();
-      await Promise.resolve();
+    await expect(session.reloadAfterStorageRootChange()).rejects.toThrow(
+      'cannot change its storage location while 1 run is live',
+    );
 
-      expect(storage.getStoragePath()).toBe('/workspace/old-storage');
-      expect(reload).not.toHaveBeenCalled();
-
-      await completeOwnedExecutionLease(liveExecutionId);
-      await replacement;
-
-      expect(storage.getStoragePath()).toBe('/workspace/new-storage');
-      expect(reload).toHaveBeenCalledOnce();
-    } finally {
-      await completeOwnedExecutionLease(liveExecutionId);
-    }
+    expect(flush).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(storage.getStoragePath()).toBe('/workspace/old-storage');
   });
 
   it('flushes old-root stores before committing the new storage root', async () => {
@@ -807,7 +787,7 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
-  it('holds new root executions outside the workspace replacement', async () => {
+  it('refuses a launch while the workspace replacement is in flight', async () => {
     const queuedExecutionId = 'workspace-queued' as ExecutionId;
     const transcripts = await StreamLogStore.open();
     const session = openDeferredSession(transcripts);
@@ -816,26 +796,19 @@ describe('SessionHandle restart repair', () => {
       finishReload = resolve;
     });
     vi.spyOn(transcripts, 'reload').mockReturnValue(reloadBlocked);
+    const start = vi.fn(async () => undefined);
 
-    try {
-      const replacement = session.reloadAfterStorageRootChange();
-      await Promise.resolve();
-      const acquisition = acquireFreshExecutionLease(queuedExecutionId);
-      let acquired = false;
-      void acquisition.then(() => {
-        acquired = true;
-      });
-      await Promise.resolve();
+    const replacement = session.reloadAfterStorageRootChange();
+    await Promise.resolve();
+    await expect(
+      session.executions.launchExecution(queuedExecutionId, start),
+    ).rejects.toThrow('cannot change its storage location');
+    expect(start).not.toHaveBeenCalled();
 
-      expect(acquired).toBe(false);
-      finishReload?.();
-      await replacement;
-      await acquisition;
-
-      expect(acquired).toBe(true);
-    } finally {
-      await completeOwnedExecutionLease(queuedExecutionId);
-    }
+    finishReload?.();
+    await replacement;
+    await session.executions.launchExecution(queuedExecutionId, start);
+    expect(start).toHaveBeenCalledOnce();
   });
 
   it('surfaces a repair write failure at the readiness boundary', async () => {

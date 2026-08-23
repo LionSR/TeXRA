@@ -50,17 +50,13 @@ vi.mock('@agent/storage', async (importOriginal) => {
   return { ...actual, registerExecution: mocks.registerExecution };
 });
 
-// The launch sites register through `registerOwnedExecution`, which calls
-// `registerExecution` module-internally; route the spy through it the same way.
+// The launch sites register through `registerExecution`; route the spy through it.
 vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
   return {
     ...actual,
-    registerOwnedExecution: async (...args: unknown[]) => {
-      await mocks.registerExecution(...args);
-      return (operation: () => unknown) => operation();
-    },
+    registerExecution: mocks.registerExecution,
   };
 });
 
@@ -83,9 +79,7 @@ vi.mock('@tools/delegation/workflowScriptStrategy', async (importOriginal) => {
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  captureOwnedExecutionLease:
-    (_executionId: ExecutionId) => (operation: () => unknown) =>
-      operation(),
+  assertOwnedExecutionLease: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/childRunLoop', () => ({

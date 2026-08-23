@@ -65,9 +65,7 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  captureOwnedExecutionLease:
-    (_executionId: ExecutionId) => (operation: () => unknown) =>
-      operation(),
+  assertOwnedExecutionLease: vi.fn(),
   validateOwnedExecutionLease: vi.fn(async () => {}),
   abandonOwnedExecutionLease: vi.fn(),
   completeOwnedExecutionLease: vi.fn(async () => ({

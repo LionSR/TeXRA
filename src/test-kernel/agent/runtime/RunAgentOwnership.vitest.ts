@@ -21,9 +21,6 @@ vi.mock('@agent/storage/executionLease', () => ({
   abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
   completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
-  captureOwnedExecutionLease:
-    (_executionId: ExecutionId) => (operation: () => unknown) =>
-      operation(),
   markOwnedExecutionLeaseUndurable: mocks.markOwnedExecutionLeaseUndurable,
   validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
 }));
@@ -66,6 +63,10 @@ const SESSION = {
     untrack: vi.fn((executionId) => {
       if (trackedHandle?.executionId === executionId) trackedHandle = undefined;
     }),
+    // No competing generation exists in this fixture; the lane is a passthrough.
+    launchExecution: vi.fn((_executionId: ExecutionId, start: () => unknown) =>
+      start(),
+    ),
   },
   flushArtifacts,
   releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
@@ -163,7 +164,6 @@ describe('runAgent execution ownership', () => {
     expect(mocks.registerExecution).not.toHaveBeenCalled();
     expect(mocks.acquireResumedExecutionLease).toHaveBeenCalledWith(
       EXECUTION_ID,
-      undefined,
     );
     expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(
       EXECUTION_ID,
@@ -206,26 +206,6 @@ describe('runAgent execution ownership', () => {
     await launch({ kind: 'fresh' });
 
     expect(mocks.clearTerminalExecutionState).not.toHaveBeenCalled();
-  });
-
-  it('abandons a resume whose canonical admission is withdrawn under the lease lock', async () => {
-    let canonical = true;
-    mocks.acquireResumedExecutionLease.mockImplementationOnce(
-      async (_executionId: ExecutionId, canAcquire: () => boolean) => {
-        canonical = false;
-        return canAcquire() ? 'acquired' : 'cancelled';
-      },
-    );
-
-    await expect(
-      launch({ canAcquireResumeLease: () => canonical }),
-    ).rejects.toThrow();
-
-    expect(mocks.acquireResumedExecutionLease).toHaveBeenCalledWith(
-      EXECUTION_ID,
-      expect.any(Function),
-    );
-    expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
 
   it('persists an early launch error before releasing ownership', async () => {

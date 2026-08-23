@@ -388,10 +388,6 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   mocks.doMock('@agent/runtime/executeAgent', () => ({
     resumeToolUseFromResumeData:
       options.resumeToolUseFromResumeData ?? vi.fn(async () => {}),
-    // `resumeQueuedToolUse` narrows admission cancellation by `instanceof`
-    // against this module's error; the stubbed launcher never throws one, so a
-    // stand-in class keeps that branch false.
-    ResumeAdmissionCancelledError: class extends Error {},
   }));
   mocks.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(),
@@ -2119,23 +2115,6 @@ describe('DesktopProgressBridge', () => {
     );
   });
 
-  it('does not resume a stream deleted in this desktop session', async () => {
-    const retrieveSessionResumeData = vi.fn(async () =>
-      searchToolUseResumeData(),
-    );
-    const bridge = await createBridge([], {
-      canonicalStreamIds: ['stream-1'],
-      retrieveSessionResumeData,
-    });
-
-    emitSearchRunConfig(bridge);
-
-    await deleteStreamViaInbound(bridge, 'stream-1');
-    emitSearchRunConfig(bridge);
-    await expect(tryResumeStream('stream-1')).resolves.toBe(false);
-    expect(retrieveSessionResumeData).not.toHaveBeenCalled();
-  });
-
   it('forgets desktop goal records when deleting a stream', async () => {
     const stream = 'goal-stream' as StreamTabId;
     const bridge = await createBridge([]);
@@ -3658,7 +3637,7 @@ describe('DesktopProgressBridge', () => {
 
       const leaseReleased = createDeferred();
       const waitForRelease = vi
-        .spyOn(owner.sessionStores, 'waitForOwnedExecutionRelease')
+        .spyOn(owner.sessionStores, 'waitForExecutionQuiescence')
         .mockReturnValue(leaseReleased.promise);
 
       try {
@@ -3719,12 +3698,12 @@ describe('DesktopProgressBridge', () => {
       const firstRelease = createDeferred();
       const secondRelease = createDeferred();
       const waitForRelease = vi
-        .spyOn(owner.sessionStores, 'waitForOwnedExecutionRelease')
+        .spyOn(owner.sessionStores, 'waitForExecutionQuiescence')
         .mockReturnValueOnce(firstRelease.promise)
         .mockReturnValueOnce(secondRelease.promise);
       const processFallback = vi.spyOn(
         owner.sessionStores,
-        'deleteStreamAfterOwnedExecutionRelease',
+        'deleteStreamAfterExecutionQuiescence',
       );
 
       try {

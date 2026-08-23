@@ -5,6 +5,8 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
+import PQueue from 'p-queue';
+
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import {
   ExecutionLeaseLostError,
@@ -56,8 +58,12 @@ interface ExecutionStopOptions {
 }
 
 /**
- * A child loop that has started synchronously but whose first run handle is
- * still being constructed.
+ * A child loop's lineage for the loop's whole life: from the synchronous start
+ * of the loop, across every turn handle it tracks and untracks, until its
+ * final result has been delivered to the parent. The parent counts it as an
+ * active child throughout, so the parent's continuation stays recoverable
+ * until the last delivery has landed and a child result can never arrive
+ * after the parent's queue went terminal.
  */
 export interface ChildExecutionActivation {
   readonly executionId: ExecutionId;
@@ -70,6 +76,29 @@ export interface ChildExecutionActivation {
 
 interface TerminateOptions {
   readonly cascadeChildren?: boolean;
+}
+
+/**
+ * The serial lifecycle lane of one execution id. Launch, resume, delete and
+ * any other lifecycle step run through `queue` one at a time, and each step
+ * first waits for `live`, the generation the last launch started, to dispose.
+ * Generations of one execution therefore never coexist: a resume cannot mint
+ * a lease while the previous run still holds one, and a delete cannot run
+ * under a live run. Stop is a signal to the live generation, not a step.
+ */
+interface ExecutionLane {
+  readonly queue: PQueue;
+  live: Promise<void> | undefined;
+  /** Steps admitted but not yet started; rejected if the session disposes. */
+  readonly waiting: Set<(error: Error) => void>;
+}
+
+/** Resolve when `promise` settles either way; a lane waits, it never fails. */
+function settled(promise: Promise<unknown>): Promise<void> {
+  return promise.then(
+    () => undefined,
+    () => undefined,
+  );
 }
 
 export type ToolUseFollowUpQueueReason =
@@ -169,6 +198,11 @@ export class ExecutionRegistry {
   private readonly childActivationListeners: ListenerSet<
     (activation: ChildExecutionActivation, active: boolean) => void
   > = createListenerSet();
+  private readonly lanes = new Map<string, ExecutionLane>();
+  /** Generations started on a lane that have not yet disposed. */
+  private readonly liveGenerations = new Map<string, Promise<void>>();
+  /** While set, every new lifecycle step is refused with this error. */
+  private lifecycleHold: Error | undefined;
 
   constructor(options: ExecutionRegistryInit) {
     this.events = options.events;
@@ -198,6 +232,16 @@ export class ExecutionRegistry {
     if (this.disposed) return;
     this.disposed = true;
     this.disposeStatusSubscription();
+    const disposal = new Error(
+      'Cannot register execution work after session disposal.',
+    );
+    for (const lane of this.lanes.values()) {
+      lane.queue.clear();
+      for (const reject of lane.waiting) reject(disposal);
+      lane.waiting.clear();
+    }
+    this.lanes.clear();
+    this.liveGenerations.clear();
     const executionIds = [...this.handles.keys()];
     this.handles.clear();
     for (const executionId of executionIds) {
@@ -211,6 +255,128 @@ export class ExecutionRegistry {
     this.listeners.clear();
     this.registrationListeners.clear();
     this.childActivationListeners.clear();
+  }
+
+  /**
+   * Refuse new lifecycle steps (launches, resumes, deletes) until the
+   * returned release runs. Throws `refusal(live)` instead, changing nothing,
+   * when any execution is live: session maintenance that would pull the
+   * storage out from under a run is refused, never queued behind it.
+   */
+  holdLifecycle(refusal: (liveExecutionIds: string[]) => Error): () => void {
+    this.assertActive();
+    const live = [
+      ...new Set([...this.handles.keys(), ...this.liveGenerations.keys()]),
+    ];
+    if (live.length > 0) throw refusal(live);
+    if (this.lifecycleHold) throw this.lifecycleHold;
+    const hold = refusal([]);
+    this.lifecycleHold = hold;
+    return () => {
+      if (this.lifecycleHold === hold) this.lifecycleHold = undefined;
+    };
+  }
+
+  /**
+   * Run one lifecycle step of `executionId` after every earlier step has
+   * returned and the generation the last launch started has disposed.
+   */
+  runExecutionStep<T>(executionId: string, step: () => Promise<T>): Promise<T> {
+    return this.enqueueLaneStep(executionId, () => {
+      const result = step();
+      return { result, hold: result };
+    });
+  }
+
+  /**
+   * Launch a generation of `executionId` as a lifecycle step: `start` begins
+   * once the previous generation has disposed, and its promise becomes the
+   * generation later steps wait on. The step itself returns as soon as the run
+   * has begun, so a parent launching a child is never held by the child's
+   * lifetime and a step never waits on a run for which it holds the lane.
+   */
+  launchExecution<T>(executionId: string, start: () => Promise<T>): Promise<T> {
+    return this.enqueueLaneStep(executionId, (lane) => {
+      const result = start();
+      this.setLiveGeneration(lane, executionId, result);
+      return { result, hold: undefined };
+    });
+  }
+
+  private setLiveGeneration(
+    lane: ExecutionLane,
+    executionId: string,
+    generation: Promise<unknown>,
+  ): void {
+    const live = settled(generation);
+    lane.live = live;
+    this.liveGenerations.set(executionId, live);
+    void live.then(() => {
+      if (this.liveGenerations.get(executionId) === live) {
+        this.liveGenerations.delete(executionId);
+      }
+    });
+  }
+
+  private enqueueLaneStep<T>(
+    executionId: string,
+    step: (lane: ExecutionLane) => {
+      readonly result: Promise<T>;
+      /** What the lane stays held for; `undefined` releases it at once. */
+      readonly hold: Promise<unknown> | undefined;
+    },
+  ): Promise<T> {
+    this.assertActive();
+    if (this.lifecycleHold) return Promise.reject(this.lifecycleHold);
+    const lane = this.lanes.get(executionId) ?? this.createLane();
+    this.lanes.set(executionId, lane);
+    let settle!: (result: Promise<T>) => void;
+    let refuse!: (error: Error) => void;
+    const handedOut = new Promise<Promise<T>>((resolve, reject) => {
+      settle = resolve;
+      refuse = reject;
+    });
+    lane.waiting.add(refuse);
+    void lane.queue
+      .add(async () => {
+        await lane.live;
+        // A disposal during the wait already refused this step.
+        if (!lane.waiting.delete(refuse)) return;
+        let run: ReturnType<typeof step>;
+        try {
+          run = step(lane);
+        } catch (error) {
+          settle(Promise.reject(error));
+          return;
+        }
+        settle(run.result);
+        if (run.hold) await settled(run.hold);
+      })
+      .finally(() => this.forgetIdleLane(executionId, lane));
+    return handedOut.then((result) => result);
+  }
+
+  private createLane(): ExecutionLane {
+    return {
+      queue: new PQueue({ concurrency: 1 }),
+      live: undefined,
+      waiting: new Set(),
+    };
+  }
+
+  private forgetIdleLane(executionId: string, lane: ExecutionLane): void {
+    if (lane.queue.size !== 0 || lane.queue.pending !== 0) return;
+    if (this.lanes.get(executionId) !== lane) return;
+    const live = lane.live;
+    if (live === undefined) {
+      this.lanes.delete(executionId);
+      return;
+    }
+    void live.then(() => {
+      if (lane.live !== live) return;
+      lane.live = undefined;
+      this.forgetIdleLane(executionId, lane);
+    });
   }
 
   /** Register an execution handle. */
@@ -235,7 +401,6 @@ export class ExecutionRegistry {
       });
     }
     this.notifyRegistrationListeners(handle.executionId, handle);
-    this.releaseChildActivation(handle.executionId);
     this.notifyWaiters(handle.executionId);
   }
 
@@ -529,9 +694,13 @@ export class ExecutionRegistry {
     visited: Set<string>,
     options: TerminateOptions,
   ): void {
+    // A loop between turns has no handle to interrupt; a loop inside a turn
+    // also gets its turn handle terminated below. The activation is keyed
+    // apart from the handle so each is interrupted once per stop.
     for (const activation of this.activeChildActivations(parentStreamId)) {
-      if (visited.has(activation.executionId)) continue;
-      visited.add(activation.executionId);
+      const key = `activation:${activation.executionId}`;
+      if (visited.has(key)) continue;
+      visited.add(key);
       activation.interrupt();
     }
     for (const handle of this.handles.values()) {
@@ -638,16 +807,12 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Retain lineage while a newly started child loop is constructing its first
-   * execution handle. Tracking that handle promotes the activation
-   * automatically; the returned disposer covers startup failure.
+   * Retain a child loop's lineage until the returned disposer runs, which the
+   * loop does only after its final delivery to the parent.
    */
   reserveChildActivation(activation: ChildExecutionActivation): () => void {
     this.assertActive();
-    if (
-      this.handles.has(activation.executionId) ||
-      this.childActivations.has(activation.executionId)
-    ) {
+    if (this.childActivations.has(activation.executionId)) {
       return () => {};
     }
     this.childActivations.set(activation.executionId, activation);
@@ -735,6 +900,17 @@ export class ExecutionRegistry {
     if (options.cascadeChildren === true) {
       this.interruptActiveChildren(handle.childStreamId, visited, options);
     }
+    // A child execution is its loop, not only the turn this handle runs:
+    // stopping it ends the loop too, so the interrupted turn is not delivered
+    // to the parent as a completed one.
+    const activation = this.childActivations.get(handle.executionId);
+    if (activation && !activation.isDetached()) {
+      const key = `activation:${activation.executionId}`;
+      if (!visited.has(key)) {
+        visited.add(key);
+        activation.interrupt();
+      }
+    }
     if (handle.interrupt()) {
       this.cancelStreamStatus(handle.childStreamId);
       return true;
@@ -795,52 +971,59 @@ export class ExecutionRegistry {
       category: handle.category,
       isSubagent: handle.isChildExecution,
     };
-    void this.finishWaitingTermination(handle, teardown, cancelledResult).catch(
-      async (error: unknown) => {
-        const recoveryFailures = [error];
-        if (!(error instanceof ExecutionLeaseLostError)) {
-          try {
-            await handle.runWithExecutionLease(async () => {
-              markOwnedExecutionLeaseUndurable(handle.executionId);
-              const untracked = this.settleTerminal(handle, cancelledResult, {
-                publish: false,
-                untrackMode: 'ifCurrent',
-              });
-              if (untracked && !handle.isChildExecution) {
-                await this.releaseRootExecutionLease(handle.executionId);
-              }
-            });
-            logger.warn(
-              'Waiting-execution termination failed; recovered under the execution lease',
-              { data: { executionId: handle.executionId, recoveryFailures } },
-            );
-            return;
-          } catch (recoveryError) {
-            recoveryFailures.push(recoveryError);
+    const termination = this.finishWaitingTermination(
+      handle,
+      teardown,
+      cancelledResult,
+    ).catch(async (error: unknown) => {
+      const recoveryFailures = [error];
+      if (!(error instanceof ExecutionLeaseLostError)) {
+        try {
+          markOwnedExecutionLeaseUndurable(handle.executionId);
+          const untracked = this.settleTerminal(handle, cancelledResult, {
+            publish: false,
+            untrackMode: 'ifCurrent',
+          });
+          if (untracked && !handle.isChildExecution) {
+            await this.releaseRootExecutionLease(handle.executionId);
           }
+          logger.warn(
+            'Waiting-execution termination failed; recovered under the execution lease',
+            { data: { executionId: handle.executionId, recoveryFailures } },
+          );
+          return;
+        } catch (recoveryError) {
+          recoveryFailures.push(recoveryError);
         }
+      }
 
-        // A former generation owns only its private result. It must not mark,
-        // release, untrack, or cancel a locally reacquired successor.
-        try {
-          handle.settleResult(cancelledResult);
-        } catch (recoveryError) {
-          recoveryFailures.push(recoveryError);
+      // A former generation owns only its private result. It must not mark,
+      // release, untrack, or cancel a locally reacquired successor.
+      try {
+        handle.settleResult(cancelledResult);
+      } catch (recoveryError) {
+        recoveryFailures.push(recoveryError);
+      }
+      try {
+        const untracked = this.untrackIfCurrent(handle);
+        if (untracked) {
+          this.cancelStreamStatus(handle.childStreamId);
         }
-        try {
-          const untracked = this.untrackIfCurrent(handle);
-          if (untracked) {
-            this.cancelStreamStatus(handle.childStreamId);
-          }
-        } catch (recoveryError) {
-          recoveryFailures.push(recoveryError);
-        }
-        logger.warn(
-          'Waiting-execution termination failed; settled the run without durable finalization',
-          { data: { executionId: handle.executionId, recoveryFailures } },
-        );
-      },
-    );
+      } catch (recoveryError) {
+        recoveryFailures.push(recoveryError);
+      }
+      logger.warn(
+        'Waiting-execution termination failed; settled the run without durable finalization',
+        { data: { executionId: handle.executionId, recoveryFailures } },
+      );
+    });
+    // The teardown releases the execution lease: it is the tail of the
+    // suspended generation, so the lane waits for it before a resume can
+    // claim the execution again.
+    const lane = this.lanes.get(handle.executionId) ?? this.createLane();
+    this.lanes.set(handle.executionId, lane);
+    this.setLiveGeneration(lane, handle.executionId, termination);
+    this.forgetIdleLane(handle.executionId, lane);
     return true;
   }
 
@@ -849,69 +1032,54 @@ export class ExecutionRegistry {
     teardown: Promise<void>,
     cancelledResult: ResultEvent,
   ): Promise<void> {
-    return await handle.runWithExecutionLease(async () => {
-      try {
-        await teardown;
-      } catch (error) {
-        // Transcript closure and terminal execution metadata are independent
-        // durable facts. Preserve the failed artifact fence, but still give the
-        // terminal status its own opportunity to reach disk.
-        markOwnedExecutionLeaseUndurable(handle.executionId);
-        logger.warn(
-          'Waiting-execution cleanup failed; continuing terminal persistence',
-          { data: { executionId: handle.executionId, error } },
-        );
-      }
+    try {
+      await teardown;
+    } catch (error) {
+      // Transcript closure and terminal execution metadata are independent
+      // durable facts. Preserve the failed artifact fence, but still give the
+      // terminal status its own opportunity to reach disk.
+      markOwnedExecutionLeaseUndurable(handle.executionId);
+      logger.warn(
+        'Waiting-execution cleanup failed; continuing terminal persistence',
+        { data: { executionId: handle.executionId, error } },
+      );
+    }
 
-      if (this.handles.get(handle.executionId) !== handle) {
-        // `track` transfers the pending stop to a resumed successor. The old
-        // handle still needs its private result settled, but it no longer owns
-        // the shared stream, execution metadata, or lease.
-        handle.settleResult(cancelledResult);
-        return;
-      }
+    if (this.handles.get(handle.executionId) !== handle) {
+      // `track` transfers the pending stop to a resumed successor. The old
+      // handle still needs its private result settled, but it no longer owns
+      // the shared stream, execution metadata, or lease.
+      handle.settleResult(cancelledResult);
+      return;
+    }
 
-      if (handle.executionLeaseLost) {
-        logger.warn('Discarding a stopped waiting execution after lease loss', {
-          data: { executionId: handle.executionId },
-        });
-        // Settle the in-memory result only: the former owner must not publish or
-        // persist a terminal event, but this promise must resolve on every exit.
-        this.settleTerminal(handle, cancelledResult, {
-          publish: false,
-          untrackMode: 'unconditional',
-        });
-        return;
-      }
+    // Cleanup closes the suspended run's transcript group. Publish the
+    // terminal state only after that owned artifact is settled so every host
+    // observes one coherent cancellation boundary.
+    this.settleTerminal(handle, cancelledResult, {
+      publish: true,
+      untrackMode: 'unconditional',
+    });
 
-      // Cleanup closes the suspended run's transcript group. Publish the
-      // terminal state only after that owned artifact is settled so every host
-      // observes one coherent cancellation boundary.
-      this.settleTerminal(handle, cancelledResult, {
-        publish: true,
-        untrackMode: 'unconditional',
+    try {
+      await persistTerminalExecution({
+        executionId: handle.executionId,
+        outcome: RUN_OUTCOME.CANCELLED,
+        flowRecord: 'delete',
+        logger,
+        failedMessage: 'Failed to finalize stopped waiting execution',
       });
-
-      try {
-        await persistTerminalExecution({
-          executionId: handle.executionId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'delete',
-          logger,
-          failedMessage: 'Failed to finalize stopped waiting execution',
-        });
-      } finally {
-        if (!handle.isChildExecution) {
-          try {
-            await this.releaseRootExecutionLease(handle.executionId);
-          } catch (error) {
-            logger.warn('Waiting-execution artifact flush failed', {
-              data: { executionId: handle.executionId, error },
-            });
-          }
+    } finally {
+      if (!handle.isChildExecution) {
+        try {
+          await this.releaseRootExecutionLease(handle.executionId);
+        } catch (error) {
+          logger.warn('Waiting-execution artifact flush failed', {
+            data: { executionId: handle.executionId, error },
+          });
         }
       }
-    });
+    }
   }
 
   /**

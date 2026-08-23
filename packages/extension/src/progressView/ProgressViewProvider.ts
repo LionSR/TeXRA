@@ -4,7 +4,11 @@ import * as vscode from 'vscode';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import { attachTerminalResultToast, defaultSession } from '@agent/runtime';
+import {
+  attachTerminalResultToast,
+  defaultSession,
+  StorageRootChangeRefusedError,
+} from '@agent/runtime';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -207,7 +211,9 @@ export class ProgressViewProvider extends BaseWebviewProvider {
               { data: error },
             );
             void vscode.window.showErrorMessage(
-              'TeXRA could not reload settings and transcripts after the workspace changed. Retry the workspace change or restart TeXRA.',
+              error instanceof StorageRootChangeRefusedError
+                ? error.message
+                : 'TeXRA could not reload settings and transcripts after the workspace changed. Retry the workspace change or restart TeXRA.',
             );
           },
         );

@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
+import { registerExecution } from '@agent/storage/executionLifecycle';
 import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
@@ -515,7 +515,7 @@ export class BashTool extends defineTool({
     // The durable record states only what a shell command has: no execution
     // mode, no model. The synthetic AgentConfig above feeds the ephemeral
     // live wire only.
-    const runWithOwnership = await registerOwnedExecution(
+    await registerExecution(
       executionId,
       { name: 'bash', instruction: command },
       'bash',
@@ -528,45 +528,43 @@ export class BashTool extends defineTool({
       },
     );
 
-    await runWithOwnership(() =>
-      startDetachedChildRunLoop({
-        executionId,
-        parentStreamId,
-        childStreamId,
-        agentName: 'bash',
-        // A background shell is an external process on no model budget, like
-        // the agent-CLI children (see the child-run concurrency budget note).
-        budgeted: false,
-        createChildStream: () =>
-          createChildStream(executionId, parentStreamId, {
-            streamPrefix: BASH_CHILD_STREAM_PREFIX,
-            run: { kind: 'process', tool: 'bash' },
-            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-            description: command,
-            config: syntheticConfig,
+    await startDetachedChildRunLoop({
+      executionId,
+      parentStreamId,
+      childStreamId,
+      agentName: 'bash',
+      // A background shell is an external process on no model budget, like
+      // the agent-CLI children (see the child-run concurrency budget note).
+      budgeted: false,
+      createChildStream: () =>
+        createChildStream(executionId, parentStreamId, {
+          streamPrefix: BASH_CHILD_STREAM_PREFIX,
+          run: { kind: 'process', tool: 'bash' },
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+          description: command,
+          config: syntheticConfig,
+        }),
+      buildLaunch: async (childStream) => {
+        return {
+          strategy: createBackgroundBashStrategy({
+            executionId,
+            command,
+            timeoutMs,
+            cwd,
+            logger: childStream.logger,
           }),
-        buildLaunch: async (childStream) => {
-          return {
-            strategy: createBackgroundBashStrategy({
-              executionId,
-              command,
-              timeoutMs,
-              cwd,
-              logger: childStream.logger,
-            }),
-            // Nobody awaits this run: own late loop failures here as trace
-            // diagnostics, since the loop already owns its one user-facing
-            // result delivery.
-            onLoopFailed: (error: unknown): void => {
-              childStream.logger.error(
-                'Background command run loop failed after launch',
-                { data: error },
-              );
-            },
-          };
-        },
-      }),
-    );
+          // Nobody awaits this run: own late loop failures here as trace
+          // diagnostics, since the loop already owns its one user-facing
+          // result delivery.
+          onLoopFailed: (error: unknown): void => {
+            childStream.logger.error(
+              'Background command run loop failed after launch',
+              { data: error },
+            );
+          },
+        };
+      },
+    });
 
     return executed(
       [

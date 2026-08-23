@@ -3,10 +3,7 @@
 
 import { registerExecution } from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
-import {
-  captureOwnedExecutionLease,
-  releaseOwnedExecutionLeaseAfterFailure,
-} from '@agent/storage/executionLease';
+import { releaseOwnedExecutionLeaseAfterFailure } from '@agent/storage/executionLease';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   currentSession,
@@ -226,47 +223,43 @@ export async function launchAgentCliSession(
   } catch {
     throw new ToolError(params.registerFailedMessage);
   }
-  const runWithOwnership = captureOwnedExecutionLease(executionId);
-
-  return runWithOwnership(async () => {
-    let childStream: ChildStream | undefined;
-    try {
-      childStream = createChildStream(executionId, params.parentStreamId, {
-        streamPrefix: params.streamPrefix,
-        run: identity,
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-        description: params.description,
-        config: params.config,
-      });
-      await params.startLoop({ childStream, executionId });
-    } catch (error) {
-      let failure = error;
-      if (childStream) {
-        try {
-          await childStream.finalize({
-            outcome: { kind: 'failed', error },
-            persistence: { kind: 'finalize', flowRecord: 'delete' },
-          });
-        } catch (finalizeError) {
-          failure = new AggregateError(
-            [error, finalizeError],
-            `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
-          );
-        }
+  let childStream: ChildStream | undefined;
+  try {
+    childStream = createChildStream(executionId, params.parentStreamId, {
+      streamPrefix: params.streamPrefix,
+      run: identity,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+      description: params.description,
+      config: params.config,
+    });
+    await params.startLoop({ childStream, executionId });
+  } catch (error) {
+    let failure = error;
+    if (childStream) {
+      try {
+        await childStream.finalize({
+          outcome: { kind: 'failed', error },
+          persistence: { kind: 'finalize', flowRecord: 'delete' },
+        });
+      } catch (finalizeError) {
+        failure = new AggregateError(
+          [error, finalizeError],
+          `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
+        );
       }
-      throw await releaseOwnedExecutionLeaseAfterFailure(executionId, failure);
     }
+    throw await releaseOwnedExecutionLeaseAfterFailure(executionId, failure);
+  }
 
-    return executed(
-      [
-        params.launchedLine,
-        `Execution ID: ${executionId}`,
-        `Stream tab: ${childStream.childStreamId}`,
-        params.followUpLine,
-      ].join('\n'),
-      params.summary,
-    );
-  });
+  return executed(
+    [
+      params.launchedLine,
+      `Execution ID: ${executionId}`,
+      `Stream tab: ${childStream.childStreamId}`,
+      params.followUpLine,
+    ].join('\n'),
+    params.summary,
+  );
 }
 
 /**

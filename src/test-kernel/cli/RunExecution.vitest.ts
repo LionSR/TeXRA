@@ -159,10 +159,7 @@ type LeaseOptions = {
   onRun?: () => void;
   launchSignal?: AbortSignal;
   session?: SessionHandle;
-  onExecutionLeaseAcquired?: (
-    scope: (operation: () => unknown) => unknown,
-    executionId: ExecutionId,
-  ) => void;
+  onExecutionLeaseAcquired?: (executionId: ExecutionId) => void;
 };
 
 /**
@@ -208,11 +205,6 @@ async function spyOnTranscriptFlush() {
   const store = defaultSession().transcripts;
   const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
   return { store, flushSpy };
-}
-
-/** Lease-scope runner for tests that don't need to observe the wrapper. */
-function runOperationSync(operation: () => unknown): unknown {
-  return operation();
 }
 
 async function stubRunExecutionDeps(): Promise<void> {
@@ -263,10 +255,7 @@ async function stubRunExecutionDeps(): Promise<void> {
     flowRecord: 'deleted',
   });
   mocks.runAgent.mockImplementation(async (_request, options) => {
-    options.onExecutionLeaseAcquired?.(
-      runOperationSync,
-      'exec-1' as ExecutionId,
-    );
+    options.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     return COMPLETED_RUN;
   });
 }
@@ -798,10 +787,7 @@ describe('executeCliRequest', () => {
     const request = baseRequest();
     const context = cliContext();
     mocks.runAgent.mockImplementationOnce(async (_request, options) => {
-      options.onExecutionLeaseAcquired?.(
-        runOperationSync,
-        'exec-1' as ExecutionId,
-      );
+      options.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
       options.onApprovalPolicyDenial?.();
       return COMPLETED_RUN;
     });
@@ -867,7 +853,6 @@ describe('executeCliRequest', () => {
       mocks.releaseExecutionLeaseAfterArtifacts.mockImplementationOnce(
         async (session, executionId) => session.flushArtifacts(executionId),
       );
-      const runWithOwnership = vi.fn((operation: () => unknown) => operation());
       let settleRecoveryWrite!: () => void;
       const recoveryWrite = new Promise<void>((resolve) => {
         settleRecoveryWrite = resolve;
@@ -887,7 +872,7 @@ describe('executeCliRequest', () => {
       const shutdown = platform.lifecycle.runShutdown();
       await Promise.resolve();
       expect(mocks.finalizeExecution).not.toHaveBeenCalled();
-      publishLeaseScope?.(runWithOwnership, 'exec-1' as ExecutionId);
+      publishLeaseScope?.('exec-1' as ExecutionId);
       publishRun?.();
       await Promise.resolve();
       expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
@@ -908,7 +893,6 @@ describe('executeCliRequest', () => {
       expect(shutdownResolved).toBe(false);
       settleRecoveryWrite();
       await shutdown;
-      expect(runWithOwnership).toHaveBeenCalledOnce();
       expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledOnce();
       expect(flushSpy).toHaveBeenCalled();
       expect(mocks.finalizeExecution).toHaveBeenCalledWith({
@@ -963,7 +947,7 @@ describe('executeCliRequest', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
+    publishLeaseScope?.('exec-1' as ExecutionId);
     publishRun?.();
     mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
@@ -1014,7 +998,7 @@ describe('executeCliRequest', () => {
       });
       await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
       const shutdown = platform.lifecycle.runShutdown();
-      publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
+      publishLeaseScope?.('exec-1' as ExecutionId);
       publishRun?.();
       mockCancelledOutcome();
       hangingRun.resolve(COMPLETED_RUN);
@@ -1042,7 +1026,6 @@ describe('executeCliRequest', () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     const drainError = new Error('snapshot drain failed');
     mocks.releaseExecutionLeaseAfterArtifacts.mockRejectedValueOnce(drainError);
-    const runWithOwnership = vi.fn((operation: () => unknown) => operation());
     let leaseOptions: LeaseOptions | undefined;
     const hangingRun = stubHangingRun((options) => {
       leaseOptions = options;
@@ -1050,10 +1033,7 @@ describe('executeCliRequest', () => {
 
     const run = executeCliRequest(baseRequest(), cliContext(), {});
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
-    leaseOptions?.onExecutionLeaseAcquired?.(
-      runWithOwnership,
-      'exec-1' as ExecutionId,
-    );
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     const shutdown = platform.lifecycle.runShutdown();
 
     await expect(leaseOptions?.beforeLeaseRelease?.()).rejects.toBe(drainError);
@@ -1101,10 +1081,7 @@ describe('executeCliRequest', () => {
     });
     const run = executeCliRequest(baseRequest(), cliContext(), {});
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
-    leaseOptions?.onExecutionLeaseAcquired?.(
-      runOperationSync,
-      'exec-1' as ExecutionId,
-    );
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     leaseOptions?.onRun?.();
 
     const shutdown = platform.lifecycle.runShutdown();
@@ -1131,10 +1108,7 @@ describe('executeCliRequest', () => {
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
 
     const shutdown = platform.lifecycle.runShutdown();
-    leaseOptions?.onExecutionLeaseAcquired?.(
-      runOperationSync,
-      'exec-1' as ExecutionId,
-    );
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     leaseOptions?.onRun?.();
     await leaseOptions?.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
     mockCancelledOutcome();
@@ -1168,10 +1142,7 @@ describe('executeCliRequest', () => {
       },
     });
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
-    leaseOptions?.onExecutionLeaseAcquired?.(
-      runOperationSync,
-      'exec-1' as ExecutionId,
-    );
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     leaseOptions?.onRun?.();
     await leaseOptions?.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
 
@@ -1196,7 +1167,6 @@ describe('executeCliRequest', () => {
     // earlier test's `vi.resetModules()` in this file.
     const { AgentError: RuntimeAgentError } = await import('@common/errors');
     const killSpy = vi.spyOn(defaultSession().executions, 'kill');
-    const runWithOwnership = vi.fn((operation: () => unknown) => operation());
     const outputFailure = new Error(
       'Workflow completed without generated outputs; nothing was copied to out.',
     );
@@ -1208,10 +1178,7 @@ describe('executeCliRequest', () => {
     });
     mocks.runAgent.mockImplementationOnce(
       async (_request: unknown, options: LeaseOptions) => {
-        options.onExecutionLeaseAcquired?.(
-          runWithOwnership,
-          'exec-1' as ExecutionId,
-        );
+        options.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
         options.onRun?.();
         try {
           await options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
@@ -1254,29 +1221,29 @@ describe('executeCliRequest', () => {
     });
   });
 
-  it('does not finalize shutdown through a captured lease that is already lost', async () => {
+  it('does not report a shutdown drain that fails because the lease is already lost', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     // Imported dynamically (matching the module above) so the `instanceof`
     // check in runExecution.ts sees the same module instance even after an
     // earlier test's `vi.resetModules()` in this file.
-    const { ExecutionLeaseLostError } =
-      await import('@agent/storage/executionLease');
+    const { ExecutionLeaseLostError } = await import('@agent/storage');
+    mocks.releaseExecutionLeaseAfterArtifacts.mockRejectedValueOnce(
+      new ExecutionLeaseLostError('exec-1' as ExecutionId),
+    );
+    let leaseOptions: LeaseOptions | undefined;
     const hangingRun = stubHangingRun((options) => {
-      options.onExecutionLeaseAcquired?.(() => {
-        throw new ExecutionLeaseLostError('exec-1');
-      }, 'exec-1' as ExecutionId);
+      leaseOptions = options;
     });
 
     const run = executeCliRequest(baseRequest(), cliContext(), {});
-    await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(leaseOptions).toBeDefined());
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     const shutdown = platform.lifecycle.runShutdown();
-    await Promise.resolve();
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
 
+    await expect(leaseOptions?.beforeLeaseRelease?.()).resolves.toBe(false);
     hangingRun.resolve(COMPLETED_RUN);
     await shutdown;
     await run;
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
 
   it('closes the runtime host when shutdown finalization fails', async () => {
@@ -1289,10 +1256,7 @@ describe('executeCliRequest', () => {
       outcomePersisted: false,
     });
     const hangingRun = stubHangingRun((options) => {
-      options.onExecutionLeaseAcquired?.(
-        runOperationSync,
-        'exec-1' as ExecutionId,
-      );
+      options.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     });
 
     const onInterruptedExecutionFinalized = vi.fn();
@@ -1392,7 +1356,7 @@ describe('executeCliConfig', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
+    publishLeaseScope?.('exec-1' as ExecutionId);
     publishRun?.();
     mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
@@ -1432,7 +1396,7 @@ describe('executeCliConfig', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
+    publishLeaseScope?.('exec-1' as ExecutionId);
     publishRun?.();
     mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);

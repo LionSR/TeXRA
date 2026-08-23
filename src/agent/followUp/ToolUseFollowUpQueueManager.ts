@@ -1,11 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
-import { LRUCache } from 'lru-cache';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { throwAggregated } from '@utils/core';
-import { KeyedMutex } from '@utils/core/keyedMutex';
 import {
   createBoundedIdSet,
   type BoundedIdSet,
@@ -32,7 +30,6 @@ interface QueueEntry {
    */
   readonly admittedDeliveryIds: BoundedIdSet<string>;
   lifecycle: QueueLifecycle;
-  generation: number;
   owner?: FollowUpConsumerLease;
 }
 
@@ -40,14 +37,13 @@ interface QueueEntry {
  * Exclusive authority to consume one stream's follow-up queue.
  *
  * The manager issues at most one lease per entry. Claims and releases are
- * synchronous, and every lease carries the entry generation it claimed. A
- * release from an older flow/child therefore cannot clear or terminalize a
- * successor recovery generation. Only the lease may wait, drain, or dispose;
- * producers submit through the manager and cannot manufacture a consumer.
+ * synchronous, and a lease is valid only while it is the entry's owner, so a
+ * release from an older flow/child cannot clear or terminalize a successor.
+ * Only the lease may wait, drain, or dispose; producers submit through the
+ * manager and cannot manufacture a consumer.
  */
 export interface FollowUpConsumerLease {
   readonly streamId: StreamTabId;
-  readonly generation: number;
   /** Opaque identity of this session-owned queue generation. */
   readonly generationId: string;
   readonly kind: FollowUpConsumerKind;
@@ -72,18 +68,15 @@ export type FollowUpSubmission =
  * Session-owned continuation boundary indexed by stream ID.
  *
  * Lifecycle is explicit: an owned entry is `live` or `recovering`, an unowned
- * persisted cursor is `recoverable`, and terminal stream ids are retained in a
- * bounded tombstone cache. Delivery and ordinary live claims cannot reopen a
- * terminal entry; a newly authorized child run may begin a new generation.
+ * persisted cursor is `recoverable`, and a terminal entry is simply gone. A
+ * parent counts every child as active until the child's final delivery has
+ * landed, and a stream with no live flow, no children and a terminal phase
+ * refuses submission before it reaches this boundary, so nothing needs to
+ * remember which streams went terminal.
  */
 export class ToolUseFollowUpQueue {
-  static readonly TERMINAL_CAP = 500;
   static readonly DELIVERY_ID_CAP = 1000;
   private readonly entries = new Map<StreamTabId, QueueEntry>();
-  private readonly submissionMutex = new KeyedMutex<StreamTabId>();
-  private readonly terminal = new LRUCache<StreamTabId, true>({
-    max: ToolUseFollowUpQueue.TERMINAL_CAP,
-  });
   private readonly releaseObservers = new Set<
     (streamId: StreamTabId) => void
   >();
@@ -97,14 +90,6 @@ export class ToolUseFollowUpQueue {
     };
   }
 
-  /** Serialize routing and admission for one stream within this session. */
-  runSubmissionExclusive<Result>(
-    streamId: StreamTabId,
-    operation: () => Promise<Result>,
-  ): Promise<Result> {
-    return this.submissionMutex.runExclusive(streamId, operation);
-  }
-
   /** Claim a live flow/child consumer. A competing owner is rejected. */
   claimLive(
     streamId: StreamTabId,
@@ -112,7 +97,6 @@ export class ToolUseFollowUpQueue {
     generationId?: string,
   ): FollowUpConsumerLease | undefined {
     if (this.disposed) return undefined;
-    if (this.terminal.has(streamId)) return undefined;
     const entry =
       this.entries.get(streamId) ?? this.createEntry(streamId, generationId);
     if (generationId !== undefined && entry.generationId !== generationId) {
@@ -123,15 +107,14 @@ export class ToolUseFollowUpQueue {
 
   /**
    * Restore a generation read from the stream's authoritative flow record.
-   * Distinguishes session dispose from terminal/mismatch rejection so callers
-   * can label diagnostics accurately.
+   * Distinguishes session dispose from mismatch rejection so callers can
+   * label diagnostics accurately.
    */
   restorePersistedGeneration(
     streamId: StreamTabId,
     generationId: string,
   ): 'restored' | 'disposed' | 'unavailable' {
     if (this.disposed) return 'disposed';
-    if (this.terminal.has(streamId)) return 'unavailable';
     const entry = this.entries.get(streamId);
     if (entry) {
       if (entry.generationId === generationId) {
@@ -148,10 +131,8 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * Begin a separately authorized child run, replacing a terminal generation
-   * when the deterministic child stream ID is reused. The caller must already
-   * own the execution lease; producers and ordinary live flows cannot cross
-   * this boundary, so late delivery remains rejected.
+   * Begin a separately authorized child run. The caller must already own the
+   * execution lease.
    */
   claimChildRun(
     streamId: StreamTabId,
@@ -165,8 +146,6 @@ export class ToolUseFollowUpQueue {
     }
     const retained = this.entries.get(streamId);
     if (retained) return this.claim(retained, streamId, 'child');
-
-    this.terminal.delete(streamId);
     return this.claim(this.createEntry(streamId), streamId, 'child');
   }
 
@@ -176,7 +155,6 @@ export class ToolUseFollowUpQueue {
     createIfMissing = false,
   ): FollowUpRecoveryLease | undefined {
     if (this.disposed) return undefined;
-    if (this.terminal.has(streamId)) return undefined;
     const entry =
       this.entries.get(streamId) ??
       (createIfMissing
@@ -202,18 +180,15 @@ export class ToolUseFollowUpQueue {
    * flow or child consumer, or enqueues without claiming when the entry has no
    * live owner (so live notifications can reach a WAITING parent queue).
    * `recoverable` admits a registry-approved persisted cursor and creates its
-   * queue when needed. `existing_recoverable` admits only an already-retained
-   * recoverable queue, which lets a final child result survive child untracking
-   * without reopening an otherwise terminal parent.
+   * queue when needed.
    */
   submit(
     streamId: StreamTabId,
     followUp: FollowUpQueueInput,
-    admission: 'live_owner' | 'recoverable' | 'existing_recoverable',
+    admission: 'live_owner' | 'recoverable',
     expectedGenerationId?: string,
   ): FollowUpSubmission {
     if (this.disposed) return { kind: 'unavailable' };
-    if (this.terminal.has(streamId)) return { kind: 'unavailable' };
 
     let entry = this.entries.get(streamId);
     if (
@@ -225,9 +200,6 @@ export class ToolUseFollowUpQueue {
     if (admission === 'live_owner') {
       if (!entry) return { kind: 'not_owned' };
     } else {
-      if (!entry && admission === 'existing_recoverable') {
-        return { kind: 'unavailable' };
-      }
       entry ??= this.createEntry(streamId, undefined, true);
       if (!entry.owner) entry.lifecycle = 'recoverable';
     }
@@ -314,7 +286,6 @@ export class ToolUseFollowUpQueue {
     }
     entry.queue.dispose();
     this.entries.delete(lease.streamId);
-    this.terminal.set(lease.streamId, true);
     logger.debug(`Terminalized follow-up queue for stream ${lease.streamId}.`);
     this.notifyReleaseObservers(lease.streamId);
     return true;
@@ -326,18 +297,16 @@ export class ToolUseFollowUpQueue {
     const entry = this.entries.get(streamId);
     entry?.queue.dispose();
     this.entries.delete(streamId);
-    this.terminal.set(streamId, true);
     this.notifyReleaseObservers(streamId);
     return true;
   }
 
   /**
    * Dispose the session-owned boundary: every live entry queue, then the
-   * entry map, terminal tombstones, and release observers. The state clears
-   * in a `finally` so one queue's disposal failure cannot leave the map,
-   * tombstones, or observers behind. Entry-creating paths refuse to rebuild
-   * afterwards, so a late detached producer cannot leak a queue nobody will
-   * drain.
+   * entry map and release observers. The state clears in a `finally` so one
+   * queue's disposal failure cannot leave the map or observers behind.
+   * Entry-creating paths refuse to rebuild afterwards, so a late detached
+   * producer cannot leak a queue nobody will drain.
    */
   dispose(): void {
     if (this.disposed) return;
@@ -353,7 +322,6 @@ export class ToolUseFollowUpQueue {
       }
     } finally {
       this.entries.clear();
-      this.terminal.clear();
       this.releaseObservers.clear();
     }
     throwAggregated(failures, 'Multiple follow-up queues failed to dispose');
@@ -400,7 +368,6 @@ export class ToolUseFollowUpQueue {
         ToolUseFollowUpQueue.DELIVERY_ID_CAP,
       ),
       lifecycle: 'recoverable',
-      generation: 0,
     };
     this.entries.set(streamId, entry);
     return entry;
@@ -412,10 +379,8 @@ export class ToolUseFollowUpQueue {
     kind: FollowUpConsumerKind,
   ): FollowUpConsumerLease | undefined {
     if (entry.owner) return undefined;
-    entry.generation += 1;
     const lease: FollowUpConsumerLease = {
       streamId,
-      generation: entry.generation,
       get generationId() {
         return entry.generationId;
       },
@@ -439,10 +404,6 @@ export class ToolUseFollowUpQueue {
   /** The entry `lease` still owns, or `undefined` if it has gone stale. */
   private entryForLease(lease: FollowUpConsumerLease): QueueEntry | undefined {
     const entry = this.entries.get(lease.streamId);
-    return entry &&
-      entry.owner === lease &&
-      entry.generation === lease.generation
-      ? entry
-      : undefined;
+    return entry?.owner === lease ? entry : undefined;
   }
 }
