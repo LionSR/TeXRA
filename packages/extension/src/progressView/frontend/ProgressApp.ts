@@ -17,7 +17,7 @@ import type {
   StreamLifecycleStatus,
   StreamTabId,
 } from '@shared/schemas';
-import { Signal, SignalWatcher } from '@shared/signals';
+import { SignalWatcher, subscribeToSignalChanges } from '@shared/signals';
 import {
   designTokens,
   viewTabStyles,
@@ -106,17 +106,11 @@ export class ProgressApp extends ProgressAppBase {
   > = new Map();
 
   /**
-   * Watcher callback runs during signal invalidation, where reading a signal
-   * is not allowed — so the diff runs on a microtask, which also coalesces a
-   * burst of `.set()` calls from one handler into one announcement pass.
-   * Same pattern as webview/frontend/persistence.ts.
+   * Diff runs on a microtask (via `subscribeToSignalChanges`), which also
+   * coalesces a burst of `.set()` calls from one handler into one
+   * announcement pass. Same pattern as webview/frontend/persistence.ts.
    */
-  private readonly announcementWatcher = new Signal.subtle.Watcher(() => {
-    queueMicrotask(() => {
-      this.announcementWatcher.watch();
-      this.updateStatusAnnouncement();
-    });
-  });
+  private unwatchAnnouncements: (() => void) | undefined;
 
   private readonly resizeObserver = new ResizeObserver((entries) => {
     const width = entries[0]?.contentRect.width ?? this.clientWidth;
@@ -131,7 +125,10 @@ export class ProgressApp extends ProgressAppBase {
   override connectedCallback(): void {
     super.connectedCallback();
     this.resizeObserver.observe(this);
-    this.announcementWatcher.watch(permissions$, streamStates$, streamById$);
+    this.unwatchAnnouncements = subscribeToSignalChanges(
+      [permissions$, streamStates$, streamById$],
+      () => this.updateStatusAnnouncement(),
+    );
     // Baseline pass: announce anything already pending at mount (the old
     // computed did so on first read) and seed the status memos so
     // already-finished runs never announce.
@@ -139,7 +136,7 @@ export class ProgressApp extends ProgressAppBase {
   }
 
   override disconnectedCallback(): void {
-    this.announcementWatcher.unwatch(permissions$, streamStates$, streamById$);
+    this.unwatchAnnouncements?.();
     this.resizeObserver.disconnect();
     super.disconnectedCallback();
   }
