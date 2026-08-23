@@ -11,6 +11,7 @@ type AgentCatalog = Record<AgentCategory, AgentEntry[]>;
 
 const host = vi.hoisted(() => ({
   showInformationMessage: vi.fn(),
+  showWarningMessage: vi.fn(),
   executeCommand: vi.fn(),
 }));
 
@@ -21,6 +22,7 @@ vi.mock('vscode', async () => {
     window: {
       ...actual.window,
       showInformationMessage: host.showInformationMessage,
+      showWarningMessage: host.showWarningMessage,
     },
     commands: { ...actual.commands, executeCommand: host.executeCommand },
   };
@@ -93,6 +95,7 @@ interface HandlerFixtureOptions {
   readonly catalog?: AgentCatalog;
   /** Button label returned by the modal "members unavailable" prompt. */
   readonly modalChoice?: string | undefined;
+  readonly infoMessageResult?: Promise<string | undefined>;
 }
 
 async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
@@ -103,18 +106,14 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
 
   const notifications: string[] = [];
   const modalPrompts: string[] = [];
-  host.showInformationMessage.mockImplementation(
-    async (message: string, ...rest: unknown[]) => {
-      // The modal team-availability prompt passes options plus button labels;
-      // the plain confirmation toast passes only a message.
-      if (rest.length === 0) {
-        notifications.push(message);
-        return undefined;
-      }
-      modalPrompts.push(message);
-      return options.modalChoice;
-    },
-  );
+  host.showInformationMessage.mockImplementation((message: string) => {
+    notifications.push(message);
+    return options.infoMessageResult;
+  });
+  host.showWarningMessage.mockImplementation(async (message: string) => {
+    modalPrompts.push(message);
+    return options.modalChoice;
+  });
 
   const refreshAfterAgentMutation = vi.fn(
     async (_selectedToolUseAgent?: string, _catalogFresh?: boolean) => {},
@@ -160,7 +159,7 @@ describe('extension settings AgentHandlers', () => {
     resetAgentCatalogAuthRefreshScopeForTests();
   });
 
-  it('applies source-qualified teams and selects the tool-use root', async () => {
+  it('applies source-qualified teams without awaiting notification dismissal', async () => {
     const {
       handlers,
       notifications,
@@ -168,7 +167,8 @@ describe('extension settings AgentHandlers', () => {
       workspaceState,
     } = await createHandlerFixture({
       catalog: physicistCatalog(),
-      modalChoice: 'Continue with available members',
+      modalChoice: 'Continue with Available Members',
+      infoMessageResult: new Promise(() => {}),
     });
 
     await applyPreset(handlers, 'physicist');
@@ -232,7 +232,7 @@ describe('extension settings AgentHandlers', () => {
     });
     const { handlers } = await createHandlerFixture({
       workspaceState,
-      modalChoice: 'Sign in to TeXRA',
+      modalChoice: 'Sign In to TeXRA',
     });
     const update = vi.spyOn(workspaceState, 'update');
 
@@ -262,7 +262,16 @@ describe('extension settings AgentHandlers', () => {
 
     await applyPreset(handlers, 'remote-team');
 
-    expect(modalPrompts).toHaveLength(1);
+    expect(modalPrompts).toEqual([
+      'Team "Remote team" has unavailable TeXRA-hosted members: orchestrator.',
+    ]);
+    expect(host.showWarningMessage).toHaveBeenCalledWith(
+      modalPrompts[0],
+      { modal: true },
+      'Sign In to TeXRA',
+      'Continue with Available Members',
+      'Cancel',
+    );
     expect(registry.refreshAgents).not.toHaveBeenCalled();
     expect(refreshAfterAgentMutation).not.toHaveBeenCalled();
     expect(

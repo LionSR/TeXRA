@@ -37,6 +37,7 @@ import {
   TEAM_LAUNCH_SIGN_IN_LABEL,
 } from '@common/teams/TeamPlan';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
+import type { SettingsTeamAvailabilityPrompt } from '@controllers/settingsView/SettingsTeamRosterController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
@@ -380,33 +381,34 @@ function createWindow(options: {
     });
     return result.response === 0;
   };
-  /**
-   * Sole owner of the "team has unavailable hosted members" prompt. Both the
-   * main-view launch path and the settings path route here so the two can't
-   * drift apart in wording or button labels again.
-   */
-  const chooseTeamAvailability = async (
-    unavailableNames: readonly string[],
-    presetName?: string,
+  const presentTeamAvailabilityPrompt = async (
+    prompt: SettingsTeamAvailabilityPrompt,
   ): Promise<'sign-in' | 'continue' | 'cancel'> => {
     const { response } = await dialog.showMessageBox(window, {
-      type: 'warning',
+      type: prompt.severity,
+      message: prompt.message,
+      buttons: prompt.actions.map((action) => action.label),
+      defaultId: 0,
+      cancelId: 2,
+    });
+    return prompt.actions[response]?.choice ?? 'cancel';
+  };
+  const chooseTeamAvailability = (
+    unavailableNames: readonly string[],
+    presetName?: string,
+  ) =>
+    presentTeamAvailabilityPrompt({
+      severity: 'warning',
       message: formatUnavailableTeamMembersMessage(
         unavailableNames,
         presetName,
       ),
-      buttons: [
-        TEAM_LAUNCH_SIGN_IN_LABEL,
-        TEAM_LAUNCH_CONTINUE_LABEL,
-        TEAM_LAUNCH_CANCEL_LABEL,
+      actions: [
+        { choice: 'sign-in', label: TEAM_LAUNCH_SIGN_IN_LABEL },
+        { choice: 'continue', label: TEAM_LAUNCH_CONTINUE_LABEL },
+        { choice: 'cancel', label: TEAM_LAUNCH_CANCEL_LABEL },
       ],
-      defaultId: 0,
-      cancelId: 2,
     });
-    if (response === 0) return 'sign-in';
-    if (response === 1) return 'continue';
-    return 'cancel';
-  };
   // Lightweight update check: at most once/day, notifies at most once per
   // release via a native dialog linking to the GitHub release page. Not a full
   // updater: no download, no install, no feed files. Disable with
@@ -728,8 +730,7 @@ function createWindow(options: {
       promptText: (input) => promptController.request(input),
       confirm: ({ title, message }) =>
         confirmDialog({ title, message, confirmLabel: 'Continue' }),
-      chooseTeamAvailability: ({ presetName, unavailableNames }) =>
-        chooseTeamAvailability(unavailableNames, presetName),
+      chooseTeamAvailability: presentTeamAvailabilityPrompt,
     },
     remoteCatalog: {
       canAccess: () => SupabaseClient.isAuthenticated(),
