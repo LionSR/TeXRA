@@ -181,6 +181,11 @@ export function restorePersistedState(): void {
   // and persisted by the user's next real change), and every later change is
   // measured against the state the user is actually looking at.
   lastWritten = persistedSnapshot$.get();
+  // connectedCallback (which calls this) can fire more than once per
+  // MainApp instance without an intervening resetPersistenceRuntime — that
+  // only runs from the constructor — so a stale subscription from an
+  // earlier connect must be torn down before arming a new one.
+  unwatchPersistedSnapshot?.();
   unwatchPersistedSnapshot = subscribeToSignalChanges(
     [persistedSnapshot$],
     () => {
