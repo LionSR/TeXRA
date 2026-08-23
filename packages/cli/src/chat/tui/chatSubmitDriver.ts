@@ -9,7 +9,11 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import PQueue from 'p-queue';
 
 import type { SessionHandle } from '@agent/runtime';
-import { describeFollowUpFailure, submitFollowUp } from '@agent/followUp';
+import {
+  describeFollowUpFailure,
+  presentFollowUpResult,
+  submitFollowUp,
+} from '@agent/followUp';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
@@ -305,13 +309,14 @@ export function createChatSubmitDriver(
         if (result.status !== 'failed') {
           emitQueuedFollowUpsChanged(followUpTarget);
           delivered = true;
-        } else if (result.reason === 'resume_failed') {
-          // The input is in the stream's queue; only its wake failed.
-          emitQueuedFollowUpsChanged(followUpTarget);
-          appendLocalAssistantTranscript(
-            describeFollowUpFailure(result.reason),
-            followUpTarget,
-          );
+          const presentation = presentFollowUpResult(result);
+          if (presentation.severity !== 'none') {
+            // The input is in the stream's queue; only its wake failed.
+            appendLocalAssistantTranscript(
+              presentation.message,
+              followUpTarget,
+            );
+          }
         } else {
           // The draft is the user's until admitted: hand it back before any
           // notice, so a refused send never costs a retype.

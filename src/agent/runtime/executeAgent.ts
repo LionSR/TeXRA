@@ -702,5 +702,5 @@ export function resumeToolUseFromResumeData(
 // flow drivers statically import the tool registry that includes those tools.
 provideAgentEngine({
   executeAgent,
-  resumeToolUseFromResumeData: resumeToolUseTurn,
+  resumeToolUseTurn,
 });

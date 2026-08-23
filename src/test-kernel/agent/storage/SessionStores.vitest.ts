@@ -221,26 +221,30 @@ describe('SessionStores deletion coordination', () => {
     });
   });
 
-  it('tracks lease-gated deletion without blocking its artifact flush', async () => {
+  it('tracks lane-gated deletion without blocking its artifact flush', async () => {
     await withSession(async (session) => {
       const stream = 'lease-gated-delete' as StreamTabId;
       session.transcripts.ensureStream(stream);
       const snapshots = new StreamSnapshotStore();
-      const stores = new SessionStores({
-        streamLogs: session.transcripts,
-        snapshots,
-      });
+      ownExecution(snapshots, stream, 'exec-lane' as ExecutionId);
       let releaseLease!: () => void;
       const leaseReleased = new Promise<void>((resolve) => {
         releaseLease = resolve;
       });
-      vi.spyOn(stores, 'waitForExecutionQuiescence').mockReturnValue(
-        leaseReleased,
-      );
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        executions: {
+          runExecutionStep: async (_executionId, step) => {
+            await leaseReleased;
+            return step();
+          },
+        },
+      });
       const flush = vi.spyOn(snapshots, 'flush');
 
       try {
-        const deletion = stores.deleteStreamAfterExecutionQuiescence(stream);
+        const deletion = stores.deleteStream(stream);
         const drain = stores.waitForPendingStreamDeletions();
         let drainFinished = false;
         void drain.then(() => {
@@ -266,27 +270,29 @@ describe('SessionStores deletion coordination', () => {
     await withSession(async (session) => {
       const stream = 'shared-incarnation-delete' as StreamTabId;
       session.transcripts.ensureStream(stream);
-      const stores = new SessionStores({
-        streamLogs: session.transcripts,
-        snapshots: new StreamSnapshotStore(),
-      });
+      const snapshots = new StreamSnapshotStore();
+      ownExecution(snapshots, stream, 'exec-shared' as ExecutionId);
       let releaseLease!: () => void;
       const leaseReleased = new Promise<void>((resolve) => {
         releaseLease = resolve;
       });
-      vi.spyOn(stores, 'waitForExecutionQuiescence').mockReturnValue(
-        leaseReleased,
-      );
+      const stores = new SessionStores({
+        streamLogs: session.transcripts,
+        snapshots,
+        executions: {
+          runExecutionStep: async (_executionId, step) => {
+            await leaseReleased;
+            return step();
+          },
+        },
+      });
       const deleteTranscript = vi.spyOn(session.transcripts, 'delete');
 
       try {
-        const processDeletion = stores.deleteStreamAfterExecutionQuiescence(
-          stream,
-          {
-            shouldDelete: () => true,
-            expectedIncarnation: 4,
-          },
-        );
+        const processDeletion = stores.deleteStream(stream, {
+          shouldDelete: () => true,
+          expectedIncarnation: 4,
+        });
         const presentationDeletion = stores.deleteStream(stream, {
           shouldDelete: () => true,
           expectedIncarnation: 4,

@@ -19,6 +19,7 @@ import {
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import {
   describeFollowUpFailure,
+  FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
@@ -127,9 +128,14 @@ async function queueAgentCliFollowUp(
   }
 
   const preview = truncateWithEllipsis(prompt, 60);
+  // A queued follow-up whose wake failed is still queued: it is delivered
+  // when the agent is resumed, so the caller must not offer it again.
+  const wakeFailed = result.status === 'queued' && result.wake === 'failed';
   return executed(
     [
-      `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`,
+      wakeFailed
+        ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}', but the agent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`
+        : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`,
       `Execution ID: ${stored.executionId}`,
     ].join('\n'),
     `Follow-up queued for ${labels.summaryLabel}: ${preview}`,

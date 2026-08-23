@@ -16,8 +16,15 @@ import {
 } from '@agent/runtime/resolveAndResumeStream';
 import { ResumeSessionUnavailableError } from '@agent/runtime/executeAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { type ExecutionId, type StreamTabId } from '@shared/schemas';
-import { clearStreamStatusForTest } from '@test/support/streamStatusTestUtils';
+import {
+  STREAM_PHASE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/support/streamStatusTestUtils';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
@@ -35,6 +42,7 @@ function basePorts(
   overrides: Partial<ResumeStreamPorts> = {},
 ): ResumeStreamPorts {
   return {
+    executions: { isActiveOrResuming: () => false },
     resolveResumeState: vi.fn(async () => RESOLVED_STATE),
     resumeToolUse: vi.fn(async () => true),
     executeWorkflow: vi.fn(async () => {}),
@@ -147,6 +155,36 @@ describe('resolveAndResumeStream', () => {
       'exec-1',
       'key-1',
     );
+  });
+
+  it('refuses, rather than queues, a resume of a stream that is live in this process', async () => {
+    const session = defaultSession();
+    seedStreamStatusForTest(session.status, STREAM, {
+      phase: STREAM_PHASE.RUNNING,
+    });
+    retrieveSessionResumeDataMock.mockResolvedValue(
+      createToolUseResumeData({ streamId: STREAM }),
+    );
+    const ports = basePorts({ executions: session.executions });
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(ports.resolveResumeState).not.toHaveBeenCalled();
+    expect(ports.resumeToolUse).not.toHaveBeenCalled();
+    expect(ports.executeWorkflow).not.toHaveBeenCalled();
+
+    // A launch admitted while resume data was being read is refused too:
+    // the lane would queue this resume behind it, not refuse it.
+    clearStreamStatusForTest(session.status, STREAM);
+    retrieveSessionResumeDataMock.mockImplementation(async () => {
+      seedStreamStatusForTest(session.status, STREAM, {
+        phase: STREAM_PHASE.RUNNING,
+      });
+      return createToolUseResumeData({ streamId: STREAM });
+    });
+
+    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
+    expect(ports.resolveResumeState).toHaveBeenCalledOnce();
+    expect(ports.resumeToolUse).not.toHaveBeenCalled();
   });
 
   it('skips resume when cancellation was already requested', async () => {

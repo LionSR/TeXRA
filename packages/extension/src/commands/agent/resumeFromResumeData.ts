@@ -53,6 +53,7 @@ export function tryResumeFromResumeData(
       return resolveAndResumeStream(
         streamId,
         {
+          executions: session.executions,
           isCancellationRequested,
           resolveResumeState: (id) =>
             resolveResumeStateFromSnapshots(session.snapshots, id),

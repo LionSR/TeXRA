@@ -320,4 +320,18 @@ describe('desktop process resume owner', () => {
     expect(runAgent).not.toHaveBeenCalled();
     expect(harness.session.transcripts.has(stream)).toBe(false);
   });
+
+  it('rejects a stale process store after another process deletes the stream', async () => {
+    mockWorkflowResume();
+    const harness = createResumeHarness();
+    vi.spyOn(
+      harness.session.transcripts,
+      'hasAuthoritativeStream',
+    ).mockResolvedValue(false);
+
+    await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(retrieveSessionResumeData).not.toHaveBeenCalled();
+    expect(harness.session.transcripts.has(stream)).toBe(true);
+  });
 });

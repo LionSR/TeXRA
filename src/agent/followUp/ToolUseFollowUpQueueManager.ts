@@ -68,15 +68,19 @@ export type FollowUpSubmission =
  * Session-owned continuation boundary indexed by stream ID.
  *
  * Lifecycle is explicit: an owned entry is `live` or `recovering`, an unowned
- * persisted cursor is `recoverable`, and a terminal entry is simply gone. A
- * parent counts every child as active until the child's final delivery has
- * landed, and a stream with no live flow, no children and a terminal phase
- * refuses submission before it reaches this boundary, so nothing needs to
- * remember which streams went terminal.
+ * persisted cursor is `recoverable`, and a terminal entry is gone. A stream
+ * whose queue was ended by {@link terminalize} (its stream deleted, or its
+ * parked run torn down) is marked so that a producer that is not an owner,
+ * such as a child whose activation outlives its parent's teardown, cannot
+ * recreate the queue and trigger a resume of a run that is gone; only an
+ * explicit claim reopens the stream. Stream ids embed their execution id, so
+ * the mark never collides with a later run, and a session accrues one per
+ * ended stream.
  */
 export class ToolUseFollowUpQueue {
   static readonly DELIVERY_ID_CAP = 1000;
   private readonly entries = new Map<StreamTabId, QueueEntry>();
+  private readonly terminalized = new Set<StreamTabId>();
   private readonly releaseObservers = new Set<
     (streamId: StreamTabId) => void
   >();
@@ -97,6 +101,7 @@ export class ToolUseFollowUpQueue {
     generationId?: string,
   ): FollowUpConsumerLease | undefined {
     if (this.disposed) return undefined;
+    this.terminalized.delete(streamId);
     const entry =
       this.entries.get(streamId) ?? this.createEntry(streamId, generationId);
     if (generationId !== undefined && entry.generationId !== generationId) {
@@ -126,6 +131,7 @@ export class ToolUseFollowUpQueue {
       entry.generationProvisional = false;
       return 'restored';
     }
+    if (this.terminalized.has(streamId)) return 'unavailable';
     this.createEntry(streamId, generationId);
     return 'restored';
   }
@@ -144,6 +150,7 @@ export class ToolUseFollowUpQueue {
         `Child stream ${streamId} does not belong to execution ${executionId}.`,
       );
     }
+    this.terminalized.delete(streamId);
     const retained = this.entries.get(streamId);
     if (retained) return this.claim(retained, streamId, 'child');
     return this.claim(this.createEntry(streamId), streamId, 'child');
@@ -155,6 +162,7 @@ export class ToolUseFollowUpQueue {
     createIfMissing = false,
   ): FollowUpRecoveryLease | undefined {
     if (this.disposed) return undefined;
+    if (createIfMissing) this.terminalized.delete(streamId);
     const entry =
       this.entries.get(streamId) ??
       (createIfMissing
@@ -200,6 +208,9 @@ export class ToolUseFollowUpQueue {
     if (admission === 'live_owner') {
       if (!entry) return { kind: 'not_owned' };
     } else {
+      if (!entry && this.terminalized.has(streamId)) {
+        return { kind: 'unavailable' };
+      }
       entry ??= this.createEntry(streamId, undefined, true);
       if (!entry.owner) entry.lifecycle = 'recoverable';
     }
@@ -291,12 +302,16 @@ export class ToolUseFollowUpQueue {
     return true;
   }
 
-  /** Terminalize a stream; any outstanding lease becomes stale immediately. */
+  /**
+   * End a stream's queue: any outstanding lease becomes stale immediately, and
+   * no producer can recreate the queue until an explicit claim reopens it.
+   */
   terminalize(streamId: StreamTabId): boolean {
     if (this.disposed) return false;
     const entry = this.entries.get(streamId);
     entry?.queue.dispose();
     this.entries.delete(streamId);
+    this.terminalized.add(streamId);
     this.notifyReleaseObservers(streamId);
     return true;
   }
@@ -322,6 +337,7 @@ export class ToolUseFollowUpQueue {
       }
     } finally {
       this.entries.clear();
+      this.terminalized.clear();
       this.releaseObservers.clear();
     }
     throwAggregated(failures, 'Multiple follow-up queues failed to dispose');

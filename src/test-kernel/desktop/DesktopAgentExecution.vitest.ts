@@ -3636,10 +3636,15 @@ describe('DesktopProgressBridge', () => {
       owner.processSession.transcripts.ensureStream(childStreamId);
       owner.close();
 
+      // The deletion is pending while its ownership read is in flight: the
+      // child stream has no resident run metadata, so the read goes to disk.
       const leaseReleased = createDeferred();
       const waitForRelease = vi
-        .spyOn(owner.sessionStores, 'waitForExecutionQuiescence')
-        .mockReturnValue(leaseReleased.promise);
+        .spyOn(owner.progressSnapshotStore, 'readPersistedExecutionId')
+        .mockImplementation(async () => {
+          await leaseReleased.promise;
+          return undefined;
+        });
 
       try {
         owner.processSession.events.emit({
@@ -3698,14 +3703,18 @@ describe('DesktopProgressBridge', () => {
       });
       const firstRelease = createDeferred();
       const secondRelease = createDeferred();
+      // The deletion runs as a step on the execution lane; gate the lane.
       const waitForRelease = vi
-        .spyOn(owner.sessionStores, 'waitForExecutionQuiescence')
-        .mockReturnValueOnce(firstRelease.promise)
-        .mockReturnValueOnce(secondRelease.promise);
-      const processFallback = vi.spyOn(
-        owner.sessionStores,
-        'deleteStreamAfterExecutionQuiescence',
-      );
+        .spyOn(owner.processSession.executions, 'runExecutionStep')
+        .mockImplementationOnce(async (_executionId, step) => {
+          await firstRelease.promise;
+          return step();
+        })
+        .mockImplementationOnce(async (_executionId, step) => {
+          await secondRelease.promise;
+          return step();
+        });
+      const deleteStream = vi.spyOn(owner.sessionStores, 'deleteStream');
 
       try {
         emitSessionFact(owner.bridgeA, 'removeStream', {
@@ -3756,7 +3765,12 @@ describe('DesktopProgressBridge', () => {
         await vi.waitFor(() => expect(waitForRelease).toHaveBeenCalledTimes(2));
         await settleProgressEvents();
 
-        expect(processFallback).not.toHaveBeenCalled();
+        // Both deletions are the presentation's (incarnations 0 and 1); a
+        // process fallback would have issued a third.
+        expect(deleteStream).toHaveBeenCalledTimes(2);
+        expect(
+          deleteStream.mock.calls.map(([, o]) => o?.expectedIncarnation),
+        ).toEqual([0, 1]);
         expect(owner.processSession.transcripts.has(streamId)).toBe(true);
       } finally {
         firstRelease.resolve();

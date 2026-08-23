@@ -258,22 +258,63 @@ export class ExecutionRegistry {
 
   /**
    * Refuse new lifecycle steps (launches, resumes, deletes) until the
-   * returned release runs. Throws `refusal(live)` instead, changing nothing,
-   * when any execution is live: session maintenance that would pull the
-   * storage out from under a run is refused, never queued behind it.
+   * returned release runs; each refused step rejects with `blocked()`. Throws
+   * `refusal(live)` instead, changing nothing, when any execution is live:
+   * session maintenance that would pull the storage out from under a run is
+   * refused, never queued behind it. Live means tracked, a generation not yet
+   * disposed, a lane step admitted but not yet finished, or a child loop whose
+   * activation is still reserved: every one of them writes under the current
+   * storage root.
    */
-  holdLifecycle(refusal: (liveExecutionIds: string[]) => Error): () => void {
+  holdLifecycle(
+    refusal: (liveExecutionIds: string[]) => Error,
+    blocked: () => Error,
+  ): () => void {
     this.assertActive();
-    const live = [
-      ...new Set([...this.handles.keys(), ...this.liveGenerations.keys()]),
-    ];
+    const live = this.liveExecutionIds();
     if (live.length > 0) throw refusal(live);
-    if (this.lifecycleHold) throw this.lifecycleHold;
-    const hold = refusal([]);
+    if (this.lifecycleHold) {
+      throw new Error(
+        'A storage location change is already in progress. Retry once it finishes.',
+      );
+    }
+    const hold = blocked();
     this.lifecycleHold = hold;
     return () => {
       if (this.lifecycleHold === hold) this.lifecycleHold = undefined;
     };
+  }
+
+  private liveExecutionIds(): string[] {
+    const live = new Set<string>([
+      ...this.handles.keys(),
+      ...this.liveGenerations.keys(),
+      ...this.childActivations.keys(),
+    ]);
+    for (const [executionId, lane] of this.lanes) {
+      if (
+        lane.queue.size > 0 ||
+        lane.queue.pending > 0 ||
+        lane.waiting.size > 0
+      ) {
+        live.add(executionId);
+      }
+    }
+    return [...live];
+  }
+
+  /**
+   * Whether `streamId` is running, resuming, or parked with a live flow in this
+   * process: the states in which a resume must be refused outright rather than
+   * queued on the execution lane, since it would otherwise start a fresh
+   * generation of a run that just finished.
+   */
+  isActiveOrResuming(streamId: StreamTabId): boolean {
+    return (
+      isActivePhase(this.streamStatus.get(streamId)) ||
+      this.streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING ||
+      this.getToolUseFlowContext(streamId) !== undefined
+    );
   }
 
   /**
@@ -1015,9 +1056,16 @@ export class ExecutionRegistry {
     // The teardown releases the execution lease: it is the tail of the
     // suspended generation, so the lane waits for it before a resume can
     // claim the execution again.
+    // A child loop's generation stays the lane's live promise until the loop
+    // ends; the turn's teardown chains onto it rather than replacing it.
     const lane = this.lanes.get(handle.executionId) ?? this.createLane();
     this.lanes.set(handle.executionId, lane);
-    this.setLiveGeneration(lane, handle.executionId, termination);
+    const previous = lane.live;
+    this.setLiveGeneration(
+      lane,
+      handle.executionId,
+      previous ? Promise.all([previous, termination]) : termination,
+    );
     this.forgetIdleLane(handle.executionId, lane);
     return true;
   }

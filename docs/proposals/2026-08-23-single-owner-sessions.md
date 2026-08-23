@@ -193,8 +193,11 @@ existing `.then/.catch` in `desktopAgentExecution.ts:1169-1200` posts it
 already runs.
 
 **D6. Three outcomes, not thirty.** `SubmitFollowUpResult` becomes
-`sent | queued | failed{reason}` where `reason` is a short enum the UI can
-word: `finished`, `owned_elsewhere`, `not_resumable`, `resume_failed`.
+`sent | queued{wake?} | failed{reason}` where `reason` is a short enum the
+UI can word: `finished`, `owned_elsewhere`, `not_resumable`. A queued input
+whose recovery resume did not reach the run is `queued` with
+`wake: 'failed'`: it was admitted and an explicit Resume delivers it, so no
+consumer hands the draft back or re-offers it.
 Internal submission kinds may survive inside the queue manager, but the
 generation-fence restore (`ToolUseFollowUp.ts:108-167`, six diagnostics)
 and `existing_recoverable` admission exist only because foreign or stale

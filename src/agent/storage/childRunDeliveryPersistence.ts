@@ -1,11 +1,18 @@
-/** Best-effort persistence of the artifacts delivered by a child run. */
+/**
+ * Best-effort persistence of the artifacts delivered by a child run. A lost
+ * execution lease is not a best-effort failure: the run has been displaced
+ * and must stop, so that one error propagates.
+ */
 import type { ExecutionId } from '@shared/schemas';
 
 import {
   persistChildRunReport,
   persistChildRunResultMeta,
 } from './childRunPersistence';
-import { markOwnedExecutionLeaseUndurable } from './executionLease';
+import {
+  ExecutionLeaseLostError,
+  markOwnedExecutionLeaseUndurable,
+} from './executionLease';
 import type { ResultMeta } from './resultMeta';
 
 export async function persistChildRunDeliveryBestEffort(
@@ -25,6 +32,7 @@ export async function persistChildRunDeliveryBestEffort(
     ['result manifest', manifest],
   ] as const) {
     if (result.kind !== 'failed') continue;
+    if (result.err instanceof ExecutionLeaseLostError) throw result.err;
     markOwnedExecutionLeaseUndurable(executionId);
     onFailure(kind, result.err);
   }
