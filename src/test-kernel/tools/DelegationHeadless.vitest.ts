@@ -1077,8 +1077,9 @@ describe('headless delegation', () => {
     mocks.inspectExecutionLease.mockResolvedValueOnce({
       status: 'foreign',
       acquiredAt: Date.now(),
-      owner: { pid: 1, processStartTime: 1, hostname: 'test-host' },
+      owner: { pid: 1, processStart: '1', hostname: 'test-host' },
       provable: true,
+      reclaimable: false,
     });
 
     await expect(

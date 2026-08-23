@@ -1,8 +1,10 @@
 import type { StatusEvent } from '@agent/trace';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import type { OwnerHold } from '@agent/storage/leaseOwnerLiveness';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
+  type ExecutionId,
   type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
@@ -30,14 +32,19 @@ type TerminalTransitionCause = Extract<
 /**
  * What restart classification established about a stream that has no phase
  * in this process. `held`: another TeXRA process holds its execution lease;
- * `provable` is false when that process could not be proven alive or dead.
+ * `hold` says which process, whether it was proven alive, and whether an
+ * explicit reclaim of `executionId` would remove its record.
  * `unclassified`: its lease, metadata, or flow record could not be read, so
  * nothing is known and nothing was mutated; `cause` is shown to the user.
  * `retryable` is false for present-but-malformed data, where Resume fails
  * deterministically and only Delete clears the run.
  */
 export type StreamHoldState =
-  | { readonly kind: 'held'; readonly provable: boolean }
+  | {
+      readonly kind: 'held';
+      readonly executionId: ExecutionId;
+      readonly hold: OwnerHold;
+    }
   | {
       readonly kind: 'unclassified';
       readonly cause: string;
@@ -290,12 +297,13 @@ export class StreamStatusMachine {
     return false;
   }
 
-  /**
-   * Record that another process holds `stream`'s execution. `provable` is
-   * false when that process could not be proven alive or dead.
-   */
-  markHeld(stream: StreamTabId, provable: boolean): void {
-    this.holds.set(stream, { kind: 'held', provable });
+  /** Record that another process holds `stream`'s execution. */
+  markHeld(
+    stream: StreamTabId,
+    executionId: ExecutionId,
+    hold: OwnerHold,
+  ): void {
+    this.holds.set(stream, { kind: 'held', executionId, hold });
   }
 
   /** Record that `stream`'s run state could not be read; nothing was mutated. */

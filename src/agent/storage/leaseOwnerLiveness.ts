@@ -8,32 +8,65 @@ import { platform } from '@platform/platform';
 const log = createLog('LeaseOwnerLiveness');
 
 /**
- * Identity of the process that owns an execution lease: a pid, the start time
- * the kernel reported for it when the lease was written (null where the host
- * cannot read start times), and the machine it runs on. Liveness is a kernel
- * fact derived from these three fields; nothing here is compared to a clock
- * and no socket protocol is involved.
+ * Identity of the process that owns an execution lease: a pid, the opaque
+ * process-start identity the `processes` port produced for it when the lease
+ * was written (null where the host could not read one), and the machine it
+ * runs on. Liveness is a kernel fact derived from these three fields;
+ * nothing here is compared to a clock and no socket protocol is involved.
  */
 export const LeaseOwnerSchema = z.strictObject({
-  pid: z.int().nonnegative(),
-  processStartTime: z.int().nonnegative().nullable(),
+  pid: z.int().positive(),
+  processStart: z.string().min(1).nullable(),
   hostname: z.string().min(1),
 });
 
 export type LeaseOwnerRecord = z.infer<typeof LeaseOwnerSchema>;
 
 /**
- * A verdict is a proof or an admission that no proof exists. `unprovable`
- * means "do not touch" to every acquire, reclaim, and delete path, and is
- * surfaced to the user as a held run whose owner cannot be reached.
+ * A verdict is a proof or an admission that no proof exists. Two admissions
+ * are told apart because they differ in what the user may do:
+ *
+ * - `unprovable`: the owner was recorded on another host, so nothing on this
+ *   machine can say anything about it. An explicit reclaim may remove it.
+ * - `unreadable`: some process holds the recorded pid on this host, and the
+ *   identity on one side could not be read. That process is far more likely
+ *   the owner than a coincidence, so even an explicit reclaim refuses it.
+ *
+ * Both mean "do not touch" to every automatic acquire, reclaim, and delete
+ * path, and surface to the user as a held run.
  */
-export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
+export type OwnerLiveness = 'alive' | 'dead' | 'unprovable' | 'unreadable';
+
+/**
+ * What a refusal tells the user, derived from one verdict: the owner it
+ * names, whether it was proven alive, and whether an explicit reclaim would
+ * remove its record. Every hold the lease module reports carries this.
+ */
+export interface OwnerHold {
+  readonly owner: LeaseOwnerRecord;
+  /** True when the owner was proven alive. */
+  readonly provable: boolean;
+  /** True when `reclaimExecutionLease` would remove the record. */
+  readonly reclaimable: boolean;
+}
+
+/** The one place a liveness verdict becomes user-facing hold facts. */
+export function ownerHold(
+  owner: LeaseOwnerRecord,
+  liveness: Exclude<OwnerLiveness, 'dead'>,
+): OwnerHold {
+  return {
+    owner,
+    provable: liveness === 'alive',
+    reclaimable: liveness === 'unprovable',
+  };
+}
 
 /** The identity this process stamps into the leases it claims. */
 export async function currentLeaseOwner(): Promise<LeaseOwnerRecord> {
   return {
     pid: process.pid,
-    processStartTime: (await platform().processes.selfStartTime()) ?? null,
+    processStart: (await platform().processes.selfIdentity()) ?? null,
     hostname: os.hostname(),
   };
 }
@@ -41,7 +74,7 @@ export async function currentLeaseOwner(): Promise<LeaseOwnerRecord> {
 /**
  * `kill(pid, 0)` throwing ESRCH is a kernel proof that no such process
  * exists. Success, including EPERM, proves only that some process has the
- * pid; the start time decides whether it is the recorded one.
+ * pid; the start identity decides whether it is the recorded one.
  */
 function pidProvablyDead(pid: number): boolean {
   try {
@@ -55,13 +88,13 @@ function pidProvablyDead(pid: number): boolean {
 /**
  * The single source of liveness truth:
  *
- * | observed                                     | verdict    |
- * | -------------------------------------------- | ---------- |
- * | owner recorded on another host               | unprovable |
- * | `kill(pid, 0)` gives ESRCH                   | dead       |
- * | pid exists, start time matches the record    | alive      |
- * | pid exists, start time differs (pid reuse)   | dead       |
- * | start time unreadable on either side         | unprovable |
+ * | observed                                       | verdict    |
+ * | ---------------------------------------------- | ---------- |
+ * | owner recorded on another host                 | unprovable |
+ * | `kill(pid, 0)` gives ESRCH                     | dead       |
+ * | pid exists, identity equals the record         | alive      |
+ * | pid exists, identity differs (pid reuse)       | dead       |
+ * | pid exists, identity unreadable on either side | unreadable |
  *
  * Hostnames compare case-insensitively on every platform TeXRA supports. A
  * cross-host owner is unprovable by construction: a local pid says nothing
@@ -78,25 +111,20 @@ export async function proveOwnerLiveness(
     return 'unprovable';
   }
   if (pidProvablyDead(owner.pid)) return 'dead';
-  const startTime = await platform().processes.startTime(owner.pid);
-  if (startTime === undefined || owner.processStartTime === null) {
+  const observed = await platform().processes.identity(owner.pid);
+  if (observed === undefined) {
+    // The process may have exited between the two probes.
+    if (pidProvablyDead(owner.pid)) return 'dead';
     log.warn(
-      `Lease owner pid ${owner.pid} exists but its start time cannot be compared; its liveness is unprovable`,
-      { data: { recorded: owner.processStartTime, observed: startTime } },
+      `Lease owner pid ${owner.pid} exists but its start identity cannot be read; its liveness is unreadable`,
     );
-    return 'unprovable';
+    return 'unreadable';
   }
-  return startTime === owner.processStartTime ? 'alive' : 'dead';
-}
-
-/**
- * Whether some process holds the recorded pid on this host, whatever its
- * start time. A destructive reclaim must not guess that such a process is a
- * coincidence: on hosts without readable start times this is every live owner.
- */
-export function ownerPidExistsOnThisHost(owner: LeaseOwnerRecord): boolean {
-  return (
-    owner.hostname.toLowerCase() === os.hostname().toLowerCase() &&
-    !pidProvablyDead(owner.pid)
-  );
+  if (owner.processStart === null) {
+    log.warn(
+      `Lease owner pid ${owner.pid} exists but its record carries no start identity; its liveness is unreadable`,
+    );
+    return 'unreadable';
+  }
+  return observed === owner.processStart ? 'alive' : 'dead';
 }

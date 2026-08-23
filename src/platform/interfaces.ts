@@ -196,15 +196,17 @@ export interface StorageProvider {
 
 /**
  * Kernel facts about processes, used to prove whether the owner recorded in
- * an execution lease is still the same process. Start times are epoch ms
- * truncated to whole seconds, so a value read for another pid compares
- * exactly against one captured by that process itself.
+ * an execution lease is still the same process. An identity is an opaque
+ * string that cannot change while a process runs and that no later process
+ * with the same pid can repeat: two equal strings name one process, two
+ * different strings name two. Its format is the port's business; callers
+ * only compare it verbatim.
  */
 export interface ProcessesPort {
-  /** OS-reported start time of `pid`, or undefined when it cannot be read. */
-  startTime(pid: number): Promise<number | undefined>;
-  /** This process's own start time; memoized once read, retried until then. */
-  selfStartTime(): Promise<number | undefined>;
+  /** Start identity of `pid`, or undefined when it cannot be read. */
+  identity(pid: number): Promise<string | undefined>;
+  /** This process's own identity; memoized once read, retried until then. */
+  selfIdentity(): Promise<string | undefined>;
 }
 
 // ---------------------------------------------------------------------------
