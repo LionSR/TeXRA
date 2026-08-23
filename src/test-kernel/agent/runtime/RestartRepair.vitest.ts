@@ -90,7 +90,10 @@ describe('repairRestartedStreams', () => {
     });
 
     expect(setup.streamStatus.get(setup.streamId)).toBeUndefined();
-    expect(setup.streamStatus.isHeld(setup.streamId)).toBe(true);
+    expect(setup.streamStatus.holdState(setup.streamId)).toEqual({
+      kind: 'held',
+      provable: true,
+    });
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(finalizeExecution).not.toHaveBeenCalled();
   });
@@ -105,7 +108,7 @@ describe('repairRestartedStreams', () => {
       classifyRun: classifyAs({ kind: 'resumable' }),
     });
 
-    expect(setup.streamStatus.isHeld(setup.streamId)).toBe(false);
+    expect(setup.streamStatus.holdState(setup.streamId)).toBeUndefined();
     expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.CANCELLED);
   });
 
@@ -132,21 +135,60 @@ describe('repairRestartedStreams', () => {
     expect(finalizeExecution).not.toHaveBeenCalled();
   });
 
-  it('propagates classification failures instead of settling on a guess', async () => {
-    const setup = setupStream('unclassifiable');
+  it('leaves an unclassifiable stream visibly unclassified and classifies the rest', async () => {
+    const unreadable = setupStream('unclassifiable');
+    const readable = 'stream-readable' as StreamTabId;
+    const readableExecution = 'execution-readable' as ExecutionId;
     const closeRunningGroups = vi.fn(closeAllGroups);
+    const finalizeExecution = createDurableFinalizer();
 
-    await expect(
-      runRepair(setup, {
-        closeRunningGroups,
-        classifyRun: vi.fn(async () => {
+    await repairRestartedStreams({
+      streamStatus: unreadable.streamStatus,
+      repairStreams: [unreadable.streamId, readable],
+      executionIds: new Map([
+        [unreadable.streamId, unreadable.executionId],
+        [readable, readableExecution],
+      ]),
+      closeRunningGroups,
+      finalizeExecution,
+      classifyRun: vi.fn(async (executionId: ExecutionId) => {
+        if (executionId === unreadable.executionId) {
           throw new Error('metadata temporarily unreadable');
-        }),
+        }
+        return { kind: 'finished' as const, outcome: RUN_OUTCOME.COMPLETED };
       }),
-    ).rejects.toThrow('metadata temporarily unreadable');
+    });
+
+    // Nothing known, nothing mutated, but shown: the cause is the display fact.
+    expect(unreadable.streamStatus.get(unreadable.streamId)).toBeUndefined();
+    expect(unreadable.streamStatus.holdState(unreadable.streamId)).toEqual({
+      kind: 'unclassified',
+      cause: 'metadata temporarily unreadable',
+    });
+    expect(finalizeExecution).not.toHaveBeenCalled();
+    expect(unreadable.streamStatus.get(readable)).toBe(STREAM_PHASE.COMPLETED);
+    expect(closeRunningGroups).toHaveBeenCalledExactlyOnceWith(
+      [readable],
+      RUN_OUTCOME.COMPLETED,
+      expect.any(Number),
+    );
+  });
+
+  it('never labels a lease this process holds as another window', async () => {
+    const setup = setupStream('owned-here');
+    const closeRunningGroups = vi.fn(closeAllGroups);
+    const logger = { debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+    await runRepair(setup, {
+      closeRunningGroups,
+      classifyRun: classifyAs({ kind: 'owned_here' }),
+      logger,
+    });
 
     expect(setup.streamStatus.get(setup.streamId)).toBeUndefined();
+    expect(setup.streamStatus.holdState(setup.streamId)).toBeUndefined();
     expect(closeRunningGroups).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledOnce();
   });
 
   it('records a resumable stream as CANCELLED, never WAITING, and preserves its checkpoint', async () => {
@@ -325,7 +367,7 @@ describe('repairRestartedStreams', () => {
       outcomePersisted: false as const,
       error: durabilityError,
     }));
-    const logger = { debug: vi.fn(), warn: vi.fn() };
+    const logger = { debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     await runRepair(setup, {
       closeRunningGroups: closeAllGroups,

@@ -1604,7 +1604,7 @@ describe('DesktopProgressBridge', () => {
     expect(bridgeStatus(bridge).get(streamId)).toBe(STREAM_PHASE.CANCELLED);
   });
 
-  it('fails bridge initialization when an unfinished run cannot be classified', async () => {
+  it('keeps the bridge initializing when an unfinished run cannot be classified', async () => {
     const mappedStream = 'mapped-stream' as StreamTabId;
     const executionId = 'ca110ad' as ExecutionId;
     const classificationError = new Error('flow records unavailable');
@@ -1618,22 +1618,29 @@ describe('DesktopProgressBridge', () => {
         }),
     );
 
-    await expect(
-      createBridge([], {
-        canonicalStreamIds: [mappedStream],
-        configureTranscripts: (store) =>
-          appendRunningGroup(store, mappedStream),
-        configureProgressSnapshotStore: (store) => {
-          snapshotFacts(store).setRunConfig(
-            mappedStream,
-            workflowConfig(),
-            executionId,
-          );
-        },
-        repairRestartedStreams,
-      }),
-    ).rejects.toBe(classificationError);
+    const bridge = await createBridge([], {
+      canonicalStreamIds: [mappedStream],
+      configureTranscripts: (store) => appendRunningGroup(store, mappedStream),
+      configureProgressSnapshotStore: (store) => {
+        snapshotFacts(store).setRunConfig(
+          mappedStream,
+          workflowConfig(),
+          executionId,
+        );
+      },
+      repairRestartedStreams,
+    });
+
+    // One unreadable run never takes the host down: the stream is shown as
+    // unclassified with its cause, nothing is mutated, and its transcript
+    // stays open for the Resume retry.
     expect(repairRestartedStreams).toHaveBeenCalledOnce();
+    expect(bridgeStatus(bridge).get(mappedStream)).toBeUndefined();
+    expect(bridgeStatus(bridge).holdState(mappedStream)).toEqual({
+      kind: 'unclassified',
+      cause: 'flow records unavailable',
+    });
+    expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([mappedStream]);
   });
 
   it('presents a merge failure that occurs before lifecycle startup', async () => {

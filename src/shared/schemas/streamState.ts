@@ -127,18 +127,19 @@ export const BackendOwnedFieldsSchema = z.object({
   status: StreamLifecycleStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
   substate: StreamSubstateSchema.optional(),
   /**
+   * Present only with the `held` and `unclassified` sentinels: for `held`, the
+   * banner and tooltip copy (which says when the holder could not be reached
+   * and how to reclaim the run); for `unclassified`, why the run state could
+   * not be read.
+   */
+  statusDetail: z.string().optional(),
+  /**
    * Epoch ms when the stream entered its current active phase, stamped once by
    * the session status machine (`StreamPhaseState.runStartedAt`). Absent while
    * the phase is not active. Every host renders elapsed time from this one
    * value; the tick rate and duration format stay host modality.
    */
   runStartedAt: z.int().positive().optional(),
-  /**
-   * Present only with the `held` status: whether the process holding the
-   * execution was proven alive. False means it could not be reached, and the
-   * user may reclaim the run explicitly.
-   */
-  holderProvable: z.boolean().optional(),
   /** Runtime behavior declared by the launch source, not UI visibility. */
   userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   lastTimestamp: z.number().optional(),

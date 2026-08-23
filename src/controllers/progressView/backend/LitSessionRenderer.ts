@@ -33,9 +33,13 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import { STREAM_LIFECYCLE_HELD } from '@shared/schemas';
+import {
+  STREAM_LIFECYCLE_HELD,
+  STREAM_LIFECYCLE_UNCLASSIFIED,
+} from '@shared/schemas';
 import { buildStreamContentRender } from '@shared/streams/streamContentSync';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
+import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
 import {
   assertNever,
   createFlushableDebounce,
@@ -453,16 +457,22 @@ export class LitSessionRenderer implements SessionRendererPort {
   ): StreamMetadata {
     const current = this.state.getStreamState(streamInfo.name);
     const status = streamStates.get(streamInfo.name);
-    const holderProvable = this.state.streamStatus.heldProvable(
-      streamInfo.name,
-    );
+    // A stream held by another process, or one whose run state could not be
+    // read, has no phase in this session; the wire carries the sentinel so
+    // the view renders it read-only, with `statusDetail` saying why: the held
+    // copy (which differs when the holder cannot be reached) or the cause.
+    const hold = this.state.streamStatus.holdState(streamInfo.name);
+    const holdStatus =
+      hold &&
+      (hold.kind === 'held'
+        ? STREAM_LIFECYCLE_HELD
+        : STREAM_LIFECYCLE_UNCLASSIFIED);
     return buildStreamMetadata({
       category: streamInfo.agentCategory,
-      // A stream held by another process has no phase in this session; the
-      // wire carries the held sentinel so the view renders it read-only.
-      status:
-        holderProvable === undefined ? status?.phase : STREAM_LIFECYCLE_HELD,
-      holderProvable,
+      status: holdStatus ?? status?.phase,
+      statusDetail:
+        hold &&
+        (hold.kind === 'held' ? streamHeldMessage(hold.provable) : hold.cause),
       substate: status?.substate,
       runStartedAt: status?.runStartedAt,
       userFollowUpSupport: streamInfo.userFollowUpSupport,

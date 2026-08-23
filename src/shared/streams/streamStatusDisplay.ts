@@ -1,5 +1,6 @@
 import {
   STREAM_LIFECYCLE_HELD,
+  STREAM_LIFECYCLE_UNCLASSIFIED,
   STREAM_PHASE,
   STREAM_STATUS,
   STREAM_SUBSTATE,
@@ -59,6 +60,7 @@ const cliStreamStatusLabels: Record<StreamStatusDisplayKey, string> = {
   [STREAM_PHASE.WAITING]: 'idle',
   [STREAM_SUBSTATE.RESUMING]: 'resuming',
   [STREAM_LIFECYCLE_HELD]: 'held elsewhere',
+  [STREAM_LIFECYCLE_UNCLASSIFIED]: 'unreadable',
 } as const;
 
 const STREAM_STATUS_LABELS = {
@@ -77,6 +79,7 @@ const STREAM_STATUS_LABELS = {
     [STREAM_PHASE.WAITING]: 'Idle',
     [STREAM_SUBSTATE.RESUMING]: 'Resuming',
     [STREAM_LIFECYCLE_HELD]: 'In another window',
+    [STREAM_LIFECYCLE_UNCLASSIFIED]: 'State unreadable',
   },
 } as const;
 
@@ -88,11 +91,38 @@ const STREAM_HELD_ELSEWHERE_MESSAGE =
 const STREAM_HELD_UNREACHABLE_MESSAGE =
   'Held by a process that cannot be reached. If you are sure it is gone, reclaim the run with `texra resume <id> --reclaim`.';
 
-/** Banner and tooltip copy for a held stream, by whether its holder was reached. */
-export function streamHeldMessage(holderProvable: boolean | undefined): string {
-  return holderProvable === false
-    ? STREAM_HELD_UNREACHABLE_MESSAGE
-    : STREAM_HELD_ELSEWHERE_MESSAGE;
+/**
+ * Banner and tooltip copy for a held stream, by whether its holder was
+ * reached. The session renderer sends it as `StreamMetadata.statusDetail`.
+ */
+export function streamHeldMessage(holderProvable: boolean): string {
+  return holderProvable
+    ? STREAM_HELD_ELSEWHERE_MESSAGE
+    : STREAM_HELD_UNREACHABLE_MESSAGE;
+}
+
+/** Tooltip and banner copy for a stream whose run state could not be read. */
+function streamUnclassifiedMessage(cause: string | undefined): string {
+  return `Could not read this run's state: ${cause ?? 'unknown cause'}. Resume to retry.`;
+}
+
+/**
+ * Status-indicator tooltip and banner copy: the held and unclassified
+ * sentinels explain themselves from `statusDetail` (falling back to the
+ * generic held copy); every other status shows its label.
+ */
+export function streamStatusTooltip(
+  status: StreamLifecycleStatus | undefined,
+  statusDetail: string | undefined,
+  label: string | undefined,
+): string | undefined {
+  if (status === STREAM_LIFECYCLE_HELD) {
+    return statusDetail ?? STREAM_HELD_ELSEWHERE_MESSAGE;
+  }
+  if (status === STREAM_LIFECYCLE_UNCLASSIFIED) {
+    return streamUnclassifiedMessage(statusDetail);
+  }
+  return label;
 }
 
 export type StreamStatusLabelStyle = keyof typeof STREAM_STATUS_LABELS;

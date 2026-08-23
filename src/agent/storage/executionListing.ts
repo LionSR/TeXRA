@@ -8,6 +8,7 @@
 import pMap from 'p-map';
 
 import { type AgentConfig } from '@agent/core/definition/AgentConfig';
+import { flowKey } from '@agent/node/persistedFlow';
 import {
   isAgentRunRecord,
   type RunRecord,
@@ -144,22 +145,33 @@ export interface ExecutionStreamReference {
  * This deliberately does not infer ownership for metadata without `streamId`,
  * or for malformed metadata. Those rows are retained: the sweep's only safe
  * deletion authority is the registered execution→stream edge itself.
+ *
+ * With `checkpointedOnly`, only executions that still hold a resume
+ * checkpoint (flow record) are listed; the existence check runs before the
+ * metadata read, so settled history costs one `stat` each and no file read.
  */
-export async function listExecutionStreamReferences(): Promise<
-  ExecutionStreamReference[]
-> {
+export async function listExecutionStreamReferences(
+  options: { readonly checkpointedOnly?: boolean } = {},
+): Promise<ExecutionStreamReference[]> {
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
   const results = await pMap(
     executionDirs,
     async (executionId): Promise<ExecutionStreamReference | null> => {
+      const store = getExecutionStore(executionId);
       try {
-        const meta = await getExecutionStore(executionId).readMetaStrict();
+        if (
+          options.checkpointedOnly &&
+          !(await store.exists(flowKey(executionId)))
+        ) {
+          return null;
+        }
+        const meta = await store.readMetaStrict();
         if (!meta?.streamId) return null;
         return { executionId, streamId: meta.streamId };
       } catch (error) {
         log.warn(
-          `Skipping execution ${executionId} with unreadable metadata during orphan cleanup: ${toErrorMessage(error)}`,
+          `Skipping execution ${executionId} with unreadable storage while listing stream references: ${toErrorMessage(error)}`,
           { data: error },
         );
         return null;
