@@ -105,7 +105,9 @@ describe('LaTeXdiffService shadow output', () => {
 
     const result = await runShadowDiff(sourceDir, shadowDir);
 
-    if (!result.success) throw new Error('Expected diff run to succeed');
+    if (!result.success) {
+      throw new Error(`Expected diff run to succeed: ${result.message}`);
+    }
     expect(path.basename(result.diffPath)).toBe('revised_diff.tex');
     await expect(
       readFile(path.join(shadowDir, 'revised_diff.tex'), 'utf8'),
