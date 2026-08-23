@@ -1,5 +1,4 @@
 import {
-  describeFollowUpFailure,
   presentFollowUpResult,
   submitFollowUp,
   type SubmitFollowUpResult,
@@ -75,31 +74,14 @@ export function submitProgressFollowUp(
         return;
       }
 
-      switch (result.status) {
-        case 'sent':
-        case 'queued': {
-          // A queued input whose wake failed still belongs to the stream.
-          acknowledge(true);
-          emitQueuedFollowUpsChanged();
-          const presentation = presentFollowUpResult(result);
-          if (presentation.severity !== 'none') {
-            await showInfo(presentation.message);
-          }
-          return;
-        }
-        case 'failed':
-          acknowledge(false);
-          emitQueuedFollowUpsChanged();
-          await showInfo(describeFollowUpFailure(result.reason));
-          return;
-        default:
-          // A result this switch does not know must not leave the composer
-          // frozen: hand the draft back and make the gap loud.
-          acknowledge(false);
-          logger.warn(
-            `Unhandled follow-up result for stream ${streamId}: ${JSON.stringify(result)}`,
-          );
-          return;
+      // Anything not refused belongs to the stream, a queued input whose wake
+      // failed included. `presentFollowUpResult` is the one owner of the
+      // wording for every outcome that has any.
+      acknowledge(result.status !== 'failed');
+      emitQueuedFollowUpsChanged();
+      const presentation = presentFollowUpResult(result);
+      if (presentation.severity !== 'none') {
+        await showInfo(presentation.message);
       }
     })().catch((error: unknown) => {
       acknowledge(false);

@@ -1,7 +1,4 @@
 /** Tool-use follow-up routing and continuation ownership. */
-import { z } from 'zod';
-
-import { deriveResumability } from '@agent/storage/resumability';
 import { classifyRun } from '@agent/runtime/runClassification';
 import {
   currentSession,
@@ -23,8 +20,8 @@ import type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
  * - `finished`: the run has no checkpoint left to continue from.
  * - `owned_elsewhere`: another TeXRA process holds the run.
  * - `not_resumable`: the stream has no live flow here and the submission was
- *   refused (a replaced continuation generation, a disposed session, a run
- *   this process cannot classify).
+ *   refused (a terminalized queue, a disposed session, a run this process
+ *   cannot classify).
  */
 export type FollowUpFailureReason =
   'finished' | 'owned_elsewhere' | 'not_resumable';
@@ -53,9 +50,7 @@ export interface SubmitFollowUpOptions {
    * ordinary continuation: its parent counts the child as active until the
    * delivery has landed, so it always finds a live or recoverable queue.
    */
-  readonly mode?: 'continuation' | 'live_notification' | 'child_delivery';
-  /** Reject a detached producer if its originating continuation was replaced. */
-  readonly expectedGenerationId?: string;
+  readonly mode?: 'live_notification' | 'child_delivery';
   /**
    * Fires once admission is decided, before any recovery resume runs. `true`
    * means the input now belongs to the stream (sent, queued, or already
@@ -96,108 +91,6 @@ export function presentFollowUpResult(
 }
 
 const logger = createLog('ToolUseFollowUp');
-const PersistedContinuationGenerationSchema = z.looseObject({
-  continuationGenerationId: z.uuid(),
-});
-
-/**
- * The stream's execution id. Prefer the resident snapshot record for a live
- * session: `run.start` updates it synchronously while the sidecar FK write is
- * still queued. A stream whose run metadata is not resident (after a host
- * restart, or evicted by a storage-root change) falls back to the persisted
- * sidecar, then the summary mirror. Throws when the persisted read fails.
- */
-async function lookupExecutionId(
-  streamId: StreamTabId,
-  session: SessionHandle,
-): Promise<ExecutionId | undefined> {
-  return (
-    session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
-    (await session.snapshots.readPersistedExecutionId(streamId)) ??
-    session.transcripts.getSummaryMeta(streamId)?.executionId
-  );
-}
-
-async function restorePersistedGeneration(
-  streamId: StreamTabId,
-  session: SessionHandle,
-): Promise<boolean> {
-  let executionId: ExecutionId | undefined;
-  try {
-    executionId = await lookupExecutionId(streamId, session);
-  } catch (error) {
-    logger.warn(
-      `Cannot restore continuation generation for ${streamId}: persisted execution identity is unreadable.`,
-      {
-        data: {
-          streamId,
-          cause: 'execution_id_read_failed',
-          error,
-        },
-      },
-    );
-    return false;
-  }
-  if (!executionId) {
-    logger.warn(
-      `Cannot restore continuation generation for ${streamId}: no persisted execution id.`,
-      {
-        data: { streamId, cause: 'missing_execution_id' },
-      },
-    );
-    return false;
-  }
-  const resumability = await deriveResumability(executionId);
-  if (!resumability.resumable) {
-    logger.warn(
-      `Cannot restore continuation generation for ${streamId}: ${resumability.cause}.`,
-      {
-        data: { streamId, executionId, cause: resumability.cause },
-      },
-    );
-    return false;
-  }
-  const parsed = PersistedContinuationGenerationSchema.safeParse(
-    resumability.flowRecord.shared,
-  );
-  if (!parsed.success) {
-    logger.warn(
-      `Cannot restore continuation generation for ${streamId}: persisted flow state is invalid.`,
-      {
-        data: {
-          streamId,
-          executionId,
-          cause: 'invalid_generation',
-          error: parsed.error,
-        },
-      },
-    );
-    return false;
-  }
-  const restored = session.followUps.restorePersistedGeneration(
-    streamId,
-    parsed.data.continuationGenerationId,
-  );
-  if (restored === 'disposed') {
-    logger.warn(
-      `Cannot restore continuation generation for ${streamId}: follow-up queue was disposed.`,
-      {
-        data: { streamId, executionId, cause: 'disposed' },
-      },
-    );
-    return false;
-  }
-  if (restored === 'unavailable') {
-    logger.warn(
-      `Cannot restore continuation generation for ${streamId}: the retained queue belongs to another generation.`,
-      {
-        data: { streamId, executionId, cause: 'generation_mismatch' },
-      },
-    );
-    return false;
-  }
-  return true;
-}
 
 export function notifyFollowUpSent(
   streamId: StreamTabId,
@@ -221,10 +114,8 @@ type Admission =
  * Route and admit one submission. Synchronous from the registry snapshot to
  * the enqueue: two submissions to one stream cannot interleave between the
  * target lookup and the admission, which is what keeps the recovery claim
- * single-owner without a per-stream lock. Only the generation restore above
- * reads disk, and it runs before the snapshot is taken. A resumed model turn
- * completes after this returns, so it cannot block later input from joining
- * its queue.
+ * single-owner without a per-stream lock. A resumed model turn completes
+ * after this returns, so it cannot block later input from joining its queue.
  */
 function admitFollowUp(
   streamId: StreamTabId,
@@ -241,7 +132,6 @@ function admitFollowUp(
       streamId,
       item,
       'live_owner',
-      options.expectedGenerationId,
     );
     if (submission.kind === 'duplicate') return { status: 'sent' };
     if (submission.kind === 'live_flow') {
@@ -269,12 +159,7 @@ function admitFollowUp(
 
   const admission =
     options.mode === 'live_notification' ? 'live_owner' : 'recoverable';
-  const submission = ownerSession.followUps.submit(
-    streamId,
-    item,
-    admission,
-    options.expectedGenerationId,
-  );
+  const submission = ownerSession.followUps.submit(streamId, item, admission);
   if (submission.kind === 'duplicate') return { status: 'sent' };
   if (submission.kind === 'unavailable' || submission.kind === 'not_owned') {
     return { status: 'failed', reason: 'not_resumable' };
@@ -290,6 +175,25 @@ function admitFollowUp(
 }
 
 /**
+ * The execution a stream currently belongs to. Prefer the resident snapshot
+ * record for a live session: `run.start` updates it synchronously while the
+ * sidecar FK write is still queued. A stream whose run metadata is not
+ * resident (after a host restart, or evicted by a storage-root change) falls
+ * back to the persisted sidecar, then to the summary mirror. Throws when the
+ * persisted identity is unreadable.
+ */
+export async function lookupStreamExecutionId(
+  streamId: StreamTabId,
+  session: SessionHandle,
+): Promise<ExecutionId | undefined> {
+  return (
+    session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
+    (await session.snapshots.readPersistedExecutionId(streamId)) ??
+    session.transcripts.getSummaryMeta(streamId)?.executionId
+  );
+}
+
+/**
  * Word the refusal of a stream with no live flow here from the persisted
  * facts: who holds the run, and whether a checkpoint is left. Read only on
  * the failure path; an unreadable fact is `not_resumable`.
@@ -300,7 +204,7 @@ async function classifyRefusal(
 ): Promise<FollowUpFailureReason> {
   let executionId: ExecutionId | undefined;
   try {
-    executionId = await lookupExecutionId(streamId, session);
+    executionId = await lookupStreamExecutionId(streamId, session);
   } catch (error) {
     logger.warn(
       `Cannot classify the refusal for ${streamId}: persisted execution identity is unreadable.`,
@@ -340,22 +244,6 @@ export async function submitFollowUp(
       });
     }
   };
-  // A detached producer bound to a generation the session no longer holds in
-  // memory (a persisted inquiry answered after a host restart) is checked
-  // against the flow record on disk before a recovery admission; the check
-  // is idempotent, so concurrent submissions restoring one record agree.
-  if (
-    options.expectedGenerationId !== undefined &&
-    options.mode !== 'live_notification' &&
-    ownerSession.followUps.currentGenerationId(streamId) !==
-      options.expectedGenerationId &&
-    ownerSession.executions.getToolUseFollowUpTarget(streamId).kind ===
-      'queue' &&
-    !(await restorePersistedGeneration(streamId, ownerSession))
-  ) {
-    notifyAdmitted(false);
-    return { status: 'failed', reason: 'not_resumable' };
-  }
   const dispatch = admitFollowUp(streamId, item, options, ownerSession);
   if ('resume' in dispatch) {
     notifyAdmitted(true);

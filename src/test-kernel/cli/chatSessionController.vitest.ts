@@ -598,7 +598,6 @@ describe('createChatSessionController', () => {
         const options = args[2] as ResumeQueuedToolUseOptions;
         options.onFollowUpQueueReady?.({
           streamId: 'stream:test' as StreamTabId,
-          generationId: 'recovery-generation',
           kind: 'recovery',
         });
         return true;
@@ -1792,7 +1791,6 @@ describe('createChatSessionController', () => {
         const options = args[2] as ResumeQueuedToolUseOptions;
         options.onFollowUpQueueReady?.({
           streamId: 'stream:test' as StreamTabId,
-          generationId: 'recovery-generation',
           kind: 'recovery',
         });
         return resume.promise;

@@ -23,44 +23,12 @@ export const LeaseOwnerSchema = z.strictObject({
 export type LeaseOwnerRecord = z.infer<typeof LeaseOwnerSchema>;
 
 /**
- * A verdict is a proof or an admission that no proof exists. Two admissions
- * are told apart because they differ in what the user may do:
- *
- * - `unprovable`: the owner was recorded on another host, so nothing on this
- *   machine can say anything about it. An explicit reclaim may remove it.
- * - `unreadable`: some process holds the recorded pid on this host, and the
- *   identity on one side could not be read. That process is far more likely
- *   the owner than a coincidence, so even an explicit reclaim refuses it.
- *
- * Both mean "do not touch" to every automatic acquire, reclaim, and delete
- * path, and surface to the user as a held run.
+ * A verdict is a proof or an admission that no proof exists. `unprovable`
+ * means "do not touch automatically": every acquire path treats it exactly
+ * like `alive`, and the user sees the run as held. The user's explicit
+ * deletion of the run is the one path that reaps it.
  */
-export type OwnerLiveness = 'alive' | 'dead' | 'unprovable' | 'unreadable';
-
-/**
- * What a refusal tells the user, derived from one verdict: the owner it
- * names, whether it was proven alive, and whether an explicit reclaim would
- * remove its record. Every hold the lease module reports carries this.
- */
-export interface OwnerHold {
-  readonly owner: LeaseOwnerRecord;
-  /** True when the owner was proven alive. */
-  readonly provable: boolean;
-  /** True when `reclaimExecutionLease` would remove the record. */
-  readonly reclaimable: boolean;
-}
-
-/** The one place a liveness verdict becomes user-facing hold facts. */
-export function ownerHold(
-  owner: LeaseOwnerRecord,
-  liveness: Exclude<OwnerLiveness, 'dead'>,
-): OwnerHold {
-  return {
-    owner,
-    provable: liveness === 'alive',
-    reclaimable: liveness === 'unprovable',
-  };
-}
+export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 
 /** The identity this process stamps into the leases it claims. */
 export async function currentLeaseOwner(): Promise<LeaseOwnerRecord> {
@@ -94,7 +62,7 @@ function pidProvablyDead(pid: number): boolean {
  * | `kill(pid, 0)` gives ESRCH                     | dead       |
  * | pid exists, identity equals the record         | alive      |
  * | pid exists, identity differs (pid reuse)       | dead       |
- * | pid exists, identity unreadable on either side | unreadable |
+ * | pid exists, identity unreadable on either side | unprovable |
  *
  * Hostnames compare case-insensitively on every platform TeXRA supports. A
  * cross-host owner is unprovable by construction: a local pid says nothing
@@ -116,15 +84,15 @@ export async function proveOwnerLiveness(
     // The process may have exited between the two probes.
     if (pidProvablyDead(owner.pid)) return 'dead';
     log.warn(
-      `Lease owner pid ${owner.pid} exists but its start identity cannot be read; its liveness is unreadable`,
+      `Lease owner pid ${owner.pid} exists but its start identity cannot be read; its liveness is unprovable`,
     );
-    return 'unreadable';
+    return 'unprovable';
   }
   if (owner.processStart === null) {
     log.warn(
-      `Lease owner pid ${owner.pid} exists but its record carries no start identity; its liveness is unreadable`,
+      `Lease owner pid ${owner.pid} exists but its record carries no start identity; its liveness is unprovable`,
     );
-    return 'unreadable';
+    return 'unprovable';
   }
   return observed === owner.processStart ? 'alive' : 'dead';
 }

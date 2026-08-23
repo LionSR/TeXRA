@@ -70,7 +70,6 @@ describe('child run delivery', () => {
         targetStreamId: 'parent' as StreamTabId,
         followUp: { text: 'done', origin: 'subagent_result' },
         session: session as never,
-        expectedGenerationId: 'parent-generation',
       }),
     ).resolves.toEqual({ kind: 'delivered' });
     expect(mocks.submitFollowUp).toHaveBeenCalledWith(
@@ -79,7 +78,6 @@ describe('child run delivery', () => {
       {
         session,
         mode: 'child_delivery',
-        expectedGenerationId: 'parent-generation',
       },
     );
   });

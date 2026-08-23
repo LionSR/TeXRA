@@ -168,7 +168,7 @@ describe('execution lifecycle', () => {
     ).rejects.toThrow(error);
 
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({
-      status: 'missing',
+      status: 'free',
     });
   });
 

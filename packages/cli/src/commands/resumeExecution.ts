@@ -1,13 +1,12 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { describeResumeFailure, resolveAndResumeStream } from '@agent/runtime';
 import {
-  executionHeldMessage,
-  getExecutionStore,
-  inspectExecutionLease,
-  reclaimExecutionLease,
-} from '@agent/storage';
+  classifyRun,
+  describeResumeFailure,
+  resolveAndResumeStream,
+} from '@agent/runtime';
+import { executionHeldMessage, getExecutionStore } from '@agent/storage';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -39,13 +38,6 @@ function loadFailureMessage(id: ExecutionId, error: unknown): string {
   return `Could not load session ${id}: ${toErrorMessage(error)}`;
 }
 
-function leaseInspectionFailureMessage(
-  id: ExecutionId,
-  error: unknown,
-): string {
-  return `Could not check whether execution ${id} is active: ${toErrorMessage(error)}`;
-}
-
 async function workflowRecoveryInputsAreDurable(
   config: Parameters<typeof executeCliWorkflowConfig>[0],
   fallbackCwd: string,
@@ -75,11 +67,6 @@ async function workflowRecoveryInputsAreDurable(
 export async function runResumeExecution(
   context: CliContext,
   id: ExecutionId,
-  /**
-   * Remove a lease whose owner cannot be reached before resuming. Never
-   * removes a lease whose owner is provably alive.
-   */
-  reclaim = false,
 ): Promise<number> {
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
 
@@ -95,31 +82,24 @@ export async function runResumeExecution(
     writeTextStderr(`Execution not found: ${id}`);
     return CliExitCode.Usage;
   }
-  // Gate resume on the lease: a provably live owner refuses, and an owner
-  // that cannot be reached refuses unless `--reclaim` was given. The record
-  // itself is removed only after the preflight below, so a refused resume
-  // never leaves the run unowned. `--reclaim` is offered only where the
-  // reclaim would succeed; a pid on this machine whose identity could not
-  // be read is refused by the reclaim too, so the user is told to wait.
-  let reclaimFrom: { pid: number; hostname: string } | undefined;
-  try {
-    const lease = await inspectExecutionLease(id);
-    if (lease.status === 'owned' || lease.status === 'foreign') {
-      if (lease.provable || !lease.reclaimable) {
-        writeTextStderr(executionHeldMessage(id, lease));
-        return CliExitCode.Usage;
-      }
-      if (!reclaim) {
-        writeTextStderr(
-          `${executionHeldMessage(id, lease)} If you are sure it is gone, rerun with --reclaim.`,
-        );
-        return CliExitCode.Usage;
-      }
-      reclaimFrom = lease.owner;
-    }
-  } catch (error) {
-    writeTextStderr(leaseInspectionFailureMessage(id, error));
-    return CliExitCode.AgentError;
+  // Gate resume on ownership: a run held by any owner that is alive or cannot
+  // be proven dead refuses, naming that owner.
+  const classification = await classifyRun(id);
+  switch (classification.kind) {
+    case 'held_elsewhere':
+      writeTextStderr(executionHeldMessage(id, classification.owner));
+      return CliExitCode.Usage;
+    case 'owned_here':
+      writeTextStderr(`Execution ${id} is already running in this process.`);
+      return CliExitCode.Usage;
+    case 'unclassified':
+      writeTextStderr(
+        `Could not read the state of execution ${id}: ${classification.cause}`,
+      );
+      return CliExitCode.AgentError;
+    case 'resumable':
+    case 'finished':
+      break;
   }
   // FK-first: the stream id stamped at registration is the reproduction
   // contract. A row without one has no persisted stream to continue.
@@ -163,29 +143,6 @@ export async function runResumeExecution(
       }
       writeTextStderr(loadFailureMessage(id, error));
       return CliExitCode.AgentError;
-    }
-  }
-
-  if (reclaimFrom !== undefined) {
-    let outcome: Awaited<ReturnType<typeof reclaimExecutionLease>>;
-    try {
-      outcome = await reclaimExecutionLease(id);
-    } catch (error) {
-      writeTextStderr(leaseInspectionFailureMessage(id, error));
-      return CliExitCode.AgentError;
-    }
-    if (outcome === 'alive') {
-      writeTextStderr(
-        `Execution ${id} is held by a process that is still running; nothing was reclaimed.`,
-      );
-      return CliExitCode.Usage;
-    }
-    if (outcome === 'missing') {
-      writeTextStderr(`Execution ${id} is no longer held; resuming.`);
-    } else {
-      writeTextStderr(
-        `Reclaimed execution ${id} from pid ${reclaimFrom.pid} on ${reclaimFrom.hostname}.`,
-      );
     }
   }
 

@@ -14,14 +14,11 @@ export async function deliverChildRunFollowUp(params: {
   readonly targetStreamId: StreamTabId;
   readonly followUp: FollowUpQueueInput;
   readonly session: SessionHandle;
-  readonly mode?: 'continuation' | 'live_notification' | 'child_delivery';
-  /** Parent continuation generation captured when this producer began. */
-  readonly expectedGenerationId?: string;
+  readonly mode?: 'live_notification' | 'child_delivery';
 }): Promise<ChildRunDeliveryResult> {
   const result = await submitFollowUp(params.targetStreamId, params.followUp, {
     session: params.session,
     mode: params.mode ?? 'child_delivery',
-    expectedGenerationId: params.expectedGenerationId,
   });
   if (result.status === 'failed') {
     return { kind: 'failed', reason: result.reason };
