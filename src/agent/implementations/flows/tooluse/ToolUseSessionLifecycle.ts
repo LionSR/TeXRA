@@ -63,20 +63,23 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
     signal: AbortSignal,
   ): Promise<FollowUpQueueBatch | null> {
     const batch = await this.followUps.waitAndDrainAll(signal);
-    this.waitCancelled = batch === null;
     if (batch?.synthetic) {
       this.syntheticFollowUpPending = false;
     }
     return batch;
   }
 
+  noteParkedWaitCancelled(): void {
+    this.waitCancelled = true;
+  }
+
   /**
-   * Whether the most recent {@link waitForFollowUp} ended without a batch:
-   * the queue was cancelled or disposed under the parked flow. The flow
-   * reads this so a queue taken away is recorded as a cancellation, never as
-   * a completed turn.
+   * Whether the parking wait ended because the queue was cancelled or
+   * disposed under the flow. Recorded by the wait node at the one site where
+   * that is unambiguous; the flow reads it so a queue taken away is recorded
+   * as a cancellation, never as a completed turn.
    */
-  get lastWaitCancelled(): boolean {
+  get parkedWaitCancelled(): boolean {
     return this.waitCancelled;
   }
 

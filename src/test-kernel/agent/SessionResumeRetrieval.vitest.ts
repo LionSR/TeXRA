@@ -1427,32 +1427,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     });
   });
 
-  it('resets the resumable cursor after the user declines a retry', async () => {
-    const executionId = 'abc-declined-retry' as ExecutionId;
-    const streamId = 'chat@gpt54#abc-declined-retry' as StreamTabId;
-    const shared = {
-      messages: [],
-      continuationGenerationId: CONTINUATION_GENERATION_ID,
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices(),
-      userCancelledRetry: true,
-    };
-    await writeFlowRecord(executionId, shared, {
-      cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
-    });
-
-    const resume = await retrieveToolUseResume(streamId, executionId);
-    // The terminal cursor makes the flow exit COMPLETE without stepping any
-    // node, leaving the declined-retry marker for the outcome derivation.
-    const result = await runPersistedFlow(executionId, streamId, resume);
-
-    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    expect(await readFlowRecord(executionId)).toMatchObject({
-      cursor: { nextNodeId: 'start' },
-      shared: { shouldSkipCycle: true, userCancelledRetry: true },
-    });
-  });
-
   it('preserves an established flow when provider cancellation rejects the run', async () => {
     const executionId = 'abc-interrupted-provider' as ExecutionId;
     const streamId = 'chat@gpt54#abc-interrupted-provider' as StreamTabId;

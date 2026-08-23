@@ -283,7 +283,7 @@ describe('execution lifecycle', () => {
     const result = await finalizeExecution({
       executionId,
       outcome: RUN_OUTCOME.FAILED,
-      flowRecord: 'preserve',
+      flowRecord: 'delete',
     });
 
     expect(result).toMatchObject({
