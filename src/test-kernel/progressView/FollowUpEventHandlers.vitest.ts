@@ -126,7 +126,8 @@ describe('stream-scoped follow-up event handlers', () => {
         images: [pastedImage],
       },
     );
-    expect(followUpText(getState(), 'stream-a')).toBe('');
+    // The draft stays until the host acks admission.
+    expect(followUpText(getState(), 'stream-a')).toBe('draft [pasted-a.png]');
     expect(followUpText(getState(), 'stream-b')).toBe('other');
   });
 });

@@ -17,6 +17,7 @@ import { BaseTextInput, textInputCappedRowCount } from '../input/BaseTextInput';
 import {
   DraftAttachmentStore,
   shouldCollapsePaste,
+  type PastedImageEntry,
 } from '../input/draftAttachments';
 import {
   ImagePasteQueue,
@@ -38,6 +39,7 @@ import {
   type SlashPickIntent,
 } from '../commands/slashRegistry';
 import {
+  draftRestoreRequest,
   inputBarContentRows,
   reverseSearchOpen as reverseSearchOpenSignal,
   setTransientNotice,
@@ -192,6 +194,30 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     },
     [setValue],
   );
+  // A refused follow-up hands its text back: the draft is the user's until
+  // the session admits it. Image chips are rebuilt from the entries captured
+  // at submit; anything typed since the send is kept and the restored text
+  // is appended below it.
+  const lastSubmittedImagesRef = useRef<readonly PastedImageEntry[]>([]);
+  const draftRestore = useSignal(draftRestoreRequest);
+  useEffect(() => {
+    if (!draftRestore) return;
+    draftRestoreRequest.set(null);
+    // The submitted text still carries its `[Image #N]` tokens (only pasted
+    // text is expanded at submit); revive each one as a fresh chip, in order,
+    // so no placeholder is duplicated or left dangling.
+    const store = attachmentsRef.current;
+    const images = [...lastSubmittedImagesRef.current];
+    const restored = draftRestore.text.replaceAll(
+      /\[Image #\d+\]/g,
+      (token) => {
+        const image = images.shift();
+        return image ? store.addPastedImage(image) : token;
+      },
+    );
+    const current = draftValueRef.current;
+    setValue(current.length > 0 ? `${current}\n${restored}` : restored);
+  }, [draftRestore, setValue]);
   const transformPaste = useCallback((text: string): string => {
     if (!shouldCollapsePaste(text)) return text;
     return attachmentsRef.current.addPastedText(text);
@@ -246,7 +272,9 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         clearDraft();
         return;
       }
-      const mediaFiles = store.resolveMedia(submitted);
+      const images = store.resolveImages(submitted);
+      const mediaFiles = images.map((image) => image.path);
+      lastSubmittedImagesRef.current = images;
       const historyText = store.expandTextForHistory(submitted).trim();
       clearDraft();
       // Persisting history is best-effort — a disk failure (read-only fs,

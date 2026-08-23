@@ -653,6 +653,7 @@ describe('stream meta frontend state', () => {
         ],
         ui: {
           followUpText: 'unsent observation',
+          followUpSending: false,
           polishedText: null,
           polishRevision: 0,
           transcribedText: null,
