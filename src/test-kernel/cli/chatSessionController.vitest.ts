@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/storage', () => ({
   getExecutionStore: mocks.getExecutionStore,
+  ExecutionLeaseActiveError: class ExecutionLeaseActiveError extends Error {},
 }));
 
 vi.mock('@agent/runtime/resumeRun', () => ({

@@ -5,7 +5,11 @@
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
-import { getExecutionStore, readExecutionStreamIndex } from '@agent/storage';
+import {
+  ExecutionLeaseActiveError,
+  getExecutionStore,
+  readExecutionStreamIndex,
+} from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
@@ -22,7 +26,6 @@ import type {
   FollowUpQueueInput,
   FollowUpRecoveryLease,
 } from '@agent/followUp';
-import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
