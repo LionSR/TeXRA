@@ -3,8 +3,8 @@ import * as path from 'node:path';
 
 import {
   classifyRun,
-  describeResumeFailure,
-  resolveAndResumeStream,
+  describeFollowUpFailure,
+  resumeRun,
 } from '@agent/runtime';
 import { executionHeldMessage, getExecutionStore } from '@agent/storage';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
@@ -30,10 +30,6 @@ import {
 } from '../runtime/terminalRequirements';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
-function noResumeStateMessage(id: ExecutionId): string {
-  return `Execution ${id} cannot be resumed (it completed or was cleared).`;
-}
-
 function loadFailureMessage(id: ExecutionId, error: unknown): string {
   return `Could not load session ${id}: ${toErrorMessage(error)}`;
 }
@@ -58,11 +54,10 @@ async function workflowRecoveryInputsAreDurable(
 }
 
 /**
- * Continue a stored session. Funnels through the shared
- * `resolveAndResumeStream` orchestrator: a tool-use session reopens the
- * interactive chat TUI (so a usable terminal is required), while a workflow
- * run resumes headless under its persisted execution id — the same branch
- * vocabulary the extension and desktop resume paths speak.
+ * Continue a stored session through the shared `resumeRun`: a tool-use
+ * session reopens the interactive chat TUI (so a usable terminal is
+ * required), whose `/resume` calls it; a workflow run resumes headless under
+ * its persisted execution id.
  */
 export async function runResumeExecution(
   context: CliContext,
@@ -97,15 +92,16 @@ export async function runResumeExecution(
         `Could not read the state of execution ${id}: ${classification.cause}`,
       );
       return CliExitCode.AgentError;
-    case 'resumable':
     case 'finished':
+      writeTextStderr(describeFollowUpFailure('finished'));
+      return CliExitCode.Usage;
+    case 'resumable':
       break;
   }
   // FK-first: the stream id stamped at registration is the reproduction
   // contract. A row without one has no persisted stream to continue.
-  const streamId = meta?.streamId;
-  if (!streamId) {
-    writeTextStderr(noResumeStateMessage(id));
+  if (!meta?.streamId) {
+    writeTextStderr(describeFollowUpFailure('finished'));
     return CliExitCode.Usage;
   }
 
@@ -146,72 +142,56 @@ export async function runResumeExecution(
     }
   }
 
-  // The funnel's guards need the live session planes; the TUI and the
-  // headless skeleton both adopt this session rather than re-initializing.
-  const { session } = await initializeHeadlessTranscriptSession();
+  if (config.agentCategory === AgentCategory.ToolUse) {
+    const { runChat } = await import('../chat/tui/runChatTui');
+    return (await runChat(context, { initialResume: { id, config } })).exitCode;
+  }
 
+  // `resumeRun`'s guards need the live session planes; the headless skeleton
+  // adopts this session rather than re-initializing.
+  const { session } = await initializeHeadlessTranscriptSession();
   let exitCode: number = CliExitCode.Usage;
-  let failed = false;
-  let failureExitCode: CliExitCode = CliExitCode.AgentError;
-  const resumed = await resolveAndResumeStream(streamId, {
-    executions: session.executions,
-    resolveResumeState: async () => ({
-      status: 'resolved',
-      state: { runState: config, executionId: id },
-    }),
-    resumeToolUse: async (resume) => {
-      const { runChat } = await import('../chat/tui/runChatTui');
-      const result = await runChat(context, {
-        initialResume: { id, resolution: resume },
-      });
-      exitCode = result.exitCode;
-      return true;
-    },
-    executeWorkflow: async (
-      workflowConfig,
-      executionId,
-      modelHandlerCompatibilityKey,
-    ) => {
-      const output = resumeWorkflowOutputFile(workflowConfig);
-      const outputDir = resumeWorkflowOutputDirectory(workflowConfig);
-      await assertOutputFileAvailable(output, context.cwd);
-      await assertOutputDirAvailable(outputDir, context.cwd);
-      exitCode = await executeCliWorkflowConfig(
+  try {
+    const result = await resumeRun(id, {
+      session,
+      executeWorkflow: async (
         workflowConfig,
-        buildHeadlessRunContext(context),
-        {
-          executionId: executionId ?? id,
-          modelHandlerCompatibilityKey,
-          // Honor the original run's persisted output destination.
-          output,
-          outputDir,
-          expectedOutputFiles:
-            workflowConfig.cliExpectedOutputFiles ?? undefined,
-          recoveryInputIsDurable: await workflowRecoveryInputsAreDurable(
-            workflowConfig,
-            context.cwd,
-          ),
-          categoryMismatchMessage: `Execution ${id} resolved to a non workflow run.`,
-        },
-      );
-    },
-    reportNoResumableSession: () => {
-      writeTextStderr(noResumeStateMessage(id));
-    },
-    reportFailure: (_streamId, error) => {
-      failed = true;
-      const description = describeResumeFailure(error);
-      if (description.kind === 'lease-active') {
-        writeTextStderr(description.message);
-      } else if (error instanceof CliUsageError) {
-        writeTextStderr(error.message);
-      } else {
-        writeTextStderr(loadFailureMessage(id, error));
-        return;
-      }
-      failureExitCode = CliExitCode.Usage;
-    },
-  });
-  if (failed) return failureExitCode;
-  return resumed ? exitCode : CliExitCode.Usage;
+        executionId,
+        modelHandlerCompatibilityKey,
+      ) => {
+        const output = resumeWorkflowOutputFile(workflowConfig);
+        const outputDir = resumeWorkflowOutputDirectory(workflowConfig);
+        await assertOutputFileAvailable(output, context.cwd);
+        await assertOutputDirAvailable(outputDir, context.cwd);
+        exitCode = await executeCliWorkflowConfig(
+          workflowConfig,
+          buildHeadlessRunContext(context),
+          {
+            executionId,
+            modelHandlerCompatibilityKey,
+            // Honor the original run's persisted output destination.
+            output,
+            outputDir,
+            expectedOutputFiles:
+              workflowConfig.cliExpectedOutputFiles ?? undefined,
+            recoveryInputIsDurable: await workflowRecoveryInputsAreDurable(
+              workflowConfig,
+              context.cwd,
+            ),
+            categoryMismatchMessage: `Execution ${id} resolved to a non workflow run.`,
+          },
+        );
+      },
+    });
+    if (result === 'started') return exitCode;
+    writeTextStderr(describeFollowUpFailure(result.failed));
+    return CliExitCode.Usage;
+  } catch (error) {
+    if (error instanceof CliUsageError) {
+      writeTextStderr(error.message);
+      return CliExitCode.Usage;
+    }
+    writeTextStderr(loadFailureMessage(id, error));
+    return CliExitCode.AgentError;
+  }
 }

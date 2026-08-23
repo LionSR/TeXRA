@@ -60,8 +60,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
-import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
-import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
+import { resumeRun } from '@agent/runtime/resumeRun';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
@@ -368,8 +367,9 @@ describe('completedRunArchive facade', () => {
     // config would produce a different (wrong) id.
     expect(getStreamTabId(config.agent, { executionId })).not.toBe(streamId);
 
-    const snapshots = await seedStreams(executionId, [{ streamId }]);
+    await seedStreams(executionId, [{ streamId }]);
     await stampStreamId(executionId, streamId);
+    await getExecutionStore(executionId).writeRunRecord(config);
 
     const logs = await StreamLogStore.open();
     const firstTurn = logs.acquireWriter(streamId, executionId);
@@ -437,41 +437,18 @@ describe('completedRunArchive facade', () => {
         return writer;
       });
 
-    const resolveResumeState = vi.fn(async (requestedStreamId: StreamTabId) => {
-      const { config: runState, executionId: resolvedExecutionId } =
-        snapshots.getRunMetadata(requestedStreamId);
-      return runState && resolvedExecutionId
-        ? {
-            status: 'resolved' as const,
-            state: { runState, executionId: resolvedExecutionId },
-          }
-        : {
-            status: 'incomplete' as const,
-            runState,
-            executionId: resolvedExecutionId,
-          };
-    });
-    const reportFailure = vi.fn();
     try {
       await expect(
-        resolveAndResumeStream(streamId, {
-          executions: session.executions,
-          resolveResumeState,
-          resumeToolUse: async (resume) => {
-            await resumeToolUseFromResumeData(resume, { session });
-            return true;
-          },
+        resumeRun(executionId, {
+          session,
           executeWorkflow: vi.fn(async () => undefined),
-          reportFailure,
         }),
-      ).resolves.toBe(false);
+      ).rejects.toBe(launchFailure);
     } finally {
       session.dispose();
     }
     await logs.flush();
 
-    expect(resolveResumeState).toHaveBeenCalledWith(streamId);
-    expect(reportFailure).toHaveBeenCalledWith(streamId, launchFailure);
     expect(resumedWriter).toHaveBeenCalledWith(streamId, executionId);
     expect(
       launchMocks.releaseOwnedExecutionLeaseAfterFailure,

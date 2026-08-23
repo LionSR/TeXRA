@@ -35,7 +35,6 @@ const mocks = vi.hoisted(() => ({
   listExecutions: vi.fn(),
   deleteExecution: vi.fn(),
   deleteAllExecutions: vi.fn(),
-  readCliToolUseResumeData: vi.fn(),
   readCliResumeDataForListing: vi.fn(),
   assembleTrace: vi.fn(),
 }));
@@ -68,7 +67,6 @@ vi.mock('@utils/files/taskRunStorage', () => ({
 }));
 
 vi.mock('@cli/runtime/toolUseResumeData', () => ({
-  readCliToolUseResumeData: mocks.readCliToolUseResumeData,
   readCliResumeDataForListing: mocks.readCliResumeDataForListing,
 }));
 
@@ -286,7 +284,6 @@ describe('CLI history runtime', () => {
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
-    mocks.readCliToolUseResumeData.mockResolvedValue(null);
     mocks.readCliResumeDataForListing.mockResolvedValue(null);
   });
 
