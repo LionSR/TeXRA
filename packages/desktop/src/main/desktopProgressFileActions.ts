@@ -252,8 +252,8 @@ export class DesktopProgressFileActions {
     outcome: DiffRunOutcome,
   ): Promise<boolean> {
     const successes = outcome.results.filter(
-      (entry): entry is DiffRunResult & { diffPath: string } =>
-        entry.success && Boolean(entry.diffPath),
+      (entry): entry is Extract<DiffRunResult, { success: true }> =>
+        entry.success,
     );
 
     for (const result of successes) {

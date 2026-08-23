@@ -89,12 +89,7 @@ async function executeDiffOperations(
             { cwd: operation.cwd },
           );
 
-    results.push({
-      success: diffResult.success,
-      message: diffResult.message,
-      diffPath: diffResult.diffPath,
-      description: operation.description,
-    });
+    results.push({ ...diffResult, description: operation.description });
   }
 
   return { results };
