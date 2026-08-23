@@ -105,8 +105,7 @@ const ModelSchema = NonEmptyStringSchema.refine(isCliSupportedModelId, {
 });
 const OutputFormatSchema = z.enum(CLI_OUTPUT_FORMATS);
 
-type CliScalarConfigKey = 'agent' | 'model' | 'outputFormat' | 'approvalPolicy';
-type CliScalarFields = Required<Pick<CliConfigValues, CliScalarConfigKey>>;
+type CliScalarFields = Required<Omit<CliConfigValues, 'chat' | 'run'>>;
 type CliRequiredCommandConfig = Required<CliCommandConfig>;
 
 /** One `[key, schema]` pair whose schema output matches `T`'s type for that
@@ -257,8 +256,8 @@ function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
       TOP_LEVEL_FIELD_SCHEMAS,
       canonicalConfigKey,
     ),
-    chat: chat ? pickCommandConfig(chat) : undefined,
-    run: run ? pickCommandConfig(run) : undefined,
+    ...(chat ? { chat: pickCommandConfig(chat) } : {}),
+    ...(run ? { run: pickCommandConfig(run) } : {}),
   };
 }
 
