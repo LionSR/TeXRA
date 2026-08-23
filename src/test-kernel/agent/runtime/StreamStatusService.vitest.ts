@@ -157,10 +157,10 @@ describe('StreamStatusMachine', () => {
     seedStreamStatusForTest(machine, streamId, { phase: STREAM_PHASE.WAITING });
 
     expect(
-      machine.transitionToTerminal(streamId, STREAM_PHASE.FAILED, cause),
+      machine.transitionToTerminal(streamId, STREAM_PHASE.CANCELLED, cause),
     ).toBe(true);
 
-    expect(machine.get(streamId)).toBe(STREAM_PHASE.FAILED);
+    expect(machine.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
     expect(statusEvents()).toEqual([
       {
         streamId,
@@ -173,7 +173,7 @@ describe('StreamStatusMachine', () => {
       {
         streamId,
         type: 'status',
-        phase: STREAM_PHASE.FAILED,
+        phase: STREAM_PHASE.CANCELLED,
         previousPhase: STREAM_PHASE.RUNNING,
         cause,
       },

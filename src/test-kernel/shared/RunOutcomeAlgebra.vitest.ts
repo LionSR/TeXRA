@@ -102,7 +102,6 @@ describe('stream phase transition table', () => {
       [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [
         STREAM_PHASE.RUNNING,
         STREAM_PHASE.WAITING,
-        STREAM_PHASE.FAILED,
         STREAM_PHASE.CANCELLED,
       ],
     },

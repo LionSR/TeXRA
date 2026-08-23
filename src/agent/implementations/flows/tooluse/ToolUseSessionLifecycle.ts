@@ -14,6 +14,7 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   private readonly followUps: FollowUpQueue;
   private readonly lease: FollowUpConsumerLease | undefined;
   private syntheticFollowUpPending = false;
+  private waitCancelled = false;
 
   constructor(
     private readonly streamTabId: StreamTabId,
@@ -62,10 +63,21 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
     signal: AbortSignal,
   ): Promise<FollowUpQueueBatch | null> {
     const batch = await this.followUps.waitAndDrainAll(signal);
+    this.waitCancelled = batch === null;
     if (batch?.synthetic) {
       this.syntheticFollowUpPending = false;
     }
     return batch;
+  }
+
+  /**
+   * Whether the most recent {@link waitForFollowUp} ended without a batch:
+   * the queue was cancelled or disposed under the parked flow. The flow
+   * reads this so a queue taken away is recorded as a cancellation, never as
+   * a completed turn.
+   */
+  get lastWaitCancelled(): boolean {
+    return this.waitCancelled;
   }
 
   /**

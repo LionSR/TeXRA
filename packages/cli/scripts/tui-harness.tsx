@@ -496,6 +496,7 @@ function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
       agent: 'orchestrator',
       model: 'harness-model',
       status: CLI_HISTORY_RESUMABLE_STATUS,
+      resumable: true,
       inputBasename: '-',
       category: AgentCategory.ToolUse,
     },
