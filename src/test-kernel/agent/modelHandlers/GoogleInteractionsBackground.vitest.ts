@@ -41,6 +41,22 @@ type Step = Interactions.Step;
 
 const POLL_INTERVAL_MS = 5000;
 const MAX_DURATION_MS = 3 * 60 * 60 * 1000;
+const TRANSIENT_RETRIEVAL_MESSAGE_403 =
+  'There was a problem processing your request. You will not be charged.';
+const TRANSIENT_RETRIEVAL_MESSAGE_400 = 'Request contains an invalid argument.';
+
+function transientRetrieval403(): Error {
+  return Object.assign(new Error(TRANSIENT_RETRIEVAL_MESSAGE_403), {
+    status: 403,
+    code: 'permission_denied',
+  });
+}
+
+function transientRetrieval400(): Error {
+  return Object.assign(new Error(TRANSIENT_RETRIEVAL_MESSAGE_400), {
+    status: 400,
+  });
+}
 
 interface Interaction {
   id: string;
@@ -770,11 +786,12 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     });
   });
 
-  it('retains a known id after a non-missing 4xx retrieval failure', async () => {
+  it('propagates a genuine permission-denied 403 and retains its id', async () => {
     useBackgroundTimers();
     const handler = createHandler();
     const forbidden = Object.assign(new Error('request rejected'), {
       status: 403,
+      code: 'permission_denied',
     });
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_forbidden', status: 'in_progress' }),
@@ -792,6 +809,91 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       gets: ['int_forbidden', 'int_forbidden'],
     });
   });
+
+  it.each([
+    {
+      label: 'generic durable',
+      error: Object.assign(new Error('request is invalid'), { status: 400 }),
+    },
+    { label: 'ambiguous pre-403', error: transientRetrieval400() },
+  ])('propagates a $label 400', async ({ error }) => {
+    useBackgroundTimers();
+    const handler = createHandler();
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_bad_request', status: 'in_progress' }),
+      getSequence: [error],
+    });
+
+    const firstError = await failFirstRetrieval(handler, client);
+
+    expect(firstError).toBe(error);
+    expectLedger(calls, 1, ['int_bad_request']);
+  });
+
+  it('polls through the recognized 403 then 400 and warns once without provider text', async () => {
+    useBackgroundTimers();
+    const handler = createHandler();
+    const warn = vi.fn();
+    handler.setLogger({ ...noopTrace, warn });
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_slow', status: 'in_progress' }),
+      getSequence: [
+        transientRetrieval403(),
+        transientRetrieval400(),
+        completedInteraction('int_slow'),
+      ],
+    });
+
+    const result = await runWithPolls(
+      respond(handler, client, [userStep('a')]),
+      3,
+    );
+
+    expect(result.response.status).toBe('completed');
+    expectLedger(calls, 1, ['int_slow', 'int_slow', 'int_slow']);
+    const transientWarnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('classification=known-provider-retrieval-lag'),
+    );
+    expect(transientWarnings).toHaveLength(1);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(
+      TRANSIENT_RETRIEVAL_MESSAGE_403,
+    );
+  });
+
+  it.each([
+    { label: 'success', terminal: completedInteraction('int_reused') },
+    {
+      label: 'failure',
+      terminal: { id: 'int_reused', status: 'failed' },
+    },
+  ])(
+    'resets transient retrieval state after terminal $label',
+    async ({ terminal }) => {
+      useBackgroundTimers();
+      const handler = createHandler();
+      const invalidArgument = transientRetrieval400();
+      const { client, calls } = bgClient({
+        submit: () => ({ id: 'int_reused', status: 'in_progress' }),
+        getSequence: [transientRetrieval403(), terminal, invalidArgument],
+      });
+
+      if (terminal.status === 'completed') {
+        await runWithPolls(respond(handler, client, [userStep('a')]), 2);
+      } else {
+        await runWithPolls(
+          captureRejection(respond(handler, client, [userStep('a')])),
+          2,
+        );
+      }
+
+      const nextError = await failFirstRetrieval(handler, client, undefined, [
+        userStep('b'),
+      ]);
+
+      expect(nextError).toBe(invalidArgument);
+      expectLedger(calls, 2, ['int_reused', 'int_reused', 'int_reused']);
+    },
+  );
 
   it.each([404, 410])(
     'clears a definitively missing interaction on HTTP %i and requires manual retry',
