@@ -79,7 +79,7 @@ vi.mock('@agent/runtime', () => ({
   runAgent: mocks.runValidatedAgent,
 }));
 
-vi.mock('@tools/agentCliSessionStores', () => ({
+vi.mock('@tools/agentShutdownHandlers', () => ({
   claudeAgentSessionsFor: (session: unknown) => ({
     interruptAll: () => mocks.interruptClaudeAgentSessions(session),
   }),

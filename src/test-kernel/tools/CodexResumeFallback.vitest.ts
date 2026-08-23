@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { codexThreadsFor } from '@tools/agentCliSessionStores';
+import { codexThreadsFor } from '@tools/agentShutdownHandlers';
 
 const mocks = vi.hoisted(() => ({
   requestBashApproval: vi.fn(),

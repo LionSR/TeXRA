@@ -16,7 +16,7 @@ import {
 import { tryDefaultSession, type AgentConfig } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { createSessionStores } from '@controllers/session/sessionStores';
+import { createSessionStores } from '@controllers/session/createSessionStores';
 import {
   ExecutionIdSchema,
   HISTORY_RUN_STATUS,

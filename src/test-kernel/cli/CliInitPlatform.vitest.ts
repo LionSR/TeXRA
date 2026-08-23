@@ -17,7 +17,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   claudeAgentSessionsFor,
   codexThreadsFor,
-} from '@tools/agentCliSessionStores';
+} from '@tools/agentShutdownHandlers';
 import { getSetupPlatform } from '@tools/setup/platform';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';

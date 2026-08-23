@@ -15,7 +15,7 @@ import type {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
-import { claudeAgentSessionsFor } from '@tools/agentCliSessionStores';
+import { claudeAgentSessionsFor } from '@tools/agentShutdownHandlers';
 
 const mocks = vi.hoisted(() => ({
   requestBashApproval: vi.fn(),

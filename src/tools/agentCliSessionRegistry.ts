@@ -142,7 +142,7 @@ export class AgentCliSessionRegistry {
 
   /**
    * Interrupt every registered CLI-backed session. Registries are keyed by
-   * runtime session (`agentCliSessionStores`), so "every" is already scoped
+   * runtime session (`agentShutdownHandlers`), so "every" is already scoped
    * to one session's own agent-CLI children.
    */
   interruptAll(): void {

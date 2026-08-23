@@ -1,5 +1,5 @@
 import type { SessionHandle } from '@agent/runtime';
-import { createSessionStores } from '@controllers/session/sessionStores';
+import { createSessionStores } from '@controllers/session/createSessionStores';
 import { createLog } from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
 import { toLogData } from './desktopLogUtils.js';

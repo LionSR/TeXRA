@@ -61,7 +61,7 @@ import {
   findClaudeBinaryPath,
 } from './claudeAgentImport';
 import { type ChildStream } from './delegation/childStream';
-import { claudeAgentSessionsFor } from './agentCliSessionStores';
+import { claudeAgentSessionsFor } from './agentShutdownHandlers';
 import {
   dispatchAgentCliTool,
   launchAgentCliSession,

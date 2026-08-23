@@ -12,7 +12,7 @@ import {
   claudeAgentSessionsFor,
   codexThreadsFor,
   registerAgentShutdownHandlers,
-} from '@tools/agentCliSessionStores';
+} from '@tools/agentShutdownHandlers';
 
 describe('agent shutdown', () => {
   afterEach(() => {

@@ -53,7 +53,7 @@ import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { type ChildStream } from './delegation/childStream';
-import { codexThreadsFor } from './agentCliSessionStores';
+import { codexThreadsFor } from './agentShutdownHandlers';
 import {
   dispatchAgentCliTool,
   launchAgentCliSession,
