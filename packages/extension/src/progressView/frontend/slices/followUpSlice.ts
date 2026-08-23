@@ -1,6 +1,6 @@
 /**
  * Follow-up handlers: UPDATE_FOLLOW_UP_TEXT, UPDATE_RECORDING,
- * UPDATE_QUEUED_FOLLOW_UPS.
+ * FOLLOW_UP_RESULT, UPDATE_QUEUED_FOLLOW_UPS.
  */
 
 import { create } from 'mutative';
@@ -8,6 +8,10 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundHandlerRegistry } from '@shared/schemas';
 
+import {
+  getFollowUpInputTransientState,
+  resetFollowUpInputTransientState,
+} from '../followUpInputState';
 import { appState } from '../progressState';
 import { updateToolUseState } from '../stateUtils';
 
@@ -53,6 +57,24 @@ export const followUpHandlers = {
     updateToolUseState(streamId, (prev) =>
       create(prev, (draft) => {
         draft.ui.recording = data.status === 'started';
+      }),
+    );
+  },
+
+  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT]: (data) => {
+    if (data.accepted) {
+      resetFollowUpInputTransientState(
+        getFollowUpInputTransientState(data.stream),
+      );
+    }
+    updateToolUseState(data.stream, (prev) =>
+      create(prev, (draft) => {
+        draft.ui.followUpSending = false;
+        if (data.accepted) {
+          draft.ui.followUpText = '';
+        } else {
+          draft.ui.shouldFocusFollowUp = true;
+        }
       }),
     );
   },

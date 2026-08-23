@@ -19,7 +19,6 @@ import {
   type SessionHandle,
   type SessionHostInteractions,
 } from '@agent/runtime';
-import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
@@ -49,6 +48,7 @@ import {
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
+import { submitProgressFollowUp } from '@controllers/progressView/progressFollowUpSubmit';
 import {
   createProgressViewCommandHandlers,
   createProgressViewSecondTierHandlers,
@@ -677,7 +677,15 @@ export class DesktopProgressBridge {
             data: toLogData(error),
           }),
       },
-      sendFollowUp: (stream, text) => this.sendFollowUp(stream, text),
+      sendFollowUp: async (stream, text) => {
+        await submitProgressFollowUp({
+          session: this.session,
+          streamId: stream,
+          input: { text },
+          acknowledge: () => {},
+          showInfo: (message) => this.options.host.showInfoMessage(message),
+        });
+      },
     });
   }
 
@@ -741,8 +749,14 @@ export class DesktopProgressBridge {
         stopStream: (stream) => this.backend.stopStream(stream),
       },
       followUp: {
-        sendFollowUp: ({ stream, text, mediaFiles }) =>
-          this.sendFollowUp(stream, text, mediaFiles),
+        session: this.session,
+        acknowledge: (stream, accepted) => {
+          this.postToRenderer({
+            command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
+            stream,
+            accepted,
+          });
+        },
         reportImageSaveError: (image, error) =>
           this.logger.warn(
             `Failed to save pasted follow-up image ${image.fileName}`,
@@ -1152,55 +1166,6 @@ export class DesktopProgressBridge {
       inputFile,
       ...(outputFiles?.length ? { outputFiles } : {}),
     };
-  }
-
-  private async sendFollowUp(
-    streamId: StreamTabId,
-    text: string,
-    mediaFiles?: readonly string[],
-  ): Promise<void> {
-    // Resolve the follow-up target against the process session: the run's
-    // handle is tracked in `this.session`, but this IPC path runs outside the
-    // run ALS, so the module default (currentSession ⇒ defaultSession) would
-    // look in the wrong registry and report `no_session` for a live run.
-    // Admission and the recovery claim happen synchronously inside
-    // submitFollowUp. Presentation remains detached because recovery may run a
-    // complete agent turn; closing a desktop window must not await that turn.
-    void submitFollowUp(
-      streamId,
-      { text, mediaFiles },
-      { session: this.session },
-    )
-      .then(async (result) => {
-        if (result.status === 'sent' || result.status === 'queued') {
-          this.session.events.emit({
-            scope: 'session',
-            event: {
-              type: 'updateQueuedFollowUps',
-              payload: { streamId },
-            },
-          });
-          const presentation = presentFollowUpResult(result);
-          if (presentation.severity !== 'none') {
-            await this.session.interactions.showInfoMessage(
-              presentation.message,
-              {
-                replayWhenAttached: true,
-              },
-            );
-          }
-          return;
-        }
-
-        await this.options.host.showInfoMessage(
-          'No active session. Start a new agent task to continue.',
-        );
-      })
-      .catch((error: unknown) => {
-        this.logger.warn(`Failed to submit follow-up for stream ${streamId}`, {
-          data: toLogData(error),
-        });
-      });
   }
 
   /**
