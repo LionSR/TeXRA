@@ -22,6 +22,7 @@ import {
   isPlainAgentIdentity,
   isToolUseState,
   isWorkflowState,
+  STREAM_LIFECYCLE_HELD,
   STREAM_PHASE,
   STREAM_SUBSTATE,
 } from '@shared/schemas';
@@ -30,6 +31,7 @@ import { formatWorkflowRunContext } from '@shared/copy/workflowRunContext';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import {
   progressHeaderStatus,
+  STREAM_HELD_ELSEWHERE_MESSAGE,
   streamStatusIndicatorClass,
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
@@ -100,6 +102,17 @@ const TERMINAL_STATE_BUTTONS = [
 ];
 
 /**
+ * Buttons enabled while another TeXRA process holds the run: read-only
+ * verbs only. Stop, resume, re-run, restore, archive, clean, and diff all
+ * act on a run this process does not own.
+ */
+const HELD_STATE_BUTTONS = [
+  ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
+  ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
+];
+
+/**
  * Terminal-set buttons that make no sense before the stream's first run:
  * there is no prior run to resume, and no outputs to copy context from.
  */
@@ -129,6 +142,7 @@ const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
   ),
   [STREAM_PHASE.WAITING]: new Set(ACTIVE_STATE_BUTTONS),
   [STREAM_SUBSTATE.RESUMING]: new Set(ACTIVE_STATE_BUTTONS),
+  [STREAM_LIFECYCLE_HELD]: new Set(HELD_STATE_BUTTONS),
 };
 
 /** Buttons that depend on having an executionId */
@@ -531,7 +545,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
             })}
           ></span>
           <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
-            ${statusLabel}
+            ${status === STREAM_LIFECYCLE_HELD ? STREAM_HELD_ELSEWHERE_MESSAGE : statusLabel}
           </wa-tooltip>
           ${this.renderRunElapsed(state?.runStartedAt)}
           ${this.renderGoalChip(goalActive, goalStatus, goalObjective)}

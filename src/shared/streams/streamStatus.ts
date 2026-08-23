@@ -119,11 +119,15 @@ export function isTranscriptSettlementPhase(
   return phase === STREAM_PHASE.WAITING || isTerminalOutcomePhase(phase);
 }
 
-export function isActivePhase(phase: StreamPhase | undefined): boolean {
+export function isActivePhase(
+  phase: StreamLifecycleStatus | undefined,
+): boolean {
   return phase === STREAM_PHASE.RUNNING;
 }
 
-export function isInFlightPhase(phase: StreamPhase | undefined): boolean {
+export function isInFlightPhase(
+  phase: StreamLifecycleStatus | undefined,
+): boolean {
   return phase === STREAM_PHASE.RUNNING || phase === STREAM_PHASE.WAITING;
 }
 
@@ -170,13 +174,11 @@ export function canTransitionStreamPhase(
         to === STREAM_PHASE.RUNNING
       );
     case STREAM_TRANSITION_CAUSE.RESTART_REPAIR:
-      if (from === undefined) return true;
+      // Repair settles a stream on a persisted outcome or records an
+      // interruption as CANCELLED; it never restores a live phase it did not
+      // observe and never infers FAILED.
+      if (from === undefined) return isTerminalOutcomePhase(to);
       if (from === to) return true;
-      // Repair restores a checkpointed stream to WAITING or records an
-      // interruption as CANCELLED; it never infers FAILED.
-      return (
-        from === STREAM_PHASE.RUNNING &&
-        (to === STREAM_PHASE.WAITING || to === STREAM_PHASE.CANCELLED)
-      );
+      return from === STREAM_PHASE.RUNNING && to === STREAM_PHASE.CANCELLED;
   }
 }

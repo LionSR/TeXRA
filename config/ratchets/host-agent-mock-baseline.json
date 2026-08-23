@@ -124,17 +124,17 @@
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
       "form": "doMock",
+      "specifier": "@agent/runtime/restartRepair"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
+      "form": "doMock",
       "specifier": "@agent/runtime/runAgent"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
       "form": "doMock",
       "specifier": "@agent/runtime/SessionResumeRetrieval"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
-      "form": "doMock",
-      "specifier": "@agent/storage/detectWaitingStreams"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
@@ -144,17 +144,17 @@
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
       "form": "doMock",
+      "specifier": "@agent/runtime/restartRepair"
+    },
+    {
+      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
+      "form": "doMock",
       "specifier": "@agent/runtime/runAgent"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
       "form": "doMock",
       "specifier": "@agent/runtime/SessionResumeRetrieval"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
-      "form": "doMock",
-      "specifier": "@agent/storage/detectWaitingStreams"
     },
     {
       "file": "src/test-kernel/desktop/DesktopToolEditApproval.vitest.ts",

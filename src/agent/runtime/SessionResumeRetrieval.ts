@@ -59,13 +59,9 @@ function throwIfResumeStorageUnreadable(
     case RESUMABILITY_CAUSE.UNREADABLE_META:
     case RESUMABILITY_CAUSE.INVALID_META:
       throw new Error(`Unable to read resume storage: ${resumability.cause}`);
-    // Nothing to resume, but the storage itself read fine. The two lease
-    // causes belong to the display-side `deriveOfferableResumability` and
-    // cannot reach this path, which reads the durable decision directly.
+    // Nothing to resume, but the storage itself read fine.
     case RESUMABILITY_CAUSE.MISSING_FLOW:
     case RESUMABILITY_CAUSE.INVALID_FLOW:
-    case RESUMABILITY_CAUSE.ACTIVE_LEASE:
-    case RESUMABILITY_CAUSE.UNREADABLE_LEASE:
       return;
     default:
       resumability satisfies never;

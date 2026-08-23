@@ -1,5 +1,6 @@
 import type { StatusEvent } from '@agent/trace';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import type { InstanceOwnerRecord } from '@agent/storage/instancePresence';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -20,10 +21,7 @@ interface StreamStatusEmitOptions {
   substate?: StreamSubstate;
 }
 
-type WaitingTransitionCause = Extract<
-  StreamTransitionCause,
-  'wait' | 'restart-repair'
->;
+type WaitingTransitionCause = Extract<StreamTransitionCause, 'wait'>;
 
 type TerminalTransitionCause = Extract<
   StreamTransitionCause,
@@ -68,6 +66,17 @@ function effectiveState(entry: StreamEntry): StreamPhaseState {
 
 export class StreamStatusMachine {
   private readonly streams = new Map<StreamTabId, StreamEntry>();
+  /**
+   * Streams whose execution lease is held by another TeXRA process. A held
+   * stream has no phase here: RUNNING/WAITING mean a live flow in this
+   * process, and this process never adopts anyone else's run. The set is a
+   * display fact for the session renderer, published with the next full
+   * metadata sync rather than as a phase transition.
+   */
+  private readonly held = new Map<
+    StreamTabId,
+    InstanceOwnerRecord | undefined
+  >();
 
   /**
    * @param eventHub Session hub this machine publishes canonical `status` facts
@@ -196,6 +205,7 @@ export class StreamStatusMachine {
     const runStartedAt = isActivePhase(to)
       ? (previousRunStartedAt ?? Date.now())
       : undefined;
+    this.held.delete(stream);
     this.streams.set(stream, {
       kind: 'phase',
       state: {
@@ -267,12 +277,23 @@ export class StreamStatusMachine {
     return false;
   }
 
+  /** Record that another process holds `stream`'s execution. */
+  markHeld(stream: StreamTabId, owner: InstanceOwnerRecord | undefined): void {
+    this.held.set(stream, owner);
+  }
+
+  isHeld(stream: StreamTabId): boolean {
+    return this.held.has(stream);
+  }
+
   clearStream(stream: StreamTabId): void {
     this.streams.delete(stream);
+    this.held.delete(stream);
   }
 
   clearAll(): void {
     this.streams.clear();
+    this.held.clear();
   }
 
   entries(): IterableIterator<[StreamTabId, StreamPhase]> {

@@ -109,6 +109,12 @@ export const conversationContentStyles: CSSResult = css`
     display: block;
   }
 
+  .conversation-composer-banner {
+    padding: var(--wa-space-xs) var(--wa-space-s);
+    color: var(--color-text-muted);
+    font-size: var(--wa-font-size-s);
+  }
+
   @container (max-width: 640px) {
     .conversation-column {
       width: calc(100% - 2 * var(--wa-space-xs));

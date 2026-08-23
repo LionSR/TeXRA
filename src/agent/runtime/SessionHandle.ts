@@ -35,7 +35,6 @@ import PQueue from 'p-queue';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   abandonOwnedExecutionLease,
   captureOwnedExecutionLeaseIfPresent,
@@ -46,8 +45,6 @@ import {
   validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { finalizeExecution } from '@agent/storage/executionLifecycle';
-import { watchInstanceExit } from '@agent/storage/instancePresence';
-import { deriveResumability } from '@agent/storage/resumability';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
@@ -92,13 +89,6 @@ const logger = createLog('sessionHandle');
 
 /** Bounded fan-out for restart repair's sidecar ownership/preload sweeps. */
 const RESTART_REPAIR_IO_CONCURRENCY = 8;
-
-interface WaitingRepairProbe {
-  readonly executionId: string;
-  readonly statusGeneration: object | undefined;
-  readonly ownershipSource: 'resident' | 'cold';
-  readonly result: Promise<boolean>;
-}
 
 function isReplayableTerminalResult(event: ResultEvent): boolean {
   return (
@@ -184,13 +174,7 @@ export class SessionHandle {
    */
   readonly workflowControls: WorkflowControlRegistry;
   private restartRepairPromise: Promise<unknown> | undefined;
-  /** Per-stream {@link repairWaitingIfResumable} result currently in flight. */
-  private readonly waitingRepairProbes = new Map<
-    StreamTabId,
-    WaitingRepairProbe
-  >();
   private readonly restartRepairQueue = new PQueue({ concurrency: 1 });
-  private readonly restartRepairWatches = new Map<string, () => void>();
   private readonly restartRepairAbort = new AbortController();
   private storageGeneration = 0;
   /** LIFO owner for the session's constructor-registered teardown. */
@@ -274,7 +258,6 @@ export class SessionHandle {
     this.teardown.add(() => this.executions.dispose());
     this.teardown.add(() => this.followUps.dispose());
     this.teardown.add(() => this.subscriptions.dispose());
-    this.teardown.add(() => this.disposeRestartRepairWatches());
     this.teardown.add(() => this.restartRepairAbort.abort());
     this.teardown.add(() => this.flushPendingTraces());
     if (
@@ -334,181 +317,11 @@ export class SessionHandle {
     if (hasPendingStorageChange === false) return Promise.resolve(false);
     this.storageGeneration += 1;
     const generation = this.storageGeneration;
-    this.disposeRestartRepairWatches();
     const repair = this.enqueueRestartRepair(() =>
       this.repairStoresAfterRestart(generation, true, hooks),
     );
     this.restartRepairPromise = repair;
     return repair;
-  }
-
-  /**
-   * Restore one stream to WAITING when its execution is still resumable.
-   *
-   * The same repair {@link repairRestartedStreams} applies at startup, deferred
-   * to the moment it matters: a stream whose phase settled terminal while its
-   * flow record stayed resumable routes a follow-up to `no_session` instead of
-   * the resume queue (`ExecutionRegistry.getToolUseFollowUpTarget`). Callers
-   * submitting input therefore probe here first. Concurrent submissions for one
-   * stream collapse onto the first probe — the resumability read is the
-   * expensive part and only one transition can win anyway.
-   *
-   * Lives beside the startup pass rather than in a host command so all three
-   * hosts share one repair, and so the resumability read stays inside the
-   * runtime that owns the stream phase.
-   */
-  async repairWaitingIfResumable(streamId: StreamTabId): Promise<boolean> {
-    // Live phases never need persisted ownership: WAITING is already parked
-    // and RUNNING is already active. Read those first so a transiently
-    // unreadable sidecar cannot reject follow-ups to an active or parked
-    // stream.
-    const statusGeneration = this.status.getGeneration(streamId);
-    const phase = this.status.get(streamId);
-    if (phase === STREAM_PHASE.WAITING) return true;
-    if (isInFlightPhase(phase)) return false;
-
-    // A live-session resident record is the current authority: `run.start`
-    // updates it synchronously, while the persisted sidecar FK may still name
-    // the previous execution until the run-end flush.
-    const residentExecutionId = this.snapshots.getRunMetadata(streamId, {
-      quiet: true,
-    }).executionId;
-    if (residentExecutionId) {
-      return this.startOrJoinWaitingRepairProbe(
-        streamId,
-        residentExecutionId,
-        statusGeneration,
-        'resident',
-      );
-    }
-
-    // A parked WAITING stream is not part of the bounded startup seed, so its
-    // snapshot record is deliberately absent. Resolve the authoritative
-    // one-file sidecar FK first, then the always-resident summary mirror. The
-    // mirror arm is load-bearing, not just legacy compat: `run.start`
-    // publishes the execution id to the mirror synchronously while the async
-    // sidecar FK flush may still be in flight (or lost to a crash), so a
-    // genuinely owned stream can transiently have only the mirror FK. It also
-    // covers legacy streams that never got a persisted sidecar FK; the two
-    // roles share this one read and separate only once run identity becomes a
-    // synchronous appended fact. A read failure must not reject a
-    // follow-up submission; let `submitFollowUp` surface its own routing result.
-    let executionId: string | undefined;
-    try {
-      executionId =
-        (await this.snapshots.readPersistedExecutionId(streamId)) ??
-        this.transcripts.getSummaryMeta(streamId)?.executionId;
-    } catch (error) {
-      logger.warn(
-        `Skipped waiting repair for stream ${streamId}: its execution identity could not be read`,
-        { data: error },
-      );
-      return false;
-    }
-
-    // The sidecar read can yield while a resume/wait transition lands; re-check
-    // before starting a probe against a phase that no longer needs one.
-    const currentStatusGeneration = this.status.getGeneration(streamId);
-    const currentPhase = this.status.get(streamId);
-    if (currentPhase === STREAM_PHASE.WAITING) return true;
-    if (isInFlightPhase(currentPhase)) return false;
-    if (!executionId) return false;
-
-    return this.startOrJoinWaitingRepairProbe(
-      streamId,
-      executionId,
-      currentStatusGeneration,
-      'cold',
-    );
-  }
-
-  private async startOrJoinWaitingRepairProbe(
-    streamId: StreamTabId,
-    executionId: string,
-    statusGeneration: object | undefined,
-    ownershipSource: 'resident' | 'cold',
-  ): Promise<boolean> {
-    const inFlight = this.waitingRepairProbes.get(streamId);
-    if (
-      inFlight &&
-      inFlight.executionId === executionId &&
-      inFlight.ownershipSource === ownershipSource &&
-      this.status.isCurrentGeneration(streamId, inFlight.statusGeneration)
-    ) {
-      return inFlight.result;
-    }
-
-    const probe: WaitingRepairProbe = {
-      executionId,
-      statusGeneration,
-      ownershipSource,
-      result: this.probeWaitingRepair(
-        streamId,
-        executionId,
-        statusGeneration,
-        ownershipSource,
-      ),
-    };
-    this.waitingRepairProbes.set(streamId, probe);
-    try {
-      return await probe.result;
-    } finally {
-      if (this.waitingRepairProbes.get(streamId) === probe) {
-        this.waitingRepairProbes.delete(streamId);
-      }
-    }
-  }
-
-  private async probeWaitingRepair(
-    streamId: StreamTabId,
-    executionId: string,
-    statusGeneration: object | undefined,
-    ownershipSource: 'resident' | 'cold',
-  ): Promise<boolean> {
-    const resumability = await deriveResumability(executionId);
-    if (!resumability.resumable) return false;
-    // Revalidate through the same authority the probe started from. A
-    // resident-started probe must not compare against the still-unflushed
-    // sidecar FK after `run.start`; a cold-started probe keeps the one-file
-    // sidecar first and falls back to the summary mirror.
-    let currentExecutionId: string | undefined;
-    if (ownershipSource === 'resident') {
-      currentExecutionId =
-        this.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
-        this.transcripts.getSummaryMeta(streamId)?.executionId;
-    } else {
-      try {
-        currentExecutionId =
-          (await this.snapshots.readPersistedExecutionId(streamId)) ??
-          this.transcripts.getSummaryMeta(streamId)?.executionId;
-      } catch (error) {
-        // A transient storage failure during the recheck must not reject the
-        // follow-up command before `submitFollowUp` can route it.
-        logger.warn(
-          `Skipped waiting repair for stream ${streamId}: its execution identity could not be revalidated`,
-          { data: error },
-        );
-        return false;
-      }
-    }
-    if (
-      currentExecutionId !== executionId ||
-      !this.status.isCurrentGeneration(streamId, statusGeneration)
-    ) {
-      return false;
-    }
-    const repaired = this.status.transitionToWaiting(
-      streamId,
-      STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-    );
-    if (repaired) {
-      logger.debug(`Stream ${streamId} restored to WAITING before follow-up`);
-    } else {
-      logger.warn(
-        `Failed to restore resumable stream ${streamId} to WAITING before follow-up`,
-      );
-    }
-    return repaired;
   }
 
   private enqueueRestartRepair<T>(work: () => Promise<T>): Promise<T> {
@@ -560,7 +373,6 @@ export class SessionHandle {
       if (generation !== this.storageGeneration) return false;
       await this.snapshots.preload([...this.computeStartupSeedSet()]);
       if (this.isRepairSuperseded(generation)) return false;
-      this.markUnfinishedStreamsRunning();
       await this.runRestartRepair(generation);
       return true;
     } catch (error) {
@@ -607,7 +419,6 @@ export class SessionHandle {
       this.status.clearAll();
       this.snapshots.evictAll();
       await this.snapshots.preload([...this.computeStartupSeedSet()]);
-      this.markUnfinishedStreamsRunning();
       await this.runRestartRepair(generation);
       storage.finalizeWorkspaceStorageChange?.();
       transitionHooks?.afterStorageFinalize();
@@ -627,7 +438,7 @@ export class SessionHandle {
           if (state.phase === STREAM_PHASE.WAITING) {
             this.status.transitionToWaiting(
               streamId,
-              STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
+              STREAM_TRANSITION_CAUSE.WAIT,
               { substate: state.substate },
             );
           } else if (
@@ -678,17 +489,6 @@ export class SessionHandle {
     throw replacementError;
   }
 
-  /** Transition every transcript-unfinished stream to RUNNING ahead of restart repair. */
-  private markUnfinishedStreamsRunning(): void {
-    for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
-      this.status.transition(
-        streamId,
-        STREAM_PHASE.RUNNING,
-        STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      );
-    }
-  }
-
   /**
    * The bounded set of streams seeded from their sidecars at startup: every
    * transcript-unfinished stream plus the transitive parent chain behind each
@@ -708,30 +508,35 @@ export class SessionHandle {
     return seed;
   }
 
+  /**
+   * Classify every transcript-unfinished stream this process does not run
+   * and record what the classification proves. A stream live in this
+   * process (RUNNING/WAITING with a flow context) is never a candidate:
+   * in-memory phases are facts about this registry, and startup never
+   * remembers one for a run it does not own.
+   */
   private async runRestartRepair(generation: number): Promise<void> {
     if (this.isRepairSuperseded(generation)) return;
-    // Resident snapshot records already resolved their execution id from the
-    // sidecar when they were seeded, so skip the disk read for them — the
-    // bounded-startup invariant keeps settled history lazy (#9947). Only
-    // non-resident streams (parked WAITING and settled history outside the
-    // seed) need the one-file sidecar read below.
+    const candidates = this.transcripts
+      .getUnfinishedStreamIds()
+      .filter((streamId) => !isInFlightPhase(this.status.get(streamId)));
     const statusGenerationsAtScan = new Map<StreamTabId, object | undefined>();
-    for (const streamId of this.transcripts.keys()) {
+    for (const streamId of candidates) {
       statusGenerationsAtScan.set(
         streamId,
         this.status.getGeneration(streamId),
       );
     }
+    // Resident snapshot records already resolved their execution id from the
+    // sidecar when they were seeded (#9947); only a candidate outside the
+    // seed needs the one-file sidecar read below.
     const executionIds = new Map(this.snapshots.getExecutionIdMap());
     const unresolvedStreams = new Set<StreamTabId>();
-    // Bound the one-file ownership scan so startup latency does not scale
-    // linearly with every non-resident stream in the transcript registry. Each
-    // mapper is self-contained: one unreadable sidecar is logged and skipped,
-    // never allowed to fail the whole pass.
+    // Bound the one-file ownership scan. Each mapper is self-contained: one
+    // unreadable sidecar is logged and skipped, never allowed to fail the
+    // whole pass.
     await pMap(
-      [...this.transcripts.keys()].filter(
-        (streamId) => !executionIds.has(streamId),
-      ),
+      candidates.filter((streamId) => !executionIds.has(streamId)),
       async (streamId) => {
         // The stream→execution reverse edge is the persisted sidecar FK;
         // name resemblance is never ownership. Read that authority first and
@@ -739,8 +544,8 @@ export class SessionHandle {
         // load-bearing beyond legacy streams without a persisted FK: `run.start`
         // publishes to the mirror synchronously while the sidecar FK flush is
         // async, so a crash inside that window leaves the mirror as the only
-        // record of ownership. A stream with neither stays unmapped
-        // and is skipped by repair.
+        // record of ownership. A stream with neither stays unmapped and is
+        // closed as interrupted with nothing recorded.
         try {
           const persisted =
             await this.snapshots.readPersistedExecutionId(streamId);
@@ -750,8 +555,8 @@ export class SessionHandle {
           }
         } catch (error) {
           // A transient storage failure proves nothing about this stream.
-          // Leave it out of this pass — repairing it unmapped would skip its
-          // lease guard — instead of aborting repair for every other stream.
+          // Leave it out of this pass instead of aborting repair for every
+          // other stream.
           unresolvedStreams.add(streamId);
           logger.warn(
             `Skipped restart repair for stream ${streamId}: its execution identity could not be read`,
@@ -767,63 +572,12 @@ export class SessionHandle {
       },
       { concurrency: RESTART_REPAIR_IO_CONCURRENCY },
     );
-    let waitingStreams: Set<StreamTabId>;
-    let repairStreams: Set<StreamTabId>;
-    try {
-      waitingStreams = await detectWaitingStreams(executionIds);
-      repairStreams = new Set(
-        [
-          ...this.transcripts.getUnfinishedStreamIds(),
-          ...waitingStreams,
-        ].filter((streamId) => !unresolvedStreams.has(streamId)),
-      );
-    } catch (error) {
-      logger.warn('Failed to detect resumable streams during restart repair', {
-        data: error,
-      });
-      waitingStreams = new Set();
-      repairStreams = new Set(
-        this.transcripts
-          .getUnfinishedStreamIds()
-          .filter(
-            (streamId) =>
-              !executionIds.has(streamId) && !unresolvedStreams.has(streamId),
-          ),
-      );
-    }
     if (this.isRepairSuperseded(generation)) return;
 
-    // Parked WAITING streams were deliberately left out of the bounded
-    // startup seed, so hydrate their usage now — before repair publishes their
-    // WAITING status — because synchronous status readers (the extension's
-    // status-bar usage total) resolve usage from the snapshot record. A
-    // usage-only read keeps the full 6-file record lazy (#9947) and never
-    // republishes summary metadata, so a legacy summary-only ownership mapping
-    // stays intact. Each mapper is self-contained: one unreadable parked
-    // sidecar is logged and skipped, and repair still publishes WAITING (usage
-    // stays zero until the lazy probe or a selection seeds it) rather than
-    // rejecting `waitUntilReady()`.
-    await pMap(
-      [...waitingStreams],
-      async (streamId) => {
-        try {
-          await this.snapshots.preload([streamId], { usageOnly: true });
-        } catch (error) {
-          logger.warn(
-            `Skipped parked WAITING usage preload for stream ${streamId}: its sidecar could not be read`,
-            { data: error },
-          );
-        }
-      },
-      { concurrency: RESTART_REPAIR_IO_CONCURRENCY },
-    );
-    if (this.isRepairSuperseded(generation)) return;
-
-    // The ownership scan, resumability detection, and usage preload are all
-    // async. Refresh resident ownership once here so the map is current, then
-    // let `repairRestartedStreams` revalidate each candidate under its lease
-    // immediately before mutation.
-    for (const streamId of new Set([...waitingStreams, ...repairStreams])) {
+    // The ownership scan is async. Refresh resident ownership once here so
+    // the map is current, then let `repairRestartedStreams` revalidate each
+    // candidate immediately before mutation.
+    for (const streamId of candidates) {
       const residentExecutionId = this.snapshots.getRunMetadata(streamId, {
         quiet: true,
       }).executionId;
@@ -832,11 +586,12 @@ export class SessionHandle {
       }
     }
 
-    const result = await repairRestartedStreams({
+    await repairRestartedStreams({
       streamStatus: this.status,
-      waitingStreams,
       executionIds,
-      repairStreams,
+      repairStreams: candidates.filter(
+        (streamId) => !unresolvedStreams.has(streamId),
+      ),
       isRepairCandidateCurrent: (streamId, expectedExecutionId) => {
         if (
           this.status.getGeneration(streamId) !==
@@ -867,34 +622,6 @@ export class SessionHandle {
       logger,
       signal: this.restartRepairAbort.signal,
     });
-    if (this.restartRepairAbort.signal.aborted) return;
-    // A live foreign owner is never revisited on a clock: the kernel closes
-    // the presence watch when that process exits, and only then does repair
-    // re-run for its streams.
-    this.disposeRestartRepairWatches();
-    for (const { owner } of result.activeOwners) {
-      // One watch per owner instance, not per execution: an owner holding
-      // many executions must trigger exactly one repair pass when it exits.
-      const watchKey = owner.socketPath;
-      if (this.restartRepairWatches.has(watchKey)) continue;
-      this.restartRepairWatches.set(
-        watchKey,
-        watchInstanceExit(owner, () => {
-          this.restartRepairWatches.delete(watchKey);
-          if (this.restartRepairAbort.signal.aborted) return;
-          void this.enqueueRestartRepair(() =>
-            this.runRestartRepair(generation),
-          ).catch((error: unknown) => {
-            logger.warn('Failed owner-exit restart repair', { data: error });
-          });
-        }),
-      );
-    }
-  }
-
-  private disposeRestartRepairWatches(): void {
-    for (const dispose of this.restartRepairWatches.values()) dispose();
-    this.restartRepairWatches.clear();
   }
 
   useHostInteractions(interactions: HostInteractions): () => void {

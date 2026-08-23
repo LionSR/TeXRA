@@ -14,6 +14,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports
 import {
   DEFAULT_STREAM_METADATA_STATUS,
+  STREAM_LIFECYCLE_HELD,
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type StreamLifecycleStatus,
@@ -70,6 +71,7 @@ const STATUS_ICONS: Record<StreamStatusDisplayKey, TeXRAIconName> = {
   [STREAM_PHASE.FAILED]: 'circle-exclamation',
   [STREAM_PHASE.CANCELLED]: 'circle-stop',
   ready: 'circle',
+  [STREAM_LIFECYCLE_HELD]: 'window-maximize',
 };
 
 function buildTooltip(
@@ -354,6 +356,7 @@ class StreamTab extends LitElement {
           aria-label=${`Delete ${streamTitle}`}
           data-stream=${stream.name}
           data-action="delete"
+          ?disabled=${status === STREAM_LIFECYCLE_HELD}
         >
           ${waIcon('xmark')}
         </wa-button>

@@ -14,6 +14,10 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import type {
+  repairRestartedStreams as RepairRestartedStreams,
+  RestartRepairOptions,
+} from '@agent/runtime/restartRepair';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import {
   AgentConfigSchema,
@@ -285,7 +289,8 @@ type CreateBridgeOptions = {
   ) => Promise<void> | void;
   configureSession?: (session: SessionHandle) => Promise<void> | void;
   deferReady?: boolean;
-  detectWaitingStreams?: ReturnType<typeof vi.fn>;
+  /** Intercept the restart-repair pass; `original` runs the real one. */
+  repairRestartedStreams?: RepairRestartedStreamsMock;
   showErrorMessage?: (message: string) => Promise<void> | void;
   showInfoMessage?: (message: string) => Promise<void> | void;
   onRunCompleted?: () => void;
@@ -296,6 +301,15 @@ type CreateBridgeOptions = {
   /** Captures `this.logger.error(...)` calls made by the bridge under test. */
   loggerErrorSpy?: ReturnType<typeof vi.fn<AgentTrace['error']>>;
 };
+
+type RepairRestartedStreamsMock = ReturnType<
+  typeof vi.fn<
+    (
+      options: RestartRepairOptions,
+      original: typeof RepairRestartedStreams,
+    ) => Promise<void>
+  >
+>;
 
 type ProgressMessage = {
   command?: string;
@@ -382,10 +396,18 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   mocks.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(),
   }));
-  mocks.doMock('@agent/storage/detectWaitingStreams', () => ({
-    detectWaitingStreams:
-      options.detectWaitingStreams ?? vi.fn(async () => new Set()),
-  }));
+  mocks.doMock('@agent/runtime/restartRepair', async (importOriginal) => {
+    const original =
+      await importOriginal<typeof import('@agent/runtime/restartRepair')>();
+    const injected = options.repairRestartedStreams;
+    return {
+      ...original,
+      repairRestartedStreams: injected
+        ? (repairOptions: RestartRepairOptions) =>
+            injected(repairOptions, original.repairRestartedStreams)
+        : original.repairRestartedStreams,
+    };
+  });
   mocks.doMock('@common/storage/KVStore', () => ({
     KVStore: class {
       constructor(private readonly dir: string) {}
@@ -830,20 +852,19 @@ function expectLastLogGroupEnd(
   });
 }
 
-/** detectWaitingStreams mock that blocks restart initialization on a gate. */
-function gatedWaitingDetection(): {
+/** Restart-repair mock that blocks restart initialization on a gate. */
+function gatedRestartRepair(): {
   initializationStarted: ReturnType<typeof createDeferred<void>>;
   initializationGate: ReturnType<typeof createDeferred<void>>;
-  detectWaitingStreams: ReturnType<typeof vi.fn>;
+  repairRestartedStreams: RepairRestartedStreamsMock;
 } {
   const initializationStarted = createDeferred();
   const initializationGate = createDeferred();
-  const detectWaitingStreams = vi.fn(async () => {
+  const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(async () => {
     initializationStarted.resolve();
     await initializationGate.promise;
-    return new Set();
   });
-  return { initializationStarted, initializationGate, detectWaitingStreams };
+  return { initializationStarted, initializationGate, repairRestartedStreams };
 }
 
 function searchToolUseResumeData(): ReturnType<typeof createToolUseResumeData> {
@@ -932,12 +953,15 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('reports a completed root result while canonical initialization is gated exactly once', async () => {
-    const { initializationStarted, initializationGate, detectWaitingStreams } =
-      gatedWaitingDetection();
+    const {
+      initializationStarted,
+      initializationGate,
+      repairRestartedStreams,
+    } = gatedRestartRepair();
     const onRunCompleted = vi.fn();
     const bridge = await createBridge([], {
       deferReady: true,
-      detectWaitingStreams,
+      repairRestartedStreams,
       onRunCompleted,
     });
     await initializationStarted.promise;
@@ -955,12 +979,15 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('detaches the completed-result listener when disposed during initialization', async () => {
-    const { initializationStarted, initializationGate, detectWaitingStreams } =
-      gatedWaitingDetection();
+    const {
+      initializationStarted,
+      initializationGate,
+      repairRestartedStreams,
+    } = gatedRestartRepair();
     const onRunCompleted = vi.fn();
     const bridge = await createBridge([], {
       deferReady: true,
-      detectWaitingStreams,
+      repairRestartedStreams,
       onRunCompleted,
     });
     await initializationStarted.promise;
@@ -1441,16 +1468,22 @@ describe('DesktopProgressBridge', () => {
     ).toMatchObject({ status: STREAM_STATUS.RUNNING });
   });
 
-  it('detects waiting streams from canonical execution mappings', async () => {
+  it('classifies unfinished streams from canonical execution mappings', async () => {
     const waitingStream = 'waiting-stream' as StreamTabId;
     const crashedStream = 'crashed-stream' as StreamTabId;
-    const detectWaitingStreams = vi.fn(
-      async (executionIds: ReadonlyMap<StreamTabId, string>) => {
-        expect([...executionIds.entries()].toSorted()).toEqual([
+    const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(
+      async (options, original) => {
+        expect([...options.executionIds.entries()].toSorted()).toEqual([
           [crashedStream, 'def456'],
           [waitingStream, 'abc123'],
         ]);
-        return new Set([waitingStream]);
+        return original({
+          ...options,
+          classifyRun: async (executionId) =>
+            executionId === 'abc123'
+              ? { kind: 'resumable' }
+              : { kind: 'finished' },
+        });
       },
     );
     const bridge = await createBridge([], {
@@ -1464,11 +1497,15 @@ describe('DesktopProgressBridge', () => {
         snapshotFacts(store).setRunConfig(waitingStream, config, 'abc123');
         snapshotFacts(store).setRunConfig(crashedStream, config, 'def456');
       },
-      detectWaitingStreams,
+      repairRestartedStreams,
     });
 
-    expect(detectWaitingStreams).toHaveBeenCalledOnce();
-    expect(bridgeStatus(bridge).get(waitingStream)).toBe(STREAM_PHASE.WAITING);
+    // A checkpointed stream is settled as interrupted, never adopted as
+    // WAITING: Resume is the only way to continue it.
+    expect(repairRestartedStreams).toHaveBeenCalledOnce();
+    expect(bridgeStatus(bridge).get(waitingStream)).toBe(
+      STREAM_PHASE.CANCELLED,
+    );
     expect(bridgeStatus(bridge).get(crashedStream)).toBe(
       STREAM_PHASE.CANCELLED,
     );
@@ -1514,19 +1551,27 @@ describe('DesktopProgressBridge', () => {
     first.dispose();
     firstSession.dispose();
 
-    const detectWaitingStreams = vi.fn(async () => new Set([waitingStream]));
+    const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(
+      async (options, original) =>
+        original({
+          ...options,
+          classifyRun: async () => ({ kind: 'resumable' }),
+        }),
+    );
     const second = await createBridge([], {
       kvStoreBacking,
-      detectWaitingStreams,
+      repairRestartedStreams,
     });
     const secondSession = bridgeSession(second);
 
     expect(secondSession).not.toBe(firstSession);
     expect(secondSession.executions).not.toBe(firstSession.executions);
-    expect(detectWaitingStreams).toHaveBeenCalledWith(
+    expect(repairRestartedStreams.mock.calls[0]?.[0].executionIds).toEqual(
       new Map([[waitingStream, executionId]]),
     );
-    expect(bridgeStatus(second).get(waitingStream)).toBe(STREAM_PHASE.WAITING);
+    expect(bridgeStatus(second).get(waitingStream)).toBe(
+      STREAM_PHASE.CANCELLED,
+    );
     expect(second.streamLogs.get(waitingStream)).toBeUndefined();
     expect(second.streamLogs.get(orphanedStream)).toBeUndefined();
 
@@ -1559,40 +1604,36 @@ describe('DesktopProgressBridge', () => {
     expect(bridgeStatus(bridge).get(streamId)).toBe(STREAM_PHASE.CANCELLED);
   });
 
-  it('repairs only unmapped streams when waiting detection fails', async () => {
-    const unmappedStream = 'unmapped-stream' as StreamTabId;
+  it('fails bridge initialization when an unfinished run cannot be classified', async () => {
     const mappedStream = 'mapped-stream' as StreamTabId;
     const executionId = 'ca110ad' as ExecutionId;
-    const detectionError = new Error('flow records unavailable');
-    const detectWaitingStreams = vi.fn(async () => {
-      throw detectionError;
-    });
-    const bridge = await createBridge([], {
-      canonicalStreamIds: [unmappedStream, mappedStream],
-      configureTranscripts: (store) => {
-        appendRunningGroup(store, unmappedStream);
-        appendRunningGroup(store, mappedStream);
-      },
-      configureProgressSnapshotStore: (store) => {
-        snapshotFacts(store).setRunConfig(
-          mappedStream,
-          workflowConfig(),
-          executionId,
-        );
-      },
-      detectWaitingStreams,
-    });
-
-    expect(detectWaitingStreams).toHaveBeenCalledOnce();
-    expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([mappedStream]);
-    expectLastLogGroupEnd(
-      bridge.streamLogs,
-      unmappedStream,
-      RUN_OUTCOME.CANCELLED,
+    const classificationError = new Error('flow records unavailable');
+    const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(
+      async (options, original) =>
+        original({
+          ...options,
+          classifyRun: async () => {
+            throw classificationError;
+          },
+        }),
     );
-    expect(
-      bridge.streamLogs.get(mappedStream)?.getRange(0).at(-1),
-    ).not.toMatchObject({ type: STREAM_LOG_ENTRY_TYPES.GROUP_END });
+
+    await expect(
+      createBridge([], {
+        canonicalStreamIds: [mappedStream],
+        configureTranscripts: (store) =>
+          appendRunningGroup(store, mappedStream),
+        configureProgressSnapshotStore: (store) => {
+          snapshotFacts(store).setRunConfig(
+            mappedStream,
+            workflowConfig(),
+            executionId,
+          );
+        },
+        repairRestartedStreams,
+      }),
+    ).rejects.toBe(classificationError);
+    expect(repairRestartedStreams).toHaveBeenCalledOnce();
   });
 
   it('presents a merge failure that occurs before lifecycle startup', async () => {
@@ -1691,29 +1732,33 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('fails desktop bridge initialization when transcript opening fails', async () => {
-    const detectWaitingStreams = vi.fn();
+    const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn();
     const failure = new Error('stream log store unavailable');
 
     await expect(
       createBridge([], {
-        detectWaitingStreams,
+        repairRestartedStreams,
         transcriptOpenError: failure,
       }),
     ).rejects.toBe(failure);
-    expect(detectWaitingStreams).not.toHaveBeenCalled();
+    expect(repairRestartedStreams).not.toHaveBeenCalled();
   });
 
   it('loads canonical sidecars before restart repair', async () => {
     const streamId = 'canonical-stream' as StreamTabId;
     const executionId = 'ca110ad' as ExecutionId;
     let snapshots: ProgressSnapshotStore | undefined;
-    const detectWaitingStreams = vi.fn(async () => {
-      expect(snapshots?.getRunMetadata(streamId).executionId).toBe(executionId);
-      return new Set<StreamTabId>();
-    });
+    const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(
+      async () => {
+        expect(snapshots?.getRunMetadata(streamId).executionId).toBe(
+          executionId,
+        );
+      },
+    );
 
-    const bridge = await createBridge([], {
+    await createBridge([], {
       canonicalStreamIds: [streamId],
+      configureTranscripts: (store) => appendRunningGroup(store, streamId),
       configureProgressSnapshotStore: (store) => {
         snapshots = store;
         snapshotFacts(store).setRunConfig(
@@ -1722,10 +1767,10 @@ describe('DesktopProgressBridge', () => {
           executionId,
         );
       },
-      detectWaitingStreams,
+      repairRestartedStreams,
     });
 
-    expect(detectWaitingStreams).toHaveBeenCalledWith(
+    expect(repairRestartedStreams.mock.calls[0]?.[0].executionIds).toEqual(
       new Map([[streamId, executionId]]),
     );
   });
@@ -1736,9 +1781,8 @@ describe('DesktopProgressBridge', () => {
 
     const bridge = await createBridge([], {
       canonicalStreamIds: [streamId],
-      detectWaitingStreams: vi.fn(async () => {
+      repairRestartedStreams: vi.fn(async () => {
         order.push('load');
-        return new Set();
       }),
       configureSession: async (session) => {
         const { AgentExecutionHandle } =
@@ -1785,11 +1829,13 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('preserves queued notices when approval replay closes the attaching presentation', async () => {
-    let finishDetection!: (value: Set<StreamTabId>) => void;
-    const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
-      finishDetection = resolve;
+    let finishRepair!: () => void;
+    const repairGate = new Promise<void>((resolve) => {
+      finishRepair = resolve;
     });
-    const detectWaitingStreams = vi.fn(async () => detectionGate);
+    const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(
+      async () => repairGate,
+    );
     const firstInfo = vi.fn(async () => undefined);
     const bridgeRef: { current?: TestableBridge } = {};
 
@@ -1806,7 +1852,7 @@ describe('DesktopProgressBridge', () => {
         });
       },
       deferReady: true,
-      detectWaitingStreams,
+      repairRestartedStreams,
       showInfoMessage: firstInfo,
       observeRendererMessage: (message) => {
         const progress = message as ProgressMessage;
@@ -1819,8 +1865,8 @@ describe('DesktopProgressBridge', () => {
       },
     });
     bridgeRef.current = bridge;
-    await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
-    finishDetection(new Set());
+    await vi.waitFor(() => expect(repairRestartedStreams).toHaveBeenCalled());
+    finishRepair();
     await bridge.waitUntilReady();
 
     const interactions = bridgeInteractions(bridge) as unknown as {
@@ -2716,14 +2762,14 @@ describe('DesktopProgressBridge', () => {
       agentName = 'proofreader',
       category = AgentCategory.Workflow,
       messages = [],
-      detectWaitingStreams,
+      repairRestartedStreams,
     }: {
       streamId: StreamTabId;
       executionId: ExecutionId;
       agentName?: string;
       category?: AgentCategory;
       messages?: unknown[];
-      detectWaitingStreams?: ReturnType<typeof vi.fn>;
+      repairRestartedStreams?: RepairRestartedStreamsMock;
     }) {
       const {
         bridgeModule,
@@ -2731,7 +2777,7 @@ describe('DesktopProgressBridge', () => {
         createSession,
         openTranscripts,
         processResumeOwner,
-      } = await loadBridgeModule({ detectWaitingStreams });
+      } = await loadBridgeModule({ repairRestartedStreams });
       const { AgentExecutionHandle } =
         await import('@agent/runtime/ExecutionHandle');
       const { getExecutionStore } = await import('@agent/storage');

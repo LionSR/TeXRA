@@ -7,10 +7,10 @@ import {
   completeOwnedExecutionLease,
   resetExecutionLeaseCoordinationForTests,
 } from '@agent/storage/executionLease';
-import * as waitingDetection from '@agent/storage/detectWaitingStreams';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import * as runClassification from '@agent/runtime/runClassification';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import * as restartRepair from '@agent/runtime/restartRepair';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
 import {
@@ -159,26 +159,30 @@ describe('SessionHandle restart repair', () => {
     const transcripts = await StreamLogStore.open();
     appendRunningGroup(transcripts, streamId, 'disposed-running-group');
     await transcripts.flush();
+    await seedSidecarFk(streamId, executionId);
 
-    let finishDetection: ((streams: Set<StreamTabId>) => void) | undefined;
-    const detectionBlocked = new Promise<Set<StreamTabId>>((resolve) => {
-      finishDetection = resolve;
-    });
-    vi.spyOn(waitingDetection, 'detectWaitingStreams').mockReturnValue(
-      detectionBlocked,
+    let finishClassification:
+      | ((classification: runClassification.RunClassification) => void)
+      | undefined;
+    const classificationBlocked =
+      new Promise<runClassification.RunClassification>((resolve) => {
+        finishClassification = resolve;
+      });
+    vi.spyOn(runClassification, 'classifyRun').mockReturnValue(
+      classificationBlocked,
     );
 
     const session = openDeferredSession(transcripts);
     const readiness = session.waitUntilReady();
     await vi.waitFor(() => {
-      expect(waitingDetection.detectWaitingStreams).toHaveBeenCalledOnce();
+      expect(runClassification.classifyRun).toHaveBeenCalledOnce();
     });
 
     session.dispose();
-    finishDetection?.(new Set());
+    finishClassification?.({ kind: 'finished' });
     await expect(readiness).resolves.toBeUndefined();
 
-    expect(session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+    expect(session.status.get(streamId)).toBeUndefined();
     expect(transcripts.get(streamId)?.getRange(0)).toHaveLength(1);
     await expect(getExecutionStore(executionId).readMeta()).resolves.toBeNull();
   });
@@ -214,24 +218,22 @@ describe('SessionHandle restart repair', () => {
   // `restartRepair: 'deferred'`; desktop is the only host that defers repair
   // while it claims legacy stream identities.
   it('starts one repair pass at construction when the host does not defer it', async () => {
-    const eagerExecutionId = 'eager1234567' as ExecutionId;
+    const eagerExecutionId = 'ea9e4123' as ExecutionId;
     const eagerStreamId = `eager#${eagerExecutionId}` as StreamTabId;
     const transcripts = await StreamLogStore.open();
     appendRunningGroup(transcripts, eagerStreamId, 'eager-running-group');
     await transcripts.flush();
+    await seedSidecarFk(eagerStreamId, eagerExecutionId);
 
     const executionStore = getExecutionStore(eagerExecutionId);
     await executionStore.writeMeta({ timestamp: META_TIMESTAMP });
-    await executionStore.write(flowKey(eagerExecutionId), validFlowRecord);
-    const detectWaiting = vi
-      .spyOn(waitingDetection, 'detectWaitingStreams')
-      .mockResolvedValue(new Set());
+    const classify = vi.spyOn(runClassification, 'classifyRun');
 
     const session = trackSession(new SessionHandle({ transcripts }));
-    await vi.waitFor(() => expect(detectWaiting).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(classify).toHaveBeenCalledOnce());
     await session.waitUntilReady();
 
-    expect(detectWaiting).toHaveBeenCalledOnce();
+    expect(classify).toHaveBeenCalledOnce();
     expect(session.status.get(eagerStreamId)).toBe(STREAM_PHASE.CANCELLED);
     expectClosedWith(transcripts, eagerStreamId, RUN_OUTCOME.CANCELLED);
   });
@@ -304,7 +306,7 @@ describe('SessionHandle restart repair', () => {
     expectClosedWith(transcripts, completedStreamId, RUN_OUTCOME.COMPLETED);
   });
 
-  it('detects a resumable run from its persisted sidecar FK', async () => {
+  it('settles a crashed checkpointed run as CANCELLED and refuses follow-ups until resumed', async () => {
     const resumableExecutionId = 'facade123' as ExecutionId;
     const resumableStreamId =
       `resumable#${resumableExecutionId}` as StreamTabId;
@@ -316,19 +318,38 @@ describe('SessionHandle restart repair', () => {
     );
     await transcripts.flush();
     await seedSidecarFk(resumableStreamId, resumableExecutionId);
-    const executionStore = await seedResumableExecution(resumableExecutionId);
+    const executionStore = getExecutionStore(resumableExecutionId);
+    await executionStore.writeMeta({ timestamp: META_TIMESTAMP });
+    await executionStore.write(flowKey(resumableExecutionId), validFlowRecord);
+    await writeOrphanedLease(resumableExecutionId);
 
     const session = openDeferredSession(transcripts);
     await session.waitUntilReady();
 
-    expect(
-      session.snapshots.getRunMetadata(resumableStreamId).executionId,
-    ).toBe(resumableExecutionId);
-    expect(session.status.get(resumableStreamId)).toBe(STREAM_PHASE.WAITING);
+    // Owner proven dead, checkpoint present: the interruption is recorded,
+    // the checkpoint stays, and nothing is adopted. The explicit Resume
+    // affordance is the only way to continue; a follow-up is handed back.
+    expect(session.status.get(resumableStreamId)).toBe(STREAM_PHASE.CANCELLED);
+    expect(session.status.isHeld(resumableStreamId)).toBe(false);
+    await expect(executionStore.readMeta()).resolves.toMatchObject({
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
     await expect(
       executionStore.read(flowKey(resumableExecutionId)),
     ).resolves.toEqual(validFlowRecord);
     expectClosedWith(transcripts, resumableStreamId, RUN_OUTCOME.CANCELLED);
+
+    const onAdmitted = vi.fn();
+    await expect(
+      submitFollowUp(resumableStreamId, 'are you there?', {
+        session,
+        onAdmitted,
+      }),
+    ).resolves.toEqual({
+      status: 'no_session',
+      streamStatus: STREAM_PHASE.CANCELLED,
+    });
+    expect(onAdmitted).toHaveBeenCalledExactlyOnceWith(false);
   });
 
   it('seeds only unfinished streams and their transitive parent chain at startup', async () => {
@@ -375,279 +396,45 @@ describe('SessionHandle restart repair', () => {
     );
   });
 
-  it('resumes a parked WAITING stream with no resident snapshot record after restart', async () => {
-    const parkedExecutionId = 'b0a00005' as ExecutionId;
-    const parkedStreamId = 'parked#waiting' as StreamTabId;
+  it('does not settle a stream reused by a live run while classification is in flight', async () => {
+    const reusedExecutionId = 'b0a00012' as ExecutionId;
+    const reusedStreamId = 'reused#generation-change' as StreamTabId;
 
     const transcripts = await StreamLogStore.open();
-    transcripts.ensureStream(parkedStreamId);
-    transcripts.recordSummaryMeta(parkedStreamId, {
-      executionId: parkedExecutionId,
-    });
+    appendRunningGroup(transcripts, reusedStreamId, 'reused-running-group');
     await transcripts.flush();
-    await seedSidecarFk(parkedStreamId, parkedExecutionId);
-    await seedResumableExecution(parkedExecutionId);
+    await seedSidecarFk(reusedStreamId, reusedExecutionId);
+    await seedResumableExecution(reusedExecutionId);
 
-    const session = openDeferredSession(transcripts);
-    vi.spyOn(
-      session as unknown as { runRestartRepair(): Promise<void> },
-      'runRestartRepair',
-    ).mockResolvedValue(undefined);
-
-    await session.waitUntilReady();
-
-    // The parked stream is settled history, so the bounded startup seed leaves
-    // its snapshot record absent; the follow-up repair must still resolve the
-    // execution through the summary mirror and route it back to WAITING.
-    expect([...session.snapshots.getExecutionIdMap().keys()]).not.toContain(
-      parkedStreamId,
-    );
-    session.status.transition(
-      parkedStreamId,
-      STREAM_PHASE.CANCELLED,
-      'user-stop',
-    );
-
-    await expect(
-      session.repairWaitingIfResumable(parkedStreamId),
-    ).resolves.toBe(true);
-    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
-  });
-
-  it('resolves waiting-stream ownership from the sidecar FK when the summary mirror diverges', async () => {
-    const sidecarExecutionId = 'b0a00007' as ExecutionId;
-    const summaryExecutionId = 'b0a00008' as ExecutionId;
-    const settledStream = 'settled#divergent-mirror' as StreamTabId;
-
-    const transcripts = await StreamLogStore.open();
-    appendRunningGroup(transcripts, settledStream, 'settled-divergent-group');
-    await transcripts.endRunningGroupsForStreams(
-      [settledStream],
-      2_000,
-      RUN_OUTCOME.COMPLETED,
-    );
-    await transcripts.flush();
-    transcripts.recordSummaryMeta(settledStream, {
-      executionId: summaryExecutionId,
-    });
-    await seedSidecarFk(settledStream, sidecarExecutionId);
-    await seedResumableExecution(sidecarExecutionId);
-
-    const session = openDeferredSession(transcripts);
-    await session.waitUntilReady();
-
-    // The summary mirror names a different (non-resumable) execution; repair
-    // must follow the persisted sidecar FK and park the stream as WAITING.
-    expect(session.status.get(settledStream)).toBe(STREAM_PHASE.WAITING);
-  });
-
-  it('preloads parked WAITING streams before publishing restart status', async () => {
-    const parkedExecutionId = 'b0a00009' as ExecutionId;
-    const parkedStreamId = 'parked#waiting-preload' as StreamTabId;
-
-    const transcripts = await StreamLogStore.open();
-    transcripts.ensureStream(parkedStreamId);
-    await transcripts.flush();
-    await seedSidecarFk(parkedStreamId, parkedExecutionId);
-    await seedResumableExecution(parkedExecutionId);
-
-    const session = openDeferredSession(transcripts);
-    const preload = vi.spyOn(session.snapshots, 'preload');
-    const repair = vi.spyOn(restartRepair, 'repairRestartedStreams');
-
-    await session.waitUntilReady();
-
-    expect(preload).toHaveBeenCalledTimes(2);
-    expect([...preload.mock.calls[1][0]]).toEqual([parkedStreamId]);
-    expect(preload.mock.calls[1][1]).toEqual({ usageOnly: true });
-    expect(preload.mock.invocationCallOrder[1]).toBeLessThan(
-      repair.mock.invocationCallOrder[0],
-    );
-    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
-  });
-
-  it('skips a later waiting candidate reused while an earlier candidate is repairing', async () => {
-    const firstExecutionId = 'b0a00013' as ExecutionId;
-    const firstStreamId = 'parked#waiting-loop-first' as StreamTabId;
-    const secondExecutionId = 'b0a00014' as ExecutionId;
-    const secondStreamId = 'parked#waiting-loop-second' as StreamTabId;
-
-    const transcripts = await StreamLogStore.open();
-    transcripts.ensureStream(firstStreamId);
-    transcripts.ensureStream(secondStreamId);
-    await transcripts.flush();
-    await seedSidecarFk(firstStreamId, firstExecutionId);
-    await seedSidecarFk(secondStreamId, secondExecutionId);
-    await seedResumableExecution(firstExecutionId);
-    await seedResumableExecution(secondExecutionId);
-    vi.spyOn(waitingDetection, 'detectWaitingStreams').mockResolvedValue(
-      new Set([firstStreamId, secondStreamId]),
-    );
-
-    let releaseFirstClose!: () => void;
-    const firstCloseGate = new Promise<void>((resolve) => {
-      releaseFirstClose = resolve;
-    });
-    const originalEnd =
-      transcripts.endRunningGroupsForStreams.bind(transcripts);
-    vi.spyOn(transcripts, 'endRunningGroupsForStreams').mockImplementation(
-      async (streamIds, now, status) => {
-        if (streamIds.includes(firstStreamId)) {
-          await firstCloseGate;
-        }
-        return originalEnd(streamIds, now, status);
-      },
-    );
-
-    const session = openDeferredSession(transcripts);
-    const readiness = session.waitUntilReady();
-    await vi.waitFor(() => {
-      expect(transcripts.endRunningGroupsForStreams).toHaveBeenCalled();
-    });
-
-    // The first candidate is blocked inside its lease-held repair. Reuse the
-    // second stream now; per-stream revalidation must skip it when the loop
-    // reaches it instead of parking the new run with stale waiting state.
-    session.status.transition(
-      secondStreamId,
-      STREAM_PHASE.RUNNING,
-      'lifecycle',
-    );
-    releaseFirstClose();
-
-    await readiness;
-    expect(session.status.get(firstStreamId)).toBe(STREAM_PHASE.WAITING);
-    expect(session.status.get(secondStreamId)).toBe(STREAM_PHASE.RUNNING);
-  });
-
-  it('does not park a waiting stream whose status generation changed during detection', async () => {
-    const parkedExecutionId = 'b0a00012' as ExecutionId;
-    const parkedStreamId = 'parked#waiting-generation-change' as StreamTabId;
-
-    const transcripts = await StreamLogStore.open();
-    transcripts.ensureStream(parkedStreamId);
-    await transcripts.flush();
-    await seedSidecarFk(parkedStreamId, parkedExecutionId);
-    await seedResumableExecution(parkedExecutionId);
-
-    let finishDetection: ((streams: Set<StreamTabId>) => void) | undefined;
-    const detectionBlocked = new Promise<Set<StreamTabId>>((resolve) => {
-      finishDetection = resolve;
-    });
-    vi.spyOn(waitingDetection, 'detectWaitingStreams').mockReturnValue(
-      detectionBlocked,
-    );
-
-    const session = openDeferredSession(transcripts);
-    const readiness = session.waitUntilReady();
-    await vi.waitFor(() => {
-      expect(waitingDetection.detectWaitingStreams).toHaveBeenCalledOnce();
-    });
-
-    // A live run reuses the stream while detection is blocked. The generation
-    // recheck before repair must drop the stale WAITING candidate instead of
-    // parking this now-running stream.
-    session.status.transition(
-      parkedStreamId,
-      STREAM_PHASE.RUNNING,
-      'lifecycle',
-    );
-    finishDetection?.(new Set([parkedStreamId]));
-
-    await readiness;
-    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.RUNNING);
-  });
-
-  it('isolates one unreadable parked WAITING preload so session startup still publishes WAITING', async () => {
-    const parkedExecutionId = 'b0a00010' as ExecutionId;
-    const parkedStreamId = 'parked#waiting-preload-failure' as StreamTabId;
-
-    const transcripts = await StreamLogStore.open();
-    transcripts.ensureStream(parkedStreamId);
-    await transcripts.flush();
-    await seedSidecarFk(parkedStreamId, parkedExecutionId);
-    await seedResumableExecution(parkedExecutionId);
-
-    const session = openDeferredSession(transcripts);
-    const originalPreload = session.snapshots.preload.bind(session.snapshots);
-    const preload = vi
-      .spyOn(session.snapshots, 'preload')
-      .mockImplementation(async (streamIds) => {
-        if (streamIds.includes(parkedStreamId)) {
-          throw new Error('parked sidecar unreadable');
-        }
-        await originalPreload(streamIds);
+    let finishClassification:
+      | ((classification: runClassification.RunClassification) => void)
+      | undefined;
+    const classificationBlocked =
+      new Promise<runClassification.RunClassification>((resolve) => {
+        finishClassification = resolve;
       });
+    vi.spyOn(runClassification, 'classifyRun').mockReturnValue(
+      classificationBlocked,
+    );
 
-    await expect(session.waitUntilReady()).resolves.toBeUndefined();
-
-    expect(preload).toHaveBeenCalledTimes(2);
-    // The stream is still marked WAITING; only its usage hydration was skipped.
-    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
-  });
-
-  it('preserves summary-only WAITING ownership without rewriting the sidecar', async () => {
-    const parkedExecutionId = 'b0a00011' as ExecutionId;
-    const parkedStreamId = 'parked#waiting-summary-only' as StreamTabId;
-
-    const transcripts = await StreamLogStore.open();
-    transcripts.ensureStream(parkedStreamId);
-    transcripts.recordSummaryMeta(parkedStreamId, {
-      executionId: parkedExecutionId,
+    const session = openDeferredSession(transcripts);
+    const readiness = session.waitUntilReady();
+    await vi.waitFor(() => {
+      expect(runClassification.classifyRun).toHaveBeenCalledOnce();
     });
-    await transcripts.flush();
-    await seedResumableExecution(parkedExecutionId);
 
-    const session = openDeferredSession(transcripts);
-    await session.waitUntilReady();
-
-    // The legacy stream has no sidecar FK, only a summary mirror entry. Its
-    // usage-only preload must not republish the summary from an empty/corrupt
-    // sidecar meta, so the summary ownership and the absent sidecar FK both
-    // stay exactly as they were.
-    expect(session.status.get(parkedStreamId)).toBe(STREAM_PHASE.WAITING);
-    expect(
-      session.transcripts.getSummaryMeta(parkedStreamId)?.executionId,
-    ).toBe(parkedExecutionId);
-    await expect(
-      session.snapshots.readPersistedExecutionId(parkedStreamId),
-    ).resolves.toBeUndefined();
-  });
-
-  it('preserves mapped runs and fails only unmapped streams when resumability detection fails', async () => {
-    const degradedExecutionId = 'decade123' as ExecutionId;
-    const degradedStreamId = `degraded#${degradedExecutionId}` as StreamTabId;
-    const unmappedStreamId = 'unmapped#no-sidecar-fk' as StreamTabId;
-    const transcripts = await StreamLogStore.open();
-    appendRunningGroup(transcripts, degradedStreamId, 'degraded-running-group');
-    appendRunningGroup(transcripts, unmappedStreamId, 'unmapped-running-group');
-    await transcripts.flush();
-    await seedSidecarFk(degradedStreamId, degradedExecutionId);
-
-    const executionStore = getExecutionStore(degradedExecutionId);
-    await executionStore.writeMeta({ timestamp: META_TIMESTAMP });
-    await executionStore.write(flowKey(degradedExecutionId), validFlowRecord);
-    vi.spyOn(waitingDetection, 'detectWaitingStreams').mockRejectedValueOnce(
-      new Error('resumability read failed'),
+    // A live run reuses the stream while classification is blocked. The
+    // generation recheck before mutation must drop the stale candidate
+    // instead of settling this now-running stream.
+    session.status.transition(
+      reusedStreamId,
+      STREAM_PHASE.RUNNING,
+      'lifecycle',
     );
+    finishClassification?.({ kind: 'resumable' });
 
-    const session = openDeferredSession(transcripts);
-    await session.waitUntilReady();
-
-    // A mapped stream keeps its recovery state: failing it blindly could
-    // destroy a flow record that is in fact resumable.
-    expect(session.snapshots.getRunMetadata(degradedStreamId).executionId).toBe(
-      degradedExecutionId,
-    );
-    expect(session.status.get(degradedStreamId)).toBe(STREAM_PHASE.RUNNING);
-    await expect(
-      executionStore.read(flowKey(degradedExecutionId)),
-    ).resolves.toEqual(validFlowRecord);
-
-    // An unmapped stream owns no execution: it is interrupted in-transcript
-    // only, with no execution-store writes.
-    expect(session.status.get(unmappedStreamId)).toBe(STREAM_PHASE.CANCELLED);
-    expectClosedWith(transcripts, unmappedStreamId, RUN_OUTCOME.CANCELLED);
+    await readiness;
+    expect(session.status.get(reusedStreamId)).toBe(STREAM_PHASE.RUNNING);
   });
 
   it('replaces stores with evictAll + bounded preload at the workspace-root boundary', async () => {
@@ -869,76 +656,45 @@ describe('SessionHandle restart repair', () => {
     expect(transitionHooks.afterStorageFinalize).toHaveBeenCalledOnce();
   });
 
-  it('restores owner-exit lease repair after a root replacement rolls back', async () => {
-    vi.useFakeTimers({
-      now: new Date('2026-07-28T12:00:00.000Z'),
-    });
+  it('holds a foreign-owned run read-only and settles it only on a later pass after the owner exits', async () => {
     const foreign = await startForeignInstance();
-    const rollbackExecutionId = '9355abcd' as ExecutionId;
-    const rollbackStreamId = `crashed#${rollbackExecutionId}` as StreamTabId;
-    const storage = platform().storage;
-    let activeRoot = 'old';
-    Object.assign(storage, {
-      hasPendingWorkspaceStorageChange: () => true,
-      commitWorkspaceStorageChange: () => {
-        activeRoot = 'new';
-        return true;
-      },
-      rollbackWorkspaceStorageChange: () => {
-        activeRoot = 'old';
-        return true;
-      },
-    });
+    const heldExecutionId = '9355abcd' as ExecutionId;
+    const heldStreamId = `held#${heldExecutionId}` as StreamTabId;
+    mockPendingWorkspaceChange({ pending: true, commit: false });
     const transcripts = await StreamLogStore.open();
-    appendRunningGroup(
-      transcripts,
-      rollbackStreamId,
-      'rollback-running-group',
-      Date.now(),
-    );
+    appendRunningGroup(transcripts, heldStreamId, 'held-running-group');
     await transcripts.flush();
-    await seedSidecarFk(rollbackStreamId, rollbackExecutionId);
-    const executionStore = getExecutionStore(rollbackExecutionId);
-    await executionStore.writeMeta({
-      timestamp: new Date().toISOString(),
-    });
-    await executionStore.write(flowKey(rollbackExecutionId), {
-      invalid: true,
-    });
-    await writeForeignLease(rollbackExecutionId, undefined, foreign.owner);
+    await seedSidecarFk(heldStreamId, heldExecutionId);
+    const executionStore = getExecutionStore(heldExecutionId);
+    await executionStore.writeMeta({ timestamp: META_TIMESTAMP });
+    await executionStore.write(flowKey(heldExecutionId), validFlowRecord);
+    await writeForeignLease(heldExecutionId, undefined, foreign.owner);
 
     const session = openDeferredSession(transcripts);
 
     try {
       await session.waitUntilReady();
-      expect(session.status.get(rollbackStreamId)).toBe(STREAM_PHASE.RUNNING);
+      // Live foreign owner: held, no phase, nothing written, transcript open.
+      expect(session.status.isHeld(heldStreamId)).toBe(true);
+      expect(session.status.get(heldStreamId)).toBeUndefined();
+      expect((await executionStore.readMeta())?.outcome).toBeUndefined();
+      expect(transcripts.get(heldStreamId)?.getRange(0)).toHaveLength(1);
 
-      const replacementError = new Error('new snapshot root is unreadable');
-      vi.spyOn(transcripts, 'reload').mockResolvedValue();
-      vi.spyOn(session.snapshots, 'preload')
-        .mockRejectedValueOnce(replacementError)
-        .mockResolvedValue();
-
-      await expect(session.reloadAfterStorageRootChange()).rejects.toBe(
-        replacementError,
-      );
-      expect(activeRoot).toBe('old');
-      expect(session.status.get(rollbackStreamId)).toBe(STREAM_PHASE.RUNNING);
-
+      // No exit watch: the owner's death is noticed only by the next pass.
       await foreign.shutdown();
-      await vi.waitFor(() => {
-        expect(session.status.get(rollbackStreamId)).toBe(
-          STREAM_PHASE.CANCELLED,
-        );
-      });
+      await session.reloadAfterStorageRootChange();
 
+      expect(session.status.isHeld(heldStreamId)).toBe(false);
+      expect(session.status.get(heldStreamId)).toBe(STREAM_PHASE.CANCELLED);
       await expect(executionStore.readMeta()).resolves.toMatchObject({
         outcome: RUN_OUTCOME.CANCELLED,
       });
-      expectClosedWith(transcripts, rollbackStreamId, RUN_OUTCOME.CANCELLED);
+      await expect(
+        executionStore.read(flowKey(heldExecutionId)),
+      ).resolves.toEqual(validFlowRecord);
+      expectClosedWith(transcripts, heldStreamId, RUN_OUTCOME.CANCELLED);
     } finally {
       session.dispose();
-      vi.useRealTimers();
     }
   });
 
