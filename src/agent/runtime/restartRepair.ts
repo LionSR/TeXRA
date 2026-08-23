@@ -60,7 +60,8 @@ import {
   type RunFactsClassification,
 } from './runClassification';
 
-const DEFAULT_CLASSIFICATION_CONCURRENCY = 4;
+/** Bounded fan-out of the read-only classification phase. */
+const CLASSIFICATION_CONCURRENCY = 8;
 
 interface RestartRepairLogger {
   debug(message: string): void;
@@ -83,8 +84,6 @@ export interface RestartRepairOptions {
   deriveResumability?: (
     executionId: ExecutionId,
   ) => Promise<ResumabilityDecision>;
-  /** Parallelism of the read-only classification phase. */
-  classificationConcurrency?: number;
   finalizeExecution?: (
     input: FinalizeExecutionInput,
   ) => Promise<FinalizeExecutionResult>;
@@ -205,10 +204,7 @@ export async function repairRestartedStreams(
         };
       }
     },
-    {
-      concurrency:
-        options.classificationConcurrency ?? DEFAULT_CLASSIFICATION_CONCURRENCY,
-    },
+    { concurrency: CLASSIFICATION_CONCURRENCY },
   );
 
   // Apply a hold-only classification (no write). Returns false when the

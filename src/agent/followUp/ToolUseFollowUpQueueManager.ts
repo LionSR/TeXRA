@@ -112,9 +112,8 @@ export class ToolUseFollowUpQueue {
       );
     }
     this.terminalized.delete(streamId);
-    const retained = this.entries.get(streamId);
-    if (retained) return this.claim(retained, streamId, 'child');
-    return this.claim(this.createEntry(streamId), streamId, 'child');
+    const entry = this.entries.get(streamId) ?? this.createEntry(streamId);
+    return this.claim(entry, streamId, 'child');
   }
 
   /** Claim persisted recovery before any asynchronous resume preparation. */

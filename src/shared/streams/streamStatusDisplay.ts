@@ -163,11 +163,10 @@ export function progressHeaderStatus(
   label: string | undefined;
   displayKey: StreamStatusDisplayKey | undefined;
 } {
-  const displayKey = streamStatusDisplayKey(status, substate);
-  const label = displayKey
-    ? STREAM_STATUS_LABELS.progressHeader[displayKey]
-    : status;
-  return { label, displayKey };
+  return {
+    label: formatStreamStatusLabel(status, { substate }),
+    displayKey: streamStatusDisplayKey(status, substate),
+  };
 }
 
 /** Compact round/turn progress label: `r2/3` when the planned total is known

@@ -218,8 +218,9 @@ function claimPath(root: string, executionId: ExecutionId, ownerToken: string) {
 }
 
 /**
- * A claim as found on disk. `files` is everything a reap unlinks for it: the claim file, plus the legacy shadow record when the claim's
- * owner keeps one (see `legacyShadowRecord`).
+ * A claim as found on disk. `files` is everything a reap unlinks for it: the
+ * claim file, plus the legacy shadow record when the claim's owner keeps one
+ * (see `legacyShadowRecord`).
  */
 interface StoredClaim {
   readonly files: readonly string[];
@@ -739,7 +740,10 @@ async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
   }
 }
 
-/** Who holds `executionId` on disk. Reads only: dead claims are unlinked by the next claim, not here. */
+/**
+ * Who holds `executionId` on disk. Reads only: dead claims are reported as
+ * absent here and unlinked by the next claim, never by this call.
+ */
 export async function inspectExecutionLease(
   executionId: ExecutionId,
 ): Promise<ExecutionLeasePresence> {
