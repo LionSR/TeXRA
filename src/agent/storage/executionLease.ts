@@ -145,7 +145,7 @@ interface OwnedExecutionLease {
  * (`owned`), or another process whose owner is alive or unprovable (`held`).
  * Malformed present state rejects deliberately.
  */
-export type ExecutionLeasePresence =
+type ExecutionLeasePresence =
   | { readonly status: 'free' }
   | { readonly status: 'owned' }
   | { readonly status: 'held'; readonly owner: LeaseOwnerRecord };
@@ -160,7 +160,7 @@ interface LeaseHeld {
   readonly owner: LeaseOwnerRecord;
 }
 
-export type InactiveExecutionLeaseResult<T> =
+type InactiveExecutionLeaseResult<T> =
   LeaseHeld | { readonly status: 'performed'; readonly value: T };
 
 /** Why an execution refused a claim, in the words the user is shown. */
@@ -683,13 +683,10 @@ export function acquireResumedExecutionLease(
 export async function releaseOwnedExecutionLease(
   executionId: ExecutionId,
 ): Promise<void> {
-  const ownerships = currentOwnedLeases(executionId);
-  await Promise.all(ownerships.map(releaseOwnership));
-}
-
-function currentOwnedLeases(executionId: ExecutionId): OwnedExecutionLease[] {
-  return [...ownedLeases.values()].filter(
-    (lease) => lease.executionId === executionId,
+  await Promise.all(
+    [...ownedLeases.values()]
+      .filter((lease) => lease.executionId === executionId)
+      .map(releaseOwnership),
   );
 }
 
