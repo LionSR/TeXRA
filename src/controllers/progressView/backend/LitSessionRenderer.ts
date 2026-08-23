@@ -473,6 +473,8 @@ export class LitSessionRenderer implements SessionRendererPort {
       statusDetail:
         hold &&
         (hold.kind === 'held' ? streamHeldMessage(hold.provable) : hold.cause),
+      statusRetryable:
+        hold?.kind === 'unclassified' ? hold.retryable : undefined,
       substate: status?.substate,
       runStartedAt: status?.runStartedAt,
       userFollowUpSupport: streamInfo.userFollowUpSupport,

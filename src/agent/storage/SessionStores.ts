@@ -7,7 +7,7 @@ import {
   listExecutionStreamReferences,
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
-  type ExecutionStreamReference,
+  type ExecutionStreamReferenceListing,
 } from '@agent/storage/executionListing';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -23,9 +23,8 @@ type DeleteExecutionFn = (
   executionId: ExecutionId,
   options?: DeleteExecutionOptions,
 ) => Promise<DeleteExecutionResult>;
-type ListExecutionStreamReferencesFn = () => Promise<
-  ExecutionStreamReference[]
->;
+type ListExecutionStreamReferencesFn =
+  () => Promise<ExecutionStreamReferenceListing>;
 
 interface GoalEntryStore {
   forget(stream: StreamTabId): Promise<void>;
@@ -835,7 +834,7 @@ export class SessionStores {
   ): Promise<ExecutionId[]> {
     let references;
     try {
-      references = await this.listExecutionStreamReferences();
+      ({ references } = await this.listExecutionStreamReferences());
     } catch (error) {
       log.warn(
         `Skipping execution-side orphan cleanup; startup will continue: ${toErrorMessage(error)}`,

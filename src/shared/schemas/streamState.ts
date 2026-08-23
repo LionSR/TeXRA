@@ -134,6 +134,12 @@ export const BackendOwnedFieldsSchema = z.object({
    */
   statusDetail: z.string().optional(),
   /**
+   * Whether an `unclassified` stream's cause is a transient read failure
+   * (Resume retries) rather than malformed saved state (only Delete clears
+   * it); absent otherwise.
+   */
+  statusRetryable: z.boolean().optional(),
+  /**
    * Epoch ms when the stream entered its current active phase, stamped once by
    * the session status machine (`StreamPhaseState.runStartedAt`). Absent while
    * the phase is not active. Every host renders elapsed time from this one
