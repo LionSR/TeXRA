@@ -171,6 +171,8 @@ const BaseStreamStateSchema = BackendOwnedFieldsSchema.extend({
 
 const ToolUseUIStateSchema = z.object({
   followUpText: z.string().prefault(''),
+  /** A send is awaiting its admission ack; the draft stays until it lands. */
+  followUpSending: z.boolean().prefault(false),
   polishedText: z.string().nullable().prefault(null),
   polishRevision: z.int().prefault(0),
   transcribedText: z.string().nullable().prefault(null),

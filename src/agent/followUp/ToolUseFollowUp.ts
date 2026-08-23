@@ -51,6 +51,12 @@ export interface SubmitFollowUpOptions {
   readonly mode?: 'continuation' | 'live_notification' | 'child_delivery';
   /** Reject a detached producer if its originating continuation was replaced. */
   readonly expectedGenerationId?: string;
+  /**
+   * Fires once admission is decided, before any recovery resume runs. `true`
+   * means the input now belongs to the stream (sent, queued, or already
+   * admitted); `false` means the caller still owns it and may re-offer it.
+   */
+  readonly onAdmitted?: (admitted: boolean) => void;
 }
 
 export function presentFollowUpResult(
@@ -299,7 +305,13 @@ export async function submitFollowUp(
     streamId,
     () => submitFollowUpSerialized(streamId, followUp, options, ownerSession),
   );
-  if (!('resume' in dispatch)) return dispatch;
+  if (!('resume' in dispatch)) {
+    options.onAdmitted?.(
+      dispatch.status !== 'no_session' && dispatch.status !== 'dropped',
+    );
+    return dispatch;
+  }
+  options.onAdmitted?.(true);
 
   const resumed = await dispatch.resume;
   if (!resumed) {

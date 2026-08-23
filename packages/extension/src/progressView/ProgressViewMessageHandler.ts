@@ -529,15 +529,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         stopStream: (stream) => this.provider.backend.stopStream(stream),
       },
       followUp: {
-        sendFollowUp: async ({ stream, text, mediaFiles }) => {
-          await this.runViewCommand('texra.sendFollowUp', [
-            {
-              stream,
-              text,
-              ...(mediaFiles && mediaFiles.length > 0 ? { mediaFiles } : {}),
-            },
-          ]);
-        },
+        acknowledge: (stream, accepted) =>
+          this.postToActiveView({
+            command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
+            stream,
+            accepted,
+          }),
         reportImageSaveError: (_image, error) => {
           // Best-effort: a failed image save must not block the text, but log
           // it so a missing attachment is diagnosable.

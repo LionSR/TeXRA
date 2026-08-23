@@ -161,6 +161,15 @@ const UpdateQueuedFollowUpsMessageSchema = StreamScopedBaseSchema.extend({
   messages: pickProjection('queuedFollowUps'),
 });
 
+/**
+ * Admission ack for one follow-up send. The composer keeps its draft until
+ * this arrives: `accepted` clears it, a refusal hands the text back.
+ */
+const FollowUpResultMessageSchema = StreamScopedBaseSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT),
+  accepted: z.boolean(),
+});
+
 const PermissionKindSchema = z.enum(PERMISSION_KIND);
 /**
  * The one approval/prompt kind vocabulary. Wire payloads, the backend handler
@@ -364,6 +373,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdatePlanMessageSchema,
     UpdateRunUsageMessageSchema,
     UpdateQueuedFollowUpsMessageSchema,
+    FollowUpResultMessageSchema,
     SyncStreamContentMessageSchema,
     UpdatePermissionMessageSchema,
     UpdateBypassMessageSchema,

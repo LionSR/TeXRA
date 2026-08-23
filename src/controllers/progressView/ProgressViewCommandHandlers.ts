@@ -36,6 +36,7 @@ import {
   NO_TRANSCRIPT_TO_EXPORT_MESSAGE,
   type TranscriptExportPorts,
 } from './exportTranscript';
+import { submitProgressFollowUp } from './progressFollowUpSubmit';
 import type { ProgressWorkflowActionsController } from './ProgressWorkflowActionsController';
 import type { ProgressWorkflowFileActionsController } from './ProgressWorkflowFileActionsController';
 import type { ProgressAgentProposalController } from './ProgressAgentProposalController';
@@ -160,12 +161,6 @@ type ProgressViewFollowUpImage = NonNullable<
   SendFollowUpMessage['images']
 >[number];
 
-interface ProgressViewFollowUpSubmission {
-  stream: StreamTabId;
-  text: string;
-  mediaFiles?: readonly string[];
-}
-
 interface ProgressViewLifecycleCommandActions {
   setActiveStream(
     stream: StreamTabId | '',
@@ -190,9 +185,13 @@ interface ProgressViewFileCommandActions {
 }
 
 interface ProgressViewFollowUpCommandActions {
-  sendFollowUp(
-    submission: ProgressViewFollowUpSubmission,
-  ): Promise<void> | void;
+  /**
+   * Continuation owner. Desktop scopes it to its window session; the
+   * extension omits it so the module default applies.
+   */
+  session?: SessionHandle;
+  /** Admission ack back to the composer that sent the draft. */
+  acknowledge(stream: StreamTabId, accepted: boolean): void;
   reportImageSaveError(image: ProgressViewFollowUpImage, error: unknown): void;
 }
 
@@ -340,10 +339,17 @@ export function createProgressViewCommandHandlers(
         data.images ?? [],
         followUp.reportImageSaveError,
       );
-      await followUp.sendFollowUp({
-        stream: data.stream,
-        text: data.text,
-        ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
+      // Detached past admission: a recovery resume may run a whole model
+      // turn, and the composer is released by the ack, not by this promise.
+      void submitProgressFollowUp({
+        session: followUp.session ?? currentSession(),
+        streamId: data.stream,
+        input: {
+          text: data.text,
+          ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
+        },
+        acknowledge: (accepted) => followUp.acknowledge(data.stream, accepted),
+        showInfo,
       });
     },
 

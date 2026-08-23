@@ -148,16 +148,18 @@ export function handleFollowUpSend(
     result.text.includes(`[${img.fileName}]`),
   );
 
+  // The draft (text and image chips) stays put until the host acks admission
+  // with FOLLOW_UP_RESULT; a refused send hands it straight back to the user.
+  updateToolUseState(result.streamId, (prev) =>
+    create(prev, (draft) => {
+      draft.ui.followUpSending = true;
+    }),
+  );
   postMessage(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP, {
     stream: result.streamId,
     text: result.text,
     ...(attached.length > 0 ? { images: attached } : {}),
   });
-  updateToolUseState(result.streamId, (prev) =>
-    create(prev, (draft) => {
-      draft.ui.followUpText = '';
-    }),
-  );
 }
 
 export function handleFollowUpPolish(): void {

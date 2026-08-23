@@ -38,6 +38,7 @@ import {
   type SlashPickIntent,
 } from '../commands/slashRegistry';
 import {
+  draftRestoreRequest,
   inputBarContentRows,
   reverseSearchOpen as reverseSearchOpenSignal,
   setTransientNotice,
@@ -192,6 +193,14 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     },
     [setValue],
   );
+  // A refused follow-up hands its text back: the draft is the user's until
+  // the session admits it.
+  const draftRestore = useSignal(draftRestoreRequest);
+  useEffect(() => {
+    if (!draftRestore) return;
+    replaceDraft(draftRestore.text);
+    draftRestoreRequest.set(null);
+  }, [draftRestore, replaceDraft]);
   const transformPaste = useCallback((text: string): string => {
     if (!shouldCollapsePaste(text)) return text;
     return attachmentsRef.current.addPastedText(text);
