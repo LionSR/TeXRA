@@ -314,25 +314,40 @@ describe('cross-process execution leases', () => {
         return { pid: process.pid, processStart: '1', hostname: os.hostname() };
       },
     },
-  ])('treats $label as held and never touches it', async ({ owner }) => {
-    const executionId = 'b8644f' as ExecutionId;
-    const record = await owner();
-    await writeForeignLease(executionId, undefined, record);
-    const operation = vi.fn(async () => 'removed');
+  ])(
+    'treats $label as held until the user deletes the run',
+    async ({ owner }) => {
+      const executionId = 'b8644f' as ExecutionId;
+      const record = await owner();
+      await writeExecution(executionId);
+      await writeForeignLease(executionId, undefined, record);
+      const operation = vi.fn(async () => 'removed');
 
-    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
-      status: 'held',
-      owner: record,
-    });
-    await expect(
-      runWithInactiveExecutionLease(executionId, operation),
-    ).resolves.toEqual({ status: 'active', owner: record });
-    expect(operation).not.toHaveBeenCalled();
-    await expect(acquireResumedExecutionLease(executionId)).rejects.toThrow(
-      `Execution ${executionId} is held by another TeXRA process (pid ${record.pid} on ${record.hostname}).`,
-    );
-    expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(true);
-  });
+      await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+        status: 'held',
+        owner: record,
+      });
+      await expect(
+        runWithInactiveExecutionLease(executionId, operation),
+      ).resolves.toEqual({ status: 'active', owner: record });
+      expect(operation).not.toHaveBeenCalled();
+      await expect(acquireResumedExecutionLease(executionId)).rejects.toThrow(
+        `Execution ${executionId} is held by another TeXRA process (pid ${record.pid} on ${record.hostname}).`,
+      );
+      expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(
+        true,
+      );
+
+      // Only the user's explicit deletion reaps an unprovable owner.
+      await expect(deleteExecution(executionId)).resolves.toMatchObject({
+        status: 'deleted',
+      });
+      expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(
+        false,
+      );
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
+    },
+  );
 
   it('lets exactly one of two concurrent fresh claims win, with no lock directory', async () => {
     const executionId = 'b86452' as ExecutionId;

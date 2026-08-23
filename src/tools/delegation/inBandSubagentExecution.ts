@@ -487,10 +487,11 @@ async function executeInBand(
       loopFailure = error;
     }
 
-    // The loop handed this caller the settled turn's facts in memory
-    // (persistence stays best-effort loop-side); no turn settling means the
-    // run was interrupted or the infrastructure failed before terminal
-    // persistence — durable callers mark the attempt retryable.
+    // The loop hands this caller the settled turn's facts only once its
+    // report and result manifest are on disk; no turn settling means the run
+    // was interrupted, or a delivery write or the infrastructure failed
+    // before terminal persistence — durable callers mark the attempt
+    // retryable.
     const resultMeta = settledTurn?.resultMeta;
     if (!settledTurn || !resultMeta || resultMeta.producer !== 'subagent') {
       const failure = new SubagentDurabilityError(

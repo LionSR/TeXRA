@@ -806,7 +806,7 @@ describe('BashTool', () => {
     }
   });
 
-  it('finalizes background execution when supplementary result metadata fails', async () => {
+  it('fails background execution when its result metadata cannot be persisted', async () => {
     const resolveCommand = holdCommand();
     await installPlatform(BASH_PLATFORM_OPTIONS);
     const parentStreamId = 'bash-result-meta-failure' as StreamTabId;
@@ -822,8 +822,10 @@ describe('BashTool', () => {
 
     resolveCommand(DONE_EXEC_RESULT);
 
+    // The manifest is what `/result` reads, so its loss is the run's failure
+    // rather than a completed run with a silently missing result.
     await vi.waitFor(async () => {
-      assert.equal((await store.readMeta())?.outcome, RUN_OUTCOME.COMPLETED);
+      assert.equal((await store.readMeta())?.outcome, RUN_OUTCOME.FAILED);
     });
     detachBackgroundRun(recorded, parentStreamId);
   });

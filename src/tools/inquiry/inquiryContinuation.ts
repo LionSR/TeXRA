@@ -13,10 +13,12 @@
  */
 
 import {
+  lookupStreamExecutionId,
   submitFollowUp,
   type SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
 import {
+  currentSession,
   defaultSession,
   resolveEmitSession,
   type SessionHandle,
@@ -175,8 +177,9 @@ async function deliverContinuation(params: {
 /**
  * Shared body of the answered / dropped injectors: resolve the manifest,
  * archive when there is nothing to continue (missing thread, a turn-less
- * manifest, an `answered` event whose last turn is no longer answered, or
- * no parent stream), then build and deliver the continuation.
+ * manifest, an `answered` event whose last turn is no longer answered, no
+ * parent stream, or a parent stream since re-run under another execution),
+ * then build and deliver the continuation.
  */
 async function injectContinuation(
   event: 'answered' | 'dropped',
@@ -199,6 +202,20 @@ async function injectContinuation(
   if (event === 'answered' && lastTurn.kind !== 'answered') return 'archived';
   if (manifest.parentStreamId == null) {
     return archiveAsParentFinished(threadId, session);
+  }
+  // The answer is addressed to the execution that asked. A manifest written
+  // before the field existed names none and is delivered by stream alone.
+  if (manifest.parentExecutionId != null) {
+    const current = await lookupStreamExecutionId(
+      manifest.parentStreamId,
+      session ?? currentSession(),
+    );
+    if (current !== manifest.parentExecutionId) {
+      logger.warn(
+        `Inquiry continuation for ${threadId}: parent stream ${manifest.parentStreamId} now runs execution ${current ?? 'none'}, not ${manifest.parentExecutionId}; archiving.`,
+      );
+      return archiveAsParentFinished(threadId, session);
+    }
   }
 
   const stillOpen = await listThreadsByStatus({

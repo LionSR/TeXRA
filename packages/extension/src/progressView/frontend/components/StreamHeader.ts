@@ -103,15 +103,14 @@ const TERMINAL_STATE_BUTTONS = [
 
 /**
  * Buttons enabled while the run is unavailable here (held by another TeXRA
- * process, or its saved state unreadable): the read-only verbs plus Clean,
- * which deletes the run. Stop, resume, re-run, restore, archive, and diff all
- * act on a run this process does not own.
+ * process, or its saved state unreadable): the read-only verbs only. Stop,
+ * resume, re-run, restore, archive, diff, pack, and clean all act on a run
+ * this process does not own. Removing the run is the tab's Delete.
  */
 const UNAVAILABLE_STATE_BUTTONS = [
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
-  ELEMENT_IDS.CLEAN_STREAM_BTN,
 ];
 
 /**

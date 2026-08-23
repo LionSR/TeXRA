@@ -225,8 +225,10 @@ collapses `RESUMABILITY_CAUSE`'s eleven members to three.
 the remaining unprovable cases are genuine anomalies (foreign hostname,
 permission error). No code path guesses them dead: the run is shown as
 unavailable with the owner's pid and host in the detail, every message to
-it is refused with that same detail, and Delete is the user's only action.
-There is no reclaim; a user who knows the owner is gone deletes the run.
+it is refused with that same detail, and Delete is the user's only action:
+deletion is the one claim that reaps an unprovable owner, because the user
+who asked for it is the only party who can know that owner is gone. There
+is no reclaim.
 
 **D10. Races are removed by structure, not guarded by locks.** A lock,
 fence, generation counter, or double-check exists only because two things

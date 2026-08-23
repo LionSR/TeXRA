@@ -24,9 +24,9 @@ export type LeaseOwnerRecord = z.infer<typeof LeaseOwnerSchema>;
 
 /**
  * A verdict is a proof or an admission that no proof exists. `unprovable`
- * means "do not touch": every acquire and delete path treats it exactly like
- * `alive`, and the user sees the run as held. The user's only way out is to
- * delete the run.
+ * means "do not touch automatically": every acquire path treats it exactly
+ * like `alive`, and the user sees the run as held. The user's explicit
+ * deletion of the run is the one path that reaps it.
  */
 export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 

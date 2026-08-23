@@ -44,7 +44,7 @@ import type {
 } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
-import { persistChildRunDeliveryBestEffort } from '@agent/storage/childRunDeliveryPersistence';
+import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
@@ -660,16 +660,16 @@ async function deliverTurn<TTurn>(params: {
       ? { ...resultMeta, turnToken: turnRef.token }
       : resultMeta;
 
-  await persistChildRunDeliveryBestEffort(
-    executionId,
-    msg,
-    stampedMeta,
-    (kind, error) => {
-      logger.warn(`Failed to persist ${kind} for ${executionId}`, {
-        data: error,
-      });
-    },
-  );
+  // The settled facts reach the caller whether or not they persisted: a
+  // durable caller decides from them what a missing manifest means. The
+  // persistence failure is then this turn's failure, thrown once the turn
+  // is settled, and the delivery never reaches the parent.
+  let persistFailure: unknown;
+  try {
+    await persistChildRunDelivery(executionId, msg, stampedMeta);
+  } catch (error) {
+    persistFailure = error;
+  }
   // The turn's result slots now hold this turn: record it as the latest
   // completed turn, clearing the active marker written at acceptance. The
   // store does not serialize per-key writes, so this must queue behind the
@@ -689,6 +689,7 @@ async function deliverTurn<TTurn>(params: {
     isError,
     ...(err != null && { error: err }),
   });
+  if (persistFailure !== undefined) throw persistFailure;
 
   if (strategy.deliveryMode === 'persistOnly') return undefined;
 
@@ -1185,10 +1186,13 @@ export function startChildRunLoop<TTurn>(
         );
       } finally {
         try {
-          await runSession.releaseExecutionLease(
-            executionId,
-            params.afterArtifactsDrained,
-          );
+          await runSession.releaseExecutionLease(executionId, async () => {
+            // A turn that failed (its delivery persistence included) leaves
+            // nothing the caller may attest as committed; the failure itself
+            // is already this run's, propagated by the loop.
+            if (sawTurnFailure) return;
+            await params.afterArtifactsDrained?.();
+          });
         } catch (error) {
           logger.warn('Failed to persist final child-run artifacts', {
             data: { executionId, error },
