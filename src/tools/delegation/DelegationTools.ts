@@ -80,7 +80,6 @@ async function deliverResumeWakeFailure(
   session: SessionHandle,
   executionId: string,
   err: unknown,
-  expectedGenerationId?: string,
 ): Promise<void> {
   log.warn(
     `Failed to wake resumed subagent '${executionId}': ${toErrorMessage(err)}`,
@@ -90,7 +89,6 @@ async function deliverResumeWakeFailure(
     targetStreamId: handle.parentStreamId,
     followUp: { text: msg, origin: 'subagent_result' },
     session,
-    ...(expectedGenerationId !== undefined ? { expectedGenerationId } : {}),
   });
   if (delivery.kind !== 'delivered') {
     log.warn(
@@ -313,9 +311,6 @@ Git worktree support: resolved from the active workspace at runtime.`,
     }
 
     const framedInstruction = formatFollowUpInstruction(instruction);
-    const parentDeliveryGenerationId = session.followUps.currentGenerationId(
-      handle.parentStreamId,
-    );
     const result = await submitFollowUp(
       handle.childStreamId,
       framedInstruction,
@@ -339,7 +334,6 @@ Git worktree support: resolved from the active workspace at runtime.`,
         new Error(
           'The subagent could not be resumed to process the follow-up.',
         ),
-        parentDeliveryGenerationId,
       );
       return executed(
         [

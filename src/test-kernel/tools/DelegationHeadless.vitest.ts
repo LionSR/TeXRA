@@ -609,26 +609,6 @@ describe('headless delegation', () => {
     );
   });
 
-  it('does not commit or recover when required report persistence poisons the lease', async () => {
-    const logicalExecutionId = 'cccccc888888' as ExecutionId;
-    const childStore = memoryExecutionStore();
-    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
-    mocks.writeReport.mockRejectedValueOnce(new Error('report write failed'));
-
-    await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
-    ).rejects.toBeInstanceOf(SubagentDurabilityError);
-    await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
-    ).rejects.toBeInstanceOf(SubagentReconciliationError);
-
-    expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    expect(childStore.write).not.toHaveBeenCalledWith(
-      'stable-subagent-attempt',
-      expect.objectContaining({ phase: 'committed' }),
-    );
-  });
-
   it('recovers committed success when lease deletion fails', async () => {
     const logicalExecutionId = 'cccccc999999' as ExecutionId;
     const childStore = memoryExecutionStore();

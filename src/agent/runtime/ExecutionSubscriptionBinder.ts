@@ -52,7 +52,6 @@ function subscriptionKey(
 
 interface ReleaseSource {
   onRelease(observer: (streamId: StreamTabId) => void): () => void;
-  currentGenerationId?(streamId: StreamTabId): string | undefined;
 }
 
 interface BinderLogger {
@@ -84,7 +83,6 @@ class ExecutionSubscription {
     >,
     private readonly logger: BinderLogger,
     private readonly onDisposed: () => void,
-    private readonly expectedGenerationId: string | undefined,
     private readonly session?: SessionHandle,
   ) {
     this.executionId = handle.executionId;
@@ -159,7 +157,6 @@ class ExecutionSubscription {
       streamId: this.streamId,
       followUp: wrapAndSanitizeTag(TAG, text),
       session: this.session,
-      expectedGenerationId: this.expectedGenerationId,
       logger: this.logger,
       failure: {
         message: 'Failed to deliver execution subscription follow-up',
@@ -220,7 +217,6 @@ export class ExecutionSubscriptionBinder {
       this.registry,
       this.logger,
       () => this.subscriptions.delete(key),
-      this.releaseSource.currentGenerationId?.(streamId),
       this.session,
     );
     this.subscriptions.set(key, subscription);

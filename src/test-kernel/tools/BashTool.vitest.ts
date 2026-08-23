@@ -688,10 +688,6 @@ describe('BashTool', () => {
       defaultSession().followUps.release(parentLease, 'terminal');
     }
 
-    expect(submitFollowUpSpy.mock.calls[0]?.[2]?.expectedGenerationId).toBe(
-      parentLease.generationId,
-    );
-
     const followUpArg = submitFollowUpSpy.mock.calls[0]?.[1];
     const deliveredText =
       typeof followUpArg === 'string' ? followUpArg : followUpArg?.text;
