@@ -178,7 +178,7 @@ export async function registerExecution(
 /**
  * Drop the previous run's terminal facts as a persisted execution is admitted
  * for resumption. `meta.outcome` owns "how did this run end" and every reader
- * projects it onto the turn-owned result envelope (`applyExecutionOutcome`), so
+ * projects it onto the turn-owned result envelope (`readResultMeta`), so
  * an execution that resumes while still carrying its interrupted predecessor's
  * outcome relabels every turn the resumed run writes until its next terminal
  * finalize.

@@ -182,7 +182,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   // The predecessor run's terminal outcome is projected onto every result
-  // envelope read back (`applyExecutionOutcome`), so it has to be gone before
+  // envelope read back (`readResultMeta`), so it has to be gone before
   // the resumed run can write a turn of its own.
   it('clears the previous run terminal facts before the resumed run starts', async () => {
     const executionId = 'e9503-boundary' as ExecutionId;
