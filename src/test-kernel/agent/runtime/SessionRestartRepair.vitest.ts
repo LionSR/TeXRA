@@ -5,7 +5,6 @@ import { flowKey } from '@agent/node/persistedFlow';
 import {
   acquireFreshExecutionLease,
   completeOwnedExecutionLease,
-  resetExecutionLeaseCoordinationForTests,
 } from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -26,6 +25,8 @@ import {
   writeForeignLease,
   writeOrphanedLease,
 } from '@test/support/executionLeaseFixtures';
+import { createDeferred } from '@test/support/asyncTestUtils';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   appendTranscriptEntry,
@@ -157,7 +158,6 @@ afterEach(async () => {
     );
   }
   clearStoreCache();
-  resetExecutionLeaseCoordinationForTests();
 });
 
 describe('SessionHandle restart repair', () => {
@@ -405,7 +405,8 @@ describe('SessionHandle restart repair', () => {
 
     // Owner proven dead, checkpoint present: the interruption is recorded,
     // the checkpoint stays, and nothing is adopted. The explicit Resume
-    // affordance is the only way to continue; a follow-up is handed back.
+    // affordance is the only way to continue; a follow-up is handed back
+    // with the reason that points there.
     expect(session.status.get(resumableStreamId)).toBe(STREAM_PHASE.CANCELLED);
     expect(session.status.holdState(resumableStreamId)).toBeUndefined();
     await expect(executionStore.readMeta()).resolves.toMatchObject({
@@ -422,10 +423,7 @@ describe('SessionHandle restart repair', () => {
         session,
         onAdmitted,
       }),
-    ).resolves.toEqual({
-      status: 'no_session',
-      streamStatus: STREAM_PHASE.CANCELLED,
-    });
+    ).resolves.toEqual({ status: 'failed', reason: 'not_resumable' });
     expect(onAdmitted).toHaveBeenCalledExactlyOnceWith(false);
   });
 
@@ -538,59 +536,72 @@ describe('SessionHandle restart repair', () => {
     ).toBeUndefined();
   });
 
-  it('waits for execution artifacts before replacing workspace stores', async () => {
+  it('refuses a storage-root change while an execution is live and changes nothing', async () => {
     const liveExecutionId = 'workspace-live' as ExecutionId;
-    const transcripts = await StreamLogStore.open();
-    const session = openDeferredSession(transcripts);
-    await acquireFreshExecutionLease(liveExecutionId);
-    const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
-
-    try {
-      const replacement = session.reloadAfterStorageRootChange();
-      await Promise.resolve();
-
-      expect(reload).not.toHaveBeenCalled();
-      await completeOwnedExecutionLease(liveExecutionId);
-      await replacement;
-
-      expect(reload).toHaveBeenCalledOnce();
-    } finally {
-      await completeOwnedExecutionLease(liveExecutionId);
-    }
-  });
-
-  it('keeps the old storage root pinned until execution artifacts finish', async () => {
-    const liveExecutionId = 'workspace-root-pinned' as ExecutionId;
     const transcripts = await StreamLogStore.open();
     const session = openDeferredSession(transcripts);
     const storage = platform().storage;
     let activeRoot = '/workspace/old-storage';
     vi.spyOn(storage, 'getStoragePath').mockImplementation(() => activeRoot);
+    const commit = vi.fn(() => {
+      activeRoot = '/workspace/new-storage';
+      return true;
+    });
     Object.assign(storage, {
       hasPendingWorkspaceStorageChange: () => true,
-      commitWorkspaceStorageChange: () => {
-        activeRoot = '/workspace/new-storage';
-        return true;
-      },
+      commitWorkspaceStorageChange: commit,
     });
-    await acquireFreshExecutionLease(liveExecutionId);
     const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
+    const flush = vi.spyOn(transcripts, 'flush');
+    session.executions.track(
+      testExecutionHandle({
+        executionId: liveExecutionId,
+        parentStreamId: 'workspace-live-stream' as StreamTabId,
+        childStreamId: 'workspace-live-stream' as StreamTabId,
+        agent: 'assistant',
+      }),
+    );
 
-    try {
-      const replacement = session.reloadAfterStorageRootChange();
-      await Promise.resolve();
+    await expect(session.reloadAfterStorageRootChange()).rejects.toThrow(
+      'cannot change its storage location while 1 run is live',
+    );
 
-      expect(storage.getStoragePath()).toBe('/workspace/old-storage');
-      expect(reload).not.toHaveBeenCalled();
+    expect(flush).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(storage.getStoragePath()).toBe('/workspace/old-storage');
+  });
 
-      await completeOwnedExecutionLease(liveExecutionId);
-      await replacement;
+  it('refuses a storage-root change while a lane step is admitted but not started, leaving the session as it was', async () => {
+    const executionId = 'workspace-queued' as ExecutionId;
+    const transcripts = await StreamLogStore.open();
+    const session = openDeferredSession(transcripts);
+    const storage = platform().storage;
+    const commit = vi.fn(() => true);
+    Object.assign(storage, {
+      hasPendingWorkspaceStorageChange: () => true,
+      commitWorkspaceStorageChange: commit,
+    });
+    const flush = vi.spyOn(transcripts, 'flush');
+    const generationBefore = Reflect.get(session, 'storageGeneration');
+    const gate = createDeferred();
+    // Admitted synchronously; its body has not run yet.
+    const step = session.executions.runExecutionStep(executionId, async () => {
+      await gate.promise;
+      return 'ran';
+    });
 
-      expect(storage.getStoragePath()).toBe('/workspace/new-storage');
-      expect(reload).toHaveBeenCalledOnce();
-    } finally {
-      await completeOwnedExecutionLease(liveExecutionId);
-    }
+    await expect(session.reloadAfterStorageRootChange()).rejects.toThrow(
+      'cannot change its storage location while 1 run is live',
+    );
+
+    expect(flush).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
+    expect(Reflect.get(session, 'storageGeneration')).toBe(generationBefore);
+    // The readiness promise was not replaced by the refused change.
+    await expect(session.waitUntilReady()).resolves.toBeUndefined();
+    gate.resolve();
+    await expect(step).resolves.toBe('ran');
   });
 
   it('flushes old-root stores before committing the new storage root', async () => {
@@ -816,7 +827,7 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
-  it('holds new root executions outside the workspace replacement', async () => {
+  it('refuses a launch while the workspace replacement is in flight', async () => {
     const queuedExecutionId = 'workspace-queued' as ExecutionId;
     const transcripts = await StreamLogStore.open();
     const session = openDeferredSession(transcripts);
@@ -825,26 +836,21 @@ describe('SessionHandle restart repair', () => {
       finishReload = resolve;
     });
     vi.spyOn(transcripts, 'reload').mockReturnValue(reloadBlocked);
+    const start = vi.fn(async () => undefined);
 
-    try {
-      const replacement = session.reloadAfterStorageRootChange();
-      await Promise.resolve();
-      const acquisition = acquireFreshExecutionLease(queuedExecutionId);
-      let acquired = false;
-      void acquisition.then(() => {
-        acquired = true;
-      });
-      await Promise.resolve();
+    const replacement = session.reloadAfterStorageRootChange();
+    await Promise.resolve();
+    await expect(
+      session.executions.launchExecution(queuedExecutionId, start),
+    ).rejects.toThrow(
+      'TeXRA is changing its storage location. Start this run again in a moment.',
+    );
+    expect(start).not.toHaveBeenCalled();
 
-      expect(acquired).toBe(false);
-      finishReload?.();
-      await replacement;
-      await acquisition;
-
-      expect(acquired).toBe(true);
-    } finally {
-      await completeOwnedExecutionLease(queuedExecutionId);
-    }
+    finishReload?.();
+    await replacement;
+    await session.executions.launchExecution(queuedExecutionId, start);
+    expect(start).toHaveBeenCalledOnce();
   });
 
   it('surfaces a repair write failure at the readiness boundary', async () => {

@@ -13,7 +13,6 @@ import {
   registerExecution,
   writeWorkflowExecutionSnapshot,
 } from '@agent/storage';
-import { captureOwnedExecutionLease } from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
@@ -439,67 +438,65 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       { length: 513 },
       (_, index) => `${'f'.repeat(600)}-${index}-file-tail.tex`,
     );
-    await captureOwnedExecutionLease(executionId)(() =>
-      writeWorkflowExecutionSnapshot(executionId, {
-        lifecycle: 'active',
-        currentStageId: longStageId,
-        stages: [
-          {
-            id: longStageId,
-            title: longTitle,
-            order: 0,
-            lifecycle: 'active',
-            startedAt: timestamp,
-          },
-        ],
-        calls: [
-          {
-            id: longCallId,
-            label: '   ',
-            stageId: longStageId,
-            agent: 'writer',
-            files: { input: longFiles, context: [], media: [] },
-            childExecutionId: 'abcdef123456',
-            attempts: [
-              {
-                number: 1,
-                id: '111111111111',
-                startedAt: timestamp,
-                completedAt: timestamp,
-              },
-              {
-                number: 2,
-                id: '222222222222',
-                childStreamId: 'writer#222222222222',
-                model: 'historical-model',
-                costUsd: 0.2,
-                startedAt: timestamp,
-                completedAt: timestamp,
-              },
-              {
-                number: 3,
-                id: 'abcdef123456',
-                childStreamId: 'writer#abcdef123456',
-                model: 'replacement-model',
-                costUsd: 0.3,
-                startedAt: timestamp,
-                completedAt: timestamp,
-              },
-            ],
-            status: 'failed',
-            error: longError,
-            timestamps: {
-              createdAt: timestamp,
-              queuedAt: timestamp,
+    await writeWorkflowExecutionSnapshot(executionId, {
+      lifecycle: 'active',
+      currentStageId: longStageId,
+      stages: [
+        {
+          id: longStageId,
+          title: longTitle,
+          order: 0,
+          lifecycle: 'active',
+          startedAt: timestamp,
+        },
+      ],
+      calls: [
+        {
+          id: longCallId,
+          label: '   ',
+          stageId: longStageId,
+          agent: 'writer',
+          files: { input: longFiles, context: [], media: [] },
+          childExecutionId: 'abcdef123456',
+          attempts: [
+            {
+              number: 1,
+              id: '111111111111',
               startedAt: timestamp,
-              updatedAt: timestamp,
               completedAt: timestamp,
             },
+            {
+              number: 2,
+              id: '222222222222',
+              childStreamId: 'writer#222222222222',
+              model: 'historical-model',
+              costUsd: 0.2,
+              startedAt: timestamp,
+              completedAt: timestamp,
+            },
+            {
+              number: 3,
+              id: 'abcdef123456',
+              childStreamId: 'writer#abcdef123456',
+              model: 'replacement-model',
+              costUsd: 0.3,
+              startedAt: timestamp,
+              completedAt: timestamp,
+            },
+          ],
+          status: 'failed',
+          error: longError,
+          timestamps: {
+            createdAt: timestamp,
+            queuedAt: timestamp,
+            startedAt: timestamp,
+            updatedAt: timestamp,
+            completedAt: timestamp,
           },
-        ],
-        timestamps: { createdAt: timestamp, updatedAt: timestamp },
-      }),
-    );
+        },
+      ],
+      timestamps: { createdAt: timestamp, updatedAt: timestamp },
+    });
 
     const result = await new ExecutionsTool().call({
       path: `/executions/${executionId}`,
@@ -545,54 +542,52 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       };
     });
     const failedAt = new Date(base).toISOString();
-    await captureOwnedExecutionLease(executionId)(() =>
-      writeWorkflowExecutionSnapshot(executionId, {
-        lifecycle: 'active',
-        currentStageId: 'stage-2',
-        stages: [
-          {
-            id: 'stage-1',
-            title: 'Earlier stage',
-            order: 0,
-            lifecycle: 'failed',
-            startedAt: failedAt,
-            completedAt: failedAt,
-          },
-          {
-            id: 'stage-2',
-            title: 'Current stage',
-            order: 1,
-            lifecycle: 'active',
-            startedAt: failedAt,
-          },
-        ],
-        calls: [
-          {
-            id: 'older-failed',
-            label: 'Older failed',
-            stageId: 'stage-1',
-            files: { input: [], context: [], media: [] },
-            attempts: [
-              {
-                number: 1,
-                startedAt: failedAt,
-                completedAt: failedAt,
-              },
-            ],
-            status: 'failed',
-            error: 'expected failure',
-            timestamps: {
-              createdAt: failedAt,
+    await writeWorkflowExecutionSnapshot(executionId, {
+      lifecycle: 'active',
+      currentStageId: 'stage-2',
+      stages: [
+        {
+          id: 'stage-1',
+          title: 'Earlier stage',
+          order: 0,
+          lifecycle: 'failed',
+          startedAt: failedAt,
+          completedAt: failedAt,
+        },
+        {
+          id: 'stage-2',
+          title: 'Current stage',
+          order: 1,
+          lifecycle: 'active',
+          startedAt: failedAt,
+        },
+      ],
+      calls: [
+        {
+          id: 'older-failed',
+          label: 'Older failed',
+          stageId: 'stage-1',
+          files: { input: [], context: [], media: [] },
+          attempts: [
+            {
+              number: 1,
               startedAt: failedAt,
-              updatedAt: failedAt,
               completedAt: failedAt,
             },
+          ],
+          status: 'failed',
+          error: 'expected failure',
+          timestamps: {
+            createdAt: failedAt,
+            startedAt: failedAt,
+            updatedAt: failedAt,
+            completedAt: failedAt,
           },
-          ...completedCalls,
-        ],
-        timestamps: { createdAt: failedAt, updatedAt: failedAt },
-      }),
-    );
+        },
+        ...completedCalls,
+      ],
+      timestamps: { createdAt: failedAt, updatedAt: failedAt },
+    });
 
     const result = await new ExecutionsTool().call({
       path: `/executions/${executionId}`,
@@ -621,47 +616,45 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         completedAt: timestamp,
       },
     }));
-    await captureOwnedExecutionLease(executionId)(() =>
-      writeWorkflowExecutionSnapshot(executionId, {
-        lifecycle: 'active',
-        currentStageId: 'stage-2',
-        stages: [
-          {
-            id: 'stage-1',
-            title: 'Earlier stage',
-            order: 0,
-            lifecycle: 'completed',
+    await writeWorkflowExecutionSnapshot(executionId, {
+      lifecycle: 'active',
+      currentStageId: 'stage-2',
+      stages: [
+        {
+          id: 'stage-1',
+          title: 'Earlier stage',
+          order: 0,
+          lifecycle: 'completed',
+          startedAt: timestamp,
+          completedAt: timestamp,
+        },
+        {
+          id: 'stage-2',
+          title: 'Current stage',
+          order: 1,
+          lifecycle: 'active',
+          startedAt: timestamp,
+        },
+      ],
+      calls: [
+        ...terminalCalls,
+        {
+          id: 'earlier-live',
+          label: 'Earlier live',
+          stageId: 'stage-1',
+          files: { input: [], context: [], media: [] },
+          attempts: [{ number: 1, startedAt: timestamp }],
+          status: 'running',
+          timestamps: {
+            createdAt: timestamp,
+            queuedAt: timestamp,
             startedAt: timestamp,
-            completedAt: timestamp,
+            updatedAt: timestamp,
           },
-          {
-            id: 'stage-2',
-            title: 'Current stage',
-            order: 1,
-            lifecycle: 'active',
-            startedAt: timestamp,
-          },
-        ],
-        calls: [
-          ...terminalCalls,
-          {
-            id: 'earlier-live',
-            label: 'Earlier live',
-            stageId: 'stage-1',
-            files: { input: [], context: [], media: [] },
-            attempts: [{ number: 1, startedAt: timestamp }],
-            status: 'running',
-            timestamps: {
-              createdAt: timestamp,
-              queuedAt: timestamp,
-              startedAt: timestamp,
-              updatedAt: timestamp,
-            },
-          },
-        ],
-        timestamps: { createdAt: timestamp, updatedAt: timestamp },
-      }),
-    );
+        },
+      ],
+      timestamps: { createdAt: timestamp, updatedAt: timestamp },
+    });
 
     const result = await new ExecutionsTool().call({
       path: `/executions/${executionId}`,

@@ -3,9 +3,10 @@ import PQueue from 'p-queue';
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
 import type { DeleteStreamResult, SessionStores } from '@agent/storage';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
-import type {
-  SessionHandle,
-  WorkspaceStorageTransitionHooks,
+import {
+  StorageRootChangeRefusedError,
+  type SessionHandle,
+  type WorkspaceStorageTransitionHooks,
 } from '@agent/runtime/SessionHandle';
 import {
   WebviewBridge,
@@ -574,10 +575,9 @@ export class ProgressBackend {
 
   /**
    * Per-stream prepare shared by single- and all-delete: stop an in-flight
-   * stream we own locally, then wait for the execution-lease release. The
-   * `waitForOwnedExecutionRelease` no-ops for streams with no owned execution,
-   * so the all-delete path can run it over every stream without changing
-   * behavior.
+   * stream we own locally. The deletion itself runs as a step on the stream's
+   * execution lane (`SessionStores.deleteStream`), so it lands only after the
+   * stopped generation has disposed; nothing here needs to wait for it.
    */
   private async prepareStreamDeletionCore(
     stream: StreamTabId,
@@ -587,20 +587,7 @@ export class ProgressBackend {
     if (ownedLocally && isInFlightPhase(this.session.status.get(stream))) {
       await this.lifecycle.stopStream(stream);
     }
-
-    // A terminal child is untracked before its artifact flush releases the
-    // execution lease. Auto-close can land in that interval, so the handle is
-    // not a reliable indication that local durable writes have finished.
-    try {
-      await this.state.stores.waitForOwnedExecutionRelease(stream);
-      return false;
-    } catch (error) {
-      log.warn(
-        `Stream ${stream} was retained because its execution ownership could not be read`,
-        { data: error },
-      );
-      return true;
-    }
+    return false;
   }
 
   private async prepareStreamDeletion(stream: StreamTabId): Promise<boolean> {
@@ -744,9 +731,8 @@ export class ProgressBackend {
     // Runs the per-stream prepare over every known stream — deliberately
     // without the single-delete guards, so in-flight reserved-segment streams
     // are still stopped before clearAll() exactly as before the shared core.
-    // Ownership-read failures are already converted to a per-stream result by
-    // `prepareStreamDeletionCore`; `clearAll` reports those streams through
-    // its own failed set.
+    // `clearAll` reports ownership-read and lane refusals through its own
+    // failed set.
     await Promise.all(
       this.state.streamLogs
         .keys()
@@ -814,6 +800,8 @@ export class ProgressBackend {
           ? await this.session.reloadAfterStorageRootChange(transitionHooks)
           : await this.session.reloadAfterStorageRootChange();
       } catch (error) {
+        // A refused change touched nothing, so there is nothing to reload.
+        if (error instanceof StorageRootChangeRefusedError) throw error;
         sessionReloadError = error;
       }
       if (sessionReloadError || storageRootReplaced) {

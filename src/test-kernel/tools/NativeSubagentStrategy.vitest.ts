@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   persistChildRunResultMeta: vi.fn(),
   readConfig: vi.fn(),
   writeTurnState: vi.fn(),
-  resumeToolUseFromResumeData: vi.fn(),
+  resumeToolUseTurn: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   throwDeliveryFormatting: false,
   throwErrorFormatting: false,
@@ -65,9 +65,7 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  captureOwnedExecutionLease:
-    (_executionId: ExecutionId) => (operation: () => unknown) =>
-      operation(),
+  assertOwnedExecutionLease: vi.fn(),
   validateOwnedExecutionLease: vi.fn(async () => {}),
   abandonOwnedExecutionLease: vi.fn(),
   completeOwnedExecutionLease: vi.fn(async () => ({
@@ -186,7 +184,7 @@ describe('NativeSubagentStrategy', () => {
     vi.resetAllMocks();
     restoreAgentEngine = provideAgentEngine({
       executeAgent: mocks.executeAgent,
-      resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
+      resumeToolUseTurn: mocks.resumeToolUseTurn,
     } as unknown as AgentEngine);
     mocks.throwDeliveryFormatting = false;
     mocks.throwErrorFormatting = false;
@@ -423,22 +421,20 @@ describe('NativeSubagentStrategy', () => {
     const ready = new Promise<void>((resolve) => {
       replacementReady = resolve;
     });
-    mocks.resumeToolUseFromResumeData.mockImplementationOnce(
-      async (_resume, options) => {
-        options.onRun?.({
-          childStreamId,
-          deliveryTargetStreamId: params.parentStreamId,
-          interrupt: replacementInterrupt,
-        } as never);
-        replacementReady();
-        await new Promise<void>((resolve) =>
-          turn.signal.addEventListener('abort', () => resolve(), {
-            once: true,
-          }),
-        );
-        return toolUseTurnResult('cancelled', params.executionId);
-      },
-    );
+    mocks.resumeToolUseTurn.mockImplementationOnce(async (_resume, options) => {
+      options.onRun?.({
+        childStreamId,
+        deliveryTargetStreamId: params.parentStreamId,
+        interrupt: replacementInterrupt,
+      } as never);
+      replacementReady();
+      await new Promise<void>((resolve) =>
+        turn.signal.addEventListener('abort', () => resolve(), {
+          once: true,
+        }),
+      );
+      return toolUseTurnResult('cancelled', params.executionId);
+    });
 
     const resumed = strategy.runTurn!([], fakePorts(), turn);
     await ready;
@@ -571,7 +567,7 @@ describe('NativeSubagentStrategy', () => {
     });
     mocks.readConfig.mockResolvedValue(config);
     mocks.retrieveSessionResumeData.mockResolvedValue(snapshot);
-    mocks.resumeToolUseFromResumeData.mockResolvedValueOnce(
+    mocks.resumeToolUseTurn.mockResolvedValueOnce(
       toolUseTurnResult('completed', params.executionId, { response: 'done' }),
     );
 
@@ -586,7 +582,7 @@ describe('NativeSubagentStrategy', () => {
       params.executionId,
       config,
     );
-    expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledWith(
+    expect(mocks.resumeToolUseTurn).toHaveBeenCalledWith(
       snapshot,
       expect.objectContaining({
         approvalPromptsUnavailable: true,
@@ -617,7 +613,7 @@ describe('NativeSubagentStrategy', () => {
       createToolUseResumeData({ executionId: params.executionId }),
     );
     const resumeError = new Error('resume storage unreadable');
-    mocks.resumeToolUseFromResumeData.mockRejectedValueOnce(resumeError);
+    mocks.resumeToolUseTurn.mockRejectedValueOnce(resumeError);
 
     await expect(
       strategy.runTurn!([], fakePorts(), new AbortController()),
@@ -679,15 +675,13 @@ describe('NativeSubagentStrategy', () => {
     });
     mocks.readConfig.mockResolvedValue(config);
     mocks.retrieveSessionResumeData.mockResolvedValue(resume);
-    mocks.resumeToolUseFromResumeData.mockImplementation(
-      async (_snapshot, options) => {
-        options.onRun?.(handle);
-        session.status.transitionToWaiting(childStreamId, 'wait');
-        return waitingTurn(
-          `follow-up response ${mocks.resumeToolUseFromResumeData.mock.calls.length}`,
-        );
-      },
-    );
+    mocks.resumeToolUseTurn.mockImplementation(async (_snapshot, options) => {
+      options.onRun?.(handle);
+      session.status.transitionToWaiting(childStreamId, 'wait');
+      return waitingTurn(
+        `follow-up response ${mocks.resumeToolUseTurn.mock.calls.length}`,
+      );
+    });
 
     const strategy = createNativeSubagentStrategy(params);
     try {
@@ -714,7 +708,7 @@ describe('NativeSubagentStrategy', () => {
       ).toEqual({ kind: 'live' });
 
       await vi.waitFor(() =>
-        expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledTimes(1),
+        expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(1),
       );
       await vi.waitFor(() =>
         expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(2),
@@ -732,19 +726,19 @@ describe('NativeSubagentStrategy', () => {
       ).toEqual({ kind: 'live' });
 
       await vi.waitFor(() =>
-        expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledTimes(2),
+        expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2),
       );
       await vi.waitFor(() =>
         expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(3),
       );
       await sleep(50);
 
-      expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledTimes(2);
+      expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2);
+      expect(mocks.resumeToolUseTurn.mock.calls.map((call) => call[0])).toEqual(
+        [resume, resume],
+      );
       expect(
-        mocks.resumeToolUseFromResumeData.mock.calls.map((call) => call[0]),
-      ).toEqual([resume, resume]);
-      expect(
-        mocks.resumeToolUseFromResumeData.mock.calls.map(
+        mocks.resumeToolUseTurn.mock.calls.map(
           (call) => call[1].drainedFollowUps,
         ),
       ).toEqual([
@@ -878,7 +872,7 @@ describe('NativeSubagentStrategy', () => {
         expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
       );
 
-      expect(mocks.resumeToolUseFromResumeData).not.toHaveBeenCalled();
+      expect(mocks.resumeToolUseTurn).not.toHaveBeenCalled();
       expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
       session.followUps.terminalize(childStreamId);

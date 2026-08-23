@@ -10,7 +10,6 @@ import {
   deriveResumability,
   ExecutionLeaseLostError,
   inspectExecutionLease,
-  type OwnedExecutionLeaseScope,
   type ResumabilityDecision,
 } from '@agent/storage';
 import { validateExecutionRequest } from '@agent/core/state/executionRequests';
@@ -311,14 +310,12 @@ export async function executeCliRequest(
     shutdownFinalizationFailureReported = true;
     reportFinalizationFailure(error);
   };
-  let settleLeaseScope: (
-    scope: OwnedExecutionLeaseScope | undefined,
+  let settleLeaseAcquired: (
+    executionId: ExecutionId | undefined,
   ) => void = () => undefined;
-  const leaseScopeReady = new Promise<OwnedExecutionLeaseScope | undefined>(
-    (resolve) => {
-      settleLeaseScope = resolve;
-    },
-  );
+  const leaseAcquired = new Promise<ExecutionId | undefined>((resolve) => {
+    settleLeaseAcquired = resolve;
+  });
   let settleShutdownFinalization: () => void = () => undefined;
   const shutdownFinalizationDone = new Promise<void>((resolve) => {
     settleShutdownFinalization = resolve;
@@ -338,20 +335,16 @@ export async function executeCliRequest(
   const finalizeShutdownStatus = (): Promise<boolean> => {
     if (!shutdownInterrupted) return Promise.resolve(false);
     shutdownStatusFinalized ??= (async () => {
-      const runWithOwnership = await leaseScopeReady;
-      const executionId = ownedExecutionId;
-      if (!runWithOwnership || !executionId) return false;
+      const executionId = await leaseAcquired;
+      if (!executionId) return false;
       try {
-        let terminalStatusPersisted = false;
-        await runWithOwnership(async () => {
-          terminalStatusPersisted = await finalizeCliExecution(
-            executionId,
-            RUN_OUTCOME.CANCELLED,
-            'preserve',
-            reportShutdownFinalizationFailure,
-          );
-          await session.releaseExecutionLease(executionId);
-        });
+        const terminalStatusPersisted = await finalizeCliExecution(
+          executionId,
+          RUN_OUTCOME.CANCELLED,
+          'preserve',
+          reportShutdownFinalizationFailure,
+        );
+        await session.releaseExecutionLease(executionId);
         const resumability = terminalStatusPersisted
           ? await deriveResumability(executionId)
           : undefined;
@@ -473,9 +466,9 @@ export async function executeCliRequest(
           }
           return handled;
         },
-        onExecutionLeaseAcquired: (runWithOwnership, executionId) => {
+        onExecutionLeaseAcquired: (executionId) => {
           ownedExecutionId = executionId;
-          settleLeaseScope(runWithOwnership);
+          settleLeaseAcquired(executionId);
         },
         stopAfterCycle: options.stopAfterCycle,
         approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
@@ -492,7 +485,7 @@ export async function executeCliRequest(
     } finally {
       // Unblock an in-flight shutdown when acquisition failed before a scope
       // became available. Promise resolution is one-shot after success.
-      settleLeaseScope(undefined);
+      settleLeaseAcquired(undefined);
     }
   };
 

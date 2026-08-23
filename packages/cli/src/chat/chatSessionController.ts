@@ -701,7 +701,7 @@ export function createChatSessionController(
           resolveAndResumeStream(
             streamId,
             {
-              streamStatus: runtimeSession.status,
+              executions: runtimeSession.executions,
               isCancellationRequested,
               resolveResumeState: async () => ({
                 status: 'resolved',
@@ -741,7 +741,6 @@ export function createChatSessionController(
                     resumedOutcome = result.outcome;
                   },
                   onError: reportRunFailure,
-                  canAcquireResumeLease: () => !isCancellationRequested(),
                 }),
               executeWorkflow: async () => {
                 throw new Error(

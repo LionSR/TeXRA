@@ -216,10 +216,7 @@ describe('tool-use follow-up progress events', () => {
 
     const result = await submitFollowUp(streamId, 'late follow-up');
 
-    expect(result).toEqual({
-      status: 'no_session',
-      streamStatus: STREAM_PHASE.COMPLETED,
-    });
+    expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
     expect(appendFollowUp).not.toHaveBeenCalled();
   });
 
@@ -234,10 +231,7 @@ describe('tool-use follow-up progress events', () => {
         { session },
       );
 
-      expect(result).toEqual({
-        status: 'no_session',
-        streamStatus: undefined,
-      });
+      expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
       expect(recorded.events).toEqual([]);
     } finally {
       recorded.detach();
@@ -258,11 +252,9 @@ describe('tool-use follow-up progress events', () => {
         'queued while resuming',
       );
 
-      expect(result).toEqual({
-        status: 'queued',
-        reason: 'resuming',
-        continuation: 'resume_failed',
-      });
+      // The fake platform's resume port refuses, so the input stays queued
+      // behind a failed wake.
+      expect(result).toEqual({ status: 'queued', wake: 'failed' });
       expect(defaultSession().followUps.getAll(resumingStreamId)).toEqual([
         'queued while resuming',
       ]);
@@ -290,11 +282,7 @@ describe('tool-use follow-up progress events', () => {
     try {
       const result = await submitFollowUp(parentStreamId, 'continue child');
 
-      expect(result).toEqual({
-        status: 'queued',
-        reason: 'children_running',
-        continuation: 'resume_failed',
-      });
+      expect(result).toEqual({ status: 'queued', wake: 'failed' });
       expect(defaultSession().followUps.getAll(parentStreamId)).toEqual([
         'continue child',
       ]);

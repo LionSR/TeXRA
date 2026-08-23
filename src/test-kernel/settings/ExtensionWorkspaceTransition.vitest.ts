@@ -81,6 +81,7 @@ vi.mock('@agent/trace', () => ({
   createChannelTrace: () => ({ debug: vi.fn(), error: vi.fn() }),
 }));
 vi.mock('@agent/runtime/SessionHandle', () => ({
+  StorageRootChangeRefusedError: class extends Error {},
   defaultSession: () => ({
     interactions: {},
     useHostInteractions: () => () => {},

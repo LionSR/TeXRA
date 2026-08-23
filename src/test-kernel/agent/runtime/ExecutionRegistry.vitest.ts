@@ -4,10 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import { getExecutionStore } from '@agent/storage';
 import type { AgentTrace, ResultEvent } from '@agent/trace';
-import {
-  ExecutionLeaseLostError,
-  type OwnedExecutionLeaseScope,
-} from '@agent/storage/executionLease';
 import type {
   AgentExecutionHandle,
   LiveToolUseFlowContext,
@@ -91,7 +87,6 @@ type HandleOverrides = {
   agentName?: string;
   category?: AgentCategory;
   trace?: AgentTrace;
-  leaseScope?: OwnedExecutionLeaseScope;
 };
 
 /** Builds an `AgentExecutionHandle` for a toolUse test-subagent, the shape most tests need. */
@@ -109,9 +104,6 @@ function createHandle(
     category: overrides.category,
     trace: overrides.trace,
   });
-  handle.attachExecutionLeaseScope(
-    overrides.leaseScope ?? ((operation) => operation()),
-  );
   return handle;
 }
 
@@ -202,7 +194,7 @@ function trackSuspendedWaitingHandle(
 }
 
 describe('executionRegistry', () => {
-  it('promotes a pending child activation without an ownership gap', () => {
+  it('retains a child activation across handle tracking until its disposer runs', () => {
     const { registry } = createRegistry();
     const activationEvents: boolean[] = [];
     const executionId = 'pending-child-exec' as ExecutionId;
@@ -223,8 +215,10 @@ describe('executionRegistry', () => {
       });
       expect(activationEvents).toEqual([true]);
 
+      // The activation is the child's lineage for the loop's whole life:
+      // tracking a turn handle does not release it, the loop's disposer does.
       registry.track(createHandle(executionId, parentStreamId, childStreamId));
-      expect(activationEvents).toEqual([true, false]);
+      expect(activationEvents).toEqual([true]);
 
       release();
       expect(activationEvents).toEqual([true, false]);
@@ -291,32 +285,6 @@ describe('executionRegistry', () => {
     cleanupFinished.resolve();
     await observation;
     expect(observedCompletion).toBe(true);
-  });
-
-  it('settles without persisting a stopped waiting handle after lease loss', async () => {
-    const { streamStatus, registry } = createRegistry();
-    const executionId = 'exec-waiting-lease-lost' as ExecutionId;
-    const streamId = 'stream-waiting-lease-lost' as StreamTabId;
-    storageMocks.finalizeExecution.mockClear();
-
-    try {
-      const handle = trackSuspendedWaitingHandle(registry, streamStatus, {
-        executionId,
-        childStreamId: streamId,
-      });
-      handle.markExecutionLeaseLost();
-
-      expect(registry.kill(executionId)).toBe(true);
-      await expect(handle.result).resolves.toMatchObject({
-        type: 'result',
-        outcome: RUN_OUTCOME.CANCELLED,
-        executionId,
-      });
-      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
-      expect(registry.getHandle(executionId)).toBeUndefined();
-    } finally {
-      registry.dispose();
-    }
   });
 
   it('observes handle replacements and removal in order', () => {
@@ -497,23 +465,17 @@ describe('executionRegistry', () => {
     const childStreamId =
       'child-waiting-kill-publish-result-test' as StreamTabId;
     const trace = spiedTrace({ emit: vi.fn() }, { strict: true });
-    const leaseScopeInvoked = vi.fn();
-    const leaseScope: OwnedExecutionLeaseScope = (operation) => {
-      leaseScopeInvoked();
-      return operation();
-    };
 
     try {
       const handle = trackSuspendedWaitingHandle(registry, streamStatus, {
         executionId,
         parentStreamId,
         childStreamId,
-        overrides: { trace, leaseScope },
+        overrides: { trace },
       });
 
       expect(registry.kill(executionId)).toBe(true);
       await handle.result;
-      expect(leaseScopeInvoked).toHaveBeenCalledOnce();
 
       expect(publishResult).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
@@ -625,37 +587,6 @@ describe('executionRegistry', () => {
       expect(publishResult).not.toHaveBeenCalled();
       expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('does not let lost-generation recovery mutate a successor handle or lease', async () => {
-    const releaseLease = vi.fn(async () => undefined);
-    const { streamStatus, registry } = createRegistry({
-      releaseRootExecutionLease: releaseLease,
-    });
-    const executionId = 'exec-waiting-lost-generation' as ExecutionId;
-    const streamId = 'stream-waiting-lost-generation' as StreamTabId;
-    const lostScope: OwnedExecutionLeaseScope = () => {
-      throw new ExecutionLeaseLostError(executionId);
-    };
-
-    try {
-      const previous = trackSuspendedWaitingHandle(registry, streamStatus, {
-        executionId,
-        childStreamId: streamId,
-        overrides: { leaseScope: lostScope },
-      });
-
-      expect(registry.kill(executionId)).toBe(true);
-      const successor = createHandle(executionId, streamId, streamId);
-      registry.track(successor);
-
-      await previous.result;
-      expect(registry.getHandle(executionId)).toBe(successor);
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
-      expect(releaseLease).not.toHaveBeenCalled();
     } finally {
       registry.dispose();
     }
@@ -1658,7 +1589,6 @@ describe('executionRegistry', () => {
       });
       expect(registry.getToolUseFollowUpTarget(resumingStreamId)).toEqual({
         kind: 'queue',
-        reason: 'resuming',
       });
 
       seedStreamStatusForTest(streamStatus, waitingStreamId, {
@@ -1666,7 +1596,6 @@ describe('executionRegistry', () => {
       });
       expect(registry.getToolUseFollowUpTarget(waitingStreamId)).toEqual({
         kind: 'queue',
-        reason: 'waiting',
       });
 
       seedStreamStatusForTest(streamStatus, stoppedStreamId, {
@@ -1689,7 +1618,6 @@ describe('executionRegistry', () => {
       );
       expect(registry.getToolUseFollowUpTarget(parentStreamId)).toEqual({
         kind: 'queue',
-        reason: 'children_running',
       });
     } finally {
       registry.dispose();

@@ -1,4 +1,5 @@
 import {
+  describeFollowUpFailure,
   presentFollowUpResult,
   submitFollowUp,
   type SubmitFollowUpResult,
@@ -10,9 +11,6 @@ import type { StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createLog('ProgressFollowUpSubmit');
-
-const NO_ACTIVE_SESSION_MESSAGE =
-  'No active session. Start a new agent task to continue.';
 
 export interface ProgressFollowUpSubmitArgs {
   readonly session: SessionHandle;
@@ -30,8 +28,8 @@ export interface ProgressFollowUpSubmitArgs {
 /**
  * One follow-up submission path for the extension and desktop progress views:
  * admission, the composer ack, the queued-follow-ups refresh, and outcome
- * presentation. Hosts supply only their ports. Sending never starts a
- * resume: a stream with no live flow in this process refuses the draft.
+ * presentation. Hosts supply only their ports. A stream with no live flow in
+ * this process refuses the draft with a worded reason.
  *
  * Resolves at admission with whether the draft was accepted. Anything after
  * admission (a recovery resume may run a whole model turn, then present its
@@ -79,10 +77,8 @@ export function submitProgressFollowUp(
 
       switch (result.status) {
         case 'sent':
-          acknowledge(true);
-          emitQueuedFollowUpsChanged();
-          return;
         case 'queued': {
+          // A queued input whose wake failed still belongs to the stream.
           acknowledge(true);
           emitQueuedFollowUpsChanged();
           const presentation = presentFollowUpResult(result);
@@ -91,13 +87,10 @@ export function submitProgressFollowUp(
           }
           return;
         }
-        case 'duplicate':
-          acknowledge(true);
-          return;
-        case 'no_session':
-        case 'dropped':
+        case 'failed':
           acknowledge(false);
-          await showInfo(NO_ACTIVE_SESSION_MESSAGE);
+          emitQueuedFollowUpsChanged();
+          await showInfo(describeFollowUpFailure(result.reason));
           return;
         default:
           // A result this switch does not know must not leave the composer

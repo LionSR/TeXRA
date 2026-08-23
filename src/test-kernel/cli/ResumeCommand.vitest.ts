@@ -139,7 +139,7 @@ describe('runResumeExecution', () => {
     mocks.initializeHeadlessTranscriptSession.mockResolvedValue({
       session: {
         interactions: {},
-        status: { isActiveOrResuming: () => false },
+        executions: { isActiveOrResuming: () => false },
       },
     });
     mocks.readConfig.mockResolvedValue(TOOL_USE_CONFIG);

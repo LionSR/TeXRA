@@ -12,7 +12,7 @@
  * those callers. `runTurn` is every following interactive turn: resolve the
  * persisted flow-record cursor for this execution
  * (`retrieveSessionResumeData`) and drive it to the next WAITING/terminal
- * boundary via `resumeToolUseFromResumeData`, handing it the batch already
+ * boundary via `resumeToolUseTurn`, handing it the batch already
  * consumed by `childRunLoop`. `runTurn` is unreachable for a workflow child —
  * a workflow flow never produces a WAITING result, so `isTerminal` is always
  * true on its first (and only) turn, and `childRunLoop.ts`'s loop breaks on a
@@ -32,7 +32,11 @@ import {
   type AgentFlowResult,
   type AgentRuntimeFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import {
+  retrieveSessionResumeData,
+  type ToolUseResumeData,
+} from '@agent/runtime/SessionResumeRetrieval';
+import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type {
@@ -71,7 +75,16 @@ import {
  */
 export interface AgentEngine {
   readonly executeAgent: typeof import('@agent/runtime/executeAgent').executeAgent;
-  readonly resumeToolUseFromResumeData: typeof import('@agent/runtime/executeAgent').resumeToolUseFromResumeData;
+  /**
+   * The unlaned turn (`executeAgent`'s `resumeToolUseTurn`): a child loop
+   * already holds its execution's lane, so the laned
+   * `resumeToolUseFromResumeData` would park the turn behind the loop's own
+   * generation.
+   */
+  readonly resumeToolUseTurn: (
+    resume: ToolUseResumeData,
+    options?: ResumeToolUseFromResumeDataOptions,
+  ) => Promise<AgentRuntimeFlowResult>;
 }
 
 let agentEngine: AgentEngine | undefined;
@@ -188,7 +201,7 @@ export function createNativeSubagentStrategy(
 } {
   let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
-  // `executeAgent`/`resumeToolUseFromResumeData` never reject for a
+  // `executeAgent`/`resumeToolUseTurn` never reject for a
   // subagent's own application-level failure (runFlowWithLifecycle returns a
   // terminal failed result instead) — the real underlying error is only
   // observable through this callback.
@@ -367,7 +380,7 @@ export function createNativeSubagentStrategy(
           STREAM_TRANSITION_CAUSE.RESUME,
           { substate: STREAM_SUBSTATE.RESUMING },
         );
-        return await engine().resumeToolUseFromResumeData(resume, {
+        return await engine().resumeToolUseTurn(resume, {
           session: params.session,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           onApprovalPolicyDenial: params.onApprovalPolicyDenial,

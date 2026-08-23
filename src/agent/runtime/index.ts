@@ -20,6 +20,7 @@
 // SessionHandle
 export {
   SessionHandle,
+  StorageRootChangeRefusedError,
   currentSession,
   defaultSession,
   initializeDefaultSession,

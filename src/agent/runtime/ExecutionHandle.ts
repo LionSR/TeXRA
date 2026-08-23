@@ -9,7 +9,6 @@
 import pDefer from 'p-defer';
 
 import type { AgentTrace, ResultEvent } from '@agent/trace';
-import type { OwnedExecutionLeaseScope } from '@agent/storage/executionLease';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type {
@@ -122,8 +121,6 @@ export class AgentExecutionHandle {
   private toolUseFlowContext?: LiveToolUseFlowContext;
   private detachToolUseAbortListener?: () => void;
   private suspension?: RunSuspension;
-  private _executionLeaseLost = false;
-  private executionLeaseScope?: OwnedExecutionLeaseScope;
 
   /**
    * Workflow-script phase owning this run, when it is an `agent()` grandchild
@@ -282,28 +279,6 @@ export class AgentExecutionHandle {
       return true;
     }
     return false;
-  }
-
-  markExecutionLeaseLost(): void {
-    this._executionLeaseLost = true;
-  }
-
-  get executionLeaseLost(): boolean {
-    return this._executionLeaseLost;
-  }
-
-  /** Bind deferred handle-owned work to the lease generation that created it. */
-  attachExecutionLeaseScope(scope: OwnedExecutionLeaseScope): void {
-    this.executionLeaseScope = scope;
-  }
-
-  /** Re-enter the creating lease generation from an external lifecycle call. */
-  runWithExecutionLease<T>(operation: () => T | Promise<T>): T | Promise<T> {
-    // Some in-memory/embedder runs deliberately have no durable lease. Their
-    // storage writes still pass through the execution-store write fence.
-    return this.executionLeaseScope
-      ? this.executionLeaseScope(operation)
-      : operation();
   }
 
   /**

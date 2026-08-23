@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => ({
   createCliRuntimeHost: vi.fn(),
   presentationHostClose: vi.fn(),
   defaultSession: vi.fn(),
-  streamIsActiveOrResuming: vi.fn(),
   getActiveExecutionIds: vi.fn(),
   getExecutionHandle: vi.fn(),
   addExecutionRegistrationListener: vi.fn(),
@@ -345,7 +344,6 @@ function installSession(overrides: Record<string, unknown> = {}): void {
       }),
     },
     approvals: { registerStreamParent: vi.fn() },
-    status: { isActiveOrResuming: mocks.streamIsActiveOrResuming },
     executions: {
       ...executions,
       // The stubbed registry still answers the three surfaces the real
@@ -587,7 +585,6 @@ describe('createChatSessionController', () => {
       close: mocks.presentationHostClose,
       emit: vi.fn(),
     });
-    mocks.streamIsActiveOrResuming.mockReturnValue(false);
     mocks.getActiveExecutionIds.mockReturnValue([]);
     mocks.addExecutionRegistrationListener.mockReturnValue(vi.fn());
     mocks.addChildActivationListener.mockReturnValue(vi.fn());
@@ -601,7 +598,6 @@ describe('createChatSessionController', () => {
         const options = args[2] as ResumeQueuedToolUseOptions;
         options.onFollowUpQueueReady?.({
           streamId: 'stream:test' as StreamTabId,
-          generation: 1,
           generationId: 'recovery-generation',
           kind: 'recovery',
         });
@@ -982,6 +978,7 @@ describe('createChatSessionController', () => {
     const rootStream = 'activation-root' as StreamTabId;
     const childStream = 'activation-child' as StreamTabId;
     const childExecutionId = 'activation-child-exec' as ExecutionId;
+    let releaseChildActivation = (): void => undefined;
 
     mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
     mocks.createTuiHostInteractions.mockReturnValue({
@@ -1002,7 +999,7 @@ describe('createChatSessionController', () => {
           'root',
         );
         options.onStreamResolved?.(rootStream);
-        executions.reserveChildActivation({
+        releaseChildActivation = executions.reserveChildActivation({
           executionId: childExecutionId,
           parentStreamId: rootStream,
           childStreamId: childStream,
@@ -1037,7 +1034,11 @@ describe('createChatSessionController', () => {
     );
     expect(presentationHost.close).not.toHaveBeenCalled();
 
+    // The activation outlives the child's turn handles; the host is held
+    // until the loop's own disposer runs.
     executions.untrack(childExecutionId);
+    expect(presentationHost.close).not.toHaveBeenCalled();
+    releaseChildActivation();
     await vi.waitFor(() => {
       expect(presentationHost.close).toHaveBeenCalledOnce();
       expect(disposeAdapter).toHaveBeenCalledOnce();
@@ -1533,15 +1534,14 @@ describe('createChatSessionController', () => {
       'stream-1',
       makeAutoResumeData(),
       expect.objectContaining({
-        canAcquireResumeLease: expect.any(Function),
         isCancellationRequested: expect.any(Function),
       }),
     );
     const resumeOptions = mocks.resumeQueuedToolUseFromResumeData.mock
       .calls[0]?.[2] as ResumeQueuedToolUseOptions | undefined;
-    expect(resumeOptions?.canAcquireResumeLease?.()).toBe(true);
+    expect(resumeOptions?.isCancellationRequested()).toBe(false);
     session.stopRequested = true;
-    expect(resumeOptions?.canAcquireResumeLease?.()).toBe(false);
+    expect(resumeOptions?.isCancellationRequested()).toBe(true);
     expect(mocks.syncStreamLog).toHaveBeenCalledWith(
       init.runtimeSession,
       'stream-1',
@@ -1572,7 +1572,7 @@ describe('createChatSessionController', () => {
         resumeOptions = options;
         leaseCheckStarted.resolve();
         await releaseLeaseCheck.promise;
-        return options.canAcquireResumeLease?.() ?? true;
+        return !options.isCancellationRequested();
       },
     );
     const ctrl = createChatSessionController(
@@ -1581,7 +1581,6 @@ describe('createChatSessionController', () => {
 
     const resume = ctrl.tryResumeStream('stream-1', {
       streamId: 'stream-1' as StreamTabId,
-      generation: 1,
       kind: 'recovery',
     });
     await leaseCheckStarted.promise;
@@ -1589,7 +1588,7 @@ describe('createChatSessionController', () => {
     ctrl.stop();
     session.clearRunState();
     expect(session.stopRequested).toBe(false);
-    expect(resumeOptions?.canAcquireResumeLease?.()).toBe(false);
+    expect(resumeOptions?.isCancellationRequested()).toBe(true);
 
     releaseLeaseCheck.resolve();
     await expect(resume).resolves.toBe(false);
@@ -1635,7 +1634,6 @@ describe('createChatSessionController', () => {
     await expect(
       ctrl.tryResumeStream('stream-1', {
         streamId: 'stream-1' as StreamTabId,
-        generation: 1,
         kind: 'recovery',
       }),
     ).resolves.toBe(false);
@@ -1651,7 +1649,6 @@ describe('createChatSessionController', () => {
     await expect(
       ctrl.tryResumeStream('stream-1', {
         streamId: 'stream-1' as StreamTabId,
-        generation: 2,
         kind: 'recovery',
       }),
     ).resolves.toBe(true);
@@ -1690,7 +1687,6 @@ describe('createChatSessionController', () => {
     await expect(
       ctrl.tryResumeStream('stream-1', {
         streamId: 'stream-1' as StreamTabId,
-        generation: 1,
         kind: 'recovery',
       }),
     ).resolves.toBe(false);
@@ -1701,7 +1697,6 @@ describe('createChatSessionController', () => {
     await expect(
       ctrl.tryResumeStream('stream-1', {
         streamId: 'stream-1' as StreamTabId,
-        generation: 2,
         kind: 'recovery',
       }),
     ).resolves.toBe(true);
@@ -1797,7 +1792,6 @@ describe('createChatSessionController', () => {
         const options = args[2] as ResumeQueuedToolUseOptions;
         options.onFollowUpQueueReady?.({
           streamId: 'stream:test' as StreamTabId,
-          generation: 1,
           generationId: 'recovery-generation',
           kind: 'recovery',
         });

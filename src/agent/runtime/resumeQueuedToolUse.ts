@@ -15,7 +15,6 @@ import {
 } from '@shared/schemas';
 import {
   resumeToolUseFromResumeData,
-  ResumeAdmissionCancelledError,
   type SubagentRunOptions,
 } from './executeAgent';
 import { defaultSession } from './SessionHandle';
@@ -30,8 +29,6 @@ export interface ResumeQueuedToolUseOptions extends Pick<
 > {
   /** Recovery ownership synchronously claimed by the submission boundary. */
   readonly recovery?: RecoveryContinuation;
-  /** Recheck canonical admission atomically while acquiring the resumed lease. */
-  readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
   /** Query a caller-owned stop request at the resumed flow attachment boundary. */
   readonly isCancellationRequested: () => boolean;
   /**
@@ -101,7 +98,6 @@ export async function resumeQueuedToolUseFromResumeData(
   const seed = options.extraFollowUps ?? [];
   let followUps: readonly FollowUpQueueInput[] = seed;
   let cancelledAtFlowAttachment = false;
-  let cancelledBeforeLaunch = false;
   let followUpsRestored = false;
   let resumeError: { error: unknown } | undefined;
   let runResult: AgentRuntimeFlowResult | undefined;
@@ -145,9 +141,6 @@ export async function resumeQueuedToolUseFromResumeData(
       onFollowUpConsumed: () => {
         followUps = [];
       },
-      ...(options.canAcquireResumeLease && {
-        canAcquireResumeLease: options.canAcquireResumeLease,
-      }),
       isCancellationRequested: options.isCancellationRequested,
       onCancellationAtFlowAttachment: () => {
         cancelledAtFlowAttachment = true;
@@ -168,28 +161,19 @@ export async function resumeQueuedToolUseFromResumeData(
     if (followUps.length > 0) restoreFollowUps();
     options.onResult?.(result);
   } catch (error) {
-    cancelledBeforeLaunch = error instanceof ResumeAdmissionCancelledError;
-    if (!cancelledBeforeLaunch) resumeError = { error };
+    resumeError = { error };
     // A rejection before the wait node acknowledges consumption must replay
     // the drained batch. A callback failure after that acknowledgement must
     // not enqueue the same user input again.
-    if (
-      followUps.length > 0 &&
-      (!cancelledBeforeLaunch || session.transcripts.has(streamId))
-    ) {
-      restoreFollowUps();
-    }
+    if (followUps.length > 0) restoreFollowUps();
   } finally {
     // Early failures leave the stream RESUMING. Startup cancellation can
     // instead reach lifecycle terminalization before the queue owner regains
     // control. In both cases, restored input makes WAITING the durable state.
-    // Guarded admission lost to deletion only after canonical removal, whose
-    // process-session cleanup owns status; do not recreate either here.
     if (
-      (!cancelledBeforeLaunch || session.transcripts.has(streamId)) &&
-      (cancelledAtFlowAttachment ||
-        followUpsRestored ||
-        streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING)
+      cancelledAtFlowAttachment ||
+      followUpsRestored ||
+      streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING
     ) {
       streamStatus.transitionToWaiting(streamId, 'wait');
     }
@@ -201,7 +185,6 @@ export async function resumeQueuedToolUseFromResumeData(
     );
   }
 
-  if (cancelledBeforeLaunch) return false;
   if (!resumeError) {
     return !cancelledAtFlowAttachment && !followUpsRestored;
   }

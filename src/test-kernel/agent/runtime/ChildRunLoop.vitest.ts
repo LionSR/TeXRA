@@ -20,10 +20,7 @@ const mocks = vi.hoisted(() => ({
   releaseExecutionLeaseAfterArtifacts: vi.fn(
     async (_session: unknown, _executionId: ExecutionId) => {},
   ),
-  captureOwnedExecutionLease: vi.fn(
-    (_executionId: ExecutionId) => (operation: () => unknown) => operation(),
-  ),
-  leaseLossListener: undefined as (() => void) | undefined,
+  assertOwnedExecutionLease: vi.fn((_executionId: ExecutionId) => undefined),
 }));
 
 // Turn-state persistence runs against the real (memfs-backed) execution store:
@@ -43,17 +40,7 @@ vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
   markOwnedExecutionLeaseUndurable: vi.fn(),
-  captureOwnedExecutionLease: mocks.captureOwnedExecutionLease,
-  onOwnedExecutionLeaseLost: vi.fn(
-    (_executionId: ExecutionId, listener: () => void) => {
-      mocks.leaseLossListener = listener;
-      return () => {
-        if (mocks.leaseLossListener === listener) {
-          mocks.leaseLossListener = undefined;
-        }
-      };
-    },
-  ),
+  assertOwnedExecutionLease: mocks.assertOwnedExecutionLease,
 }));
 
 vi.mock('@agent/storage/childRunPersistence', () => ({
@@ -276,7 +263,6 @@ beforeEach(() => {
   vi.spyOn(session, 'releaseExecutionLease').mockImplementation((executionId) =>
     mocks.releaseExecutionLeaseAfterArtifacts(session, executionId),
   );
-  mocks.leaseLossListener = undefined;
   mocks.finalizeExecution.mockResolvedValue({
     status: 'durable',
     terminalStatusPersisted: true,
@@ -300,7 +286,7 @@ describe('childRunLoop E2E fixtures', () => {
   it('validates the captured lease before registering loop resources', () => {
     const { childStreamId, executionId } = loopIds('lost-before-setup');
     const { strategy, callCount } = createFakeStrategy();
-    mocks.captureOwnedExecutionLease.mockImplementationOnce(() => {
+    mocks.assertOwnedExecutionLease.mockImplementationOnce(() => {
       throw new Error('lease generation lost');
     });
 
@@ -309,7 +295,6 @@ describe('childRunLoop E2E fixtures', () => {
     );
 
     expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false);
-    expect(mocks.leaseLossListener).toBeUndefined();
     expect(callCount()).toBe(0);
   });
 
@@ -317,10 +302,8 @@ describe('childRunLoop E2E fixtures', () => {
     const { childStreamId, executionId } = loopIds('lost-during-setup');
     const { strategy, callCount } = createFakeStrategy();
     const claimChildRun = vi.spyOn(session.followUps, 'claimChildRun');
-    mocks.captureOwnedExecutionLease
-      .mockImplementationOnce(
-        (_id) => (operation: () => unknown) => operation(),
-      )
+    mocks.assertOwnedExecutionLease
+      .mockImplementationOnce(() => undefined)
       .mockImplementationOnce(() => {
         throw new Error('lease generation lost during setup');
       });
@@ -331,7 +314,6 @@ describe('childRunLoop E2E fixtures', () => {
 
     expect(claimChildRun).not.toHaveBeenCalled();
     expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false);
-    expect(mocks.leaseLossListener).toBeUndefined();
     expect(callCount()).toBe(0);
   });
 
@@ -375,7 +357,6 @@ describe('childRunLoop E2E fixtures', () => {
 
       expect(releaseSessionOwnership).toHaveBeenCalledOnce();
       expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false);
-      expect(mocks.leaseLossListener).toBeUndefined();
       expect(handle.interrupt()).toBe(false);
       interruptHandle.mockClear();
       registry.interruptAll();
@@ -462,8 +443,13 @@ describe('childRunLoop E2E fixtures', () => {
           agentName: name,
         });
 
-        expect(events).toEqual(['registered', 'launch']);
+        expect(events).toEqual(['registered']);
         expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true);
+        // The loop body is a generation on the execution's lane: it starts
+        // once the lane admits it, not inside `startChildRunLoop`.
+        await vi.waitFor(() =>
+          expect(events).toEqual(['registered', 'launch']),
+        );
         interruptAll();
 
         await vi.waitFor(() => {
@@ -477,21 +463,6 @@ describe('childRunLoop E2E fixtures', () => {
       }
     },
   );
-
-  it('interrupts an in-flight child when its execution lease is lost', async () => {
-    const { childStreamId, executionId } = loopIds('lease-loss');
-    const { strategy, rejectTurn } = createFakeStrategy();
-
-    startLoop({ childStreamId, executionId }, strategy);
-    expect(mocks.captureOwnedExecutionLease).toHaveBeenCalledTimes(3);
-    await vi.waitFor(() => expect(mocks.leaseLossListener).toBeDefined());
-
-    mocks.leaseLossListener?.();
-    await rejectTurn(1, createAbortError());
-
-    await waitForLoopEnd(childStreamId);
-    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
-  });
 
   it('drains accepted-turn attribution before releasing the execution lease', async () => {
     const { childStreamId, executionId } = loopIds('turn-state-drain');
@@ -509,7 +480,10 @@ describe('childRunLoop E2E fixtures', () => {
     try {
       const handle = startLoop({ childStreamId, executionId }, strategy);
       await writeStarted.promise;
-      mocks.leaseLossListener?.();
+      // Interrupt the loop through its parent lineage: no turn handle is
+      // tracked in this fixture, so the stop reaches the loop via its
+      // child activation.
+      session.executions.stopAgentStream(PARENT_STREAM_ID);
       await rejectTurn(1, createAbortError());
 
       await vi.waitFor(() =>
@@ -1006,7 +980,7 @@ describe('childRunLoop E2E fixtures', () => {
     // the loop's finalize, so the loop reports an interrupted run for a stream
     // whose phase already carries the failure.
     const interruptAfterFailure = vi.fn(() => {
-      mocks.leaseLossListener?.();
+      session.executions.kill(executionId);
     });
 
     startLoop({ childStreamId, executionId }, strategy, {

@@ -48,7 +48,6 @@ export type InquiryThreadSummary = z.infer<typeof InquiryThreadSummarySchema>;
 const InquiryResumeOutcomeSchema = z.enum([
   'sent',
   'queued',
-  'resumed',
   'parent_finished',
 ]);
 export type InquiryResumeOutcome = z.infer<typeof InquiryResumeOutcomeSchema>;

@@ -53,7 +53,6 @@ export {
   inspectExecutionLease,
   markOwnedExecutionLeaseUndurable,
   reclaimExecutionLease,
-  type OwnedExecutionLeaseScope,
 } from './executionLease';
 export { persistChildRunResultMeta } from './childRunPersistence';
 export { resolveChildRunOutput } from './childRunOutput';
