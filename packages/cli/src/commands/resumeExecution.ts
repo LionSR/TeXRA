@@ -49,51 +49,6 @@ function activeExecutionMessage(id: ExecutionId): string {
   return `Execution ${id} is active in TeXRA.`;
 }
 
-function unreachableOwnerMessage(
-  id: ExecutionId,
-  owner: { pid: number; hostname: string },
-): string {
-  return `Execution ${id} is held by a TeXRA process that cannot be reached (pid ${owner.pid} on ${owner.hostname}). If you are sure it is gone, rerun with --reclaim.`;
-}
-
-export interface ResumeExecutionOptions {
-  /**
-   * Remove a lease whose owner cannot be reached before resuming. Never
-   * removes a lease whose owner is provably alive.
-   */
-  readonly reclaim?: boolean;
-}
-
-/**
- * Gate resume on the lease. A provably live owner refuses; an owner that
- * cannot be reached refuses unless `--reclaim` was passed, in which case its
- * record is removed here and the resume claims the execution afresh.
- */
-async function clearLeaseForResume(
-  id: ExecutionId,
-  options: ResumeExecutionOptions,
-): Promise<number | undefined> {
-  const lease = await inspectExecutionLease(id);
-  if (lease.status !== 'owned' && lease.status !== 'foreign') return undefined;
-  if (lease.provable) {
-    writeTextStderr(activeExecutionMessage(id));
-    return CliExitCode.Usage;
-  }
-  if (!options.reclaim) {
-    writeTextStderr(unreachableOwnerMessage(id, lease.owner));
-    return CliExitCode.Usage;
-  }
-  const reclaimed = await reclaimExecutionLease(id);
-  if (reclaimed === 'alive') {
-    writeTextStderr(activeExecutionMessage(id));
-    return CliExitCode.Usage;
-  }
-  writeTextStderr(
-    `Reclaimed execution ${id} from pid ${lease.owner.pid} on ${lease.owner.hostname}.`,
-  );
-  return undefined;
-}
-
 async function workflowRecoveryInputsAreDurable(
   config: Parameters<typeof executeCliWorkflowConfig>[0],
   fallbackCwd: string,
@@ -123,7 +78,11 @@ async function workflowRecoveryInputsAreDurable(
 export async function runResumeExecution(
   context: CliContext,
   id: ExecutionId,
-  options: ResumeExecutionOptions = {},
+  /**
+   * Remove a lease whose owner cannot be reached before resuming. Never
+   * removes a lease whose owner is provably alive.
+   */
+  reclaim = false,
 ): Promise<number> {
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
 
@@ -139,9 +98,30 @@ export async function runResumeExecution(
     writeTextStderr(`Execution not found: ${id}`);
     return CliExitCode.Usage;
   }
+  // Gate resume on the lease: a provably live owner refuses, and an owner
+  // that cannot be reached refuses unless `--reclaim` removes its record here
+  // so the resume below claims the execution afresh.
   try {
-    const refused = await clearLeaseForResume(id, options);
-    if (refused !== undefined) return refused;
+    const lease = await inspectExecutionLease(id);
+    if (lease.status === 'owned' || lease.status === 'foreign') {
+      if (lease.provable) {
+        writeTextStderr(activeExecutionMessage(id));
+        return CliExitCode.Usage;
+      }
+      if (!reclaim) {
+        writeTextStderr(
+          `Execution ${id} is held by a TeXRA process that cannot be reached (pid ${lease.owner.pid} on ${lease.owner.hostname}). If you are sure it is gone, rerun with --reclaim.`,
+        );
+        return CliExitCode.Usage;
+      }
+      if ((await reclaimExecutionLease(id)) === 'alive') {
+        writeTextStderr(activeExecutionMessage(id));
+        return CliExitCode.Usage;
+      }
+      writeTextStderr(
+        `Reclaimed execution ${id} from pid ${lease.owner.pid} on ${lease.owner.hostname}.`,
+      );
+    }
   } catch (error) {
     writeTextStderr(leaseInspectionFailureMessage(id, error));
     return CliExitCode.AgentError;

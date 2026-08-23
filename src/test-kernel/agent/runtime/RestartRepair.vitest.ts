@@ -77,8 +77,6 @@ async function failGroupClose(): Promise<StreamTabId[]> {
   throw new Error('group close failed');
 }
 
-const FOREIGN_OWNER = { pid: 1, processStartTime: 1, hostname: 'test-host' };
-
 describe('repairRestartedStreams', () => {
   it('marks a stream held by a live foreign owner and mutates nothing', async () => {
     const setup = setupStream('foreign-active');
@@ -88,11 +86,7 @@ describe('repairRestartedStreams', () => {
     await runRepair(setup, {
       closeRunningGroups,
       finalizeExecution,
-      classifyRun: classifyAs({
-        kind: 'held_elsewhere',
-        owner: FOREIGN_OWNER,
-        provable: true,
-      }),
+      classifyRun: classifyAs({ kind: 'held_elsewhere', provable: true }),
     });
 
     expect(setup.streamStatus.get(setup.streamId)).toBeUndefined();

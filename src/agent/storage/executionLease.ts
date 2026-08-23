@@ -89,13 +89,19 @@ export type ExecutionLeasePresence =
       readonly provable: boolean;
     };
 
+/**
+ * A record this process may not touch: its owner is alive, or its liveness
+ * could not be proven (`provable: false`). The one shape both the claim
+ * protocol and the maintenance entry point report a refusal with.
+ */
+type LeaseHeld = {
+  readonly status: 'active';
+  readonly owner: LeaseOwnerRecord;
+  readonly provable: boolean;
+};
+
 export type InactiveExecutionLeaseResult<T> =
-  | {
-      readonly status: 'active';
-      readonly owner: LeaseOwnerRecord;
-      readonly provable: boolean;
-    }
-  | { readonly status: 'performed'; readonly value: T };
+  LeaseHeld | { readonly status: 'performed'; readonly value: T };
 
 export type OwnedExecutionLeaseCompletion =
   | { readonly status: 'released' }
@@ -292,40 +298,18 @@ function readStoredLease(
 }
 
 /**
- * The claim itself: create the record with `O_EXCL`. The kernel lets exactly
- * one concurrent creator through, so there is no lock and no read-modify-write
- * anywhere in this module. Returns whether this process is the creator.
- */
-async function tryClaimLease(
-  record: ExecutionLeaseRecord,
-  root: string,
-): Promise<boolean> {
-  const persisted = ExecutionLeaseSchema.parse(record);
-  await StorageFS.ensureDir(leaseDir(root));
-  try {
-    await StorageFS.writeExclusive(
-      leasePath(root, record.executionId),
-      `${JSON.stringify(persisted, null, 2)}\n`,
-    );
-    return true;
-  } catch (error) {
-    if (isFileExistsError(error)) return false;
-    throw error;
-  }
-}
-
-/**
- * Move a record that was classified as reclaimable (a dead owner, or a
- * retired-protocol tombstone) out of the claim path. Exactly one renamer
- * wins; ENOENT means another process got there first and this claim is
- * lost. The moved content is then checked against what was classified: a
- * record that changed in between belongs to a claimant that won meanwhile
- * and is put back. Only the renamer unlinks what it moved.
+ * Move a record that was classified as reclaimable out of the claim path.
+ * `expected` is the owner token that was classified, or the sentinel
+ * `'tombstone'` for a retired-protocol record. Exactly one renamer wins;
+ * ENOENT means another process got there first and this claim is lost. The
+ * moved content is then checked against what was classified: a record that
+ * changed in between belongs to a claimant that won meanwhile and is put
+ * back. Only the renamer unlinks what it moved.
  */
 async function retireLease(
   executionId: ExecutionId,
   root: string,
-  expected: string | 'tombstone',
+  expected: string,
 ): Promise<'retired' | 'lost'> {
   const live = leasePath(root, executionId);
   const tombstone = tombstonePath(
@@ -392,26 +376,10 @@ async function retireLegacyLease(
   await retireLease(executionId, root, 'tombstone');
 }
 
-async function newLeaseRecord(
-  executionId: ExecutionId,
-): Promise<ExecutionLeaseRecord> {
-  return {
-    version: 3,
-    executionId,
-    ownerToken: randomUUID(),
-    acquiredAt: Date.now(),
-    owner: await currentLeaseOwner(),
-  };
-}
-
 type ClaimOutcome =
-  | { readonly outcome: 'claimed'; readonly record: ExecutionLeaseRecord }
-  | { readonly outcome: 'cancelled' }
-  | {
-      readonly outcome: 'active';
-      readonly owner: LeaseOwnerRecord;
-      readonly provable: boolean;
-    };
+  | { readonly status: 'claimed'; readonly record: ExecutionLeaseRecord }
+  | { readonly status: 'cancelled' }
+  | LeaseHeld;
 
 /**
  * The claim protocol against the current on-disk state, repeated after every
@@ -419,8 +387,18 @@ type ClaimOutcome =
  * create; a retired-protocol record means retire and look again. An owner
  * that is alive, or whose liveness cannot be proven, refuses the claim
  * outright. `admit` runs at most once, just before the first create attempt,
- * so an admission that is withdrawn never leaves a record behind.
+ * so an admission that is withdrawn never leaves a record behind — a claim
+ * made without one can therefore never be cancelled.
  */
+function claimLease(
+  executionId: ExecutionId,
+  root: string,
+): Promise<Exclude<ClaimOutcome, { readonly status: 'cancelled' }>>;
+function claimLease(
+  executionId: ExecutionId,
+  root: string,
+  admit: (() => boolean | Promise<boolean>) | undefined,
+): Promise<ClaimOutcome>;
 async function claimLease(
   executionId: ExecutionId,
   root: string,
@@ -437,14 +415,14 @@ async function claimLease(
       const liveness = await proveOwnerLiveness(current.owner);
       if (liveness !== 'dead') {
         return {
-          outcome: 'active',
+          status: 'active',
           owner: current.owner,
           provable: liveness === 'alive',
         };
       }
     }
     if (!admitted) {
-      if ((await admit?.()) === false) return { outcome: 'cancelled' };
+      if ((await admit?.()) === false) return { status: 'cancelled' };
       admitted = true;
     }
     if (
@@ -453,9 +431,27 @@ async function claimLease(
     ) {
       continue;
     }
-    const record = await newLeaseRecord(executionId);
-    if (await tryClaimLease(record, root))
-      return { outcome: 'claimed', record };
+    const record: ExecutionLeaseRecord = {
+      version: 3,
+      executionId,
+      ownerToken: randomUUID(),
+      acquiredAt: Date.now(),
+      owner: await currentLeaseOwner(),
+    };
+    const persisted = ExecutionLeaseSchema.parse(record);
+    await StorageFS.ensureDir(leaseDir(root));
+    // The claim itself: create the record with `O_EXCL`. The kernel lets
+    // exactly one concurrent creator through, so there is no lock and no
+    // read-modify-write anywhere in this module.
+    try {
+      await StorageFS.writeExclusive(
+        leasePath(root, executionId),
+        `${JSON.stringify(persisted, null, 2)}\n`,
+      );
+      return { status: 'claimed', record };
+    } catch (error) {
+      if (!isFileExistsError(error)) throw error;
+    }
   }
   throw new Error(
     `Execution ${executionId}: lost the lease claim race ${MAX_CLAIM_ROUNDS} times in a row.`,
@@ -691,7 +687,7 @@ async function acquireExecutionLease(
     }
 
     const claim = await claimLease(executionId, root, canAcquire);
-    switch (claim.outcome) {
+    switch (claim.status) {
       case 'cancelled':
         return 'cancelled';
       case 'active':
@@ -936,12 +932,7 @@ export async function runWithInactiveExecutionLease<T>(
     forgetOwnedLease(local, { notifyLoss: true });
   }
   const claim = await claimLease(executionId, root);
-  if (claim.outcome === 'active') {
-    return { status: 'active', owner: claim.owner, provable: claim.provable };
-  }
-  if (claim.outcome === 'cancelled') {
-    throw new Error('unreachable: maintenance claims have no admission');
-  }
+  if (claim.status === 'active') return claim;
   const maintenanceKeys = new Set(maintenanceExecutions.getStore());
   maintenanceKeys.add(key);
   let value: T;

@@ -21,7 +21,6 @@ import {
   inspectExecutionLease,
   type ExecutionLeasePresence,
 } from '@agent/storage/executionLease';
-import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import {
   deriveResumability,
   RESUMABILITY_CAUSE,
@@ -34,9 +33,7 @@ const log = createLog('RunClassification');
 export type RunClassification =
   | {
       readonly kind: 'held_elsewhere';
-      /** Absent when the lease record itself could not be read. */
-      readonly owner: LeaseOwnerRecord | undefined;
-      /** False when the owner could not be proven alive (or read at all). */
+      /** False when the holder could not be proven alive (or read at all). */
       readonly provable: boolean;
     }
   | { readonly kind: 'resumable'; readonly outcome?: RunOutcome }
@@ -58,14 +55,10 @@ export async function classifyRun(
       `Cannot classify ownership of ${executionId}; treating it as held elsewhere`,
       { data: error },
     );
-    return { kind: 'held_elsewhere', owner: undefined, provable: false };
+    return { kind: 'held_elsewhere', provable: false };
   }
   if (lease.status === 'owned' || lease.status === 'foreign') {
-    return {
-      kind: 'held_elsewhere',
-      owner: lease.owner,
-      provable: lease.provable,
-    };
+    return { kind: 'held_elsewhere', provable: lease.provable };
   }
 
   const resumability = await deriveResumability(executionId);

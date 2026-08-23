@@ -164,9 +164,11 @@ export async function repairRestartedStreams(
     if (classification.kind === 'held_elsewhere') {
       options.streamStatus.markHeld(streamId, classification.provable);
       options.logger?.debug(
-        classification.provable
-          ? `Stream ${streamId} is held by another process; left untouched`
-          : `Stream ${streamId} is held by a process that cannot be reached; left untouched`,
+        `Stream ${streamId} is held by ${
+          classification.provable
+            ? 'another process'
+            : 'a process that cannot be reached'
+        }; left untouched`,
       );
       continue;
     }

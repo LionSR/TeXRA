@@ -39,8 +39,6 @@ export const resumeCommand = defineCommand({
       return;
     }
     const context = await contextFromArgs(ctx.args, ctx.rawArgs);
-    setExitCode(
-      await runResumeExecution(context, id, { reclaim: ctx.args.reclaim }),
-    );
+    setExitCode(await runResumeExecution(context, id, ctx.args.reclaim));
   },
 });
