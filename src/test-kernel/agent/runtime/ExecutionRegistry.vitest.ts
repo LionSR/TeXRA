@@ -1808,7 +1808,7 @@ describe('executionRegistry', () => {
     try {
       streamStatus.transition(
         childStreamId,
-        STREAM_PHASE.WAITING,
+        STREAM_PHASE.CANCELLED,
         'restart-repair',
       );
 

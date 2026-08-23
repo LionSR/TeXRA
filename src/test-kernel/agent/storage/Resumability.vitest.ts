@@ -7,7 +7,6 @@ import {
   getExecutionStore,
 } from '@agent/storage';
 import { RESUMABILITY_CAUSE } from '@agent/storage/resumability';
-import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   FLOW_RECORD_SCHEMA_VERSION,
   flowKey,
@@ -18,7 +17,6 @@ import {
   RUN_OUTCOME,
   type ExecutionId,
   type RunOutcome,
-  type StreamTabId,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -257,37 +255,5 @@ describe('deriveResumability', () => {
       resumable: false,
       cause: RESUMABILITY_CAUSE.UNREADABLE_FLOW,
     });
-  });
-
-  it('projects every execution with a checkpoint into WAITING streams', async () => {
-    const crashExecutionId = 'waiting-crash-with-flow' as ExecutionId;
-    const cancelledExecutionId = 'waiting-cancelled-with-flow' as ExecutionId;
-    const failedExecutionId = 'waiting-failed-with-flow' as ExecutionId;
-    const missingFlowExecutionId =
-      'waiting-interrupted-missing-flow' as ExecutionId;
-
-    await writeFlow(crashExecutionId);
-    await writeMeta(cancelledExecutionId, { outcome: RUN_OUTCOME.CANCELLED });
-    await writeFlow(cancelledExecutionId);
-    await writeMeta(failedExecutionId, { outcome: RUN_OUTCOME.FAILED });
-    await writeFlow(failedExecutionId);
-    await writeMeta(missingFlowExecutionId, {
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-
-    const streamIdsByExecutionId = new Map<StreamTabId, ExecutionId>([
-      ['crash-stream' as StreamTabId, crashExecutionId],
-      ['cancelled-stream' as StreamTabId, cancelledExecutionId],
-      ['failed-stream' as StreamTabId, failedExecutionId],
-      ['missing-flow-stream' as StreamTabId, missingFlowExecutionId],
-    ]);
-
-    await expect(detectWaitingStreams(streamIdsByExecutionId)).resolves.toEqual(
-      new Set<StreamTabId>([
-        'crash-stream' as StreamTabId,
-        'cancelled-stream' as StreamTabId,
-        'failed-stream' as StreamTabId,
-      ]),
-    );
   });
 });

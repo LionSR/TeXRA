@@ -14,6 +14,8 @@ import { when } from 'lit/directives/when.js';
 // Local imports
 import {
   DEFAULT_STREAM_METADATA_STATUS,
+  STREAM_LIFECYCLE_HELD,
+  STREAM_LIFECYCLE_UNCLASSIFIED,
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type StreamLifecycleStatus,
@@ -25,6 +27,7 @@ import {
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
+  isStreamStateMalformed,
   progressHeaderStatus,
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
@@ -70,6 +73,8 @@ const STATUS_ICONS: Record<StreamStatusDisplayKey, TeXRAIconName> = {
   [STREAM_PHASE.FAILED]: 'circle-exclamation',
   [STREAM_PHASE.CANCELLED]: 'circle-stop',
   ready: 'circle',
+  [STREAM_LIFECYCLE_HELD]: 'window-maximize',
+  [STREAM_LIFECYCLE_UNCLASSIFIED]: 'circle-question',
 };
 
 function buildTooltip(
@@ -129,6 +134,8 @@ class StreamTab extends LitElement {
   @property({ attribute: false }) status: StreamLifecycleStatus =
     DEFAULT_STREAM_METADATA_STATUS;
   @property({ attribute: false }) substate: StreamSubstate | undefined;
+  /** Malformed saved state: Delete is the only affordance left. */
+  @property({ type: Boolean }) malformed = false;
   @property({ attribute: false }) lastTimestamp: number | undefined = undefined;
   @property({ type: Boolean }) active = false;
   @property({ type: Boolean }) compact = false;
@@ -354,6 +361,10 @@ class StreamTab extends LitElement {
           aria-label=${`Delete ${streamTitle}`}
           data-stream=${stream.name}
           data-action="delete"
+          ?disabled=${
+            status === STREAM_LIFECYCLE_HELD ||
+            (status === STREAM_LIFECYCLE_UNCLASSIFIED && !this.malformed)
+          }
         >
           ${waIcon('xmark')}
         </wa-button>
@@ -460,6 +471,7 @@ export class StreamTabs extends LitElement {
         .compact=${options.compact}
         .status=${streamState?.status ?? DEFAULT_STREAM_METADATA_STATUS}
         .substate=${streamState?.substate}
+        ?malformed=${isStreamStateMalformed(streamState)}
         .lastTimestamp=${streamState?.lastTimestamp}
         ?active=${stream.name === this.activeStreamId}
         .hasPendingApproval=${this.approvalBadgeStreamIds.has(stream.name)}

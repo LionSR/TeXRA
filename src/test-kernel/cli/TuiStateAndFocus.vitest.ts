@@ -1781,7 +1781,7 @@ describe('CLI TUI row allocation', () => {
       setStatus(child1, STREAM_PHASE.CANCELLED);
       markToolUseAgent(hub, child1);
 
-      transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'restart-repair');
+      transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'resume');
       // The RUNNING transition resets the child's per-run metadata; the edge
       // fact lands after it, as the parent-link plumbing does for a real run.
       emitParentEdge(hub, child1, root);

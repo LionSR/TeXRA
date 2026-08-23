@@ -1,4 +1,6 @@
 import {
+  STREAM_LIFECYCLE_HELD,
+  STREAM_LIFECYCLE_UNCLASSIFIED,
   STREAM_PHASE,
   STREAM_STATUS,
   STREAM_SUBSTATE,
@@ -57,6 +59,8 @@ const cliStreamStatusLabels: Record<StreamStatusDisplayKey, string> = {
   ready: 'ready',
   [STREAM_PHASE.WAITING]: 'idle',
   [STREAM_SUBSTATE.RESUMING]: 'resuming',
+  [STREAM_LIFECYCLE_HELD]: 'held elsewhere',
+  [STREAM_LIFECYCLE_UNCLASSIFIED]: 'unreadable',
 } as const;
 
 const STREAM_STATUS_LABELS = {
@@ -74,8 +78,62 @@ const STREAM_STATUS_LABELS = {
     ready: 'Ready',
     [STREAM_PHASE.WAITING]: 'Idle',
     [STREAM_SUBSTATE.RESUMING]: 'Resuming',
+    [STREAM_LIFECYCLE_HELD]: 'In another window',
+    [STREAM_LIFECYCLE_UNCLASSIFIED]: 'State unreadable',
   },
 } as const;
+
+/** Tooltip and banner copy for a stream held by another TeXRA process. */
+export const STREAM_HELD_ELSEWHERE_MESSAGE =
+  'Held by another TeXRA window. Close that window or let it finish before acting on this run here.';
+
+/** The unclassified-sentinel fields of a stream's backend-owned state. */
+export interface StreamUnclassifiedDetail {
+  readonly status?: StreamLifecycleStatus;
+  readonly statusDetail?: string;
+  readonly statusRetryable?: boolean;
+}
+
+/**
+ * Whether an unclassified stream's saved state is malformed rather than
+ * transiently unreadable: Resume would fail deterministically, so Delete is
+ * the only affordance left.
+ */
+export function isStreamStateMalformed(
+  state: StreamUnclassifiedDetail | null | undefined,
+): boolean {
+  return (
+    state?.status === STREAM_LIFECYCLE_UNCLASSIFIED &&
+    state.statusRetryable === false
+  );
+}
+
+/** Tooltip and banner copy for a stream whose run state could not be read. */
+export function streamUnclassifiedMessage(
+  state: Omit<StreamUnclassifiedDetail, 'status'>,
+): string {
+  const cause = state.statusDetail ?? 'unknown cause';
+  return state.statusRetryable === false
+    ? `This run's saved state is malformed: ${cause}. It cannot be resumed; delete it to clear it.`
+    : `Could not read this run's state: ${cause}. Resume to retry.`;
+}
+
+/**
+ * Status-indicator tooltip: the held and unclassified sentinels explain
+ * themselves; every other status shows its label.
+ */
+export function streamStatusTooltip(
+  state: StreamUnclassifiedDetail | null | undefined,
+  label: string | undefined,
+): string | undefined {
+  if (state?.status === STREAM_LIFECYCLE_HELD) {
+    return STREAM_HELD_ELSEWHERE_MESSAGE;
+  }
+  if (state?.status === STREAM_LIFECYCLE_UNCLASSIFIED) {
+    return streamUnclassifiedMessage(state);
+  }
+  return label;
+}
 
 export type StreamStatusLabelStyle = keyof typeof STREAM_STATUS_LABELS;
 

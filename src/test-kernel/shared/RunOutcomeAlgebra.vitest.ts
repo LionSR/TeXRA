@@ -101,9 +101,9 @@ describe('stream phase transition table', () => {
       [STREAM_TRANSITION_CAUSE.USER_STOP]: [STREAM_PHASE.CANCELLED],
       [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [
         STREAM_PHASE.RUNNING,
-        STREAM_PHASE.WAITING,
         STREAM_PHASE.CANCELLED,
       ],
+      [STREAM_TRANSITION_CAUSE.ROLLBACK]: [],
     },
     [STREAM_PHASE.WAITING]: {
       ...NO_TRANSITIONS,
@@ -134,8 +134,16 @@ describe('stream phase transition table', () => {
       [STREAM_TRANSITION_CAUSE.LIFECYCLE]: [STREAM_PHASE.RUNNING],
       [STREAM_TRANSITION_CAUSE.RESUME]: [STREAM_PHASE.RUNNING],
       [STREAM_TRANSITION_CAUSE.USER_STOP]: [STREAM_PHASE.CANCELLED],
-      // Restart repair may land on any phase.
-      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: phases,
+      // Restart repair settles on a terminal phase; it never restores a live
+      // phase it did not observe.
+      [STREAM_TRANSITION_CAUSE.RESTART_REPAIR]: [
+        STREAM_PHASE.COMPLETED,
+        STREAM_PHASE.CANCELLED,
+        STREAM_PHASE.FAILED,
+      ],
+      // A storage-root rollback restores any phase this process observed in
+      // one step, so no synthetic RUNNING fact reaches the applier.
+      [STREAM_TRANSITION_CAUSE.ROLLBACK]: phases,
     };
 
     for (const cause of causes) {

@@ -58,7 +58,7 @@ describe('StreamStatusMachine', () => {
     });
     const streamId = 'stream-status-listener-test' as StreamTabId;
 
-    second.transition(streamId, STREAM_PHASE.WAITING, 'restart-repair');
+    second.transition(streamId, STREAM_PHASE.CANCELLED, 'restart-repair');
 
     expect(sessionFactsOfType(firstPublished.events, 'status')).toEqual([]);
     expect(sessionFactsOfType(secondPublished.events, 'status')).toHaveLength(
@@ -113,37 +113,6 @@ describe('StreamStatusMachine', () => {
     );
     expect(machine.get(streamId)).toBe(STREAM_PHASE.WAITING);
     expect(machine.tryAcquire(streamId)).toBe(false);
-  });
-
-  it('repairs terminal streams to waiting through resume then wait', () => {
-    const { machine, statusEvents, streamId } = setupMachine(
-      'stream-status-terminal-waiting-repair',
-    );
-
-    seedStreamStatusForTest(machine, streamId, {
-      phase: STREAM_PHASE.CANCELLED,
-    });
-
-    expect(machine.transitionToWaiting(streamId, 'restart-repair')).toBe(true);
-
-    expect(machine.get(streamId)).toBe(STREAM_PHASE.WAITING);
-    expect(statusEvents()).toEqual([
-      {
-        streamId,
-        type: 'status',
-        phase: STREAM_PHASE.RUNNING,
-        previousPhase: STREAM_PHASE.CANCELLED,
-        cause: 'resume',
-        runStartedAt: expect.any(Number),
-      },
-      {
-        streamId,
-        type: 'status',
-        phase: STREAM_PHASE.WAITING,
-        previousPhase: STREAM_PHASE.RUNNING,
-        cause: 'restart-repair',
-      },
-    ]);
   });
 
   it.each([
