@@ -5,7 +5,7 @@
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionStore, readExecutionStreamIndex } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
@@ -680,7 +680,7 @@ export function createChatSessionController(
         const runMetadata = snapshotStore.getRunMetadata(streamId);
         const executionId =
           runMetadata.executionId ??
-          (await snapshotStore.readPersistedExecutionId(streamId));
+          (await readExecutionStreamIndex()).get(streamId);
         if (!executionId) return false;
 
         const config =

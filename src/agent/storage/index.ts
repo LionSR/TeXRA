@@ -44,6 +44,7 @@ export {
   deleteExecution,
   deleteAllExecutions,
   isUserVisibleExecution,
+  readExecutionStreamIndex,
 } from './executionListing';
 export { deriveResumability, type ResumabilityDecision } from './resumability';
 export { formatConversationMessage } from './conversationFormat';

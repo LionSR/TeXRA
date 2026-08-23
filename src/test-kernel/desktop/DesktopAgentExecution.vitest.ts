@@ -3668,13 +3668,15 @@ describe('DesktopProgressBridge', () => {
       owner.close();
 
       // The deletion is pending while its ownership read is in flight: the
-      // child stream has no resident run metadata, so the read goes to disk.
+      // child stream has no resident run metadata, so the read goes to the
+      // authored stream index.
       const leaseReleased = createDeferred();
+      const executionListing = await import('@agent/storage/executionListing');
       const waitForRelease = vi
-        .spyOn(owner.progressSnapshotStore, 'readPersistedExecutionId')
+        .spyOn(executionListing, 'readExecutionStreamIndex')
         .mockImplementation(async () => {
           await leaseReleased.promise;
-          return undefined;
+          return new Map();
         });
 
       try {
@@ -3686,9 +3688,7 @@ describe('DesktopProgressBridge', () => {
           },
         });
 
-        await vi.waitFor(() =>
-          expect(waitForRelease).toHaveBeenCalledWith(childStreamId),
-        );
+        await vi.waitFor(() => expect(waitForRelease).toHaveBeenCalled());
         owner.processSession.events.emit({
           scope: 'session',
           event: {
@@ -3820,9 +3820,10 @@ describe('DesktopProgressBridge', () => {
       const failure = new Error('execution metadata unavailable');
       const deletionStarted = createDeferred();
       const deletionGate = createDeferred();
+      const executionListing = await import('@agent/storage/executionListing');
       vi.spyOn(
-        owner.progressSnapshotStore,
-        'readPersistedExecutionId',
+        executionListing,
+        'readExecutionStreamIndex',
       ).mockImplementationOnce(async () => {
         deletionStarted.resolve();
         await deletionGate.promise;

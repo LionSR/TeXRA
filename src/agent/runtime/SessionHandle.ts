@@ -30,7 +30,6 @@
  */
 
 import pDefer, { type DeferredPromise } from 'p-defer';
-import pMap from 'p-map';
 import PQueue from 'p-queue';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
@@ -41,7 +40,10 @@ import {
   validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { finalizeExecution } from '@agent/storage/executionLifecycle';
-import { listExecutionStreamReferences } from '@agent/storage/executionListing';
+import {
+  listExecutionStreamReferences,
+  readExecutionStreamIndex,
+} from '@agent/storage/executionListing';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
@@ -60,7 +62,6 @@ import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
-import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
@@ -87,8 +88,6 @@ import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 const logger = createLog('sessionHandle');
 
 /** Bounded fan-out for restart repair's sidecar ownership/preload sweeps. */
-const RESTART_REPAIR_IO_CONCURRENCY = 8;
-
 function isReplayableTerminalResult(event: ResultEvent): boolean {
   return (
     !event.isSubagent && event.error != null && event.error.kind !== 'abort'
@@ -557,9 +556,7 @@ export class SessionHandle {
       if (unreadable.size > 0) {
         const residentExecutionIds = this.snapshots.getExecutionIdMap();
         for (const streamId of this.transcripts.keys()) {
-          const executionId =
-            residentExecutionIds.get(streamId) ??
-            this.transcripts.getSummaryMeta(streamId)?.executionId;
+          const executionId = residentExecutionIds.get(streamId);
           if (executionId && unreadable.has(executionId)) {
             candidateSet.add(streamId);
           }
@@ -586,65 +583,35 @@ export class SessionHandle {
       );
     }
     // Resident snapshot records already resolved their execution id from the
-    // sidecar when they were seeded (#9947); only a candidate outside the
-    // seed needs the one-file sidecar read below.
+    // sidecar when they were seeded (#9947). A candidate outside both the
+    // checkpointed scan and the resident set resolves through the authored
+    // `meta.streamId` index — one full-directory read, only when needed. A
+    // stream absent from all three stays unmapped and is closed as
+    // interrupted with nothing recorded.
     const executionIds = new Map([
       ...scannedExecutionIds,
       ...this.snapshots.getExecutionIdMap(),
     ]);
-    const unreadableStreams = new Map<StreamTabId, string>();
-    // Bound the one-file ownership scan. Each mapper is self-contained: one
-    // unreadable sidecar is logged and marked unclassified, never allowed to
-    // fail the whole pass.
-    await pMap(
-      candidates.filter((streamId) => !executionIds.has(streamId)),
-      async (streamId) => {
-        // The stream→execution reverse edge is the persisted sidecar FK;
-        // name resemblance is never ownership. Read that authority first and
-        // fall back to the always-resident summary mirror. The mirror arm is
-        // load-bearing beyond legacy streams without a persisted FK: `run.start`
-        // publishes to the mirror synchronously while the sidecar FK flush is
-        // async, so a crash inside that window leaves the mirror as the only
-        // record of ownership. A stream with neither stays unmapped and is
-        // closed as interrupted with nothing recorded.
-        try {
-          const persisted =
-            await this.snapshots.readPersistedExecutionId(streamId);
-          if (persisted) {
-            executionIds.set(streamId, persisted);
-            return;
-          }
-        } catch (error) {
-          // A transient storage failure proves nothing about this stream.
-          // Its state is unknown, so it is shown as unclassified (Resume
-          // re-reads) rather than falling through to the ready default.
-          unreadableStreams.set(
-            streamId,
-            `execution identity unreadable (${toErrorMessage(error)})`,
-          );
-          logger.warn(
-            `Stream ${streamId} left unclassified after restart: its execution identity could not be read`,
-            { data: error },
-          );
-          return;
-        }
-        const summaryExecutionId =
-          this.transcripts.getSummaryMeta(streamId)?.executionId;
-        if (summaryExecutionId) {
-          executionIds.set(streamId, summaryExecutionId);
-        }
-      },
-      { concurrency: RESTART_REPAIR_IO_CONCURRENCY },
+    const unmapped = candidates.filter(
+      (streamId) => !executionIds.has(streamId),
     );
-    if (this.isRepairSuperseded(generation)) return;
-    for (const [streamId, cause] of unreadableStreams) {
-      if (
-        this.status.getGeneration(streamId) ===
-        statusGenerationsAtScan.get(streamId)
-      ) {
-        this.status.markUnavailable(streamId, streamUnreadableMessage(cause));
+    if (unmapped.length > 0) {
+      try {
+        const index = await readExecutionStreamIndex();
+        for (const streamId of unmapped) {
+          const executionId = index.get(streamId);
+          if (executionId) executionIds.set(streamId, executionId);
+        }
+      } catch (error) {
+        // The index proves nothing when it fails; the streams stay unmapped
+        // and are classified from what the scan and resident records showed.
+        logger.warn(
+          'Could not read the stream index during restart repair; unmapped streams are closed as interrupted',
+          { data: error },
+        );
       }
     }
+    if (this.isRepairSuperseded(generation)) return;
 
     // The ownership scan is async. Refresh resident ownership once here so
     // the map is current, then let `repairRestartedStreams` revalidate each
@@ -665,9 +632,7 @@ export class SessionHandle {
       // still open (closing it as interrupted is the one honest fact); a
       // closed stream with nothing to classify keeps no phase.
       repairStreams: candidates.filter(
-        (streamId) =>
-          !unreadableStreams.has(streamId) &&
-          (executionIds.has(streamId) || unfinished.has(streamId)),
+        (streamId) => executionIds.has(streamId) || unfinished.has(streamId),
       ),
       isRepairCandidateCurrent: (streamId, expectedExecutionId) => {
         if (

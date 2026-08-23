@@ -8,6 +8,7 @@ import {
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
   type ExecutionStreamReferenceListing,
+  readExecutionStreamIndex,
 } from '@agent/storage/executionListing';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -437,23 +438,19 @@ export class SessionStores {
   }
 
   /**
-   * The stream→execution reverse edge. Live deletion paths resolve the current
-   * execution from the resident snapshot record first: `run.start` updates the
-   * in-memory record and the summary mirror synchronously, while the persisted
-   * sidecar FK is written asynchronously and may still name the previous
-   * execution until the run-end flush. For streams with no resident record the
-   * persisted sidecar FK is authoritative (settled streams, #10518), then the
-   * always-resident summary mirror for legacy streams without a persisted FK.
-   * A stream with neither has no owned execution — name resemblance is never
-   * ownership, so no suffix derivation exists.
+   * The stream→execution edge. Live deletion paths resolve the current
+   * execution from the resident snapshot record first: `run.start` updates
+   * the in-memory record synchronously. A stream with no resident record
+   * resolves through the authored `meta.streamId` index; one with neither has
+   * no owned execution — name resemblance is never ownership, so no suffix
+   * derivation exists.
    */
   private async executionIdForStream(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
     return (
       this.snapshots.getRunMetadata(stream, { quiet: true }).executionId ??
-      (await this.snapshots.readPersistedExecutionId(stream)) ??
-      this.streamLogs.getSummaryMeta(stream)?.executionId
+      (await readExecutionStreamIndex()).get(stream)
     );
   }
 
@@ -502,31 +499,16 @@ export class SessionStores {
     const canonicalStreams = new Set(this.streamLogs.keys());
     const streamIds = unique([...snapshotStreams, ...canonicalStreams]);
     const executionIdsByStream = new Map(this.snapshots.getExecutionIdMap());
-    const failed = new Set<StreamTabId>();
-    const retainUnreadable = (stream: StreamTabId, error: unknown): void => {
-      // Per-stream isolation: one unreadable ownership record retains that
-      // stream instead of failing the whole bulk deletion before it starts.
-      log.warn(
-        `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
-        { data: error },
-      );
-      failed.add(stream);
-    };
+    const index = await readExecutionStreamIndex();
     for (const stream of snapshotStreams) {
       if (executionIdsByStream.has(stream)) continue;
-      try {
-        const executionId =
-          await this.snapshots.readPersistedExecutionId(stream);
-        if (executionId) executionIdsByStream.set(stream, executionId);
-      } catch (error) {
-        retainUnreadable(stream, error);
-      }
+      const executionId = index.get(stream);
+      if (executionId) executionIdsByStream.set(stream, executionId);
     }
 
     const streamsByExecution = new Map<ExecutionId, StreamTabId[]>();
     const streamsWithoutExecution: StreamTabId[] = [];
     for (const stream of streamIds) {
-      if (failed.has(stream)) continue;
       const executionId = executionIdsByStream.get(stream);
       if (!executionId) {
         streamsWithoutExecution.push(stream);
@@ -538,6 +520,7 @@ export class SessionStores {
     }
     const active = new Set<StreamTabId>();
     const deleted = new Set<StreamTabId>();
+    const failed = new Set<StreamTabId>();
     await Promise.all(
       streamsWithoutExecution.map(async (stream) => {
         const shouldDelete = shouldDeleteStream
@@ -766,11 +749,11 @@ export class SessionStores {
     const sweptStreams: StreamTabId[] = [];
     const sweptExecutionIds: ExecutionId[] = [];
 
+    const index = await readExecutionStreamIndex();
     await Promise.all(
       orphanedStreams.map(async (stream) => {
         try {
-          const executionId =
-            await this.snapshots.readPersistedExecutionId(stream);
+          const executionId = index.get(stream);
           if (executionId) {
             const outcome = await this.deleteExecutionWithStreamState(
               executionId,
