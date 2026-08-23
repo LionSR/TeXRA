@@ -324,7 +324,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
   const operations: DiffOperation[] = [];
 
   for (const [baseFile, roundOutputs] of inputToOutputsMap.entries()) {
-    const sorted = [...roundOutputs].sort((a, b) => a.round - b.round);
+    const sorted = roundOutputs.toSorted((a, b) => a.round - b.round);
 
     for (const { round, outputPath } of sorted) {
       const resolvedOutput = toAbsolute(outputPath);

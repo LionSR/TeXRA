@@ -35,7 +35,7 @@ import {
   type MainViewPersistedState,
   type StateRestoreMessage,
 } from '@shared/schemas';
-import { Signal } from '@shared/signals';
+import { Signal, subscribeToSignalChanges } from '@shared/signals';
 import {
   createWebviewStorage,
   PersistedState,
@@ -166,23 +166,10 @@ function writeIfChanged(): void {
 }
 
 /**
- * Watcher callback runs during signal invalidation, where reading a signal is
- * not allowed — so the projection is inspected on a microtask, which also
- * coalesces a burst of `.set()` calls from one handler into one write.
+ * Watch callback runs on a microtask (via `subscribeToSignalChanges`), which
+ * also coalesces a burst of `.set()` calls from one handler into one write.
  */
-const watcher = new Signal.subtle.Watcher(() => {
-  queueMicrotask(() => {
-    watcher.watch();
-    if (lastWritten === undefined) return;
-    const changed = changedFields(persistedSnapshot$.get());
-    if (changed.length === 0) return;
-    if (changed.every((field) => DRAFT_FIELDS.has(field))) {
-      draftSaveDebounce.schedule();
-      return;
-    }
-    writeIfChanged();
-  });
-});
+let unwatchPersistedSnapshot: (() => void) | undefined;
 
 export function restorePersistedState(): void {
   // The extension-local schema provides defaults and reads the retired VS Code
@@ -194,7 +181,19 @@ export function restorePersistedState(): void {
   // and persisted by the user's next real change), and every later change is
   // measured against the state the user is actually looking at.
   lastWritten = persistedSnapshot$.get();
-  watcher.watch(persistedSnapshot$);
+  unwatchPersistedSnapshot = subscribeToSignalChanges(
+    [persistedSnapshot$],
+    () => {
+      if (lastWritten === undefined) return;
+      const changed = changedFields(persistedSnapshot$.get());
+      if (changed.length === 0) return;
+      if (changed.every((field) => DRAFT_FIELDS.has(field))) {
+        draftSaveDebounce.schedule();
+        return;
+      }
+      writeIfChanged();
+    },
+  );
 }
 
 /**
@@ -304,7 +303,7 @@ export function flushPendingSave(): void {
  */
 export function resetPersistenceRuntime(): void {
   draftSaveDebounce.cancel();
-  watcher.unwatch(persistedSnapshot$);
+  unwatchPersistedSnapshot?.();
   lastWritten = undefined;
   stateManager.reload();
 }
