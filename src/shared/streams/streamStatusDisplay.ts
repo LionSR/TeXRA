@@ -20,17 +20,17 @@ export type StreamStatusDisplayKey =
  * Display key for a `StreamLifecycleStatus` (a `StreamPhase`, or the `ready`
  * idle sentinel every host defaults an unstarted stream to).
  */
-export function streamStatusDisplayKey(
+function streamStatusDisplayKey(
   status: StreamLifecycleStatus,
   substate?: StreamSubstate,
 ): StreamStatusDisplayKey;
 
-export function streamStatusDisplayKey(
+function streamStatusDisplayKey(
   status: StreamLifecycleStatus | undefined,
   substate?: StreamSubstate,
 ): StreamStatusDisplayKey | undefined;
 
-export function streamStatusDisplayKey(
+function streamStatusDisplayKey(
   status: StreamLifecycleStatus | undefined,
   substate?: StreamSubstate,
 ): StreamStatusDisplayKey | undefined {

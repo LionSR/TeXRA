@@ -2210,30 +2210,6 @@
       "name": "resolveStateSettingWrite"
     },
     {
-      "file": "src/shared/streams/streamStatus.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "projectRunOutcome"
-    },
-    {
-      "file": "src/shared/streams/streamStatus.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "RUN_OUTCOME_PROJECTION"
-    },
-    {
-      "file": "src/shared/streams/streamStatus.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "RunOutcomeProjection"
-    },
-    {
-      "file": "src/shared/streams/streamStatusDisplay.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "streamStatusDisplayKey"
-    },
-    {
       "file": "src/shared/streams/streamStatusDisplay.ts",
       "category": "production-dead",
       "kind": "types",
