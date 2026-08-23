@@ -339,9 +339,8 @@ export function createProgressViewCommandHandlers(
         data.images ?? [],
         followUp.reportImageSaveError,
       );
-      // Detached past admission: a recovery resume may run a whole model
-      // turn, and the composer is released by the ack, not by this promise.
-      void submitProgressFollowUp({
+      // Resolves at admission; the composer is released by the ack.
+      await submitProgressFollowUp({
         session: followUp.session ?? currentSession(),
         streamId: data.stream,
         input: {

@@ -13,7 +13,6 @@
     ],
     "desktop": [
       "@agent/core/state/executionRequests",
-      "@agent/followUp",
       "@agent/index",
       "@agent/runtime",
       "@agent/storage",
@@ -22,7 +21,6 @@
     "extension": [
       "@agent/core/state/executionRequests",
       "@agent/features",
-      "@agent/followUp",
       "@agent/implementations/agentCreator/agentCreatorFlow",
       "@agent/index",
       "@agent/review",

@@ -31,65 +31,77 @@ export interface ProgressFollowUpSubmitArgs {
  * One follow-up submission path for the extension and desktop progress views:
  * waiting repair, admission, the composer ack, the queued-follow-ups refresh,
  * and outcome presentation. Hosts supply only their ports.
+ *
+ * Resolves at admission with whether the draft was accepted. Anything after
+ * admission (a recovery resume may run a whole model turn, then present its
+ * outcome) runs detached so no IPC request or window close waits on it.
  */
-export async function submitProgressFollowUp(
+export function submitProgressFollowUp(
   args: ProgressFollowUpSubmitArgs,
-): Promise<void> {
+): Promise<boolean> {
   const { session, streamId, input, showInfo } = args;
-  let acknowledged = false;
-  const acknowledge = (accepted: boolean): void => {
-    if (acknowledged) return;
-    acknowledged = true;
-    args.acknowledge(accepted);
-  };
-  const emitQueuedFollowUpsChanged = (): void => {
-    session.events.emit({
-      scope: 'session',
-      event: { type: 'updateQueuedFollowUps', payload: { streamId } },
-    });
-  };
+  return new Promise<boolean>((resolveAdmission) => {
+    let acknowledged = false;
+    const acknowledge = (accepted: boolean): void => {
+      if (acknowledged) return;
+      acknowledged = true;
+      args.acknowledge(accepted);
+      resolveAdmission(accepted);
+    };
+    const emitQueuedFollowUpsChanged = (): void => {
+      session.events.emit({
+        scope: 'session',
+        event: { type: 'updateQueuedFollowUps', payload: { streamId } },
+      });
+    };
 
-  let result: SubmitFollowUpResult;
-  try {
-    await session.repairWaitingIfResumable(streamId);
-    result = await submitFollowUp(streamId, input, {
-      session,
-      onAdmitted: acknowledge,
-    });
-  } catch (error) {
-    acknowledge(false);
-    const message = toErrorMessage(error);
-    logger.warn(
-      `Failed to submit follow-up for stream ${streamId}: ${message}`,
-      {
-        data: { streamId, error: message },
-      },
-    );
-    await showInfo(`Could not send the follow-up: ${message}`);
-    return;
-  }
-
-  switch (result.status) {
-    case 'sent':
-      acknowledge(true);
-      emitQueuedFollowUpsChanged();
-      return;
-    case 'queued': {
-      acknowledge(true);
-      emitQueuedFollowUpsChanged();
-      const presentation = presentFollowUpResult(result);
-      if (presentation.severity !== 'none') {
-        await showInfo(presentation.message);
+    void (async () => {
+      let result: SubmitFollowUpResult;
+      try {
+        await session.repairWaitingIfResumable(streamId);
+        result = await submitFollowUp(streamId, input, {
+          session,
+          onAdmitted: acknowledge,
+        });
+      } catch (error) {
+        acknowledge(false);
+        const message = toErrorMessage(error);
+        logger.warn(
+          `Failed to submit follow-up for stream ${streamId}: ${message}`,
+          { data: { streamId, error: message } },
+        );
+        await showInfo(`Could not send the follow-up: ${message}`);
+        return;
       }
-      return;
-    }
-    case 'duplicate':
-      acknowledge(true);
-      return;
-    case 'no_session':
-    case 'dropped':
+
+      switch (result.status) {
+        case 'sent':
+          acknowledge(true);
+          emitQueuedFollowUpsChanged();
+          return;
+        case 'queued': {
+          acknowledge(true);
+          emitQueuedFollowUpsChanged();
+          const presentation = presentFollowUpResult(result);
+          if (presentation.severity !== 'none') {
+            await showInfo(presentation.message);
+          }
+          return;
+        }
+        case 'duplicate':
+          acknowledge(true);
+          return;
+        case 'no_session':
+        case 'dropped':
+          acknowledge(false);
+          await showInfo(NO_ACTIVE_SESSION_MESSAGE);
+          return;
+      }
+    })().catch((error: unknown) => {
       acknowledge(false);
-      await showInfo(NO_ACTIVE_SESSION_MESSAGE);
-      return;
-  }
+      logger.warn(
+        `Follow-up presentation failed for stream ${streamId}: ${toErrorMessage(error)}`,
+      );
+    });
+  });
 }
