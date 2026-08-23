@@ -980,11 +980,11 @@ return null`;
   it('reports already-running when the deterministic id is still leased', async () => {
     const runExecutionId = runExecutionIdFor('tool-test');
     mocks.registerExecution.mockRejectedValueOnce(
-      new ExecutionLeaseActiveError(
-        runExecutionId,
-        { pid: 1, processStartTime: 1, hostname: 'test-host' },
-        true,
-      ),
+      new ExecutionLeaseActiveError(runExecutionId, {
+        owner: { pid: 1, processStart: '1', hostname: 'test-host' },
+        provable: true,
+        reclaimable: false,
+      }),
     );
 
     const result = await callTool();

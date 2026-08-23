@@ -63,17 +63,15 @@ export interface ForeignInstance {
 }
 
 /**
- * Spawn an idling child and read its start time through the real port. The
- * child never keeps the worker alive: its handle is unreferenced, and
- * `sharedForeign` kills it at exit. On hosts that cannot read start times
- * (win32) the child is still a real pid; its owner then records `null`, so
- * every liveness verdict about it is `unprovable` rather than `alive`, and
- * assertions that need a proven owner skip via {@link startTimesReadable}.
+ * Spawn an idling child and read its start identity through the real port,
+ * on every platform the port supports. The child never keeps the worker
+ * alive: its stdio is not piped and its handle is unreferenced, and
+ * `sharedForeign` kills it at exit.
  */
 async function spawnIdleChild(): Promise<{
   child: ChildProcess;
   pid: number;
-  processStartTime: number | null;
+  processStart: string;
 }> {
   const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
     stdio: 'ignore',
@@ -81,17 +79,12 @@ async function spawnIdleChild(): Promise<{
   child.unref();
   const pid = child.pid;
   if (pid === undefined) throw new Error('Failed to spawn a child process');
-  const processStartTime = await nodeProcesses.startTime(pid);
-  if (processStartTime === undefined && process.platform !== 'win32') {
+  const processStart = await nodeProcesses.identity(pid);
+  if (processStart === undefined) {
     child.kill('SIGKILL');
-    throw new Error(`Cannot read the start time of child ${pid}`);
+    throw new Error(`Cannot read the start identity of child ${pid}`);
   }
-  return { child, pid, processStartTime: processStartTime ?? null };
-}
-
-/** Whether this host can prove a foreign owner alive (false on win32). */
-export function startTimesReadable(): boolean {
-  return process.platform !== 'win32';
+  return { child, pid, processStart };
 }
 
 async function killAndWait(child: ChildProcess): Promise<void> {
@@ -109,9 +102,9 @@ async function killAndWait(child: ChildProcess): Promise<void> {
  * read through the real process port matches the one recorded here.
  */
 export async function startForeignInstance(): Promise<ForeignInstance> {
-  const { child, pid, processStartTime } = await spawnIdleChild();
+  const { child, pid, processStart } = await spawnIdleChild();
   return {
-    owner: { pid, processStartTime, hostname: os.hostname() },
+    owner: { pid, processStart, hostname: os.hostname() },
     shutdown: () => killAndWait(child),
   };
 }
@@ -145,9 +138,9 @@ let exitedChild: Promise<LeaseOwnerRecord> | undefined;
  */
 export function deadOwner(): Promise<LeaseOwnerRecord> {
   exitedChild ??= (async () => {
-    const { child, pid, processStartTime } = await spawnIdleChild();
+    const { child, pid, processStart } = await spawnIdleChild();
     await killAndWait(child);
-    return { pid, processStartTime, hostname: os.hostname() };
+    return { pid, processStart, hostname: os.hostname() };
   })();
   return exitedChild;
 }
@@ -190,7 +183,7 @@ export async function writeForeignLease(
 
 /**
  * Persist a pre-0.41 presence-socket (v2) record naming `owner`'s pid. Such a
- * record carries no start time, so its owner is proven by pid alone.
+ * record carries no start identity, so its owner is proven by pid alone.
  */
 export async function writeLegacyPresenceLease(
   executionId: string,
@@ -215,10 +208,11 @@ export async function writeLegacyPresenceLease(
 }
 
 /**
- * Model a reclaim performed elsewhere: every claim file on disk is removed
- * and `owner`'s claim published in its place. Only this (a user's explicit
- * reclaim) ever removes another process's claim; a claim published beside an
- * existing one never displaces it.
+ * Model a reclaim performed elsewhere: every claim file on disk, and the v2
+ * shadow a claim keeps beside it, is removed and `owner`'s claim published
+ * in its place. Only this (a user's explicit reclaim) ever removes another
+ * process's claim; a claim published beside an existing one never displaces
+ * it.
  */
 export async function displaceLease(
   executionId: string,
@@ -226,6 +220,7 @@ export async function displaceLease(
   owner?: LeaseOwnerRecord,
 ): Promise<void> {
   await StorageFS.delete(executionLeaseDir(executionId), { recursive: true });
+  await StorageFS.delete(legacyExecutionLeasePath(executionId)).catch(() => {});
   await writeForeignLease(executionId, ownerToken, owner);
 }
 

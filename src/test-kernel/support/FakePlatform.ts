@@ -532,35 +532,35 @@ export class FakeSecrets implements PlatformSecrets {
 }
 
 /**
- * Controllable process start times. Pids without a registered entry fall
- * through to the real Node port, so a test may spawn an actual child and have
- * its liveness proven the production way, or register a pid to script a
- * verdict (a different start time for pid reuse, undefined for unreadable).
+ * Scripted process identities for lease-liveness tests: a pid not scripted
+ * here falls through to the real port, so a real child's identity is read
+ * for real while a test can force one verdict (a different identity for pid
+ * reuse, undefined for unreadable).
  */
 export class FakeProcesses implements ProcessesPort {
-  private readonly startTimes = new Map<number, number | undefined>();
+  private readonly identities = new Map<number, string | undefined>();
 
-  setStartTime(pid: number, startTime: number | undefined): void {
-    this.startTimes.set(pid, startTime);
+  setIdentity(pid: number, identity: string | undefined): void {
+    this.identities.set(pid, identity);
   }
 
   /** Drop every scripted value; every pid falls through to the real port. */
   reset(): void {
-    this.startTimes.clear();
+    this.identities.clear();
   }
 
-  async startTime(pid: number): Promise<number | undefined> {
-    if (this.startTimes.has(pid)) return this.startTimes.get(pid);
-    return nodeProcesses.startTime(pid);
+  async identity(pid: number): Promise<string | undefined> {
+    if (this.identities.has(pid)) return this.identities.get(pid);
+    return nodeProcesses.identity(pid);
   }
 
-  selfStartTime(): Promise<number | undefined> {
+  selfIdentity(): Promise<string | undefined> {
     // Route through the scripted map so a test that scripts this process's
     // pid sees the same value in the records it writes and the probes it runs.
-    if (this.startTimes.has(process.pid)) {
-      return Promise.resolve(this.startTimes.get(process.pid));
+    if (this.identities.has(process.pid)) {
+      return Promise.resolve(this.identities.get(process.pid));
     }
-    return nodeProcesses.selfStartTime();
+    return nodeProcesses.selfIdentity();
   }
 }
 
