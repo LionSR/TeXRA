@@ -160,7 +160,7 @@ describe('runAgent execution ownership', () => {
 
   // A workflow resume reuses the execution record, so the previous run's
   // terminal outcome is still on disk and would be projected onto every result
-  // envelope this run writes (`applyExecutionOutcome`) until it finalizes.
+  // envelope this run writes (`readResultMeta`) until it finalizes.
   it('clears the previous run terminal facts before a resumed run executes', async () => {
     const order: string[] = [];
     mocks.clearTerminalExecutionState.mockImplementationOnce(async () => {
