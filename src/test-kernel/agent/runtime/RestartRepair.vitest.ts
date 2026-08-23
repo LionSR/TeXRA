@@ -185,7 +185,10 @@ describe('repairRestartedStreams', () => {
     });
 
     expect(setup.streamStatus.get(setup.streamId)).toBeUndefined();
-    expect(setup.streamStatus.holdState(setup.streamId)).toBeUndefined();
+    expect(setup.streamStatus.holdState(setup.streamId)).toEqual({
+      kind: 'unclassified',
+      cause: 'lease owned by this process with no live run',
+    });
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(logger.error).toHaveBeenCalledOnce();
   });
@@ -398,7 +401,10 @@ describe('repairRestartedStreams', () => {
       timestamp: '2026-07-05T00:00:00.000Z',
       description: 'keep this field',
     });
-    const flowRecord = { shared: { marker: 'checkpoint' } };
+    const flowRecord = {
+      shared: { messages: [] },
+      cursor: { nextNodeId: 'start' },
+    };
     await store.write(flowKey(executionId), flowRecord);
     await store.writeResultMeta({
       producer: 'subagent',
