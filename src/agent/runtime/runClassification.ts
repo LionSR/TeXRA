@@ -28,6 +28,7 @@ import {
   inspectExecutionLease,
   type ExecutionLeasePresence,
 } from '@agent/storage/executionLease';
+import type { OwnerHold } from '@agent/storage/leaseOwnerLiveness';
 import {
   deriveResumability,
   RESUMABILITY_CAUSE,
@@ -40,11 +41,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 const log = createLog('RunClassification');
 
 export type RunClassification =
-  | {
-      readonly kind: 'held_elsewhere';
-      /** False when the holder could not be proven alive. */
-      readonly provable: boolean;
-    }
+  | { readonly kind: 'held_elsewhere'; readonly hold: OwnerHold }
   | { readonly kind: 'owned_here' }
   | { readonly kind: 'resumable'; readonly outcome?: RunOutcome }
   | { readonly kind: 'finished'; readonly outcome?: RunOutcome }
@@ -96,7 +93,8 @@ export async function classifyRun(
   }
   if (lease.status === 'owned') return { kind: 'owned_here' };
   if (lease.status === 'foreign') {
-    return { kind: 'held_elsewhere', provable: lease.provable };
+    const { owner, provable, reclaimable } = lease;
+    return { kind: 'held_elsewhere', hold: { owner, provable, reclaimable } };
   }
   return classifyRunFacts(executionId, await deriveResumability(executionId));
 }

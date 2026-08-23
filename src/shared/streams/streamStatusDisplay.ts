@@ -87,18 +87,32 @@ const STREAM_STATUS_LABELS = {
 const STREAM_HELD_ELSEWHERE_MESSAGE =
   'Held by another TeXRA window. Close that window or let it finish before acting on this run here.';
 
-/** Copy for a held stream whose holder could not be proven alive or dead. */
-const STREAM_HELD_UNREACHABLE_MESSAGE =
-  'Held by a process that cannot be reached. If you are sure it is gone, reclaim the run with `texra resume <id> --reclaim`.';
+/**
+ * The facts of a hold that the copy depends on: who holds the run, whether
+ * that process was proven alive, and whether `--reclaim` would remove its
+ * record. The lease classifier is the one source of these.
+ */
+export interface StreamHoldFacts {
+  readonly owner: { readonly pid: number };
+  readonly provable: boolean;
+  readonly reclaimable: boolean;
+}
 
 /**
- * Banner and tooltip copy for a held stream, by whether its holder was
- * reached. The session renderer sends it as `StreamMetadata.statusDetail`.
+ * Banner and tooltip copy for a held stream. The reclaim command is offered
+ * only when it would succeed; a pid on this machine whose identity could
+ * not be read is named instead, because reclaim refuses it. The session
+ * renderer sends the result as `StreamMetadata.statusDetail`.
  */
-export function streamHeldMessage(holderProvable: boolean): string {
-  return holderProvable
-    ? STREAM_HELD_ELSEWHERE_MESSAGE
-    : STREAM_HELD_UNREACHABLE_MESSAGE;
+export function streamHeldMessage(
+  executionId: string,
+  hold: StreamHoldFacts,
+): string {
+  if (hold.provable) return STREAM_HELD_ELSEWHERE_MESSAGE;
+  if (hold.reclaimable) {
+    return `Held by a process that cannot be reached. If you are sure it is gone, reclaim the run with \`texra resume ${executionId} --reclaim\`.`;
+  }
+  return `Held by pid ${hold.owner.pid} on this machine; its identity could not be read. Wait for that process to exit before acting on this run here.`;
 }
 
 /** The unclassified-sentinel fields of a stream's backend-owned state. */

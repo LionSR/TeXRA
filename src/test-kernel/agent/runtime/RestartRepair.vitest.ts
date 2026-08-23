@@ -23,6 +23,13 @@ import {
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { setupPlatform } from '@test/support/setupPlatform';
 
+/** A hold by a process proven alive: nothing to reclaim. */
+const LIVE_HOLD = {
+  owner: { pid: 1, processStart: '1', hostname: 'test-host' },
+  provable: true,
+  reclaimable: false,
+} as const;
+
 setupPlatform({ workspacePath: '/workspace' });
 
 interface StreamSetup {
@@ -129,13 +136,14 @@ describe('repairRestartedStreams', () => {
     await runRepair(setup, {
       closeRunningGroups,
       finalizeExecution,
-      classifyRun: classifyAs({ kind: 'held_elsewhere', provable: true }),
+      classifyRun: classifyAs({ kind: 'held_elsewhere', hold: LIVE_HOLD }),
     });
 
     expect(setup.streamStatus.get(setup.streamId)).toBeUndefined();
     expect(setup.streamStatus.holdState(setup.streamId)).toEqual({
       kind: 'held',
-      provable: true,
+      executionId: setup.executionId,
+      hold: LIVE_HOLD,
     });
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(finalizeExecution).not.toHaveBeenCalled();
@@ -143,7 +151,7 @@ describe('repairRestartedStreams', () => {
 
   it('releases a held mark once the stream settles on a later pass', async () => {
     const setup = setupStream('held-then-settled');
-    setup.streamStatus.markHeld(setup.streamId, true);
+    setup.streamStatus.markHeld(setup.streamId, setup.executionId, LIVE_HOLD);
 
     await runRepair(setup, {
       closeRunningGroups: closeAllGroups,
