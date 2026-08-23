@@ -9,6 +9,7 @@ import {
   type loadAgents,
   type refresh,
 } from '@agent/index';
+import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
@@ -97,7 +98,7 @@ export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsSt
     }) => Promise<boolean>;
     readonly chooseTeamAvailability: (
       prompt: SettingsTeamAvailabilityPrompt,
-    ) => Promise<'sign-in' | 'continue' | 'cancel' | undefined>;
+    ) => Promise<TeamAvailabilityChoice | undefined>;
   };
   /**
    * Root of the packaged resources tree, used to read the bundled agent

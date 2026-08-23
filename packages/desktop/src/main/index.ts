@@ -381,6 +381,11 @@ function createWindow(options: {
     });
     return result.response === 0;
   };
+  /**
+   * Sole owner of the native unavailable-member prompt. Both the main-view
+   * launch path and settings path route here so wording and button labels
+   * cannot drift.
+   */
   const presentTeamAvailabilityPrompt = async (
     prompt: SettingsTeamAvailabilityPrompt,
   ): Promise<'sign-in' | 'continue' | 'cancel'> => {
