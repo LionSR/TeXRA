@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 import { describeResumeFailure, resolveAndResumeStream } from '@agent/runtime';
 import {
+  ExecutionLeaseUnreadableError,
   getExecutionStore,
   inspectExecutionLease,
   reclaimExecutionLease,
@@ -99,8 +100,10 @@ export async function runResumeExecution(
     return CliExitCode.Usage;
   }
   // Gate resume on the lease: a provably live owner refuses, and an owner
-  // that cannot be reached refuses unless `--reclaim` removes its record here
-  // so the resume below claims the execution afresh.
+  // that cannot be reached refuses unless `--reclaim` was given. The record
+  // itself is removed only after the preflight below, so a refused resume
+  // never leaves the run unowned.
+  let reclaimFrom: { pid: number; hostname: string } | undefined | null;
   try {
     const lease = await inspectExecutionLease(id);
     if (lease.status === 'owned' || lease.status === 'foreign') {
@@ -114,17 +117,20 @@ export async function runResumeExecution(
         );
         return CliExitCode.Usage;
       }
-      if ((await reclaimExecutionLease(id)) === 'alive') {
-        writeTextStderr(activeExecutionMessage(id));
-        return CliExitCode.Usage;
-      }
-      writeTextStderr(
-        `Reclaimed execution ${id} from pid ${lease.owner.pid} on ${lease.owner.hostname}.`,
-      );
+      reclaimFrom = lease.owner;
     }
   } catch (error) {
-    writeTextStderr(leaseInspectionFailureMessage(id, error));
-    return CliExitCode.AgentError;
+    if (!(error instanceof ExecutionLeaseUnreadableError)) {
+      writeTextStderr(leaseInspectionFailureMessage(id, error));
+      return CliExitCode.AgentError;
+    }
+    if (!reclaim) {
+      writeTextStderr(
+        `${error.message} If you are sure no TeXRA process holds it, rerun with --reclaim.`,
+      );
+      return CliExitCode.Usage;
+    }
+    reclaimFrom = null;
   }
   // FK-first: the stream id stamped at registration is the reproduction
   // contract. A row without one has no persisted stream to continue.
@@ -168,6 +174,29 @@ export async function runResumeExecution(
       }
       writeTextStderr(loadFailureMessage(id, error));
       return CliExitCode.AgentError;
+    }
+  }
+
+  if (reclaimFrom !== undefined) {
+    let outcome: Awaited<ReturnType<typeof reclaimExecutionLease>>;
+    try {
+      outcome = await reclaimExecutionLease(id);
+    } catch (error) {
+      writeTextStderr(leaseInspectionFailureMessage(id, error));
+      return CliExitCode.AgentError;
+    }
+    if (outcome === 'alive') {
+      writeTextStderr(activeExecutionMessage(id));
+      return CliExitCode.Usage;
+    }
+    if (outcome === 'missing') {
+      writeTextStderr(`Execution ${id} is no longer held; resuming.`);
+    } else if (reclaimFrom) {
+      writeTextStderr(
+        `Reclaimed execution ${id} from pid ${reclaimFrom.pid} on ${reclaimFrom.hostname}.`,
+      );
+    } else {
+      writeTextStderr(`Reclaimed execution ${id}.`);
     }
   }
 

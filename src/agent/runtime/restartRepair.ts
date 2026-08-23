@@ -373,8 +373,11 @@ export async function repairRestartedStreams(
       if (isInFlightPhase(options.streamStatus.get(streamId))) continue;
       const self = await currentLeaseOwner();
       const { owner } = maintenance;
+      // Same process requires both start times known and equal: two unknown
+      // start times prove nothing, and such an owner is foreign-unprovable.
       if (
         owner.pid === self.pid &&
+        self.processStartTime !== null &&
         owner.processStartTime === self.processStartTime &&
         owner.hostname === self.hostname
       ) {
