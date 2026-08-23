@@ -20,7 +20,7 @@ import {
 const mocks = vi.hoisted(() => ({
   deliverChildRunFollowUp: vi.fn(),
   executeAgent: vi.fn(),
-  finalizeExecution: vi.fn(),
+  finalizeRun: vi.fn(),
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   readConfig: vi.fn(),
@@ -56,7 +56,7 @@ vi.mock('@tools/delegation/subagentResults', async (importOriginal) => {
 });
 
 vi.mock('@agent/storage', () => ({
-  finalizeExecution: mocks.finalizeExecution,
+  finalizeRun: mocks.finalizeRun,
   getExecutionStore: vi.fn(() => ({
     readConfig: mocks.readConfig,
     writeTurnState: mocks.writeTurnState,
@@ -192,11 +192,7 @@ describe('NativeSubagentStrategy', () => {
     mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
     mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
     mocks.writeTurnState.mockResolvedValue(undefined);
-    mocks.finalizeExecution.mockResolvedValue({
-      status: 'durable',
-      terminalStatusPersisted: true,
-      flowRecord: 'deleted',
-    });
+    mocks.finalizeRun.mockResolvedValue({ ok: true });
   });
 
   afterEach(() => {

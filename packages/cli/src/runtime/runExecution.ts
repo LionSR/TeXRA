@@ -10,6 +10,7 @@ import {
   deriveResumability,
   ExecutionLeaseLostError,
   type ResumabilityDecision,
+  finalizeRun,
 } from '@agent/storage';
 import { validateExecutionRequest } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
@@ -28,7 +29,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { warnApprovalDenied } from './approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
-import { finalizeCliExecution } from './executionFinalization';
 import {
   formatInterruptedResumeHint,
   tryReadCliCwd,
@@ -153,13 +153,13 @@ export async function executeCliConfig<
   const { result } = execution;
 
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
-    await finalizeCliExecution(
+    await finalizeRun({
       executionId,
-      RUN_OUTCOME.FAILED,
-      'delete',
-      (finalizationError) =>
+      outcome: RUN_OUTCOME.FAILED,
+      flowRecord: 'delete',
+      report: (finalizationError) =>
         writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
-    );
+    });
     writeTextStderr(
       categoryMismatchMessage ??
         `Agent resolved to a non ${expectedCategory} run.`,
@@ -337,12 +337,14 @@ export async function executeCliRequest(
       const executionId = await leaseAcquired;
       if (!executionId) return false;
       try {
-        const terminalStatusPersisted = await finalizeCliExecution(
-          executionId,
-          RUN_OUTCOME.CANCELLED,
-          'preserve',
-          reportShutdownFinalizationFailure,
-        );
+        const terminalStatusPersisted = (
+          await finalizeRun({
+            executionId,
+            outcome: RUN_OUTCOME.CANCELLED,
+            flowRecord: 'preserve',
+            report: reportShutdownFinalizationFailure,
+          })
+        ).ok;
         await session.releaseExecutionLease(executionId);
         const resumability = terminalStatusPersisted
           ? await deriveResumability(executionId)

@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => {
   return {
     executeCliConfig: vi.fn(),
     emitCliResult: vi.fn(),
-    finalizeExecution: vi.fn(),
+    finalizeRun: vi.fn(),
     withExpandedRunInputs: vi.fn(),
     resolveCliLaunchAgent: vi.fn(),
     selectCliRunModel: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock('@agent/storage', async (importOriginal) => {
       createFakeKv(executionId, { writeResultMeta: mocks.writeResultMeta }),
     ),
     deriveResumability: mocks.deriveResumability,
-    finalizeExecution: mocks.finalizeExecution,
+    finalizeRun: mocks.finalizeRun,
     // Mirrors the real result-object conversion over the same writeResultMeta
     // fake, so failure injection keeps flowing through mocks.writeResultMeta.
     persistChildRunResultMeta: vi.fn(
@@ -296,7 +296,7 @@ function expectNoModelOrInputWork(): void {
 describe('CLI workflow run command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.finalizeExecution.mockResolvedValue(durableFinalizationResult());
+    mocks.finalizeRun.mockResolvedValue(durableFinalizationResult());
     mocks.resolveCliLaunchAgent.mockResolvedValue({
       name: 'polish',
       category: AgentCategory.Workflow,
@@ -625,7 +625,7 @@ describe('CLI workflow run command', () => {
         compileFailures: [],
       }),
     );
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.finalizeRun).not.toHaveBeenCalled();
   });
 
   it('leaves failed output finalization to the live run lifecycle', async () => {
@@ -641,7 +641,7 @@ describe('CLI workflow run command', () => {
       CliExitCode.AgentError,
     );
 
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.finalizeRun).not.toHaveBeenCalled();
     expect(cliLogSinksMock.writeErrorStderr).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ code: 'ENOENT' }),
     );

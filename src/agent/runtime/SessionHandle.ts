@@ -39,7 +39,7 @@ import {
   releaseOwnedExecutionLease,
   validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
-import { finalizeExecution } from '@agent/storage/executionLifecycle';
+import { finalizeRun } from '@agent/storage/executionLifecycle';
 import {
   listExecutionStreamReferences,
   readExecutionStreamIndex,
@@ -975,7 +975,7 @@ export async function settleLiveSessionExecutions(
     if (!ownsExecutionLease(executionId)) continue;
     try {
       await session.releaseExecutionLease(executionId, async () => {
-        const finalization = await finalizeExecution({
+        const finalization = await finalizeRun({
           executionId,
           outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'preserve',
@@ -984,7 +984,7 @@ export async function settleLiveSessionExecutions(
           // records what the exit interrupted, never what already finished.
           keepExistingOutcome: true,
         });
-        if (finalization.status === 'failed') {
+        if (!finalization.ok) {
           throw new Error(
             `Failed to persist the CANCELLED outcome for execution ${executionId}`,
             { cause: finalization.error },
