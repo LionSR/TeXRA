@@ -49,6 +49,7 @@ export { deriveResumability, type ResumabilityDecision } from './resumability';
 export { formatConversationMessage } from './conversationFormat';
 export {
   ExecutionLeaseLostError,
+  ExecutionLeaseUnreadableError,
   inspectExecutionLease,
   markOwnedExecutionLeaseUndurable,
   reclaimExecutionLease,

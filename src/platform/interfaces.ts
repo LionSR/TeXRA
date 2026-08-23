@@ -104,12 +104,15 @@ export interface FileSystemProvider {
    */
   writeFileAtomic(path: string, content: Uint8Array): Promise<void>;
   /**
-   * Create `path` with `content` only if it does not exist yet (`O_EXCL`).
-   * Rejects with `EEXIST` when it does. The kernel guarantees exactly one
-   * concurrent creator wins, which is what makes a claim a single atomic
-   * operation rather than a read-modify-write under a lock.
+   * Make `path` appear complete and durable in one step: stage the content
+   * beside it, fsync, then rename into place. For names that belong to
+   * exactly one writer (an execution-lease claim), where `writeFileAtomic`'s
+   * replace-existing semantics are not wanted and a torn file must never be
+   * observable.
    */
-  writeFileExclusive(path: string, content: Uint8Array): Promise<void>;
+  publishFile(path: string, content: Uint8Array): Promise<void>;
+  /** Remove a directory only if it is empty; rejects with `ENOTEMPTY`. */
+  removeEmptyDirectory(path: string): Promise<void>;
   appendFile(path: string, content: Uint8Array): Promise<void>;
   delete(path: string, options?: { recursive?: boolean }): Promise<void>;
   createDirectory(path: string): Promise<void>;
@@ -200,7 +203,7 @@ export interface StorageProvider {
 export interface ProcessesPort {
   /** OS-reported start time of `pid`, or undefined when it cannot be read. */
   startTime(pid: number): Promise<number | undefined>;
-  /** This process's own start time, captured once and then memoized. */
+  /** This process's own start time; memoized once read, retried until then. */
   selfStartTime(): Promise<number | undefined>;
 }
 

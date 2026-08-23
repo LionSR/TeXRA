@@ -88,3 +88,15 @@ export async function proveOwnerLiveness(
   }
   return startTime === owner.processStartTime ? 'alive' : 'dead';
 }
+
+/**
+ * Whether some process holds the recorded pid on this host, whatever its
+ * start time. A destructive reclaim must not guess that such a process is a
+ * coincidence: on hosts without readable start times this is every live owner.
+ */
+export function ownerPidExistsOnThisHost(owner: LeaseOwnerRecord): boolean {
+  return (
+    owner.hostname.toLowerCase() === os.hostname().toLowerCase() &&
+    !pidProvablyDead(owner.pid)
+  );
+}

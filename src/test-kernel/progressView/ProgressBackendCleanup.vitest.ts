@@ -31,7 +31,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import {
-  executionLeasePath,
+  executionLeaseDir,
   writeForeignLease,
 } from '@test/support/executionLeaseFixtures';
 import {
@@ -127,7 +127,9 @@ async function cleanupForeignLease(
 ): Promise<void> {
   // Best-effort teardown: the lease file may already be gone; a delete
   // failure here must not mask the assertion this fixture is protecting.
-  await StorageFS.delete(executionLeasePath(ids.executionId)).catch(() => {});
+  await StorageFS.delete(executionLeaseDir(ids.executionId), {
+    recursive: true,
+  }).catch(() => {});
   await GoalStore.forget(ids.stream);
   await getExecutionStore(ids.executionId).clear();
   await backend.state.clearAll();

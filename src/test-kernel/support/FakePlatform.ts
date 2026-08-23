@@ -311,16 +311,17 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     await this.writeFile(target, content);
   }
 
-  async writeFileExclusive(target: string, content: Uint8Array): Promise<void> {
-    // memfs honors `wx`: the second concurrent creator gets EEXIST, which is
-    // the exclusivity the lease claim depends on.
-    await this.fs.promises.writeFile(
-      normalizePath(target),
-      Buffer.from(content),
-      {
-        flag: 'wx',
-      },
-    );
+  async publishFile(target: string, content: Uint8Array): Promise<void> {
+    // Mirror the production stage-then-rename so a test observes the same
+    // directory contents (the staged sibling never outlives the publish).
+    const normalized = normalizePath(target);
+    const staging = `${normalized}.tmp`;
+    await this.fs.promises.writeFile(staging, Buffer.from(content));
+    await this.fs.promises.rename(staging, normalized);
+  }
+
+  async removeEmptyDirectory(target: string): Promise<void> {
+    await this.fs.promises.rmdir(normalizePath(target));
   }
 
   async appendFile(target: string, content: Uint8Array): Promise<void> {
@@ -554,6 +555,11 @@ export class FakeProcesses implements ProcessesPort {
   }
 
   selfStartTime(): Promise<number | undefined> {
+    // Route through the scripted map so a test that scripts this process's
+    // pid sees the same value in the records it writes and the probes it runs.
+    if (this.startTimes.has(process.pid)) {
+      return Promise.resolve(this.startTimes.get(process.pid));
+    }
     return nodeProcesses.selfStartTime();
   }
 }
