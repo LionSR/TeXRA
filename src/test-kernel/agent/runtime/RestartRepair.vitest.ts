@@ -2,10 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
-import {
-  RESUMABILITY_CAUSE,
-  type ResumabilityDecision,
-} from '@agent/storage/resumability';
+import { type ResumabilityDecision } from '@agent/storage/resumability';
 import type { RunClassification } from '@agent/runtime/runClassification';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -54,19 +51,14 @@ function factsFor(classification: RunClassification): ResumabilityDecision {
   switch (classification.kind) {
     case 'resumable':
       return {
-        resumable: true,
-        cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
+        kind: 'checkpoint',
         flowRecord: {} as FlowRecord,
         outcome: classification.outcome,
       };
     case 'finished':
-      return {
-        resumable: false,
-        cause: RESUMABILITY_CAUSE.MISSING_FLOW,
-        outcome: classification.outcome,
-      };
+      return { kind: 'none', outcome: classification.outcome };
     case 'unclassified':
-      return { resumable: false, cause: RESUMABILITY_CAUSE.UNREADABLE_META };
+      return { kind: 'unreadable', cause: classification.cause };
     case 'held_elsewhere':
     case 'owned_here':
       throw new Error(`no durable facts for ${classification.kind}`);

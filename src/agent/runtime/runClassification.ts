@@ -24,11 +24,7 @@
  */
 import { inspectExecutionLease } from '@agent/storage/executionLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
-import {
-  deriveResumability,
-  RESUMABILITY_CAUSE,
-  type ResumabilityDecision,
-} from '@agent/storage/resumability';
+import { deriveResumability } from '@agent/storage/resumability';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, RunOutcome } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -48,21 +44,6 @@ export type RunFactsClassification = Exclude<
   { kind: 'held_elsewhere' | 'owned_here' }
 >;
 
-/** Classify the checkpoint and persisted outcome of one execution. */
-export function classifyRunFacts(
-  executionId: ExecutionId,
-  facts: ResumabilityDecision,
-): RunFactsClassification {
-  if (facts.resumable) {
-    return { kind: 'resumable', outcome: facts.outcome };
-  }
-  if (facts.cause === RESUMABILITY_CAUSE.MISSING_FLOW) {
-    return { kind: 'finished', outcome: facts.outcome };
-  }
-  log.warn(`Cannot classify ${executionId}: ${facts.cause}`);
-  return { kind: 'unclassified', cause: facts.cause };
-}
-
 /** Classify one execution. Never throws: an unreadable fact is `unclassified`. */
 export async function classifyRun(
   executionId: ExecutionId,
@@ -78,5 +59,13 @@ export async function classifyRun(
     log.warn(`Cannot classify ${executionId}: ${cause}`, { data: error });
     return { kind: 'unclassified', cause };
   }
-  return classifyRunFacts(executionId, await deriveResumability(executionId));
+  const facts = await deriveResumability(executionId);
+  if (facts.kind === 'checkpoint') {
+    return { kind: 'resumable', outcome: facts.outcome };
+  }
+  if (facts.kind === 'none') {
+    return { kind: 'finished', outcome: facts.outcome };
+  }
+  log.warn(`Cannot classify ${executionId}: ${facts.cause}`);
+  return { kind: 'unclassified', cause: facts.cause };
 }

@@ -179,7 +179,7 @@ export async function executeCliWorkflowConfig(
   const recoveryProcessCwd = tryReadCliCwd();
   const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
   const canAdvertiseInterruptedExecution = (
-    resumability: Extract<ResumabilityDecision, { resumable: true }>,
+    resumability: Extract<ResumabilityDecision, { kind: 'checkpoint' }>,
   ): boolean => {
     const shared = resumability.flowRecord.shared;
     const lastError =
@@ -208,7 +208,7 @@ export async function executeCliWorkflowConfig(
     if (!execution.ok || !execution.outcomePersisted) return;
     const resumability = await deriveResumability(executionId);
     if (
-      resumability.resumable &&
+      resumability.kind === 'checkpoint' &&
       canAdvertiseInterruptedExecution(resumability)
     ) {
       writeResumeHint(executionId);

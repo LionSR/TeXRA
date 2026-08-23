@@ -411,7 +411,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     if (!meta && !record) {
       const resumability = await deriveResumability(executionId);
-      if (!resumability.resumable) {
+      if (resumability.kind !== 'checkpoint') {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
       return executed(
@@ -694,7 +694,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       const resumability = await deriveResumability(executionId);
       const exists =
         meta !== null ||
-        resumability.resumable ||
+        resumability.kind === 'checkpoint' ||
         hasCompletedRunConversationEvidence(conversationResult);
       if (!exists) {
         throw new ToolError(`Execution not found: ${executionId}`);
