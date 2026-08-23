@@ -101,6 +101,7 @@ function createWaitNodeServices(
     session: {
       hasQueuedFollowUp: () => false,
       waitForFollowUp: vi.fn(async () => null),
+      noteParkedWaitCancelled: vi.fn(),
       ...session,
     },
     ...topLevel,
