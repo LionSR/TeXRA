@@ -570,7 +570,10 @@ export async function runToolUseFlow<C = unknown>(
         // run ended: the wait node clears it when a follow-up recovers.
         cancelled,
       });
-      if (outcome === RUN_OUTCOME.CANCELLED) {
+      // A cancelled or failed run keeps its checkpoint for resume; rewind the
+      // persisted cursor now so the resume runs another model turn instead of
+      // replaying the terminal action it ended on.
+      if (outcome !== RUN_OUTCOME.COMPLETED) {
         await activePersistedFlow?.prepareForFollowUp(shared);
       }
     }

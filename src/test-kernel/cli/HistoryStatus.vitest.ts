@@ -124,7 +124,6 @@ describe('CLI history status formatting', () => {
       conversationPreview: null,
       files: [],
       hasFlowRecord: true,
-      resumable: true,
     });
 
     expect(text).toContain('Status: Resumable');
