@@ -96,6 +96,14 @@ export function submitProgressFollowUp(
           acknowledge(false);
           await showInfo(NO_ACTIVE_SESSION_MESSAGE);
           return;
+        default:
+          // A result this switch does not know must not leave the composer
+          // frozen: hand the draft back and make the gap loud.
+          acknowledge(false);
+          logger.warn(
+            `Unhandled follow-up result for stream ${streamId}: ${JSON.stringify(result)}`,
+          );
+          return;
       }
     })().catch((error: unknown) => {
       acknowledge(false);

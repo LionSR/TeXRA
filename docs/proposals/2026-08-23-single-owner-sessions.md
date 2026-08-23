@@ -172,7 +172,10 @@ context or a queue target), or it is resumable-by-me. Otherwise the tab
 shows a one-line read-only banner. `repairWaitingIfResumable` stops being
 a pre-send probe and becomes part of the D3 classification.
 
-**D5. Never clear a draft without an ack.** Add one outbound command
+**D5. Never clear a draft without an ack.** _Shipped in #11303; the wire
+payload is `{stream, accepted: boolean}` and the extension composer calls
+the shared `submitProgressFollowUp` directly rather than the
+`texra.sendFollowUp` command._ Add one outbound command
 `followUpResult {stream, status}` to `PROGRESS_VIEW_COMMANDS`. The webview
 marks the draft in-flight on send, clears only on `sent | queued`, and on
 failure restores focus with the text and pasted images intact. Extension:
@@ -201,7 +204,7 @@ present, lease absent or dead), `finished` (outcome, no checkpoint).
 resident-vs-cold probe, and `detectWaitingStreams` all disappear into one
 classifier that mutates nothing.
 
-**D8. A checkpoint is deleted only by the user.** No inferred outcome may
+**D8. A checkpoint is deleted only by the user.** _Shipped in #11304._ No inferred outcome may
 delete the flow record: restart repair never writes FAILED and never
 deletes; an escaped exception persists FAILED but keeps the record; the
 queue being disposed is a cancellation, not a completion
