@@ -13,7 +13,7 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
-import type { LifecycleHost } from '@platform/interfaces';
+import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
@@ -31,7 +31,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { applyCliGitAuthorConfig } from './gitAuthor';
-import { tryResumeCliStream } from './agentResume';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import { flushNdjsonStdout, writeTextStderr } from './logSinks';
@@ -159,6 +158,22 @@ export function handOffCliShutdownSignalHandlers(): void {
   shutdownHandlersInstalled = false;
 }
 
+/**
+ * The chat TUI's stream resume, installed while a chat session is mounted.
+ * The platform port above forwards to it; outside a chat there is no host
+ * that can resume, so the port answers `false`.
+ */
+let cliResumeHandler: AgentResumePort['tryResumeStream'] | undefined;
+
+export function setCliAgentResumeHandler(
+  handler: AgentResumePort['tryResumeStream'],
+): () => void {
+  cliResumeHandler = handler;
+  return () => {
+    if (cliResumeHandler === handler) cliResumeHandler = undefined;
+  };
+}
+
 export async function setCliHelperModel(
   model: string | undefined,
 ): Promise<void> {
@@ -264,7 +279,8 @@ export async function initCliPlatform(
         secrets: getCliSecrets(context.storageRoot),
         lifecycle,
         agentResume: {
-          tryResumeStream: tryResumeCliStream,
+          tryResumeStream: async (streamId, recovery) =>
+            (await cliResumeHandler?.(streamId, recovery)) ?? false,
         },
         agentDirectories,
         getWorkspacePath: () => cliWorkspaceCwd,

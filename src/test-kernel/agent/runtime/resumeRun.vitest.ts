@@ -1,32 +1,44 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
-import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
-import type { StreamTabId } from '@shared/schemas';
+import { resumeRun } from '@agent/runtime/resumeRun';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { RUN_OUTCOME } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const resumeToolUseFromResumeDataMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/runtime/executeAgent', () => ({
+vi.mock('@agent/runtime/executeAgent', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/runtime/executeAgent')>()),
   resumeToolUseFromResumeData: resumeToolUseFromResumeDataMock,
 }));
 
+const retrieveSessionResumeDataMock = vi.hoisted(() => vi.fn());
+vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
+  retrieveSessionResumeData: retrieveSessionResumeDataMock,
+}));
+
+const getExecutionStoreMock = vi.hoisted(() => vi.fn());
+vi.mock('@agent/storage/ExecutionKVStore', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/ExecutionKVStore')>()),
+  getExecutionStore: getExecutionStoreMock,
+}));
+
+const EXECUTION = 'exec:resume' as ExecutionId;
 const STREAM = 'stream:resume-ownership' as StreamTabId;
 const completed = {
   category: 'toolUse' as const,
   outcome: RUN_OUTCOME.COMPLETED,
-  executionId: 'exec:resume',
+  executionId: EXECUTION,
   streamId: STREAM,
   response: 'done',
   files: [],
   totalCostUsd: 0,
 };
-const isCancellationRequested = (): boolean => false;
 
 function snapshot() {
-  return createToolUseResumeData({ streamId: STREAM });
+  return createToolUseResumeData({ executionId: EXECUTION, streamId: STREAM });
 }
 
 function seedRecoverable(
@@ -47,11 +59,21 @@ afterEach(() => {
 function createSession(): ReturnType<typeof createTestSession> {
   const session = createTestSession();
   sessions.push(session);
+  vi.spyOn(session.snapshots, 'preload').mockResolvedValue(undefined);
   return session;
 }
 
-describe('resumeQueuedToolUseFromResumeData ownership', () => {
+const executeWorkflow = vi.fn(async () => {
+  throw new Error('tool-use fixtures never launch a workflow');
+});
+
+describe('resumeRun tool-use queue ownership', () => {
   beforeEach(() => {
+    getExecutionStoreMock.mockReset().mockReturnValue({
+      readConfig: async () => snapshot().agentConfig,
+      readMeta: async () => ({ streamId: STREAM }),
+    });
+    retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
     resumeToolUseFromResumeDataMock.mockReset();
     resumeToolUseFromResumeDataMock.mockImplementation(
       async (_resume: unknown, options: ResumeToolUseFromResumeDataOptions) => {
@@ -66,17 +88,16 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
     seedRecoverable(session, 'first');
 
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
+      resumeRun(EXECUTION, {
         session,
-        isCancellationRequested,
+        executeWorkflow,
         onFollowUpQueueReady: () => {
           expect(
             session.followUps.submit(STREAM, { text: 'second' }, 'recoverable'),
           ).toEqual({ kind: 'recovering' });
         },
-        onError: vi.fn(),
       }),
-    ).resolves.toBe(true);
+    ).resolves.toBe('started');
 
     const options = resumeToolUseFromResumeDataMock.mock
       .calls[0]?.[1] as ResumeToolUseFromResumeDataOptions;
@@ -95,21 +116,13 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
       return completed;
     });
 
-    const first = resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
-      session,
-      isCancellationRequested,
-      onError: vi.fn(),
-    });
+    const first = resumeRun(EXECUTION, { session, executeWorkflow });
     await vi.waitFor(() =>
       expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce(),
     );
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
-        session,
-        isCancellationRequested,
-        onError: vi.fn(),
-      }),
-    ).resolves.toBe(false);
+      resumeRun(EXECUTION, { session, executeWorkflow }),
+    ).resolves.toEqual({ failed: 'not_resumable' });
     barrier.resolve();
     await first;
     expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
@@ -121,12 +134,8 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
     resumeToolUseFromResumeDataMock.mockRejectedValueOnce(new Error('failed'));
 
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
-        session,
-        isCancellationRequested,
-        onError: vi.fn(),
-      }),
-    ).resolves.toBe(false);
+      resumeRun(EXECUTION, { session, executeWorkflow }),
+    ).rejects.toThrow('failed');
     expect(session.followUps.getAll(STREAM)).toEqual(['keep me']);
   });
 
@@ -139,11 +148,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
     });
     resumeToolUseFromResumeDataMock.mockReturnValueOnce(barrier);
 
-    const resuming = resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
-      session,
-      isCancellationRequested,
-      onError: vi.fn(),
-    });
+    const resuming = resumeRun(EXECUTION, { session, executeWorkflow });
     await vi.waitFor(() =>
       expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce(),
     );
@@ -157,7 +162,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
     ).toEqual({ kind: 'recovering' });
     rejectResume(new Error('resume failed'));
 
-    await expect(resuming).resolves.toBe(false);
+    await expect(resuming).rejects.toThrow('resume failed');
     expect(session.followUps.getAll(STREAM)).toEqual([
       'original',
       'completed child',
@@ -176,13 +181,18 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
     const recovery = submission.lease;
 
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
-        session,
-        recovery,
-        isCancellationRequested,
-        onError: vi.fn(),
-      }),
-    ).resolves.toBe(true);
+      resumeRun(EXECUTION, { session, recovery, executeWorkflow }),
+    ).resolves.toBe('started');
     expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
+  });
+
+  it('refuses with `finished` when no checkpoint remains', async () => {
+    const session = createSession();
+    retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
+
+    await expect(
+      resumeRun(EXECUTION, { session, executeWorkflow }),
+    ).resolves.toEqual({ failed: 'finished' });
+    expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
   });
 });

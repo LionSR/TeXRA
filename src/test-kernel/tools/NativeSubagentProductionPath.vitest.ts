@@ -39,8 +39,7 @@ import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { ModelCell } from '@agent/runtime/ModelCell';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import { resumeRun } from '@agent/runtime/resumeRun';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
@@ -153,20 +152,15 @@ async function resumePersistedStream(
   const executionId = streamId.slice(
     streamId.lastIndexOf('#') + 1,
   ) as ExecutionId;
-  const config = await getExecutionStore(executionId).readConfig();
-  if (!config) return false;
-  const resume = await retrieveSessionResumeData(streamId, executionId, config);
-  if (!resume || resume.type !== 'toolUse') return false;
-  const resumed = await resumeQueuedToolUseFromResumeData(streamId, resume, {
+  const resumed = await resumeRun(executionId, {
     session,
     recovery,
-    isCancellationRequested: () => false,
-    onError: (error) => {
-      throw error;
+    executeWorkflow: async () => {
+      throw new Error('Workflow resume is not part of this fixture.');
     },
   });
   completedResumes.push(streamId);
-  return resumed;
+  return resumed === 'started';
 }
 
 async function integrationPlatform(): Promise<Platform> {

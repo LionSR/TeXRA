@@ -880,6 +880,28 @@ function emitSearchRunConfig(bridge: TestableBridge): void {
   });
 }
 
+/**
+ * Durable execution rows `resumeRun` resolves before dispatching: the run
+ * record plus registration-stamped `meta.streamId`.
+ */
+function executionSeed(
+  executionId: string,
+  streamId: string,
+  config: AgentConfig,
+): [string, unknown][] {
+  return [
+    [`executions/${executionId}/config`, config],
+    [
+      `executions/${executionId}/meta`,
+      {
+        timestamp: '2026-07-10T00:00:00.000Z',
+        streamId,
+        identity: { kind: 'agent', agent: config.agent },
+      },
+    ],
+  ];
+}
+
 function stubWorkflowResumeData(
   runConfig: AgentConfig,
   executionId: string,
@@ -1948,9 +1970,9 @@ describe('DesktopProgressBridge', () => {
     });
     const bridge = await createBridge(messages, {
       canonicalStreamIds: [streamId],
-      kvStoreBacking: new Map<string, unknown>([
-        [`executions/${executionId}/config`, runConfig],
-      ]),
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed(executionId, streamId, runConfig),
+      ),
       configureProgressSnapshotStore: (store) => {
         snapshotFacts(store).setRunConfig(streamId, runConfig, executionId);
       },
@@ -2285,6 +2307,7 @@ describe('DesktopProgressBridge', () => {
       if (key === 'meta') {
         return {
           executionId,
+          streamId: 'stream-1',
           timestamp: '2026-07-10T00:00:00.000Z',
           identity: { kind: 'agent', agent: runConfig.agent },
           description: 'Persisted workflow',
@@ -2372,9 +2395,9 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       runAgent,
       canonicalStreamIds: [streamId],
-      kvStoreBacking: new Map<string, unknown>([
-        [`executions/${executionId}/config`, runConfig],
-      ]),
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed(executionId, streamId, runConfig),
+      ),
       configureProgressSnapshotStore: (store) => {
         snapshots = store;
         snapshotFacts(store).setRunConfig(streamId, runConfig, executionId);
@@ -2432,6 +2455,9 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       resumeToolUseFromResumeData,
       canonicalStreamIds: ['stream-1'],
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed('ec1001', 'stream-1', SEARCH_TOOL_USE_AGENT_CONFIG),
+      ),
     });
     try {
       emitSearchRunConfig(bridge);
@@ -2489,6 +2515,9 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       resumeToolUseFromResumeData,
       canonicalStreamIds: ['stream-1'],
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed('ec1001', 'stream-1', SEARCH_TOOL_USE_AGENT_CONFIG),
+      ),
     });
 
     try {
@@ -2536,6 +2565,9 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], {
       retrieveSessionResumeData,
       canonicalStreamIds: ['stream-1'],
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed('ec1001', 'stream-1', SEARCH_TOOL_USE_AGENT_CONFIG),
+      ),
     });
 
     try {
