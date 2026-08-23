@@ -34,7 +34,7 @@ import { AgentCategory } from '@shared/schemas';
 import {
   claudeAgentSessionsFor,
   codexThreadsFor,
-} from '@tools/agentShutdownHandlers';
+} from '@tools/agentCliSessionStores';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
 export type { AgentEvent } from '@agent/trace';

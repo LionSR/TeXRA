@@ -97,7 +97,7 @@ import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import {
   claudeAgentSessionsFor,
   codexThreadsFor,
-} from '@tools/agentShutdownHandlers';
+} from '@tools/agentCliSessionStores';
 import { createChildStream } from '@tools/delegation/childStream';
 import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 

@@ -49,7 +49,7 @@ import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, agentKeyOf, type AgentSource } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
-import { registerAgentShutdownHandlers } from '@tools/agentShutdownHandlers';
+import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { killActiveRecording } from '@tools/media/audio';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';

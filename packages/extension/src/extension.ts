@@ -91,7 +91,7 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { UsageLogService } from '@telemetry/UsageLogService';
-import { registerAgentShutdownHandlers } from '@tools/agentShutdownHandlers';
+import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
 import { setSetupPlatform } from '@tools/setup';
 import {
   refreshToolAvailability,
