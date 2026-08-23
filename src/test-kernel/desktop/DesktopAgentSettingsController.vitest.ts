@@ -519,7 +519,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
 
     await applyAgentPreset(controller, 'missing-team');
 
-    expect(errorMessages).toEqual(['Unknown team: missing-team']);
+    expect(errorMessages).toEqual(['Unknown team "missing-team".']);
     expect(
       workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toBeUndefined();

@@ -1922,6 +1922,12 @@
       "name": "SettingsAgentDirectoryEntry"
     },
     {
+      "file": "src/controllers/settingsView/SettingsTeamRosterController.ts",
+      "category": "unused",
+      "kind": "types",
+      "name": "SettingsTeamRosterPresentation"
+    },
+    {
       "file": "src/eventBus/AppSignals.ts",
       "category": "production-dead",
       "kind": "types",
