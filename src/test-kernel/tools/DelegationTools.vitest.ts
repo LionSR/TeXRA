@@ -200,8 +200,8 @@ describe('DelegateAgentTool resume ownership', () => {
 
   it('reports a merged recovery failure to the parent', async () => {
     mocks.submitFollowUp.mockResolvedValue({
-      status: 'failed',
-      reason: 'resume_failed',
+      status: 'queued',
+      wake: 'failed',
     });
 
     await new DelegateAgentTool().call({

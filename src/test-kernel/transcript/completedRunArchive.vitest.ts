@@ -455,6 +455,7 @@ describe('completedRunArchive facade', () => {
     try {
       await expect(
         resolveAndResumeStream(streamId, {
+          executions: session.executions,
           resolveResumeState,
           resumeToolUse: async (resume) => {
             await resumeToolUseFromResumeData(resume, { session });

@@ -50,7 +50,7 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
             return;
           }
           void stores
-            .deleteStreamAfterExecutionQuiescence(streamId, {
+            .deleteStream(streamId, {
               shouldDelete: () =>
                 (streamIncarnations.get(streamId) ?? 0) === expectedIncarnation,
               expectedIncarnation,

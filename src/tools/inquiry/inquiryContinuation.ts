@@ -140,10 +140,10 @@ function mapSubmissionToInquiryOutcome(
   result: SubmitFollowUpResult,
 ): InjectionOutcome {
   if (result.status === 'sent') return 'sent';
+  // A queued continuation whose wake failed is still queued; an explicit
+  // Resume delivers it. A refusal has nothing left to continue.
   if (result.status === 'queued') return 'queued';
-  // A failed recovery resume still queued the continuation; an explicit
-  // Resume delivers it. Every other refusal has nothing left to continue.
-  return result.reason === 'resume_failed' ? 'queued' : 'archived';
+  return 'archived';
 }
 
 async function deliverContinuation(params: {

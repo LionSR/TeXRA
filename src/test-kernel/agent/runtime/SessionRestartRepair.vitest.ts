@@ -25,6 +25,7 @@ import {
   writeForeignLease,
   writeOrphanedLease,
 } from '@test/support/executionLeaseFixtures';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -571,6 +572,38 @@ describe('SessionHandle restart repair', () => {
     expect(storage.getStoragePath()).toBe('/workspace/old-storage');
   });
 
+  it('refuses a storage-root change while a lane step is admitted but not started, leaving the session as it was', async () => {
+    const executionId = 'workspace-queued' as ExecutionId;
+    const transcripts = await StreamLogStore.open();
+    const session = openDeferredSession(transcripts);
+    const storage = platform().storage;
+    const commit = vi.fn(() => true);
+    Object.assign(storage, {
+      hasPendingWorkspaceStorageChange: () => true,
+      commitWorkspaceStorageChange: commit,
+    });
+    const flush = vi.spyOn(transcripts, 'flush');
+    const generationBefore = Reflect.get(session, 'storageGeneration');
+    const gate = createDeferred();
+    // Admitted synchronously; its body has not run yet.
+    const step = session.executions.runExecutionStep(executionId, async () => {
+      await gate.promise;
+      return 'ran';
+    });
+
+    await expect(session.reloadAfterStorageRootChange()).rejects.toThrow(
+      'cannot change its storage location while 1 run is live',
+    );
+
+    expect(flush).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
+    expect(Reflect.get(session, 'storageGeneration')).toBe(generationBefore);
+    // The readiness promise was not replaced by the refused change.
+    await expect(session.waitUntilReady()).resolves.toBeUndefined();
+    gate.resolve();
+    await expect(step).resolves.toBe('ran');
+  });
+
   it('flushes old-root stores before committing the new storage root', async () => {
     const transcripts = await StreamLogStore.open();
     const session = openDeferredSession(transcripts);
@@ -809,7 +842,9 @@ describe('SessionHandle restart repair', () => {
     await Promise.resolve();
     await expect(
       session.executions.launchExecution(queuedExecutionId, start),
-    ).rejects.toThrow('cannot change its storage location');
+    ).rejects.toThrow(
+      'TeXRA is changing its storage location. Start this run again in a moment.',
+    );
     expect(start).not.toHaveBeenCalled();
 
     finishReload?.();

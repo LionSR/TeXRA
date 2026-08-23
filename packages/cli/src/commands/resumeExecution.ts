@@ -197,6 +197,7 @@ export async function runResumeExecution(
   let failed = false;
   let failureExitCode: CliExitCode = CliExitCode.AgentError;
   const resumed = await resolveAndResumeStream(streamId, {
+    executions: session.executions,
     resolveResumeState: async () => ({
       status: 'resolved',
       state: { runState: config, executionId: id },

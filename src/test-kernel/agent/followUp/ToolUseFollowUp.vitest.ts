@@ -472,7 +472,7 @@ describe('presentFollowUpResult', () => {
       severity: 'none',
     });
     expect(
-      presentFollowUpResult({ status: 'failed', reason: 'resume_failed' }),
+      presentFollowUpResult({ status: 'queued', wake: 'failed' }),
     ).toMatchObject({ severity: 'info' });
     expect(
       presentFollowUpResult({ status: 'failed', reason: 'owned_elsewhere' }),

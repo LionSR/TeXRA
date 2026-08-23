@@ -12,7 +12,7 @@ import {
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
-import type { StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 import type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
 
@@ -25,20 +25,21 @@ import type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
  * - `not_resumable`: the stream has no live flow here and the submission was
  *   refused (a replaced continuation generation, a disposed session, a run
  *   this process cannot classify).
- * - `resume_failed`: the input was queued, but the recovery resume it
- *   triggered did not reach the run; an explicit Resume delivers it.
  */
 export type FollowUpFailureReason =
-  'finished' | 'owned_elsewhere' | 'not_resumable' | 'resume_failed';
+  'finished' | 'owned_elsewhere' | 'not_resumable';
 
 /**
  * Three outcomes: the input reached a live flow, it waits in the stream's
  * queue for the next turn, or it was not admitted for a worded reason. A
  * delivery the admission boundary had already accepted (#9531) is `sent`.
+ * A queued input whose recovery resume did not reach the run is still
+ * queued (`wake: 'failed'`): the input belongs to the stream, and an
+ * explicit Resume delivers it.
  */
 export type SubmitFollowUpResult =
   | { status: 'sent' }
-  | { status: 'queued' }
+  | { status: 'queued'; wake?: 'failed' }
   | { status: 'failed'; reason: FollowUpFailureReason };
 
 export type FollowUpPresentation =
@@ -69,9 +70,10 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
     'This run is live in another TeXRA window. Send the message there.',
   not_resumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
-  resume_failed:
-    'Message queued, but the run could not be resumed automatically. Resume it to deliver the message, or start a new agent task.',
 };
+
+export const FOLLOW_UP_WAKE_FAILED_MESSAGE =
+  'Message queued, but the run could not be resumed automatically. Resume it to deliver the message, or start a new agent task.';
 
 /** The one wording of each refusal, shared by every host and tool output. */
 export function describeFollowUpFailure(reason: FollowUpFailureReason): string {
@@ -81,11 +83,16 @@ export function describeFollowUpFailure(reason: FollowUpFailureReason): string {
 export function presentFollowUpResult(
   result: SubmitFollowUpResult,
 ): FollowUpPresentation {
-  if (result.status !== 'failed') return { severity: 'none' };
-  return {
-    severity: result.reason === 'resume_failed' ? 'info' : 'warning',
-    message: describeFollowUpFailure(result.reason),
-  };
+  if (result.status === 'failed') {
+    return {
+      severity: 'warning',
+      message: describeFollowUpFailure(result.reason),
+    };
+  }
+  if (result.status === 'queued' && result.wake === 'failed') {
+    return { severity: 'info', message: FOLLOW_UP_WAKE_FAILED_MESSAGE };
+  }
+  return { severity: 'none' };
 }
 
 const logger = createLog('ToolUseFollowUp');
@@ -93,33 +100,43 @@ const PersistedContinuationGenerationSchema = z.looseObject({
   continuationGenerationId: z.uuid(),
 });
 
+/**
+ * The stream's execution id. Prefer the resident snapshot record for a live
+ * session: `run.start` updates it synchronously while the sidecar FK write is
+ * still queued. A stream whose run metadata is not resident (after a host
+ * restart, or evicted by a storage-root change) falls back to the persisted
+ * sidecar, then the summary mirror. Throws when the persisted read fails.
+ */
+async function lookupExecutionId(
+  streamId: StreamTabId,
+  session: SessionHandle,
+): Promise<ExecutionId | undefined> {
+  return (
+    session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
+    (await session.snapshots.readPersistedExecutionId(streamId)) ??
+    session.transcripts.getSummaryMeta(streamId)?.executionId
+  );
+}
+
 async function restorePersistedGeneration(
   streamId: StreamTabId,
   session: SessionHandle,
 ): Promise<boolean> {
-  // Prefer the resident snapshot record for a live session: `run.start`
-  // updates it synchronously while the sidecar FK write is still queued.
-  let executionId = session.snapshots.getRunMetadata(streamId, {
-    quiet: true,
-  }).executionId;
-  if (!executionId) {
-    try {
-      executionId =
-        (await session.snapshots.readPersistedExecutionId(streamId)) ??
-        session.transcripts.getSummaryMeta(streamId)?.executionId;
-    } catch (error) {
-      logger.warn(
-        `Cannot restore continuation generation for ${streamId}: persisted execution identity is unreadable.`,
-        {
-          data: {
-            streamId,
-            cause: 'execution_id_read_failed',
-            error,
-          },
+  let executionId: ExecutionId | undefined;
+  try {
+    executionId = await lookupExecutionId(streamId, session);
+  } catch (error) {
+    logger.warn(
+      `Cannot restore continuation generation for ${streamId}: persisted execution identity is unreadable.`,
+      {
+        data: {
+          streamId,
+          cause: 'execution_id_read_failed',
+          error,
         },
-      );
-      return false;
-    }
+      },
+    );
+    return false;
   }
   if (!executionId) {
     logger.warn(
@@ -281,9 +298,16 @@ async function classifyRefusal(
   streamId: StreamTabId,
   session: SessionHandle,
 ): Promise<FollowUpFailureReason> {
-  const executionId = session.snapshots.getRunMetadata(streamId, {
-    quiet: true,
-  }).executionId;
+  let executionId: ExecutionId | undefined;
+  try {
+    executionId = await lookupExecutionId(streamId, session);
+  } catch (error) {
+    logger.warn(
+      `Cannot classify the refusal for ${streamId}: persisted execution identity is unreadable.`,
+      { data: { streamId, error } },
+    );
+    return 'not_resumable';
+  }
   if (!executionId) return 'not_resumable';
   const classification = await classifyRun(executionId);
   switch (classification.kind) {
@@ -338,7 +362,7 @@ export async function submitFollowUp(
     const resumed = await dispatch.resume;
     if (resumed) return { status: 'queued' };
     ownerSession.followUps.release(dispatch.recovery, 'recoverable');
-    return { status: 'failed', reason: 'resume_failed' };
+    return { status: 'queued', wake: 'failed' };
   }
   if (dispatch.status === 'no_session') {
     notifyAdmitted(false);

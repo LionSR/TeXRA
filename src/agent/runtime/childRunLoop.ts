@@ -20,6 +20,7 @@ import type {
 } from '@agent/storage/ExecutionKVStore';
 import {
   assertOwnedExecutionLease,
+  ExecutionLeaseLostError,
   markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
 import {
@@ -744,6 +745,11 @@ async function submitPendingDelivery(
         },
       },
     );
+  } else if (delivery.wake === 'failed') {
+    logger.warn(
+      'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
+      { data: { executionId, parentStreamId: pending.targetStreamId } },
+    );
   }
 }
 
@@ -817,6 +823,33 @@ export function startChildRunLoop<TTurn>(
     detachLoopInterrupt = handle.attachInterruptHandler(loop);
   };
   let sessionStage: StageHandle | undefined;
+  // Preserve the setup error while unwinding every resource acquired so far.
+  // Used when setup throws and when the lane refuses the run before it
+  // starts; in both cases `run` never executes, so nothing else unwinds.
+  const unwindSetup = (error: unknown): unknown => {
+    const cleanupErrors: unknown[] = [];
+    const cleanup = (operation: () => void): void => {
+      try {
+        operation();
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+      }
+    };
+    cleanup(() => sessionStage?.end(RUN_OUTCOME.FAILED));
+    cleanup(() => detachLoopInterrupt?.());
+    cleanup(() => {
+      if (queueLease) runSession.followUps.release(queueLease, 'terminal');
+    });
+    cleanup(releaseChildActivation);
+    cleanup(releaseSessionOwnershipOnce);
+    // The primary error always heads the list, so a single throw covers both
+    // shapes: `error` unwrapped when rollback was clean, an AggregateError when
+    // cleanup also failed.
+    return aggregateError(
+      [error, ...cleanupErrors],
+      `Child run ${executionId} setup failed and rollback was incomplete`,
+    );
+  };
 
   try {
     strategy.onLoopStart?.(runSession);
@@ -836,29 +869,7 @@ export function startChildRunLoop<TTurn>(
       ? logger.openStage(strategy.stageLabel)
       : undefined;
   } catch (error) {
-    // Preserve the setup error while unwinding every resource acquired so far.
-    const cleanupErrors: unknown[] = [];
-    const cleanup = (operation: () => void): void => {
-      try {
-        operation();
-      } catch (cleanupError) {
-        cleanupErrors.push(cleanupError);
-      }
-    };
-    cleanup(() => sessionStage?.end(RUN_OUTCOME.FAILED));
-    cleanup(() => detachLoopInterrupt?.());
-    cleanup(() => {
-      if (queueLease) runSession.followUps.release(queueLease, 'terminal');
-    });
-    cleanup(releaseChildActivation);
-    cleanup(releaseSessionOwnershipOnce);
-    // The primary error always heads the list, so a single throw covers both
-    // shapes: `error` unwrapped when rollback was clean, an AggregateError when
-    // cleanup also failed.
-    throw aggregateError(
-      [error, ...cleanupErrors],
-      `Child run ${executionId} setup failed and rollback was incomplete`,
-    );
+    throw unwindSetup(error);
   }
 
   const childRunGenerationId = queueLease.generationId;
@@ -927,7 +938,9 @@ export function startChildRunLoop<TTurn>(
             { signal: ac.signal },
           ) as Promise<TTurn>;
 
+  let runStarted = false;
   const run = async (): Promise<void> => {
+    runStarted = true;
     // A release failure after a clean run must reach awaited callers: the
     // child's artifacts did not drain and its lease was abandoned, so a
     // required-result parent must not journal the turn as durably settled.
@@ -1076,6 +1089,10 @@ export function startChildRunLoop<TTurn>(
       // released.
       sawTurnFailure = true;
       lastTurnErr ??= error;
+      // A fenced write found the lease gone: another owner holds this
+      // execution now, so the loop stops here instead of delivering or
+      // accepting anything further on the former owner's behalf.
+      if (error instanceof ExecutionLeaseLostError) loop.interrupt();
       markOwnedExecutionLeaseUndurable(executionId);
       throw error;
     } finally {
@@ -1211,7 +1228,18 @@ export function startChildRunLoop<TTurn>(
   // The loop is this execution's generation: it starts on the execution's
   // lane once any earlier generation of the id has disposed, and later steps
   // (a resume, a delete) wait for its completion.
+  let completion: Promise<void>;
+  try {
+    completion = runSession.executions.launchExecution(executionId, run);
+  } catch (error) {
+    throw unwindSetup(error);
+  }
   return {
-    completion: runSession.executions.launchExecution(executionId, run),
+    completion: completion.catch((error: unknown) => {
+      // Refused before `run` began (the registry disposed, or a storage-root
+      // change holds the lifecycle): `run`'s own unwinding never ran.
+      if (runStarted) throw error;
+      throw unwindSetup(error);
+    }),
   };
 }

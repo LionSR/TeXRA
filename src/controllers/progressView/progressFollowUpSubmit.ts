@@ -1,4 +1,5 @@
 import {
+  describeFollowUpFailure,
   presentFollowUpResult,
   submitFollowUp,
   type SubmitFollowUpResult,
@@ -74,15 +75,31 @@ export function submitProgressFollowUp(
         return;
       }
 
-      // A failed recovery resume still queued the input; every other
-      // failure hands the draft back.
-      acknowledge(
-        result.status !== 'failed' || result.reason === 'resume_failed',
-      );
-      emitQueuedFollowUpsChanged();
-      const presentation = presentFollowUpResult(result);
-      if (presentation.severity !== 'none') {
-        await showInfo(presentation.message);
+      switch (result.status) {
+        case 'sent':
+        case 'queued': {
+          // A queued input whose wake failed still belongs to the stream.
+          acknowledge(true);
+          emitQueuedFollowUpsChanged();
+          const presentation = presentFollowUpResult(result);
+          if (presentation.severity !== 'none') {
+            await showInfo(presentation.message);
+          }
+          return;
+        }
+        case 'failed':
+          acknowledge(false);
+          emitQueuedFollowUpsChanged();
+          await showInfo(describeFollowUpFailure(result.reason));
+          return;
+        default:
+          // A result this switch does not know must not leave the composer
+          // frozen: hand the draft back and make the gap loud.
+          acknowledge(false);
+          logger.warn(
+            `Unhandled follow-up result for stream ${streamId}: ${JSON.stringify(result)}`,
+          );
+          return;
       }
     })().catch((error: unknown) => {
       acknowledge(false);

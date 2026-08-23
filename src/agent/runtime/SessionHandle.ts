@@ -328,10 +328,28 @@ export class SessionHandle {
         hooks && { workspacePath: hooks.workspacePath },
       );
     if (hasPendingStorageChange === false) return Promise.resolve(false);
+    // A storage-root change is refused, not queued, while any execution is
+    // live: a run writes under the root it was claimed in, so the two may not
+    // overlap. The hold is taken before any session state moves, so a refusal
+    // changes nothing; while it is held, launches and resumes are refused.
+    let releaseHold: () => void;
+    try {
+      releaseHold = this.executions.holdLifecycle(
+        (live) => new StorageRootChangeRefusedError(live),
+        () =>
+          new Error(
+            'TeXRA is changing its storage location. Start this run again in a moment.',
+          ),
+      );
+    } catch (error) {
+      return Promise.reject(error);
+    }
     this.storageGeneration += 1;
     const generation = this.storageGeneration;
     const repair = this.enqueueRestartRepair(() =>
-      this.repairStoresAfterRestart(generation, true, hooks),
+      this.repairStoresAfterRestart(generation, true, hooks).finally(
+        releaseHold,
+      ),
     );
     this.restartRepairPromise = repair;
     return repair;
@@ -375,20 +393,10 @@ export class SessionHandle {
     try {
       if (this.restartRepairAbort.signal.aborted) return false;
       if (reloadTranscripts) {
-        // A storage-root change is refused, not queued, while any execution
-        // is live: a run writes under the root it was claimed in, so the two
-        // may not overlap. The hold also refuses launches for the duration.
-        const releaseHold = this.executions.holdLifecycle(
-          (live) => new StorageRootChangeRefusedError(live),
+        return await this.replaceStoresAfterStorageRootChange(
+          generation,
+          transitionHooks,
         );
-        try {
-          return await this.replaceStoresAfterStorageRootChange(
-            generation,
-            transitionHooks,
-          );
-        } finally {
-          releaseHold();
-        }
       }
       if (generation !== this.storageGeneration) return false;
       await this.snapshots.preload([...this.computeStartupSeedSet()]);

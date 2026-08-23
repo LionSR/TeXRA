@@ -5,8 +5,10 @@ import type { StreamTabId } from '@shared/schemas';
 import { submitFollowUp, type FollowUpFailureReason } from './ToolUseFollowUp';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 
+/** `wake: 'failed'`: the result is in the parent's queue; only its wake failed. */
 export type ChildRunDeliveryResult =
-  { kind: 'delivered' } | { kind: 'failed'; reason: FollowUpFailureReason };
+  | { kind: 'delivered'; wake?: 'failed' }
+  | { kind: 'failed'; reason: FollowUpFailureReason };
 
 export async function deliverChildRunFollowUp(params: {
   readonly targetStreamId: StreamTabId;
@@ -21,7 +23,10 @@ export async function deliverChildRunFollowUp(params: {
     mode: params.mode ?? 'child_delivery',
     expectedGenerationId: params.expectedGenerationId,
   });
-  return result.status === 'failed'
-    ? { kind: 'failed', reason: result.reason }
+  if (result.status === 'failed') {
+    return { kind: 'failed', reason: result.reason };
+  }
+  return result.status === 'queued' && result.wake === 'failed'
+    ? { kind: 'delivered', wake: 'failed' }
     : { kind: 'delivered' };
 }

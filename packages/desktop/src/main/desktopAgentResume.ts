@@ -85,9 +85,19 @@ async function resumeDesktopStream(
       ),
     );
   };
+  // The resident transcript index is a cache of this process; the stream may
+  // have been deleted from the durable transcript store by another process
+  // since it was loaded. Read the store before resuming: neither the lease
+  // (a deleted stream holds none) nor the execution lane (in-process only)
+  // sees that fact.
+  if (!(await context.session.transcripts.hasAuthoritativeStream(streamId))) {
+    return false;
+  }
+  if (isResumeInvalidated()) return false;
   return resolveAndResumeStream(
     streamId,
     {
+      executions: context.session.executions,
       resolveResumeState: (id) =>
         resolveResumeStateFromSnapshots(context.session.snapshots, id),
       reportResumeStateResolution: async (id, resolution) => {

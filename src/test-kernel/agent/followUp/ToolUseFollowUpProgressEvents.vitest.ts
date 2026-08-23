@@ -254,7 +254,7 @@ describe('tool-use follow-up progress events', () => {
 
       // The fake platform's resume port refuses, so the input stays queued
       // behind a failed wake.
-      expect(result).toEqual({ status: 'failed', reason: 'resume_failed' });
+      expect(result).toEqual({ status: 'queued', wake: 'failed' });
       expect(defaultSession().followUps.getAll(resumingStreamId)).toEqual([
         'queued while resuming',
       ]);
@@ -282,7 +282,7 @@ describe('tool-use follow-up progress events', () => {
     try {
       const result = await submitFollowUp(parentStreamId, 'continue child');
 
-      expect(result).toEqual({ status: 'failed', reason: 'resume_failed' });
+      expect(result).toEqual({ status: 'queued', wake: 'failed' });
       expect(defaultSession().followUps.getAll(parentStreamId)).toEqual([
         'continue child',
       ]);

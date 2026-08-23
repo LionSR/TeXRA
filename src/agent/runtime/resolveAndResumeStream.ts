@@ -11,6 +11,7 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import { ResumeSessionUnavailableError } from './executeAgent';
+import type { ExecutionRegistry } from './executionRegistry';
 import type { SessionHandle } from './SessionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
@@ -126,6 +127,12 @@ export async function resolveResumeStateFromSnapshots(
 }
 
 export interface ResumeStreamPorts {
+  /**
+   * The registry of the session that owns this stream. A resume is refused,
+   * not queued, while the stream is running or resuming in this process; the
+   * lane below only keeps admitted generations from overlapping.
+   */
+  readonly executions: Pick<ExecutionRegistry, 'isActiveOrResuming'>;
   /** Monotone per-attempt cancellation signal: once true it stays true. */
   readonly isCancellationRequested?: () => boolean;
   resolveResumeState(streamId: StreamTabId): Promise<ResumeStateResolution>;
@@ -150,10 +157,11 @@ export interface ResumeStreamPorts {
 /**
  * Attempt to resume a WAITING / children-running stream from persisted state.
  *
- * Admission is the recovery claim the caller made on the stream's follow-up
- * queue: a stream with a live consumer cannot be claimed, and the resume
- * itself starts on the execution's serial lane, so no stream-status check is
- * needed here to keep two resumes, or a resume and a launch, apart.
+ * The execution lane keeps the resumed generation from overlapping the one
+ * before it; admission is decided here. A stream that is already running or
+ * resuming in this process is refused, because a workflow run holds no
+ * follow-up queue consumer and a queued resume would otherwise rerun it
+ * after it finishes.
  */
 export async function resolveAndResumeStream(
   streamId: StreamTabId,
@@ -163,7 +171,11 @@ export async function resolveAndResumeStream(
   const isCancellationRequested = (): boolean =>
     ports.isCancellationRequested?.() === true;
 
-  if (isCancellationRequested()) return false;
+  if (
+    isCancellationRequested() ||
+    ports.executions.isActiveOrResuming(streamId)
+  )
+    return false;
 
   try {
     const resolution = await ports.resolveResumeState(streamId);
@@ -189,6 +201,9 @@ export async function resolveAndResumeStream(
       await ports.reportNoResumableSession?.(streamId);
       return false;
     }
+    // Re-check after the retrieval await: a launch of this stream may have
+    // been admitted meanwhile, and the lane would queue, not refuse, this one.
+    if (ports.executions.isActiveOrResuming(streamId)) return false;
 
     if (resume.type === 'toolUse') {
       return await ports.resumeToolUse(resume, recovery);

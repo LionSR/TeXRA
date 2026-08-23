@@ -24,6 +24,7 @@ import {
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import {
   describeFollowUpFailure,
+  FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
@@ -323,30 +324,29 @@ Git worktree support: resolved from the active workspace at runtime.`,
       },
     );
     if (result.status === 'failed') {
-      const worded = describeFollowUpFailure(result.reason);
-      if (result.reason === 'resume_failed') {
-        // The instruction is in the subagent's queue; only its wake failed.
-        // The parent learns of that through its own follow-up queue as well,
-        // the same way a child's turn failure reaches it.
-        void deliverResumeWakeFailure(
-          handle,
-          session,
-          executionId,
-          new Error(
-            'The subagent could not be resumed to process the follow-up.',
-          ),
-          parentDeliveryGenerationId,
-        );
-        return executed(
-          [
-            `Follow-up instruction queued for '${handle.agentName}', but the subagent could not be resumed (${result.reason}). ${worded}`,
-            `Execution ID: ${executionId}`,
-          ].join('\n'),
-          `Follow-up queued for '${handle.agentName}' (resume failed)`,
-        );
-      }
       throw new Error(
-        `Follow-up for '${handle.agentName}' was not accepted (${result.reason}): ${worded}`,
+        `Follow-up for '${handle.agentName}' was not accepted (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
+      );
+    }
+    if (result.status === 'queued' && result.wake === 'failed') {
+      // The instruction is in the subagent's queue; only its wake failed.
+      // The parent learns of that through its own follow-up queue as well,
+      // the same way a child's turn failure reaches it.
+      void deliverResumeWakeFailure(
+        handle,
+        session,
+        executionId,
+        new Error(
+          'The subagent could not be resumed to process the follow-up.',
+        ),
+        parentDeliveryGenerationId,
+      );
+      return executed(
+        [
+          `Follow-up instruction queued for '${handle.agentName}', but the subagent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`,
+          `Execution ID: ${executionId}`,
+        ].join('\n'),
+        `Follow-up queued for '${handle.agentName}' (resume failed)`,
       );
     }
 
