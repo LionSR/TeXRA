@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearStoreCache,
   deriveResumability,
-  finalizeExecution,
+  finalizeRun,
   getExecutionStore,
 } from '@agent/storage';
 import {
@@ -72,14 +72,13 @@ describe('deriveResumability', () => {
     );
 
     await expect(
-      finalizeExecution({
+      finalizeRun({
         executionId,
         outcome: RUN_OUTCOME.COMPLETED,
         flowRecord: 'delete',
       }),
     ).resolves.toMatchObject({
-      status: 'failed',
-      stage: 'flow-record-delete',
+      ok: false,
       outcomePersisted: true,
     });
 
@@ -113,14 +112,13 @@ describe('deriveResumability', () => {
     );
 
     await expect(
-      finalizeExecution({
+      finalizeRun({
         executionId,
         outcome: RUN_OUTCOME.FAILED,
         flowRecord: 'preserve',
       }),
     ).resolves.toMatchObject({
-      status: 'failed',
-      stage: 'terminal-status',
+      ok: false,
       outcomePersisted: false,
     });
 

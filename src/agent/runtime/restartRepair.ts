@@ -33,7 +33,7 @@ import {
   type ResumabilityDecision,
 } from '@agent/storage/resumability';
 import {
-  finalizeExecution as defaultFinalizeExecution,
+  finalizeRun as defaultFinalizeRun,
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
 } from '@agent/storage/executionLifecycle';
@@ -83,7 +83,7 @@ export interface RestartRepairOptions {
   deriveResumability?: (
     executionId: ExecutionId,
   ) => Promise<ResumabilityDecision>;
-  finalizeExecution?: (
+  finalizeRun?: (
     input: FinalizeExecutionInput,
   ) => Promise<FinalizeExecutionResult>;
   logger?: RestartRepairLogger;
@@ -125,23 +125,22 @@ interface ClassifiedStream {
 async function recordInterruption(
   streamId: StreamTabId,
   executionId: ExecutionId,
-  finalizeExecution: (
+  finalizeRun: (
     input: FinalizeExecutionInput,
   ) => Promise<FinalizeExecutionResult>,
   logger: RestartRepairLogger | undefined,
 ): Promise<void> {
   try {
-    const finalization = await finalizeExecution({
+    const finalization = await finalizeRun({
       executionId,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
     });
-    if (finalization.status === 'failed') {
+    if (!finalization.ok) {
       logger?.warn('Failed to finalize restart-repair execution', {
         data: {
           streamId,
           executionId,
-          stage: finalization.stage,
           outcomePersisted: finalization.outcomePersisted,
           error: finalization.error,
         },
@@ -166,8 +165,7 @@ export async function repairRestartedStreams(
   const classifyRun = options.classifyRun ?? defaultClassifyRun;
   const deriveResumability =
     options.deriveResumability ?? defaultDeriveResumability;
-  const finalizeExecution =
-    options.finalizeExecution ?? defaultFinalizeExecution;
+  const finalizeRun = options.finalizeRun ?? defaultFinalizeRun;
   const isCurrent = (streamId: StreamTabId, executionId?: ExecutionId) =>
     options.isRepairCandidateCurrent?.(streamId, executionId) ?? true;
 
@@ -301,7 +299,7 @@ export async function repairRestartedStreams(
         await recordInterruption(
           streamId,
           executionId,
-          finalizeExecution,
+          finalizeRun,
           options.logger,
         );
       }

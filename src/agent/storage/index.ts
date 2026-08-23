@@ -31,7 +31,7 @@ export {
   resolveExecutionWorkspaceFilePath,
 } from './executionWorkspaceFiles';
 export {
-  finalizeExecution,
+  finalizeRun,
   registerExecution,
   type FinalizeExecutionInput,
   writeWorkflowExecutionSnapshot,

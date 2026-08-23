@@ -19,15 +19,11 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
-  finalizeExecution: vi.fn().mockResolvedValue({
-    status: 'durable',
-    terminalStatusPersisted: true,
-    flowRecord: 'deleted',
-  }),
+  finalizeRun: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 vi.mock('@agent/storage', () => ({
-  finalizeExecution: storageMocks.finalizeExecution,
+  finalizeRun: storageMocks.finalizeRun,
 }));
 
 const plan: Plan = { objective: 'Finish the run.' };
