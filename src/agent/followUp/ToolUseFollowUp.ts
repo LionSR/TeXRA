@@ -135,17 +135,16 @@ function admitFollowUp(
       'live_owner',
     );
     if (submission.kind === 'duplicate') return { status: 'sent' };
-    if (submission.kind === 'live_flow') {
+    if (submission.kind === 'delivered_live') {
       if (options.mode === 'live_notification') return { status: 'queued' };
       notifyFollowUpSent(streamId, ownerSession);
       return { status: 'sent' };
     }
-    if (submission.kind === 'live' || submission.kind === 'queued') {
-      return { status: 'queued' };
-    }
-    if (submission.kind !== 'not_owned') {
+    if (submission.kind === 'queued') return { status: 'queued' };
+    if (submission.kind === 'refused') {
       return { status: 'failed', reason: 'not_resumable' };
     }
+    // No queue entry to join: deliver to the live context directly.
     target.context.session.appendFollowUp(item);
     notifyFollowUpSent(streamId, ownerSession);
     return { status: 'sent' };
@@ -162,10 +161,12 @@ function admitFollowUp(
     options.mode === 'live_notification' ? 'live_owner' : 'recoverable';
   const submission = ownerSession.followUps.submit(streamId, item, admission);
   if (submission.kind === 'duplicate') return { status: 'sent' };
-  if (submission.kind === 'unavailable' || submission.kind === 'not_owned') {
+  if (submission.kind === 'refused' || submission.kind === 'not_owned') {
     return { status: 'failed', reason: 'not_resumable' };
   }
-  if (submission.kind !== 'recovery') return { status: 'queued' };
+  if (submission.kind !== 'queued' || !submission.lease) {
+    return { status: 'queued' };
+  }
 
   const recovery = submission.lease;
   const resume = (options.resumePort ?? platform().agentResume).tryResumeStream(
