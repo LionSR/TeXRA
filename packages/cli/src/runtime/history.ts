@@ -100,8 +100,6 @@ export interface CliHistoryDetails {
   readonly files: readonly CliHistoryFile[];
   /** Whether a category-valid flow record is available for resumption. */
   readonly hasFlowRecord: boolean;
-  /** Mirrors {@link CliHistoryEntry.resumable}. */
-  readonly resumable: boolean;
   readonly currentModel?: string;
 }
 
@@ -236,7 +234,6 @@ export async function readCliHistoryDetails(
       : {}),
     files,
     hasFlowRecord: resumeData !== null,
-    resumable: resumeData !== null,
     currentModel:
       resumeData?.type === 'toolUse' ? resumeData.agentConfig.model : undefined,
   };

@@ -597,21 +597,17 @@ export function closeForegroundReader(): void {
 export const slashPaletteOpen = signal<boolean>(false);
 export const reverseSearchOpen = signal<boolean>(false);
 
-/** A refused follow-up handing its text (and the image paths it carried)
- *  back to the InputBar. `seq` makes two identical restores distinguishable;
+/** A refused follow-up handing its submitted text back to the InputBar,
+ *  image chips included. `seq` makes two identical restores distinguishable;
  *  the InputBar consumes and clears. */
 export const draftRestoreRequest = signal<{
   readonly text: string;
-  readonly mediaFiles: readonly string[];
   readonly seq: number;
 } | null>(null);
 let draftRestoreSeq = 0;
-export function requestDraftRestore(
-  text: string,
-  mediaFiles: readonly string[] = [],
-): void {
+export function requestDraftRestore(text: string): void {
   draftRestoreSeq += 1;
-  draftRestoreRequest.set({ text, mediaFiles, seq: draftRestoreSeq });
+  draftRestoreRequest.set({ text, seq: draftRestoreSeq });
 }
 
 /** Windowed content rows of the chat input's current draft (≥ 1), reported

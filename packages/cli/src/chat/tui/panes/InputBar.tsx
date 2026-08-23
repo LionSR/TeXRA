@@ -203,14 +203,18 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   useEffect(() => {
     if (!draftRestore) return;
     draftRestoreRequest.set(null);
+    // The submitted text still carries its `[Image #N]` tokens (only pasted
+    // text is expanded at submit); revive each one as a fresh chip, in order,
+    // so no placeholder is duplicated or left dangling.
     const store = attachmentsRef.current;
-    const chips = draftRestore.mediaFiles.flatMap((path) => {
-      const image = lastSubmittedImagesRef.current.find(
-        (entry) => entry.path === path,
-      );
-      return image ? [store.addPastedImage(image)] : [];
-    });
-    const restored = [draftRestore.text, ...chips].join(' ');
+    const images = [...lastSubmittedImagesRef.current];
+    const restored = draftRestore.text.replaceAll(
+      /\[Image #\d+\]/g,
+      (token) => {
+        const image = images.shift();
+        return image ? store.addPastedImage(image) : token;
+      },
+    );
     const current = draftValueRef.current;
     setValue(current.length > 0 ? `${current}\n${restored}` : restored);
   }, [draftRestore, setValue]);
