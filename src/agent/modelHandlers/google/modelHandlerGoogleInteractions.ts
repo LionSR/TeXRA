@@ -730,18 +730,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return media;
   }
 
-  /** Labelled media for a round, or empty when there is nothing to attach. */
-  protected async buildLabelledMedia(
-    mediaFiles: FileLocation[] | undefined,
-    context: 'initial' | 'followUp',
-  ): Promise<Content[]> {
-    if (!mediaFiles?.length || !this.supportsFileUploads()) {
-      return [];
-    }
-
-    return this.createMediaForRound(mediaFiles, context);
-  }
-
   // ===========================================================================
   // Capability getters / auth (REUSE / PORT from the chat handler)
   // ===========================================================================
@@ -931,14 +919,14 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: FileLocation[],
+    mediaFiles: FileLocation[] = [],
     _systemPrompt?: string,
   ): Promise<Step[]> {
     // System prompt is NOT a step — it rides on request-level system_instruction
     // (resent on every create, spec §6.2).
     const content: Content[] = [
       ...(userPrefix.trim() ? [this.textMedia(userPrefix)] : []),
-      ...(await this.buildLabelledMedia(mediaFiles, 'initial')),
+      ...(await this.createMediaForRound(mediaFiles, 'initial')),
     ];
     if (userRequest.trim()) {
       const separator = content.length > 0 ? '\n' : '';
@@ -957,10 +945,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   async createRoundMessages(
     messages: Step[],
     userMessage: string,
-    mediaFiles?: FileLocation[],
+    mediaFiles: FileLocation[] = [],
   ): Promise<Step[]> {
     const content: Content[] = [
-      ...(await this.buildLabelledMedia(mediaFiles, 'followUp')),
+      ...(await this.createMediaForRound(mediaFiles, 'followUp')),
       ...(userMessage.trim() ? [this.textMedia(userMessage)] : []),
     ];
 
