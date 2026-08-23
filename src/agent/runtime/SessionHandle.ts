@@ -68,6 +68,7 @@ import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { throwAggregated } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getRunContextSession, tryUseRunContext } from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
 import { ExecutionSubscriptionBinder } from './ExecutionSubscriptionBinder';
@@ -510,11 +511,18 @@ export class SessionHandle {
     if (this.isRepairSuperseded(generation)) return;
     const unfinished = new Set(this.transcripts.getUnfinishedStreamIds());
     const candidateSet = new Set(this.computeStartupSeedSet());
+    // The scan reads the authoritative `meta.streamId` edge, so it also
+    // resolves ownership for a stream whose sidecar and summary mirror never
+    // persisted an execution id (a crash before either projection flushed).
+    // Resident sidecar identity, merged below, still wins over this seed.
+    const scannedExecutionIds = new Map<StreamTabId, ExecutionId>();
     try {
-      for (const { streamId } of await listExecutionStreamReferences({
-        checkpointedOnly: true,
-      })) {
+      for (const {
+        streamId,
+        executionId,
+      } of await listExecutionStreamReferences({ checkpointedOnly: true })) {
         candidateSet.add(streamId);
+        scannedExecutionIds.set(streamId, executionId);
       }
     } catch (error) {
       // The scan proves nothing when it fails; the seed still gets classified.
@@ -539,11 +547,14 @@ export class SessionHandle {
     // Resident snapshot records already resolved their execution id from the
     // sidecar when they were seeded (#9947); only a candidate outside the
     // seed needs the one-file sidecar read below.
-    const executionIds = new Map(this.snapshots.getExecutionIdMap());
-    const unresolvedStreams = new Set<StreamTabId>();
+    const executionIds = new Map([
+      ...scannedExecutionIds,
+      ...this.snapshots.getExecutionIdMap(),
+    ]);
+    const unreadableStreams = new Map<StreamTabId, string>();
     // Bound the one-file ownership scan. Each mapper is self-contained: one
-    // unreadable sidecar is logged and skipped, never allowed to fail the
-    // whole pass.
+    // unreadable sidecar is logged and marked unclassified, never allowed to
+    // fail the whole pass.
     await pMap(
       candidates.filter((streamId) => !executionIds.has(streamId)),
       async (streamId) => {
@@ -564,11 +575,14 @@ export class SessionHandle {
           }
         } catch (error) {
           // A transient storage failure proves nothing about this stream.
-          // Leave it out of this pass instead of aborting repair for every
-          // other stream.
-          unresolvedStreams.add(streamId);
+          // Its state is unknown, so it is shown as unclassified (Resume
+          // re-reads) rather than falling through to the ready default.
+          unreadableStreams.set(
+            streamId,
+            `execution identity unreadable (${toErrorMessage(error)})`,
+          );
           logger.warn(
-            `Skipped restart repair for stream ${streamId}: its execution identity could not be read`,
+            `Stream ${streamId} left unclassified after restart: its execution identity could not be read`,
             { data: error },
           );
           return;
@@ -582,6 +596,14 @@ export class SessionHandle {
       { concurrency: RESTART_REPAIR_IO_CONCURRENCY },
     );
     if (this.isRepairSuperseded(generation)) return;
+    for (const [streamId, cause] of unreadableStreams) {
+      if (
+        this.status.getGeneration(streamId) ===
+        statusGenerationsAtScan.get(streamId)
+      ) {
+        this.status.markUnclassified(streamId, cause);
+      }
+    }
 
     // The ownership scan is async. Refresh resident ownership once here so
     // the map is current, then let `repairRestartedStreams` revalidate each
@@ -603,7 +625,7 @@ export class SessionHandle {
       // closed stream with nothing to classify keeps no phase.
       repairStreams: candidates.filter(
         (streamId) =>
-          !unresolvedStreams.has(streamId) &&
+          !unreadableStreams.has(streamId) &&
           (executionIds.has(streamId) || unfinished.has(streamId)),
       ),
       classificationConcurrency: RESTART_REPAIR_IO_CONCURRENCY,

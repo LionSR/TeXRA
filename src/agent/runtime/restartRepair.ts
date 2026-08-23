@@ -198,7 +198,12 @@ export async function repairRestartedStreams(
       case 'owned_here':
         // Classification only sees streams with no live flow context here, so
         // a lease this process holds is a registry/lease disagreement. Say so
-        // and leave the stream alone rather than labelling it foreign.
+        // and record the unknown state rather than labelling it foreign or
+        // letting it fall through to the ready default.
+        options.streamStatus.markUnclassified(
+          streamId,
+          'lease owned by this process with no live run',
+        );
         options.logger?.error(
           `Stream ${streamId} has no live flow context but this process holds execution ${executionId}; left unclassified`,
           { data: { streamId, executionId } },

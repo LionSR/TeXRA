@@ -358,7 +358,10 @@ class StreamTab extends LitElement {
           aria-label=${`Delete ${streamTitle}`}
           data-stream=${stream.name}
           data-action="delete"
-          ?disabled=${status === STREAM_LIFECYCLE_HELD}
+          ?disabled=${
+            status === STREAM_LIFECYCLE_HELD ||
+            status === STREAM_LIFECYCLE_UNCLASSIFIED
+          }
         >
           ${waIcon('xmark')}
         </wa-button>

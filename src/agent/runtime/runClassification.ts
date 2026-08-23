@@ -15,10 +15,11 @@
  *   lease. Continued only through the explicit Resume affordance.
  * - `finished`: no checkpoint. Its persisted outcome, when present, is the
  *   display fact.
- * - `unclassified`: the lease, metadata, or flow record could not be read.
- *   Nothing is known, so nothing is mutated; the stream is shown as
- *   unclassified with the cause, and Resume (which re-reads and re-acquires)
- *   is the retry.
+ * - `unclassified`: the lease, metadata, or flow record could not be read or
+ *   is malformed. Nothing is known, so nothing is mutated; the stream is
+ *   shown as unclassified with the cause, and Resume (which re-reads and
+ *   re-acquires) is the retry. A present-but-invalid checkpoint lands here,
+ *   never in `finished`: corruption is unknown state, not a terminal run.
  */
 import {
   inspectExecutionLease,
@@ -64,10 +65,10 @@ export async function classifyRun(
     case RESUMABILITY_CAUSE.UNREADABLE_META:
     case RESUMABILITY_CAUSE.INVALID_META:
     case RESUMABILITY_CAUSE.UNREADABLE_FLOW:
+    case RESUMABILITY_CAUSE.INVALID_FLOW:
       log.warn(`Cannot classify ${executionId}: ${resumability.cause}`);
       return { kind: 'unclassified', cause: resumability.cause };
     case RESUMABILITY_CAUSE.MISSING_FLOW:
-    case RESUMABILITY_CAUSE.INVALID_FLOW:
       return { kind: 'finished', outcome: resumability.outcome };
   }
 }
