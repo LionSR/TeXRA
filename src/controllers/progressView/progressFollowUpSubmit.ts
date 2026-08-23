@@ -45,8 +45,11 @@ export function submitProgressFollowUp(
     const acknowledge = (accepted: boolean): void => {
       if (acknowledged) return;
       acknowledged = true;
-      args.acknowledge(accepted);
-      resolveAdmission(accepted);
+      try {
+        args.acknowledge(accepted);
+      } finally {
+        resolveAdmission(accepted);
+      }
     };
     const emitQueuedFollowUpsChanged = (): void => {
       session.events.emit({

@@ -325,7 +325,7 @@ export function createChatSubmitDriver(
         if (result.status === 'no_session' || result.status === 'dropped') {
           // The draft is the user's until admitted: hand it back before any
           // notice, so a refused send never costs a retype.
-          requestDraftRestore(line, mediaFiles);
+          requestDraftRestore(line);
           setTransientNotice(FOLLOW_UP_NOT_ACCEPTED, { ttlMs: Infinity });
           // Child stream ids are keys in parentStream; the root session id is not.
           if (followUpTarget === session.streamId) {
