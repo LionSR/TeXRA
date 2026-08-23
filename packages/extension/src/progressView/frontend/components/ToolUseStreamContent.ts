@@ -7,12 +7,12 @@ import { customElement } from 'lit/decorators.js';
 // Local imports - shared schemas
 import {
   isToolUseState,
-  STREAM_LIFECYCLE_HELD,
   STREAM_STATUS,
+  type StreamTabInfo,
   type ToolUseStreamState,
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
-import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
+import { streamStatusTooltip } from '@shared/streams/streamStatusDisplay';
 
 // Local imports - progress view
 import { ProgressEvents } from '../events';
@@ -81,9 +81,9 @@ export class ToolUseStreamContent extends BaseStreamContent {
 
       <div class="conversation-composer-dock">
         <div class="conversation-column">
-          ${this.renderComposerBanner(currentState.status, currentState.holderProvable)}
+          ${this.renderComposerBanner(currentState, streamInfo)}
           <follow-up-input
-            .visible=${composerVisible(currentState.status)}
+            .visible=${composerVisible(currentState, streamInfo)}
             .streamId=${streamInfo.name}
             .transientState=${getFollowUpInputTransientState(streamInfo.name)}
             .value=${currentState.ui.followUpText}
@@ -103,12 +103,12 @@ export class ToolUseStreamContent extends BaseStreamContent {
   }
 
   private renderComposerBanner(
-    status: ToolUseStreamState['status'],
-    holderProvable: boolean | undefined,
+    state: ToolUseStreamState,
+    streamInfo: StreamTabInfo,
   ): TemplateResult | typeof nothing {
-    if (composerVisible(status)) return nothing;
+    if (composerVisible(state, streamInfo)) return nothing;
     return html`<div class="conversation-composer-banner">
-      ${status === STREAM_LIFECYCLE_HELD ? streamHeldMessage(holderProvable) : RUN_ENDED_MESSAGE}
+      ${streamStatusTooltip(state.status, state.statusDetail, RUN_ENDED_MESSAGE)}
     </div>`;
   }
 
@@ -120,10 +120,21 @@ export class ToolUseStreamContent extends BaseStreamContent {
 const RUN_ENDED_MESSAGE = 'This run has ended.';
 
 /**
- * The composer exists only where delivery is possible: a run live in this
- * process (RUNNING or WAITING) or a tab that has not run yet. A terminal or
- * held stream shows a read-only banner; Resume is the only way to continue.
+ * The composer exists only where delivery is possible, decided on positive
+ * facts: a run live in this process (RUNNING or WAITING), or a tab that has
+ * never run (no execution and no transcript history). `ready` alone is not
+ * evidence: it is the prefault for "no phase in this process", which is also
+ * what settled history and unclassified tabs carry. Everything else shows a
+ * read-only banner; Resume is the only way to continue.
  */
-function composerVisible(status: ToolUseStreamState['status']): boolean {
-  return status === STREAM_STATUS.READY || isInFlightPhase(status);
+function composerVisible(
+  state: ToolUseStreamState,
+  streamInfo: StreamTabInfo,
+): boolean {
+  if (isInFlightPhase(state.status)) return true;
+  return (
+    state.status === STREAM_STATUS.READY &&
+    streamInfo.executionId === undefined &&
+    state.lastTimestamp === undefined
+  );
 }

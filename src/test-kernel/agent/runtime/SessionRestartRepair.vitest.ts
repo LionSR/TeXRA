@@ -105,14 +105,20 @@ async function seedSidecarFk(
   await snapshots.flush();
 }
 
-/** Writes a cancelled-but-resumable execution meta plus a valid flow record. */
+/**
+ * Writes a cancelled-but-resumable execution meta plus a valid flow record.
+ * `streamId` is the authored execution→stream edge `registerExecution`
+ * stamps; the checkpoint scan reads it to find stopped runs outside the seed.
+ */
 async function seedResumableExecution(
   id: ExecutionId,
+  streamId?: StreamTabId,
 ): Promise<ReturnType<typeof getExecutionStore>> {
   const executionStore = getExecutionStore(id);
   await executionStore.writeMeta({
     timestamp: META_TIMESTAMP,
     outcome: RUN_OUTCOME.CANCELLED,
+    ...(streamId ? { streamId } : {}),
   });
   await executionStore.write(flowKey(id), validFlowRecord);
   return executionStore;
@@ -238,25 +244,88 @@ describe('SessionHandle restart repair', () => {
     expectClosedWith(transcripts, eagerStreamId, RUN_OUTCOME.CANCELLED);
   });
 
-  it('preserves recovery state when present execution metadata is malformed', async () => {
+  it('shows a stream with unreadable metadata as unclassified without failing readiness or the other streams', async () => {
+    const otherExecutionId = 'd00d1234' as ExecutionId;
+    const otherStreamId = `other#${otherExecutionId}` as StreamTabId;
     const transcripts = await StreamLogStore.open();
     appendRunningGroup(transcripts, streamId, 'malformed-meta-running-group');
+    appendRunningGroup(transcripts, otherStreamId, 'other-running-group');
     await transcripts.flush();
     await seedSidecarFk(streamId, executionId);
+    await seedSidecarFk(otherStreamId, otherExecutionId);
 
     const executionStore = getExecutionStore(executionId);
     const malformedMeta = { timestamp: 123 };
     await executionStore.write('meta', malformedMeta);
     await executionStore.write(flowKey(executionId), validFlowRecord);
+    await getExecutionStore(otherExecutionId).writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.COMPLETED,
+    });
 
     const session = openDeferredSession(transcripts);
-    await expect(session.waitUntilReady()).rejects.toThrow();
+    await expect(session.waitUntilReady()).resolves.toBeUndefined();
 
+    // Nothing known about the unreadable run: no phase, nothing written, the
+    // transcript left open, and the cause shown so Resume can retry.
+    expect(session.status.get(streamId)).toBeUndefined();
+    expect(session.status.holdState(streamId)).toEqual({
+      kind: 'unclassified',
+      cause: 'invalid-meta',
+    });
     await expect(executionStore.read('meta')).resolves.toEqual(malformedMeta);
     await expect(executionStore.read(flowKey(executionId))).resolves.toEqual(
       validFlowRecord,
     );
     expect(transcripts.get(streamId)?.getRange(0)).toHaveLength(1);
+
+    expect(session.status.get(otherStreamId)).toBe(STREAM_PHASE.COMPLETED);
+    expectClosedWith(transcripts, otherStreamId, RUN_OUTCOME.COMPLETED);
+  });
+
+  it('offers Resume for a stopped run that kept its checkpoint', async () => {
+    const stoppedExecutionId = '57a9ed12' as ExecutionId;
+    const stoppedStreamId = `stopped#${stoppedExecutionId}` as StreamTabId;
+    const transcripts = await StreamLogStore.open();
+    // A user Stop closes the transcript group and records CANCELLED, but the
+    // checkpoint is deleted only by the user or a COMPLETED run.
+    appendRunningGroup(transcripts, stoppedStreamId, 'stopped-running-group');
+    await transcripts.endRunningGroupsForStreams(
+      [stoppedStreamId],
+      2_000,
+      RUN_OUTCOME.CANCELLED,
+    );
+    await transcripts.flush();
+    await seedSidecarFk(stoppedStreamId, stoppedExecutionId);
+    const executionStore = await seedResumableExecution(
+      stoppedExecutionId,
+      stoppedStreamId,
+    );
+    const classify = vi.spyOn(runClassification, 'classifyRun');
+    const entriesBefore = transcripts.get(stoppedStreamId)?.getRange(0).length;
+
+    const session = openDeferredSession(transcripts);
+    await session.waitUntilReady();
+
+    // Not transcript-unfinished, yet classified: resumable on its persisted
+    // CANCELLED outcome, so the terminal display key lights Resume. Nothing
+    // is rewritten and the closed transcript is left alone.
+    expect(classify).toHaveBeenCalledWith(stoppedExecutionId);
+    await expect(classify.mock.results[0]?.value).resolves.toEqual({
+      kind: 'resumable',
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    expect(session.status.get(stoppedStreamId)).toBe(STREAM_PHASE.CANCELLED);
+    expect(session.status.holdState(stoppedStreamId)).toBeUndefined();
+    await expect(executionStore.readMeta()).resolves.toMatchObject({
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await expect(
+      executionStore.read(flowKey(stoppedExecutionId)),
+    ).resolves.toEqual(validFlowRecord);
+    expect(transcripts.get(stoppedStreamId)?.getRange(0)).toHaveLength(
+      entriesBefore ?? -1,
+    );
   });
 
   it('ignores malformed metadata for settled historical streams', async () => {
@@ -330,7 +399,7 @@ describe('SessionHandle restart repair', () => {
     // the checkpoint stays, and nothing is adopted. The explicit Resume
     // affordance is the only way to continue; a follow-up is handed back.
     expect(session.status.get(resumableStreamId)).toBe(STREAM_PHASE.CANCELLED);
-    expect(session.status.isHeld(resumableStreamId)).toBe(false);
+    expect(session.status.holdState(resumableStreamId)).toBeUndefined();
     await expect(executionStore.readMeta()).resolves.toMatchObject({
       outcome: RUN_OUTCOME.CANCELLED,
     });
@@ -675,7 +744,10 @@ describe('SessionHandle restart repair', () => {
     try {
       await session.waitUntilReady();
       // Live foreign owner: held, no phase, nothing written, transcript open.
-      expect(session.status.isHeld(heldStreamId)).toBe(true);
+      expect(session.status.holdState(heldStreamId)).toEqual({
+        kind: 'held',
+        provable: true,
+      });
       expect(session.status.get(heldStreamId)).toBeUndefined();
       expect((await executionStore.readMeta())?.outcome).toBeUndefined();
       expect(transcripts.get(heldStreamId)?.getRange(0)).toHaveLength(1);
@@ -684,7 +756,7 @@ describe('SessionHandle restart repair', () => {
       await foreign.shutdown();
       await session.reloadAfterStorageRootChange();
 
-      expect(session.status.isHeld(heldStreamId)).toBe(false);
+      expect(session.status.holdState(heldStreamId)).toBeUndefined();
       expect(session.status.get(heldStreamId)).toBe(STREAM_PHASE.CANCELLED);
       await expect(executionStore.readMeta()).resolves.toMatchObject({
         outcome: RUN_OUTCOME.CANCELLED,

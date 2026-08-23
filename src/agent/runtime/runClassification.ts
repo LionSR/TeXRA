@@ -3,19 +3,23 @@
  * nothing.
  *
  * In-memory RUNNING/WAITING means exactly "a live flow context exists in this
- * process's registry". Every other unfinished run in the shared bucket is one
- * of three things, decided once here and never inferred:
+ * process's registry". Every other run in the shared bucket is one of these,
+ * decided once here and never inferred:
  *
- * - `held_elsewhere`: its execution lease is held by an owner that is alive or
- *   cannot be proven dead (another TeXRA process). Shown read-only; when the
- *   owner is unprovable the user is told so and may reclaim it explicitly.
+ * - `held_elsewhere`: its execution lease is readable and held by an owner
+ *   that is alive or cannot be proven dead (another TeXRA process). Shown
+ *   read-only; when the owner is unprovable the user is told so and may
+ *   reclaim it explicitly.
+ * - `owned_here`: its lease is held by this very process. Never a restart
+ *   candidate; the caller treats reaching it as an invariant violation.
  * - `resumable`: a checkpoint (flow record) exists and nobody alive holds the
  *   lease. Continued only through the explicit Resume affordance.
  * - `finished`: no checkpoint. Its persisted outcome, when present, is the
  *   display fact.
- *
- * An unreadable lease classifies as held, never as resumable: a run whose
- * ownership cannot be established must not be offered for a second owner.
+ * - `unclassified`: the lease, metadata, or flow record could not be read.
+ *   Nothing is known, so nothing is mutated; the stream is shown as
+ *   unclassified with the cause, and Resume (which re-reads and re-acquires)
+ *   is the retry.
  */
 import {
   inspectExecutionLease,
@@ -27,23 +31,22 @@ import {
 } from '@agent/storage/resumability';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, RunOutcome } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('RunClassification');
 
 export type RunClassification =
   | {
       readonly kind: 'held_elsewhere';
-      /** False when the holder could not be proven alive (or read at all). */
+      /** False when the holder could not be proven alive. */
       readonly provable: boolean;
     }
+  | { readonly kind: 'owned_here' }
   | { readonly kind: 'resumable'; readonly outcome?: RunOutcome }
-  | { readonly kind: 'finished'; readonly outcome?: RunOutcome };
+  | { readonly kind: 'finished'; readonly outcome?: RunOutcome }
+  | { readonly kind: 'unclassified'; readonly cause: string };
 
-/**
- * Classify one execution. Throws when the execution's own storage (metadata
- * or flow record) is unreadable: that run cannot be classified, and the
- * caller decides how loudly to say so.
- */
+/** Classify one execution. Never throws: an unreadable fact is `unclassified`. */
 export async function classifyRun(
   executionId: ExecutionId,
 ): Promise<RunClassification> {
@@ -51,13 +54,12 @@ export async function classifyRun(
   try {
     lease = await inspectExecutionLease(executionId);
   } catch (error) {
-    log.warn(
-      `Cannot classify ownership of ${executionId}; treating it as held elsewhere`,
-      { data: error },
-    );
-    return { kind: 'held_elsewhere', provable: false };
+    const cause = `lease unreadable (${toErrorMessage(error)})`;
+    log.warn(`Cannot classify ${executionId}: ${cause}`, { data: error });
+    return { kind: 'unclassified', cause };
   }
-  if (lease.status === 'owned' || lease.status === 'foreign') {
+  if (lease.status === 'owned') return { kind: 'owned_here' };
+  if (lease.status === 'foreign') {
     return { kind: 'held_elsewhere', provable: lease.provable };
   }
 
@@ -69,9 +71,8 @@ export async function classifyRun(
     case RESUMABILITY_CAUSE.UNREADABLE_META:
     case RESUMABILITY_CAUSE.INVALID_META:
     case RESUMABILITY_CAUSE.UNREADABLE_FLOW:
-      throw new Error(
-        `Cannot classify execution ${executionId}: ${resumability.cause}`,
-      );
+      log.warn(`Cannot classify ${executionId}: ${resumability.cause}`);
+      return { kind: 'unclassified', cause: resumability.cause };
     case RESUMABILITY_CAUSE.MISSING_FLOW:
     case RESUMABILITY_CAUSE.INVALID_FLOW:
       return { kind: 'finished', outcome: resumability.outcome };

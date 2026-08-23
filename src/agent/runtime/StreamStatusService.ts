@@ -27,6 +27,17 @@ type TerminalTransitionCause = Extract<
   'lifecycle' | 'restart-repair'
 >;
 
+/**
+ * What restart classification established about a stream that has no phase
+ * in this process. `held`: another TeXRA process holds its execution lease;
+ * `provable` is false when that process could not be proven alive or dead.
+ * `unclassified`: its lease, metadata, or flow record could not be read, so
+ * nothing is known and nothing was mutated; `cause` is shown to the user.
+ */
+export type StreamHoldState =
+  | { readonly kind: 'held'; readonly provable: boolean }
+  | { readonly kind: 'unclassified'; readonly cause: string };
+
 export interface StreamPhaseState {
   readonly phase: StreamPhase;
   readonly substate?: StreamSubstate;
@@ -66,13 +77,13 @@ function effectiveState(entry: StreamEntry): StreamPhaseState {
 export class StreamStatusMachine {
   private readonly streams = new Map<StreamTabId, StreamEntry>();
   /**
-   * Streams whose execution lease is held by another TeXRA process. A held
-   * stream has no phase here: RUNNING/WAITING mean a live flow in this
-   * process, and this process never adopts anyone else's run. The set is a
-   * display fact for the session renderer, published with the next full
-   * metadata sync rather than as a phase transition.
+   * Streams restart classification could not settle on a phase: held by
+   * another process, or unreadable. RUNNING/WAITING mean a live flow in this
+   * process, and this process never adopts anyone else's run, so these carry
+   * no phase. Display facts for the session renderer, published with the
+   * next full metadata sync rather than as a phase transition.
    */
-  private readonly held = new Map<StreamTabId, boolean>();
+  private readonly holds = new Map<StreamTabId, StreamHoldState>();
 
   /**
    * @param eventHub Session hub this machine publishes canonical `status` facts
@@ -201,7 +212,7 @@ export class StreamStatusMachine {
     const runStartedAt = isActivePhase(to)
       ? (previousRunStartedAt ?? Date.now())
       : undefined;
-    this.held.delete(stream);
+    this.holds.delete(stream);
     this.streams.set(stream, {
       kind: 'phase',
       state: {
@@ -278,26 +289,26 @@ export class StreamStatusMachine {
    * false when that process could not be proven alive or dead.
    */
   markHeld(stream: StreamTabId, provable: boolean): void {
-    this.held.set(stream, provable);
+    this.holds.set(stream, { kind: 'held', provable });
   }
 
-  isHeld(stream: StreamTabId): boolean {
-    return this.held.has(stream);
+  /** Record that `stream`'s run state could not be read; nothing was mutated. */
+  markUnclassified(stream: StreamTabId, cause: string): void {
+    this.holds.set(stream, { kind: 'unclassified', cause });
   }
 
-  /** Whether the holder of a held stream is provably alive; undefined if not held. */
-  heldProvable(stream: StreamTabId): boolean | undefined {
-    return this.held.get(stream);
+  holdState(stream: StreamTabId): StreamHoldState | undefined {
+    return this.holds.get(stream);
   }
 
   clearStream(stream: StreamTabId): void {
     this.streams.delete(stream);
-    this.held.delete(stream);
+    this.holds.delete(stream);
   }
 
   clearAll(): void {
     this.streams.clear();
-    this.held.clear();
+    this.holds.clear();
   }
 
   entries(): IterableIterator<[StreamTabId, StreamPhase]> {
