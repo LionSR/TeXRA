@@ -33,6 +33,7 @@ import { CopyButtonController } from '@shared/litControllers/CopyButtonControlle
 import {
   progressHeaderStatus,
   streamStatusIndicatorClass,
+  isStreamStateMalformed,
   streamStatusTooltip,
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
@@ -122,6 +123,16 @@ const UNCLASSIFIED_STATE_BUTTONS = [
   ...HELD_STATE_BUTTONS,
   ELEMENT_IDS.RESUME_BTN,
 ];
+
+/**
+ * Buttons enabled while the run's saved state is malformed: ownership is
+ * proven absent, Resume would fail deterministically, so the read-only verbs
+ * plus Clean (which deletes this run's outputs) are what is left.
+ */
+const MALFORMED_STATE_BUTTONS = new Set([
+  ...HELD_STATE_BUTTONS,
+  ELEMENT_IDS.CLEAN_STREAM_BTN,
+]);
 
 /**
  * Terminal-set buttons that make no sense before the stream's first run:
@@ -447,9 +458,10 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
       isAgentOrPending && agentCategory
         ? TOOLBAR_BUTTONS[agentCategory]
         : NEUTRAL_TOOLBAR;
-    const enabledButtons = displayKey
+    let enabledButtons = displayKey
       ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
       : undefined;
+    if (isStreamStateMalformed(state)) enabledButtons = MALFORMED_STATE_BUTTONS;
     // Composed once per render: it both gates the copy button and is the
     // payload its click writes.
     const runContext = this.runContextText(this.stream, state);
@@ -557,7 +569,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
             })}
           ></span>
           <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
-            ${streamStatusTooltip(status, state?.statusDetail, statusLabel)}
+            ${streamStatusTooltip(state, statusLabel)}
           </wa-tooltip>
           ${this.renderRunElapsed(state?.runStartedAt)}
           ${this.renderGoalChip(goalActive, goalStatus, goalObjective)}

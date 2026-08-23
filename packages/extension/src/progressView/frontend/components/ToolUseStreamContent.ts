@@ -108,7 +108,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
   ): TemplateResult | typeof nothing {
     if (composerVisible(state, streamInfo)) return nothing;
     return html`<div class="conversation-composer-banner">
-      ${streamStatusTooltip(state.status, state.statusDetail, RUN_ENDED_MESSAGE)}
+      ${streamStatusTooltip(state, RUN_ENDED_MESSAGE)}
     </div>`;
   }
 
