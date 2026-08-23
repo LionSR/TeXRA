@@ -2,11 +2,9 @@
  * Restart repair: classify every candidate stream once and record what the
  * classification proves. Nothing is adopted and nothing is guessed.
  *
- * - `held_elsewhere`: another process owns the execution. The stream is
- *   marked held and left untouched; its owner closes its transcript.
- * - `unclassified`: the run's lease, metadata, or flow record could not be
- *   read. The stream is marked unclassified with the cause and left
- *   untouched; Resume re-reads and re-acquires, so it is the retry.
+ * - `held_elsewhere` / `owned_here` / `unclassified`: the stream is marked
+ *   unavailable with the fact as its detail and left untouched. Only Delete
+ *   clears it.
  * - `resumable` / `finished`: the owner is gone. The persisted outcome, if
  *   any, becomes the in-memory phase; otherwise the interruption is recorded
  *   as CANCELLED with the flow record preserved. A resumable stream is then
@@ -50,6 +48,10 @@ import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
+import {
+  streamHeldMessage,
+  streamUnreadableMessage,
+} from '@shared/streams/streamStatusDisplay';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   classifyRun as defaultClassifyRun,
@@ -58,7 +60,8 @@ import {
   type RunFactsClassification,
 } from './runClassification';
 
-const DEFAULT_CLASSIFICATION_CONCURRENCY = 4;
+/** Bounded fan-out of the read-only classification phase. */
+const CLASSIFICATION_CONCURRENCY = 8;
 
 interface RestartRepairLogger {
   debug(message: string): void;
@@ -81,8 +84,6 @@ export interface RestartRepairOptions {
   deriveResumability?: (
     executionId: ExecutionId,
   ) => Promise<ResumabilityDecision>;
-  /** Parallelism of the read-only classification phase. */
-  classificationConcurrency?: number;
   finalizeExecution?: (
     input: FinalizeExecutionInput,
   ) => Promise<FinalizeExecutionResult>;
@@ -118,7 +119,7 @@ interface ClassifiedStream {
  * recording one. The flow record is preserved whatever its state: repair
  * records the interruption, it never deletes. The caller runs it inside the
  * inactive-lease maintenance scope: the classifier proved the owner gone,
- * and the settlement happens under a claim of its own, which reclaims the
+ * and the settlement happens under a claim of its own, which unlinks the
  * dead owner's record exactly as an acquirer would. Finalization problems are
  * logged rather than thrown: the in-memory repair has already committed.
  */
@@ -199,33 +200,12 @@ export async function repairRestartedStreams(
         return {
           streamId,
           executionId,
-          classification: { kind: 'unclassified', cause, retryable: true },
+          classification: { kind: 'unclassified', cause },
         };
       }
     },
-    {
-      concurrency:
-        options.classificationConcurrency ?? DEFAULT_CLASSIFICATION_CONCURRENCY,
-    },
+    { concurrency: CLASSIFICATION_CONCURRENCY },
   );
-
-  // A lease this process holds for a stream with no live flow context is a
-  // registry/lease disagreement. Say so and record the unknown state rather
-  // than labelling it foreign or letting it fall through to the ready default.
-  const markOwnedHere = (
-    streamId: StreamTabId,
-    executionId: ExecutionId | undefined,
-  ): void => {
-    options.streamStatus.markUnclassified(
-      streamId,
-      'lease owned by this process with no live run',
-      true,
-    );
-    options.logger?.error(
-      `Stream ${streamId} has no live flow context but this process holds execution ${executionId}; left unclassified`,
-      { data: { streamId, executionId } },
-    );
-  };
 
   // Apply a hold-only classification (no write). Returns false when the
   // classification settles instead, so the caller proceeds to the write path.
@@ -234,44 +214,38 @@ export async function repairRestartedStreams(
     executionId: ExecutionId | undefined,
     classification: RunClassification,
   ): classification is HoldClassification => {
+    let detail: string;
     switch (classification.kind) {
-      case 'owned_here':
-        // Classification only sees streams with no live flow context here, so
-        // a lease this process holds is a registry/lease disagreement. Say so
-        // and record the unknown state rather than labelling it foreign or
-        // letting it fall through to the ready default.
-        markOwnedHere(streamId, executionId);
-        return true;
-      case 'held_elsewhere':
-        // Only a stream with an execution is ever classified as held.
-        options.streamStatus.markHeld(
-          streamId,
-          executionId!,
-          classification.hold,
-        );
-        options.logger?.debug(
-          `Stream ${streamId} is held by ${
-            classification.hold.provable
-              ? 'another process'
-              : 'a process that cannot be reached'
-          }; left untouched`,
-        );
-        return true;
-      case 'unclassified':
-        options.streamStatus.markUnclassified(
-          streamId,
-          classification.cause,
-          classification.retryable,
-        );
-        options.logger?.warn(
-          `Stream ${streamId} left unclassified after restart: ${classification.cause}`,
-          { data: { streamId, executionId } },
-        );
-        return true;
       case 'resumable':
       case 'finished':
         return false;
+      case 'owned_here':
+        // A lease this process holds for a stream with no live flow context
+        // is a registry/lease disagreement: neither foreign nor ready.
+        detail = streamUnreadableMessage(
+          'lease owned by this process with no live run',
+        );
+        options.logger?.error(
+          `Stream ${streamId} has no live flow context but this process holds execution ${executionId}; left unavailable`,
+          { data: { streamId, executionId } },
+        );
+        break;
+      case 'held_elsewhere':
+        detail = streamHeldMessage(classification.owner);
+        options.logger?.debug(
+          `Stream ${streamId} is held by pid ${classification.owner.pid} on ${classification.owner.hostname}; left untouched`,
+        );
+        break;
+      case 'unclassified':
+        detail = streamUnreadableMessage(classification.cause);
+        options.logger?.warn(
+          `Stream ${streamId} left unavailable after restart: ${classification.cause}`,
+          { data: { streamId, executionId } },
+        );
+        break;
     }
+    options.streamStatus.markUnavailable(streamId, detail);
+    return true;
   };
 
   // Phase 2: settle sequentially.
@@ -349,25 +323,19 @@ export async function repairRestartedStreams(
               await deriveResumability(executionId),
             );
           } catch (error) {
-            current = {
-              kind: 'unclassified',
-              cause: toErrorMessage(error),
-              retryable: true,
-            };
+            current = { kind: 'unclassified', cause: toErrorMessage(error) };
           }
           await settle(current);
         },
       );
     } catch (error) {
       // A settlement that already mutated must surface; a lock that could
-      // not even be taken proves nothing, so the stream stays unclassified.
+      // not even be taken proves nothing, so the stream stays unavailable.
       if (settleStarted) throw error;
-      const cause = `lease lock unavailable (${toErrorMessage(error)})`;
-      options.streamStatus.markUnclassified(streamId, cause, true);
-      options.logger?.warn(
-        `Stream ${streamId} left unclassified after restart: ${cause}`,
-        { data: error },
-      );
+      applyHold(streamId, executionId, {
+        kind: 'unclassified',
+        cause: `lease lock unavailable (${toErrorMessage(error)})`,
+      });
       continue;
     }
     if (maintenance.status === 'active') {
@@ -380,19 +348,15 @@ export async function repairRestartedStreams(
       const { owner } = maintenance;
       // Same process requires both identities known and equal: two unknown
       // identities prove nothing, and such an owner is held, not ours.
-      if (
+      const ownedHere =
         owner.pid === self.pid &&
         self.processStart !== null &&
         owner.processStart === self.processStart &&
-        owner.hostname === self.hostname
-      ) {
-        markOwnedHere(streamId, executionId);
-        continue;
-      }
-      options.streamStatus.markHeld(streamId, executionId, maintenance);
-      options.logger?.warn(
-        `Execution ${executionId} was claimed while restart repair settled stream ${streamId}; now held elsewhere`,
-        { data: { streamId, owner: maintenance.owner } },
+        owner.hostname === self.hostname;
+      applyHold(
+        streamId,
+        executionId,
+        ownedHere ? { kind: 'owned_here' } : { kind: 'held_elsewhere', owner },
       );
     }
   }

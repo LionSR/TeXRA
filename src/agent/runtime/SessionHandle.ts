@@ -36,10 +36,8 @@ import PQueue from 'p-queue';
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
-  abandonOwnedExecutionLease,
-  completeOwnedExecutionLease,
-  isOwnedExecutionLeaseDurable,
   ownsExecutionLease,
+  releaseOwnedExecutionLease,
   validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { finalizeExecution } from '@agent/storage/executionLifecycle';
@@ -62,6 +60,7 @@ import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
+import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
@@ -643,7 +642,7 @@ export class SessionHandle {
         this.status.getGeneration(streamId) ===
         statusGenerationsAtScan.get(streamId)
       ) {
-        this.status.markUnclassified(streamId, cause, true);
+        this.status.markUnavailable(streamId, streamUnreadableMessage(cause));
       }
     }
 
@@ -670,7 +669,6 @@ export class SessionHandle {
           !unreadableStreams.has(streamId) &&
           (executionIds.has(streamId) || unfinished.has(streamId)),
       ),
-      classificationConcurrency: RESTART_REPAIR_IO_CONCURRENCY,
       isRepairCandidateCurrent: (streamId, expectedExecutionId) => {
         if (
           this.status.getGeneration(streamId) !==
@@ -733,39 +731,41 @@ export class SessionHandle {
   }
 
   /**
-   * End ownership of one execution only after every session-owned durable
-   * writer has drained. Session artifacts persist between two short
-   * owner-token validations — the persisted record and this process's
-   * presence already prove ownership while the session drains, so no file
-   * lock needs to cover unrelated transcript and snapshot I/O. An optional post-drain operation may publish lifecycle state
-   * that is valid only once those artifacts are durable; it still runs before
-   * the lease record is deleted. A drain or post-drain failure abandons the
-   * lease (record retained until this process exits) and rethrows. A poisoned
-   * lease or failed lease deletion also retains the record and rejects this
-   * boundary.
+   * End ownership of one execution after every session-owned durable writer
+   * has drained. An optional post-drain operation publishes lifecycle state
+   * that belongs after those artifacts; it runs before the claim is unlinked.
+   * The claim is unlinked whatever the drain did: resumability is the
+   * checkpoint, so a failed flush is logged and rethrown but never changes
+   * who owns the run. A release failure never masks a drain failure: the
+   * drain's error is the one the caller sees, and the release's is logged.
    * This is the one exit choreography every run driver calls.
    */
   async releaseExecutionLease(
     executionId: ExecutionId,
     afterArtifactsDrained?: () => void | Promise<void>,
   ): Promise<void> {
+    let drainError: unknown;
     try {
       await validateOwnedExecutionLease(executionId);
       await this.flushArtifacts(executionId);
-      await validateOwnedExecutionLease(executionId);
-      if (afterArtifactsDrained && isOwnedExecutionLeaseDurable(executionId)) {
-        await afterArtifactsDrained();
-      }
+      await afterArtifactsDrained?.();
     } catch (error) {
-      abandonOwnedExecutionLease(executionId);
-      throw error;
+      drainError = error;
+      logger.warn(
+        `Execution ${executionId}: final artifacts did not all persist; releasing its lease anyway`,
+        { data: error },
+      );
     }
-    const completion = await completeOwnedExecutionLease(executionId);
-    if (completion.status === 'released') return;
-    if (completion.reason === 'release-failed') throw completion.error;
-    throw new Error(
-      `Execution ${executionId} retained its lease because required artifacts are not durable.`,
-    );
+    try {
+      await releaseOwnedExecutionLease(executionId);
+    } catch (releaseError) {
+      if (drainError === undefined) throw releaseError;
+      logger.warn(
+        `Execution ${executionId}: its lease could not be released after its final artifacts failed`,
+        { data: releaseError },
+      );
+    }
+    if (drainError !== undefined) throw drainError;
   }
 
   /** Persist one execution's trace plus the session's shared artifact stores. */
@@ -981,13 +981,13 @@ export function forEachLiveSession(
  * Each such execution gets the same durable settlement the CLI has always
  * given its own: the CANCELLED outcome, its flow record preserved so
  * `deriveResumability` can still offer the checkpoint, and its lease record
- * deleted rather than left for a later launch to reclaim.
+ * deleted rather than left for a later launch to prove dead.
  *
  * Bounded by the caller's phase deadline — a host that cannot exit because a
  * release is slow would be worse than the unsettled record. Once `signal`
  * fires, every remaining execution is named in the log instead of being
  * silently skipped: what is left behind is recoverable (the next launch
- * proves this process dead through its presence socket) but not free.
+ * proves this process dead from its pid) but not free.
  */
 export async function settleLiveSessionExecutions(
   signal: AbortSignal,
@@ -1006,7 +1006,7 @@ export async function settleLiveSessionExecutions(
       continue;
     }
     // Skips both a run whose driver already settled it and one this process
-    // never owned (an adopted or foreign execution).
+    // never owned (a run another TeXRA process holds).
     if (!ownsExecutionLease(executionId)) continue;
     try {
       await session.releaseExecutionLease(executionId, async () => {
@@ -1020,9 +1020,6 @@ export async function settleLiveSessionExecutions(
           keepExistingOutcome: true,
         });
         if (finalization.status === 'failed') {
-          // Rejecting here is what keeps the lease record: an execution
-          // whose terminal outcome never reached disk must not look
-          // settled to the next launch.
           throw new Error(
             `Failed to persist the CANCELLED outcome for execution ${executionId}`,
             { cause: finalization.error },
@@ -1031,7 +1028,7 @@ export async function settleLiveSessionExecutions(
       });
     } catch (error) {
       logger.warn(
-        `Failed to settle execution ${executionId} at host exit; its record is repaired on a later launch`,
+        `Failed to settle execution ${executionId} at host exit; a later launch classifies it from its checkpoint`,
         { data: error },
       );
     }

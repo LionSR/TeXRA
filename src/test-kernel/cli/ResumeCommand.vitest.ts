@@ -363,7 +363,7 @@ describe('runResumeExecution', () => {
       await expect(run(cliContext())).resolves.toBe(2);
 
       expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-        `Execution ${EXECUTION_ID} is active in TeXRA.`,
+        `Execution ${EXECUTION_ID} is already running in this process.`,
       );
       expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
@@ -372,15 +372,15 @@ describe('runResumeExecution', () => {
   });
 
   it('identifies lease inspection failures separately from session loading', async () => {
-    const storage = await import('@agent/storage');
-    vi.spyOn(storage, 'inspectExecutionLease').mockRejectedValueOnce(
+    const lease = await import('@agent/storage/executionLease');
+    vi.spyOn(lease, 'inspectExecutionLease').mockRejectedValueOnce(
       new Error('lease disk offline'),
     );
 
     await expect(run(cliContext())).resolves.toBe(1);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Could not check whether execution ${EXECUTION_ID} is active: lease disk offline`,
+      `Could not read the state of execution ${EXECUTION_ID}: lease unreadable (lease disk offline)`,
     );
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });

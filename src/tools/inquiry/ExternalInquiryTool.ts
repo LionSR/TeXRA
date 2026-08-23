@@ -31,6 +31,7 @@ import { createLog } from '@logger/logUtils';
 import {
   InquiryThreadIdSchema,
   ToolError,
+  type ExecutionId,
   type ExternalInquiryPermission,
   type InquiryThreadSummary,
   type StreamTabId,
@@ -154,7 +155,7 @@ export type InquiryInput = z.infer<typeof InquiryInputSchema>;
  * call, but it is logged rather than swallowed.
  */
 async function mirrorThreadBestEffort(
-  executionId: string,
+  executionId: ExecutionId,
   threadId: string,
 ): Promise<void> {
   try {
@@ -284,7 +285,7 @@ export class ExternalInquiryTool extends defineTool({
     input: Extract<InquiryInput, { command: 'ask' }>;
     streamId: StreamTabId | undefined;
     interactions: ReturnType<typeof requireInteractions>;
-    executionId?: string;
+    executionId?: ExecutionId;
     session?: SessionHandle;
   }): Promise<ToolResult> {
     const { input, streamId, interactions, executionId, session } = args;
@@ -294,14 +295,6 @@ export class ExternalInquiryTool extends defineTool({
       );
     }
     const ownerSession = session ?? defaultSession();
-    const parentGenerationId =
-      ownerSession.followUps.currentGenerationId(streamId);
-    if (!parentGenerationId) {
-      throw new ToolError(
-        'Inquiry dispatch requires an active parent continuation generation.',
-      );
-    }
-
     const questionContext = input.context ?? undefined;
     const suggestSearch = input.suggestSearch ?? undefined;
     const attachFiles = input.attachFiles ?? undefined;
@@ -313,7 +306,7 @@ export class ExternalInquiryTool extends defineTool({
     const persisted = await recordOpenQuestion({
       threadId: input.thread_id ?? undefined,
       parentStreamId: streamId,
-      parentGenerationId,
+      parentExecutionId: executionId ?? null,
       question: input.question,
       context: questionContext,
       suggestSearch,
@@ -403,7 +396,7 @@ export class ExternalInquiryTool extends defineTool({
 
   private async executeRead(args: {
     input: Extract<InquiryInput, { command: 'read' }>;
-    executionId?: string;
+    executionId?: ExecutionId;
   }): Promise<ToolResult> {
     const manifest = await readExternalInquiryThread(args.input.thread_id);
     if (!manifest) {

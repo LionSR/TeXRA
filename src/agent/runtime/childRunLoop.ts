@@ -9,6 +9,8 @@
 //
 // Host-agnostic, VS Code-free.
 
+import { randomUUID } from 'node:crypto';
+
 import PQueue from 'p-queue';
 
 import { getExecutionStore, type ResultMeta } from '@agent/storage';
@@ -21,7 +23,6 @@ import type {
 import {
   assertOwnedExecutionLease,
   ExecutionLeaseLostError,
-  markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
 import {
   currentSession,
@@ -43,7 +44,7 @@ import type {
 } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
-import { persistChildRunDeliveryBestEffort } from '@agent/storage/childRunDeliveryPersistence';
+import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
@@ -495,10 +496,12 @@ async function attemptTurn<TTurn>(
  */
 function mintChildTurnRef(
   executionId: ExecutionId,
-  generationId: string,
+  attemptId: string,
   turnIndex: number,
 ): ChildTurnRef {
-  const token = `${executionId}:generation:${generationId}:turn:${turnIndex}`;
+  // The `:generation:` segment is the persisted spelling of this token and is
+  // frozen: delivery ids minted by an earlier build must keep comparing equal.
+  const token = `${executionId}:generation:${attemptId}:turn:${turnIndex}`;
   return { token, deliveryId: `${token}:delivery` };
 }
 
@@ -601,7 +604,6 @@ function resolveDeliveryTarget<TTurn>(
 interface PendingChildDelivery {
   readonly targetStreamId: StreamTabId;
   readonly followUp: FollowUpQueueInput;
-  readonly expectedGenerationId?: string;
 }
 
 /**
@@ -623,8 +625,6 @@ async function deliverTurn<TTurn>(params: {
   wallTimeMs: number;
   isError: boolean;
   prepareParentDelivery?: () => boolean;
-  /** Parent continuation generation captured before this producer started. */
-  parentDeliveryGenerationId?: string;
   /** Serializes turn-state writes against the acceptance write (#9531). */
   turnStateWrites: PQueue;
   onTurnSettled?: ChildRunLoopParams<TTurn>['onTurnSettled'];
@@ -640,7 +640,6 @@ async function deliverTurn<TTurn>(params: {
     wallTimeMs,
     isError,
     prepareParentDelivery,
-    parentDeliveryGenerationId,
   } = params;
   const delivered = turn != null && !isError;
   const msg = await (delivered
@@ -661,16 +660,16 @@ async function deliverTurn<TTurn>(params: {
       ? { ...resultMeta, turnToken: turnRef.token }
       : resultMeta;
 
-  await persistChildRunDeliveryBestEffort(
-    executionId,
-    msg,
-    stampedMeta,
-    (kind, error) => {
-      logger.warn(`Failed to persist ${kind} for ${executionId}`, {
-        data: error,
-      });
-    },
-  );
+  // The settled facts reach the caller whether or not they persisted: a
+  // durable caller decides from them what a missing manifest means. The
+  // persistence failure is then this turn's failure, thrown once the turn
+  // is settled, and the delivery never reaches the parent.
+  let persistFailure: unknown;
+  try {
+    await persistChildRunDelivery(executionId, msg, stampedMeta);
+  } catch (error) {
+    persistFailure = error;
+  }
   // The turn's result slots now hold this turn: record it as the latest
   // completed turn, clearing the active marker written at acceptance. The
   // store does not serialize per-key writes, so this must queue behind the
@@ -690,6 +689,7 @@ async function deliverTurn<TTurn>(params: {
     isError,
     ...(err != null && { error: err }),
   });
+  if (persistFailure !== undefined) throw persistFailure;
 
   if (strategy.deliveryMode === 'persistOnly') return undefined;
 
@@ -704,9 +704,6 @@ async function deliverTurn<TTurn>(params: {
   if (prepareParentDelivery?.() === false) return undefined;
   return {
     targetStreamId,
-    ...(parentDeliveryGenerationId !== undefined
-      ? { expectedGenerationId: parentDeliveryGenerationId }
-      : {}),
     followUp: {
       text: msg,
       origin: 'subagent_result',
@@ -730,9 +727,6 @@ async function submitPendingDelivery(
     targetStreamId: pending.targetStreamId,
     followUp: pending.followUp,
     session,
-    ...(pending.expectedGenerationId !== undefined
-      ? { expectedGenerationId: pending.expectedGenerationId }
-      : {}),
   });
   if (delivery.kind === 'failed') {
     logger.warn(
@@ -780,11 +774,6 @@ export function startChildRunLoop<TTurn>(
   // that does not own its lease fails before any queue, stage, or loop exists.
   assertOwnedExecutionLease(executionId);
   const runSession = currentSession();
-  // Parent delivery belongs to the continuation generation under which this
-  // producer started. A terminal retry may reuse the same stream ID, but late
-  // progress or results from this child must not enter the replacement queue.
-  const parentDeliveryGenerationId =
-    runSession.followUps.currentGenerationId(parentStreamId);
   const loop = new ChildRunInterruptible(
     runSession,
     childStreamId,
@@ -872,7 +861,7 @@ export function startChildRunLoop<TTurn>(
     throw unwindSetup(error);
   }
 
-  const childRunGenerationId = queueLease.generationId;
+  const attemptId = randomUUID();
 
   let bestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
@@ -890,9 +879,6 @@ export function startChildRunLoop<TTurn>(
         followUp: { text: msg, origin: 'subagent_result' },
         session: runSession,
         mode: 'live_notification',
-        ...(parentDeliveryGenerationId !== undefined
-          ? { expectedGenerationId: parentDeliveryGenerationId }
-          : {}),
       });
     },
     recordCost: (totalCostUsd) => {
@@ -962,11 +948,7 @@ export function startChildRunLoop<TTurn>(
     try {
       while (!loop.isInterrupted()) {
         turnIndex += 1;
-        const turnRef = mintChildTurnRef(
-          executionId,
-          childRunGenerationId,
-          turnIndex,
-        );
+        const turnRef = mintChildTurnRef(executionId, attemptId, turnIndex);
         emitTurnDiagnostic(logger, 'turn.accepted', {
           executionId,
           turnRef,
@@ -1013,7 +995,6 @@ export function startChildRunLoop<TTurn>(
           strategy,
           executionId,
           parentStreamId,
-          parentDeliveryGenerationId,
           logger,
           turn,
           turnRef,
@@ -1085,15 +1066,13 @@ export function startChildRunLoop<TTurn>(
       // A throw from the loop body itself — delivery formatting, report
       // persistence, the queue wait — is this run's failure. Without this the
       // terminal block below would finalize a child that never delivered as
-      // COMPLETED, and the abandoned generation would still look durably
-      // released.
+      // COMPLETED.
       sawTurnFailure = true;
       lastTurnErr ??= error;
       // A fenced write found the lease gone: another owner holds this
       // execution now, so the loop stops here instead of delivering or
       // accepting anything further on the former owner's behalf.
       if (error instanceof ExecutionLeaseLostError) loop.interrupt();
-      markOwnedExecutionLeaseUndurable(executionId);
       throw error;
     } finally {
       // A retry may reuse this execution ID as soon as its lease is released.
@@ -1207,10 +1186,13 @@ export function startChildRunLoop<TTurn>(
         );
       } finally {
         try {
-          await runSession.releaseExecutionLease(
-            executionId,
-            params.afterArtifactsDrained,
-          );
+          await runSession.releaseExecutionLease(executionId, async () => {
+            // A turn that failed (its delivery persistence included) leaves
+            // nothing the caller may attest as committed; the failure itself
+            // is already this run's, propagated by the loop.
+            if (sawTurnFailure) return;
+            await params.afterArtifactsDrained?.();
+          });
         } catch (error) {
           logger.warn('Failed to persist final child-run artifacts', {
             data: { executionId, error },

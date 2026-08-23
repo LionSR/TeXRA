@@ -21,14 +21,13 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import {
+  streamHeldMessage,
+  streamUnreadableMessage,
+} from '@shared/streams/streamStatusDisplay';
 import { setupPlatform } from '@test/support/setupPlatform';
 
-/** A hold by a process proven alive: nothing to reclaim. */
-const LIVE_HOLD = {
-  owner: { pid: 1, processStart: '1', hostname: 'test-host' },
-  provable: true,
-  reclaimable: false,
-} as const;
+const LIVE_OWNER = { pid: 1, processStart: '1', hostname: 'test-host' };
 
 setupPlatform({ workspacePath: '/workspace' });
 
@@ -67,12 +66,7 @@ function factsFor(classification: RunClassification): ResumabilityDecision {
         outcome: classification.outcome,
       };
     case 'unclassified':
-      return {
-        resumable: false,
-        cause: classification.retryable
-          ? RESUMABILITY_CAUSE.UNREADABLE_META
-          : RESUMABILITY_CAUSE.INVALID_META,
-      };
+      return { resumable: false, cause: RESUMABILITY_CAUSE.UNREADABLE_META };
     case 'held_elsewhere':
     case 'owned_here':
       throw new Error(`no durable facts for ${classification.kind}`);
@@ -136,22 +130,23 @@ describe('repairRestartedStreams', () => {
     await runRepair(setup, {
       closeRunningGroups,
       finalizeExecution,
-      classifyRun: classifyAs({ kind: 'held_elsewhere', hold: LIVE_HOLD }),
+      classifyRun: classifyAs({ kind: 'held_elsewhere', owner: LIVE_OWNER }),
     });
 
     expect(setup.streamStatus.get(setup.streamId)).toBeUndefined();
-    expect(setup.streamStatus.holdState(setup.streamId)).toEqual({
-      kind: 'held',
-      executionId: setup.executionId,
-      hold: LIVE_HOLD,
-    });
+    expect(setup.streamStatus.holdState(setup.streamId)).toBe(
+      streamHeldMessage(LIVE_OWNER),
+    );
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(finalizeExecution).not.toHaveBeenCalled();
   });
 
   it('releases a held mark once the stream settles on a later pass', async () => {
     const setup = setupStream('held-then-settled');
-    setup.streamStatus.markHeld(setup.streamId, setup.executionId, LIVE_HOLD);
+    setup.streamStatus.markUnavailable(
+      setup.streamId,
+      streamHeldMessage(LIVE_OWNER),
+    );
 
     await runRepair(setup, {
       closeRunningGroups: closeAllGroups,
@@ -164,11 +159,7 @@ describe('repairRestartedStreams', () => {
 
     // A hold overlaid on an already-terminal phase is released even though
     // the terminal transition itself is a no-op.
-    setup.streamStatus.markUnclassified(
-      setup.streamId,
-      'transient read error',
-      true,
-    );
+    setup.streamStatus.markUnavailable(setup.streamId, 'transient read error');
     await runRepair(setup, {
       closeRunningGroups: closeAllGroups,
       finalizeExecution: createDurableFinalizer(),
@@ -265,11 +256,9 @@ describe('repairRestartedStreams', () => {
 
     // Nothing known, nothing mutated, but shown: the cause is the display fact.
     expect(unreadable.streamStatus.get(unreadable.streamId)).toBeUndefined();
-    expect(unreadable.streamStatus.holdState(unreadable.streamId)).toEqual({
-      kind: 'unclassified',
-      cause: 'metadata temporarily unreadable',
-      retryable: true,
-    });
+    expect(unreadable.streamStatus.holdState(unreadable.streamId)).toBe(
+      streamUnreadableMessage('metadata temporarily unreadable'),
+    );
     expect(finalizeExecution).not.toHaveBeenCalled();
     expect(unreadable.streamStatus.get(readable)).toBe(STREAM_PHASE.COMPLETED);
     expect(closeRunningGroups).toHaveBeenCalledExactlyOnceWith(
@@ -291,11 +280,9 @@ describe('repairRestartedStreams', () => {
     });
 
     expect(setup.streamStatus.get(setup.streamId)).toBeUndefined();
-    expect(setup.streamStatus.holdState(setup.streamId)).toEqual({
-      kind: 'unclassified',
-      cause: 'lease owned by this process with no live run',
-      retryable: true,
-    });
+    expect(setup.streamStatus.holdState(setup.streamId)).toBe(
+      streamUnreadableMessage('lease owned by this process with no live run'),
+    );
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(logger.error).toHaveBeenCalledOnce();
   });

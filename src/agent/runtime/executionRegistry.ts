@@ -8,10 +8,7 @@
 import PQueue from 'p-queue';
 
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
-import {
-  ExecutionLeaseLostError,
-  markOwnedExecutionLeaseUndurable,
-} from '@agent/storage/executionLease';
+import { ExecutionLeaseLostError } from '@agent/storage/executionLease';
 import { persistTerminalExecution } from '@agent/storage/terminalPersistence';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
@@ -198,8 +195,6 @@ export class ExecutionRegistry {
     (activation: ChildExecutionActivation, active: boolean) => void
   > = createListenerSet();
   private readonly lanes = new Map<string, ExecutionLane>();
-  /** Generations started on a lane that have not yet disposed. */
-  private readonly liveGenerations = new Map<string, Promise<void>>();
   /** While set, every new lifecycle step is refused with this error. */
   private lifecycleHold: Error | undefined;
 
@@ -240,7 +235,6 @@ export class ExecutionRegistry {
       lane.waiting.clear();
     }
     this.lanes.clear();
-    this.liveGenerations.clear();
     const executionIds = [...this.handles.keys()];
     this.handles.clear();
     for (const executionId of executionIds) {
@@ -288,11 +282,11 @@ export class ExecutionRegistry {
   private liveExecutionIds(): string[] {
     const live = new Set<string>([
       ...this.handles.keys(),
-      ...this.liveGenerations.keys(),
       ...this.childActivations.keys(),
     ]);
     for (const [executionId, lane] of this.lanes) {
       if (
+        lane.live !== undefined ||
         lane.queue.size > 0 ||
         lane.queue.pending > 0 ||
         lane.waiting.size > 0
@@ -338,23 +332,8 @@ export class ExecutionRegistry {
   launchExecution<T>(executionId: string, start: () => Promise<T>): Promise<T> {
     return this.enqueueLaneStep(executionId, (lane) => {
       const result = start();
-      this.setLiveGeneration(lane, executionId, result);
+      lane.live = settled(result);
       return { result, hold: undefined };
-    });
-  }
-
-  private setLiveGeneration(
-    lane: ExecutionLane,
-    executionId: string,
-    generation: Promise<unknown>,
-  ): void {
-    const live = settled(generation);
-    lane.live = live;
-    this.liveGenerations.set(executionId, live);
-    void live.then(() => {
-      if (this.liveGenerations.get(executionId) === live) {
-        this.liveGenerations.delete(executionId);
-      }
     });
   }
 
@@ -368,8 +347,7 @@ export class ExecutionRegistry {
   ): Promise<T> {
     this.assertActive();
     if (this.lifecycleHold) return Promise.reject(this.lifecycleHold);
-    const lane = this.lanes.get(executionId) ?? this.createLane();
-    this.lanes.set(executionId, lane);
+    const lane = this.laneFor(executionId);
     let settle!: (result: Promise<T>) => void;
     let refuse!: (error: Error) => void;
     const handedOut = new Promise<Promise<T>>((resolve, reject) => {
@@ -396,12 +374,17 @@ export class ExecutionRegistry {
     return handedOut.then((result) => result);
   }
 
-  private createLane(): ExecutionLane {
-    return {
-      queue: new PQueue({ concurrency: 1 }),
-      live: undefined,
-      waiting: new Set(),
-    };
+  private laneFor(executionId: string): ExecutionLane {
+    let lane = this.lanes.get(executionId);
+    if (!lane) {
+      lane = {
+        queue: new PQueue({ concurrency: 1 }),
+        live: undefined,
+        waiting: new Set(),
+      };
+      this.lanes.set(executionId, lane);
+    }
+    return lane;
   }
 
   private forgetIdleLane(executionId: string, lane: ExecutionLane): void {
@@ -1015,7 +998,6 @@ export class ExecutionRegistry {
       const recoveryFailures = [error];
       if (!(error instanceof ExecutionLeaseLostError)) {
         try {
-          markOwnedExecutionLeaseUndurable(handle.executionId);
           const untracked = this.settleTerminal(handle, cancelledResult, {
             publish: false,
             untrackMode: 'ifCurrent',
@@ -1058,12 +1040,9 @@ export class ExecutionRegistry {
     // claim the execution again.
     // A child loop's generation stays the lane's live promise until the loop
     // ends; the turn's teardown chains onto it rather than replacing it.
-    const lane = this.lanes.get(handle.executionId) ?? this.createLane();
-    this.lanes.set(handle.executionId, lane);
+    const lane = this.laneFor(handle.executionId);
     const previous = lane.live;
-    this.setLiveGeneration(
-      lane,
-      handle.executionId,
+    lane.live = settled(
       previous ? Promise.all([previous, termination]) : termination,
     );
     this.forgetIdleLane(handle.executionId, lane);
@@ -1079,9 +1058,7 @@ export class ExecutionRegistry {
       await teardown;
     } catch (error) {
       // Transcript closure and terminal execution metadata are independent
-      // durable facts. Preserve the failed artifact fence, but still give the
-      // terminal status its own opportunity to reach disk.
-      markOwnedExecutionLeaseUndurable(handle.executionId);
+      // durable facts; the terminal status still gets its own chance to land.
       logger.warn(
         'Waiting-execution cleanup failed; continuing terminal persistence',
         { data: { executionId: handle.executionId, error } },

@@ -975,9 +975,9 @@ return null`;
     const runExecutionId = runExecutionIdFor('tool-test');
     mocks.registerExecution.mockRejectedValueOnce(
       new ExecutionLeaseActiveError(runExecutionId, {
-        owner: { pid: 1, processStart: '1', hostname: 'test-host' },
-        provable: true,
-        reclaimable: false,
+        pid: 1,
+        processStart: '1',
+        hostname: 'test-host',
       }),
     );
 

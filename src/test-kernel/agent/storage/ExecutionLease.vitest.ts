@@ -15,15 +15,10 @@ import {
 import {
   ExecutionLeaseActiveError,
   ExecutionLeaseLostError,
-  abandonOwnedExecutionLease,
   acquireFreshExecutionLease,
   acquireResumedExecutionLease,
-  completeOwnedExecutionLease,
   inspectExecutionLease,
-  isOwnedExecutionLeaseDurable,
-  markOwnedExecutionLeaseUndurable,
   ownsExecutionLease,
-  reclaimExecutionLease,
   releaseOwnedExecutionLease,
   runWithInactiveExecutionLease,
   validateOwnedExecutionLease,
@@ -132,7 +127,7 @@ describe('cross-process execution leases', () => {
     await writeOrphanedLease(executionId);
 
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({
-      status: 'orphaned',
+      status: 'free',
     });
     await acquire(executionId);
 
@@ -166,7 +161,7 @@ describe('cross-process execution leases', () => {
     );
 
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({
-      status: 'missing',
+      status: 'free',
     });
     expect(await StorageFS.exists(legacyExecutionLeasePath(executionId))).toBe(
       false,
@@ -232,7 +227,7 @@ describe('cross-process execution leases', () => {
     ).toEqual([]);
   });
 
-  it('proves a presence-socket (v2) record by pid: dead is reclaimed, live is kept', async () => {
+  it('proves a presence-socket (v2) record by pid: dead is freed, live is kept', async () => {
     const deadId = 'c8644e' as ExecutionId;
     const liveId = 'c8644f' as ExecutionId;
     await writeExecution(deadId);
@@ -242,7 +237,7 @@ describe('cross-process execution leases', () => {
       await writeLegacyPresenceLease(liveId, foreign.owner);
 
       await expect(inspectExecutionLease(deadId)).resolves.toEqual({
-        status: 'orphaned',
+        status: 'free',
       });
       await expect(deleteExecution(deadId)).resolves.toMatchObject({
         status: 'deleted',
@@ -252,30 +247,24 @@ describe('cross-process execution leases', () => {
       );
 
       // No identity was ever recorded for a v2 owner, so a running pid is
-      // unreadable: automatic paths refuse it, and so does an explicit
-      // reclaim while the pid exists on this host.
-      await expect(inspectExecutionLease(liveId)).resolves.toMatchObject({
-        status: 'foreign',
-        provable: false,
-        reclaimable: false,
-        owner: { pid: foreign.owner.pid, processStart: null },
+      // unprovable: every automatic path refuses it while the pid exists.
+      await expect(inspectExecutionLease(liveId)).resolves.toEqual({
+        status: 'held',
+        owner: { ...foreign.owner, processStart: null },
       });
       await expect(acquireResumedExecutionLease(liveId)).rejects.toMatchObject({
         name: 'ExecutionLeaseActiveError',
-        provable: false,
-        reclaimable: false,
+        owner: { pid: foreign.owner.pid },
       });
-      await expect(reclaimExecutionLease(liveId)).resolves.toBe('alive');
       expect(await StorageFS.exists(legacyExecutionLeasePath(liveId))).toBe(
         true,
       );
     } finally {
       await foreign.shutdown();
     }
-    await expect(reclaimExecutionLease(liveId)).resolves.toBe('reclaimed');
-    expect(await StorageFS.exists(legacyExecutionLeasePath(liveId))).toBe(
-      false,
-    );
+    await expect(inspectExecutionLease(liveId)).resolves.toEqual({
+      status: 'free',
+    });
   });
 
   it('classifies a live pid whose identity differs from the record as orphaned', async () => {
@@ -288,7 +277,7 @@ describe('cross-process execution leases', () => {
       });
 
       await expect(inspectExecutionLease(executionId)).resolves.toEqual({
-        status: 'orphaned',
+        status: 'free',
       });
     } finally {
       await foreign.shutdown();
@@ -300,21 +289,19 @@ describe('cross-process execution leases', () => {
     const foreign = await startForeignInstance();
     await writeForeignLease(executionId, undefined, foreign.owner);
 
-    await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
-      status: 'foreign',
-      provable: true,
-      reclaimable: false,
+    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+      status: 'held',
+      owner: foreign.owner,
     });
     await foreign.shutdown();
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({
-      status: 'orphaned',
+      status: 'free',
     });
   });
 
   it.each([
     {
       label: 'a cross-host owner',
-      reclaimable: true,
       owner: async () => ({
         ...(await deadOwner()),
         hostname: 'texra-some-other-host',
@@ -322,75 +309,45 @@ describe('cross-process execution leases', () => {
     },
     {
       label: 'a live pid whose identity cannot be read',
-      reclaimable: false,
       owner: async () => {
         fakeProcesses().setIdentity(process.pid, undefined);
         return { pid: process.pid, processStart: '1', hostname: os.hostname() };
       },
     },
   ])(
-    'treats $label as unproven and never touches it automatically',
-    async ({ owner, reclaimable }) => {
+    'treats $label as held until the user deletes the run',
+    async ({ owner }) => {
       const executionId = 'b8644f' as ExecutionId;
-      await writeForeignLease(executionId, undefined, await owner());
+      const record = await owner();
+      await writeExecution(executionId);
+      await writeForeignLease(executionId, undefined, record);
       const operation = vi.fn(async () => 'removed');
 
-      await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
-        status: 'foreign',
-        provable: false,
-        reclaimable,
+      await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+        status: 'held',
+        owner: record,
       });
       await expect(
         runWithInactiveExecutionLease(executionId, operation),
-      ).resolves.toMatchObject({ status: 'active', provable: false });
+      ).resolves.toEqual({ status: 'active', owner: record });
       expect(operation).not.toHaveBeenCalled();
-      await expect(
-        acquireResumedExecutionLease(executionId),
-      ).rejects.toMatchObject({
-        name: 'ExecutionLeaseActiveError',
-        provable: false,
-        reclaimable,
-      });
+      await expect(acquireResumedExecutionLease(executionId)).rejects.toThrow(
+        `Execution ${executionId} is held by another TeXRA process (pid ${record.pid} on ${record.hostname}).`,
+      );
       expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(
         true,
       );
+
+      // Only the user's explicit deletion reaps an unprovable owner.
+      await expect(deleteExecution(executionId)).resolves.toMatchObject({
+        status: 'deleted',
+      });
+      expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(
+        false,
+      );
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
     },
   );
-
-  it('reclaims an unprovable owner only on explicit request, never a live one', async () => {
-    const unprovableId = 'b86450' as ExecutionId;
-    const liveId = 'b86451' as ExecutionId;
-    await writeForeignLease(unprovableId, undefined, {
-      ...(await deadOwner()),
-      hostname: 'texra-some-other-host',
-    });
-    await writeForeignLease(liveId);
-
-    await expect(reclaimExecutionLease(liveId)).resolves.toBe('alive');
-    expect(await StorageFS.exists(executionLeasePath(liveId))).toBe(true);
-
-    await expect(reclaimExecutionLease(unprovableId)).resolves.toBe(
-      'reclaimed',
-    );
-    await expect(inspectExecutionLease(unprovableId)).resolves.toEqual({
-      status: 'missing',
-    });
-    await expect(reclaimExecutionLease(unprovableId)).resolves.toBe('missing');
-    await acquire(unprovableId);
-  });
-
-  it('does not reclaim a pid that exists on this host even when its identity is unreadable', async () => {
-    const executionId = 'b86453' as ExecutionId;
-    fakeProcesses().setIdentity(process.pid, undefined);
-    await writeForeignLease(executionId, undefined, {
-      pid: process.pid,
-      processStart: '1',
-      hostname: os.hostname(),
-    });
-
-    await expect(reclaimExecutionLease(executionId)).resolves.toBe('alive');
-    expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(true);
-  });
 
   it('lets exactly one of two concurrent fresh claims win, with no lock directory', async () => {
     const executionId = 'b86452' as ExecutionId;
@@ -459,7 +416,7 @@ describe('cross-process execution leases', () => {
     ]);
     const loss = outcomes.find((o) => o.status === 'rejected');
     expect(loss?.reason).toBeInstanceOf(ExecutionLeaseActiveError);
-    expect(loss?.reason).toMatchObject({ provable: true });
+    expect(loss?.reason).toMatchObject({ owner: { pid: process.pid } });
     const [winner, ...rest] = await readLeaseRecords(executionId);
     expect(rest).toEqual([]);
     expect(
@@ -524,7 +481,6 @@ describe('cross-process execution leases', () => {
 
     await expect(claim).rejects.toMatchObject({
       name: 'ExecutionLeaseActiveError',
-      provable: true,
     });
     expect(ownsExecutionLease(executionId)).toBe(false);
     expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(false);
@@ -622,58 +578,25 @@ describe('cross-process execution leases', () => {
     ownedExecutionIds.delete(executionId);
 
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({
-      status: 'missing',
+      status: 'free',
     });
   });
 
-  it('stops claiming but preserves the lease after durability failure', async () => {
-    const executionId = 'd86442' as ExecutionId;
-    await acquire(executionId);
-
-    abandonOwnedExecutionLease(executionId);
-    ownedExecutionIds.delete(executionId);
-
-    expect(ownsExecutionLease(executionId)).toBe(false);
-    await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
-      status: 'foreign',
-    });
-  });
-
-  it('abandons rather than releases an execution marked undurable', async () => {
-    const executionId = 'd86443' as ExecutionId;
-    await acquire(executionId);
-
-    expect(isOwnedExecutionLeaseDurable(executionId)).toBe(true);
-    markOwnedExecutionLeaseUndurable(executionId);
-    expect(isOwnedExecutionLeaseDurable(executionId)).toBe(false);
-    await expect(completeOwnedExecutionLease(executionId)).resolves.toEqual({
-      status: 'retained',
-      reason: 'undurable',
-    });
-    ownedExecutionIds.delete(executionId);
-
-    expect(ownsExecutionLease(executionId)).toBe(false);
-    await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
-      status: 'foreign',
-    });
-  });
-
-  it('reports lease deletion failure while retaining its persisted record', async () => {
+  it('stops claiming ownership even when the lease deletion fails', async () => {
     const executionId = 'd86444' as ExecutionId;
     const deletionError = new Error('lease deletion failed');
     await acquire(executionId);
     vi.spyOn(StorageFS, 'delete').mockRejectedValueOnce(deletionError);
 
-    await expect(completeOwnedExecutionLease(executionId)).resolves.toEqual({
-      status: 'retained',
-      reason: 'release-failed',
-      error: deletionError,
-    });
+    await expect(releaseOwnedExecutionLease(executionId)).rejects.toBe(
+      deletionError,
+    );
     ownedExecutionIds.delete(executionId);
 
     expect(ownsExecutionLease(executionId)).toBe(false);
-    await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
-      status: 'foreign',
+    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+      status: 'held',
+      owner: expect.objectContaining({ pid: process.pid }),
     });
   });
 
@@ -689,7 +612,7 @@ describe('cross-process execution leases', () => {
     ownedExecutionIds.delete(executionId);
 
     await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
-      status: 'foreign',
+      status: 'held',
     });
   });
 
@@ -751,7 +674,7 @@ describe('cross-process execution leases', () => {
       acquireResumedExecutionLease(executionId),
     ).rejects.toMatchObject({
       name: 'ExecutionLeaseActiveError',
-      provable: true,
+      owner: { pid: process.pid },
     });
 
     deletionPaused.resolve();
@@ -760,7 +683,7 @@ describe('cross-process execution leases', () => {
       value: 'removed',
     });
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({
-      status: 'missing',
+      status: 'free',
     });
     await acquire(executionId);
     await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({

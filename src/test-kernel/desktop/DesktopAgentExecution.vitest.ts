@@ -48,6 +48,7 @@ import {
   MAIN_VIEW_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@shared/ipc';
+import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -1628,15 +1629,13 @@ describe('DesktopProgressBridge', () => {
     });
 
     // One unreadable run never takes the host down: the stream is shown as
-    // unclassified with its cause, nothing is mutated, and its transcript
-    // stays open for the Resume retry.
+    // unavailable with its cause, nothing is mutated, and its transcript
+    // stays open.
     expect(repairRestartedStreams).toHaveBeenCalledOnce();
     expect(bridgeStatus(bridge).get(mappedStream)).toBeUndefined();
-    expect(bridgeStatus(bridge).holdState(mappedStream)).toEqual({
-      kind: 'unclassified',
-      cause: 'flow records unavailable',
-      retryable: true,
-    });
+    expect(bridgeStatus(bridge).holdState(mappedStream)).toBe(
+      streamUnreadableMessage('flow records unavailable'),
+    );
     expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([mappedStream]);
   });
 

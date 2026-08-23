@@ -9,34 +9,11 @@
 
 import type { AgentTrace } from '@agent/trace';
 import type { ExecutionId, RunOutcome } from '@shared/schemas';
-import { markOwnedExecutionLeaseUndurable } from './executionLease';
 import {
   finalizeExecution,
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
 } from './executionLifecycle';
-
-/**
- * Calls `finalizeExecution` and marks the owned lease undurable whenever the
- * terminal status did not reach disk — a `'failed'` result, which carries the
- * underlying error. This is the shared step both `persistTerminalExecution`
- * and `runAgent`'s pre-lifecycle finalize arm used to duplicate inline, so
- * the mark-undurable decision lives in one place. Callers own their failure
- * reporting: `persistTerminalExecution` warns, `runAgent` folds the error
- * into its AggregateError. Never throws: `finalizeExecution` converts every
- * persistence failure into a `'failed'` result.
- */
-export async function finalizeExecutionWithLease(params: {
-  executionId: ExecutionId;
-  outcome: RunOutcome;
-  flowRecord: FinalizeExecutionInput['flowRecord'];
-}): Promise<FinalizeExecutionResult> {
-  const finalization = await finalizeExecution(params);
-  if (finalization.status === 'failed') {
-    markOwnedExecutionLeaseUndurable(params.executionId);
-  }
-  return finalization;
-}
 
 export interface PersistTerminalExecutionParams {
   readonly executionId: ExecutionId;
@@ -55,15 +32,12 @@ export interface PersistTerminalExecutionResult {
 }
 
 /**
- * Shared `finalizeExecution` tail used by both terminal-persistence
- * sites: `AgentRunLifecycle.finalizeRunTerminal`'s finalize arm and
- * `ExecutionRegistry.finishWaitingTermination`'s waiting-stop arm. Both sides
- * previously duplicated this exactly: call `finalizeExecution`, mark the
- * owned lease undurable and warn on a `'failed'` result, and hand back
- * whether the terminal status reached disk. The
- * caller keeps everything this helper does not own: the registry keeps its
- * root-lease release in its own `finally`; this function never throws, so a
- * caller-side `catch` is unnecessary and would be dead code.
+ * Shared `finalizeExecution` tail used by both terminal-persistence sites:
+ * `AgentRunLifecycle.finalizeRunTerminal`'s finalize arm and
+ * `ExecutionRegistry.finishWaitingTermination`'s waiting-stop arm. Warns on a
+ * `'failed'` result and hands back whether the terminal status reached disk.
+ * Never throws: `finalizeExecution` converts every persistence failure into
+ * a `'failed'` result.
  */
 export async function persistTerminalExecution(
   params: PersistTerminalExecutionParams,
@@ -76,7 +50,7 @@ export async function persistTerminalExecution(
     logger: callerLogger,
     failedMessage,
   } = params;
-  const finalization = await finalizeExecutionWithLease({
+  const finalization = await finalizeExecution({
     executionId,
     outcome,
     flowRecord,

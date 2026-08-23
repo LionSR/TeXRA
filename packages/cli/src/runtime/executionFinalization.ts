@@ -1,8 +1,4 @@
-import {
-  finalizeExecution,
-  markOwnedExecutionLeaseUndurable,
-  type FinalizeExecutionInput,
-} from '@agent/storage';
+import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
 import type { RunOutcome } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -46,8 +42,6 @@ export async function finalizeCliExecution(
     flowRecord,
   });
   if (result.status === 'durable') return true;
-  markOwnedExecutionLeaseUndurable(executionId);
-
   const message = finalizationFailureMessage(result, executionId, outcome);
   reportFailure(new Error(message, { cause: result.error }));
   return false;

@@ -57,8 +57,6 @@ interface BoundSubscription {
    * session (for example, the desktop process session).
    */
   owner: SessionHandle;
-  /** Continuation generation in which this detached producer was bound. */
-  expectedGenerationId: string | undefined;
 }
 
 export class StreamSubscriptionRegistry<K extends string, Input> {
@@ -94,8 +92,6 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       this.ensureReleaseHook(session);
       const previousOwner = existing.owner;
       existing.owner = session;
-      existing.expectedGenerationId =
-        session.followUps.currentGenerationId(streamId);
       if (previousOwner !== session) {
         this.detachReleaseHookIfUnused(previousOwner);
       }
@@ -109,7 +105,6 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
         streamId,
         followUp: text,
         session: subscription.owner,
-        expectedGenerationId: subscription.expectedGenerationId,
         logger: this.logger,
         failure: {
           message: 'Failed to deliver subscription follow-up',
@@ -122,7 +117,6 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       disposable,
       onEvent,
       owner: session,
-      expectedGenerationId: session.followUps.currentGenerationId(streamId),
     };
     bound.set(key, subscription);
     this.perStream.set(streamId, bound);

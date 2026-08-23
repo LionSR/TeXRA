@@ -22,8 +22,7 @@ import {
   isPlainAgentIdentity,
   isToolUseState,
   isWorkflowState,
-  STREAM_LIFECYCLE_HELD,
-  STREAM_LIFECYCLE_UNCLASSIFIED,
+  STREAM_LIFECYCLE_UNAVAILABLE,
   STREAM_PHASE,
   STREAM_SUBSTATE,
 } from '@shared/schemas';
@@ -33,7 +32,6 @@ import { CopyButtonController } from '@shared/litControllers/CopyButtonControlle
 import {
   progressHeaderStatus,
   streamStatusIndicatorClass,
-  isStreamStateMalformed,
   streamStatusTooltip,
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
@@ -104,35 +102,16 @@ const TERMINAL_STATE_BUTTONS = [
 ];
 
 /**
- * Buttons enabled while another TeXRA process holds the run: read-only
- * verbs only. Stop, resume, re-run, restore, archive, clean, and diff all
- * act on a run this process does not own.
+ * Buttons enabled while the run is unavailable here (held by another TeXRA
+ * process, or its saved state unreadable): the read-only verbs only. Stop,
+ * resume, re-run, restore, archive, diff, pack, and clean all act on a run
+ * this process does not own. Removing the run is the tab's Delete.
  */
-const HELD_STATE_BUTTONS = [
+const UNAVAILABLE_STATE_BUTTONS = [
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ];
-
-/**
- * Buttons enabled while the run's state could not be read: the read-only
- * verbs plus Resume, which re-reads and re-acquires the run and so is the
- * retry for the failed classification.
- */
-const UNCLASSIFIED_STATE_BUTTONS = [
-  ...HELD_STATE_BUTTONS,
-  ELEMENT_IDS.RESUME_BTN,
-];
-
-/**
- * Buttons enabled while the run's saved state is malformed: ownership is
- * proven absent, Resume would fail deterministically, so the read-only verbs
- * plus Clean (which deletes this run's outputs) are what is left.
- */
-const MALFORMED_STATE_BUTTONS = new Set([
-  ...HELD_STATE_BUTTONS,
-  ELEMENT_IDS.CLEAN_STREAM_BTN,
-]);
 
 /**
  * Terminal-set buttons that make no sense before the stream's first run:
@@ -164,8 +143,7 @@ const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
   ),
   [STREAM_PHASE.WAITING]: new Set(ACTIVE_STATE_BUTTONS),
   [STREAM_SUBSTATE.RESUMING]: new Set(ACTIVE_STATE_BUTTONS),
-  [STREAM_LIFECYCLE_HELD]: new Set(HELD_STATE_BUTTONS),
-  [STREAM_LIFECYCLE_UNCLASSIFIED]: new Set(UNCLASSIFIED_STATE_BUTTONS),
+  [STREAM_LIFECYCLE_UNAVAILABLE]: new Set(UNAVAILABLE_STATE_BUTTONS),
 };
 
 /** Buttons that depend on having an executionId */
@@ -458,10 +436,9 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
       isAgentOrPending && agentCategory
         ? TOOLBAR_BUTTONS[agentCategory]
         : NEUTRAL_TOOLBAR;
-    let enabledButtons = displayKey
+    const enabledButtons = displayKey
       ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
       : undefined;
-    if (isStreamStateMalformed(state)) enabledButtons = MALFORMED_STATE_BUTTONS;
     // Composed once per render: it both gates the copy button and is the
     // payload its click writes.
     const runContext = this.runContextText(this.stream, state);

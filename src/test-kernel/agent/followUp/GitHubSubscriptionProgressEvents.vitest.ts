@@ -240,7 +240,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const streamId = 'stream-a' as StreamTabId;
     const source = new RegistryTestSource();
     const session = createTestSession();
-    const lease = session.followUps.claimLive(streamId, 'flow')!;
+    session.followUps.claimLive(streamId, 'flow');
     const registry = createTestRegistry(source);
 
     try {
@@ -257,24 +257,20 @@ describe('GitHub subscription app signals and follow-ups', () => {
       expect(submitFollowUpMock).toHaveBeenCalledWith(
         streamId,
         'new github event',
-        {
-          session,
-          mode: 'live_notification',
-          expectedGenerationId: lease.generationId,
-        },
+        { session, mode: 'live_notification' },
       );
     } finally {
       session.dispose();
     }
   });
 
-  it('refreshes the generation fence when an existing binding changes sessions', () => {
+  it('rebinds an existing subscription to the session that rebound it', () => {
     const streamId = 'stream-a' as StreamTabId;
     const source = new RegistryTestSource();
     const firstSession = createTestSession();
     firstSession.followUps.claimLive(streamId, 'flow');
     const secondSession = createTestSession();
-    const secondLease = secondSession.followUps.claimLive(streamId, 'flow')!;
+    secondSession.followUps.claimLive(streamId, 'flow');
     const registry = createTestRegistry(source);
 
     try {
@@ -292,11 +288,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
       expect(submitFollowUpMock).toHaveBeenCalledWith(
         streamId,
         'new github event',
-        {
-          session: secondSession,
-          mode: 'live_notification',
-          expectedGenerationId: secondLease.generationId,
-        },
+        { session: secondSession, mode: 'live_notification' },
       );
     } finally {
       firstSession.dispose();

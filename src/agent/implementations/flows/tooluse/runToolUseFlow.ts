@@ -171,17 +171,12 @@ export async function runToolUseFlow<C = unknown>(
 ): Promise<RunToolUseFlowResult> {
   const { logger, setting, runScope, toolPolicy } = input;
   const { streamId, executionId, session: runSession, signal } = runScope;
-  const continuationGenerationId =
-    runSession.followUps.currentChildGenerationId(streamId) ??
-    input.resume?.shared.continuationGenerationId ??
-    randomUUID();
   // Capture the run's scope at setup. The interrupt closure below fires from
   // the host thread outside the ALS, so it must use this captured session
   // handle instead of asking for an ambient current session later.
   const sessionLifecycle = new ToolUseSessionLifecycle(
     streamId,
     runSession.followUps,
-    continuationGenerationId,
   );
   const baseRegistry = toolRegistry ?? getDefaultToolRegistry();
   const { tools: resolvedTools } = await resolveAgentTools({
@@ -423,7 +418,8 @@ export async function runToolUseFlow<C = unknown>(
 
   let shared: ToolUseRunShared = {
     messages: [],
-    continuationGenerationId,
+    // Persisted-shape compatibility only: nothing reads this field any more.
+    continuationGenerationId: randomUUID(),
     modelId: services.modelCell.modelId,
     modelHandlerCompatibilityKey: compatibilityKey,
     shouldSkipCycle: false,
