@@ -174,22 +174,22 @@ function formatSchemaIssue(issue: ZodIssue): string {
 
 type InheritedBlockName = 'prompts' | 'settings';
 
-interface InheritedDefinitionBlock {
-  readonly value: Record<string, unknown>;
+interface InheritedDefinitionBlock<T> {
+  readonly value: T;
   readonly complete: boolean;
 }
 
-function inheritedDefinitionBlock(
+function inheritedDefinitionBlock<B extends InheritedBlockName>(
   entry: ParsedAgentYaml,
   definitions: Map<string, ParsedAgentYaml>,
-  block: InheritedBlockName,
+  block: B,
   seen: ReadonlySet<string> = new Set([entry.name]),
-): InheritedDefinitionBlock {
-  // definition[block] is a validated raw YAML block; widen to
-  // Record<string, unknown> for the lightweight metadata extraction below.
-  const ownBlock: Record<string, unknown> = entry.definition[
-    block
-  ] as unknown as Record<string, unknown>;
+): InheritedDefinitionBlock<AgentDefinition[B]> {
+  // Parameterizing over the block name (not the value type) lets this index
+  // without a cast: `AgentDefinitionSchema` pins `entry.definition[block]` to
+  // exactly `AgentDefinition[B]`, so passing the wrong block name for a given
+  // T is no longer expressible.
+  const ownBlock = entry.definition[block];
   const parentName = entry.definition.inherits;
   if (!parentName) return { value: ownBlock, complete: true };
 
@@ -238,12 +238,11 @@ function scanYaml(
     );
     const rawSettings = settingsBlock.value;
     const rawPrompts = promptsBlock.value;
-    const defaultOutputFiles = rawSettings.defaultOutputFiles as
-      string[] | undefined;
+    const defaultOutputFiles = rawSettings.defaultOutputFiles;
 
-    const tools = extractToolNames(rawSettings.tools as unknown[] | undefined);
+    const tools = extractToolNames(rawSettings.tools);
 
-    const rawCategory = rawSettings.agentCategory as string | undefined;
+    const rawCategory = rawSettings.agentCategory;
     const category =
       source === 'builtInToolUse' || rawCategory === AgentCategory.ToolUse
         ? AgentCategory.ToolUse
