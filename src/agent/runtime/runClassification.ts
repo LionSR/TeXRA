@@ -8,7 +8,8 @@
  *
  * - `held_elsewhere`: its execution lease is readable and held by an owner
  *   that is alive or cannot be proven dead (another TeXRA process). Shown
- *   read-only.
+ *   read-only; when the owner is unprovable the user is told so and may
+ *   reclaim it explicitly.
  * - `owned_here`: its lease is held by this very process. Never a restart
  *   candidate; the caller treats reaching it as an invariant violation.
  * - `resumable`: a checkpoint (flow record) exists and nobody alive holds the
@@ -27,6 +28,7 @@ import {
   inspectExecutionLease,
   type ExecutionLeasePresence,
 } from '@agent/storage/executionLease';
+import type { OwnerHold } from '@agent/storage/leaseOwnerLiveness';
 import {
   deriveResumability,
   RESUMABILITY_CAUSE,
@@ -39,7 +41,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 const log = createLog('RunClassification');
 
 export type RunClassification =
-  | { readonly kind: 'held_elsewhere' }
+  | { readonly kind: 'held_elsewhere'; readonly hold: OwnerHold }
   | { readonly kind: 'owned_here' }
   | { readonly kind: 'resumable'; readonly outcome?: RunOutcome }
   | { readonly kind: 'finished'; readonly outcome?: RunOutcome }
@@ -90,6 +92,9 @@ export async function classifyRun(
     return { kind: 'unclassified', cause, retryable: true };
   }
   if (lease.status === 'owned') return { kind: 'owned_here' };
-  if (lease.status === 'foreign') return { kind: 'held_elsewhere' };
+  if (lease.status === 'foreign') {
+    const { owner, provable, reclaimable } = lease;
+    return { kind: 'held_elsewhere', hold: { owner, provable, reclaimable } };
+  }
   return classifyRunFacts(executionId, await deriveResumability(executionId));
 }

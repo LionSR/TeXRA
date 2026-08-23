@@ -103,6 +103,16 @@ export interface FileSystemProvider {
    * files (where atomic rename would replace a user's symlink).
    */
   writeFileAtomic(path: string, content: Uint8Array): Promise<void>;
+  /**
+   * Make `path` appear complete and durable in one step: stage the content
+   * beside it, fsync, then rename into place. For names that belong to
+   * exactly one writer (an execution-lease claim), where `writeFileAtomic`'s
+   * replace-existing semantics are not wanted and a torn file must never be
+   * observable.
+   */
+  publishFile(path: string, content: Uint8Array): Promise<void>;
+  /** Remove a directory only if it is empty; rejects with `ENOTEMPTY`. */
+  removeEmptyDirectory(path: string): Promise<void>;
   appendFile(path: string, content: Uint8Array): Promise<void>;
   delete(path: string, options?: { recursive?: boolean }): Promise<void>;
   createDirectory(path: string): Promise<void>;
@@ -178,6 +188,25 @@ export interface StorageProvider {
    * pending commit was rolled back.
    */
   rollbackWorkspaceStorageChange?(): boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Process liveness
+// ---------------------------------------------------------------------------
+
+/**
+ * Kernel facts about processes, used to prove whether the owner recorded in
+ * an execution lease is still the same process. An identity is an opaque
+ * string that cannot change while a process runs and that no later process
+ * with the same pid can repeat: two equal strings name one process, two
+ * different strings name two. Its format is the port's business; callers
+ * only compare it verbatim.
+ */
+export interface ProcessesPort {
+  /** Start identity of `pid`, or undefined when it cannot be read. */
+  identity(pid: number): Promise<string | undefined>;
+  /** This process's own identity; memoized once read, retried until then. */
+  selfIdentity(): Promise<string | undefined>;
 }
 
 // ---------------------------------------------------------------------------

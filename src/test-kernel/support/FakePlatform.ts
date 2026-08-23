@@ -18,11 +18,13 @@ import {
   type StorageProvider,
   type WorkspaceProvider,
   type AgentDirectoriesPort,
+  type ProcessesPort,
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import {
   fileTypeFor,
   type FileTypeProbe,
@@ -309,6 +311,19 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     await this.writeFile(target, content);
   }
 
+  async publishFile(target: string, content: Uint8Array): Promise<void> {
+    // Mirror the production stage-then-rename so a test observes the same
+    // directory contents (the staged sibling never outlives the publish).
+    const normalized = normalizePath(target);
+    const staging = `${normalized}.tmp`;
+    await this.fs.promises.writeFile(staging, Buffer.from(content));
+    await this.fs.promises.rename(staging, normalized);
+  }
+
+  async removeEmptyDirectory(target: string): Promise<void> {
+    await this.fs.promises.rmdir(normalizePath(target));
+  }
+
   async appendFile(target: string, content: Uint8Array): Promise<void> {
     await this.fs.promises.appendFile(
       normalizePath(target),
@@ -516,6 +531,39 @@ export class FakeSecrets implements PlatformSecrets {
   }
 }
 
+/**
+ * Scripted process identities for lease-liveness tests: a pid not scripted
+ * here falls through to the real port, so a real child's identity is read
+ * for real while a test can force one verdict (a different identity for pid
+ * reuse, undefined for unreadable).
+ */
+export class FakeProcesses implements ProcessesPort {
+  private readonly identities = new Map<number, string | undefined>();
+
+  setIdentity(pid: number, identity: string | undefined): void {
+    this.identities.set(pid, identity);
+  }
+
+  /** Drop every scripted value; every pid falls through to the real port. */
+  reset(): void {
+    this.identities.clear();
+  }
+
+  async identity(pid: number): Promise<string | undefined> {
+    if (this.identities.has(pid)) return this.identities.get(pid);
+    return nodeProcesses.identity(pid);
+  }
+
+  selfIdentity(): Promise<string | undefined> {
+    // Route through the scripted map so a test that scripts this process's
+    // pid sees the same value in the records it writes and the probes it runs.
+    if (this.identities.has(process.pid)) {
+      return Promise.resolve(this.identities.get(process.pid));
+    }
+    return nodeProcesses.selfIdentity();
+  }
+}
+
 export interface FakePlatformOptions {
   config?: Record<string, unknown>;
   globalState?: Record<string, unknown>;
@@ -554,6 +602,7 @@ export function createFakePlatform(
       options.storagePath,
       options.globalStoragePath,
     ),
+    processes: new FakeProcesses(),
     fileLocks: {
       async runExclusive<T>(
         lockPath: string,

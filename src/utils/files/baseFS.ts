@@ -3,7 +3,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // Common imports
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import {
+  isFileExistsError,
+  isFileNotFoundError,
+  isNotADirectoryError,
+} from '@common/errors';
 
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces';
@@ -109,6 +113,29 @@ export abstract class BaseFS {
     );
   }
 
+  /**
+   * Publish a file that belongs to exactly one writer: staged, fsynced, then
+   * renamed into place, so it is either absent or complete and durable.
+   */
+  public static async publish(
+    this: typeof BaseFS,
+    target: string,
+    content: string | Uint8Array,
+  ): Promise<void> {
+    await platform().fs.publishFile(
+      this.preparePath(target),
+      toBuffer(content),
+    );
+  }
+
+  /** Remove `target` only if it is an empty directory (`ENOTEMPTY` otherwise). */
+  public static async removeEmptyDir(
+    this: typeof BaseFS,
+    target: string,
+  ): Promise<void> {
+    await platform().fs.removeEmptyDirectory(this.preparePath(target));
+  }
+
   public static async appendFile(
     this: typeof BaseFS,
     target: string,
@@ -139,12 +166,8 @@ export abstract class BaseFS {
     try {
       await this.createDir(target);
     } catch (err) {
-      // Directory already exists — silently succeed.
-      // Check for both EEXIST (Node.js default) and FileExists (VS Code adapter).
-      const code = (err as { code?: string }).code;
-      if (code === 'EEXIST' || code === 'FileExists') {
-        return;
-      }
+      // Directory already exists: that is the post-condition, so succeed.
+      if (isFileExistsError(err)) return;
       throw err;
     }
   }

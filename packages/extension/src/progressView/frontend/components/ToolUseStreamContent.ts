@@ -7,17 +7,12 @@ import { customElement } from 'lit/decorators.js';
 // Local imports - shared schemas
 import {
   isToolUseState,
-  STREAM_LIFECYCLE_HELD,
-  STREAM_LIFECYCLE_UNCLASSIFIED,
   STREAM_STATUS,
   type StreamTabInfo,
   type ToolUseStreamState,
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
-import {
-  STREAM_HELD_ELSEWHERE_MESSAGE,
-  streamUnclassifiedMessage,
-} from '@shared/streams/streamStatusDisplay';
+import { streamStatusTooltip } from '@shared/streams/streamStatusDisplay';
 
 // Local imports - progress view
 import { ProgressEvents } from '../events';
@@ -113,7 +108,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
   ): TemplateResult | typeof nothing {
     if (composerVisible(state, streamInfo)) return nothing;
     return html`<div class="conversation-composer-banner">
-      ${composerBannerMessage(state)}
+      ${streamStatusTooltip(state, RUN_ENDED_MESSAGE)}
     </div>`;
   }
 
@@ -142,15 +137,4 @@ function composerVisible(
     streamInfo.executionId === undefined &&
     state.lastTimestamp === undefined
   );
-}
-
-function composerBannerMessage(state: ToolUseStreamState): string {
-  switch (state.status) {
-    case STREAM_LIFECYCLE_HELD:
-      return STREAM_HELD_ELSEWHERE_MESSAGE;
-    case STREAM_LIFECYCLE_UNCLASSIFIED:
-      return streamUnclassifiedMessage(state);
-    default:
-      return RUN_ENDED_MESSAGE;
-  }
 }

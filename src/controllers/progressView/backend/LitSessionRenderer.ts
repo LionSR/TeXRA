@@ -39,6 +39,7 @@ import {
 } from '@shared/schemas';
 import { buildStreamContentRender } from '@shared/streams/streamContentSync';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
+import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
 import {
   assertNever,
   createFlushableDebounce,
@@ -458,7 +459,8 @@ export class LitSessionRenderer implements SessionRendererPort {
     const status = streamStates.get(streamInfo.name);
     // A stream held by another process, or one whose run state could not be
     // read, has no phase in this session; the wire carries the sentinel so
-    // the view renders it read-only (with the cause for an unclassified one).
+    // the view renders it read-only, with `statusDetail` saying why: the held
+    // copy (which differs when the holder cannot be reached) or the cause.
     const hold = this.state.streamStatus.holdState(streamInfo.name);
     const holdStatus =
       hold &&
@@ -468,7 +470,11 @@ export class LitSessionRenderer implements SessionRendererPort {
     return buildStreamMetadata({
       category: streamInfo.agentCategory,
       status: holdStatus ?? status?.phase,
-      statusDetail: hold?.kind === 'unclassified' ? hold.cause : undefined,
+      statusDetail:
+        hold &&
+        (hold.kind === 'held'
+          ? streamHeldMessage(hold.executionId, hold.hold)
+          : hold.cause),
       statusRetryable:
         hold?.kind === 'unclassified' ? hold.retryable : undefined,
       substate: status?.substate,

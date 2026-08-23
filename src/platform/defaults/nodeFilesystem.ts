@@ -63,6 +63,25 @@ export const nodeFilesystem: FileSystemProvider = {
     await writeFileAtomicLib(target, Buffer.from(content));
   },
 
+  async publishFile(target: string, content: Uint8Array): Promise<void> {
+    // Stage beside the target, fsync, then rename. The target name is unique
+    // to its publisher, so the rename never contends with anyone and a crash
+    // leaves at most a `.tmp` sibling, never a torn target.
+    const staging = `${target}.tmp`;
+    const handle = await fs.promises.open(staging, 'w');
+    try {
+      await handle.writeFile(content);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fs.promises.rename(staging, target);
+  },
+
+  async removeEmptyDirectory(target: string): Promise<void> {
+    await fs.promises.rmdir(target);
+  },
+
   async appendFile(target: string, content: Uint8Array): Promise<void> {
     await fs.promises.appendFile(target, content);
   },
