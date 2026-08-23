@@ -15,6 +15,7 @@ import { when } from 'lit/directives/when.js';
 import {
   DEFAULT_STREAM_METADATA_STATUS,
   STREAM_LIFECYCLE_HELD,
+  STREAM_LIFECYCLE_UNCLASSIFIED,
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type StreamLifecycleStatus,
@@ -72,6 +73,7 @@ const STATUS_ICONS: Record<StreamStatusDisplayKey, TeXRAIconName> = {
   [STREAM_PHASE.CANCELLED]: 'circle-stop',
   ready: 'circle',
   [STREAM_LIFECYCLE_HELD]: 'window-maximize',
+  [STREAM_LIFECYCLE_UNCLASSIFIED]: 'circle-question',
 };
 
 function buildTooltip(

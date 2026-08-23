@@ -45,6 +45,7 @@ import {
   validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { finalizeExecution } from '@agent/storage/executionLifecycle';
+import { listExecutionStreamReferences } from '@agent/storage/executionListing';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
@@ -434,32 +435,15 @@ export class SessionHandle {
         this.snapshots.evictAll();
         await this.snapshots.preload([...this.computeStartupSeedSet()]);
         this.status.clearAll();
+        // Each phase is restored in one step: the applier treats a RUNNING
+        // fact as a run start, so no intermediate phase may be published.
         for (const [streamId, state] of previousStatus) {
-          if (state.phase === STREAM_PHASE.WAITING) {
-            this.status.transitionToWaiting(
-              streamId,
-              STREAM_TRANSITION_CAUSE.WAIT,
-              { substate: state.substate },
-            );
-          } else if (
-            state.phase === STREAM_PHASE.COMPLETED ||
-            state.phase === STREAM_PHASE.FAILED ||
-            state.phase === STREAM_PHASE.CANCELLED
-          ) {
-            this.status.transitionToTerminal(
-              streamId,
-              state.phase,
-              STREAM_TRANSITION_CAUSE.LIFECYCLE,
-              { substate: state.substate },
-            );
-          } else {
-            this.status.transition(
-              streamId,
-              state.phase,
-              STREAM_TRANSITION_CAUSE.LIFECYCLE,
-              { substate: state.substate },
-            );
-          }
+          this.status.transition(
+            streamId,
+            state.phase,
+            STREAM_TRANSITION_CAUSE.ROLLBACK,
+            { substate: state.substate },
+          );
         }
       } catch (rollbackError) {
         throw new AggregateError(
@@ -509,17 +493,42 @@ export class SessionHandle {
   }
 
   /**
-   * Classify every transcript-unfinished stream this process does not run
-   * and record what the classification proves. A stream live in this
+   * Classify every stream that can carry a run this process does not run,
+   * and record what the classification proves. Candidates are the bounded
+   * startup seed (transcript-unfinished streams plus their parent chain)
+   * and every stream whose execution still holds a resume checkpoint: a
+   * stopped or failed run closes its transcript group and keeps its
+   * checkpoint, so it is not transcript-unfinished yet must still offer
+   * Resume after a restart. The checkpoint set comes from one scan of the
+   * execution directory (flow-record `stat` + metadata), never from reading
+   * transcripts, so hydration stays bounded (#9947). A stream live in this
    * process (RUNNING/WAITING with a flow context) is never a candidate:
    * in-memory phases are facts about this registry, and startup never
    * remembers one for a run it does not own.
    */
   private async runRestartRepair(generation: number): Promise<void> {
     if (this.isRepairSuperseded(generation)) return;
-    const candidates = this.transcripts
-      .getUnfinishedStreamIds()
-      .filter((streamId) => !isInFlightPhase(this.status.get(streamId)));
+    const unfinished = new Set(this.transcripts.getUnfinishedStreamIds());
+    const candidateSet = new Set(this.computeStartupSeedSet());
+    try {
+      for (const { streamId } of await listExecutionStreamReferences({
+        checkpointedOnly: true,
+      })) {
+        candidateSet.add(streamId);
+      }
+    } catch (error) {
+      // The scan proves nothing when it fails; the seed still gets classified.
+      logger.warn(
+        'Could not list checkpointed executions during restart repair; stopped runs outside the startup seed are not classified',
+        { data: error },
+      );
+    }
+    if (this.isRepairSuperseded(generation)) return;
+    const candidates = [...candidateSet].filter(
+      (streamId) =>
+        this.transcripts.has(streamId) &&
+        !isInFlightPhase(this.status.get(streamId)),
+    );
     const statusGenerationsAtScan = new Map<StreamTabId, object | undefined>();
     for (const streamId of candidates) {
       statusGenerationsAtScan.set(
@@ -589,9 +598,15 @@ export class SessionHandle {
     await repairRestartedStreams({
       streamStatus: this.status,
       executionIds,
+      // A candidate with no execution is settled only when its transcript is
+      // still open (closing it as interrupted is the one honest fact); a
+      // closed stream with nothing to classify keeps no phase.
       repairStreams: candidates.filter(
-        (streamId) => !unresolvedStreams.has(streamId),
+        (streamId) =>
+          !unresolvedStreams.has(streamId) &&
+          (executionIds.has(streamId) || unfinished.has(streamId)),
       ),
+      classificationConcurrency: RESTART_REPAIR_IO_CONCURRENCY,
       isRepairCandidateCurrent: (streamId, expectedExecutionId) => {
         if (
           this.status.getGeneration(streamId) !==
