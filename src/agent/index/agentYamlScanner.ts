@@ -11,8 +11,6 @@ import {
   AgentDefinitionSchema,
   AgentWorkflowSettingSchema,
   type AgentDefinition,
-  type AgentPromptInput,
-  type AgentSettingInput,
 } from '@agent/core/definition/AgentDataclass';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { createLog } from '@logger/logUtils';
@@ -176,21 +174,22 @@ function formatSchemaIssue(issue: ZodIssue): string {
 
 type InheritedBlockName = 'prompts' | 'settings';
 
-interface InheritedDefinitionBlock<T extends object> {
+interface InheritedDefinitionBlock<T> {
   readonly value: T;
   readonly complete: boolean;
 }
 
-function inheritedDefinitionBlock<T extends object>(
+function inheritedDefinitionBlock<B extends InheritedBlockName>(
   entry: ParsedAgentYaml,
   definitions: Map<string, ParsedAgentYaml>,
-  block: InheritedBlockName,
+  block: B,
   seen: ReadonlySet<string> = new Set([entry.name]),
-): InheritedDefinitionBlock<T> {
-  // `block` is a union of both block names, so indexing can't statically
-  // narrow to the one schema type the caller pinned T to ('settings' ->
-  // AgentSettingInput, 'prompts' -> AgentPromptInput).
-  const ownBlock = entry.definition[block] as T;
+): InheritedDefinitionBlock<AgentDefinition[B]> {
+  // Parameterizing over the block name (not the value type) lets this index
+  // without a cast: `AgentDefinitionSchema` pins `entry.definition[block]` to
+  // exactly `AgentDefinition[B]`, so passing the wrong block name for a given
+  // T is no longer expressible.
+  const ownBlock = entry.definition[block];
   const parentName = entry.definition.inherits;
   if (!parentName) return { value: ownBlock, complete: true };
 
@@ -199,7 +198,7 @@ function inheritedDefinitionBlock<T extends object>(
     return { value: ownBlock, complete: false };
   }
 
-  const inherited = inheritedDefinitionBlock<T>(
+  const inherited = inheritedDefinitionBlock(
     parent,
     definitions,
     block,
@@ -227,12 +226,12 @@ function scanYaml(
   definitions: Map<string, ParsedAgentYaml>,
 ): { ok: true; entry: AgentEntry } | { ok: false; message: string } {
   try {
-    const settingsBlock = inheritedDefinitionBlock<AgentSettingInput>(
+    const settingsBlock = inheritedDefinitionBlock(
       entry,
       definitions,
       'settings',
     );
-    const promptsBlock = inheritedDefinitionBlock<AgentPromptInput>(
+    const promptsBlock = inheritedDefinitionBlock(
       entry,
       definitions,
       'prompts',
