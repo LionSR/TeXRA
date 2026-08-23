@@ -13,11 +13,13 @@
  *   continued only through the explicit Resume affordance.
  *
  * Classification reads only and runs in parallel; it decides which streams
- * need a settlement claim. Settlement is sequential and fenced: inside one
- * inactive-lease scope the run is classified again and that fresh result is
- * the one acted on, so a run another process claimed and finished between the
- * pre-pass and the lock is published on its persisted outcome and nothing is
- * written over it.
+ * need a settlement claim. Settlement is sequential and fenced: the
+ * inactive-lease scope that opens is the ownership decision, and inside it
+ * only the durable facts (checkpoint presence and persisted outcome) are
+ * re-read and acted on, so a run another process claimed and finished between
+ * the pre-pass and the lock is published on its persisted outcome and nothing
+ * is written over it. Ownership is never re-asked under the lock: a second
+ * probe could only contradict the lock that proved the owner absent.
  *
  * Invariant: a resume checkpoint (`executions/<id>/flow_<id>.json`) is deleted
  * only by the user or by a genuinely COMPLETED run. Repair never infers FAILED
@@ -27,6 +29,11 @@
 import pMap from 'p-map';
 
 import { runWithInactiveExecutionLease } from '@agent/storage/executionLease';
+import { ensureInstancePresence } from '@agent/storage/instancePresence';
+import {
+  deriveResumability as defaultDeriveResumability,
+  type ResumabilityDecision,
+} from '@agent/storage/resumability';
 import {
   finalizeExecution as defaultFinalizeExecution,
   type FinalizeExecutionInput,
@@ -46,7 +53,9 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   classifyRun as defaultClassifyRun,
+  classifyRunFacts,
   type RunClassification,
+  type RunFactsClassification,
 } from './runClassification';
 
 const DEFAULT_CLASSIFICATION_CONCURRENCY = 4;
@@ -68,6 +77,10 @@ export interface RestartRepairOptions {
     now: number,
   ): Promise<readonly StreamTabId[]>;
   classifyRun?: (executionId: ExecutionId) => Promise<RunClassification>;
+  /** Durable facts re-read under the settlement lease. */
+  deriveResumability?: (
+    executionId: ExecutionId,
+  ) => Promise<ResumabilityDecision>;
   /** Parallelism of the read-only classification phase. */
   classificationConcurrency?: number;
   finalizeExecution?: (
@@ -148,6 +161,8 @@ export async function repairRestartedStreams(
 ): Promise<void> {
   const now = options.now ?? Date.now();
   const classifyRun = options.classifyRun ?? defaultClassifyRun;
+  const deriveResumability =
+    options.deriveResumability ?? defaultDeriveResumability;
   const finalizeExecution =
     options.finalizeExecution ?? defaultFinalizeExecution;
   const isCurrent = (streamId: StreamTabId, executionId?: ExecutionId) =>
@@ -181,7 +196,7 @@ export async function repairRestartedStreams(
         return {
           streamId,
           executionId,
-          classification: { kind: 'unclassified', cause },
+          classification: { kind: 'unclassified', cause, retryable: true },
         };
       }
     },
@@ -190,6 +205,24 @@ export async function repairRestartedStreams(
         options.classificationConcurrency ?? DEFAULT_CLASSIFICATION_CONCURRENCY,
     },
   );
+
+  // A lease this process holds for a stream with no live flow context is a
+  // registry/lease disagreement. Say so and record the unknown state rather
+  // than labelling it foreign or letting it fall through to the ready default.
+  const markOwnedHere = (
+    streamId: StreamTabId,
+    executionId: ExecutionId | undefined,
+  ): void => {
+    options.streamStatus.markUnclassified(
+      streamId,
+      'lease owned by this process with no live run',
+      true,
+    );
+    options.logger?.error(
+      `Stream ${streamId} has no live flow context but this process holds execution ${executionId}; left unclassified`,
+      { data: { streamId, executionId } },
+    );
+  };
 
   // Apply a hold-only classification (no write). Returns false when the
   // classification settles instead, so the caller proceeds to the write path.
@@ -204,14 +237,7 @@ export async function repairRestartedStreams(
         // a lease this process holds is a registry/lease disagreement. Say so
         // and record the unknown state rather than labelling it foreign or
         // letting it fall through to the ready default.
-        options.streamStatus.markUnclassified(
-          streamId,
-          'lease owned by this process with no live run',
-        );
-        options.logger?.error(
-          `Stream ${streamId} has no live flow context but this process holds execution ${executionId}; left unclassified`,
-          { data: { streamId, executionId } },
-        );
+        markOwnedHere(streamId, executionId);
         return true;
       case 'held_elsewhere':
         options.streamStatus.markHeld(streamId);
@@ -220,7 +246,11 @@ export async function repairRestartedStreams(
         );
         return true;
       case 'unclassified':
-        options.streamStatus.markUnclassified(streamId, classification.cause);
+        options.streamStatus.markUnclassified(
+          streamId,
+          classification.cause,
+          classification.retryable,
+        );
         options.logger?.warn(
           `Stream ${streamId} left unclassified after restart: ${classification.cause}`,
           { data: { streamId, executionId } },
@@ -249,11 +279,11 @@ export async function repairRestartedStreams(
     // under the inactive-lease lock: the same lock an acquirer takes, so
     // nobody can claim the run between the transcript close and the outcome
     // write. The pre-claim classification only decided that a claim is
-    // needed; the facts are re-read under the lock and only those are acted
-    // on, because another process may have claimed, resumed, and finished the
-    // run in between.
+    // needed; the durable facts are re-read under the lock and only those are
+    // acted on, because another process may have claimed, resumed, and
+    // finished the run in between. Ownership is the lock itself.
     let settleStarted = false;
-    const settle = async (current: RunClassification): Promise<void> => {
+    const settle = async (current: RunFactsClassification): Promise<void> => {
       if (!isCurrent(streamId, executionId)) {
         options.logger?.debug(
           `Skipped restart repair for stream ${streamId}: it was reused before settlement`,
@@ -300,11 +330,18 @@ export async function repairRestartedStreams(
       maintenance = await runWithInactiveExecutionLease(
         executionId,
         async () => {
-          let current: RunClassification;
+          let current: RunFactsClassification;
           try {
-            current = await classifyRun(executionId);
+            current = classifyRunFacts(
+              executionId,
+              await deriveResumability(executionId),
+            );
           } catch (error) {
-            current = { kind: 'unclassified', cause: toErrorMessage(error) };
+            current = {
+              kind: 'unclassified',
+              cause: toErrorMessage(error),
+              retryable: true,
+            };
           }
           await settle(current);
         },
@@ -314,7 +351,7 @@ export async function repairRestartedStreams(
       // not even be taken proves nothing, so the stream stays unclassified.
       if (settleStarted) throw error;
       const cause = `lease lock unavailable (${toErrorMessage(error)})`;
-      options.streamStatus.markUnclassified(streamId, cause);
+      options.streamStatus.markUnclassified(streamId, cause, true);
       options.logger?.warn(
         `Stream ${streamId} left unclassified after restart: ${cause}`,
         { data: error },
@@ -324,8 +361,14 @@ export async function repairRestartedStreams(
     if (maintenance.status === 'active') {
       // Claimed between classification and settlement: that is the current
       // fact. A claim by this process means the stream is live here and the
-      // registry already owns its phase.
+      // registry already owns its phase; one with no phase yet is the same
+      // registry/lease disagreement as `owned_here`, never another window.
       if (isInFlightPhase(options.streamStatus.get(streamId))) continue;
+      const self = await ensureInstancePresence();
+      if (maintenance.owner.instanceId === self.instanceId) {
+        markOwnedHere(streamId, executionId);
+        continue;
+      }
       options.streamStatus.markHeld(streamId);
       options.logger?.warn(
         `Execution ${executionId} was claimed while restart repair settled stream ${streamId}; now held elsewhere`,

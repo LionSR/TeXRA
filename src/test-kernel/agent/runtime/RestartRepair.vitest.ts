@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
-import { flowKey } from '@agent/node/persistedFlow';
+import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
+import {
+  RESUMABILITY_CAUSE,
+  type ResumabilityDecision,
+} from '@agent/storage/resumability';
 import type { RunClassification } from '@agent/runtime/runClassification';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -35,15 +39,54 @@ function setupStream(name: string): StreamSetup {
   };
 }
 
+/**
+ * The durable facts that would have produced `classification`: what the
+ * settlement re-reads under the lease. Ownership-only kinds have no facts;
+ * settlement never reaches them.
+ */
+function factsFor(classification: RunClassification): ResumabilityDecision {
+  switch (classification.kind) {
+    case 'resumable':
+      return {
+        resumable: true,
+        cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
+        flowRecord: {} as FlowRecord,
+        outcome: classification.outcome,
+      };
+    case 'finished':
+      return {
+        resumable: false,
+        cause: RESUMABILITY_CAUSE.MISSING_FLOW,
+        outcome: classification.outcome,
+      };
+    case 'unclassified':
+      return {
+        resumable: false,
+        cause: classification.retryable
+          ? RESUMABILITY_CAUSE.UNREADABLE_META
+          : RESUMABILITY_CAUSE.INVALID_META,
+      };
+    case 'held_elsewhere':
+    case 'owned_here':
+      throw new Error(`no durable facts for ${classification.kind}`);
+  }
+}
+
 function runRepair(
   setup: StreamSetup,
   overrides: Partial<RestartRepairOptions> &
     Pick<RestartRepairOptions, 'closeRunningGroups'>,
 ) {
+  const classifyRun = overrides.classifyRun;
   return repairRestartedStreams({
     streamStatus: setup.streamStatus,
     repairStreams: [setup.streamId],
     executionIds: new Map([[setup.streamId, setup.executionId]]),
+    // Settlement re-reads the facts under the lease; by default they agree
+    // with the pre-claim classification.
+    deriveResumability: classifyRun
+      ? async (executionId) => factsFor(await classifyRun(executionId))
+      : undefined,
     ...overrides,
   });
 }
@@ -112,7 +155,11 @@ describe('repairRestartedStreams', () => {
 
     // A hold overlaid on an already-terminal phase is released even though
     // the terminal transition itself is a no-op.
-    setup.streamStatus.markUnclassified(setup.streamId, 'transient read error');
+    setup.streamStatus.markUnclassified(
+      setup.streamId,
+      'transient read error',
+      true,
+    );
     await runRepair(setup, {
       closeRunningGroups: closeAllGroups,
       finalizeExecution: createDurableFinalizer(),
@@ -126,27 +173,29 @@ describe('repairRestartedStreams', () => {
     expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.CANCELLED);
   });
 
-  it('acts on the classification taken under the settlement lease, not the pre-claim one', async () => {
+  it('acts on the durable facts re-read under the settlement lease, not the pre-claim classification', async () => {
     const setup = setupStream('finished-under-lease');
     const closeRunningGroups = vi.fn(closeAllGroups);
     const finalizeExecution = createDurableFinalizer();
     // Resumable before the claim; another process finished it before the
     // lock was taken. The fresh read wins: nothing is written over COMPLETED.
-    const classifyRun = vi
-      .fn<(executionId: ExecutionId) => Promise<RunClassification>>()
-      .mockResolvedValueOnce({ kind: 'resumable' })
-      .mockResolvedValueOnce({
-        kind: 'finished',
-        outcome: RUN_OUTCOME.COMPLETED,
-      });
+    // Ownership is the lock itself, so it is not asked again under it.
+    const classifyRun = classifyAs({ kind: 'resumable' });
+    const deriveResumability = vi.fn(async () =>
+      factsFor({ kind: 'finished', outcome: RUN_OUTCOME.COMPLETED }),
+    );
 
     await runRepair(setup, {
       closeRunningGroups,
       finalizeExecution,
       classifyRun,
+      deriveResumability,
     });
 
-    expect(classifyRun).toHaveBeenCalledTimes(2);
+    expect(classifyRun).toHaveBeenCalledOnce();
+    expect(deriveResumability).toHaveBeenCalledExactlyOnceWith(
+      setup.executionId,
+    );
     expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.COMPLETED);
     expect(closeRunningGroups).toHaveBeenCalledExactlyOnceWith(
       [setup.streamId],
@@ -201,6 +250,8 @@ describe('repairRestartedStreams', () => {
         }
         return { kind: 'finished' as const, outcome: RUN_OUTCOME.COMPLETED };
       }),
+      deriveResumability: async () =>
+        factsFor({ kind: 'finished', outcome: RUN_OUTCOME.COMPLETED }),
     });
 
     // Nothing known, nothing mutated, but shown: the cause is the display fact.
@@ -208,6 +259,7 @@ describe('repairRestartedStreams', () => {
     expect(unreadable.streamStatus.holdState(unreadable.streamId)).toEqual({
       kind: 'unclassified',
       cause: 'metadata temporarily unreadable',
+      retryable: true,
     });
     expect(finalizeExecution).not.toHaveBeenCalled();
     expect(unreadable.streamStatus.get(readable)).toBe(STREAM_PHASE.COMPLETED);
@@ -233,6 +285,7 @@ describe('repairRestartedStreams', () => {
     expect(setup.streamStatus.holdState(setup.streamId)).toEqual({
       kind: 'unclassified',
       cause: 'lease owned by this process with no live run',
+      retryable: true,
     });
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(logger.error).toHaveBeenCalledOnce();

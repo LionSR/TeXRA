@@ -32,10 +32,16 @@ type TerminalTransitionCause = Extract<
  * in this process. `held`: another TeXRA process holds its execution lease.
  * `unclassified`: its lease, metadata, or flow record could not be read, so
  * nothing is known and nothing was mutated; `cause` is shown to the user.
+ * `retryable` is false for present-but-malformed data, where Resume fails
+ * deterministically and only Delete clears the run.
  */
 export type StreamHoldState =
   | { readonly kind: 'held' }
-  | { readonly kind: 'unclassified'; readonly cause: string };
+  | {
+      readonly kind: 'unclassified';
+      readonly cause: string;
+      readonly retryable: boolean;
+    };
 
 export interface StreamPhaseState {
   readonly phase: StreamPhase;
@@ -289,8 +295,12 @@ export class StreamStatusMachine {
   }
 
   /** Record that `stream`'s run state could not be read; nothing was mutated. */
-  markUnclassified(stream: StreamTabId, cause: string): void {
-    this.holds.set(stream, { kind: 'unclassified', cause });
+  markUnclassified(
+    stream: StreamTabId,
+    cause: string,
+    retryable: boolean,
+  ): void {
+    this.holds.set(stream, { kind: 'unclassified', cause, retryable });
   }
 
   /**

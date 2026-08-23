@@ -469,6 +469,8 @@ export class LitSessionRenderer implements SessionRendererPort {
       category: streamInfo.agentCategory,
       status: holdStatus ?? status?.phase,
       statusDetail: hold?.kind === 'unclassified' ? hold.cause : undefined,
+      statusRetryable:
+        hold?.kind === 'unclassified' ? hold.retryable : undefined,
       substate: status?.substate,
       runStartedAt: status?.runStartedAt,
       userFollowUpSupport: streamInfo.userFollowUpSupport,

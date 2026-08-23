@@ -17,8 +17,10 @@
  *   display fact.
  * - `unclassified`: the lease, metadata, or flow record could not be read or
  *   is malformed. Nothing is known, so nothing is mutated; the stream is
- *   shown as unclassified with the cause, and Resume (which re-reads and
- *   re-acquires) is the retry. A present-but-invalid checkpoint lands here,
+ *   shown as unclassified with the cause. `retryable` separates a transient
+ *   read failure, where Resume (which re-reads and re-acquires) is the retry,
+ *   from present-but-invalid data, where Resume fails deterministically and
+ *   only Delete clears the run. A present-but-invalid checkpoint lands here,
  *   never in `finished`: corruption is unknown state, not a terminal run.
  */
 import {
@@ -28,6 +30,7 @@ import {
 import {
   deriveResumability,
   RESUMABILITY_CAUSE,
+  type ResumabilityDecision,
 } from '@agent/storage/resumability';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, RunOutcome } from '@shared/schemas';
@@ -40,7 +43,39 @@ export type RunClassification =
   | { readonly kind: 'owned_here' }
   | { readonly kind: 'resumable'; readonly outcome?: RunOutcome }
   | { readonly kind: 'finished'; readonly outcome?: RunOutcome }
-  | { readonly kind: 'unclassified'; readonly cause: string };
+  | {
+      readonly kind: 'unclassified';
+      readonly cause: string;
+      readonly retryable: boolean;
+    };
+
+/** What the durable facts alone decide, ownership already settled. */
+export type RunFactsClassification = Exclude<
+  RunClassification,
+  { kind: 'held_elsewhere' | 'owned_here' }
+>;
+
+/** Classify the checkpoint and persisted outcome of one execution. */
+export function classifyRunFacts(
+  executionId: ExecutionId,
+  facts: ResumabilityDecision,
+): RunFactsClassification {
+  if (facts.resumable) {
+    return { kind: 'resumable', outcome: facts.outcome };
+  }
+  switch (facts.cause) {
+    case RESUMABILITY_CAUSE.UNREADABLE_META:
+    case RESUMABILITY_CAUSE.UNREADABLE_FLOW:
+      log.warn(`Cannot classify ${executionId}: ${facts.cause}`);
+      return { kind: 'unclassified', cause: facts.cause, retryable: true };
+    case RESUMABILITY_CAUSE.INVALID_META:
+    case RESUMABILITY_CAUSE.INVALID_FLOW:
+      log.warn(`Cannot classify ${executionId}: ${facts.cause}`);
+      return { kind: 'unclassified', cause: facts.cause, retryable: false };
+    case RESUMABILITY_CAUSE.MISSING_FLOW:
+      return { kind: 'finished', outcome: facts.outcome };
+  }
+}
 
 /** Classify one execution. Never throws: an unreadable fact is `unclassified`. */
 export async function classifyRun(
@@ -52,23 +87,9 @@ export async function classifyRun(
   } catch (error) {
     const cause = `lease unreadable (${toErrorMessage(error)})`;
     log.warn(`Cannot classify ${executionId}: ${cause}`, { data: error });
-    return { kind: 'unclassified', cause };
+    return { kind: 'unclassified', cause, retryable: true };
   }
   if (lease.status === 'owned') return { kind: 'owned_here' };
   if (lease.status === 'foreign') return { kind: 'held_elsewhere' };
-
-  const resumability = await deriveResumability(executionId);
-  if (resumability.resumable) {
-    return { kind: 'resumable', outcome: resumability.outcome };
-  }
-  switch (resumability.cause) {
-    case RESUMABILITY_CAUSE.UNREADABLE_META:
-    case RESUMABILITY_CAUSE.INVALID_META:
-    case RESUMABILITY_CAUSE.UNREADABLE_FLOW:
-    case RESUMABILITY_CAUSE.INVALID_FLOW:
-      log.warn(`Cannot classify ${executionId}: ${resumability.cause}`);
-      return { kind: 'unclassified', cause: resumability.cause };
-    case RESUMABILITY_CAUSE.MISSING_FLOW:
-      return { kind: 'finished', outcome: resumability.outcome };
-  }
+  return classifyRunFacts(executionId, await deriveResumability(executionId));
 }

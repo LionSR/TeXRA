@@ -210,11 +210,12 @@ describe('SessionHandle restart repair', () => {
 
     // A present-but-invalid checkpoint is unknown state: no phase, no outcome
     // written, the transcript left open, the flow record untouched, and the
-    // cause shown so Resume can retry.
+    // cause shown as malformed: Delete, not Resume, clears it.
     expect(session.status.get(streamId)).toBeUndefined();
     expect(session.status.holdState(streamId)).toEqual({
       kind: 'unclassified',
       cause: 'invalid-flow',
+      retryable: false,
     });
     await expect(executionStore.readMeta()).resolves.toEqual(
       expect.not.objectContaining({ outcome: expect.anything() }),
@@ -243,9 +244,9 @@ describe('SessionHandle restart repair', () => {
     const session = trackSession(new SessionHandle({ transcripts }));
     await session.waitUntilReady();
 
-    // One pass: the pre-claim read plus the re-read under the settlement
-    // lease, never a second pass.
-    expect(classify).toHaveBeenCalledTimes(2);
+    // One pass, one ownership read: the settlement lease re-reads only the
+    // durable facts, never ownership.
+    expect(classify).toHaveBeenCalledOnce();
     expect(session.status.get(eagerStreamId)).toBe(STREAM_PHASE.CANCELLED);
     expectClosedWith(transcripts, eagerStreamId, RUN_OUTCOME.CANCELLED);
   });
@@ -273,11 +274,12 @@ describe('SessionHandle restart repair', () => {
     await expect(session.waitUntilReady()).resolves.toBeUndefined();
 
     // Nothing known about the unreadable run: no phase, nothing written, the
-    // transcript left open, and the cause shown so Resume can retry.
+    // transcript left open, and the cause shown as malformed (Delete clears it).
     expect(session.status.get(streamId)).toBeUndefined();
     expect(session.status.holdState(streamId)).toEqual({
       kind: 'unclassified',
       cause: 'invalid-meta',
+      retryable: false,
     });
     await expect(executionStore.read('meta')).resolves.toEqual(malformedMeta);
     await expect(executionStore.read(flowKey(executionId))).resolves.toEqual(

@@ -149,7 +149,7 @@ function composerBannerMessage(state: ToolUseStreamState): string {
     case STREAM_LIFECYCLE_HELD:
       return STREAM_HELD_ELSEWHERE_MESSAGE;
     case STREAM_LIFECYCLE_UNCLASSIFIED:
-      return streamUnclassifiedMessage(state.statusDetail);
+      return streamUnclassifiedMessage(state);
     default:
       return RUN_ENDED_MESSAGE;
   }
