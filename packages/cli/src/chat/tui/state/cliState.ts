@@ -597,6 +597,18 @@ export function closeForegroundReader(): void {
 export const slashPaletteOpen = signal<boolean>(false);
 export const reverseSearchOpen = signal<boolean>(false);
 
+/** A refused follow-up handing its text back to the InputBar. `seq` makes
+ *  two identical restores distinguishable; the InputBar consumes and clears. */
+export const draftRestoreRequest = signal<{
+  readonly text: string;
+  readonly seq: number;
+} | null>(null);
+let draftRestoreSeq = 0;
+export function requestDraftRestore(text: string): void {
+  draftRestoreSeq += 1;
+  draftRestoreRequest.set({ text, seq: draftRestoreSeq });
+}
+
 /** Windowed content rows of the chat input's current draft (≥ 1), reported
  * by `InputBar`. The row allocator budgets the input bar from this instead of
  * assuming the single-line height, so a multi-line draft shrinks the
