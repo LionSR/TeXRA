@@ -63,6 +63,9 @@ export type { RunAgentOptions, RunAgentRequest } from './runAgent';
 export { retrieveSessionResumeData } from './SessionResumeRetrieval';
 export type { ToolUseResumeData } from './SessionResumeRetrieval';
 
+// runClassification
+export { classifyRun } from './runClassification';
+
 // terminalResultToast
 export {
   attachTerminalResultToast,

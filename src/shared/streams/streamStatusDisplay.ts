@@ -1,4 +1,5 @@
 import {
+  STREAM_LIFECYCLE_HELD,
   STREAM_PHASE,
   STREAM_STATUS,
   STREAM_SUBSTATE,
@@ -57,6 +58,7 @@ const cliStreamStatusLabels: Record<StreamStatusDisplayKey, string> = {
   ready: 'ready',
   [STREAM_PHASE.WAITING]: 'idle',
   [STREAM_SUBSTATE.RESUMING]: 'resuming',
+  [STREAM_LIFECYCLE_HELD]: 'held elsewhere',
 } as const;
 
 const STREAM_STATUS_LABELS = {
@@ -74,8 +76,13 @@ const STREAM_STATUS_LABELS = {
     ready: 'Ready',
     [STREAM_PHASE.WAITING]: 'Idle',
     [STREAM_SUBSTATE.RESUMING]: 'Resuming',
+    [STREAM_LIFECYCLE_HELD]: 'In another window',
   },
 } as const;
+
+/** Tooltip and banner copy for a stream held by another TeXRA process. */
+export const STREAM_HELD_ELSEWHERE_MESSAGE =
+  'Held by another TeXRA window. Close that window or let it finish before acting on this run here.';
 
 export type StreamStatusLabelStyle = keyof typeof STREAM_STATUS_LABELS;
 

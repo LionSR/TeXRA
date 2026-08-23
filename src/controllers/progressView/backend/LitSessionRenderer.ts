@@ -33,6 +33,7 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
+import { STREAM_LIFECYCLE_HELD } from '@shared/schemas';
 import { buildStreamContentRender } from '@shared/streams/streamContentSync';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import {
@@ -454,7 +455,11 @@ export class LitSessionRenderer implements SessionRendererPort {
     const status = streamStates.get(streamInfo.name);
     return buildStreamMetadata({
       category: streamInfo.agentCategory,
-      status: status?.phase,
+      // A stream held by another process has no phase in this session; the
+      // wire carries the held sentinel so the view renders it read-only.
+      status: this.state.streamStatus.isHeld(streamInfo.name)
+        ? STREAM_LIFECYCLE_HELD
+        : status?.phase,
       substate: status?.substate,
       runStartedAt: status?.runStartedAt,
       userFollowUpSupport: streamInfo.userFollowUpSupport,

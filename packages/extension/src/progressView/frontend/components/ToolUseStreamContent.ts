@@ -5,7 +5,14 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared schemas
-import { isToolUseState, type ToolUseStreamState } from '@shared/schemas';
+import {
+  isToolUseState,
+  STREAM_LIFECYCLE_HELD,
+  STREAM_STATUS,
+  type ToolUseStreamState,
+} from '@shared/schemas';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
+import { STREAM_HELD_ELSEWHERE_MESSAGE } from '@shared/streams/streamStatusDisplay';
 
 // Local imports - progress view
 import { ProgressEvents } from '../events';
@@ -74,8 +81,9 @@ export class ToolUseStreamContent extends BaseStreamContent {
 
       <div class="conversation-composer-dock">
         <div class="conversation-column">
+          ${this.renderComposerBanner(currentState.status)}
           <follow-up-input
-            .visible=${true}
+            .visible=${composerVisible(currentState.status)}
             .streamId=${streamInfo.name}
             .transientState=${getFollowUpInputTransientState(streamInfo.name)}
             .value=${currentState.ui.followUpText}
@@ -94,7 +102,27 @@ export class ToolUseStreamContent extends BaseStreamContent {
     `;
   }
 
+  private renderComposerBanner(
+    status: ToolUseStreamState['status'],
+  ): TemplateResult | typeof nothing {
+    if (composerVisible(status)) return nothing;
+    return html`<div class="conversation-composer-banner">
+      ${status === STREAM_LIFECYCLE_HELD ? STREAM_HELD_ELSEWHERE_MESSAGE : RUN_ENDED_MESSAGE}
+    </div>`;
+  }
+
   private handleFocusComplete(): void {
     this.dispatchEvent(ProgressEvents.followupFocusComplete());
   }
+}
+
+const RUN_ENDED_MESSAGE = 'This run has ended.';
+
+/**
+ * The composer exists only where delivery is possible: a run live in this
+ * process (RUNNING or WAITING) or a tab that has not run yet. A terminal or
+ * held stream shows a read-only banner; Resume is the only way to continue.
+ */
+function composerVisible(status: ToolUseStreamState['status']): boolean {
+  return status === STREAM_STATUS.READY || isInFlightPhase(status);
 }

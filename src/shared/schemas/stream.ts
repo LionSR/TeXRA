@@ -174,7 +174,16 @@ export function executionStatusToRunOutcome(
   }
 }
 
-export type StreamLifecycleStatus = StreamPhase | typeof STREAM_STATUS.READY;
+/**
+ * Wire-level lifecycle status of a stream whose execution lease is held by
+ * another TeXRA process. Not a `StreamPhase`: phases are facts about runs
+ * live in this process, and a held stream has none. Renderers show it
+ * read-only; no run control applies to it.
+ */
+export const STREAM_LIFECYCLE_HELD = 'held';
+
+export type StreamLifecycleStatus =
+  StreamPhase | typeof STREAM_STATUS.READY | typeof STREAM_LIFECYCLE_HELD;
 
 export function streamStatusToLifecycleStatus(
   status: StreamStatus,
@@ -198,6 +207,7 @@ export function streamStatusToLifecycleStatus(
 export const StreamLifecycleStatusSchema = z.union([
   StreamPhaseSchema,
   z.literal(STREAM_STATUS.READY),
+  z.literal(STREAM_LIFECYCLE_HELD),
   StreamStatusSchema.transform(streamStatusToLifecycleStatus),
 ]);
 

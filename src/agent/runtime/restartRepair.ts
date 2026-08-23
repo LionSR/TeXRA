@@ -1,39 +1,36 @@
 /**
- * Restart repair: reconcile streams whose owning process died mid-run.
+ * Restart repair: classify every transcript-unfinished stream once and record
+ * what the classification proves. Nothing is adopted and nothing is guessed.
+ *
+ * - `held_elsewhere`: another process owns the execution. The stream is
+ *   marked held and left untouched; its owner closes its transcript.
+ * - `resumable` / `finished`: the owner is gone. The persisted outcome, if
+ *   any, becomes the in-memory phase; otherwise the interruption is recorded
+ *   as CANCELLED with the flow record preserved. A resumable stream is then
+ *   continued only through the explicit Resume affordance.
  *
  * Invariant: a resume checkpoint (`executions/<id>/flow_<id>.json`) is deleted
- * only by the user or by a genuinely COMPLETED run. Repair observes that the
- * owner is gone; it never infers an error from that. A stream with a
- * checkpoint is restored to WAITING; a stream without one is recorded as
- * CANCELLED (an interruption) with its flow record preserved. Repair never
- * writes FAILED and never passes `flowRecord: 'delete'`.
+ * only by the user or by a genuinely COMPLETED run. Repair never writes FAILED,
+ * never restores WAITING, and never passes `flowRecord: 'delete'`.
  */
+import { runWithInactiveExecutionLease } from '@agent/storage/executionLease';
 import {
   finalizeExecution as defaultFinalizeExecution,
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
 } from '@agent/storage/executionLifecycle';
-import {
-  runWithInactiveExecutionLease as defaultRunWithInactiveExecutionLease,
-  type InactiveExecutionLeaseOptions,
-} from '@agent/storage/executionLease';
-import {
-  probeInstance,
-  type InstanceLiveness,
-  type InstanceOwnerRecord,
-} from '@agent/storage/instancePresence';
-import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
-import { deriveResumability } from '@agent/storage/resumability';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   RUN_OUTCOME,
-  STREAM_PHASE,
   type ExecutionId,
   type RunOutcome,
-  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import {
+  classifyRun as defaultClassifyRun,
+  type RunClassification,
+} from './runClassification';
 
 interface RestartRepairLogger {
   debug(message: string): void;
@@ -42,38 +39,27 @@ interface RestartRepairLogger {
 
 export interface RestartRepairOptions {
   streamStatus: StreamStatusMachine;
-  waitingStreams: ReadonlySet<StreamTabId>;
+  /** Streams to classify; the caller excludes runs live in this process. */
+  repairStreams: Iterable<StreamTabId>;
   executionIds: ReadonlyMap<StreamTabId, ExecutionId>;
   closeRunningGroups(
     streamIds: readonly StreamTabId[],
     status: RunOutcome,
     now: number,
   ): Promise<readonly StreamTabId[]>;
-  repairStreams?: Iterable<StreamTabId>;
+  classifyRun?: (executionId: ExecutionId) => Promise<RunClassification>;
   finalizeExecution?: (
     input: FinalizeExecutionInput,
   ) => Promise<FinalizeExecutionResult>;
-  /** Serialize liveness validation and repair mutations with acquisition. */
-  runWithInactiveExecutionLease?: <T>(
-    executionId: ExecutionId,
-    operation: () => Promise<T>,
-    options?: InactiveExecutionLeaseOptions,
-  ) => Promise<
-    | { readonly status: 'active'; readonly owner: InstanceOwnerRecord }
-    | { readonly status: 'performed'; readonly value: T }
-  >;
-  /** Override liveness reads in focused tests. */
-  probeOwner?: (owner: InstanceOwnerRecord) => Promise<InstanceLiveness>;
   logger?: RestartRepairLogger;
   now?: number;
   /** Stop before beginning another repair mutation after session teardown. */
   signal?: AbortSignal;
   /**
-   * Revalidate one candidate under its execution lease, immediately before
-   * settlement/mutation. Return `false` to skip the stale candidate — the
-   * caller compares the status generation it captured before the async
-   * ownership/detection pass, so a stream reused after discovery but before
-   * its turn in this sequential loop is dropped.
+   * Revalidate one candidate immediately before mutation. Return `false` to
+   * skip a stale candidate: the caller compares the status generation it
+   * captured before the async classification, so a stream reused after
+   * discovery but before its turn in this sequential loop is dropped.
    */
   isRepairCandidateCurrent?: (
     streamId: StreamTabId,
@@ -81,112 +67,13 @@ export interface RestartRepairOptions {
   ) => boolean;
 }
 
-/** One stream skipped because its execution's owner is provably alive. */
-interface ActiveOwnerSkip {
-  readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId;
-  readonly owner: InstanceOwnerRecord;
-}
-
-interface RestartRepairResult {
-  /**
-   * Streams left untouched because a live owner holds their execution. The
-   * caller watches each owner's instance exit and re-runs repair on that
-   * kernel-pushed event; nothing here is ever revisited on a clock.
-   */
-  readonly activeOwners: ActiveOwnerSkip[];
-}
-
-const RESTART_REPAIR_PHASES: ReadonlySet<StreamPhase> = new Set([
-  STREAM_PHASE.RUNNING,
-  STREAM_PHASE.WAITING,
-]);
-
-function repairCandidates(
-  streamStatus: StreamStatusMachine,
-  repairStreams?: Iterable<StreamTabId>,
-): StreamTabId[] {
-  if (repairStreams) return [...repairStreams];
-  return [...streamStatus.entries()]
-    .filter(([, phase]) => phase === STREAM_PHASE.RUNNING)
-    .map(([streamId]) => streamId);
-}
-
-function livenessCacheKey(owner: InstanceOwnerRecord): string {
-  return `${owner.hostname}\0${owner.instanceId}\0${owner.socketPath}`;
-}
-
-type ExecutionSettlement =
-  | { readonly kind: 'unsettled' }
-  | { readonly kind: 'settled'; readonly outcome: RunOutcome };
-
 /**
- * Revalidate terminal metadata while holding the execution lease.
- *
- * A cancelled execution remains unsettled when it still has a resumable flow,
- * so repair can restore it to WAITING. A completed or failed outcome was
- * written by the run's owner and is displayed as such; a failed run with a
- * checkpoint is still resumable through the resume path, which never consults
- * the outcome.
- */
-async function readExecutionSettlement(
-  executionId: ExecutionId,
-): Promise<ExecutionSettlement> {
-  const meta = await getExecutionStore(executionId).readMetaStrict();
-  if (!meta || meta.outcome == null) {
-    return { kind: 'unsettled' };
-  }
-  if (meta.outcome !== RUN_OUTCOME.CANCELLED) {
-    return {
-      kind: 'settled',
-      outcome: meta.outcome,
-    };
-  }
-  const resumability = await deriveResumability(executionId);
-  return resumability.resumable
-    ? { kind: 'unsettled' }
-    : { kind: 'settled', outcome: RUN_OUTCOME.CANCELLED };
-}
-
-function synchronizeSettledPhase(
-  streamStatus: StreamStatusMachine,
-  streamId: StreamTabId,
-  outcome: RunOutcome,
-): void {
-  const current = streamStatus.get(streamId);
-  if (current == null || !RESTART_REPAIR_PHASES.has(current)) return;
-  // The machine owns the WAITING -> RUNNING(resume) -> terminal escalation;
-  // only the in-flight-phase guard above is repair-specific.
-  streamStatus.transitionToTerminal(
-    streamId,
-    outcome,
-    STREAM_TRANSITION_CAUSE.LIFECYCLE,
-  );
-}
-
-/** Repair one stream back to WAITING, logging the outcome. */
-function repairToWaiting(
-  streamStatus: StreamStatusMachine,
-  streamId: StreamTabId,
-  logger: RestartRepairLogger | undefined,
-): void {
-  if (
-    streamStatus.transition(
-      streamId,
-      STREAM_PHASE.WAITING,
-      STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-    )
-  ) {
-    logger?.debug(`Stream ${streamId} restored to WAITING after restart`);
-    return;
-  }
-  logger?.warn(`Failed to repair stream ${streamId} to WAITING after restart`);
-}
-
-/**
- * Persist the CANCELLED outcome for a stream whose owner died without leaving
- * a checkpoint. The flow record is preserved whatever its state: repair
- * records the interruption, it never deletes. Finalization problems are
+ * Persist the CANCELLED outcome for a stream whose owner died without
+ * recording one. The flow record is preserved whatever its state: repair
+ * records the interruption, it never deletes. The write runs in the
+ * inactive-lease maintenance scope: the classifier proved the owner gone,
+ * and the fenced execution write needs the dead owner's stale lease cleared
+ * under the same lock an acquirer would take. Finalization problems are
  * logged rather than thrown: the in-memory repair has already committed.
  */
 async function recordInterruption(
@@ -198,11 +85,21 @@ async function recordInterruption(
   logger: RestartRepairLogger | undefined,
 ): Promise<void> {
   try {
-    const finalization = await finalizeExecution({
-      executionId,
-      outcome: RUN_OUTCOME.CANCELLED,
-      flowRecord: 'preserve',
-    });
+    const maintenance = await runWithInactiveExecutionLease(executionId, () =>
+      finalizeExecution({
+        executionId,
+        outcome: RUN_OUTCOME.CANCELLED,
+        flowRecord: 'preserve',
+      }),
+    );
+    if (maintenance.status === 'active') {
+      logger?.warn(
+        `Execution ${executionId} was claimed while restart repair recorded its interruption; outcome left unrecorded`,
+        { data: { streamId, owner: maintenance.owner } },
+      );
+      return;
+    }
+    const finalization = maintenance.value;
     if (finalization.status === 'failed') {
       logger?.warn('Failed to finalize restart-repair execution', {
         data: {
@@ -222,176 +119,77 @@ async function recordInterruption(
 }
 
 /**
- * Apply one restart-repair pass.
- *
- * {@link SessionHandle} owns discovery, lease-aware retries, and the
- * transcript callback. The explicit inputs here keep the state transition and
+ * Apply one restart-repair pass. {@link SessionHandle} owns discovery and the
+ * transcript callback; the explicit inputs here keep the state transition and
  * persistence writes independently testable.
  */
 export async function repairRestartedStreams(
   options: RestartRepairOptions,
-): Promise<RestartRepairResult> {
-  const result: RestartRepairResult = { activeOwners: [] };
+): Promise<void> {
   const now = options.now ?? Date.now();
-  const probeOwner = options.probeOwner ?? probeInstance;
-  const ownerLiveness = new Map<string, Promise<InstanceLiveness>>();
-  const inactiveLeaseOptions: InactiveExecutionLeaseOptions = {
-    probeOwner: (owner) => {
-      const key = livenessCacheKey(owner);
-      let liveness = ownerLiveness.get(key);
-      if (!liveness) {
-        liveness = probeOwner(owner);
-        ownerLiveness.set(key, liveness);
-      }
-      return liveness;
-    },
-  };
+  const classifyRun = options.classifyRun ?? defaultClassifyRun;
+  const isCurrent = (streamId: StreamTabId, executionId?: ExecutionId) =>
+    options.isRepairCandidateCurrent?.(streamId, executionId) ?? true;
 
-  for (const streamId of repairCandidates(
-    options.streamStatus,
-    options.repairStreams,
-  )) {
+  for (const streamId of options.repairStreams) {
     if (options.signal?.aborted) break;
     // `executionIds` is the caller-owned identity channel: SessionHandle
     // populates it from snapshot sidecars. No suffix decode happens here
-    // (#9590 A2).
+    // (#9590 A2). A stream with no execution has nothing to classify: its
+    // transcript is closed as interrupted and nothing is recorded.
     const executionId = options.executionIds.get(streamId);
-    let repairStarted = false;
-    try {
-      const repair = async () => {
-        repairStarted = true;
-        if (
-          options.isRepairCandidateCurrent &&
-          !options.isRepairCandidateCurrent(streamId, executionId)
-        ) {
-          return { kind: 'skipped' as const };
-        }
-        if (executionId) {
-          const settlement = await readExecutionSettlement(executionId);
-          if (options.signal?.aborted) {
-            return { kind: 'cancelled' as const };
-          }
-          if (settlement.kind === 'settled') {
-            synchronizeSettledPhase(
-              options.streamStatus,
-              streamId,
-              settlement.outcome,
-            );
-            await options.closeRunningGroups(
-              [streamId],
-              settlement.outcome,
-              now,
-            );
-            return { kind: 'settled' as const };
-          }
-        }
-        if (options.signal?.aborted) {
-          return { kind: 'cancelled' as const };
-        }
-        await repairRestartedStream(options, streamId, executionId, now);
-        return { kind: 'repaired' as const };
-      };
-      const repaired = executionId
-        ? await (
-            options.runWithInactiveExecutionLease ??
-            defaultRunWithInactiveExecutionLease
-          )(executionId, repair, inactiveLeaseOptions)
-        : { status: 'performed' as const, value: await repair() };
-      if (repaired.status === 'active') {
-        if (executionId) {
-          result.activeOwners.push({
-            streamId,
-            executionId,
-            owner: repaired.owner,
-          });
-        }
-        options.logger?.debug(
-          `Skipped restart repair for active execution ${executionId}`,
-        );
-        continue;
-      }
-      if (repaired.value.kind === 'cancelled') break;
-      if (repaired.value.kind === 'skipped') {
-        options.logger?.debug(
-          `Skipped restart repair for stream ${streamId}: it was reused during discovery`,
-        );
-        continue;
-      }
-      if (repaired.value.kind === 'settled') {
-        options.logger?.debug(
-          `Skipped restart repair for terminal execution ${executionId}`,
-        );
-        continue;
-      }
-    } catch (error) {
-      if (repairStarted) throw error;
-      options.logger?.warn(
-        `Skipped restart repair for execution ${executionId ?? streamId} because its lease or repair state could not be validated`,
-        { data: error },
+    if (!isCurrent(streamId, executionId)) {
+      options.logger?.debug(
+        `Skipped restart repair for stream ${streamId}: it was reused during discovery`,
       );
+      continue;
     }
-  }
-  return result;
-}
-
-async function closeStreamAsCancelled(
-  options: RestartRepairOptions,
-  streamId: StreamTabId,
-  now: number,
-): Promise<void> {
-  await options.closeRunningGroups([streamId], RUN_OUTCOME.CANCELLED, now);
-}
-
-async function repairRestartedStream(
-  options: RestartRepairOptions,
-  streamId: StreamTabId,
-  executionId: ExecutionId | undefined,
-  now: number,
-): Promise<void> {
-  if (options.signal?.aborted) return;
-  const currentStatus = options.streamStatus.get(streamId);
-  const isWaitingStream = options.waitingStreams.has(streamId);
-
-  if (currentStatus == null) {
-    if (isWaitingStream) {
-      repairToWaiting(options.streamStatus, streamId, options.logger);
-      await closeStreamAsCancelled(options, streamId, now);
-      return;
-    }
-    // No in-memory phase: close the group as interrupted but leave the
-    // execution un-terminalized; nothing here observed it reach a terminal
-    // state.
-    await closeStreamAsCancelled(options, streamId, now);
-    return;
-  }
-
-  if (!RESTART_REPAIR_PHASES.has(currentStatus)) {
-    if (isWaitingStream) {
-      await closeStreamAsCancelled(options, streamId, now);
-    }
-    return;
-  }
-
-  if (isWaitingStream) {
-    repairToWaiting(options.streamStatus, streamId, options.logger);
-    await closeStreamAsCancelled(options, streamId, now);
-    return;
-  }
-
-  // Owner gone and no checkpoint to continue from: an interruption, not an
-  // error. Record CANCELLED and keep whatever flow record exists.
-  if (
-    options.streamStatus.transitionToTerminal(
-      streamId,
-      STREAM_PHASE.CANCELLED,
-      STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-    )
-  ) {
-    options.logger?.debug(
-      `Stream ${streamId} set to CANCELLED during restart repair (no checkpoint)`,
-    );
-    await closeStreamAsCancelled(options, streamId, now);
+    let classification: RunClassification;
     if (executionId) {
+      // Unreadable execution storage rejects the whole pass: a run that
+      // cannot be classified is surfaced at the readiness boundary, never
+      // settled on a guess.
+      classification = await classifyRun(executionId);
+      if (options.signal?.aborted) break;
+      if (!isCurrent(streamId, executionId)) {
+        options.logger?.debug(
+          `Skipped restart repair for stream ${streamId}: it was reused during classification`,
+        );
+        continue;
+      }
+    } else {
+      classification = { kind: 'finished' };
+    }
+
+    if (classification.kind === 'held_elsewhere') {
+      options.streamStatus.markHeld(streamId, classification.owner);
+      options.logger?.debug(
+        `Stream ${streamId} is held by another process; left untouched`,
+      );
+      continue;
+    }
+
+    // Owner gone. The persisted outcome is the display fact; without one the
+    // interruption is recorded as CANCELLED and the checkpoint, if any, stays
+    // for an explicit Resume.
+    const outcome = classification.outcome ?? RUN_OUTCOME.CANCELLED;
+    if (
+      !options.streamStatus.transitionToTerminal(
+        streamId,
+        outcome,
+        STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
+      )
+    ) {
+      options.logger?.warn(
+        `Failed to settle stream ${streamId} as ${outcome} after restart`,
+      );
+      continue;
+    }
+    options.logger?.debug(
+      `Stream ${streamId} settled as ${outcome} during restart repair (${classification.kind})`,
+    );
+    await options.closeRunningGroups([streamId], outcome, now);
+    if (executionId && classification.outcome == null) {
       await recordInterruption(
         streamId,
         executionId,
@@ -399,8 +197,5 @@ async function repairRestartedStream(
         options.logger,
       );
     }
-    return;
   }
-
-  options.logger?.warn(`Failed to repair stream ${streamId} after restart`);
 }

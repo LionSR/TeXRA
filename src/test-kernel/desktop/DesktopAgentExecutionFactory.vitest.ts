@@ -80,7 +80,7 @@ async function createExecution(options: {
   transcriptOpenError?: Error;
   presentationSignal?: AbortSignal;
   inspectSession?: (session: SessionHandle) => void;
-  detectWaitingStreams?: ReturnType<typeof vi.fn>;
+  repairRestartedStreams?: ReturnType<typeof vi.fn>;
 }): Promise<DesktopExecution> {
   vi.resetModules();
   const { initPlatform } = await import('@platform/platform');
@@ -98,10 +98,15 @@ async function createExecution(options: {
   mocks.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(async () => {}),
   }));
-  mocks.doMock('@agent/storage/detectWaitingStreams', () => ({
-    detectWaitingStreams:
-      options.detectWaitingStreams ?? vi.fn(async () => new Set()),
-  }));
+  mocks.doMock('@agent/runtime/restartRepair', async (importOriginal) => {
+    const original =
+      await importOriginal<typeof import('@agent/runtime/restartRepair')>();
+    return {
+      ...original,
+      repairRestartedStreams:
+        options.repairRestartedStreams ?? original.repairRestartedStreams,
+    };
+  });
   if (options.resolveTeamLaunch) {
     mocks.doMock('@common/teams/TeamPlan', async (importOriginal) => ({
       ...(await importOriginal<typeof import('@common/teams/TeamPlan')>()),
@@ -200,15 +205,14 @@ describe('createDesktopAgentExecution', () => {
     const detectionStarted = createDeferred();
     const attached = vi.fn();
     const detached = vi.fn();
-    const detectWaitingStreams = vi.fn(async () => {
+    const repairRestartedStreams = vi.fn(async () => {
       detectionStarted.resolve();
       await loadGate.promise;
-      return new Set<StreamTabId>();
     });
     const creation = createExecution({
       presentationSignal: controller.signal,
       prepareMainViewExecutionRequest: vi.fn(),
-      detectWaitingStreams,
+      repairRestartedStreams,
       inspectSession: (session) => {
         const useHostInteractions = session.useHostInteractions.bind(session);
         vi.spyOn(session, 'useHostInteractions').mockImplementation(
@@ -225,7 +229,7 @@ describe('createDesktopAgentExecution', () => {
     });
 
     await detectionStarted.promise;
-    expect(detectWaitingStreams).toHaveBeenCalledOnce();
+    expect(repairRestartedStreams).toHaveBeenCalledOnce();
     controller.abort();
     expect(attached).not.toHaveBeenCalled();
     expect(detached).not.toHaveBeenCalled();

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
+import type { RunClassification } from '@agent/runtime/runClassification';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
@@ -34,12 +35,6 @@ function setupStream(name: string): StreamSetup {
   };
 }
 
-function setupRunningStream(name: string): StreamSetup {
-  const setup = setupStream(name);
-  seedRunning(setup.streamStatus, setup.streamId);
-  return setup;
-}
-
 function runRepair(
   setup: StreamSetup,
   overrides: Partial<RestartRepairOptions> &
@@ -47,33 +42,14 @@ function runRepair(
 ) {
   return repairRestartedStreams({
     streamStatus: setup.streamStatus,
-    waitingStreams: new Set(),
+    repairStreams: [setup.streamId],
     executionIds: new Map([[setup.streamId, setup.executionId]]),
     ...overrides,
   });
 }
 
-function seedRunning(
-  streamStatus: StreamStatusMachine,
-  streamId: StreamTabId,
-): void {
-  streamStatus.transition(
-    streamId,
-    STREAM_PHASE.RUNNING,
-    STREAM_TRANSITION_CAUSE.LIFECYCLE,
-  );
-}
-
-function seedWaiting(
-  streamStatus: StreamStatusMachine,
-  streamId: StreamTabId,
-): void {
-  seedRunning(streamStatus, streamId);
-  streamStatus.transition(
-    streamId,
-    STREAM_PHASE.WAITING,
-    STREAM_TRANSITION_CAUSE.WAIT,
-  );
+function classifyAs(classification: RunClassification) {
+  return vi.fn(async () => classification);
 }
 
 function createDurableFinalizer() {
@@ -82,14 +58,6 @@ function createDurableFinalizer() {
     outcomePersisted: true as const,
     flowRecord: 'preserved' as const,
   }));
-}
-
-/** Lease hook that treats the execution as inactive and runs the repair. */
-async function performInactiveLease<T>(
-  _executionId: ExecutionId,
-  operation: () => Promise<T>,
-): Promise<{ status: 'performed'; value: T }> {
-  return { status: 'performed', value: await operation() };
 }
 
 /** Group closer that only reports closures for the expected outcome. */
@@ -109,238 +77,106 @@ async function failGroupClose(): Promise<StreamTabId[]> {
   throw new Error('group close failed');
 }
 
+const FOREIGN_OWNER = {
+  instanceId: 'test-instance',
+  socketPath: '/tmp/texra-test.sock',
+  pid: 1,
+  hostname: 'test-host',
+};
+
 describe('repairRestartedStreams', () => {
-  it('skips every repair mutation for a live foreign owner', async () => {
-    const setup = setupRunningStream('foreign-active');
+  it('marks a stream held by a live foreign owner and mutates nothing', async () => {
+    const setup = setupStream('foreign-active');
     const closeRunningGroups = vi.fn(async () => [] as StreamTabId[]);
     const finalizeExecution = createDurableFinalizer();
-    const owner = {
-      instanceId: 'test-instance',
-      socketPath: '/tmp/texra-test.sock',
-      pid: 1,
-      hostname: 'test-host',
-    };
 
-    const result = await runRepair(setup, {
+    await runRepair(setup, {
       closeRunningGroups,
       finalizeExecution,
-      runWithInactiveExecutionLease: vi.fn(async () => ({
-        status: 'active' as const,
-        owner,
-      })),
+      classifyRun: classifyAs({
+        kind: 'held_elsewhere',
+        owner: FOREIGN_OWNER,
+      }),
     });
 
-    expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.RUNNING);
-    expect(result).toEqual({
-      activeOwners: [
-        { streamId: setup.streamId, executionId: setup.executionId, owner },
-      ],
-    });
+    expect(setup.streamStatus.get(setup.streamId)).toBeUndefined();
+    expect(setup.streamStatus.isHeld(setup.streamId)).toBe(true);
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(finalizeExecution).not.toHaveBeenCalled();
   });
 
-  it('probes one shared active owner once per repair pass', async () => {
-    const first = setupRunningStream('shared-owner-first');
-    const second = setupRunningStream('shared-owner-second');
-    const owner = {
-      instanceId: 'shared-instance',
-      socketPath: '/tmp/texra-shared.sock',
-      pid: 1,
-      hostname: 'test-host',
-    };
-    const probeOwner = vi.fn(async () => 'alive' as const);
-    const runWithInactiveExecutionLease = vi.fn(
-      async (_executionId, _operation, leaseOptions) => {
-        expect(await leaseOptions?.probeOwner?.(owner)).toBe('alive');
-        return { status: 'active' as const, owner };
-      },
-    );
+  it('releases a held mark once the stream settles on a later pass', async () => {
+    const setup = setupStream('held-then-settled');
+    setup.streamStatus.markHeld(setup.streamId, FOREIGN_OWNER);
 
-    const result = await repairRestartedStreams({
-      streamStatus: first.streamStatus,
-      waitingStreams: new Set(),
-      executionIds: new Map([
-        [first.streamId, first.executionId],
-        [second.streamId, second.executionId],
-      ]),
-      repairStreams: [first.streamId, second.streamId],
-      closeRunningGroups: vi.fn(async () => [] as StreamTabId[]),
-      probeOwner,
-      runWithInactiveExecutionLease,
+    await runRepair(setup, {
+      closeRunningGroups: closeAllGroups,
+      finalizeExecution: createDurableFinalizer(),
+      classifyRun: classifyAs({ kind: 'resumable' }),
     });
 
-    expect(probeOwner).toHaveBeenCalledOnce();
-    expect(result.activeOwners).toHaveLength(2);
+    expect(setup.streamStatus.isHeld(setup.streamId)).toBe(false);
+    expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.CANCELLED);
   });
 
-  it('preserves an execution that completed before a delayed lease retry', async () => {
-    const setup = setupRunningStream('completed-before-retry');
-    const { streamId, executionId, streamStatus } = setup;
-    const store = getExecutionStore(executionId);
-    await store.writeMeta({
-      timestamp: '2026-07-26T00:00:00.000Z',
-      outcome: RUN_OUTCOME.COMPLETED,
-    });
+  it('settles a finished execution on its persisted outcome without recording', async () => {
+    const setup = setupStream('completed');
     const closeRunningGroups = vi.fn(async () => [] as StreamTabId[]);
     const finalizeExecution = createDurableFinalizer();
 
-    try {
-      await runRepair(setup, {
-        closeRunningGroups,
-        finalizeExecution,
-        runWithInactiveExecutionLease: performInactiveLease,
-      });
-
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
-      await expect(store.readMeta()).resolves.toMatchObject({
+    await runRepair(setup, {
+      closeRunningGroups,
+      finalizeExecution,
+      classifyRun: classifyAs({
+        kind: 'finished',
         outcome: RUN_OUTCOME.COMPLETED,
-      });
-      expect(closeRunningGroups).toHaveBeenCalledWith(
-        [streamId],
-        RUN_OUTCOME.COMPLETED,
-        expect.any(Number),
-      );
-      expect(finalizeExecution).not.toHaveBeenCalled();
-    } finally {
-      await store.clear();
-    }
+      }),
+    });
+
+    expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.COMPLETED);
+    expect(closeRunningGroups).toHaveBeenCalledWith(
+      [setup.streamId],
+      RUN_OUTCOME.COMPLETED,
+      expect.any(Number),
+    );
+    expect(finalizeExecution).not.toHaveBeenCalled();
   });
 
-  it('propagates settlement metadata read failures', async () => {
-    const setup = setupRunningStream('unreadable-settlement');
-    const store = getExecutionStore(setup.executionId);
-    const readMetaStrict = vi
-      .spyOn(store, 'readMetaStrict')
-      .mockRejectedValue(new Error('metadata temporarily unreadable'));
+  it('propagates classification failures instead of settling on a guess', async () => {
+    const setup = setupStream('unclassifiable');
+    const closeRunningGroups = vi.fn(closeAllGroups);
 
-    try {
-      await expect(
-        runRepair(setup, {
-          closeRunningGroups: closeAllGroups,
-          runWithInactiveExecutionLease: performInactiveLease,
+    await expect(
+      runRepair(setup, {
+        closeRunningGroups,
+        classifyRun: vi.fn(async () => {
+          throw new Error('metadata temporarily unreadable');
         }),
-      ).rejects.toThrow('metadata temporarily unreadable');
-      expect(readMetaStrict).toHaveBeenCalledOnce();
-      expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.RUNNING);
-    } finally {
-      readMetaStrict.mockRestore();
-      await store.clear();
-    }
+      }),
+    ).rejects.toThrow('metadata temporarily unreadable');
+
+    expect(setup.streamStatus.get(setup.streamId)).toBeUndefined();
+    expect(closeRunningGroups).not.toHaveBeenCalled();
   });
 
-  it('repairs resumable running streams to WAITING with neutral group closure', async () => {
-    const setup = setupRunningStream('waiting');
-    const { streamId, streamStatus } = setup;
+  it('records a resumable stream as CANCELLED, never WAITING, and preserves its checkpoint', async () => {
+    const setup = setupStream('resumable');
+    const { streamId, executionId, streamStatus } = setup;
     const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
     const finalizeExecution = createDurableFinalizer();
 
     await runRepair(setup, {
-      waitingStreams: new Set([streamId]),
       closeRunningGroups,
       finalizeExecution,
+      classifyRun: classifyAs({ kind: 'resumable' }),
       now: 123,
     });
 
-    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
+    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
       RUN_OUTCOME.CANCELLED,
       123,
-    );
-    expect(finalizeExecution).not.toHaveBeenCalled();
-  });
-
-  it('repairs resumable streams without an in-memory phase and closes their groups', async () => {
-    const setup = setupStream('waiting-without-phase');
-    const { streamId, streamStatus } = setup;
-    const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
-    const finalizeExecution = createDurableFinalizer();
-
-    await runRepair(setup, {
-      waitingStreams: new Set([streamId]),
-      repairStreams: [streamId],
-      closeRunningGroups,
-      finalizeExecution,
-      now: 234,
-    });
-
-    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
-    expect(closeRunningGroups).toHaveBeenCalledWith(
-      [streamId],
-      RUN_OUTCOME.CANCELLED,
-      234,
-    );
-    expect(finalizeExecution).not.toHaveBeenCalled();
-  });
-
-  it('closes non-waiting candidates without an in-memory phase without terminalizing them', async () => {
-    const setup = setupStream('without-phase');
-    const { streamId, streamStatus } = setup;
-    const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
-    const finalizeExecution = createDurableFinalizer();
-
-    await runRepair(setup, {
-      repairStreams: [streamId],
-      closeRunningGroups,
-      finalizeExecution,
-      now: 345,
-    });
-
-    expect(streamStatus.get(streamId)).toBeUndefined();
-    expect(closeRunningGroups).toHaveBeenCalledWith(
-      [streamId],
-      RUN_OUTCOME.CANCELLED,
-      345,
-    );
-    expect(finalizeExecution).not.toHaveBeenCalled();
-  });
-
-  it('closes waiting groups even when the current phase is not repairable', async () => {
-    const setup = setupRunningStream('terminal-waiting');
-    const { streamId, streamStatus } = setup;
-    streamStatus.transition(
-      streamId,
-      STREAM_PHASE.CANCELLED,
-      STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    );
-    const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
-    const finalizeExecution = createDurableFinalizer();
-
-    await runRepair(setup, {
-      waitingStreams: new Set([streamId]),
-      repairStreams: [streamId],
-      closeRunningGroups,
-      finalizeExecution,
-      now: 456,
-    });
-
-    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-    expect(closeRunningGroups).toHaveBeenCalledWith(
-      [streamId],
-      RUN_OUTCOME.CANCELLED,
-      456,
-    );
-    expect(finalizeExecution).not.toHaveBeenCalled();
-  });
-
-  it('records non-resumable running streams as CANCELLED and preserves the flow record', async () => {
-    const setup = setupRunningStream('interrupted');
-    const { streamId, executionId, streamStatus } = setup;
-    const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
-    const finalizeExecution = createDurableFinalizer();
-
-    await runRepair(setup, {
-      closeRunningGroups,
-      finalizeExecution,
-      now: 456,
-    });
-
-    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-    expect(closeRunningGroups).toHaveBeenCalledWith(
-      [streamId],
-      RUN_OUTCOME.CANCELLED,
-      456,
     );
     expect(finalizeExecution).toHaveBeenCalledWith({
       executionId,
@@ -349,14 +185,57 @@ describe('repairRestartedStreams', () => {
     });
   });
 
+  it('keeps a resumable failed run on its FAILED outcome for retry', async () => {
+    const setup = setupStream('resumable-failed');
+    const finalizeExecution = createDurableFinalizer();
+
+    await runRepair(setup, {
+      closeRunningGroups: closeAllGroups,
+      finalizeExecution,
+      classifyRun: classifyAs({
+        kind: 'resumable',
+        outcome: RUN_OUTCOME.FAILED,
+      }),
+    });
+
+    expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.FAILED);
+    expect(finalizeExecution).not.toHaveBeenCalled();
+  });
+
+  it('closes an unmapped stream as interrupted without recording anything', async () => {
+    const setup = setupStream('without-execution');
+    const { streamId, streamStatus } = setup;
+    const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
+    const finalizeExecution = createDurableFinalizer();
+    const classifyRun = classifyAs({ kind: 'resumable' });
+
+    await runRepair(setup, {
+      executionIds: new Map(),
+      closeRunningGroups,
+      finalizeExecution,
+      classifyRun,
+      now: 345,
+    });
+
+    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+    expect(closeRunningGroups).toHaveBeenCalledWith(
+      [streamId],
+      RUN_OUTCOME.CANCELLED,
+      345,
+    );
+    expect(classifyRun).not.toHaveBeenCalled();
+    expect(finalizeExecution).not.toHaveBeenCalled();
+  });
+
   it('does not write terminal meta before interrupted groups close', async () => {
-    const setup = setupRunningStream('interrupted-close-error');
+    const setup = setupStream('interrupted-close-error');
     const finalizeExecution = createDurableFinalizer();
 
     await expect(
       runRepair(setup, {
         closeRunningGroups: failGroupClose,
         finalizeExecution,
+        classifyRun: classifyAs({ kind: 'finished' }),
       }),
     ).rejects.toThrow('group close failed');
 
@@ -370,8 +249,6 @@ describe('repairRestartedStreams', () => {
     const firstExecution = 'execution-abort-first' as ExecutionId;
     const secondExecution = 'execution-abort-second' as ExecutionId;
     const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, firstStream);
-    seedRunning(streamStatus, secondStream);
     const abort = new AbortController();
     const closeRunningGroups = vi.fn(async (streamIds: StreamTabId[]) => {
       abort.abort();
@@ -381,7 +258,6 @@ describe('repairRestartedStreams', () => {
 
     await repairRestartedStreams({
       streamStatus,
-      waitingStreams: new Set(),
       executionIds: new Map([
         [firstStream, firstExecution],
         [secondStream, secondExecution],
@@ -389,8 +265,8 @@ describe('repairRestartedStreams', () => {
       repairStreams: [firstStream, secondStream],
       closeRunningGroups,
       finalizeExecution,
+      classifyRun: classifyAs({ kind: 'finished' }),
       signal: abort.signal,
-      runWithInactiveExecutionLease: performInactiveLease,
     });
 
     expect(streamStatus.get(firstStream)).toBe(STREAM_PHASE.CANCELLED);
@@ -399,13 +275,37 @@ describe('repairRestartedStreams', () => {
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
     });
-    expect(streamStatus.get(secondStream)).toBe(STREAM_PHASE.RUNNING);
+    expect(streamStatus.get(secondStream)).toBeUndefined();
     expect(finalizeExecution).toHaveBeenCalledOnce();
   });
 
+  it('skips a candidate that was reused during classification', async () => {
+    const setup = setupStream('reused');
+    const closeRunningGroups = vi.fn(closeAllGroups);
+    let classified = false;
+
+    await runRepair(setup, {
+      closeRunningGroups,
+      finalizeExecution: createDurableFinalizer(),
+      classifyRun: vi.fn(async () => {
+        classified = true;
+        return { kind: 'finished' as const };
+      }),
+      isRepairCandidateCurrent: () => !classified,
+    });
+
+    expect(setup.streamStatus.get(setup.streamId)).toBeUndefined();
+    expect(closeRunningGroups).not.toHaveBeenCalled();
+  });
+
   it('leaves historical failed streams untouched', async () => {
-    const setup = setupRunningStream('historical-failed');
+    const setup = setupStream('historical-failed');
     const { streamId, streamStatus } = setup;
+    streamStatus.transition(
+      streamId,
+      STREAM_PHASE.RUNNING,
+      STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    );
     streamStatus.transition(
       streamId,
       STREAM_PHASE.FAILED,
@@ -415,9 +315,9 @@ describe('repairRestartedStreams', () => {
     const finalizeExecution = createDurableFinalizer();
 
     await runRepair(setup, {
-      repairStreams: [streamId],
       closeRunningGroups,
       finalizeExecution,
+      classifyRun: classifyAs({ kind: 'finished' }),
     });
 
     expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
@@ -426,7 +326,7 @@ describe('repairRestartedStreams', () => {
   });
 
   it('does not report terminal status when metadata persistence fails', async () => {
-    const setup = setupRunningStream('metadata-failure');
+    const setup = setupStream('metadata-failure');
     const { streamId, executionId, streamStatus } = setup;
     const durabilityError = new Error('metadata disk write failed');
     const finalizeExecution = vi.fn(async () => ({
@@ -440,6 +340,7 @@ describe('repairRestartedStreams', () => {
     await runRepair(setup, {
       closeRunningGroups: closeAllGroups,
       finalizeExecution,
+      classifyRun: classifyAs({ kind: 'finished' }),
       logger,
     });
 
@@ -458,21 +359,8 @@ describe('repairRestartedStreams', () => {
     );
   });
 
-  it('can terminalize stale WAITING streams through the resume choreography', async () => {
-    const setup = setupStream('stale-waiting');
-    seedWaiting(setup.streamStatus, setup.streamId);
-
-    await runRepair(setup, {
-      repairStreams: [setup.streamId],
-      closeRunningGroups: closeAllGroups,
-      finalizeExecution: createDurableFinalizer(),
-    });
-
-    expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.CANCELLED);
-  });
-
-  it('records a crashed RUNNING stream as CANCELLED without touching its flow record', async () => {
-    const setup = setupRunningStream('real-meta');
+  it('records a crashed run as CANCELLED without touching its flow record', async () => {
+    const setup = setupStream('real-meta');
     const { executionId } = setup;
     const store = getExecutionStore(executionId);
     await store.writeMeta({
@@ -498,6 +386,7 @@ describe('repairRestartedStreams', () => {
       closeRunningGroups: async () => [],
     });
 
+    expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.CANCELLED);
     const repairedMeta = await store.readMeta();
     expect(repairedMeta).toMatchObject({
       description: 'keep this field',
