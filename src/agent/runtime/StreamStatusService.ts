@@ -72,7 +72,7 @@ export class StreamStatusMachine {
    * display fact for the session renderer, published with the next full
    * metadata sync rather than as a phase transition.
    */
-  private readonly held = new Map<StreamTabId, { provable: boolean }>();
+  private readonly held = new Map<StreamTabId, boolean>();
 
   /**
    * @param eventHub Session hub this machine publishes canonical `status` facts
@@ -278,7 +278,7 @@ export class StreamStatusMachine {
    * false when that process could not be proven alive or dead.
    */
   markHeld(stream: StreamTabId, provable: boolean): void {
-    this.held.set(stream, { provable });
+    this.held.set(stream, provable);
   }
 
   isHeld(stream: StreamTabId): boolean {
@@ -287,7 +287,7 @@ export class StreamStatusMachine {
 
   /** Whether the holder of a held stream is provably alive; undefined if not held. */
   heldProvable(stream: StreamTabId): boolean | undefined {
-    return this.held.get(stream)?.provable;
+    return this.held.get(stream);
   }
 
   clearStream(stream: StreamTabId): void {
