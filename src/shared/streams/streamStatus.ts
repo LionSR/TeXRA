@@ -35,52 +35,27 @@ export function deriveRunOutcome(facts: {
   return RUN_OUTCOME.COMPLETED;
 }
 
-export interface RunOutcomeProjection {
-  /** Export-boundary projection (trace document `terminalStatus`). */
-  readonly executionStatus: ExecutionStatus;
-}
-
 /**
- * Projection table: one row per outcome for persisted execution status.
- *
- * `executionStatus` keeps all three outcomes distinct at the frozen public
- * boundaries (trace document `terminalStatus`, CLI NDJSON history status).
- * Retired transcript and stream vocabularies are not projected here:
- * permanent parse-side readers accept those legacy values and normalize them
- * to canonical current values.
- *
- * The `Record` key type keeps the table compile-time exhaustive; read it
- * through {@link projectRunOutcome} so an out-of-vocabulary value (stale
- * fixture, unparsed legacy data) fails with a named error instead of an
- * undefined-property crash downstream.
+ * Project the canonical outcome onto the frozen public execution-status
+ * vocabulary (trace document `terminalStatus`, CLI NDJSON history status).
+ * The only production mapping — flows and hosts must not hand-roll their
+ * own. An out-of-vocabulary value (stale fixture, unparsed legacy data)
+ * fails with a named error instead of an undefined-property crash
+ * downstream.
  */
-export const RUN_OUTCOME_PROJECTION: Readonly<
-  Record<RunOutcome, RunOutcomeProjection>
-> = {
-  [RUN_OUTCOME.COMPLETED]: {
-    executionStatus: EXECUTION_STATUS.COMPLETED,
-  },
-  [RUN_OUTCOME.CANCELLED]: {
-    executionStatus: EXECUTION_STATUS.INTERRUPTED,
-  },
-  [RUN_OUTCOME.FAILED]: {
-    executionStatus: EXECUTION_STATUS.ERROR,
-  },
-};
-
-/** Guarded table read — loud, named failure on an unhandled outcome. */
-export function projectRunOutcome(outcome: RunOutcome): RunOutcomeProjection {
-  const projection = RUN_OUTCOME_PROJECTION[outcome];
-  if (!projection) {
-    throw new Error(`Unhandled run outcome: ${String(outcome)}`);
-  }
-  return projection;
-}
-
 export function runOutcomeToExecutionStatus(
   outcome: RunOutcome,
 ): ExecutionStatus {
-  return projectRunOutcome(outcome).executionStatus;
+  switch (outcome) {
+    case RUN_OUTCOME.COMPLETED:
+      return EXECUTION_STATUS.COMPLETED;
+    case RUN_OUTCOME.CANCELLED:
+      return EXECUTION_STATUS.INTERRUPTED;
+    case RUN_OUTCOME.FAILED:
+      return EXECUTION_STATUS.ERROR;
+    default:
+      throw new Error(`Unhandled run outcome: ${String(outcome)}`);
+  }
 }
 
 // ============================================================================
