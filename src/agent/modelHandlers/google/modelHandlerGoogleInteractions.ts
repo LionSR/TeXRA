@@ -692,10 +692,16 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     }
   }
 
+  private hasSupportedMedia(
+    mediaFiles: FileLocation[] | undefined,
+  ): mediaFiles is FileLocation[] {
+    return Boolean(mediaFiles?.length) && this.supportsFileUploads();
+  }
+
   protected override async createMediaMessage(
     mediaFiles: FileLocation[],
   ): Promise<Content[]> {
-    if (!mediaFiles?.length || !this.supportsFileUploads()) {
+    if (!this.hasSupportedMedia(mediaFiles)) {
       return [];
     }
 
@@ -919,14 +925,17 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles: FileLocation[] = [],
+    mediaFiles?: FileLocation[],
     _systemPrompt?: string,
   ): Promise<Step[]> {
     // System prompt is NOT a step — it rides on request-level system_instruction
     // (resent on every create, spec §6.2).
+    const media = this.hasSupportedMedia(mediaFiles)
+      ? await this.createMediaForRound(mediaFiles, 'initial')
+      : [];
     const content: Content[] = [
       ...(userPrefix.trim() ? [this.textMedia(userPrefix)] : []),
-      ...(await this.createMediaForRound(mediaFiles, 'initial')),
+      ...media,
     ];
     if (userRequest.trim()) {
       const separator = content.length > 0 ? '\n' : '';
@@ -945,10 +954,13 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   async createRoundMessages(
     messages: Step[],
     userMessage: string,
-    mediaFiles: FileLocation[] = [],
+    mediaFiles?: FileLocation[],
   ): Promise<Step[]> {
+    const media = this.hasSupportedMedia(mediaFiles)
+      ? await this.createMediaForRound(mediaFiles, 'followUp')
+      : [];
     const content: Content[] = [
-      ...(await this.createMediaForRound(mediaFiles, 'followUp')),
+      ...media,
       ...(userMessage.trim() ? [this.textMedia(userMessage)] : []),
     ];
 
