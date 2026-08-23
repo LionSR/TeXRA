@@ -1639,6 +1639,7 @@ describe('DesktopProgressBridge', () => {
     expect(bridgeStatus(bridge).holdState(mappedStream)).toEqual({
       kind: 'unclassified',
       cause: 'flow records unavailable',
+      retryable: true,
     });
     expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([mappedStream]);
   });
