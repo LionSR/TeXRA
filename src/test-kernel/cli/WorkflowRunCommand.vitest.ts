@@ -309,8 +309,7 @@ describe('CLI workflow run command', () => {
         model ?? 'deepseekT',
     );
     mocks.deriveResumability.mockResolvedValue({
-      resumable: true,
-      cause: 'interrupted-with-flow',
+      kind: 'checkpoint',
       flowRecord: {
         shared: {},
         cursor: { nextNodeId: 'start' },
@@ -969,8 +968,7 @@ describe('CLI workflow run command', () => {
 
     expect(
       canAdvertise?.({
-        resumable: true,
-        cause: 'interrupted-with-flow',
+        kind: 'checkpoint',
         flowRecord: {
           shared: { lastError: { message: 'provider failed' } },
           cursor: { nextNodeId: 'start' },

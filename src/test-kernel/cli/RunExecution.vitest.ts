@@ -234,8 +234,8 @@ async function stubRunExecutionDeps(): Promise<void> {
     outcomePersisted: true,
   });
   mocks.deriveResumability.mockResolvedValue({
-    resumable: true,
-    cause: 'interrupted-with-flow',
+    kind: 'checkpoint',
+    flowRecord: { shared: {}, cursor: { nextNodeId: 'start' } },
   });
   mocks.releaseExecutionLeaseAfterArtifacts.mockResolvedValue(undefined);
   // The CLI shutdown drain is the session's one exit choreography; the suite
@@ -927,8 +927,7 @@ describe('executeCliRequest', () => {
   it('does not advertise signal recovery before a flow checkpoint exists', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     mocks.deriveResumability.mockResolvedValueOnce({
-      resumable: false,
-      cause: 'missing-flow',
+      kind: 'none',
       outcome: RUN_OUTCOME.CANCELLED,
     });
     const onInterruptedExecutionFinalized = vi.fn();

@@ -74,7 +74,7 @@ interface CliExecuteOptions {
   ) => void | Promise<void>;
   /** Refine generic flow resumability for the launched workflow's state. */
   readonly canAdvertiseInterruptedExecution?: (
-    resumability: Extract<ResumabilityDecision, { resumable: true }>,
+    resumability: Extract<ResumabilityDecision, { kind: 'checkpoint' }>,
   ) => boolean;
   /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
    *  runtime-host lifecycle into the caller. */
@@ -350,7 +350,7 @@ export async function executeCliRequest(
         // The lease was released just above, so the checkpoint alone decides
         // whether the recovery notice is usable.
         if (
-          resumability?.resumable === true &&
+          resumability?.kind === 'checkpoint' &&
           options.onInterruptedExecutionFinalized !== undefined &&
           (options.canAdvertiseInterruptedExecution?.(resumability) ?? true)
         ) {
@@ -389,11 +389,13 @@ export async function executeCliRequest(
           : false;
       shutdownInterrupted = interruptionAccepted || shutdownInterrupted;
       let resumableCheckpoint:
-        Extract<ResumabilityDecision, { resumable: true }> | undefined;
+        Extract<ResumabilityDecision, { kind: 'checkpoint' }> | undefined;
       if (shutdownInterrupted && ownedExecutionId) {
         try {
           const resumability = await deriveResumability(ownedExecutionId);
-          if (resumability.resumable) resumableCheckpoint = resumability;
+          if (resumability.kind === 'checkpoint') {
+            resumableCheckpoint = resumability;
+          }
         } catch {
           // The ordinary bounded shutdown path below remains authoritative
           // when checkpoint inspection itself is unavailable.

@@ -55,7 +55,6 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   classifyRun as defaultClassifyRun,
-  classifyRunFacts,
   type RunClassification,
   type RunFactsClassification,
 } from './runClassification';
@@ -318,10 +317,14 @@ export async function repairRestartedStreams(
         async () => {
           let current: RunFactsClassification;
           try {
-            current = classifyRunFacts(
-              executionId,
-              await deriveResumability(executionId),
-            );
+            const facts = await deriveResumability(executionId);
+            if (facts.kind === 'checkpoint') {
+              current = { kind: 'resumable', outcome: facts.outcome };
+            } else if (facts.kind === 'none') {
+              current = { kind: 'finished', outcome: facts.outcome };
+            } else {
+              current = { kind: 'unclassified', cause: facts.cause };
+            }
           } catch (error) {
             current = { kind: 'unclassified', cause: toErrorMessage(error) };
           }
