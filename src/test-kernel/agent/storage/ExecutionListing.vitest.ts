@@ -82,14 +82,18 @@ describe('execution listing normalization', () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
     try {
-      const references = await listExecutionStreamReferences();
+      const listing = await listExecutionStreamReferences();
 
-      expect(references).toEqual([
+      expect(listing.references).toEqual([
         { executionId: referenced, streamId: 'referenced-stream' },
       ]);
+      // The unreadable row is reported with its cause, never dropped.
+      expect([...listing.unreadable.keys()]).toEqual([malformed]);
       expect(warn).toHaveBeenCalledWith(
         'ExecutionListing',
-        expect.stringContaining(`Skipping execution ${malformed}`),
+        expect.stringContaining(
+          `Execution ${malformed} has unreadable storage`,
+        ),
         expect.anything(),
       );
     } finally {

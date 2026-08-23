@@ -101,9 +101,35 @@ export function streamHeldMessage(holderProvable: boolean): string {
     : STREAM_HELD_UNREACHABLE_MESSAGE;
 }
 
+/** The unclassified-sentinel fields of a stream's backend-owned state. */
+export interface StreamUnclassifiedDetail {
+  readonly status?: StreamLifecycleStatus;
+  readonly statusDetail?: string;
+  readonly statusRetryable?: boolean;
+}
+
+/**
+ * Whether an unclassified stream's saved state is malformed rather than
+ * transiently unreadable: Resume would fail deterministically, so Delete is
+ * the only affordance left.
+ */
+export function isStreamStateMalformed(
+  state: StreamUnclassifiedDetail | null | undefined,
+): boolean {
+  return (
+    state?.status === STREAM_LIFECYCLE_UNCLASSIFIED &&
+    state.statusRetryable === false
+  );
+}
+
 /** Tooltip and banner copy for a stream whose run state could not be read. */
-function streamUnclassifiedMessage(cause: string | undefined): string {
-  return `Could not read this run's state: ${cause ?? 'unknown cause'}. Resume to retry.`;
+function streamUnclassifiedMessage(
+  state: Omit<StreamUnclassifiedDetail, 'status'>,
+): string {
+  const cause = state.statusDetail ?? 'unknown cause';
+  return state.statusRetryable === false
+    ? `This run's saved state is malformed: ${cause}. It cannot be resumed; delete it to clear it.`
+    : `Could not read this run's state: ${cause}. Resume to retry.`;
 }
 
 /**
@@ -112,15 +138,14 @@ function streamUnclassifiedMessage(cause: string | undefined): string {
  * generic held copy); every other status shows its label.
  */
 export function streamStatusTooltip(
-  status: StreamLifecycleStatus | undefined,
-  statusDetail: string | undefined,
+  state: StreamUnclassifiedDetail | null | undefined,
   label: string | undefined,
 ): string | undefined {
-  if (status === STREAM_LIFECYCLE_HELD) {
-    return statusDetail ?? STREAM_HELD_ELSEWHERE_MESSAGE;
+  if (state?.status === STREAM_LIFECYCLE_HELD) {
+    return state.statusDetail ?? STREAM_HELD_ELSEWHERE_MESSAGE;
   }
-  if (status === STREAM_LIFECYCLE_UNCLASSIFIED) {
-    return streamUnclassifiedMessage(statusDetail);
+  if (state?.status === STREAM_LIFECYCLE_UNCLASSIFIED) {
+    return streamUnclassifiedMessage(state);
   }
   return label;
 }

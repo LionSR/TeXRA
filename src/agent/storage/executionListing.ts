@@ -134,9 +134,20 @@ function listExecutionDirs(entries: [string, number][]): ExecutionId[] {
 // Public API
 // ============================================================================
 
-export interface ExecutionStreamReference {
+interface ExecutionStreamReference {
   readonly executionId: ExecutionId;
   readonly streamId: StreamTabId;
+}
+
+export interface ExecutionStreamReferenceListing {
+  readonly references: ExecutionStreamReference[];
+  /**
+   * Executions whose checkpoint `stat` or metadata read failed. They are not
+   * discarded: a checkpointed run whose storage cannot be read is unknown
+   * state, and the caller attributes it to a stream through its own
+   * execution-id channel rather than letting the row vanish into `ready`.
+   */
+  readonly unreadable: ReadonlyMap<ExecutionId, string>;
 }
 
 /**
@@ -149,12 +160,15 @@ export interface ExecutionStreamReference {
  * With `checkpointedOnly`, only executions that still hold a resume
  * checkpoint (flow record) are listed; the existence check runs before the
  * metadata read, so settled history costs one `stat` each and no file read.
+ * An execution whose storage cannot be read is reported in `unreadable` with
+ * the cause instead of being dropped.
  */
 export async function listExecutionStreamReferences(
   options: { readonly checkpointedOnly?: boolean } = {},
-): Promise<ExecutionStreamReference[]> {
+): Promise<ExecutionStreamReferenceListing> {
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
+  const unreadable = new Map<ExecutionId, string>();
   const results = await pMap(
     executionDirs,
     async (executionId): Promise<ExecutionStreamReference | null> => {
@@ -170,8 +184,10 @@ export async function listExecutionStreamReferences(
         if (!meta?.streamId) return null;
         return { executionId, streamId: meta.streamId };
       } catch (error) {
+        const cause = toErrorMessage(error);
+        unreadable.set(executionId, cause);
         log.warn(
-          `Skipping execution ${executionId} with unreadable storage while listing stream references: ${toErrorMessage(error)}`,
+          `Execution ${executionId} has unreadable storage while listing stream references: ${cause}`,
           { data: error },
         );
         return null;
@@ -179,7 +195,7 @@ export async function listExecutionStreamReferences(
     },
     { concurrency: EXECUTION_STORAGE_CONCURRENCY },
   );
-  return results.filter(filterNotNull);
+  return { references: results.filter(filterNotNull), unreadable };
 }
 
 /**

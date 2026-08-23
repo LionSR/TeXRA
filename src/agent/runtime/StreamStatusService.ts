@@ -33,10 +33,16 @@ type TerminalTransitionCause = Extract<
  * `provable` is false when that process could not be proven alive or dead.
  * `unclassified`: its lease, metadata, or flow record could not be read, so
  * nothing is known and nothing was mutated; `cause` is shown to the user.
+ * `retryable` is false for present-but-malformed data, where Resume fails
+ * deterministically and only Delete clears the run.
  */
 export type StreamHoldState =
   | { readonly kind: 'held'; readonly provable: boolean }
-  | { readonly kind: 'unclassified'; readonly cause: string };
+  | {
+      readonly kind: 'unclassified';
+      readonly cause: string;
+      readonly retryable: boolean;
+    };
 
 export interface StreamPhaseState {
   readonly phase: StreamPhase;
@@ -293,8 +299,22 @@ export class StreamStatusMachine {
   }
 
   /** Record that `stream`'s run state could not be read; nothing was mutated. */
-  markUnclassified(stream: StreamTabId, cause: string): void {
-    this.holds.set(stream, { kind: 'unclassified', cause });
+  markUnclassified(
+    stream: StreamTabId,
+    cause: string,
+    retryable: boolean,
+  ): void {
+    this.holds.set(stream, { kind: 'unclassified', cause, retryable });
+  }
+
+  /**
+   * Drop a hold overlay without touching the phase. Restart repair calls this
+   * when a classification resolves; `transition` clears holds only when it
+   * writes, so a repair that lands on the phase already in place would
+   * otherwise leave the stream read-only forever.
+   */
+  clearHold(stream: StreamTabId): void {
+    this.holds.delete(stream);
   }
 
   holdState(stream: StreamTabId): StreamHoldState | undefined {
