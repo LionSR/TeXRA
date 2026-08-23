@@ -6,10 +6,8 @@ import { noopTrace, TraceEmitter, type StatusEvent } from '@agent/trace';
 import type { FinalizeExecutionResult } from '@agent/storage/executionLifecycle';
 import {
   acquireResumedExecutionLease,
-  ExecutionLeaseLostError,
   inspectExecutionLease,
   releaseOwnedExecutionLease,
-  validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -42,10 +40,6 @@ import {
 import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import {
-  executionLeasePath,
-  writeForeignLease,
-} from '@test/support/executionLeaseFixtures';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
@@ -53,7 +47,6 @@ import {
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
 import { withTranscriptWriter } from '@test/support/storeTestDrivers';
-import { StorageFS } from '@utils/files/storageFS';
 
 import {
   recordSessionEvents,
