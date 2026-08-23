@@ -617,7 +617,7 @@ export class SessionHandle {
         this.status.getGeneration(streamId) ===
         statusGenerationsAtScan.get(streamId)
       ) {
-        this.status.markUnclassified(streamId, cause);
+        this.status.markUnclassified(streamId, cause, true);
       }
     }
 
