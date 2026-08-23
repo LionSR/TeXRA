@@ -17,8 +17,11 @@ import {
 } from '@agent/index';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import {
+  applySettingsTeamRoster,
+  type SettingsTeamAvailabilityPrompt,
+} from '@controllers/settingsView/SettingsTeamRosterController';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
   templateAgentNamePrompt,
@@ -43,7 +46,6 @@ import {
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
   withHandlerErrorHandling,
@@ -300,66 +302,31 @@ export class AgentHandlers {
       this.ctx,
       'Failed to apply agent team',
       async () => {
-        const result = await withAgentCatalogAuthRefreshDeferred(() =>
-          applyTeamRosterWithPreflight(data.presetId, {
+        await withAgentCatalogAuthRefreshDeferred(() =>
+          applySettingsTeamRoster(data.presetId, {
             catalog: this.catalogController,
             loadLocalCatalog: () => loadAgents({ includeRemote: false }),
             canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
-            choose: async (preset, unavailableNames) => {
-              const choice = await vscode.window.showInformationMessage(
-                `The "${preset.name}" team includes TeXRA-hosted members that are unavailable: ${unavailableNames.join(', ')}.`,
-                { modal: true },
-                'Sign in to TeXRA',
-                'Continue with available members',
-              );
-              if (choice === 'Sign in to TeXRA') return 'sign-in';
-              if (choice === 'Continue with available members') {
-                return 'continue';
-              }
-              return 'cancel';
-            },
             signIn: async () =>
               (await vscode.commands.executeCommand<boolean>(
                 AUTH_COMMANDS.SIGN_IN,
               )) === true,
             forceRefreshRemoteCatalog: () =>
               refreshAgents({ includeRemote: true }),
+            presentation: {
+              chooseTeamAvailability: (prompt) =>
+                this.chooseTeamAvailability(prompt),
+              showInfoMessage: (message) => {
+                void vscode.window.showInformationMessage(message);
+                return Promise.resolve();
+              },
+              showErrorMessage: async (message) => {
+                await showLoggedMessage(this.ctx.channel, message);
+              },
+            },
+            refreshAfterApply: (selectedToolUseAgent) =>
+              this.refreshAfterAgentMutation(selectedToolUseAgent, true),
           }),
-        );
-
-        if (result.status === 'unknown') {
-          await showLoggedMessage(
-            this.ctx.channel,
-            `Unknown team: ${data.presetId}`,
-          );
-          return;
-        }
-        if (
-          result.status === 'choice-required' ||
-          result.status === 'cancelled'
-        )
-          return;
-        if (result.status === 'unavailable') {
-          await showLoggedMessage(
-            this.ctx.channel,
-            `The "${result.preset.name}" team is unavailable because these TeXRA-hosted members could not be loaded: ${result.unavailableNames.join(', ')}.`,
-          );
-          return;
-        }
-
-        await this.refreshAfterAgentMutation(
-          this.catalogController.getPresetToolUseRoot(
-            result.preset.agents.toolUse,
-            result.preset.id,
-          ),
-          true,
-        );
-
-        const unresolvedCount = result.resolution.unresolvedNames.length;
-        void vscode.window.showInformationMessage(
-          unresolvedCount === 0
-            ? `Applied "${result.preset.name}" team`
-            : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
         );
       },
     );
@@ -422,6 +389,15 @@ export class AgentHandlers {
   }
 
   // ── Private helpers ──
+
+  private async chooseTeamAvailability(prompt: SettingsTeamAvailabilityPrompt) {
+    const choice = await vscode.window.showWarningMessage(
+      prompt.message,
+      { modal: true },
+      ...prompt.actions.map((action) => action.label),
+    );
+    return prompt.actions.find((action) => action.label === choice)?.choice;
+  }
 
   private async createAgentFromTemplate(
     category: 'workflow' | 'toolUse',

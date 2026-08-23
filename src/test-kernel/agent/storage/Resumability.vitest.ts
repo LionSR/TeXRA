@@ -92,6 +92,20 @@ describe('deriveResumability', () => {
     });
   });
 
+  it('does not treat a spent cursor as a checkpoint', async () => {
+    const executionId = 'completed-spent-cursor' as ExecutionId;
+    await writeMeta(executionId, { outcome: RUN_OUTCOME.COMPLETED });
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      ...BASE_FLOW_RECORD,
+      cursor: { ...BASE_FLOW_RECORD.cursor, nextNodeId: null },
+    });
+
+    await expect(deriveResumability(executionId)).resolves.toMatchObject({
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.INVALID_FLOW,
+    });
+  });
+
   it('keeps a preserved checkpoint when terminal metadata fails for a failed execution', async () => {
     const executionId = 'failed-terminal-metadata-with-flow' as ExecutionId;
     await writeMeta(executionId, {});
