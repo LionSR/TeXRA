@@ -9,6 +9,8 @@
 //
 // Host-agnostic, VS Code-free.
 
+import { randomUUID } from 'node:crypto';
+
 import PQueue from 'p-queue';
 
 import { getExecutionStore, type ResultMeta } from '@agent/storage';
@@ -21,7 +23,6 @@ import type {
 import {
   assertOwnedExecutionLease,
   ExecutionLeaseLostError,
-  markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
 import {
   currentSession,
@@ -640,7 +641,6 @@ async function deliverTurn<TTurn>(params: {
     wallTimeMs,
     isError,
     prepareParentDelivery,
-    parentDeliveryGenerationId,
   } = params;
   const delivered = turn != null && !isError;
   const msg = await (delivered
@@ -704,9 +704,6 @@ async function deliverTurn<TTurn>(params: {
   if (prepareParentDelivery?.() === false) return undefined;
   return {
     targetStreamId,
-    ...(parentDeliveryGenerationId !== undefined
-      ? { expectedGenerationId: parentDeliveryGenerationId }
-      : {}),
     followUp: {
       text: msg,
       origin: 'subagent_result',
@@ -730,9 +727,6 @@ async function submitPendingDelivery(
     targetStreamId: pending.targetStreamId,
     followUp: pending.followUp,
     session,
-    ...(pending.expectedGenerationId !== undefined
-      ? { expectedGenerationId: pending.expectedGenerationId }
-      : {}),
   });
   if (delivery.kind === 'failed') {
     logger.warn(
@@ -780,11 +774,6 @@ export function startChildRunLoop<TTurn>(
   // that does not own its lease fails before any queue, stage, or loop exists.
   assertOwnedExecutionLease(executionId);
   const runSession = currentSession();
-  // Parent delivery belongs to the continuation generation under which this
-  // producer started. A terminal retry may reuse the same stream ID, but late
-  // progress or results from this child must not enter the replacement queue.
-  const parentDeliveryGenerationId =
-    runSession.followUps.currentGenerationId(parentStreamId);
   const loop = new ChildRunInterruptible(
     runSession,
     childStreamId,
@@ -872,7 +861,7 @@ export function startChildRunLoop<TTurn>(
     throw unwindSetup(error);
   }
 
-  const childRunGenerationId = queueLease.generationId;
+  const attemptId = randomUUID();
 
   let bestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
@@ -890,9 +879,6 @@ export function startChildRunLoop<TTurn>(
         followUp: { text: msg, origin: 'subagent_result' },
         session: runSession,
         mode: 'live_notification',
-        ...(parentDeliveryGenerationId !== undefined
-          ? { expectedGenerationId: parentDeliveryGenerationId }
-          : {}),
       });
     },
     recordCost: (totalCostUsd) => {
@@ -962,11 +948,7 @@ export function startChildRunLoop<TTurn>(
     try {
       while (!loop.isInterrupted()) {
         turnIndex += 1;
-        const turnRef = mintChildTurnRef(
-          executionId,
-          childRunGenerationId,
-          turnIndex,
-        );
+        const turnRef = mintChildTurnRef(executionId, attemptId, turnIndex);
         emitTurnDiagnostic(logger, 'turn.accepted', {
           executionId,
           turnRef,
@@ -1013,7 +995,6 @@ export function startChildRunLoop<TTurn>(
           strategy,
           executionId,
           parentStreamId,
-          parentDeliveryGenerationId,
           logger,
           turn,
           turnRef,
@@ -1085,15 +1066,13 @@ export function startChildRunLoop<TTurn>(
       // A throw from the loop body itself — delivery formatting, report
       // persistence, the queue wait — is this run's failure. Without this the
       // terminal block below would finalize a child that never delivered as
-      // COMPLETED, and the abandoned generation would still look durably
-      // released.
+      // COMPLETED.
       sawTurnFailure = true;
       lastTurnErr ??= error;
       // A fenced write found the lease gone: another owner holds this
       // execution now, so the loop stops here instead of delivering or
       // accepting anything further on the former owner's behalf.
       if (error instanceof ExecutionLeaseLostError) loop.interrupt();
-      markOwnedExecutionLeaseUndurable(executionId);
       throw error;
     } finally {
       // A retry may reuse this execution ID as soon as its lease is released.

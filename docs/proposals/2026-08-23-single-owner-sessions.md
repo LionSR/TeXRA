@@ -114,19 +114,19 @@ mutated", never a default that lets code proceed.
 
 Guessing sites the sweeps found, each of which this proposal removes:
 
-| Guess                                                                   | Where                                                                              | Replaced by                                                                                             |
-| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| "finished" inferred from unclosed group rows                            | `StreamLogStore.ts:327-333`, `:1528-1540`; consumer `markUnfinishedStreamsRunning` | an explicit `status`/`result` journal row (§6) or `meta.outcome`; never the transcript shape            |
-| "running" remembered in a map with no flow behind it                    | `SessionHandle.ts:682-690`, `StreamStatusService`                                  | RUNNING/WAITING ⇔ a live flow context exists in this registry (D7)                                      |
-| owner alive inferred from a socket probe; `unprovable` treated as alive | `instancePresence.ts:159-213`, `executionLease.ts:324-338`                         | `kill(pid,0)` + process start time; `unprovable` is a user-visible state with a Reclaim action (D2, D9) |
-| FAILED inferred by restart repair, then used to delete the checkpoint   | `restartRepair.ts:396-408`                                                         | repair never writes an outcome and never deletes (D8)                                                   |
-| "not resumable" inferred from outcome before reading the checkpoint     | `resumability.ts:76-86`                                                            | resumable ⇔ checkpoint present and no live owner                                                        |
-| stream → execution read from one of three copies with a fallback ladder | `SessionHandle.ts:745-763`, `ToolUseFollowUp.ts:84-95`                             | one authored FK (`meta.streamId`, or the journal header), one derived index                             |
-| summary freshness decided by mtime comparison                           | `StreamLogStore.ts:1422-1435`                                                      | summaries deleted with the journal; until then, rebuilt, never trusted by mtime                         |
-| "queue taken away" read as "turn completed"                             | `FollowUpQueue.ts:149-158` → COMPLETED + delete                                    | `waitForFollowUp` returns why it stopped; disposal is a cancellation                                    |
-| every follow-up failure collapsed to "start a new agent task"           | `followUpCommand.ts:43-48`, `desktopAgentExecution.ts:1194-1196`                   | a worded reason from the classifier (D6)                                                                |
-| a foreign-owned stream treated as mine at startup                       | `SessionHandle.ts:730`, `restartRepair.ts:290-302`                                 | classify once, mutate nothing (D3)                                                                      |
-| WAITING re-derived at startup by a different function than at send time | `detectWaitingStreams.ts` vs `repairWaitingIfResumable`                            | one classifier, called from both (D7)                                                                   |
+| Guess                                                                   | Where                                                                              | Replaced by                                                                                  |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| "finished" inferred from unclosed group rows                            | `StreamLogStore.ts:327-333`, `:1528-1540`; consumer `markUnfinishedStreamsRunning` | an explicit `status`/`result` journal row (§6) or `meta.outcome`; never the transcript shape |
+| "running" remembered in a map with no flow behind it                    | `SessionHandle.ts:682-690`, `StreamStatusService`                                  | RUNNING/WAITING ⇔ a live flow context exists in this registry (D7)                           |
+| owner alive inferred from a socket probe; `unprovable` treated as alive | `instancePresence.ts:159-213`, `executionLease.ts:324-338`                         | `kill(pid,0)` + process start time; `unprovable` is shown as held, like `alive` (D2, D9)     |
+| FAILED inferred by restart repair, then used to delete the checkpoint   | `restartRepair.ts:396-408`                                                         | repair never writes an outcome and never deletes (D8)                                        |
+| "not resumable" inferred from outcome before reading the checkpoint     | `resumability.ts:76-86`                                                            | resumable ⇔ checkpoint present and no live owner                                             |
+| stream → execution read from one of three copies with a fallback ladder | `SessionHandle.ts:745-763`, `ToolUseFollowUp.ts:84-95`                             | one authored FK (`meta.streamId`, or the journal header), one derived index                  |
+| summary freshness decided by mtime comparison                           | `StreamLogStore.ts:1422-1435`                                                      | summaries deleted with the journal; until then, rebuilt, never trusted by mtime              |
+| "queue taken away" read as "turn completed"                             | `FollowUpQueue.ts:149-158` → COMPLETED + delete                                    | `waitForFollowUp` returns why it stopped; disposal is a cancellation                         |
+| every follow-up failure collapsed to "start a new agent task"           | `followUpCommand.ts:43-48`, `desktopAgentExecution.ts:1194-1196`                   | a worded reason from the classifier (D6)                                                     |
+| a foreign-owned stream treated as mine at startup                       | `SessionHandle.ts:730`, `restartRepair.ts:290-302`                                 | classify once, mutate nothing (D3)                                                           |
+| WAITING re-derived at startup by a different function than at send time | `detectWaitingStreams.ts` vs `repairWaitingIfResumable`                            | one classifier, called from both (D7)                                                        |
 
 The `.catch(default)` / silent-fallback ban already in CLAUDE.md is the
 same rule at the schema layer; this section applies it to run state.
@@ -148,9 +148,9 @@ cannot change under a live process (Linux: boot id plus raw start ticks
 from `/proc/<pid>/stat`; macOS/BSD: `ps -o lstart=` under `LC_ALL=C`;
 Windows: the PowerShell process start time). An owner is dead iff
 `kill(pid, 0)` gives `ESRCH`, or the pid exists with a different identity
-(pid reuse). Different hostname is "unprovable" (reclaimable on explicit
-request); a pid that exists on this host whose identity cannot be read is
-"unreadable" (not even reclaimable). Both mean "do not touch". This is sleep-safe (the
+(pid reuse). Anything else (a different hostname, a pid on this host
+whose identity cannot be read) is "unprovable", which means exactly what
+"alive" means: do not touch. This is sleep-safe (the
 failure that motivated the presence PRD was wall-clock TTLs, which this
 does not reintroduce) and deletes `instancePresence.ts` (367 L), the
 owner-exit watch (`SessionHandle.ts:869-891`), and the probe plumbing in
@@ -221,11 +221,12 @@ queue being disposed is a cancellation, not a completion
 outcome, so a FAILED run offers "retry from last checkpoint". This
 collapses `RESUMABILITY_CAUSE`'s eleven members to three.
 
-**D9. `unprovable` is never an absorbing state.** With pid + start time
-(D2) the remaining unprovable cases are genuine anomalies (foreign
-hostname, permission error). They are shown to the user as
-"held by a process I cannot reach", with a Reclaim action, instead of
-silently answering every message with "start a new agent task".
+**D9. An undecidable owner is shown as held.** With pid + start time (D2)
+the remaining unprovable cases are genuine anomalies (foreign hostname,
+permission error). No code path guesses them dead: the run is shown as
+unavailable with the owner's pid and host in the detail, every message to
+it is refused with that same detail, and Delete is the user's only action.
+There is no reclaim; a user who knows the owner is gone deletes the run.
 
 **D10. Races are removed by structure, not guarded by locks.** A lock,
 fence, generation counter, or double-check exists only because two things

@@ -1,6 +1,5 @@
 import {
-  STREAM_LIFECYCLE_HELD,
-  STREAM_LIFECYCLE_UNCLASSIFIED,
+  STREAM_LIFECYCLE_UNAVAILABLE,
   STREAM_PHASE,
   STREAM_STATUS,
   STREAM_SUBSTATE,
@@ -59,8 +58,7 @@ const cliStreamStatusLabels: Record<StreamStatusDisplayKey, string> = {
   ready: 'ready',
   [STREAM_PHASE.WAITING]: 'idle',
   [STREAM_SUBSTATE.RESUMING]: 'resuming',
-  [STREAM_LIFECYCLE_HELD]: 'held elsewhere',
-  [STREAM_LIFECYCLE_UNCLASSIFIED]: 'unreadable',
+  [STREAM_LIFECYCLE_UNAVAILABLE]: 'unavailable',
 } as const;
 
 const STREAM_STATUS_LABELS = {
@@ -78,88 +76,42 @@ const STREAM_STATUS_LABELS = {
     ready: 'Ready',
     [STREAM_PHASE.WAITING]: 'Idle',
     [STREAM_SUBSTATE.RESUMING]: 'Resuming',
-    [STREAM_LIFECYCLE_HELD]: 'In another window',
-    [STREAM_LIFECYCLE_UNCLASSIFIED]: 'State unreadable',
+    [STREAM_LIFECYCLE_UNAVAILABLE]: 'Unavailable',
   },
 } as const;
 
-/** Tooltip and banner copy for a stream held by another TeXRA process. */
-const STREAM_HELD_ELSEWHERE_MESSAGE =
-  'Held by another TeXRA window. Close that window or let it finish before acting on this run here.';
-
 /**
- * The facts of a hold that the copy depends on: who holds the run, whether
- * that process was proven alive, and whether `--reclaim` would remove its
- * record. The lease classifier is the one source of these.
+ * Banner and tooltip copy for a run another TeXRA process holds. Recorded
+ * as the stream's unavailable detail and sent as `StreamMetadata.statusDetail`.
  */
-export interface StreamHoldFacts {
-  readonly owner: { readonly pid: number };
-  readonly provable: boolean;
-  readonly reclaimable: boolean;
+export function streamHeldMessage(owner: {
+  readonly pid: number;
+  readonly hostname: string;
+}): string {
+  return `Held by another TeXRA process (pid ${owner.pid} on ${owner.hostname}). Let it finish or close it; delete this run to clear it here.`;
+}
+
+/** Banner and tooltip copy for a run whose saved state could not be read. */
+export function streamUnreadableMessage(cause: string): string {
+  return `Could not read this run's state: ${cause}. Delete this run to clear it.`;
 }
 
 /**
- * Banner and tooltip copy for a held stream. The reclaim command is offered
- * only when it would succeed; a pid on this machine whose identity could
- * not be read is named instead, because reclaim refuses it. The session
- * renderer sends the result as `StreamMetadata.statusDetail`.
- */
-export function streamHeldMessage(
-  executionId: string,
-  hold: StreamHoldFacts,
-): string {
-  if (hold.provable) return STREAM_HELD_ELSEWHERE_MESSAGE;
-  if (hold.reclaimable) {
-    return `Held by a process that cannot be reached. If you are sure it is gone, reclaim the run with \`texra resume ${executionId} --reclaim\`.`;
-  }
-  return `Held by pid ${hold.owner.pid} on this machine; its identity could not be read. Wait for that process to exit before acting on this run here.`;
-}
-
-/** The unclassified-sentinel fields of a stream's backend-owned state. */
-export interface StreamUnclassifiedDetail {
-  readonly status?: StreamLifecycleStatus;
-  readonly statusDetail?: string;
-  readonly statusRetryable?: boolean;
-}
-
-/**
- * Whether an unclassified stream's saved state is malformed rather than
- * transiently unreadable: Resume would fail deterministically, so Delete is
- * the only affordance left.
- */
-export function isStreamStateMalformed(
-  state: StreamUnclassifiedDetail | null | undefined,
-): boolean {
-  return (
-    state?.status === STREAM_LIFECYCLE_UNCLASSIFIED &&
-    state.statusRetryable === false
-  );
-}
-
-/** Tooltip and banner copy for a stream whose run state could not be read. */
-function streamUnclassifiedMessage(
-  state: Omit<StreamUnclassifiedDetail, 'status'>,
-): string {
-  const cause = state.statusDetail ?? 'unknown cause';
-  return state.statusRetryable === false
-    ? `This run's saved state is malformed: ${cause}. It cannot be resumed; delete it to clear it.`
-    : `Could not read this run's state: ${cause}. Resume to retry.`;
-}
-
-/**
- * Status-indicator tooltip and banner copy: the held and unclassified
- * sentinels explain themselves from `statusDetail` (falling back to the
- * generic held copy); every other status shows its label.
+ * Status-indicator tooltip and banner copy: an unavailable stream explains
+ * itself from `statusDetail`; every other status shows its label.
  */
 export function streamStatusTooltip(
-  state: StreamUnclassifiedDetail | null | undefined,
+  state:
+    | {
+        readonly status?: StreamLifecycleStatus;
+        readonly statusDetail?: string;
+      }
+    | null
+    | undefined,
   label: string | undefined,
 ): string | undefined {
-  if (state?.status === STREAM_LIFECYCLE_HELD) {
-    return state.statusDetail ?? STREAM_HELD_ELSEWHERE_MESSAGE;
-  }
-  if (state?.status === STREAM_LIFECYCLE_UNCLASSIFIED) {
-    return streamUnclassifiedMessage(state);
+  if (state?.status === STREAM_LIFECYCLE_UNAVAILABLE) {
+    return state.statusDetail ?? label;
   }
   return label;
 }
