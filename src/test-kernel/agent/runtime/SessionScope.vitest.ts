@@ -180,18 +180,14 @@ describe('sendFollowUp host-path session routing', () => {
           session: processSession,
           resumePort: { tryResumeStream: async () => false },
         }),
-      ).resolves.toEqual({
-        status: 'queued',
-        reason: 'children_running',
-        continuation: 'resume_failed',
-      });
+      ).resolves.toEqual({ status: 'queued', wake: 'failed' });
 
       // Without the session it falls back to the default session, which does
       // not track this run — this is the dropped-follow-up regression the
       // session parameter prevents on desktop.
       await expect(submitFollowUp(parentStream, 'continue')).resolves.toEqual({
-        status: 'no_session',
-        streamStatus: undefined,
+        status: 'failed',
+        reason: 'not_resumable',
       });
     } finally {
       processSession.followUps.terminalize(parentStream);

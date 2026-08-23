@@ -3,10 +3,7 @@
 
 import { registerExecution } from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
-import {
-  captureOwnedExecutionLease,
-  releaseOwnedExecutionLeaseAfterFailure,
-} from '@agent/storage/executionLease';
+import { releaseOwnedExecutionLeaseAfterFailure } from '@agent/storage/executionLease';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   currentSession,
@@ -20,7 +17,11 @@ import {
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  describeFollowUpFailure,
+  FOLLOW_UP_WAKE_FAILED_MESSAGE,
+  submitFollowUp,
+} from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import {
   getRunContextExecutionId,
@@ -120,16 +121,21 @@ async function queueAgentCliFollowUp(
   const result = await submitFollowUp(stored.childStreamId, prompt, {
     session: currentSession(),
   });
-  if (result.status === 'no_session' || result.status === 'dropped') {
+  if (result.status === 'failed') {
     throw new ToolError(
-      `${labels.notActiveLabel} '${id}' no longer has a resumable continuation.`,
+      `${labels.notActiveLabel} '${id}' did not accept the follow-up (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
     );
   }
 
   const preview = truncateWithEllipsis(prompt, 60);
+  // A queued follow-up whose wake failed is still queued: it is delivered
+  // when the agent is resumed, so the caller must not offer it again.
+  const wakeFailed = result.status === 'queued' && result.wake === 'failed';
   return executed(
     [
-      `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`,
+      wakeFailed
+        ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}', but the agent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`
+        : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`,
       `Execution ID: ${stored.executionId}`,
     ].join('\n'),
     `Follow-up queued for ${labels.summaryLabel}: ${preview}`,
@@ -226,47 +232,43 @@ export async function launchAgentCliSession(
   } catch {
     throw new ToolError(params.registerFailedMessage);
   }
-  const runWithOwnership = captureOwnedExecutionLease(executionId);
-
-  return runWithOwnership(async () => {
-    let childStream: ChildStream | undefined;
-    try {
-      childStream = createChildStream(executionId, params.parentStreamId, {
-        streamPrefix: params.streamPrefix,
-        run: identity,
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-        description: params.description,
-        config: params.config,
-      });
-      await params.startLoop({ childStream, executionId });
-    } catch (error) {
-      let failure = error;
-      if (childStream) {
-        try {
-          await childStream.finalize({
-            outcome: { kind: 'failed', error },
-            persistence: { kind: 'finalize', flowRecord: 'delete' },
-          });
-        } catch (finalizeError) {
-          failure = new AggregateError(
-            [error, finalizeError],
-            `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
-          );
-        }
+  let childStream: ChildStream | undefined;
+  try {
+    childStream = createChildStream(executionId, params.parentStreamId, {
+      streamPrefix: params.streamPrefix,
+      run: identity,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+      description: params.description,
+      config: params.config,
+    });
+    await params.startLoop({ childStream, executionId });
+  } catch (error) {
+    let failure = error;
+    if (childStream) {
+      try {
+        await childStream.finalize({
+          outcome: { kind: 'failed', error },
+          persistence: { kind: 'finalize', flowRecord: 'delete' },
+        });
+      } catch (finalizeError) {
+        failure = new AggregateError(
+          [error, finalizeError],
+          `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
+        );
       }
-      throw await releaseOwnedExecutionLeaseAfterFailure(executionId, failure);
     }
+    throw await releaseOwnedExecutionLeaseAfterFailure(executionId, failure);
+  }
 
-    return executed(
-      [
-        params.launchedLine,
-        `Execution ID: ${executionId}`,
-        `Stream tab: ${childStream.childStreamId}`,
-        params.followUpLine,
-      ].join('\n'),
-      params.summary,
-    );
-  });
+  return executed(
+    [
+      params.launchedLine,
+      `Execution ID: ${executionId}`,
+      `Stream tab: ${childStream.childStreamId}`,
+      params.followUpLine,
+    ].join('\n'),
+    params.summary,
+  );
 }
 
 /**

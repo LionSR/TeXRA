@@ -186,7 +186,7 @@ export async function executeSubagent(
   const executionId = generateExecutionId();
   const startedAt = Date.now();
   const config = AgentConfigSchema.parse(childConfigPayload);
-  const { childStreamId, runWithOwnership } = await registerChildExecution({
+  const { childStreamId } = await registerChildExecution({
     executionId,
     config,
     agentName,
@@ -197,66 +197,64 @@ export async function executeSubagent(
     parentExecutionId,
   });
 
-  return await runWithOwnership(async () => {
-    const isToolUse = config.agentCategory === AgentCategory.ToolUse;
-    const strategyParams = {
-      config,
-      agentCategoryExplicit: childConfigPayload.agentCategory !== undefined,
-      executionId,
-      parentExecutionId,
-      agentName,
-      parentStreamId,
-      session: parentSession,
-      startedAt,
-      workingDirectory,
-      approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
-      onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
-      runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
-      onStreamResolved: inheritChildStreamApprovals,
-    };
+  const isToolUse = config.agentCategory === AgentCategory.ToolUse;
+  const strategyParams = {
+    config,
+    agentCategoryExplicit: childConfigPayload.agentCategory !== undefined,
+    executionId,
+    parentExecutionId,
+    agentName,
+    parentStreamId,
+    session: parentSession,
+    startedAt,
+    workingDirectory,
+    approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
+    onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
+    runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
+    onStreamResolved: inheritChildStreamApprovals,
+  };
 
-    await startDetachedChildRunLoop({
-      executionId,
-      parentStreamId,
-      childStreamId,
-      agentName,
-      recordCost,
-      buildLaunch: async () => ({
-        strategy: createNativeSubagentStrategy(strategyParams),
-        onLoopFailed: (error: unknown): void => {
-          log.error(`Subagent '${agentName}' run loop failed after launch`, {
-            data: error,
-          });
-        },
-      }),
-    });
-
-    const meta = options?.approvalMeta;
-    const metaLines: string[] = [];
-    if (meta) {
-      const modelInfo = meta.modelOverride
-        ? `Model: ${meta.modelOverride} (overridden from ${meta.requestedModel ?? 'default'})`
-        : `Model: ${childConfigPayload.model}`;
-      const agentInfo = meta.agentOverride
-        ? ` Agent: ${meta.agentOverride} (overridden from ${meta.requestedAgent ?? 'default'}).`
-        : '';
-      metaLines.push(
-        `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.${agentInfo}`,
-      );
-    }
-    return executed(
-      [
-        `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
-        `Execution ID: ${executionId}`,
-        ...metaLines,
-        `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${executionId}; use action=wait only when you cannot proceed without it.`,
-        ...(isToolUse
-          ? [
-              `To send follow-up instructions after delivery: use delegate_agent with execution_id set to this ID.`,
-            ]
-          : []),
-      ].join('\n'),
-      `Launched '${agentName}' (async)`,
-    );
+  await startDetachedChildRunLoop({
+    executionId,
+    parentStreamId,
+    childStreamId,
+    agentName,
+    recordCost,
+    buildLaunch: async () => ({
+      strategy: createNativeSubagentStrategy(strategyParams),
+      onLoopFailed: (error: unknown): void => {
+        log.error(`Subagent '${agentName}' run loop failed after launch`, {
+          data: error,
+        });
+      },
+    }),
   });
+
+  const meta = options?.approvalMeta;
+  const metaLines: string[] = [];
+  if (meta) {
+    const modelInfo = meta.modelOverride
+      ? `Model: ${meta.modelOverride} (overridden from ${meta.requestedModel ?? 'default'})`
+      : `Model: ${childConfigPayload.model}`;
+    const agentInfo = meta.agentOverride
+      ? ` Agent: ${meta.agentOverride} (overridden from ${meta.requestedAgent ?? 'default'}).`
+      : '';
+    metaLines.push(
+      `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.${agentInfo}`,
+    );
+  }
+  return executed(
+    [
+      `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
+      `Execution ID: ${executionId}`,
+      ...metaLines,
+      `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${executionId}; use action=wait only when you cannot proceed without it.`,
+      ...(isToolUse
+        ? [
+            `To send follow-up instructions after delivery: use delegate_agent with execution_id set to this ID.`,
+          ]
+        : []),
+    ].join('\n'),
+    `Launched '${agentName}' (async)`,
+  );
 }

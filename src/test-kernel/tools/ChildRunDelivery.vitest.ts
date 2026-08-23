@@ -63,11 +63,7 @@ describe('child run delivery', () => {
 
   it('submits delivery and recovery as one operation', async () => {
     const session = { tag: 'owner' };
-    mocks.submitFollowUp.mockResolvedValue({
-      status: 'queued',
-      reason: 'waiting',
-      continuation: 'resumed',
-    });
+    mocks.submitFollowUp.mockResolvedValue({ status: 'queued' });
 
     await expect(
       deliverChildRunFollowUp({
@@ -88,7 +84,7 @@ describe('child run delivery', () => {
     );
   });
 
-  it('classifies missing and terminal parents', async () => {
+  it('carries the refusal reason for a parent that did not accept delivery', async () => {
     function deliverToParent(followUp: {
       text: string;
     }): ReturnType<typeof deliverChildRunFollowUp> {
@@ -100,17 +96,21 @@ describe('child run delivery', () => {
     }
 
     mocks.submitFollowUp.mockResolvedValueOnce({
-      status: 'no_session',
-      streamStatus: 'completed',
+      status: 'failed',
+      reason: 'finished',
     });
     await expect(deliverToParent({ text: 'done' })).resolves.toEqual({
-      kind: 'no_session',
-      streamStatus: 'completed',
+      kind: 'failed',
+      reason: 'finished',
     });
 
-    mocks.submitFollowUp.mockResolvedValueOnce({ status: 'dropped' });
+    mocks.submitFollowUp.mockResolvedValueOnce({
+      status: 'failed',
+      reason: 'not_resumable',
+    });
     await expect(deliverToParent({ text: 'late' })).resolves.toEqual({
-      kind: 'dropped',
+      kind: 'failed',
+      reason: 'not_resumable',
     });
   });
 });

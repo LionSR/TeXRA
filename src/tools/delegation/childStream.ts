@@ -1,7 +1,6 @@
 // Local imports
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { captureOwnedExecutionLeaseIfPresent } from '@agent/storage/executionLease';
 import {
   finalizeRunTerminal,
   type RunTerminalPersistence,
@@ -171,11 +170,6 @@ export function createChildStream(
       parentStreamId,
       runTrace.trace,
     );
-    const executionLeaseScope =
-      captureOwnedExecutionLeaseIfPresent(executionId);
-    if (executionLeaseScope) {
-      handle.attachExecutionLeaseScope(executionLeaseScope);
-    }
     // The process-owned snapshot listener persists both facts before handle
     // tracking; a later presentation replays them from the snapshot store during
     // canonical state loading (#8258).

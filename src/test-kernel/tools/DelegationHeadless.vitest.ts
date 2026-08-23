@@ -43,7 +43,7 @@ import {
 const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
   executeAgent: vi.fn(),
-  resumeToolUseFromResumeData: vi.fn(),
+  resumeToolUseTurn: vi.fn(),
   getExecutionStore: vi.fn(),
   getVisibleAgents: vi.fn(),
   inspectExecutionLease: vi.fn(),
@@ -76,25 +76,19 @@ vi.mock('@agent/storage', () => ({
   registerExecution: mocks.registerExecution,
 }));
 
-// The launch sites register through `registerOwnedExecution`, which calls
-// `registerExecution` module-internally; route the spy through it the same way.
+// The launch sites register through `registerExecution`; route the spy through it.
 vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
   return {
     ...actual,
-    registerOwnedExecution: async (...args: unknown[]) => {
-      await mocks.registerExecution(...args);
-      return (operation: () => unknown) => operation();
-    },
+    registerExecution: mocks.registerExecution,
   };
 });
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  captureOwnedExecutionLease:
-    (_executionId: ExecutionId) => (operation: () => unknown) =>
-      operation(),
+  assertOwnedExecutionLease: vi.fn(),
   inspectExecutionLease: mocks.inspectExecutionLease,
   markOwnedExecutionLeaseUndurable: vi.fn((executionId: ExecutionId) => {
     mocks.undurableExecutionIds.add(executionId);
@@ -412,7 +406,7 @@ describe('headless delegation', () => {
     mocks.undurableExecutionIds.clear();
     restoreAgentEngine = provideAgentEngine({
       executeAgent: mocks.executeAgent,
-      resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
+      resumeToolUseTurn: mocks.resumeToolUseTurn,
     } as unknown as AgentEngine);
     mocks.getVisibleAgents.mockReturnValue([
       {

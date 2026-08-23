@@ -17,7 +17,6 @@ import { getExecutionStore, type ResultMeta } from '@agent/storage';
 import {
   ExecutionLeaseLostError,
   runWithInactiveExecutionLease,
-  type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
@@ -379,9 +378,8 @@ async function executeInBand(
   const store = getExecutionStore(executionId);
 
   let childStreamId: StreamTabId;
-  let runWithOwnership: OwnedExecutionLeaseScope;
   try {
-    ({ childStreamId, runWithOwnership } = await registerChildExecution({
+    ({ childStreamId } = await registerChildExecution({
       executionId,
       config,
       agentName: options.agentName,
@@ -398,7 +396,7 @@ async function executeInBand(
     throw cause;
   }
   let stableCompletionCommitted = false;
-  const completed = await runWithOwnership(async () => {
+  const completed = await (async () => {
     let settledTurn: SettledInBandTurn | undefined;
     const { completion } = await startDetachedChildRunLoop({
       executionId,
@@ -593,7 +591,7 @@ async function executeInBand(
       result,
       ...(mode === 'best-effort-delivery' && { delivery: turnMessage }),
     };
-  });
+  })();
 
   // Post-run cancellation deliberately observes a terminal record: stable
   // success was committed inside the post-drain/pre-release lease boundary,

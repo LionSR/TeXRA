@@ -28,8 +28,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getExecutionStore } from './ExecutionKVStore';
 import {
   acquireFreshExecutionLease,
-  captureOwnedExecutionLease,
-  type OwnedExecutionLeaseScope,
   releaseOwnedExecutionLease,
 } from './executionLease';
 
@@ -128,74 +126,53 @@ export async function registerExecution(
     description,
   } = options;
   await acquireFreshExecutionLease(executionId);
-  const runWithOwnership = captureOwnedExecutionLease(executionId);
-  await runWithOwnership(async () => {
-    try {
-      const timestamp = new Date().toISOString();
-      const store = getExecutionStore(executionId);
-      const meta: RegisteredExecutionMeta = {
-        schemaVersion: 1,
-        timestamp,
-        streamId,
-        identity,
-        userFollowUpSupport:
-          userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-        parentExecutionId,
-        ...(description ? { description } : {}),
-      };
-      const persistedRecord = pinExecutionWorkingDirectory(record);
+  try {
+    const timestamp = new Date().toISOString();
+    const store = getExecutionStore(executionId);
+    const meta: RegisteredExecutionMeta = {
+      schemaVersion: 1,
+      timestamp,
+      streamId,
+      identity,
+      userFollowUpSupport:
+        userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      parentExecutionId,
+      ...(description ? { description } : {}),
+    };
+    const persistedRecord = pinExecutionWorkingDirectory(record);
 
-      const writes: Promise<void>[] = [
-        store.writeRunRecord(persistedRecord),
-        store.writeMeta(meta),
-      ];
-      if (parentExecutionId) {
-        writes.push(
-          getExecutionStore(parentExecutionId).writeChild(executionId, {
-            agent: agentName,
-            timestamp,
-          }),
-        );
-      }
-
-      const results = await Promise.allSettled(writes);
-      const errors = results.flatMap((result) =>
-        result.status === 'rejected' ? [result.reason] : [],
+    const writes: Promise<void>[] = [
+      store.writeRunRecord(persistedRecord),
+      store.writeMeta(meta),
+    ];
+    if (parentExecutionId) {
+      writes.push(
+        getExecutionStore(parentExecutionId).writeChild(executionId, {
+          agent: agentName,
+          timestamp,
+        }),
       );
-      throwAggregated(
-        errors,
-        `Multiple execution registration writes failed for ${executionId}`,
-      );
-    } catch (error) {
-      try {
-        await releaseOwnedExecutionLease(executionId);
-      } catch (releaseError) {
-        throw new AggregateError(
-          [error, releaseError],
-          `Execution registration and lease rollback failed for ${executionId}`,
-        );
-      }
-      throw error;
     }
-  });
-}
 
-/**
- * Register a detached child execution and capture its fresh lease as the
- * caller's ownership scope — the register → capture pair every detached
- * launch site shares, owned here so the launch failure path has one home.
- * Wrap the pre-handoff launch work in `runWithOwnedExecutionLeaseLaunchGuard`
- * (from `./executionLease`) inside the returned scope so a failed launch
- * releases the lease instead of stranding it until the stale horizon.
- */
-export async function registerOwnedExecution(
-  executionId: ExecutionId,
-  record: RunRecord,
-  agentName: string,
-  options: RegisterExecutionOptions,
-): Promise<OwnedExecutionLeaseScope> {
-  await registerExecution(executionId, record, agentName, options);
-  return captureOwnedExecutionLease(executionId);
+    const results = await Promise.allSettled(writes);
+    const errors = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
+    throwAggregated(
+      errors,
+      `Multiple execution registration writes failed for ${executionId}`,
+    );
+  } catch (error) {
+    try {
+      await releaseOwnedExecutionLease(executionId);
+    } catch (releaseError) {
+      throw new AggregateError(
+        [error, releaseError],
+        `Execution registration and lease rollback failed for ${executionId}`,
+      );
+    }
+    throw error;
+  }
 }
 
 /**

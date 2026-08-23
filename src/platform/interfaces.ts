@@ -302,7 +302,6 @@ export interface AgentDirectoriesPort {
  */
 export interface RecoveryContinuation {
   readonly streamId: StreamTabId;
-  readonly generation: number;
   readonly kind: 'recovery';
 }
 

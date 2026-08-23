@@ -10,12 +10,9 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
-import {
-  ResumeAdmissionCancelledError,
-  ResumeSessionUnavailableError,
-} from './executeAgent';
+import { ResumeSessionUnavailableError } from './executeAgent';
+import type { ExecutionRegistry } from './executionRegistry';
 import type { SessionHandle } from './SessionHandle';
-import type { StreamStatusMachine } from './StreamStatusService';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 interface ResolvedResumeState {
@@ -131,12 +128,11 @@ export async function resolveResumeStateFromSnapshots(
 
 export interface ResumeStreamPorts {
   /**
-   * The status machine of the session that owns this stream. The active/resuming
-   * guards must read the machine the run actually writes; reading the
-   * process-global default left both guards permanently false in multi-session
-   * hosts.
+   * The registry of the session that owns this stream. A resume is refused,
+   * not queued, while the stream is running or resuming in this process; the
+   * lane below only keeps admitted generations from overlapping.
    */
-  readonly streamStatus: Pick<StreamStatusMachine, 'isActiveOrResuming'>;
+  readonly executions: Pick<ExecutionRegistry, 'isActiveOrResuming'>;
   /** Monotone per-attempt cancellation signal: once true it stays true. */
   readonly isCancellationRequested?: () => boolean;
   resolveResumeState(streamId: StreamTabId): Promise<ResumeStateResolution>;
@@ -158,7 +154,15 @@ export interface ResumeStreamPorts {
   reportFailure?(streamId: StreamTabId, error: unknown): void | Promise<void>;
 }
 
-/** Attempt to resume a WAITING / children-running stream from persisted state. */
+/**
+ * Attempt to resume a WAITING / children-running stream from persisted state.
+ *
+ * The execution lane keeps the resumed generation from overlapping the one
+ * before it; admission is decided here. A stream that is already running or
+ * resuming in this process is refused, because a workflow run holds no
+ * follow-up queue consumer and a queued resume would otherwise rerun it
+ * after it finishes.
+ */
 export async function resolveAndResumeStream(
   streamId: StreamTabId,
   ports: ResumeStreamPorts,
@@ -169,10 +173,9 @@ export async function resolveAndResumeStream(
 
   if (
     isCancellationRequested() ||
-    ports.streamStatus.isActiveOrResuming(streamId)
-  ) {
+    ports.executions.isActiveOrResuming(streamId)
+  )
     return false;
-  }
 
   try {
     const resolution = await ports.resolveResumeState(streamId);
@@ -198,11 +201,9 @@ export async function resolveAndResumeStream(
       await ports.reportNoResumableSession?.(streamId);
       return false;
     }
-
-    // Re-check after the async retrieval window: `resumeInFlight` blocks only a
-    // second resume entry, not a concurrent non-resume run launch that flips
-    // this stream active/resuming while retrieval is awaited.
-    if (ports.streamStatus.isActiveOrResuming(streamId)) return false;
+    // Re-check after the retrieval await: a launch of this stream may have
+    // been admitted meanwhile, and the lane would queue, not refuse, this one.
+    if (ports.executions.isActiveOrResuming(streamId)) return false;
 
     if (resume.type === 'toolUse') {
       return await ports.resumeToolUse(resume, recovery);
@@ -219,12 +220,6 @@ export async function resolveAndResumeStream(
     return true;
   } catch (error) {
     if (isCancellationRequested()) return false;
-    // Shipped hosts that pass the lease guard share this attempt's monotone
-    // cancellation latch, so the preceding check handles their lost-admission
-    // path. Keep this fallback for a future host that supplies the lease guard
-    // without the optional cancellation port: it must still fail silently
-    // rather than toast.
-    if (error instanceof ResumeAdmissionCancelledError) return false;
     try {
       await ports.reportFailure?.(streamId, error);
     } catch {

@@ -111,11 +111,11 @@ describe('execution interaction ownership', () => {
     expect(registry.interactionOwnership.ownerOf('grandchild')).toBe(scope);
   });
 
-  it('holds the owner across the gap between a child activation and its handle', () => {
+  it('holds the owner for the whole life of a child activation', () => {
     const { registry, onRelease, scope, rootStream } = openRootScope();
     const childStream = 'child-stream' as StreamTabId;
 
-    registry.reserveChildActivation({
+    const releaseActivation = registry.reserveChildActivation({
       executionId: 'child',
       parentStreamId: rootStream,
       childStreamId: childStream,
@@ -127,12 +127,15 @@ describe('execution interaction ownership', () => {
     scope.finish();
     expect(onRelease).not.toHaveBeenCalled();
 
-    // Tracking the child's first handle promotes the reservation; the run it
-    // promoted into is what now holds the owner open.
+    // The activation holds the owner for the loop's whole life: across the
+    // child's turn handles and the gaps between them, until the loop's own
+    // disposer runs after its final delivery.
     trackRun(registry, 'child', rootStream, childStream);
     expect(onRelease).not.toHaveBeenCalled();
-
     registry.untrack('child');
+    expect(onRelease).not.toHaveBeenCalled();
+
+    releaseActivation();
     expect(onRelease).toHaveBeenCalledOnce();
   });
 

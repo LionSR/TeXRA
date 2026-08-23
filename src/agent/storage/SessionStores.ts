@@ -9,7 +9,6 @@ import {
   type DeleteExecutionResult,
   type ExecutionStreamReferenceListing,
 } from '@agent/storage/executionListing';
-import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
@@ -31,9 +30,22 @@ interface GoalEntryStore {
   forget(stream: StreamTabId): Promise<void>;
 }
 
+/** The execution-lifecycle lane a stream deletion runs on as its own step. */
+export interface ExecutionLifecycleLane {
+  runExecutionStep<T>(executionId: string, step: () => Promise<T>): Promise<T>;
+}
+
 export interface SessionStoresOptions {
   streamLogs: StreamLogStore;
   snapshots: StreamSnapshotStore;
+  /**
+   * The session's per-execution lifecycle lanes. A deletion runs as a step on
+   * the stream's execution lane, so it cannot run under a live or
+   * still-disposing generation of that execution and no generation starts
+   * until it has landed. Absent only for stores with no registry to serialize
+   * against.
+   */
+  executions?: ExecutionLifecycleLane;
   deleteExecution?: DeleteExecutionFn;
   listExecutionStreamReferences?: ListExecutionStreamReferencesFn;
   goalEntries?: GoalEntryStore;
@@ -77,6 +89,7 @@ type ExecutionDeletionOutcome =
 export class SessionStores {
   private readonly streamLogs: StreamLogStore;
   private readonly snapshots: StreamSnapshotStore;
+  private readonly executions: ExecutionLifecycleLane | undefined;
   private readonly deleteExecution: DeleteExecutionFn;
   private readonly listExecutionStreamReferences: ListExecutionStreamReferencesFn;
   private readonly goalEntries: GoalEntryStore | undefined;
@@ -108,17 +121,13 @@ export class SessionStores {
   constructor(options: SessionStoresOptions) {
     this.streamLogs = options.streamLogs;
     this.snapshots = options.snapshots;
+    this.executions = options.executions;
     this.deleteExecution = options.deleteExecution ?? deleteStoredExecution;
     this.listExecutionStreamReferences =
       options.listExecutionStreamReferences ?? listExecutionStreamReferences;
     this.goalEntries = options.goalEntries;
     this.onCanonicalStreamDeleted = options.onCanonicalStreamDeleted;
     this.onChildrenDetached = options.onChildrenDetached;
-  }
-
-  async waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void> {
-    const executionId = await this.executionIdForStream(stream);
-    if (executionId) await waitForOwnedExecutionLeaseRelease(executionId);
   }
 
   /**
@@ -160,6 +169,14 @@ export class SessionStores {
     return !!this.streamDeletionClaims.get(stream)?.size;
   }
 
+  /**
+   * Delete a stream as a lifecycle step of its execution's lane: the deletion
+   * starts once every earlier step has returned and the live generation, if
+   * any, has disposed, and no generation can start until it has landed. A
+   * stream with no execution is deleted without a lane. The lane is taken
+   * before the deletion queue, so a deletion waiting on a disposing generation
+   * does not hold up the queue's other work (`deleteAll`, the snapshot flush).
+   */
   deleteStream(
     stream: StreamTabId,
     options?: {
@@ -167,10 +184,42 @@ export class SessionStores {
       readonly expectedIncarnation?: number;
     },
   ): Promise<DeleteStreamResult> {
-    return this.trackStreamDeletion(stream, options?.expectedIncarnation, () =>
-      this.enqueueDeletion(() =>
-        this.deleteStreamAndNotify(stream, options?.shouldDelete),
-      ),
+    return this.trackStreamDeletion(
+      stream,
+      options?.expectedIncarnation,
+      async () => {
+        let executionId: ExecutionId | undefined;
+        try {
+          executionId = await this.executionIdForStream(stream);
+        } catch (error) {
+          log.warn(
+            `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
+            { data: error },
+          );
+          return 'failed';
+        }
+        const deletion = (): Promise<DeleteStreamResult> =>
+          this.enqueueDeletion(() =>
+            this.deleteStreamAndNotify(
+              stream,
+              executionId,
+              options?.shouldDelete,
+            ),
+          );
+        if (!executionId || !this.executions) return deletion();
+        try {
+          return await this.executions.runExecutionStep(executionId, deletion);
+        } catch (error) {
+          // `deleteStreamAndNotify` reports through its result, so a throw is
+          // the lane refusing the step: the session disposed, or a storage-root
+          // change holds the lifecycle.
+          log.warn(
+            `Stream ${stream} was retained because its execution lane refused the deletion: ${toErrorMessage(error)}`,
+            { data: error },
+          );
+          return 'failed';
+        }
+      },
     );
   }
 
@@ -186,38 +235,6 @@ export class SessionStores {
       await this.deleteStreamSidecars(stream);
       if (hadCanonicalStream) await this.notifyDeleted(stream);
     });
-  }
-
-  deleteStreamAfterOwnedExecutionRelease(
-    stream: StreamTabId,
-    options?: {
-      readonly shouldDelete?: () => boolean;
-      readonly expectedIncarnation?: number;
-    },
-  ): Promise<DeleteStreamResult> {
-    return this.trackStreamDeletion(
-      stream,
-      options?.expectedIncarnation,
-      async () => {
-        // Track the whole wait so a presentation attaching during terminal
-        // artifact persistence cannot replay a stream already marked removed.
-        // If the ownership read fails here, report `failed` immediately rather
-        // than enqueueing a second read that could decide the stream has no
-        // execution and delete it.
-        try {
-          await this.waitForOwnedExecutionRelease(stream);
-        } catch (error) {
-          log.warn(
-            `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
-            { data: error },
-          );
-          return 'failed';
-        }
-        return this.enqueueDeletion(() =>
-          this.deleteStreamAndNotify(stream, options?.shouldDelete),
-        );
-      },
-    );
   }
 
   private trackStreamDeletion(
@@ -241,11 +258,16 @@ export class SessionStores {
 
   private async deleteStreamAndNotify(
     stream: StreamTabId,
+    executionId: ExecutionId | undefined,
     shouldDelete?: () => boolean,
   ): Promise<DeleteStreamResult> {
     if (shouldDelete?.() === false) return 'superseded';
     const hadCanonicalStream = this.streamLogs.has(stream);
-    const result = await this.deleteStreamOnce(stream, shouldDelete);
+    const result = await this.deleteStreamOnce(
+      stream,
+      executionId,
+      shouldDelete,
+    );
     if (result === 'deleted' && hadCanonicalStream) {
       // Re-check immediately before the canonical-deleted notify: a re-claim
       // landing during the goal-forget await (inside `deleteStreamOnce`) must
@@ -336,22 +358,10 @@ export class SessionStores {
 
   private async deleteStreamOnce(
     stream: StreamTabId,
+    executionId: ExecutionId | undefined,
     shouldDelete?: () => boolean,
   ): Promise<DeleteStreamResult> {
     if (!canUseStreamDataDir(stream)) return 'deleted';
-    if (shouldDelete?.() === false) return 'superseded';
-
-    let executionId: ExecutionId | undefined;
-    try {
-      executionId = await this.executionIdForStream(stream);
-    } catch (error) {
-      log.warn(
-        `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
-        { data: error },
-      );
-      return 'failed';
-    }
-
     if (shouldDelete?.() === false) return 'superseded';
 
     if (!executionId) {

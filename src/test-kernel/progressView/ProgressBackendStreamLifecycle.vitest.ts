@@ -473,35 +473,45 @@ describe('ProgressBackend', () => {
     expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
   });
 
-  it('waits for a terminal child lease after its handle is untracked', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+  it('deletes a terminal child on its execution lane after its handle is untracked', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, session } = target;
     const stream = 'completed-background-bash' as StreamTabId;
+    const executionId = 'c40009' as ExecutionId;
     let releaseLease!: () => void;
     const leaseReleased = new Promise<void>((resolve) => {
       releaseLease = resolve;
     });
-    const waitForRelease = vi
-      .spyOn(backend.state.stores, 'waitForOwnedExecutionRelease')
-      .mockReturnValue(leaseReleased);
-    const clearStream = vi.spyOn(backend.state, 'clearStream');
+    const laneStep = vi
+      .spyOn(session.executions, 'runExecutionStep')
+      .mockImplementation(async (_executionId, step) => {
+        await leaseReleased;
+        return step();
+      });
 
     try {
       backend.state.streamLogs.ensureStream(stream);
+      emitRunConfig(
+        target,
+        stream,
+        executionId,
+        toolUseConfig('search', 'deepseekproT'),
+      );
       expect(session.executions.getAgentHandleByStream(stream)).toBeUndefined();
 
       const deletion = backend.deleteStream(stream);
       expect(backend.state.stores.hasStreamDeletionClaim(stream)).toBe(true);
       await vi.waitFor(() =>
-        expect(waitForRelease).toHaveBeenCalledWith(stream),
+        expect(laneStep).toHaveBeenCalledWith(
+          executionId,
+          expect.any(Function),
+        ),
       );
-      expect(clearStream).not.toHaveBeenCalled();
+      expect(backend.state.streamLogs.has(stream)).toBe(true);
 
       releaseLease();
       await deletion;
 
-      expect(clearStream).toHaveBeenCalledWith(stream, {
-        expectedIncarnation: 0,
-      });
       expect(backend.state.stores.hasStreamDeletionClaim(stream)).toBe(false);
       expect(backend.state.streamLogs.has(stream)).toBe(false);
     } finally {
@@ -1191,17 +1201,12 @@ describe('ProgressBackend', () => {
     vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
       {} as never,
     );
-    const waitForRelease = vi
-      .spyOn(backend.state.stores, 'waitForOwnedExecutionRelease')
-      .mockResolvedValue(undefined);
     stubClearAll(backend);
 
     await backend.deleteAllStreams();
 
     expect(lifecycle.stopStream).toHaveBeenCalledWith(first);
     expect(lifecycle.stopStream).toHaveBeenCalledWith(second);
-    expect(waitForRelease).toHaveBeenCalledWith(first);
-    expect(waitForRelease).toHaveBeenCalledWith(second);
   });
 
   it('aborts bulk cleanup when stopping an owned stream fails', async () => {
@@ -1223,16 +1228,11 @@ describe('ProgressBackend', () => {
     vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
       {} as never,
     );
-    const waitForRelease = vi.spyOn(
-      backend.state.stores,
-      'waitForOwnedExecutionRelease',
-    );
     const clearAll = vi.spyOn(backend.state, 'clearAll');
 
     await expect(backend.deleteAllStreams()).rejects.toBe(stopError);
 
     expect(lifecycle.stopStream).toHaveBeenCalledWith(stream);
-    expect(waitForRelease).not.toHaveBeenCalled();
     expect(clearAll).not.toHaveBeenCalled();
     expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
     expect(lifecycle.cleanupDeletedStreams).not.toHaveBeenCalled();
