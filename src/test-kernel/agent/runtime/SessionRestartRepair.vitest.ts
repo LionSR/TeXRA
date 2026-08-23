@@ -217,7 +217,7 @@ describe('SessionHandle restart repair', () => {
     // cause shown; Delete clears it.
     expect(session.status.get(streamId)).toBeUndefined();
     expect(session.status.holdState(streamId)).toBe(
-      streamUnreadableMessage('invalid-flow'),
+      streamUnreadableMessage('checkpoint is malformed'),
     );
     await expect(executionStore.readMeta()).resolves.toEqual(
       expect.not.objectContaining({ outcome: expect.anything() }),
@@ -279,7 +279,7 @@ describe('SessionHandle restart repair', () => {
     // transcript left open, and the cause shown as malformed (Delete clears it).
     expect(session.status.get(streamId)).toBeUndefined();
     expect(session.status.holdState(streamId)).toBe(
-      streamUnreadableMessage('invalid-meta'),
+      streamUnreadableMessage('execution metadata is malformed'),
     );
     await expect(executionStore.read('meta')).resolves.toEqual(malformedMeta);
     await expect(executionStore.read(flowKey(executionId))).resolves.toEqual(
