@@ -677,14 +677,15 @@ export class DesktopProgressBridge {
             data: toLogData(error),
           }),
       },
-      sendFollowUp: (stream, text) =>
-        submitProgressFollowUp({
+      sendFollowUp: async (stream, text) => {
+        await submitProgressFollowUp({
           session: this.session,
           streamId: stream,
           input: { text },
           acknowledge: () => {},
           showInfo: (message) => this.options.host.showInfoMessage(message),
-        }),
+        });
+      },
     });
   }
 

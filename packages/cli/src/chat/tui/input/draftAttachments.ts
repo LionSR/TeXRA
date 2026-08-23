@@ -154,12 +154,17 @@ export class DraftAttachmentStore {
    * matching Claude Code's orphan gate.
    */
   resolveMedia(input: string): string[] {
+    return this.resolveImages(input).map((entry) => entry.path);
+  }
+
+  /** Image entries whose chip survives in `input`, in chip order. */
+  resolveImages(input: string): PastedImageEntry[] {
     const present = new Set(matchChips(input).map((m) => m.id));
-    const paths: string[] = [];
+    const images: PastedImageEntry[] = [];
     for (const id of present) {
       const entry = this.entries.get(id);
-      if (entry?.kind === 'image') paths.push(entry.path);
+      if (entry?.kind === 'image') images.push(entry);
     }
-    return paths;
+    return images;
   }
 }

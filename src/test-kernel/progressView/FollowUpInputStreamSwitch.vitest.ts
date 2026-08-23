@@ -265,6 +265,7 @@ describe('follow-up-input pasted-image state across stream switches', () => {
         },
       ],
     });
-    expect(streamA.pendingImages).toEqual([]);
+    // The image draft survives the send until FOLLOW_UP_RESULT accepts it.
+    expect(streamA.pendingImages).toHaveLength(1);
   });
 });

@@ -38,9 +38,6 @@ import {
   setTransientNotice,
   streams as streamsSignal,
 } from './state/cliState';
-
-const FOLLOW_UP_NOT_ACCEPTED =
-  'No active session accepted that message; it has been restored to the input.';
 import {
   focusedChildFollowUpRoute,
   type FocusedChildFollowUpRoute,
@@ -56,6 +53,9 @@ import {
 } from './state/transcript';
 import type { ChatSessionController } from '../chatSessionController';
 import type { SkillActivation } from './forms/SkillsListForm';
+
+const FOLLOW_UP_NOT_ACCEPTED =
+  'No active session accepted that message; it has been restored to the input.';
 
 interface PreparedChatInstruction {
   readonly instruction: string;
@@ -325,13 +325,8 @@ export function createChatSubmitDriver(
         if (result.status === 'no_session' || result.status === 'dropped') {
           // The draft is the user's until admitted: hand it back before any
           // notice, so a refused send never costs a retype.
-          requestDraftRestore(line);
-          setTransientNotice(
-            mediaFiles && mediaFiles.length > 0
-              ? `${FOLLOW_UP_NOT_ACCEPTED} Pasted images were not re-attached.`
-              : FOLLOW_UP_NOT_ACCEPTED,
-            { ttlMs: Infinity },
-          );
+          requestDraftRestore(line, mediaFiles);
+          setTransientNotice(FOLLOW_UP_NOT_ACCEPTED, { ttlMs: Infinity });
           // Child stream ids are keys in parentStream; the root session id is not.
           if (followUpTarget === session.streamId) {
             session.stopRequested = true;

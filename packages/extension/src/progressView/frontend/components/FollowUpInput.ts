@@ -302,6 +302,7 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
             placeholder="Message TeXRA…"
             rows="2"
             resize="vertical"
+            ?disabled=${this.sending}
             .value=${live(this.value)}
             @input=${this.handleInput}
             @keydown=${this.handleKeydown}
