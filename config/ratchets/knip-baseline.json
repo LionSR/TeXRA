@@ -1586,18 +1586,6 @@
       "name": "ExecutionLeaseSchema"
     },
     {
-      "file": "src/agent/storage/executionLease.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "ownsExecutionLease"
-    },
-    {
-      "file": "src/agent/storage/executionLease.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resetExecutionLeaseCoordinationForTests"
-    },
-    {
       "file": "src/agent/trace/events.ts",
       "category": "production-dead",
       "kind": "types",

@@ -19,8 +19,7 @@ import type {
   ChildTurnState,
 } from '@agent/storage/ExecutionKVStore';
 import {
-  onOwnedExecutionLeaseLost,
-  captureOwnedExecutionLease,
+  assertOwnedExecutionLease,
   markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
 import {
@@ -548,12 +547,7 @@ function emitTurnDiagnostic(
       ...(turnRef
         ? { turnToken: turnRef.token, deliveryId: turnRef.deliveryId }
         : {}),
-      ...(queueOwner
-        ? {
-            queueGeneration: queueOwner.generation,
-            queueOwner: queueOwner.kind,
-          }
-        : {}),
+      ...(queueOwner ? { queueOwner: queueOwner.kind } : {}),
       ...(interruptionCause ? { interruptionCause } : {}),
     },
   });
@@ -778,9 +772,9 @@ export function startChildRunLoop<TTurn>(
   // own run trace inside `runFlowWithLifecycle`), so this is a channel-only
   // fallback for the loop's own turn-summary/warning lines.
   const logger = childStream?.logger ?? createChannelTrace('childRunLoop');
-  // The code below is synchronous until the scoped loop task is spawned, so a
-  // lost generation fails before any queue, listener, stage, or loop exists.
-  captureOwnedExecutionLease(executionId);
+  // The code below is synchronous until the loop task is spawned, so a run
+  // that does not own its lease fails before any queue, stage, or loop exists.
+  assertOwnedExecutionLease(executionId);
   const runSession = currentSession();
   // Parent delivery belongs to the continuation generation under which this
   // producer started. A terminal retry may reuse the same stream ID, but late
@@ -792,19 +786,20 @@ export function startChildRunLoop<TTurn>(
     childStreamId,
     strategy.ownsBackgroundProcess === true,
   );
+  // The parent counts this child as active from here until the final delivery
+  // below has landed, whatever turn handles come and go in between: a child
+  // result can therefore never reach a parent whose queue already went terminal.
   let activationDetached = false;
-  const releaseChildActivation = childStream
-    ? () => undefined
-    : runSession.executions.reserveChildActivation({
-        executionId,
-        parentStreamId,
-        childStreamId,
-        interrupt: () => loop.interrupt(),
-        detach: () => {
-          activationDetached = true;
-        },
-        isDetached: () => activationDetached,
-      });
+  const releaseChildActivation = runSession.executions.reserveChildActivation({
+    executionId,
+    parentStreamId,
+    childStreamId,
+    interrupt: () => loop.interrupt(),
+    detach: () => {
+      activationDetached = true;
+    },
+    isDetached: () => activationDetached,
+  });
   let sessionOwnershipReleased = false;
   const releaseSessionOwnershipOnce = (): void => {
     if (sessionOwnershipReleased) return;
@@ -812,7 +807,6 @@ export function startChildRunLoop<TTurn>(
     strategy.releaseSessionOwnership?.();
   };
 
-  let stopWatchingLease: (() => void) | undefined;
   let queue!: FollowUpQueue;
   let queueLease: FollowUpConsumerLease | undefined;
   let attachedHandle: AgentExecutionHandle | undefined;
@@ -828,15 +822,9 @@ export function startChildRunLoop<TTurn>(
 
   try {
     strategy.onLoopStart?.(runSession);
-    stopWatchingLease = onOwnedExecutionLeaseLost(executionId, () => {
-      logger.error('Execution lease was lost; interrupting the former owner', {
-        data: { executionId, childStreamId },
-      });
-      loop.interrupt();
-    });
     // Revalidate at the state transition itself: setup hooks above may run
     // arbitrary synchronous code after the early fail-fast lease check.
-    captureOwnedExecutionLease(executionId);
+    assertOwnedExecutionLease(executionId);
     queueLease = runSession.followUps.claimChildRun(childStreamId, executionId);
     if (!queueLease) {
       throw new Error(
@@ -864,7 +852,6 @@ export function startChildRunLoop<TTurn>(
     cleanup(() => {
       if (queueLease) runSession.followUps.release(queueLease, 'terminal');
     });
-    cleanup(() => stopWatchingLease?.());
     cleanup(releaseChildActivation);
     cleanup(releaseSessionOwnershipOnce);
     // The primary error always heads the list, so a single throw covers both
@@ -1215,7 +1202,6 @@ export function startChildRunLoop<TTurn>(
           });
           releaseFailure = error;
         } finally {
-          stopWatchingLease?.();
           releaseChildActivation();
         }
       }
@@ -1224,13 +1210,10 @@ export function startChildRunLoop<TTurn>(
     // threw: the lease drain failure is then the run's failure.
     if (releaseFailure !== undefined) throw releaseFailure;
   };
-  try {
-    const completion = Promise.resolve(
-      captureOwnedExecutionLease(executionId)(run),
-    );
-    return { completion };
-  } catch (error) {
-    releaseChildActivation();
-    throw error;
-  }
+  // The loop is this execution's generation: it starts on the execution's
+  // lane once any earlier generation of the id has disposed, and later steps
+  // (a resume, a delete) wait for its completion.
+  return {
+    completion: runSession.executions.launchExecution(executionId, run),
+  };
 }

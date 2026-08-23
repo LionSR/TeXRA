@@ -49,9 +49,7 @@ vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({
 vi.mock('@agent/storage/executionLease', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/executionLease')>()),
   acquireResumedExecutionLease: launchMocks.acquireResumedExecutionLease,
-  captureOwnedExecutionLease:
-    (_executionId: ExecutionId) => (operation: () => unknown) =>
-      operation(),
+  assertOwnedExecutionLease: vi.fn(),
   releaseOwnedExecutionLeaseAfterFailure:
     launchMocks.releaseOwnedExecutionLeaseAfterFailure,
 }));
@@ -457,7 +455,6 @@ describe('completedRunArchive facade', () => {
     try {
       await expect(
         resolveAndResumeStream(streamId, {
-          streamStatus: session.status,
           resolveResumeState,
           resumeToolUse: async (resume) => {
             await resumeToolUseFromResumeData(resume, { session });

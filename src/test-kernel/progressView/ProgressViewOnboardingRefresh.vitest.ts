@@ -90,7 +90,7 @@ function createProgressViewProvider(): ProgressViewProviderFake {
     streamLogs: new Map<StreamTabId, unknown>(),
     snapshots,
     pickValidActiveStream: vi.fn(() => ''),
-    waitForOwnedExecutionRelease: vi.fn(async () => undefined),
+    waitForExecutionQuiescence: vi.fn(async () => undefined),
   };
   return {
     state,

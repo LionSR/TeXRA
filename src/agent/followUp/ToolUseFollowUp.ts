@@ -45,8 +45,9 @@ export interface SubmitFollowUpOptions {
   readonly session?: SessionHandle;
   readonly resumePort?: Pick<AgentResumePort, 'tryResumeStream'>;
   /**
-   * Notifications never revive a persisted cursor. Child delivery may revive
-   * only a recoverable queue retained while that child was active.
+   * Notifications never revive a persisted cursor. A child delivery is an
+   * ordinary continuation: its parent counts the child as active until the
+   * delivery has landed, so it always finds a live or recoverable queue.
    */
   readonly mode?: 'continuation' | 'live_notification' | 'child_delivery';
   /** Reject a detached producer if its originating continuation was replaced. */
@@ -185,27 +186,28 @@ export function notifyFollowUpSent(
   });
 }
 
-/**
- * Submit visible input or an automatic notification through the stream's sole
- * continuation boundary. Routing, enqueue, live-owner detection, and persisted
- * recovery admission are serialized by the session-owned per-stream lock;
- * callers never perform a separate wake. A resumed model turn completes after
- * that lock is released, so it cannot block later input from joining its queue.
- */
 interface PendingResume {
   readonly resume: Promise<boolean>;
   readonly recovery: FollowUpRecoveryLease;
   readonly reason: ToolUseFollowUpQueueReason;
 }
 
-async function submitFollowUpSerialized(
+/**
+ * Route and admit one submission. Synchronous from the registry snapshot to
+ * the enqueue: two submissions to one stream cannot interleave between the
+ * target lookup and the admission, which is what keeps the recovery claim
+ * single-owner without a per-stream lock. Only the generation restore above
+ * reads disk, and it runs before the snapshot is taken. A resumed model turn
+ * completes after this returns, so it cannot block later input from joining
+ * its queue.
+ */
+function admitFollowUp(
   streamId: StreamTabId,
-  followUp: FollowUpQueueInput | string,
+  item: FollowUpQueueInput,
   options: SubmitFollowUpOptions,
   ownerSession: SessionHandle,
-): Promise<SubmitFollowUpResult | PendingResume> {
+): SubmitFollowUpResult | PendingResume {
   const target = ownerSession.executions.getToolUseFollowUpTarget(streamId);
-  const item = typeof followUp === 'string' ? { text: followUp } : followUp;
 
   if (target.kind === 'active') {
     // A child loop remains the owner during active inner turns, so input joins
@@ -243,30 +245,16 @@ async function submitFollowUpSerialized(
     return { status: 'sent' };
   }
 
-  if (target.kind === 'no_session' && options.mode !== 'child_delivery') {
+  if (target.kind === 'no_session') {
     logger.warn(
       `No active session for follow-up on stream ${streamId}. Status: ${target.streamStatus}`,
     );
     return { status: 'no_session', streamStatus: target.streamStatus };
   }
 
-  const reason = target.kind === 'queue' ? target.reason : 'children_running';
-  let admission: 'live_owner' | 'recoverable' | 'existing_recoverable' =
-    'recoverable';
-  if (options.mode === 'live_notification') {
-    admission = 'live_owner';
-  } else if (target.kind === 'no_session') {
-    admission = 'existing_recoverable';
-  }
-  if (
-    admission === 'recoverable' &&
-    options.expectedGenerationId !== undefined &&
-    ownerSession.followUps.currentGenerationId(streamId) !==
-      options.expectedGenerationId
-  ) {
-    const restored = await restorePersistedGeneration(streamId, ownerSession);
-    if (!restored) return { status: 'dropped' };
-  }
+  const reason = target.reason;
+  const admission =
+    options.mode === 'live_notification' ? 'live_owner' : 'recoverable';
   const submission = ownerSession.followUps.submit(
     streamId,
     item,
@@ -301,10 +289,7 @@ export async function submitFollowUp(
   options: SubmitFollowUpOptions = {},
 ): Promise<SubmitFollowUpResult> {
   const ownerSession = options.session ?? currentSession();
-  const dispatch = await ownerSession.followUps.runSubmissionExclusive(
-    streamId,
-    () => submitFollowUpSerialized(streamId, followUp, options, ownerSession),
-  );
+  const item = typeof followUp === 'string' ? { text: followUp } : followUp;
   // A host callback must not be able to strand the recovery lease below:
   // its failure is the host's to log, never this boundary's to propagate.
   const notifyAdmitted = (admitted: boolean): void => {
@@ -316,6 +301,23 @@ export async function submitFollowUp(
       });
     }
   };
+  // A detached producer bound to a generation the session no longer holds in
+  // memory (a persisted inquiry answered after a host restart) is checked
+  // against the flow record on disk before a recovery admission; the check
+  // is idempotent, so concurrent submissions restoring one record agree.
+  if (
+    options.expectedGenerationId !== undefined &&
+    options.mode !== 'live_notification' &&
+    ownerSession.followUps.currentGenerationId(streamId) !==
+      options.expectedGenerationId &&
+    ownerSession.executions.getToolUseFollowUpTarget(streamId).kind ===
+      'queue' &&
+    !(await restorePersistedGeneration(streamId, ownerSession))
+  ) {
+    notifyAdmitted(false);
+    return { status: 'dropped' };
+  }
+  const dispatch = admitFollowUp(streamId, item, options, ownerSession);
   if (!('resume' in dispatch)) {
     notifyAdmitted(
       dispatch.status !== 'no_session' && dispatch.status !== 'dropped',

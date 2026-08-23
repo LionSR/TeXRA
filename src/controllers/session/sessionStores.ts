@@ -19,6 +19,7 @@ export function createSessionStores(session: SessionHandle): SessionStores {
   return new SessionStores({
     streamLogs: session.transcripts,
     snapshots: session.snapshots,
+    executions: session.executions,
     goalEntries: {
       forget: (stream) => GoalStore.forget(stream, session),
     },

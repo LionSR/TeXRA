@@ -455,7 +455,6 @@ describe('CLI platform init', () => {
         });
     });
     const pendingResume = resolveAndResumeStream(streamId, {
-      streamStatus: { isActiveOrResuming: () => false },
       resolveResumeState: () => pendingResumeState,
       resumeToolUse: vi.fn(async () => false),
       executeWorkflow: vi.fn(async () => {}),

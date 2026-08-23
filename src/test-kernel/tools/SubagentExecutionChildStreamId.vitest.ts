@@ -45,24 +45,18 @@ vi.mock('@agent/storage', () => ({
   registerExecution: mocks.registerExecution,
 }));
 
-// `executeSubagent` registers through `registerOwnedExecution`, which calls
-// `registerExecution` module-internally; route the spy through it the same way.
+// `executeSubagent` registers through `registerExecution`; route the spy through it.
 vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
   return {
     ...actual,
-    registerOwnedExecution: async (...args: unknown[]) => {
-      await mocks.registerExecution(...args);
-      return (operation: () => unknown) => operation();
-    },
+    registerExecution: mocks.registerExecution,
   };
 });
 
 vi.mock('@agent/storage/executionLease', () => ({
-  captureOwnedExecutionLease:
-    (_executionId: string) => (operation: () => unknown) =>
-      operation(),
+  assertOwnedExecutionLease: vi.fn(),
   runWithOwnedExecutionLeaseLaunchGuard: (
     _executionId: string,
     operation: () => unknown,

@@ -15,18 +15,9 @@ import {
   type ResumeStreamPorts,
 } from '@agent/runtime/resolveAndResumeStream';
 import { ResumeSessionUnavailableError } from '@agent/runtime/executeAgent';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import {
-  STREAM_PHASE,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
-import {
-  clearStreamStatusForTest,
-  seedStreamStatusForTest,
-} from '@test/support/streamStatusTestUtils';
+import { type ExecutionId, type StreamTabId } from '@shared/schemas';
+import { clearStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
@@ -44,7 +35,6 @@ function basePorts(
   overrides: Partial<ResumeStreamPorts> = {},
 ): ResumeStreamPorts {
   return {
-    streamStatus: defaultSession().status,
     resolveResumeState: vi.fn(async () => RESOLVED_STATE),
     resumeToolUse: vi.fn(async () => true),
     executeWorkflow: vi.fn(async () => {}),
@@ -159,34 +149,6 @@ describe('resolveAndResumeStream', () => {
     );
   });
 
-  it('abandons resume when the stream becomes active during retrieval', async () => {
-    // A concurrent non-resume run flips the stream active while we await KV.
-    // `resumeInFlight` (held here) cannot catch that, so the post-retrieval
-    // re-check must bail before touching the resume ports.
-    retrieveSessionResumeDataMock.mockImplementation(async () => {
-      seedStreamStatusForTest(defaultSession().status, STREAM, {
-        phase: STREAM_PHASE.RUNNING,
-      });
-      return createToolUseResumeData({ streamId: STREAM });
-    });
-    const ports = basePorts();
-
-    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
-    expect(ports.resumeToolUse).not.toHaveBeenCalled();
-    expect(ports.executeWorkflow).not.toHaveBeenCalled();
-  });
-
-  it('skips resume without resolving when the stream is already active', async () => {
-    seedStreamStatusForTest(defaultSession().status, STREAM, {
-      phase: STREAM_PHASE.RUNNING,
-    });
-    const ports = basePorts();
-
-    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
-    expect(ports.resolveResumeState).not.toHaveBeenCalled();
-    expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
-  });
-
   it('skips resume when cancellation was already requested', async () => {
     const ports = basePorts({ isCancellationRequested: () => true });
 
@@ -224,39 +186,6 @@ describe('resolveAndResumeStream', () => {
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
     expect(ports.resumeToolUse).not.toHaveBeenCalled();
     expect(ports.executeWorkflow).not.toHaveBeenCalled();
-  });
-
-  it('guards against the injected session machine, not the process default (#7640)', async () => {
-    // Desktop scenario: the window's own session machine has the stream
-    // active while the process-global default is empty. The guard must read
-    // the injected machine — before #7640 it read the global and never fired.
-    const windowStatus = new StreamStatusMachine(new SessionEventHub());
-    seedStreamStatusForTest(windowStatus, STREAM, {
-      phase: STREAM_PHASE.RUNNING,
-    });
-    const ports = basePorts({ streamStatus: windowStatus });
-
-    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
-    expect(ports.resolveResumeState).not.toHaveBeenCalled();
-
-    clearStreamStatusForTest(windowStatus, STREAM);
-  });
-
-  it('ignores activity recorded only on a different session machine', async () => {
-    // The inverse: activity on the process default must not block a resume in
-    // a session whose own machine says the stream is idle.
-    seedStreamStatusForTest(defaultSession().status, STREAM, {
-      phase: STREAM_PHASE.RUNNING,
-    });
-    retrieveSessionResumeDataMock.mockResolvedValue(
-      createToolUseResumeData({ streamId: STREAM }),
-    );
-    const ports = basePorts({
-      streamStatus: new StreamStatusMachine(new SessionEventHub()),
-    });
-
-    await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(true);
-    expect(ports.resumeToolUse).toHaveBeenCalled();
   });
 
   it('reports a persisted-state read failure separately from missing resume data', async () => {

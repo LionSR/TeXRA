@@ -67,27 +67,11 @@ async function resumeDesktopStream(
     (event) => event.streamId === streamId,
   );
   let transcriptMissing = false;
-  let authoritativeStreamMissing = false;
   const isResumeInvalidated = (): boolean => {
     if (!transcriptMissing && !context.session.transcripts.has(streamId)) {
       transcriptMissing = true;
     }
-    return (
-      context.isCancellationRequested() ||
-      transcriptMissing ||
-      authoritativeStreamMissing
-    );
-  };
-  // Desktop-only durable multi-window resume fence: extension/CLI must not copy
-  // it because their resume admission is owned by one in-process transcript
-  // store, while desktop must fence stream identity across windows/processes.
-  const canAcquireResumeLease = async (): Promise<boolean> => {
-    if (isResumeInvalidated()) return false;
-    if (!(await context.session.transcripts.hasAuthoritativeStream(streamId))) {
-      authoritativeStreamMissing = true;
-      return false;
-    }
-    return !isResumeInvalidated();
+    return context.isCancellationRequested() || transcriptMissing;
   };
   const reportUnhandledFailure = (id: StreamTabId, error: unknown): void => {
     context.logger.error(`Failed to resume desktop stream ${id}`, {
@@ -104,7 +88,6 @@ async function resumeDesktopStream(
   return resolveAndResumeStream(
     streamId,
     {
-      streamStatus: context.session.status,
       resolveResumeState: (id) =>
         resolveResumeStateFromSnapshots(context.session.snapshots, id),
       reportResumeStateResolution: async (id, resolution) => {
@@ -128,7 +111,6 @@ async function resumeDesktopStream(
           session: context.session,
           recovery: claimedRecovery,
           runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
-          canAcquireResumeLease,
           isCancellationRequested: isResumeInvalidated,
           onError: (error) => reportUnhandledFailure(streamId, error),
         });
@@ -136,7 +118,7 @@ async function resumeDesktopStream(
       executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
         launchDesktopAgent(
           { kind: 'resume', config, executionId },
-          { session: context.session, canAcquireResumeLease },
+          { session: context.session },
           { modelHandlerCompatibilityKey, suppressErrorNotification: true },
         ),
       reportNoResumableSession: () =>

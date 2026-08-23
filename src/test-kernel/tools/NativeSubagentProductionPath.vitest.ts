@@ -30,9 +30,9 @@ import {
 } from '@agent/storage';
 import { clearInlineAgents } from '@agent/index/agentRegistry';
 import {
-  captureOwnedExecutionLease,
+  assertOwnedExecutionLease,
+  ownsExecutionLease,
   releaseOwnedExecutionLease,
-  waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
@@ -223,13 +223,24 @@ async function waitForCompletedResumes(count: number): Promise<void> {
   });
 }
 
+type ParentOwnerRunner = <T>(operation: () => T) => T;
+
+/**
+ * Wait for the child's lease release. The loop's lane stays held past that
+ * point while its final delivery wakes the parent, so the lease, not the
+ * lane, is the durable boundary these assertions read against.
+ */
+function waitForLeaseRelease(executionId: ExecutionId): Promise<void> {
+  return vi.waitFor(() => expect(ownsExecutionLease(executionId)).toBe(false));
+}
+
 /**
  * Queue the second-assertion follow-up onto a WAITING child through the real
  * DelegateAgentTool path, asserting the queue accepted it.
  */
 async function queueSecondAssertionFollowUp(
   parentContext: ReturnType<typeof createRunContext>,
-  runAsParentOwner: ReturnType<typeof captureOwnedExecutionLease>,
+  runAsParentOwner: ParentOwnerRunner,
   executionId: ExecutionId,
   instruction = 'Now prove the second assertion.',
 ) {
@@ -261,7 +272,7 @@ async function launchWaitingChild(options: {
 }): Promise<{
   readonly executionId: ExecutionId;
   readonly parentContext: ReturnType<typeof createRunContext>;
-  readonly runAsParentOwner: ReturnType<typeof captureOwnedExecutionLease>;
+  readonly runAsParentOwner: ParentOwnerRunner;
   readonly observedFollowUps: ObservedFollowUp[];
 }> {
   const observedFollowUps: ObservedFollowUp[] = [];
@@ -308,7 +319,10 @@ async function launchWaitingChild(options: {
     modelCell: new ModelCell({} as never, PARENT_MODEL),
     session,
   });
-  const runAsParentOwner = captureOwnedExecutionLease(PARENT_EXECUTION_ID);
+  const runAsParentOwner: ParentOwnerRunner = (operation) => {
+    assertOwnedExecutionLease(PARENT_EXECUTION_ID);
+    return operation();
+  };
   const launch = await runAsParentOwner(() =>
     withRunContext(parentContext, () =>
       executeSubagent(
@@ -352,7 +366,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
   afterEach(async () => {
     interruptActiveExecutions(session);
-    if (childId) await waitForOwnedExecutionLeaseRelease(childId);
+    if (childId) await waitForLeaseRelease(childId);
     await releaseOwnedExecutionLease(PARENT_EXECUTION_ID);
     session.dispose();
     clearInlineAgents();
@@ -666,10 +680,12 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       result: { response: 'Result A.' },
     });
 
-    // Interrupt turn 2 before it persists any result.
-    interruptActiveExecutions(session);
+    // Stop the child before turn 2 persists any result. The registry stop
+    // reaches the loop as well as the turn, so the turn is interrupted rather
+    // than delivered as a cancelled completion.
+    expect(session.executions.kill(executionId)).toBe(true);
     releaseTurn2(new Error('interrupted before result persistence'));
-    await waitForOwnedExecutionLeaseRelease(executionId);
+    await waitForLeaseRelease(executionId);
 
     // Turn 1 stays the latest completed turn; turn 2 remains on record as
     // the interrupted active turn instead of turn 1 posing as current.

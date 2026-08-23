@@ -13,8 +13,6 @@ import {
 
 export interface DesktopAgentLaunchContext {
   readonly session: SessionHandle;
-  /** Resume-only canonical admission checked under the execution lease lock. */
-  readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
 }
 
 export type DesktopAgentLaunchOptions = Pick<
@@ -42,9 +40,6 @@ export async function launchDesktopAgent(
     ...(options.preferHelperModel && { preferHelperModel: true }),
     onRun: options.onRun,
     suppressErrorNotification: options.suppressErrorNotification,
-    ...(context.canAcquireResumeLease && {
-      canAcquireResumeLease: context.canAcquireResumeLease,
-    }),
     openWorkflowOutput: async (result) => {
       const output = selectAutoOpenFinalOutput(result);
       if (!output) return;

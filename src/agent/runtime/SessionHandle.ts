@@ -37,11 +37,9 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   abandonOwnedExecutionLease,
-  captureOwnedExecutionLeaseIfPresent,
   completeOwnedExecutionLease,
   isOwnedExecutionLeaseDurable,
-  type OwnedExecutionLeaseScope,
-  runWithOwnedExecutionLeaseQuiescence,
+  ownsExecutionLease,
   validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { finalizeExecution } from '@agent/storage/executionLifecycle';
@@ -131,6 +129,19 @@ export interface WorkspaceStorageTransitionHooks {
   afterStorageCommit(): Promise<void>;
   afterStorageRollback(): void;
   afterStorageFinalize(): void;
+}
+
+/**
+ * A storage-root change was refused because executions are live in this
+ * session. Nothing was changed; the caller retries once they have finished.
+ */
+export class StorageRootChangeRefusedError extends Error {
+  constructor(readonly liveExecutionIds: readonly string[]) {
+    super(
+      `TeXRA cannot change its storage location while ${liveExecutionIds.length} ${liveExecutionIds.length === 1 ? 'run is' : 'runs are'} live in this window. Stop or finish them, then retry the workspace change.`,
+    );
+    this.name = 'StorageRootChangeRefusedError';
+  }
 }
 
 export class SessionHandle {
@@ -363,13 +374,20 @@ export class SessionHandle {
     try {
       if (this.restartRepairAbort.signal.aborted) return false;
       if (reloadTranscripts) {
-        return await runWithOwnedExecutionLeaseQuiescence(async () => {
-          if (this.restartRepairAbort.signal.aborted) return false;
-          return this.replaceStoresAfterStorageRootChange(
+        // A storage-root change is refused, not queued, while any execution
+        // is live: a run writes under the root it was claimed in, so the two
+        // may not overlap. The hold also refuses launches for the duration.
+        const releaseHold = this.executions.holdLifecycle(
+          (live) => new StorageRootChangeRefusedError(live),
+        );
+        try {
+          return await this.replaceStoresAfterStorageRootChange(
             generation,
             transitionHooks,
           );
-        });
+        } finally {
+          releaseHold();
+        }
       }
       if (generation !== this.storageGeneration) return false;
       await this.snapshots.preload([...this.computeStartupSeedSet()]);
@@ -941,43 +959,30 @@ export async function settleLiveSessionExecutions(
       );
       continue;
     }
-    let runWithOwnership: OwnedExecutionLeaseScope | undefined;
+    // Skips both a run whose driver already settled it and one this process
+    // never owned (an adopted or foreign execution).
+    if (!ownsExecutionLease(executionId)) continue;
     try {
-      // Skips both a run whose driver already settled it and one this
-      // process never owned (an adopted or foreign execution).
-      runWithOwnership = captureOwnedExecutionLeaseIfPresent(executionId);
-    } catch (error) {
-      // Ownership moved between the registry read and this turn — a release
-      // in flight, or a later generation of the same id. Nothing to settle.
-      logger.debug(
-        `Execution ${executionId} is no longer settleable at host exit: ${String(error)}`,
-      );
-      continue;
-    }
-    if (!runWithOwnership) continue;
-    try {
-      await runWithOwnership(() =>
-        session.releaseExecutionLease(executionId, async () => {
-          const finalization = await finalizeExecution({
-            executionId,
-            outcome: RUN_OUTCOME.CANCELLED,
-            flowRecord: 'preserve',
-            // A driver that reached its own terminal write between the
-            // registry read above and this one owns the result: this drain
-            // records what the exit interrupted, never what already finished.
-            keepExistingOutcome: true,
-          });
-          if (finalization.status === 'failed') {
-            // Rejecting here is what keeps the lease record: an execution
-            // whose terminal outcome never reached disk must not look
-            // settled to the next launch.
-            throw new Error(
-              `Failed to persist the CANCELLED outcome for execution ${executionId}`,
-              { cause: finalization.error },
-            );
-          }
-        }),
-      );
+      await session.releaseExecutionLease(executionId, async () => {
+        const finalization = await finalizeExecution({
+          executionId,
+          outcome: RUN_OUTCOME.CANCELLED,
+          flowRecord: 'preserve',
+          // A driver that reached its own terminal write between the
+          // registry read above and this one owns the result: this drain
+          // records what the exit interrupted, never what already finished.
+          keepExistingOutcome: true,
+        });
+        if (finalization.status === 'failed') {
+          // Rejecting here is what keeps the lease record: an execution
+          // whose terminal outcome never reached disk must not look
+          // settled to the next launch.
+          throw new Error(
+            `Failed to persist the CANCELLED outcome for execution ${executionId}`,
+            { cause: finalization.error },
+          );
+        }
+      });
     } catch (error) {
       logger.warn(
         `Failed to settle execution ${executionId} at host exit; its record is repaired on a later launch`,

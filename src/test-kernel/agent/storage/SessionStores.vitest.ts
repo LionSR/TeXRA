@@ -223,13 +223,13 @@ describe('SessionStores deletion coordination', () => {
       const leaseReleased = new Promise<void>((resolve) => {
         releaseLease = resolve;
       });
-      vi.spyOn(stores, 'waitForOwnedExecutionRelease').mockReturnValue(
+      vi.spyOn(stores, 'waitForExecutionQuiescence').mockReturnValue(
         leaseReleased,
       );
       const flush = vi.spyOn(snapshots, 'flush');
 
       try {
-        const deletion = stores.deleteStreamAfterOwnedExecutionRelease(stream);
+        const deletion = stores.deleteStreamAfterExecutionQuiescence(stream);
         const drain = stores.waitForPendingStreamDeletions();
         let drainFinished = false;
         void drain.then(() => {
@@ -263,13 +263,13 @@ describe('SessionStores deletion coordination', () => {
       const leaseReleased = new Promise<void>((resolve) => {
         releaseLease = resolve;
       });
-      vi.spyOn(stores, 'waitForOwnedExecutionRelease').mockReturnValue(
+      vi.spyOn(stores, 'waitForExecutionQuiescence').mockReturnValue(
         leaseReleased,
       );
       const deleteTranscript = vi.spyOn(session.transcripts, 'delete');
 
       try {
-        const processDeletion = stores.deleteStreamAfterOwnedExecutionRelease(
+        const processDeletion = stores.deleteStreamAfterExecutionQuiescence(
           stream,
           {
             shouldDelete: () => true,

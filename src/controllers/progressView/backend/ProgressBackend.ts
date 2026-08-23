@@ -574,10 +574,10 @@ export class ProgressBackend {
 
   /**
    * Per-stream prepare shared by single- and all-delete: stop an in-flight
-   * stream we own locally, then wait for the execution-lease release. The
-   * `waitForOwnedExecutionRelease` no-ops for streams with no owned execution,
-   * so the all-delete path can run it over every stream without changing
-   * behavior.
+   * stream we own locally, then take a step on its execution lane so the
+   * deletion lands after the stopped generation has disposed. The wait no-ops
+   * for streams with no execution, so the all-delete path can run it over
+   * every stream without changing behavior.
    */
   private async prepareStreamDeletionCore(
     stream: StreamTabId,
@@ -592,7 +592,7 @@ export class ProgressBackend {
     // execution lease. Auto-close can land in that interval, so the handle is
     // not a reliable indication that local durable writes have finished.
     try {
-      await this.state.stores.waitForOwnedExecutionRelease(stream);
+      await this.state.stores.waitForExecutionQuiescence(stream);
       return false;
     } catch (error) {
       log.warn(

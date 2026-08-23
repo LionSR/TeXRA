@@ -332,10 +332,6 @@ export class StreamStatusMachine {
     return values;
   }
 
-  isActiveOrResuming(stream: StreamTabId): boolean {
-    return isActivePhase(this.get(stream));
-  }
-
   isInFlight(stream: StreamTabId): boolean {
     return isInFlightPhase(this.get(stream));
   }
