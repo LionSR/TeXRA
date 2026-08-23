@@ -106,23 +106,32 @@ const ModelSchema = NonEmptyStringSchema.refine(isCliSupportedModelId, {
 const OutputFormatSchema = z.enum(CLI_OUTPUT_FORMATS);
 
 type CliScalarConfigKey = 'agent' | 'model' | 'outputFormat' | 'approvalPolicy';
+type CliScalarFields = Required<Pick<CliConfigValues, CliScalarConfigKey>>;
+type CliRequiredCommandConfig = Required<CliCommandConfig>;
+
+/** One `[key, schema]` pair whose schema output matches `T`'s type for that
+ *  same key — so a transposed pair (e.g. `model`'s key with an output-format
+ *  schema) is a compile error at the declaration below, not just a runtime
+ *  mismatch caught by `parseOptional`. */
+type FieldSchemaEntry<T> = {
+  [K in keyof T]-?: readonly [K, z.ZodType<T[K]>];
+}[keyof T];
 
 /** Single source of truth for the top-level scalar fields: both value-picking
  *  (`pickConfigValues`) and warning-collection walk this same list, instead of
  *  each re-declaring the field/schema pairing by hand. */
-const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<
-  readonly [CliScalarConfigKey, z.ZodType]
-> = [
-  ['agent', NonEmptyStringSchema],
-  ['model', ModelSchema],
-  ['outputFormat', OutputFormatSchema],
-  ['approvalPolicy', TexraApprovalPolicySchema],
-];
+const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<FieldSchemaEntry<CliScalarFields>> =
+  [
+    ['agent', NonEmptyStringSchema],
+    ['model', ModelSchema],
+    ['outputFormat', OutputFormatSchema],
+    ['approvalPolicy', TexraApprovalPolicySchema],
+  ];
 
 /** Same role as {@link TOP_LEVEL_FIELD_SCHEMAS}, for the `chat`/`run` command
  *  sections — shared by `pickCommandConfig` and warning-collection. */
 const COMMAND_FIELD_SCHEMAS: ReadonlyArray<
-  readonly [keyof CliCommandConfig, z.ZodType]
+  FieldSchemaEntry<CliRequiredCommandConfig>
 > = [
   ['agent', NonEmptyStringSchema],
   ['model', ModelSchema],
@@ -205,26 +214,29 @@ function parseOptional<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
 
 /** Picks every `[key, schema]` pair present and valid in `record`, reading
  *  each field under `keyFor(key)` (the raw key for command sections, the
- *  canonical `texra.*` key at the top level). */
-function pickFields<K extends string>(
+ *  canonical `texra.*` key at the top level). `fields`' declaration site is
+ *  checked against `T` (see {@link FieldSchemaEntry}); only this loop body —
+ *  not the caller — needs to assert the per-iteration correlation back to a
+ *  specific `K`. */
+function pickFields<T extends object>(
   record: Record<string, unknown>,
-  fields: ReadonlyArray<readonly [K, z.ZodType]>,
-  keyFor: (key: K) => string,
-): Partial<Record<K, unknown>> {
-  const picked: Partial<Record<K, unknown>> = {};
+  fields: ReadonlyArray<FieldSchemaEntry<T>>,
+  keyFor: (key: keyof T) => string,
+): Partial<T> {
+  const picked: Partial<T> = {};
   for (const [key, schema] of fields) {
     const value = parseOptional(schema, record[keyFor(key)]);
-    if (value !== undefined) picked[key] = value;
+    if (value !== undefined) picked[key] = value as T[typeof key];
   }
   return picked;
 }
 
 function pickCommandConfig(record: Record<string, unknown>): CliCommandConfig {
-  return pickFields(
+  return pickFields<CliRequiredCommandConfig>(
     record,
     COMMAND_FIELD_SCHEMAS,
     (key) => key,
-  ) as CliCommandConfig;
+  );
 }
 
 function pickRecord(
@@ -239,11 +251,7 @@ function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
   const chat = pickRecord(record, 'chat');
   const run = pickRecord(record, 'run');
   return {
-    ...(pickFields(
-      record,
-      TOP_LEVEL_FIELD_SCHEMAS,
-      canonicalConfigKey,
-    ) as Partial<CliConfigValues>),
+    ...pickFields<CliScalarFields>(record, TOP_LEVEL_FIELD_SCHEMAS, canonicalConfigKey),
     chat: chat ? pickCommandConfig(chat) : undefined,
     run: run ? pickCommandConfig(run) : undefined,
   };
