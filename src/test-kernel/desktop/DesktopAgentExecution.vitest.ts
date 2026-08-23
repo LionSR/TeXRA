@@ -112,11 +112,6 @@ type TestableBridge = {
   ): boolean | Promise<boolean>;
   syncFullView(): void;
   completeWebviewReady(): Promise<void>;
-  sendFollowUp(
-    streamId: StreamTabId,
-    text: string,
-    mediaFiles?: readonly string[],
-  ): Promise<void>;
   setActiveStream(streamId: StreamTabId): void;
   revealStream(streamId: StreamTabId): Promise<'revealed' | 'missing'>;
   progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
@@ -649,9 +644,16 @@ describe('desktop follow-up submission', () => {
       },
     });
 
-    await expect(bridge.sendFollowUp(streamId, 'continue')).resolves.toBe(
-      undefined,
+    const sendFollowUp = assertSupported(
+      bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP],
     );
+    await expect(
+      sendFollowUp({
+        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+        stream: streamId,
+        text: 'continue',
+      }),
+    ).resolves.toBe(undefined);
     expect(bridgeFollowUps(bridge).getAll(streamId)).toEqual(['continue']);
 
     finishResumeLookup(null);

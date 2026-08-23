@@ -81,6 +81,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
             .value=${currentState.ui.followUpText}
             .queuedMessages=${currentState.queuedFollowUps}
             .shouldFocus=${currentState.ui.shouldFocusFollowUp}
+            .sending=${currentState.ui.followUpSending}
             .polishedText=${currentState.ui.polishedText}
             .polishRevision=${currentState.ui.polishRevision}
             .transcribedText=${currentState.ui.transcribedText}

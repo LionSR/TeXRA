@@ -121,6 +121,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   UPDATE_TODOS: 'updateTodos',
   UPDATE_PLAN: 'updatePlan',
   UPDATE_QUEUED_FOLLOW_UPS: 'updateQueuedFollowUps',
+  FOLLOW_UP_RESULT: 'followUpResult',
   SYNC_STREAM_CONTENT: 'syncStreamContent',
 
   UPDATE_STREAM_STATUS: 'updateStreamStatus',

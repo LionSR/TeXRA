@@ -51,6 +51,12 @@ export interface SubmitFollowUpOptions {
   readonly mode?: 'continuation' | 'live_notification' | 'child_delivery';
   /** Reject a detached producer if its originating continuation was replaced. */
   readonly expectedGenerationId?: string;
+  /**
+   * Fires once admission is decided, before any recovery resume runs. `true`
+   * means the input now belongs to the stream (sent, queued, or already
+   * admitted); `false` means the caller still owns it and may re-offer it.
+   */
+  readonly onAdmitted?: (admitted: boolean) => void;
 }
 
 export function presentFollowUpResult(
@@ -68,7 +74,7 @@ export function presentFollowUpResult(
     return {
       severity: 'info',
       message:
-        'Message queued. Auto-resume failed; start a new agent task to continue.',
+        'Message queued, but the run could not be resumed automatically. Resume it to deliver the message, or start a new agent task.',
       refreshQueuedFollowUps: false,
     };
   }
@@ -299,7 +305,24 @@ export async function submitFollowUp(
     streamId,
     () => submitFollowUpSerialized(streamId, followUp, options, ownerSession),
   );
-  if (!('resume' in dispatch)) return dispatch;
+  // A host callback must not be able to strand the recovery lease below:
+  // its failure is the host's to log, never this boundary's to propagate.
+  const notifyAdmitted = (admitted: boolean): void => {
+    try {
+      options.onAdmitted?.(admitted);
+    } catch (error) {
+      logger.warn(`onAdmitted callback failed for stream ${streamId}`, {
+        data: { streamId, error: String(error) },
+      });
+    }
+  };
+  if (!('resume' in dispatch)) {
+    notifyAdmitted(
+      dispatch.status !== 'no_session' && dispatch.status !== 'dropped',
+    );
+    return dispatch;
+  }
+  notifyAdmitted(true);
 
   const resumed = await dispatch.resume;
   if (!resumed) {
