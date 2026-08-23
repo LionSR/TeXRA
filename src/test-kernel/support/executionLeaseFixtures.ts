@@ -1,15 +1,12 @@
 // Node imports
-import { spawnSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
-import { mkdtempSync } from 'node:fs';
-import * as net from 'node:net';
+import { spawn, type ChildProcess } from 'node:child_process';
 import * as os from 'node:os';
-import * as path from 'node:path';
 
 // Local imports
 import { ExecutionLeaseSchema } from '@agent/storage/executionLease';
-import type { InstanceOwnerRecord } from '@agent/storage/instancePresence';
+import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { StorageFS } from '@utils/files/storageFS';
 
 /**
@@ -23,84 +20,96 @@ export function executionLeasePath(executionId: string): string {
   return `${WORKSPACE_STORAGE_LAYOUT.executionLeases}/${executionId}.json`;
 }
 
-function fixtureSocketPath(instanceId: string): string {
-  if (process.platform === 'win32') {
-    return `\\\\.\\pipe\\texra-test-${instanceId}`;
-  }
-  return path.join(
-    mkdtempSync(path.join(os.tmpdir(), 'texra-lease-')),
-    'i.sock',
-  );
-}
-
 export interface ForeignInstance {
-  readonly owner: InstanceOwnerRecord;
-  /** Kill the "other process": watchers observe its exit for real. */
+  readonly owner: LeaseOwnerRecord;
+  /** Kill the other process; its pid then proves dead for real. */
   readonly shutdown: () => Promise<void>;
 }
 
+/** Spawn an idling child and read its start time through the real port. */
+async function spawnIdleChild(): Promise<{
+  child: ChildProcess;
+  pid: number;
+  processStartTime: number;
+}> {
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+    stdio: 'ignore',
+  });
+  const pid = child.pid;
+  if (pid === undefined) throw new Error('Failed to spawn a child process');
+  const processStartTime = await nodeProcesses.startTime(pid);
+  if (processStartTime === undefined) {
+    child.kill('SIGKILL');
+    throw new Error(`Cannot read the start time of child ${pid}`);
+  }
+  return { child, pid, processStartTime };
+}
+
+async function killAndWait(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise<void>((resolve) => {
+    child.once('exit', () => resolve());
+  });
+  child.kill('SIGKILL');
+  await exited;
+}
+
 /**
- * A real, listening presence socket owned by "another process". Its liveness
- * is proven the production way: probes connect and read its banner.
+ * A real, idling child process standing in for another TeXRA instance. Its
+ * liveness is proven the production way: the pid exists and the start time
+ * read through the real process port matches the one recorded here.
  */
 export async function startForeignInstance(): Promise<ForeignInstance> {
-  const instanceId = `test-foreign-${randomUUID().slice(0, 8)}`;
-  const socketPath = fixtureSocketPath(instanceId);
-  const connections = new Set<net.Socket>();
-  const server = net.createServer((socket) => {
-    connections.add(socket);
-    socket.on('close', () => connections.delete(socket));
-    socket.on('error', () => undefined);
-    socket.write(`texra-presence:${instanceId}\n`);
-  });
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(socketPath, resolve);
-  });
-  server.unref();
+  const { child, pid, processStartTime } = await spawnIdleChild();
   return {
-    // The pid is a death-proof-only input consulted on ENOENT: recording an
-    // already-exited pid makes shutdown() (which unlinks the socket file)
-    // read as process death, while the live listener still probes alive.
-    owner: {
-      instanceId,
-      socketPath,
-      pid: provablyDeadPid(),
-      hostname: os.hostname(),
-    },
-    shutdown: async () => {
-      for (const socket of connections) socket.destroy();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    },
+    owner: { pid, processStartTime, hostname: os.hostname() },
+    shutdown: () => killAndWait(child),
   };
 }
 
 /**
- * One shared live listener serves every plain fixture lease in a worker; it
- * is unref'd so it never holds the process open, and worker exit is its
- * shutdown. Tests that need to *kill* the owner start their own instance.
+ * One shared idle child serves every plain foreign-lease fixture in a worker;
+ * it is killed when the worker exits. Tests that need to kill the owner start
+ * their own instance.
  */
 let sharedForeignInstance: Promise<ForeignInstance> | undefined;
 
-let exitedChildPid: number | undefined;
+function sharedForeign(): Promise<ForeignInstance> {
+  sharedForeignInstance ??= startForeignInstance().then((instance) => {
+    process.once('exit', () => {
+      try {
+        process.kill(instance.owner.pid, 'SIGKILL');
+      } catch {
+        // Already gone.
+      }
+    });
+    return instance;
+  });
+  return sharedForeignInstance;
+}
+
+let exitedChild: Promise<LeaseOwnerRecord> | undefined;
 
 /**
- * A pid the kernel proves dead (ESRCH): a child spawned and already exited.
- * Needed because a missing socket file is a death proof only together with a
- * provably dead pid.
+ * An owner the kernel proves dead: a child that was spawned, whose start time
+ * was read while it ran, and that has since exited (ESRCH on `kill(pid, 0)`).
  */
-function provablyDeadPid(): number {
-  exitedChildPid ??= spawnSync(process.execPath, ['-e', '']).pid;
-  return exitedChildPid;
+export function deadOwner(): Promise<LeaseOwnerRecord> {
+  exitedChild ??= (async () => {
+    const { child, pid, processStartTime } = await spawnIdleChild();
+    await killAndWait(child);
+    return { pid, processStartTime, hostname: os.hostname() };
+  })();
+  return exitedChild;
 }
 
 async function writeLeaseFixture(
   executionId: string,
-  owner: InstanceOwnerRecord,
+  owner: LeaseOwnerRecord,
   ownerToken: string,
 ): Promise<void> {
   const lease = ExecutionLeaseSchema.parse({
-    version: 2,
+    version: 3,
     executionId,
     ownerToken,
     acquiredAt: Date.now(),
@@ -116,37 +125,24 @@ async function writeLeaseFixture(
 /**
  * Persist a lease held by another live process, validated against the
  * production lease schema so a schema change breaks every fixture in one
- * place. The recorded owner answers liveness probes for real.
+ * place. The recorded owner is a real process whose liveness is proven.
  */
 export async function writeForeignLease(
   executionId: string,
   ownerToken: string = FOREIGN_OWNER_TOKEN,
-  owner?: InstanceOwnerRecord,
+  owner?: LeaseOwnerRecord,
 ): Promise<void> {
   await writeLeaseFixture(
     executionId,
-    owner ?? (await (sharedForeignInstance ??= startForeignInstance())).owner,
+    owner ?? (await sharedForeign()).owner,
     ownerToken,
   );
 }
 
-/**
- * Persist a lease whose owner is provably dead: its socket path has no
- * listener, so probes return a death verdict and the record is reclaimable.
- */
+/** Persist a lease whose owner is provably dead, so the record is reclaimable. */
 export async function writeOrphanedLease(
   executionId: string,
   ownerToken: string = FOREIGN_OWNER_TOKEN,
 ): Promise<void> {
-  const instanceId = `test-dead-${randomUUID().slice(0, 8)}`;
-  await writeLeaseFixture(
-    executionId,
-    {
-      instanceId,
-      socketPath: fixtureSocketPath(instanceId),
-      pid: provablyDeadPid(),
-      hostname: os.hostname(),
-    },
-    ownerToken,
-  );
+  await writeLeaseFixture(executionId, await deadOwner(), ownerToken);
 }

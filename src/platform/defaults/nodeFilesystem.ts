@@ -63,6 +63,10 @@ export const nodeFilesystem: FileSystemProvider = {
     await writeFileAtomicLib(target, Buffer.from(content));
   },
 
+  async writeFileExclusive(target: string, content: Uint8Array): Promise<void> {
+    await fs.promises.writeFile(target, content, { flag: 'wx' });
+  },
+
   async appendFile(target: string, content: Uint8Array): Promise<void> {
     await fs.promises.appendFile(target, content);
   },

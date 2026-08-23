@@ -984,12 +984,8 @@ describe('executeCliRequest', () => {
       inspection: {
         status: 'foreign' as const,
         acquiredAt: 1,
-        owner: {
-          instanceId: 'test-instance',
-          socketPath: '/tmp/texra-test.sock',
-          pid: 1,
-          hostname: 'test-host',
-        },
+        owner: { pid: 1, processStartTime: 1, hostname: 'test-host' },
+        provable: true,
       },
     },
     {

@@ -980,12 +980,11 @@ return null`;
   it('reports already-running when the deterministic id is still leased', async () => {
     const runExecutionId = runExecutionIdFor('tool-test');
     mocks.registerExecution.mockRejectedValueOnce(
-      new ExecutionLeaseActiveError(runExecutionId, {
-        instanceId: 'test-instance',
-        socketPath: '/tmp/texra-test.sock',
-        pid: 1,
-        hostname: 'test-host',
-      }),
+      new ExecutionLeaseActiveError(
+        runExecutionId,
+        { pid: 1, processStartTime: 1, hostname: 'test-host' },
+        true,
+      ),
     );
 
     const result = await callTool();

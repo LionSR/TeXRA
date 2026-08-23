@@ -51,6 +51,7 @@ export {
   ExecutionLeaseLostError,
   inspectExecutionLease,
   markOwnedExecutionLeaseUndurable,
+  reclaimExecutionLease,
   type OwnedExecutionLeaseScope,
 } from './executionLease';
 export { persistChildRunResultMeta } from './childRunPersistence';

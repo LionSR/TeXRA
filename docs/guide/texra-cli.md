@@ -326,6 +326,12 @@ execution id and honors the headless globals (`--print`, `--output-format`,
 prints recent executions, with an id it continues the stored session. A
 missing or malformed id exits with code 2.
 
+A run another TeXRA process still holds is refused. If that process cannot be
+reached (it ran on another machine, or its liveness cannot be proven), resume
+says so and stops; when you are sure it is gone, `texra resume <id> --reclaim`
+removes its hold and continues. A run whose holder is provably alive is never
+reclaimed.
+
 ## Tools and integrations
 
 The CLI can inspect the same external agent integrations shown in the extension

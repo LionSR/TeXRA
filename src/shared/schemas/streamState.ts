@@ -133,6 +133,12 @@ export const BackendOwnedFieldsSchema = z.object({
    * value; the tick rate and duration format stay host modality.
    */
   runStartedAt: z.int().positive().optional(),
+  /**
+   * Present only with the `held` status: whether the process holding the
+   * execution was proven alive. False means it could not be reached, and the
+   * user may reclaim the run explicitly.
+   */
+  holderProvable: z.boolean().optional(),
   /** Runtime behavior declared by the launch source, not UI visibility. */
   userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   lastTimestamp: z.number().optional(),

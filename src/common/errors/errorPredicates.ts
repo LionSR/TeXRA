@@ -4,6 +4,12 @@ export function isFileNotFoundError(err: unknown): boolean {
   return code === 'ENOENT' || code === 'FileNotFound';
 }
 
+/** Check if an error represents "the path already exists" (Node and VS Code variants). */
+export function isFileExistsError(err: unknown): boolean {
+  const code = (err as { code?: string })?.code;
+  return code === 'EEXIST' || code === 'FileExists';
+}
+
 /** Check if an error represents "a parent path component is a file, not a directory". */
 export function isNotADirectoryError(err: unknown): boolean {
   return (err as { code?: string })?.code === 'ENOTDIR';

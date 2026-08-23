@@ -18,11 +18,13 @@ import {
   type StorageProvider,
   type WorkspaceProvider,
   type AgentDirectoriesPort,
+  type ProcessesPort,
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import {
   fileTypeFor,
   type FileTypeProbe,
@@ -309,6 +311,18 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     await this.writeFile(target, content);
   }
 
+  async writeFileExclusive(target: string, content: Uint8Array): Promise<void> {
+    // memfs honors `wx`: the second concurrent creator gets EEXIST, which is
+    // the exclusivity the lease claim depends on.
+    await this.fs.promises.writeFile(
+      normalizePath(target),
+      Buffer.from(content),
+      {
+        flag: 'wx',
+      },
+    );
+  }
+
   async appendFile(target: string, content: Uint8Array): Promise<void> {
     await this.fs.promises.appendFile(
       normalizePath(target),
@@ -516,6 +530,34 @@ export class FakeSecrets implements PlatformSecrets {
   }
 }
 
+/**
+ * Controllable process start times. Pids without a registered entry fall
+ * through to the real Node port, so a test may spawn an actual child and have
+ * its liveness proven the production way, or register a pid to script a
+ * verdict (a different start time for pid reuse, undefined for unreadable).
+ */
+export class FakeProcesses implements ProcessesPort {
+  private readonly startTimes = new Map<number, number | undefined>();
+
+  setStartTime(pid: number, startTime: number | undefined): void {
+    this.startTimes.set(pid, startTime);
+  }
+
+  /** Drop every scripted value; every pid falls through to the real port. */
+  reset(): void {
+    this.startTimes.clear();
+  }
+
+  async startTime(pid: number): Promise<number | undefined> {
+    if (this.startTimes.has(pid)) return this.startTimes.get(pid);
+    return nodeProcesses.startTime(pid);
+  }
+
+  selfStartTime(): Promise<number | undefined> {
+    return nodeProcesses.selfStartTime();
+  }
+}
+
 export interface FakePlatformOptions {
   config?: Record<string, unknown>;
   globalState?: Record<string, unknown>;
@@ -554,6 +596,7 @@ export function createFakePlatform(
       options.storagePath,
       options.globalStoragePath,
     ),
+    processes: new FakeProcesses(),
     fileLocks: {
       async runExclusive<T>(
         lockPath: string,

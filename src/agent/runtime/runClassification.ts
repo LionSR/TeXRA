@@ -7,7 +7,8 @@
  * of three things, decided once here and never inferred:
  *
  * - `held_elsewhere`: its execution lease is held by an owner that is alive or
- *   cannot be proven dead (another TeXRA process). Shown read-only.
+ *   cannot be proven dead (another TeXRA process). Shown read-only; when the
+ *   owner is unprovable the user is told so and may reclaim it explicitly.
  * - `resumable`: a checkpoint (flow record) exists and nobody alive holds the
  *   lease. Continued only through the explicit Resume affordance.
  * - `finished`: no checkpoint. Its persisted outcome, when present, is the
@@ -20,7 +21,7 @@ import {
   inspectExecutionLease,
   type ExecutionLeasePresence,
 } from '@agent/storage/executionLease';
-import type { InstanceOwnerRecord } from '@agent/storage/instancePresence';
+import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import {
   deriveResumability,
   RESUMABILITY_CAUSE,
@@ -34,7 +35,9 @@ export type RunClassification =
   | {
       readonly kind: 'held_elsewhere';
       /** Absent when the lease record itself could not be read. */
-      readonly owner: InstanceOwnerRecord | undefined;
+      readonly owner: LeaseOwnerRecord | undefined;
+      /** False when the owner could not be proven alive (or read at all). */
+      readonly provable: boolean;
     }
   | { readonly kind: 'resumable'; readonly outcome?: RunOutcome }
   | { readonly kind: 'finished'; readonly outcome?: RunOutcome };
@@ -55,10 +58,14 @@ export async function classifyRun(
       `Cannot classify ownership of ${executionId}; treating it as held elsewhere`,
       { data: error },
     );
-    return { kind: 'held_elsewhere', owner: undefined };
+    return { kind: 'held_elsewhere', owner: undefined, provable: false };
   }
   if (lease.status === 'owned' || lease.status === 'foreign') {
-    return { kind: 'held_elsewhere', owner: lease.owner };
+    return {
+      kind: 'held_elsewhere',
+      owner: lease.owner,
+      provable: lease.provable,
+    };
   }
 
   const resumability = await deriveResumability(executionId);

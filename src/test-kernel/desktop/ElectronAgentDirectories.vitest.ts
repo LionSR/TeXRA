@@ -14,6 +14,7 @@ import type { JsonStore } from '@platform/defaults/jsonStore';
 import type { bootstrapNodeAgentDirectories } from '@platform/defaults/nodeHost';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFileLocks } from '@platform/defaults/fileLocks';
+import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -85,6 +86,7 @@ describe('desktop agent directory bootstrap', () => {
       workspace: createNodeWorkspace(() => workspacePath),
       storage,
       fileLocks: nodeFileLocks,
+      processes: nodeProcesses,
       secrets: new FakeSecrets(),
       lifecycle: createLifecycleHost(),
       agentResume: { tryResumeStream: async () => false },

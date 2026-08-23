@@ -36,6 +36,7 @@ export function buildStreamMetadata(
     }),
     substate: inputs.substate,
     runStartedAt: inputs.runStartedAt,
+    holderProvable: inputs.holderProvable,
     userFollowUpSupport: inputs.userFollowUpSupport,
     lastTimestamp: inputs.lastTimestamp,
     category: inputs.category,

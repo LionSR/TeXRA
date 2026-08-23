@@ -453,13 +453,16 @@ export class LitSessionRenderer implements SessionRendererPort {
   ): StreamMetadata {
     const current = this.state.getStreamState(streamInfo.name);
     const status = streamStates.get(streamInfo.name);
+    const holderProvable = this.state.streamStatus.heldProvable(
+      streamInfo.name,
+    );
     return buildStreamMetadata({
       category: streamInfo.agentCategory,
       // A stream held by another process has no phase in this session; the
       // wire carries the held sentinel so the view renders it read-only.
-      status: this.state.streamStatus.isHeld(streamInfo.name)
-        ? STREAM_LIFECYCLE_HELD
-        : status?.phase,
+      status:
+        holderProvable === undefined ? status?.phase : STREAM_LIFECYCLE_HELD,
+      holderProvable,
       substate: status?.substate,
       runStartedAt: status?.runStartedAt,
       userFollowUpSupport: streamInfo.userFollowUpSupport,

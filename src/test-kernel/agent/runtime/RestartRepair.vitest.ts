@@ -77,12 +77,7 @@ async function failGroupClose(): Promise<StreamTabId[]> {
   throw new Error('group close failed');
 }
 
-const FOREIGN_OWNER = {
-  instanceId: 'test-instance',
-  socketPath: '/tmp/texra-test.sock',
-  pid: 1,
-  hostname: 'test-host',
-};
+const FOREIGN_OWNER = { pid: 1, processStartTime: 1, hostname: 'test-host' };
 
 describe('repairRestartedStreams', () => {
   it('marks a stream held by a live foreign owner and mutates nothing', async () => {
@@ -96,6 +91,7 @@ describe('repairRestartedStreams', () => {
       classifyRun: classifyAs({
         kind: 'held_elsewhere',
         owner: FOREIGN_OWNER,
+        provable: true,
       }),
     });
 
@@ -107,7 +103,7 @@ describe('repairRestartedStreams', () => {
 
   it('releases a held mark once the stream settles on a later pass', async () => {
     const setup = setupStream('held-then-settled');
-    setup.streamStatus.markHeld(setup.streamId, FOREIGN_OWNER);
+    setup.streamStatus.markHeld(setup.streamId, true);
 
     await runRepair(setup, {
       closeRunningGroups: closeAllGroups,

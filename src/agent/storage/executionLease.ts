@@ -6,7 +6,7 @@ import pDefer, { type DeferredPromise } from 'p-defer';
 import PQueue from 'p-queue';
 import { z } from 'zod';
 
-import { isFileNotFoundError } from '@common/errors';
+import { isFileExistsError, isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
@@ -14,12 +14,11 @@ import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files/storageFS';
 
 import {
-  ensureInstancePresence,
-  probeInstance,
-  type InstanceLiveness,
-  InstanceOwnerSchema,
-  type InstanceOwnerRecord,
-} from './instancePresence';
+  currentLeaseOwner,
+  LeaseOwnerSchema,
+  type LeaseOwnerRecord,
+  proveOwnerLiveness,
+} from './leaseOwnerLiveness';
 
 const log = createLog('ExecutionLease');
 
@@ -29,40 +28,38 @@ const LeaseExecutionIdSchema = z
   .regex(/^[^/\\]+$/);
 
 /**
- * Ownership record for one execution. Written once at acquisition, deleted at
- * release — never renewed. Liveness of `owner` is proven by probing its
- * presence socket; no field here is ever compared against a clock.
+ * Ownership record for one execution. Created exclusively at claim time,
+ * unlinked at release, never renewed or rewritten. Liveness of `owner` is a
+ * kernel fact about its pid; no field here is ever compared against a clock.
  */
 export const ExecutionLeaseSchema = z.strictObject({
-  version: z.literal(2),
+  version: z.literal(3),
   executionId: LeaseExecutionIdSchema,
   ownerToken: z.uuid(),
   acquiredAt: z.int().nonnegative(),
-  owner: InstanceOwnerSchema,
+  owner: LeaseOwnerSchema,
 });
 
 type ExecutionLeaseRecord = z.infer<typeof ExecutionLeaseSchema>;
 
-export interface InactiveExecutionLeaseOptions {
-  /**
-   * Per-operation liveness reader. Restart repair shares this between
-   * executions owned by the same instance, avoiding repeated socket probes.
-   */
-  readonly probeOwner?: (
-    owner: InstanceOwnerRecord,
-  ) => Promise<InstanceLiveness>;
-}
-
 /**
- * The only surviving recognition of the retired heartbeat protocol: a
- * `{version: 1}` file is a tombstone with no semantics.
+ * Records from the retired heartbeat (v1) and presence-socket (v2) protocols
+ * are tombstones with no semantics: retired on contact, never reclaimed as
+ * live ownership.
  */
 const StoredLeaseSchema = z.union([
   ExecutionLeaseSchema,
   z
-    .looseObject({ version: z.literal(1) })
+    .looseObject({ version: z.union([z.literal(1), z.literal(2)]) })
     .transform(() => 'tombstone' as const),
 ]);
+
+/**
+ * A claim loop re-reads after every lost race; each lost round means another
+ * process made progress, so this bound is only reached under pathological
+ * contention and then fails loudly rather than spinning.
+ */
+const MAX_CLAIM_ROUNDS = 16;
 
 interface OwnedExecutionLease {
   readonly executionId: ExecutionId;
@@ -81,13 +78,24 @@ export type ExecutionLeasePresence =
   | {
       readonly status: 'owned';
       readonly acquiredAt: number;
-      readonly owner: InstanceOwnerRecord;
+      readonly owner: LeaseOwnerRecord;
+      readonly provable: true;
     }
   | {
       readonly status: 'foreign';
       readonly acquiredAt: number;
-      readonly owner: InstanceOwnerRecord;
+      readonly owner: LeaseOwnerRecord;
+      /** False when the owner could not be proven alive or dead. */
+      readonly provable: boolean;
     };
+
+export type InactiveExecutionLeaseResult<T> =
+  | {
+      readonly status: 'active';
+      readonly owner: LeaseOwnerRecord;
+      readonly provable: boolean;
+    }
+  | { readonly status: 'performed'; readonly value: T };
 
 export type OwnedExecutionLeaseCompletion =
   | { readonly status: 'released' }
@@ -105,9 +113,15 @@ export type OwnedExecutionLeaseScope = <T>(
 export class ExecutionLeaseActiveError extends Error {
   constructor(
     readonly executionId: ExecutionId,
-    readonly owner: InstanceOwnerRecord,
+    readonly owner: LeaseOwnerRecord,
+    /** False when the owner could not be proven alive or dead. */
+    readonly provable: boolean,
   ) {
-    super(`Execution ${executionId} is active in TeXRA.`);
+    super(
+      provable
+        ? `Execution ${executionId} is active in TeXRA.`
+        : `Execution ${executionId} is held by a TeXRA process that cannot be reached (pid ${owner.pid} on ${owner.hostname}).`,
+    );
     this.name = 'ExecutionLeaseActiveError';
   }
 }
@@ -237,34 +251,27 @@ function currentScopeOwnsLease(lease: OwnedExecutionLease): boolean {
   );
 }
 
+function leaseDir(root: string): string {
+  return path.join(root, WORKSPACE_STORAGE_LAYOUT.executionLeases);
+}
+
 function leasePath(root: string, executionId: ExecutionId): string {
   const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
-  return path.join(
-    root,
-    WORKSPACE_STORAGE_LAYOUT.executionLeases,
-    `${safeExecutionId}.json`,
-  );
+  return path.join(leaseDir(root), `${safeExecutionId}.json`);
 }
 
-function coordinationPath(root: string, executionId: ExecutionId): string {
+function tombstonePath(root: string, executionId: ExecutionId, tag: string) {
   const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
-  return path.join(
-    root,
-    WORKSPACE_STORAGE_LAYOUT.executionLocks,
-    safeExecutionId,
-  );
+  return path.join(leaseDir(root), `${safeExecutionId}.${tag}.tombstone`);
 }
 
-async function readStoredLease(
+async function readStoredLeaseFile(
+  file: string,
   executionId: ExecutionId,
-  root: string,
 ): Promise<ExecutionLeaseRecord | 'tombstone' | undefined> {
   let stored: ExecutionLeaseRecord | 'tombstone';
   try {
-    stored = await StorageFS.readJson(
-      leasePath(root, executionId),
-      StoredLeaseSchema,
-    );
+    stored = await StorageFS.readJson(file, StoredLeaseSchema);
   } catch (error) {
     if (isFileNotFoundError(error)) return undefined;
     throw error;
@@ -277,64 +284,193 @@ async function readStoredLease(
   return stored;
 }
 
+function readStoredLease(
+  executionId: ExecutionId,
+  root: string,
+): Promise<ExecutionLeaseRecord | 'tombstone' | undefined> {
+  return readStoredLeaseFile(leasePath(root, executionId), executionId);
+}
+
 /**
- * Locked read that deletes a retired tombstone on contact, so upgrades
- * self-heal. Only lock holders may call this — an unlocked delete could race
- * a concurrent acquisition that just replaced the file — so the unlocked
- * classifier (inspectExecutionLease) reads without healing instead.
+ * The claim itself: create the record with `O_EXCL`. The kernel lets exactly
+ * one concurrent creator through, so there is no lock and no read-modify-write
+ * anywhere in this module. Returns whether this process is the creator.
  */
-async function readLease(
-  executionId: ExecutionId,
-  root: string,
-): Promise<ExecutionLeaseRecord | undefined> {
-  const stored = await readStoredLease(executionId, root);
-  if (stored !== 'tombstone') return stored;
-  log.warn(
-    `Deleted retired heartbeat-era lease record for execution ${executionId}`,
-  );
-  await StorageFS.delete(leasePath(root, executionId));
-  return undefined;
-}
-
-async function writeLease(
+async function tryClaimLease(
   record: ExecutionLeaseRecord,
   root: string,
-): Promise<void> {
-  const persisted = ExecutionLeaseSchema.parse(record);
-  await StorageFS.writeAtomic(
-    leasePath(root, record.executionId),
-    `${JSON.stringify(persisted, null, 2)}\n`,
-  );
-}
-
-async function withLeaseLock<T>(
-  executionId: ExecutionId,
-  operation: () => Promise<T>,
-  root: string = storageRoot(),
-): Promise<T> {
-  await StorageFS.ensureDir(
-    path.join(root, WORKSPACE_STORAGE_LAYOUT.executionLeases),
-  );
-  return platform().fileLocks.runExclusive(
-    coordinationPath(root, executionId),
-    operation,
-  );
-}
-
-/** Probe a lease's owner; unprovable verdicts classify as active. */
-async function leaseOwnerIsActive(
-  executionId: ExecutionId,
-  record: ExecutionLeaseRecord,
-  options: InactiveExecutionLeaseOptions = {},
 ): Promise<boolean> {
-  const liveness = await (options.probeOwner ?? probeInstance)(record.owner);
-  if (liveness === 'unprovable') {
+  const persisted = ExecutionLeaseSchema.parse(record);
+  await StorageFS.ensureDir(leaseDir(root));
+  try {
+    await StorageFS.writeExclusive(
+      leasePath(root, record.executionId),
+      `${JSON.stringify(persisted, null, 2)}\n`,
+    );
+    return true;
+  } catch (error) {
+    if (isFileExistsError(error)) return false;
+    throw error;
+  }
+}
+
+/**
+ * Move a record that was classified as reclaimable (a dead owner, or a
+ * retired-protocol tombstone) out of the claim path. Exactly one renamer
+ * wins; ENOENT means another process got there first and this claim is
+ * lost. The moved content is then checked against what was classified: a
+ * record that changed in between belongs to a claimant that won meanwhile
+ * and is put back. Only the renamer unlinks what it moved.
+ */
+async function retireLease(
+  executionId: ExecutionId,
+  root: string,
+  expected: string | 'tombstone',
+): Promise<'retired' | 'lost'> {
+  const live = leasePath(root, executionId);
+  const tombstone = tombstonePath(
+    root,
+    executionId,
+    expected === 'tombstone' ? `retired-${randomUUID()}` : expected,
+  );
+  try {
+    await StorageFS.rename(live, tombstone);
+  } catch (error) {
+    if (isFileNotFoundError(error)) return 'lost';
+    throw error;
+  }
+  let moved: ExecutionLeaseRecord | 'tombstone' | undefined;
+  try {
+    moved = await readStoredLeaseFile(tombstone, executionId);
+  } catch (error) {
+    // Unparseable content cannot be a live claim; it is retired below.
     log.warn(
-      `Liveness of execution ${executionId}'s owner is unprovable; treating it as active`,
-      { data: { owner: record.owner } },
+      `Retired an unreadable lease record for execution ${executionId}`,
+      {
+        data: error,
+      },
     );
   }
-  return liveness !== 'dead';
+  const movedToken = moved === 'tombstone' ? 'tombstone' : moved?.ownerToken;
+  if (moved !== undefined && movedToken !== expected) {
+    try {
+      await StorageFS.rename(tombstone, live);
+      return 'lost';
+    } catch (error) {
+      if (!isFileExistsError(error)) throw error;
+      // A third claimant created a record in the same window. The displaced
+      // claimant's next fenced write reads that record and aborts; nothing
+      // can restore its ownership without unseating a valid claim.
+      log.warn(
+        `Execution ${executionId}: a lease claimed during reclamation was displaced by a concurrent claim; its owner will abort at the next fenced write`,
+        { data: { displaced: moved } },
+      );
+    }
+  }
+  try {
+    await StorageFS.delete(tombstone);
+  } catch (error) {
+    log.warn(
+      `Execution ${executionId}: could not unlink lease tombstone ${tombstone}`,
+      { data: error },
+    );
+  }
+  return 'retired';
+}
+
+/**
+ * Retire a record from a retired protocol on contact, so upgrades self-heal.
+ * Any rename outcome is fine: either this process moved it or another did.
+ */
+async function retireLegacyLease(
+  executionId: ExecutionId,
+  root: string,
+): Promise<void> {
+  log.warn(
+    `Retiring a lease record from a retired protocol for execution ${executionId}`,
+  );
+  await retireLease(executionId, root, 'tombstone');
+}
+
+async function newLeaseRecord(
+  executionId: ExecutionId,
+): Promise<ExecutionLeaseRecord> {
+  return {
+    version: 3,
+    executionId,
+    ownerToken: randomUUID(),
+    acquiredAt: Date.now(),
+    owner: await currentLeaseOwner(),
+  };
+}
+
+type ClaimOutcome =
+  | { readonly outcome: 'claimed'; readonly record: ExecutionLeaseRecord }
+  | { readonly outcome: 'cancelled' }
+  | {
+      readonly outcome: 'active';
+      readonly owner: LeaseOwnerRecord;
+      readonly provable: boolean;
+    };
+
+/**
+ * The claim protocol against the current on-disk state, repeated after every
+ * lost race: nothing present means create; a dead owner means retire then
+ * create; a retired-protocol record means retire and look again. An owner
+ * that is alive, or whose liveness cannot be proven, refuses the claim
+ * outright. `admit` runs at most once, just before the first create attempt,
+ * so an admission that is withdrawn never leaves a record behind.
+ */
+async function claimLease(
+  executionId: ExecutionId,
+  root: string,
+  admit?: () => boolean | Promise<boolean>,
+): Promise<ClaimOutcome> {
+  let admitted = admit === undefined;
+  for (let round = 0; round < MAX_CLAIM_ROUNDS; round += 1) {
+    const current = await readStoredLease(executionId, root);
+    if (current === 'tombstone') {
+      await retireLegacyLease(executionId, root);
+      continue;
+    }
+    if (current) {
+      const liveness = await proveOwnerLiveness(current.owner);
+      if (liveness !== 'dead') {
+        return {
+          outcome: 'active',
+          owner: current.owner,
+          provable: liveness === 'alive',
+        };
+      }
+    }
+    if (!admitted) {
+      if ((await admit?.()) === false) return { outcome: 'cancelled' };
+      admitted = true;
+    }
+    if (
+      current &&
+      (await retireLease(executionId, root, current.ownerToken)) === 'lost'
+    ) {
+      continue;
+    }
+    const record = await newLeaseRecord(executionId);
+    if (await tryClaimLease(record, root))
+      return { outcome: 'claimed', record };
+  }
+  throw new Error(
+    `Execution ${executionId}: lost the lease claim race ${MAX_CLAIM_ROUNDS} times in a row.`,
+  );
+}
+
+/** Unlink this process's own record, leaving any later owner's record alone. */
+async function unlinkOwnRecord(
+  executionId: ExecutionId,
+  root: string,
+  ownerToken: string,
+): Promise<void> {
+  const current = await readStoredLease(executionId, root);
+  if (current === 'tombstone' || current?.ownerToken !== ownerToken) return;
+  await StorageFS.delete(leasePath(root, executionId));
 }
 
 function forgetOwnedLease(
@@ -399,22 +535,21 @@ export function ownsExecutionLease(executionId: ExecutionId): boolean {
   return lease !== undefined && currentScopeOwnsLease(lease);
 }
 
+/**
+ * The write fence: the in-process token is compared against the on-disk
+ * record before the operation runs. A record that names anyone else means
+ * this process was displaced and must not write.
+ */
 async function runWithValidatedOwnership<T>(
   lease: OwnedExecutionLease,
   operation: () => Promise<T>,
 ): Promise<T> {
-  return withLeaseLock(
-    lease.executionId,
-    async () => {
-      const current = await readLease(lease.executionId, lease.storageRoot);
-      if (current?.ownerToken !== lease.ownerToken) {
-        forgetOwnedLease(lease, { notifyLoss: true });
-        throw new ExecutionLeaseLostError(lease.executionId);
-      }
-      return operation();
-    },
-    lease.storageRoot,
-  );
+  const current = await readStoredLease(lease.executionId, lease.storageRoot);
+  if (current === 'tombstone' || current?.ownerToken !== lease.ownerToken) {
+    forgetOwnedLease(lease, { notifyLoss: true });
+    throw new ExecutionLeaseLostError(lease.executionId);
+  }
+  return operation();
 }
 
 /**
@@ -507,16 +642,10 @@ export async function runWithExecutionLeaseWriteFence<T>(
     throw new ExecutionLeaseLostError(executionId);
   }
   if (lease) return runWithValidatedOwnership(lease, operation);
-  return withLeaseLock(
-    executionId,
-    async () => {
-      if (await readLease(executionId, root)) {
-        throw new ExecutionLeaseLostError(executionId);
-      }
-      return operation();
-    },
-    root,
-  );
+  const current = await readStoredLease(executionId, root);
+  if (current === 'tombstone') await retireLegacyLease(executionId, root);
+  else if (current) throw new ExecutionLeaseLostError(executionId);
+  return operation();
 }
 
 function acquireExecutionLease(
@@ -549,55 +678,35 @@ async function acquireExecutionLease(
         // persisted state below instead of resurrecting the closing lease.
         await existingOwnership.released;
       } else {
-        const validated = await withLeaseLock(
-          executionId,
-          async () => {
-            const current = await readLease(executionId, root);
-            if (current?.ownerToken !== existingOwnership.ownerToken) {
-              forgetOwnedLease(existingOwnership, { notifyLoss: true });
-              return 'lost' as const;
-            }
-            if ((await canAcquire?.()) === false) return 'cancelled' as const;
-            return 'existing' as const;
-          },
-          root,
-        );
-        if (validated !== 'lost') return validated;
+        const current = await readStoredLease(executionId, root);
+        if (
+          current !== 'tombstone' &&
+          current?.ownerToken === existingOwnership.ownerToken
+        ) {
+          if ((await canAcquire?.()) === false) return 'cancelled';
+          return 'existing';
+        }
+        forgetOwnedLease(existingOwnership, { notifyLoss: true });
       }
     }
 
-    return await withLeaseLock(
-      executionId,
-      async () => {
-        // Reclamation requires a death proof: a lease whose owner is alive or
-        // merely unprovable refuses acquisition.
-        const currentLease = await readLease(executionId, root);
-        if (
-          currentLease &&
-          (await leaseOwnerIsActive(executionId, currentLease))
-        ) {
-          throw new ExecutionLeaseActiveError(executionId, currentLease.owner);
-        }
-        if ((await canAcquire?.()) === false) return 'cancelled' as const;
-        const owner = await ensureInstancePresence();
+    const claim = await claimLease(executionId, root, canAcquire);
+    switch (claim.outcome) {
+      case 'cancelled':
+        return 'cancelled';
+      case 'active':
+        throw new ExecutionLeaseActiveError(
+          executionId,
+          claim.owner,
+          claim.provable,
+        );
+      case 'claimed': {
         const stale = ownedLeases.get(key);
         if (stale) forgetOwnedLease(stale);
-        const ownerToken = randomUUID();
-        await writeLease(
-          {
-            version: 2,
-            executionId,
-            ownerToken,
-            acquiredAt: Date.now(),
-            owner,
-          },
-          root,
-        );
-        rememberOwnership(executionId, ownerToken, root);
-        return 'acquired' as const;
-      },
-      root,
-    );
+        rememberOwnership(executionId, claim.record.ownerToken, root);
+        return 'acquired';
+      }
+    }
   } finally {
     leaseCoordination.leaveAcquisition();
   }
@@ -736,17 +845,7 @@ async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
     return;
   }
   try {
-    await withLeaseLock(
-      executionId,
-      async () => {
-        const current = await readLease(executionId, root);
-        if (current?.ownerToken !== ownership.ownerToken) {
-          return;
-        }
-        await StorageFS.delete(leasePath(root, executionId));
-      },
-      root,
-    );
+    await unlinkOwnRecord(executionId, root, ownership.ownerToken);
   } catch (error) {
     if (!isFileNotFoundError(error)) {
       throw error;
@@ -761,8 +860,8 @@ export async function inspectExecutionLease(
   executionId: ExecutionId,
 ): Promise<ExecutionLeasePresence> {
   const root = storageRoot();
-  // Classification runs without the lease lock, so a retired-era tombstone is
-  // reported as orphaned here and deleted by the next locked path instead.
+  // Classification mutates nothing: a retired-protocol record is reported as
+  // orphaned here and retired by the next claim instead.
   const record = await readStoredLease(executionId, root);
   if (!record) return { status: 'missing' };
   if (record === 'tombstone') return { status: 'orphaned' };
@@ -772,61 +871,93 @@ export async function inspectExecutionLease(
       status: 'owned',
       acquiredAt: record.acquiredAt,
       owner: record.owner,
+      provable: true,
     };
   }
-  const liveness = await probeInstance(record.owner);
+  const liveness = await proveOwnerLiveness(record.owner);
   if (liveness === 'dead') return { status: 'orphaned' };
   return {
     status: 'foreign',
     acquiredAt: record.acquiredAt,
     owner: record.owner,
+    provable: liveness === 'alive',
   };
 }
 
 /**
- * Run maintenance only while the owner is provably absent. Inspection and
- * mutation share the same cross-process lock, so a host cannot acquire
- * between them, and an unprovable owner refuses maintenance outright.
+ * Remove a record whose owner is not provably alive, so the execution can be
+ * claimed again. This is the user's explicit Reclaim action for an owner that
+ * cannot be reached; every automatic path keeps refusing such a record.
+ */
+export async function reclaimExecutionLease(
+  executionId: ExecutionId,
+): Promise<'reclaimed' | 'missing' | 'alive'> {
+  const root = storageRoot();
+  const record = await readStoredLease(executionId, root);
+  if (!record) return 'missing';
+  if (record === 'tombstone') {
+    await retireLegacyLease(executionId, root);
+    return 'reclaimed';
+  }
+  const local = ownedLeases.get(ownershipKey(root, executionId));
+  if (local?.ownerToken === record.ownerToken) return 'alive';
+  if ((await proveOwnerLiveness(record.owner)) === 'alive') return 'alive';
+  await retireLease(executionId, root, record.ownerToken);
+  return 'reclaimed';
+}
+
+/**
+ * Run maintenance on an execution nobody alive owns. The maintenance is
+ * itself a claim: the record is created exclusively for its duration and
+ * unlinked afterwards, so a concurrent acquisition sees a live local owner
+ * and refuses, and a crash mid-maintenance leaves a record whose dead pid
+ * the next claimant reclaims. An owner that is alive or unprovable refuses
+ * maintenance outright.
  */
 export async function runWithInactiveExecutionLease<T>(
   executionId: ExecutionId,
   operation: () => Promise<T>,
-  options: InactiveExecutionLeaseOptions = {},
-): Promise<
-  | { readonly status: 'active'; readonly owner: InstanceOwnerRecord }
-  | { readonly status: 'performed'; readonly value: T }
-> {
+): Promise<InactiveExecutionLeaseResult<T>> {
   const root = storageRoot();
-  return withLeaseLock(
-    executionId,
-    async () => {
-      const currentLease = await readLease(executionId, root);
-      const local = ownedLeases.get(ownershipKey(root, executionId));
-      if (local && currentLease?.ownerToken === local.ownerToken) {
-        // The record names this live process; no probe is needed. A local
-        // owner is protected by its own existence, never by any clock.
-        // Report our own presence identity, not the record's copy: a record
-        // whose owner field was tampered to name a dead instance must not
-        // seed an exit watch that fires while this live owner still runs.
-        return { status: 'active', owner: await ensureInstancePresence() };
-      }
-      if (local) {
-        forgetOwnedLease(local, { notifyLoss: true });
-      }
-      if (
-        currentLease &&
-        (await leaseOwnerIsActive(executionId, currentLease, options))
-      ) {
-        return { status: 'active', owner: currentLease.owner };
-      }
-      const maintenanceKeys = new Set(maintenanceExecutions.getStore());
-      maintenanceKeys.add(ownershipKey(root, executionId));
-      const value = await maintenanceExecutions.run(maintenanceKeys, operation);
-      if (currentLease) {
-        await StorageFS.delete(leasePath(root, executionId));
-      }
-      return { status: 'performed', value };
-    },
-    root,
-  );
+  const key = ownershipKey(root, executionId);
+  const local = ownedLeases.get(key);
+  if (local) {
+    const current = await readStoredLease(executionId, root);
+    if (current !== 'tombstone' && current?.ownerToken === local.ownerToken) {
+      // The record names this live process. Report our own identity, not
+      // the record's copy, so a tampered owner field cannot misdescribe a
+      // live local owner.
+      return {
+        status: 'active',
+        owner: await currentLeaseOwner(),
+        provable: true,
+      };
+    }
+    forgetOwnedLease(local, { notifyLoss: true });
+  }
+  const claim = await claimLease(executionId, root);
+  if (claim.outcome === 'active') {
+    return { status: 'active', owner: claim.owner, provable: claim.provable };
+  }
+  if (claim.outcome === 'cancelled') {
+    throw new Error('unreachable: maintenance claims have no admission');
+  }
+  const maintenanceKeys = new Set(maintenanceExecutions.getStore());
+  maintenanceKeys.add(key);
+  let value: T;
+  try {
+    value = await maintenanceExecutions.run(maintenanceKeys, operation);
+  } catch (error) {
+    try {
+      await unlinkOwnRecord(executionId, root, claim.record.ownerToken);
+    } catch (releaseError) {
+      log.warn(
+        `Execution ${executionId}: maintenance failed and its lease could not be released`,
+        { data: releaseError },
+      );
+    }
+    throw error;
+  }
+  await unlinkOwnRecord(executionId, root, claim.record.ownerToken);
+  return { status: 'performed', value };
 }

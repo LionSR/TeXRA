@@ -12,7 +12,7 @@ import {
   type ToolUseStreamState,
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
-import { STREAM_HELD_ELSEWHERE_MESSAGE } from '@shared/streams/streamStatusDisplay';
+import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
 
 // Local imports - progress view
 import { ProgressEvents } from '../events';
@@ -81,7 +81,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
 
       <div class="conversation-composer-dock">
         <div class="conversation-column">
-          ${this.renderComposerBanner(currentState.status)}
+          ${this.renderComposerBanner(currentState.status, currentState.holderProvable)}
           <follow-up-input
             .visible=${composerVisible(currentState.status)}
             .streamId=${streamInfo.name}
@@ -104,10 +104,11 @@ export class ToolUseStreamContent extends BaseStreamContent {
 
   private renderComposerBanner(
     status: ToolUseStreamState['status'],
+    holderProvable: boolean | undefined,
   ): TemplateResult | typeof nothing {
     if (composerVisible(status)) return nothing;
     return html`<div class="conversation-composer-banner">
-      ${status === STREAM_LIFECYCLE_HELD ? STREAM_HELD_ELSEWHERE_MESSAGE : RUN_ENDED_MESSAGE}
+      ${status === STREAM_LIFECYCLE_HELD ? streamHeldMessage(holderProvable) : RUN_ENDED_MESSAGE}
     </div>`;
   }
 

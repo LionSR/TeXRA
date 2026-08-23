@@ -3,7 +3,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // Common imports
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import {
+  isFileExistsError,
+  isFileNotFoundError,
+  isNotADirectoryError,
+} from '@common/errors';
 
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces';
@@ -109,6 +113,18 @@ export abstract class BaseFS {
     );
   }
 
+  /** Create-only write: rejects with `EEXIST` when `target` already exists. */
+  public static async writeExclusive(
+    this: typeof BaseFS,
+    target: string,
+    content: string | Uint8Array,
+  ): Promise<void> {
+    await platform().fs.writeFileExclusive(
+      this.preparePath(target),
+      toBuffer(content),
+    );
+  }
+
   public static async appendFile(
     this: typeof BaseFS,
     target: string,
@@ -139,12 +155,8 @@ export abstract class BaseFS {
     try {
       await this.createDir(target);
     } catch (err) {
-      // Directory already exists — silently succeed.
-      // Check for both EEXIST (Node.js default) and FileExists (VS Code adapter).
-      const code = (err as { code?: string }).code;
-      if (code === 'EEXIST' || code === 'FileExists') {
-        return;
-      }
+      // Directory already exists: that is the post-condition, so succeed.
+      if (isFileExistsError(err)) return;
       throw err;
     }
   }
