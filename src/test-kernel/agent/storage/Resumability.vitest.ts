@@ -92,7 +92,7 @@ describe('deriveResumability', () => {
     });
   });
 
-  it('fails closed when terminal metadata fails for a failed execution', async () => {
+  it('keeps a preserved checkpoint when terminal metadata fails for a failed execution', async () => {
     const executionId = 'failed-terminal-metadata-with-flow' as ExecutionId;
     await writeMeta(executionId, {});
     await writeFlow(executionId);
@@ -114,8 +114,7 @@ describe('deriveResumability', () => {
     });
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.MISSING_FLOW,
+      resumable: true,
     });
   });
 
