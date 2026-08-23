@@ -984,8 +984,9 @@ describe('executeCliRequest', () => {
       inspection: {
         status: 'foreign' as const,
         acquiredAt: 1,
-        owner: { pid: 1, processStartTime: 1, hostname: 'test-host' },
+        owner: { pid: 1, processStart: '1', hostname: 'test-host' },
         provable: true,
+        reclaimable: false,
       },
     },
     {

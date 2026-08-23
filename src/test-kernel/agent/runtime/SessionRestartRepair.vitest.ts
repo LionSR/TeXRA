@@ -752,9 +752,10 @@ describe('SessionHandle restart repair', () => {
     try {
       await session.waitUntilReady();
       // Live foreign owner: held, no phase, nothing written, transcript open.
-      expect(session.status.holdState(heldStreamId)).toEqual({
+      expect(session.status.holdState(heldStreamId)).toMatchObject({
         kind: 'held',
-        provable: true,
+        executionId: heldExecutionId,
+        hold: { provable: true, reclaimable: false },
       });
       expect(session.status.get(heldStreamId)).toBeUndefined();
       expect((await executionStore.readMeta())?.outcome).toBeUndefined();

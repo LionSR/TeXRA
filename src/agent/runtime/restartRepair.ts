@@ -243,10 +243,15 @@ export async function repairRestartedStreams(
         markOwnedHere(streamId, executionId);
         return true;
       case 'held_elsewhere':
-        options.streamStatus.markHeld(streamId, classification.provable);
+        // Only a stream with an execution is ever classified as held.
+        options.streamStatus.markHeld(
+          streamId,
+          executionId!,
+          classification.hold,
+        );
         options.logger?.debug(
           `Stream ${streamId} is held by ${
-            classification.provable
+            classification.hold.provable
               ? 'another process'
               : 'a process that cannot be reached'
           }; left untouched`,
@@ -373,18 +378,18 @@ export async function repairRestartedStreams(
       if (isInFlightPhase(options.streamStatus.get(streamId))) continue;
       const self = await currentLeaseOwner();
       const { owner } = maintenance;
-      // Same process requires both start times known and equal: two unknown
-      // start times prove nothing, and such an owner is foreign-unprovable.
+      // Same process requires both identities known and equal: two unknown
+      // identities prove nothing, and such an owner is held, not ours.
       if (
         owner.pid === self.pid &&
-        self.processStartTime !== null &&
-        owner.processStartTime === self.processStartTime &&
+        self.processStart !== null &&
+        owner.processStart === self.processStart &&
         owner.hostname === self.hostname
       ) {
         markOwnedHere(streamId, executionId);
         continue;
       }
-      options.streamStatus.markHeld(streamId, maintenance.provable);
+      options.streamStatus.markHeld(streamId, executionId, maintenance);
       options.logger?.warn(
         `Execution ${executionId} was claimed while restart repair settled stream ${streamId}; now held elsewhere`,
         { data: { streamId, owner: maintenance.owner } },

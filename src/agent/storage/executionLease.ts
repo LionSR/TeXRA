@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
+import * as os from 'node:os';
 import * as path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import pDefer, { type DeferredPromise } from 'p-defer';
 import PQueue from 'p-queue';
@@ -17,8 +19,9 @@ import {
   currentLeaseOwner,
   LeaseOwnerSchema,
   type LeaseOwnerRecord,
+  type OwnerHold,
   type OwnerLiveness,
-  ownerPidExistsOnThisHost,
+  ownerHold,
   proveOwnerLiveness,
 } from './leaseOwnerLiveness';
 
@@ -52,37 +55,74 @@ type ExecutionLeaseRecord = z.infer<typeof ExecutionLeaseSchema>;
  * `executionLeases/<executionId>.json`. A presence-socket record (v2,
  * shipped in 0.40.4) can belong to a process that is live during a rolling
  * upgrade, so it is read as an ordinary claim whose owner is proven by pid
- * alone (its start time was never recorded). A heartbeat record (v1) names
- * no process: it is never touched automatically and is removed only by an
- * explicit reclaim.
+ * alone (no start identity was ever recorded). A heartbeat record (v1)
+ * predates 0.40.4 and names no process: it is a tombstone, retired on
+ * contact, exactly as 0.40.4 treated it.
  */
 const LegacyLeaseSchema = z.union([
   z
     .looseObject({
       version: z.literal(2),
       executionId: LeaseExecutionIdSchema,
-      ownerToken: z.string().min(1),
+      ownerToken: z.uuid(),
       acquiredAt: z.int().nonnegative(),
       owner: z.looseObject({
-        pid: z.int().nonnegative(),
+        pid: z.int().positive(),
         hostname: z.string().min(1),
       }),
     })
-    .transform((record): ExecutionLeaseRecord => ({
-      version: 3,
+    .transform((record) =>
+      ExecutionLeaseSchema.parse({
+        version: 3,
+        executionId: record.executionId,
+        ownerToken: record.ownerToken,
+        acquiredAt: record.acquiredAt,
+        owner: {
+          pid: record.owner.pid,
+          processStart: null,
+          hostname: record.owner.hostname,
+        },
+      } satisfies ExecutionLeaseRecord),
+    ),
+  z
+    .looseObject({ version: z.literal(1) })
+    .transform(() => 'tombstone' as const),
+]);
+
+/**
+ * COMPATIBILITY SHIM, delete after v0.41 ships: the v2 record a 0.40.4
+ * process reads at the single-file path. While this process holds a v3
+ * claim it keeps one of these beside it, naming its own token and pid and a
+ * socket path that does not exist. A 0.40.4 reader probes that path, gets
+ * ENOENT, sees the pid alive, and treats the owner as active, so it backs
+ * off instead of claiming beside a v3 owner it cannot see. 0.40.4 validates
+ * the record strictly, so every field it expects is present.
+ */
+function legacyShadowRecord(record: ExecutionLeaseRecord): string {
+  const socketPath =
+    process.platform === 'win32'
+      ? `\\\\.\\pipe\\texra-${record.ownerToken}`
+      : path.join(os.tmpdir(), `texra-${record.ownerToken}.sock`);
+  return `${JSON.stringify(
+    {
+      version: 2,
       executionId: record.executionId,
       ownerToken: record.ownerToken,
       acquiredAt: record.acquiredAt,
       owner: {
+        instanceId: record.ownerToken,
+        socketPath,
         pid: record.owner.pid,
-        processStartTime: null,
         hostname: record.owner.hostname,
       },
-    })),
-  z
-    .looseObject({ version: z.literal(1) })
-    .transform(() => 'heartbeat' as const),
-]);
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+/** How long a claimant waits before re-reading a competitor's claim. */
+const CLAIM_RECHECK_MS = 20;
 
 /**
  * A claim loop re-reads after every lost race; each lost round means another
@@ -110,25 +150,16 @@ export type ExecutionLeasePresence =
       readonly acquiredAt: number;
       readonly owner: LeaseOwnerRecord;
       readonly provable: true;
+      readonly reclaimable: false;
     }
-  | {
-      readonly status: 'foreign';
-      readonly acquiredAt: number;
-      readonly owner: LeaseOwnerRecord;
-      /** False when the owner could not be proven alive or dead. */
-      readonly provable: boolean;
-    };
+  | ({ readonly status: 'foreign'; readonly acquiredAt: number } & OwnerHold);
 
 /**
  * A record this process may not touch: its owner is alive, or its liveness
  * could not be proven (`provable: false`). The one shape both the claim
  * protocol and the maintenance entry point report a refusal with.
  */
-type LeaseHeld = {
-  readonly status: 'active';
-  readonly owner: LeaseOwnerRecord;
-  readonly provable: boolean;
-};
+type LeaseHeld = { readonly status: 'active' } & OwnerHold;
 
 export type InactiveExecutionLeaseResult<T> =
   LeaseHeld | { readonly status: 'performed'; readonly value: T };
@@ -146,35 +177,34 @@ export type OwnedExecutionLeaseScope = <T>(
   operation: () => T | Promise<T>,
 ) => T | Promise<T>;
 
-export class ExecutionLeaseActiveError extends Error {
-  constructor(
-    readonly executionId: ExecutionId,
-    readonly owner: LeaseOwnerRecord,
-    /** False when the owner could not be proven alive or dead. */
-    readonly provable: boolean,
-  ) {
-    super(
-      provable
-        ? `Execution ${executionId} is active in TeXRA.`
-        : `Execution ${executionId} is held by a TeXRA process that cannot be reached (pid ${owner.pid} on ${owner.hostname}).`,
-    );
-    this.name = 'ExecutionLeaseActiveError';
+/** Why an execution refused a claim, in the words the user is shown. */
+export function executionHeldMessage(
+  executionId: ExecutionId,
+  hold: OwnerHold,
+): string {
+  if (hold.provable) return `Execution ${executionId} is active in TeXRA.`;
+  if (hold.reclaimable) {
+    return `Execution ${executionId} is held by a TeXRA process that cannot be reached (pid ${hold.owner.pid} on ${hold.owner.hostname}).`;
   }
+  return `Execution ${executionId} is held by pid ${hold.owner.pid} on this machine; its identity could not be read.`;
 }
 
-/**
- * A record that names no process (the retired heartbeat protocol). Every
- * automatic path fails closed on it; `reclaimExecutionLease` removes it.
- */
-export class ExecutionLeaseUnreadableError extends Error {
+export class ExecutionLeaseActiveError extends Error implements OwnerHold {
+  readonly owner: LeaseOwnerRecord;
+  /** False when the owner could not be proven alive. */
+  readonly provable: boolean;
+  /** True when an explicit reclaim would remove the record. */
+  readonly reclaimable: boolean;
+
   constructor(
     readonly executionId: ExecutionId,
-    readonly file: string,
+    hold: OwnerHold,
   ) {
-    super(
-      `Execution ${executionId} has a lease record from a retired protocol that names no process (${file}).`,
-    );
-    this.name = 'ExecutionLeaseUnreadableError';
+    super(executionHeldMessage(executionId, hold));
+    this.name = 'ExecutionLeaseActiveError';
+    this.owner = hold.owner;
+    this.provable = hold.provable;
+    this.reclaimable = hold.reclaimable;
   }
 }
 
@@ -321,13 +351,17 @@ function claimPath(root: string, executionId: ExecutionId, ownerToken: string) {
   return path.join(claimDir(root, executionId), `${ownerToken}.json`);
 }
 
-/** A claim as found on disk; `file` is what a reclaim unlinks. */
+/**
+ * A claim as found on disk. `files` is everything a reap or reclaim unlinks
+ * for it: the claim file, plus the legacy shadow record when the claim's
+ * owner keeps one (see `legacyShadowRecord`).
+ */
 interface StoredClaim {
-  readonly file: string;
+  readonly files: readonly string[];
   readonly record: ExecutionLeaseRecord;
 }
 
-async function readClaimFile<T extends ExecutionLeaseRecord | 'heartbeat'>(
+async function readClaimFile<T extends ExecutionLeaseRecord | 'tombstone'>(
   file: string,
   executionId: ExecutionId,
   schema: z.ZodType<T>,
@@ -339,7 +373,7 @@ async function readClaimFile<T extends ExecutionLeaseRecord | 'heartbeat'>(
     if (isFileNotFoundError(error)) return undefined;
     throw error;
   }
-  if (stored !== 'heartbeat' && stored.executionId !== executionId) {
+  if (stored !== 'tombstone' && stored.executionId !== executionId) {
     throw new Error(
       `Execution lease identity mismatch: expected ${executionId}, found ${stored.executionId}.`,
     );
@@ -348,32 +382,46 @@ async function readClaimFile<T extends ExecutionLeaseRecord | 'heartbeat'>(
 }
 
 /**
- * Every claim currently on disk for an execution, in token order. Pure: a
- * file that vanishes between the listing and its read belongs to a claimant
- * that backed out or released, and is simply not reported. A heartbeat
- * record fails closed here, so no automatic path ever acts beside it.
+ * The record at the legacy single-file path, or undefined. A heartbeat
+ * tombstone is deleted on contact: no supported version writes one and the
+ * protocol it belongs to expired its own records.
  */
-async function readClaims(
+async function readLegacyRecord(
   executionId: ExecutionId,
   root: string,
-  options: { tolerateHeartbeat?: boolean } = {},
-): Promise<{ claims: StoredClaim[]; heartbeatFile: string | undefined }> {
-  const claims: StoredClaim[] = [];
-  let heartbeatFile: string | undefined;
+): Promise<ExecutionLeaseRecord | undefined> {
   const legacyFile = legacyLeasePath(root, executionId);
   const legacy = await readClaimFile(
     legacyFile,
     executionId,
     LegacyLeaseSchema,
   );
-  if (legacy === 'heartbeat') {
-    if (!options.tolerateHeartbeat) {
-      throw new ExecutionLeaseUnreadableError(executionId, legacyFile);
-    }
-    heartbeatFile = legacyFile;
-  } else if (legacy) {
-    claims.push({ file: legacyFile, record: legacy });
+  if (legacy !== 'tombstone') return legacy;
+  log.warn(
+    `Deleted retired heartbeat-era lease record for execution ${executionId}`,
+  );
+  try {
+    await StorageFS.delete(legacyFile);
+  } catch (error) {
+    if (!isFileNotFoundError(error)) throw error;
   }
+  return undefined;
+}
+
+/**
+ * Every claim currently on disk for an execution, in token order. A file
+ * that vanishes between the listing and its read belongs to a claimant that
+ * backed out or released, and is simply not reported. A legacy record whose
+ * token matches a claim file is that claim's shadow, not a second claim: its
+ * owner's verdict comes from the claim file, which carries the identity.
+ */
+async function readClaims(
+  executionId: ExecutionId,
+  root: string,
+): Promise<StoredClaim[]> {
+  const claims: StoredClaim[] = [];
+  const legacyFile = legacyLeasePath(root, executionId);
+  const legacy = await readLegacyRecord(executionId, root);
   let entries: [string, number][];
   try {
     entries = await StorageFS.readDir(claimDir(root, executionId));
@@ -381,6 +429,7 @@ async function readClaims(
     if (!isFileNotFoundError(error)) throw error;
     entries = [];
   }
+  let shadowed = false;
   for (const [name] of entries) {
     if (!name.endsWith('.json')) continue;
     const file = path.join(claimDir(root, executionId), name);
@@ -391,11 +440,14 @@ async function readClaims(
         `Execution lease identity mismatch: ${file} names owner ${record.ownerToken}.`,
       );
     }
-    claims.push({ file, record });
+    const shadow = legacy?.ownerToken === record.ownerToken;
+    shadowed ||= shadow;
+    claims.push({ files: shadow ? [file, legacyFile] : [file], record });
   }
+  if (legacy && !shadowed) claims.push({ files: [legacyFile], record: legacy });
   // Plain code-unit order: every process must agree on it, unlike a locale.
   claims.sort((a, b) => (a.record.ownerToken < b.record.ownerToken ? -1 : 1));
-  return { claims, heartbeatFile };
+  return claims;
 }
 
 interface JudgedClaim extends StoredClaim {
@@ -412,7 +464,7 @@ async function judgeClaims(
   root: string,
   ownToken?: string,
 ): Promise<JudgedClaim[]> {
-  const { claims } = await readClaims(executionId, root);
+  const claims = await readClaims(executionId, root);
   const local = ownedLeases.get(ownershipKey(root, executionId));
   const judged: JudgedClaim[] = [];
   for (const claim of claims) {
@@ -445,14 +497,37 @@ async function reapDeadClaims(judged: JudgedClaim[]): Promise<JudgedClaim[]> {
     log.warn(
       `Execution ${claim.record.executionId}: removing the lease of dead pid ${claim.record.owner.pid}`,
     );
-    await StorageFS.delete(claim.file);
+    await deleteFiles(claim.files);
   }
   return survivors;
+}
+
+async function deleteFiles(files: readonly string[]): Promise<void> {
+  for (const file of files) {
+    try {
+      await StorageFS.delete(file);
+    } catch (error) {
+      if (!isFileNotFoundError(error)) throw error;
+    }
+  }
 }
 
 /** The claim to report when several refuse: a proven-alive owner first. */
 function shownClaim(survivors: readonly JudgedClaim[]): JudgedClaim {
   return survivors.find((c) => c.liveness === 'alive') ?? survivors[0]!;
+}
+
+function holdOf(claim: JudgedClaim): OwnerHold {
+  if (claim.liveness === 'dead') {
+    throw new Error(
+      `Execution ${claim.record.executionId}: a dead claim cannot hold it.`,
+    );
+  }
+  return ownerHold(claim.record.owner, claim.liveness);
+}
+
+function heldBy(survivors: readonly JudgedClaim[]): LeaseHeld {
+  return { status: 'active', ...holdOf(shownClaim(survivors)) };
 }
 
 /** Publish this process's claim file, complete and durable, under its token. */
@@ -478,13 +553,30 @@ async function publishClaim(
   }
 }
 
-/** Unlink this process's own claim file, then the directory if it is empty. */
+/**
+ * Unlink this process's own claim file and its legacy shadow, then the
+ * directory if it is empty. A file already gone is fine: the claim may have
+ * been reclaimed from under this process, and a release must still settle.
+ */
 async function unlinkOwnClaim(
   executionId: ExecutionId,
   root: string,
   ownerToken: string,
 ): Promise<void> {
-  await StorageFS.delete(claimPath(root, executionId, ownerToken));
+  // The shadow is only this process's while it names this token; a 0.40.4
+  // process could have rewritten the path in the meantime.
+  const legacy = await readLegacyRecord(executionId, root).catch((error) => {
+    log.warn(`Execution ${executionId}: could not read its legacy record`, {
+      data: error,
+    });
+    return undefined;
+  });
+  await deleteFiles([
+    ...(legacy?.ownerToken === ownerToken
+      ? [legacyLeasePath(root, executionId)]
+      : []),
+    claimPath(root, executionId, ownerToken),
+  ]);
   try {
     await StorageFS.removeEmptyDir(claimDir(root, executionId));
   } catch (error) {
@@ -512,14 +604,19 @@ type ClaimOutcome =
  * 2. Publish this process's claim file.
  * 3. Read again. No other live claim means this claim stands alone and has
  *    won: any claimant publishing later will see this file and back out.
- *    Otherwise back out by unlinking the own file and look again from step 1,
- *    which reports whoever is still there. Two claimants that each saw the
- *    other resolve deterministically: the lexically larger token backs out at
- *    once, the smaller re-reads once to let it go and wins if it did.
+ *    Two claimants that each see the other resolve by token order: the
+ *    lexically larger backs out (unlinks its own file) and looks again from
+ *    step 1, which reports whoever is still there; the smaller keeps
+ *    re-reading until every larger file is gone and wins. A claimant never
+ *    yields to a larger token, so the set of competitors above it only
+ *    shrinks and the smallest always wins. A larger competitor that is alive
+ *    but stuck exhausts the re-read bound, at which point reporting it as
+ *    active is honest: that process really is alive.
  *
  * `admit` runs at most once, just before the first publish, so an admission
  * that is withdrawn never leaves a file behind; a claim made without one can
- * therefore never be cancelled.
+ * therefore never be cancelled. Whatever happens after the publish, a claim
+ * that did not win is unlinked before this returns or throws.
  */
 function claimLease(
   executionId: ExecutionId,
@@ -538,14 +635,7 @@ async function claimLease(
   let admitted = admit === undefined;
   for (let round = 0; round < MAX_CLAIM_ROUNDS; round += 1) {
     const present = await reapDeadClaims(await judgeClaims(executionId, root));
-    if (present.length > 0) {
-      const shown = shownClaim(present);
-      return {
-        status: 'active',
-        owner: shown.record.owner,
-        provable: shown.liveness === 'alive',
-      };
-    }
+    if (present.length > 0) return heldBy(present);
     if (!admitted) {
       if ((await admit?.()) === false) return { status: 'cancelled' };
       admitted = true;
@@ -558,16 +648,34 @@ async function claimLease(
       owner: await currentLeaseOwner(),
     } satisfies ExecutionLeaseRecord);
     await publishClaim(root, record);
-    for (let check = 0; ; check += 1) {
-      const others = await reapDeadClaims(
-        await judgeClaims(executionId, root, record.ownerToken),
-      );
-      if (others.length === 0) return { status: 'claimed', record };
-      const yields =
-        check > 0 || others[0]!.record.ownerToken < record.ownerToken;
-      if (yields) break;
+    let stuck: JudgedClaim[] | undefined;
+    try {
+      for (let check = 0; check < MAX_CLAIM_ROUNDS; check += 1) {
+        const others = await reapDeadClaims(
+          await judgeClaims(executionId, root, record.ownerToken),
+        );
+        if (others.length === 0) {
+          // COMPATIBILITY SHIM, delete after v0.41 ships: keep a v2 record a
+          // 0.40.4 process can see for as long as this claim is held.
+          await StorageFS.writeAtomic(
+            legacyLeasePath(root, executionId),
+            legacyShadowRecord(record),
+          );
+          return { status: 'claimed', record };
+        }
+        if (others[0]!.record.ownerToken < record.ownerToken) {
+          stuck = undefined;
+          break;
+        }
+        stuck = others;
+        await delay(CLAIM_RECHECK_MS);
+      }
+    } catch (error) {
+      await unlinkOwnClaim(executionId, root, record.ownerToken);
+      throw error;
     }
     await unlinkOwnClaim(executionId, root, record.ownerToken);
+    if (stuck) return heldBy(stuck);
   }
   throw new Error(
     `Execution ${executionId}: lost the lease claim race ${MAX_CLAIM_ROUNDS} times in a row.`,
@@ -728,7 +836,10 @@ export async function validateOwnedExecutionLease(
 /**
  * Fence an execution-store mutation when this process claims ownership.
  * Maintenance callers without local ownership already run under
- * `runWithInactiveExecutionLease` and continue directly.
+ * `runWithInactiveExecutionLease` and continue directly. A mutation with
+ * neither (no production path has one; test fixtures write metadata this
+ * way) claims the execution for its own duration, so it is never an
+ * unsynchronized check-then-write beside another process.
  */
 export async function runWithExecutionLeaseWriteFence<T>(
   executionId: ExecutionId,
@@ -749,10 +860,22 @@ export async function runWithExecutionLeaseWriteFence<T>(
     throw new ExecutionLeaseLostError(executionId);
   }
   if (lease) return runWithValidatedOwnership(lease, operation);
-  const { claims } = await readClaims(executionId, root);
-  if (claims.length > 0) throw new ExecutionLeaseLostError(executionId);
-  return operation();
+  // Unleased writers in this process take turns, so that two of them never
+  // refuse each other over the maintenance claim the first one holds.
+  const queue =
+    unleasedWriteQueues.get(key) ??
+    unleasedWriteQueues.set(key, new PQueue({ concurrency: 1 })).get(key)!;
+  const claimed = (await queue.add(() =>
+    runWithInactiveExecutionLease(executionId, operation),
+  )) as InactiveExecutionLeaseResult<T>;
+  if (queue.size === 0 && queue.pending === 0) unleasedWriteQueues.delete(key);
+  if (claimed.status === 'active') {
+    throw new ExecutionLeaseLostError(executionId);
+  }
+  return claimed.value;
 }
+
+const unleasedWriteQueues = new Map<string, PQueue>();
 
 function acquireExecutionLease(
   executionId: ExecutionId,
@@ -797,11 +920,7 @@ async function acquireExecutionLease(
       case 'cancelled':
         return 'cancelled';
       case 'active':
-        throw new ExecutionLeaseActiveError(
-          executionId,
-          claim.owner,
-          claim.provable,
-        );
+        throw new ExecutionLeaseActiveError(executionId, claim);
       case 'claimed': {
         const stale = ownedLeases.get(key);
         if (stale) forgetOwnedLease(stale);
@@ -970,6 +1089,7 @@ export async function inspectExecutionLease(
       acquiredAt: own.record.acquiredAt,
       owner: own.record.owner,
       provable: true,
+      reclaimable: false,
     };
   }
   const survivors = judged.filter((c) => c.liveness !== 'dead');
@@ -978,45 +1098,33 @@ export async function inspectExecutionLease(
   return {
     status: 'foreign',
     acquiredAt: shown.record.acquiredAt,
-    owner: shown.record.owner,
-    provable: shown.liveness === 'alive',
+    ...holdOf(shown),
   };
 }
 
 /**
- * Remove every record whose owner is not provably alive, so the execution
+ * Remove every record whose owner is dead or unprovable, so the execution
  * can be claimed again. This is the user's explicit Reclaim action for an
  * owner that cannot be reached; every automatic path keeps refusing such a
- * record. A pid that exists on this host counts as alive here even when its
- * start time cannot be compared (every live owner on Windows): the
- * destructive path must not guess. Only a dead or foreign-host owner, or a
- * heartbeat-protocol record, is reclaimable.
+ * record. A pid that exists on this host whose identity cannot be read
+ * (`unreadable`) counts as alive here: the destructive path must not guess.
+ * Only a dead or foreign-host owner is reclaimable, which is exactly what
+ * `OwnerHold.reclaimable` promises the user.
  */
 export async function reclaimExecutionLease(
   executionId: ExecutionId,
 ): Promise<'reclaimed' | 'missing' | 'alive'> {
   const root = storageRoot();
-  const { claims, heartbeatFile } = await readClaims(executionId, root, {
-    tolerateHeartbeat: true,
-  });
-  const local = ownedLeases.get(ownershipKey(root, executionId));
-  for (const { record } of claims) {
-    if (local?.ownerToken === record.ownerToken) return 'alive';
-    const liveness = await proveOwnerLiveness(record.owner);
-    if (liveness === 'alive') return 'alive';
-    if (liveness === 'unprovable' && ownerPidExistsOnThisHost(record.owner)) {
-      return 'alive';
-    }
+  const judged = await judgeClaims(executionId, root);
+  if (judged.some((c) => c.liveness !== 'dead' && !holdOf(c).reclaimable)) {
+    return 'alive';
   }
-  const files = [
-    ...claims.map((c) => c.file),
-    ...(heartbeatFile ? [heartbeatFile] : []),
-  ];
+  const files = judged.flatMap((c) => c.files);
   if (files.length === 0) return 'missing';
   for (const file of files) {
     log.warn(`Execution ${executionId}: reclaiming lease record ${file}`);
-    await StorageFS.delete(file);
   }
+  await deleteFiles(files);
   try {
     await StorageFS.removeEmptyDir(claimDir(root, executionId));
   } catch (error) {
@@ -1048,8 +1156,7 @@ export async function runWithInactiveExecutionLease<T>(
       // live local owner.
       return {
         status: 'active',
-        owner: await currentLeaseOwner(),
-        provable: true,
+        ...ownerHold(await currentLeaseOwner(), 'alive'),
       };
     }
     forgetOwnedLease(local, { notifyLoss: true });

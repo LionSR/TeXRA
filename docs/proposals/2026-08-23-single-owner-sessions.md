@@ -142,10 +142,15 @@ history as "running in another TeXRA window", read-only, with no
 composer.
 
 **D2. Liveness is a pid check, not a socket protocol.** The lease record
-keeps `{executionId, ownerToken, pid, processStartTime, hostname}`.
-An owner is dead iff `kill(pid, 0)` gives `ESRCH`, or the pid exists with a
-different start time (pid reuse). Different hostname or any error is
-"unprovable", which still means "do not touch". This is sleep-safe (the
+keeps `{executionId, ownerToken, pid, processStart, hostname}`, where
+`processStart` is an opaque identity the `processes` port produces that
+cannot change under a live process (Linux: boot id plus raw start ticks
+from `/proc/<pid>/stat`; macOS/BSD: `ps -o lstart=` under `LC_ALL=C`;
+Windows: the PowerShell process start time). An owner is dead iff
+`kill(pid, 0)` gives `ESRCH`, or the pid exists with a different identity
+(pid reuse). Different hostname is "unprovable" (reclaimable on explicit
+request); a pid that exists on this host whose identity cannot be read is
+"unreadable" (not even reclaimable). Both mean "do not touch". This is sleep-safe (the
 failure that motivated the presence PRD was wall-clock TTLs, which this
 does not reintroduce) and deletes `instancePresence.ts` (367 L), the
 owner-exit watch (`SessionHandle.ts:869-891`), and the probe plumbing in
@@ -466,7 +471,10 @@ composerVisible = kind === 'live' || kind === 'resumable'
 **Migration verdict: none needed.** Everything that changes is derived
 tier under the #9434 rule (`StreamLogStore.ts:97-105` states discard and
 rebuild for the summary). Lease v2 → v3 reuses the existing v1 tombstone
-arm. `meta.json` and `flow_*.json` are authored and do not change shape;
+arm. Rolling-upgrade shim, delete after v0.41 ships: a v3 owner also keeps
+a v2-shaped record at the old single-file path naming its pid and a socket
+path that does not exist, so a 0.40.4 process sees an active owner and
+backs off (`legacyShadowRecord` in `executionLease.ts`). `meta.json` and `flow_*.json` are authored and do not change shape;
 D8 changes who writes `outcome` and when the flow record is deleted, not
 the format.
 

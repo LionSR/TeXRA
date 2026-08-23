@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 import { describeResumeFailure, resolveAndResumeStream } from '@agent/runtime';
 import {
-  ExecutionLeaseUnreadableError,
+  executionHeldMessage,
   getExecutionStore,
   inspectExecutionLease,
   reclaimExecutionLease,
@@ -44,10 +44,6 @@ function leaseInspectionFailureMessage(
   error: unknown,
 ): string {
   return `Could not check whether execution ${id} is active: ${toErrorMessage(error)}`;
-}
-
-function activeExecutionMessage(id: ExecutionId): string {
-  return `Execution ${id} is active in TeXRA.`;
 }
 
 async function workflowRecoveryInputsAreDurable(
@@ -102,35 +98,28 @@ export async function runResumeExecution(
   // Gate resume on the lease: a provably live owner refuses, and an owner
   // that cannot be reached refuses unless `--reclaim` was given. The record
   // itself is removed only after the preflight below, so a refused resume
-  // never leaves the run unowned.
-  let reclaimFrom: { pid: number; hostname: string } | undefined | null;
+  // never leaves the run unowned. `--reclaim` is offered only where the
+  // reclaim would succeed; a pid on this machine whose identity could not
+  // be read is refused by the reclaim too, so the user is told to wait.
+  let reclaimFrom: { pid: number; hostname: string } | undefined;
   try {
     const lease = await inspectExecutionLease(id);
     if (lease.status === 'owned' || lease.status === 'foreign') {
-      if (lease.provable) {
-        writeTextStderr(activeExecutionMessage(id));
+      if (lease.provable || !lease.reclaimable) {
+        writeTextStderr(executionHeldMessage(id, lease));
         return CliExitCode.Usage;
       }
       if (!reclaim) {
         writeTextStderr(
-          `Execution ${id} is held by a TeXRA process that cannot be reached (pid ${lease.owner.pid} on ${lease.owner.hostname}). If you are sure it is gone, rerun with --reclaim.`,
+          `${executionHeldMessage(id, lease)} If you are sure it is gone, rerun with --reclaim.`,
         );
         return CliExitCode.Usage;
       }
       reclaimFrom = lease.owner;
     }
   } catch (error) {
-    if (!(error instanceof ExecutionLeaseUnreadableError)) {
-      writeTextStderr(leaseInspectionFailureMessage(id, error));
-      return CliExitCode.AgentError;
-    }
-    if (!reclaim) {
-      writeTextStderr(
-        `${error.message} If you are sure no TeXRA process holds it, rerun with --reclaim.`,
-      );
-      return CliExitCode.Usage;
-    }
-    reclaimFrom = null;
+    writeTextStderr(leaseInspectionFailureMessage(id, error));
+    return CliExitCode.AgentError;
   }
   // FK-first: the stream id stamped at registration is the reproduction
   // contract. A row without one has no persisted stream to continue.
@@ -186,17 +175,17 @@ export async function runResumeExecution(
       return CliExitCode.AgentError;
     }
     if (outcome === 'alive') {
-      writeTextStderr(activeExecutionMessage(id));
+      writeTextStderr(
+        `Execution ${id} is held by a process that is still running; nothing was reclaimed.`,
+      );
       return CliExitCode.Usage;
     }
     if (outcome === 'missing') {
       writeTextStderr(`Execution ${id} is no longer held; resuming.`);
-    } else if (reclaimFrom) {
+    } else {
       writeTextStderr(
         `Reclaimed execution ${id} from pid ${reclaimFrom.pid} on ${reclaimFrom.hostname}.`,
       );
-    } else {
-      writeTextStderr(`Reclaimed execution ${id}.`);
     }
   }
 
