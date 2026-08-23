@@ -31,7 +31,7 @@ import { formatWorkflowRunContext } from '@shared/copy/workflowRunContext';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import {
   progressHeaderStatus,
-  STREAM_HELD_ELSEWHERE_MESSAGE,
+  streamHeldMessage,
   streamStatusIndicatorClass,
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
@@ -545,7 +545,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
             })}
           ></span>
           <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
-            ${status === STREAM_LIFECYCLE_HELD ? STREAM_HELD_ELSEWHERE_MESSAGE : statusLabel}
+            ${status === STREAM_LIFECYCLE_HELD ? streamHeldMessage(state?.holderProvable) : statusLabel}
           </wa-tooltip>
           ${this.renderRunElapsed(state?.runStartedAt)}
           ${this.renderGoalChip(goalActive, goalStatus, goalObjective)}

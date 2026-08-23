@@ -81,8 +81,19 @@ const STREAM_STATUS_LABELS = {
 } as const;
 
 /** Tooltip and banner copy for a stream held by another TeXRA process. */
-export const STREAM_HELD_ELSEWHERE_MESSAGE =
+const STREAM_HELD_ELSEWHERE_MESSAGE =
   'Held by another TeXRA window. Close that window or let it finish before acting on this run here.';
+
+/** Copy for a held stream whose holder could not be proven alive or dead. */
+const STREAM_HELD_UNREACHABLE_MESSAGE =
+  'Held by a process that cannot be reached. If you are sure it is gone, reclaim the run with `texra resume <id> --reclaim`.';
+
+/** Banner and tooltip copy for a held stream, by whether its holder was reached. */
+export function streamHeldMessage(holderProvable: boolean | undefined): string {
+  return holderProvable === false
+    ? STREAM_HELD_UNREACHABLE_MESSAGE
+    : STREAM_HELD_ELSEWHERE_MESSAGE;
+}
 
 export type StreamStatusLabelStyle = keyof typeof STREAM_STATUS_LABELS;
 

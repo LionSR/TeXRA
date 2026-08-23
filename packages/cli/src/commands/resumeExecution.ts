@@ -2,7 +2,11 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { describeResumeFailure, resolveAndResumeStream } from '@agent/runtime';
-import { getExecutionStore, inspectExecutionLease } from '@agent/storage';
+import {
+  getExecutionStore,
+  inspectExecutionLease,
+  reclaimExecutionLease,
+} from '@agent/storage';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -45,6 +49,51 @@ function activeExecutionMessage(id: ExecutionId): string {
   return `Execution ${id} is active in TeXRA.`;
 }
 
+function unreachableOwnerMessage(
+  id: ExecutionId,
+  owner: { pid: number; hostname: string },
+): string {
+  return `Execution ${id} is held by a TeXRA process that cannot be reached (pid ${owner.pid} on ${owner.hostname}). If you are sure it is gone, rerun with --reclaim.`;
+}
+
+export interface ResumeExecutionOptions {
+  /**
+   * Remove a lease whose owner cannot be reached before resuming. Never
+   * removes a lease whose owner is provably alive.
+   */
+  readonly reclaim?: boolean;
+}
+
+/**
+ * Gate resume on the lease. A provably live owner refuses; an owner that
+ * cannot be reached refuses unless `--reclaim` was passed, in which case its
+ * record is removed here and the resume claims the execution afresh.
+ */
+async function clearLeaseForResume(
+  id: ExecutionId,
+  options: ResumeExecutionOptions,
+): Promise<number | undefined> {
+  const lease = await inspectExecutionLease(id);
+  if (lease.status !== 'owned' && lease.status !== 'foreign') return undefined;
+  if (lease.provable) {
+    writeTextStderr(activeExecutionMessage(id));
+    return CliExitCode.Usage;
+  }
+  if (!options.reclaim) {
+    writeTextStderr(unreachableOwnerMessage(id, lease.owner));
+    return CliExitCode.Usage;
+  }
+  const reclaimed = await reclaimExecutionLease(id);
+  if (reclaimed === 'alive') {
+    writeTextStderr(activeExecutionMessage(id));
+    return CliExitCode.Usage;
+  }
+  writeTextStderr(
+    `Reclaimed execution ${id} from pid ${lease.owner.pid} on ${lease.owner.hostname}.`,
+  );
+  return undefined;
+}
+
 async function workflowRecoveryInputsAreDurable(
   config: Parameters<typeof executeCliWorkflowConfig>[0],
   fallbackCwd: string,
@@ -74,6 +123,7 @@ async function workflowRecoveryInputsAreDurable(
 export async function runResumeExecution(
   context: CliContext,
   id: ExecutionId,
+  options: ResumeExecutionOptions = {},
 ): Promise<number> {
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
 
@@ -90,11 +140,8 @@ export async function runResumeExecution(
     return CliExitCode.Usage;
   }
   try {
-    const lease = await inspectExecutionLease(id);
-    if (lease.status === 'owned' || lease.status === 'foreign') {
-      writeTextStderr(activeExecutionMessage(id));
-      return CliExitCode.Usage;
-    }
+    const refused = await clearLeaseForResume(id, options);
+    if (refused !== undefined) return refused;
   } catch (error) {
     writeTextStderr(leaseInspectionFailureMessage(id, error));
     return CliExitCode.AgentError;

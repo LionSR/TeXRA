@@ -28,6 +28,7 @@ import { KeyedMutex } from '@utils/core/keyedMutex';
 import { nodeFileLocks } from './fileLocks';
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
+import { nodeProcesses } from './nodeProcesses';
 import { createNodeWorkspace } from './nodeWorkspace';
 import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
@@ -118,6 +119,7 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
     workspace: createNodeWorkspace(services.getWorkspacePath),
     storage: services.storage,
     fileLocks: nodeFileLocks,
+    processes: nodeProcesses,
     secrets: services.secrets,
     lifecycle: services.lifecycle,
     agentResume: services.agentResume,

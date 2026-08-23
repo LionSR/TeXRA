@@ -72,8 +72,8 @@ export interface RestartRepairOptions {
  * recording one. The flow record is preserved whatever its state: repair
  * records the interruption, it never deletes. The write runs in the
  * inactive-lease maintenance scope: the classifier proved the owner gone,
- * and the fenced execution write needs the dead owner's stale lease cleared
- * under the same lock an acquirer would take. Finalization problems are
+ * and the write happens under a claim of its own, which reclaims the dead
+ * owner's record exactly as an acquirer would. Finalization problems are
  * logged rather than thrown: the in-memory repair has already committed.
  */
 async function recordInterruption(
@@ -162,9 +162,11 @@ export async function repairRestartedStreams(
     }
 
     if (classification.kind === 'held_elsewhere') {
-      options.streamStatus.markHeld(streamId, classification.owner);
+      options.streamStatus.markHeld(streamId, classification.provable);
       options.logger?.debug(
-        `Stream ${streamId} is held by another process; left untouched`,
+        classification.provable
+          ? `Stream ${streamId} is held by another process; left untouched`
+          : `Stream ${streamId} is held by a process that cannot be reached; left untouched`,
       );
       continue;
     }

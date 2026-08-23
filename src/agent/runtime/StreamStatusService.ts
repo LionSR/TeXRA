@@ -1,6 +1,5 @@
 import type { StatusEvent } from '@agent/trace';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import type { InstanceOwnerRecord } from '@agent/storage/instancePresence';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -73,10 +72,7 @@ export class StreamStatusMachine {
    * display fact for the session renderer, published with the next full
    * metadata sync rather than as a phase transition.
    */
-  private readonly held = new Map<
-    StreamTabId,
-    InstanceOwnerRecord | undefined
-  >();
+  private readonly held = new Map<StreamTabId, { provable: boolean }>();
 
   /**
    * @param eventHub Session hub this machine publishes canonical `status` facts
@@ -277,13 +273,21 @@ export class StreamStatusMachine {
     return false;
   }
 
-  /** Record that another process holds `stream`'s execution. */
-  markHeld(stream: StreamTabId, owner: InstanceOwnerRecord | undefined): void {
-    this.held.set(stream, owner);
+  /**
+   * Record that another process holds `stream`'s execution. `provable` is
+   * false when that process could not be proven alive or dead.
+   */
+  markHeld(stream: StreamTabId, provable: boolean): void {
+    this.held.set(stream, { provable });
   }
 
   isHeld(stream: StreamTabId): boolean {
     return this.held.has(stream);
+  }
+
+  /** Whether the holder of a held stream is provably alive; undefined if not held. */
+  heldProvable(stream: StreamTabId): boolean | undefined {
+    return this.held.get(stream)?.provable;
   }
 
   clearStream(stream: StreamTabId): void {

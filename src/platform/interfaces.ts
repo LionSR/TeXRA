@@ -103,6 +103,13 @@ export interface FileSystemProvider {
    * files (where atomic rename would replace a user's symlink).
    */
   writeFileAtomic(path: string, content: Uint8Array): Promise<void>;
+  /**
+   * Create `path` with `content` only if it does not exist yet (`O_EXCL`).
+   * Rejects with `EEXIST` when it does. The kernel guarantees exactly one
+   * concurrent creator wins, which is what makes a claim a single atomic
+   * operation rather than a read-modify-write under a lock.
+   */
+  writeFileExclusive(path: string, content: Uint8Array): Promise<void>;
   appendFile(path: string, content: Uint8Array): Promise<void>;
   delete(path: string, options?: { recursive?: boolean }): Promise<void>;
   createDirectory(path: string): Promise<void>;
@@ -178,6 +185,23 @@ export interface StorageProvider {
    * pending commit was rolled back.
    */
   rollbackWorkspaceStorageChange?(): boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Process liveness
+// ---------------------------------------------------------------------------
+
+/**
+ * Kernel facts about processes, used to prove whether the owner recorded in
+ * an execution lease is still the same process. Start times are epoch ms
+ * truncated to whole seconds, so a value read for another pid compares
+ * exactly against one captured by that process itself.
+ */
+export interface ProcessesPort {
+  /** OS-reported start time of `pid`, or undefined when it cannot be read. */
+  startTime(pid: number): Promise<number | undefined>;
+  /** This process's own start time, captured once and then memoized. */
+  selfStartTime(): Promise<number | undefined>;
 }
 
 // ---------------------------------------------------------------------------
