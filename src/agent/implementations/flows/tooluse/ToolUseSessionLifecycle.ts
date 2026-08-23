@@ -14,6 +14,7 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   private readonly followUps: FollowUpQueue;
   private readonly lease: FollowUpConsumerLease | undefined;
   private syntheticFollowUpPending = false;
+  private waitCancelled = false;
 
   constructor(
     private readonly streamTabId: StreamTabId,
@@ -66,6 +67,20 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
       this.syntheticFollowUpPending = false;
     }
     return batch;
+  }
+
+  noteParkedWaitCancelled(): void {
+    this.waitCancelled = true;
+  }
+
+  /**
+   * Whether the parking wait ended because the queue was cancelled or
+   * disposed under the flow. Recorded by the wait node at the one site where
+   * that is unambiguous; the flow reads it so a queue taken away is recorded
+   * as a cancellation, never as a completed turn.
+   */
+  get parkedWaitCancelled(): boolean {
+    return this.waitCancelled;
   }
 
   /**

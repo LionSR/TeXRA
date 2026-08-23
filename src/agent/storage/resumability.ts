@@ -8,7 +8,6 @@ import {
 import { createLog } from '@logger/logUtils';
 import {
   ExecutionMetaCoreSchema,
-  RUN_OUTCOME,
   type ExecutionId,
   type ExecutionMeta,
   type RunOutcome,
@@ -30,13 +29,16 @@ const ResumableFlowRecordSchema = PersistedFlowRecordEnvelopeSchema.refine(
     message: 'Resumable flow shared state must be an object',
     path: ['shared'],
   },
-);
+).refine((record) => record.cursor.nextNodeId !== null, {
+  // A run that ended leaves a spent cursor; only a rewound record (cancelled
+  // or failed exits rewind to the start node) is a checkpoint to continue.
+  message: 'A spent cursor is not a resumable checkpoint',
+  path: ['cursor', 'nextNodeId'],
+});
 
 export const RESUMABILITY_CAUSE = {
   INTERRUPTED_WITH_FLOW: 'interrupted-with-flow',
   MISSING_TERMINAL_WITH_FLOW: 'missing-terminal-with-flow',
-  TERMINAL_COMPLETED: 'terminal-completed',
-  TERMINAL_FAILED: 'terminal-failed',
   MISSING_FLOW: 'missing-flow',
   INVALID_FLOW: 'invalid-flow',
   INVALID_META: 'invalid-meta',
@@ -73,24 +75,15 @@ export type ResumabilityDecision =
       readonly outcome?: RunOutcome;
     };
 
-function terminalBlockCause(
-  meta: ExecutionMeta | null,
-): NonResumableCause | undefined {
-  if (meta?.outcome === RUN_OUTCOME.COMPLETED) {
-    return RESUMABILITY_CAUSE.TERMINAL_COMPLETED;
-  }
-  if (meta?.outcome === RUN_OUTCOME.FAILED) {
-    return RESUMABILITY_CAUSE.TERMINAL_FAILED;
-  }
-  return undefined;
-}
-
 /**
  * Single storage-owned resumability decision.
  *
- * Terminal metadata is authoritative for completed/failed runs so stale flow
- * files cannot resurrect old executions. Cancelled or crash-interrupted runs
- * require a valid flow record before they are resumable.
+ * Resumable means exactly one thing: a valid flow record (the resume
+ * checkpoint) exists. The terminal outcome is read and reported on the
+ * decision for display, but it never blocks: a checkpoint is deleted only by
+ * the user or by a genuinely completed run, so a failed run that still has
+ * one is offered as "retry from the last checkpoint". Ownership is not
+ * decided here; see {@link deriveOfferableResumability}.
  */
 export async function deriveResumability(
   executionId: ExecutionId,
@@ -131,11 +124,6 @@ export async function deriveResumability(
 
   const metaFields = { outcome: meta?.outcome };
 
-  const terminalCause = terminalBlockCause(meta);
-  if (terminalCause !== undefined) {
-    return { resumable: false, cause: terminalCause, ...metaFields };
-  }
-
   let rawFlowRecord: unknown;
   try {
     rawFlowRecord = await store.read(flowKey(executionId));
@@ -170,9 +158,9 @@ export async function deriveResumability(
   return {
     resumable: true,
     cause:
-      meta?.outcome === RUN_OUTCOME.CANCELLED
-        ? RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW
-        : RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
+      meta?.outcome == null
+        ? RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW
+        : RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
     flowRecord: flowResult.data,
     ...metaFields,
   };

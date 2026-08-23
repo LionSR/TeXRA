@@ -1469,13 +1469,19 @@ describe('DesktopProgressBridge', () => {
 
     expect(detectWaitingStreams).toHaveBeenCalledOnce();
     expect(bridgeStatus(bridge).get(waitingStream)).toBe(STREAM_PHASE.WAITING);
-    expect(bridgeStatus(bridge).get(crashedStream)).toBe(STREAM_PHASE.FAILED);
+    expect(bridgeStatus(bridge).get(crashedStream)).toBe(
+      STREAM_PHASE.CANCELLED,
+    );
     expectLastLogGroupEnd(
       bridge.streamLogs,
       waitingStream,
       RUN_OUTCOME.CANCELLED,
     );
-    expectLastLogGroupEnd(bridge.streamLogs, crashedStream, RUN_OUTCOME.FAILED);
+    expectLastLogGroupEnd(
+      bridge.streamLogs,
+      crashedStream,
+      RUN_OUTCOME.CANCELLED,
+    );
   });
 
   it('starts a fresh process session on restart and repairs waiting and orphaned streams', async () => {
@@ -1536,7 +1542,7 @@ describe('DesktopProgressBridge', () => {
     expectLastLogGroupEnd(
       second.streamLogs,
       orphanedStream,
-      RUN_OUTCOME.FAILED,
+      RUN_OUTCOME.CANCELLED,
     );
     await getExecutionStore(executionId).clear();
   });
@@ -1549,8 +1555,8 @@ describe('DesktopProgressBridge', () => {
     });
 
     expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([]);
-    expectLastLogGroupEnd(bridge.streamLogs, streamId, RUN_OUTCOME.FAILED);
-    expect(bridgeStatus(bridge).get(streamId)).toBe(STREAM_PHASE.FAILED);
+    expectLastLogGroupEnd(bridge.streamLogs, streamId, RUN_OUTCOME.CANCELLED);
+    expect(bridgeStatus(bridge).get(streamId)).toBe(STREAM_PHASE.CANCELLED);
   });
 
   it('repairs only unmapped streams when waiting detection fails', async () => {
@@ -1582,7 +1588,7 @@ describe('DesktopProgressBridge', () => {
     expectLastLogGroupEnd(
       bridge.streamLogs,
       unmappedStream,
-      RUN_OUTCOME.FAILED,
+      RUN_OUTCOME.CANCELLED,
     );
     expect(
       bridge.streamLogs.get(mappedStream)?.getRange(0).at(-1),

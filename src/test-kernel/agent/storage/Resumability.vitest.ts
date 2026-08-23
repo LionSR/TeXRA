@@ -53,31 +53,20 @@ describe('deriveResumability', () => {
     });
   }
 
-  it.each([
-    {
-      name: 'does not let a stale flow record make completed executions resumable',
-      executionId: 'completed-with-flow' as ExecutionId,
-      outcome: RUN_OUTCOME.COMPLETED,
-      cause: RESUMABILITY_CAUSE.TERMINAL_COMPLETED,
-    },
-    {
-      name: 'does not let a stale flow record make failed executions resumable',
-      executionId: 'failed-with-flow' as ExecutionId,
-      outcome: RUN_OUTCOME.FAILED,
-      cause: RESUMABILITY_CAUSE.TERMINAL_FAILED,
-    },
-  ])('$name', async ({ executionId, outcome, cause }) => {
-    await writeMeta(executionId, { outcome });
+  it('keeps a failed execution resumable while its checkpoint exists', async () => {
+    const executionId = 'failed-with-flow' as ExecutionId;
+    await writeMeta(executionId, { outcome: RUN_OUTCOME.FAILED });
     await writeFlow(executionId);
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: false,
-      cause,
-      outcome,
+      resumable: true,
+      cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
+      outcome: RUN_OUTCOME.FAILED,
+      flowRecord: BASE_FLOW_RECORD,
     });
   });
 
-  it('stays non-resumable when terminal metadata persists but flow deletion fails', async () => {
+  it('stays resumable when terminal metadata persists but flow deletion fails', async () => {
     const executionId = 'failed-finalization-with-flow' as ExecutionId;
     await writeMeta(executionId, {});
     await writeFlow(executionId);
@@ -89,7 +78,7 @@ describe('deriveResumability', () => {
     await expect(
       finalizeExecution({
         executionId,
-        outcome: RUN_OUTCOME.FAILED,
+        outcome: RUN_OUTCOME.COMPLETED,
         flowRecord: 'delete',
       }),
     ).resolves.toMatchObject({
@@ -99,13 +88,27 @@ describe('deriveResumability', () => {
     });
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.TERMINAL_FAILED,
-      outcome: RUN_OUTCOME.FAILED,
+      resumable: true,
+      cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
+      outcome: RUN_OUTCOME.COMPLETED,
     });
   });
 
-  it('fails closed when terminal metadata fails for a failed execution', async () => {
+  it('does not treat a spent cursor as a checkpoint', async () => {
+    const executionId = 'completed-spent-cursor' as ExecutionId;
+    await writeMeta(executionId, { outcome: RUN_OUTCOME.COMPLETED });
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      ...BASE_FLOW_RECORD,
+      cursor: { ...BASE_FLOW_RECORD.cursor, nextNodeId: null },
+    });
+
+    await expect(deriveResumability(executionId)).resolves.toMatchObject({
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.INVALID_FLOW,
+    });
+  });
+
+  it('keeps a preserved checkpoint when terminal metadata fails for a failed execution', async () => {
     const executionId = 'failed-terminal-metadata-with-flow' as ExecutionId;
     await writeMeta(executionId, {});
     await writeFlow(executionId);
@@ -127,8 +130,7 @@ describe('deriveResumability', () => {
     });
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.MISSING_FLOW,
+      resumable: true,
     });
   });
 
@@ -257,20 +259,18 @@ describe('deriveResumability', () => {
     });
   });
 
-  it('projects only resumable executions into WAITING streams', async () => {
+  it('projects every execution with a checkpoint into WAITING streams', async () => {
     const crashExecutionId = 'waiting-crash-with-flow' as ExecutionId;
     const cancelledExecutionId = 'waiting-cancelled-with-flow' as ExecutionId;
-    const completedExecutionId = 'waiting-completed-with-flow' as ExecutionId;
+    const failedExecutionId = 'waiting-failed-with-flow' as ExecutionId;
     const missingFlowExecutionId =
       'waiting-interrupted-missing-flow' as ExecutionId;
 
     await writeFlow(crashExecutionId);
     await writeMeta(cancelledExecutionId, { outcome: RUN_OUTCOME.CANCELLED });
     await writeFlow(cancelledExecutionId);
-    await writeMeta(completedExecutionId, {
-      outcome: RUN_OUTCOME.COMPLETED,
-    });
-    await writeFlow(completedExecutionId);
+    await writeMeta(failedExecutionId, { outcome: RUN_OUTCOME.FAILED });
+    await writeFlow(failedExecutionId);
     await writeMeta(missingFlowExecutionId, {
       outcome: RUN_OUTCOME.CANCELLED,
     });
@@ -278,7 +278,7 @@ describe('deriveResumability', () => {
     const streamIdsByExecutionId = new Map<StreamTabId, ExecutionId>([
       ['crash-stream' as StreamTabId, crashExecutionId],
       ['cancelled-stream' as StreamTabId, cancelledExecutionId],
-      ['completed-stream' as StreamTabId, completedExecutionId],
+      ['failed-stream' as StreamTabId, failedExecutionId],
       ['missing-flow-stream' as StreamTabId, missingFlowExecutionId],
     ]);
 
@@ -286,6 +286,7 @@ describe('deriveResumability', () => {
       new Set<StreamTabId>([
         'crash-stream' as StreamTabId,
         'cancelled-stream' as StreamTabId,
+        'failed-stream' as StreamTabId,
       ]),
     );
   });

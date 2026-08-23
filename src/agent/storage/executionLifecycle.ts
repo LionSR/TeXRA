@@ -275,13 +275,10 @@ export async function finalizeExecution({
         : { outcome },
     );
   } catch (error) {
-    // A terminal COMPLETED/FAILED result must never retain a resumable flow,
-    // even when the caller requested preservation before the status write failed.
-    const deleteToFailClosed =
-      flowRecord === 'delete' ||
-      outcome === RUN_OUTCOME.COMPLETED ||
-      outcome === RUN_OUTCOME.FAILED;
-    if (deleteToFailClosed) {
+    // The caller's disposition stands even when the outcome write failed: a
+    // checkpoint is deleted only on request, never to fail closed. A failed
+    // metadata write with a preserved record is reported loudly below.
+    if (flowRecord === 'delete') {
       try {
         await getExecutionStore(executionId).delete(flowKey(executionId));
       } catch (deleteError) {

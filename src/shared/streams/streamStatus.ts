@@ -172,11 +172,11 @@ export function canTransitionStreamPhase(
     case STREAM_TRANSITION_CAUSE.RESTART_REPAIR:
       if (from === undefined) return true;
       if (from === to) return true;
+      // Repair restores a checkpointed stream to WAITING or records an
+      // interruption as CANCELLED; it never infers FAILED.
       return (
         from === STREAM_PHASE.RUNNING &&
-        (to === STREAM_PHASE.WAITING ||
-          to === STREAM_PHASE.FAILED ||
-          to === STREAM_PHASE.CANCELLED)
+        (to === STREAM_PHASE.WAITING || to === STREAM_PHASE.CANCELLED)
       );
   }
 }

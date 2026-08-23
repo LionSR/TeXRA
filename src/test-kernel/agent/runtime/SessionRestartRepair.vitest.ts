@@ -198,14 +198,16 @@ describe('SessionHandle restart repair', () => {
     const session = openDeferredSession(transcripts);
     await session.waitUntilReady();
 
-    expect(session.status.get(streamId)).toBe(STREAM_PHASE.FAILED);
+    // Owner gone, no usable checkpoint: an interruption, never an inferred
+    // error, and repair leaves whatever flow record exists alone.
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
     await expect(executionStore.readMeta()).resolves.toMatchObject({
-      outcome: RUN_OUTCOME.FAILED,
+      outcome: RUN_OUTCOME.CANCELLED,
     });
-    await expect(
-      executionStore.read(flowKey(executionId)),
-    ).resolves.toBeUndefined();
-    expectClosedWith(transcripts, streamId, RUN_OUTCOME.FAILED);
+    await expect(executionStore.read(flowKey(executionId))).resolves.toEqual({
+      invalid: true,
+    });
+    expectClosedWith(transcripts, streamId, RUN_OUTCOME.CANCELLED);
   });
 
   // The CLI and the VS Code extension open the process session without
@@ -230,8 +232,8 @@ describe('SessionHandle restart repair', () => {
     await session.waitUntilReady();
 
     expect(detectWaiting).toHaveBeenCalledOnce();
-    expect(session.status.get(eagerStreamId)).toBe(STREAM_PHASE.FAILED);
-    expectClosedWith(transcripts, eagerStreamId, RUN_OUTCOME.FAILED);
+    expect(session.status.get(eagerStreamId)).toBe(STREAM_PHASE.CANCELLED);
+    expectClosedWith(transcripts, eagerStreamId, RUN_OUTCOME.CANCELLED);
   });
 
   it('preserves recovery state when present execution metadata is malformed', async () => {
@@ -642,10 +644,10 @@ describe('SessionHandle restart repair', () => {
       executionStore.read(flowKey(degradedExecutionId)),
     ).resolves.toEqual(validFlowRecord);
 
-    // An unmapped stream owns no execution: it is failed in-transcript
+    // An unmapped stream owns no execution: it is interrupted in-transcript
     // only, with no execution-store writes.
-    expect(session.status.get(unmappedStreamId)).toBe(STREAM_PHASE.FAILED);
-    expectClosedWith(transcripts, unmappedStreamId, RUN_OUTCOME.FAILED);
+    expect(session.status.get(unmappedStreamId)).toBe(STREAM_PHASE.CANCELLED);
+    expectClosedWith(transcripts, unmappedStreamId, RUN_OUTCOME.CANCELLED);
   });
 
   it('replaces stores with evictAll + bounded preload at the workspace-root boundary', async () => {
@@ -925,13 +927,15 @@ describe('SessionHandle restart repair', () => {
 
       await foreign.shutdown();
       await vi.waitFor(() => {
-        expect(session.status.get(rollbackStreamId)).toBe(STREAM_PHASE.FAILED);
+        expect(session.status.get(rollbackStreamId)).toBe(
+          STREAM_PHASE.CANCELLED,
+        );
       });
 
       await expect(executionStore.readMeta()).resolves.toMatchObject({
-        outcome: RUN_OUTCOME.FAILED,
+        outcome: RUN_OUTCOME.CANCELLED,
       });
-      expectClosedWith(transcripts, rollbackStreamId, RUN_OUTCOME.FAILED);
+      expectClosedWith(transcripts, rollbackStreamId, RUN_OUTCOME.CANCELLED);
     } finally {
       session.dispose();
       vi.useRealTimers();
