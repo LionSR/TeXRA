@@ -12,10 +12,12 @@
  *   as CANCELLED with the flow record preserved. A resumable stream is then
  *   continued only through the explicit Resume affordance.
  *
- * Classification reads only and runs in parallel; settlement is sequential
- * and fenced: the phase transition, the transcript close, and the outcome
- * write all happen inside one inactive-lease scope, so an acquirer cannot
- * claim the run between the classification and the write.
+ * Classification reads only and runs in parallel; it decides which streams
+ * need a settlement claim. Settlement is sequential and fenced: inside one
+ * inactive-lease scope the run is classified again and that fresh result is
+ * the one acted on, so a run another process claimed and finished between the
+ * pre-pass and the lock is published on its persisted outcome and nothing is
+ * written over it.
  *
  * Invariant: a resume checkpoint (`executions/<id>/flow_<id>.json`) is deleted
  * only by the user or by a genuinely COMPLETED run. Repair never infers FAILED
@@ -86,6 +88,11 @@ export interface RestartRepairOptions {
     executionId: ExecutionId | undefined,
   ) => boolean;
 }
+
+type HoldClassification = Extract<
+  RunClassification,
+  { kind: 'owned_here' | 'held_elsewhere' | 'unclassified' }
+>;
 
 interface ClassifiedStream {
   readonly streamId: StreamTabId;
@@ -184,16 +191,13 @@ export async function repairRestartedStreams(
     },
   );
 
-  // Phase 2: settle sequentially.
-  for (const { streamId, executionId, classification } of classified) {
-    if (options.signal?.aborted) break;
-    if (!isCurrent(streamId, executionId)) {
-      options.logger?.debug(
-        `Skipped restart repair for stream ${streamId}: it was reused during classification`,
-      );
-      continue;
-    }
-
+  // Apply a hold-only classification (no write). Returns false when the
+  // classification settles instead, so the caller proceeds to the write path.
+  const applyHold = (
+    streamId: StreamTabId,
+    executionId: ExecutionId | undefined,
+    classification: RunClassification,
+  ): classification is HoldClassification => {
     switch (classification.kind) {
       case 'owned_here':
         // Classification only sees streams with no live flow context here, so
@@ -208,40 +212,60 @@ export async function repairRestartedStreams(
           `Stream ${streamId} has no live flow context but this process holds execution ${executionId}; left unclassified`,
           { data: { streamId, executionId } },
         );
-        continue;
+        return true;
       case 'held_elsewhere':
         options.streamStatus.markHeld(streamId);
         options.logger?.debug(
           `Stream ${streamId} is held by another process; left untouched`,
         );
-        continue;
+        return true;
       case 'unclassified':
         options.streamStatus.markUnclassified(streamId, classification.cause);
         options.logger?.warn(
           `Stream ${streamId} left unclassified after restart: ${classification.cause}`,
           { data: { streamId, executionId } },
         );
-        continue;
+        return true;
       case 'resumable':
       case 'finished':
-        break;
+        return false;
     }
+  };
 
-    // Owner gone. The persisted outcome is the display fact; without one the
-    // interruption is recorded as CANCELLED and the checkpoint, if any, stays
-    // for an explicit Resume. Everything below runs under the inactive-lease
-    // lock: the same lock an acquirer takes, so nobody can claim the run
-    // between the transcript close and the outcome write.
-    const outcome = classification.outcome ?? RUN_OUTCOME.CANCELLED;
+  // Phase 2: settle sequentially.
+  for (const { streamId, executionId, classification } of classified) {
+    if (options.signal?.aborted) break;
+    if (!isCurrent(streamId, executionId)) {
+      options.logger?.debug(
+        `Skipped restart repair for stream ${streamId}: it was reused during classification`,
+      );
+      continue;
+    }
+    if (applyHold(streamId, executionId, classification)) continue;
+
+    // Owner gone at classification time. The persisted outcome is the display
+    // fact; without one the interruption is recorded as CANCELLED and the
+    // checkpoint, if any, stays for an explicit Resume. Everything below runs
+    // under the inactive-lease lock: the same lock an acquirer takes, so
+    // nobody can claim the run between the transcript close and the outcome
+    // write. The pre-claim classification only decided that a claim is
+    // needed; the facts are re-read under the lock and only those are acted
+    // on, because another process may have claimed, resumed, and finished the
+    // run in between.
     let settleStarted = false;
-    const settle = async (): Promise<void> => {
-      settleStarted = true;
+    const settle = async (current: RunClassification): Promise<void> => {
       if (!isCurrent(streamId, executionId)) {
         options.logger?.debug(
           `Skipped restart repair for stream ${streamId}: it was reused before settlement`,
         );
         return;
       }
+      if (applyHold(streamId, executionId, current)) return;
+      const outcome = current.outcome ?? RUN_OUTCOME.CANCELLED;
+      settleStarted = true;
+      // A hold recorded by an earlier pass is superseded by this result even
+      // when the terminal phase itself is already in place (a no-op below).
+      options.streamStatus.clearHold(streamId);
       if (
         !options.streamStatus.transitionToTerminal(
           streamId,
@@ -255,10 +279,10 @@ export async function repairRestartedStreams(
         return;
       }
       options.logger?.debug(
-        `Stream ${streamId} settled as ${outcome} during restart repair (${classification.kind})`,
+        `Stream ${streamId} settled as ${outcome} during restart repair (${current.kind})`,
       );
       await options.closeRunningGroups([streamId], outcome, now);
-      if (executionId && classification.outcome == null) {
+      if (executionId && current.outcome == null) {
         await recordInterruption(
           streamId,
           executionId,
@@ -268,12 +292,23 @@ export async function repairRestartedStreams(
       }
     };
     if (!executionId) {
-      await settle();
+      await settle(classification);
       continue;
     }
     let maintenance: Awaited<ReturnType<typeof runWithInactiveExecutionLease>>;
     try {
-      maintenance = await runWithInactiveExecutionLease(executionId, settle);
+      maintenance = await runWithInactiveExecutionLease(
+        executionId,
+        async () => {
+          let current: RunClassification;
+          try {
+            current = await classifyRun(executionId);
+          } catch (error) {
+            current = { kind: 'unclassified', cause: toErrorMessage(error) };
+          }
+          await settle(current);
+        },
+      );
     } catch (error) {
       // A settlement that already mutated must surface; a lock that could
       // not even be taken proves nothing, so the stream stays unclassified.

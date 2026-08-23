@@ -517,12 +517,28 @@ export class SessionHandle {
     // Resident sidecar identity, merged below, still wins over this seed.
     const scannedExecutionIds = new Map<StreamTabId, ExecutionId>();
     try {
-      for (const {
-        streamId,
-        executionId,
-      } of await listExecutionStreamReferences({ checkpointedOnly: true })) {
+      const { references, unreadable } = await listExecutionStreamReferences({
+        checkpointedOnly: true,
+      });
+      for (const { streamId, executionId } of references) {
         candidateSet.add(streamId);
         scannedExecutionIds.set(streamId, executionId);
+      }
+      // A checkpointed execution whose storage could not be read has no
+      // `meta.streamId` to offer. Its stream is still a candidate: attribute
+      // it through the resident execution-id channels so classification
+      // reports it unclassified with the cause instead of letting the row
+      // vanish from discovery into the ready default.
+      if (unreadable.size > 0) {
+        const residentExecutionIds = this.snapshots.getExecutionIdMap();
+        for (const streamId of this.transcripts.keys()) {
+          const executionId =
+            residentExecutionIds.get(streamId) ??
+            this.transcripts.getSummaryMeta(streamId)?.executionId;
+          if (executionId && unreadable.has(executionId)) {
+            candidateSet.add(streamId);
+          }
+        }
       }
     } catch (error) {
       // The scan proves nothing when it fails; the seed still gets classified.

@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { getExecutionStore, SessionStores } from '@agent/storage';
-import type { DeleteExecutionOptions } from '@agent/storage/executionListing';
+import type {
+  DeleteExecutionOptions,
+  ExecutionStreamReferenceListing,
+} from '@agent/storage/executionListing';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import * as logUtils from '@logger/logUtils';
@@ -58,6 +61,14 @@ function deletionSpy() {
     },
   );
 }
+
+function listingOf(
+  references: ExecutionStreamReferenceListing['references'],
+): ExecutionStreamReferenceListing {
+  return { references, unreadable: new Map() };
+}
+
+const emptyListing = () => listingOf([]);
 
 describe('SessionStores deletion coordination', () => {
   it('detaches durable child parent edges only after deleting the parent', async () => {
@@ -642,7 +653,7 @@ describe('SessionStores startup sweep', () => {
     return new SessionStores({
       streamLogs,
       snapshots,
-      listExecutionStreamReferences: async () => [],
+      listExecutionStreamReferences: async () => emptyListing(),
     });
   }
 
@@ -714,7 +725,7 @@ describe('SessionStores orphan sweep', () => {
     const stores = new SessionStores({
       streamLogs: await StreamLogStore.open(),
       snapshots,
-      listExecutionStreamReferences: async () => [],
+      listExecutionStreamReferences: async () => emptyListing(),
     });
 
     const result = await stores.sweepOrphanedStreams(new Set());
@@ -736,9 +747,8 @@ describe('SessionStores orphan sweep', () => {
       streamLogs,
       snapshots: emptySnapshots(),
       deleteExecution,
-      listExecutionStreamReferences: async () => [
-        { executionId, streamId: stream },
-      ],
+      listExecutionStreamReferences: async () =>
+        listingOf([{ executionId, streamId: stream }]),
     });
 
     // The sidecar never received its execution FK, so normal stream deletion
@@ -768,9 +778,8 @@ describe('SessionStores orphan sweep', () => {
       streamLogs,
       snapshots: emptySnapshots(),
       deleteExecution,
-      listExecutionStreamReferences: async () => [
-        { executionId, streamId: stream },
-      ],
+      listExecutionStreamReferences: async () =>
+        listingOf([{ executionId, streamId: stream }]),
     });
 
     const result = await stores.sweepOrphanedStreams(
@@ -791,9 +800,8 @@ describe('SessionStores orphan sweep', () => {
       streamLogs: streamLogsA,
       snapshots: emptySnapshots(),
       deleteExecution,
-      listExecutionStreamReferences: async () => [
-        { executionId, streamId: stream },
-      ],
+      listExecutionStreamReferences: async () =>
+        listingOf([{ executionId, streamId: stream }]),
     });
 
     // Store A has already loaded its index. A second host now durably creates
@@ -821,9 +829,8 @@ describe('SessionStores orphan sweep', () => {
       streamLogs: await StreamLogStore.open(),
       snapshots: emptySnapshots(),
       deleteExecution,
-      listExecutionStreamReferences: async () => [
-        { executionId, streamId: stream },
-      ],
+      listExecutionStreamReferences: async () =>
+        listingOf([{ executionId, streamId: stream }]),
     });
 
     const result = await stores.sweepOrphanedStreams(new Set());
@@ -862,7 +869,7 @@ describe('SessionStores orphan sweep', () => {
     const stores = new SessionStores({
       streamLogs: StreamLogStore.ephemeral('transcript open failed'),
       snapshots,
-      listExecutionStreamReferences: async () => [],
+      listExecutionStreamReferences: async () => emptyListing(),
     });
 
     const result = await stores.sweepOrphanedStreams(new Set());
