@@ -76,6 +76,11 @@ export interface CliHistoryEntry {
   readonly agent: string;
   readonly model: string;
   readonly status: HistoryRunStatus;
+  /**
+   * Whether a checkpoint exists and nobody alive owns the run. Independent of
+   * `status`, which stays a frozen contract: a failed run can be resumable.
+   */
+  readonly resumable: boolean;
   readonly inputBasename: string;
   readonly category?: string;
   readonly description?: string;
@@ -121,11 +126,9 @@ export const CLI_HISTORY_RESUMABLE_STATUS = 'resumable';
 export const RESUME_LIST_LIMIT = 50;
 
 export function resumableCliHistoryEntries<
-  T extends Pick<CliHistoryEntry, 'status'>,
+  T extends Pick<CliHistoryEntry, 'resumable'>,
 >(entries: readonly T[]): T[] {
-  return entries.filter(
-    (entry) => entry.status === CLI_HISTORY_RESUMABLE_STATUS,
-  );
+  return entries.filter((entry) => entry.resumable);
 }
 
 export type CliHistoryDeleteResult =
@@ -548,6 +551,7 @@ async function toCliHistoryEntry(
       resumable: resumeData !== null,
       outcome: entry.outcome,
     }),
+    resumable: resumeData !== null,
     inputBasename,
     category: config.agentCategory,
     description: entry.description,

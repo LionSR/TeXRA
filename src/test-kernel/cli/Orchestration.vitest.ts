@@ -60,6 +60,7 @@ function historyEntry(
     agent: 'orchestrator',
     model: 'claude-opus-4-7',
     status: 'completed',
+    resumable: overrides.status === CLI_HISTORY_RESUMABLE_STATUS,
     inputBasename: '-',
     category: AgentCategory.ToolUse,
     ...overrides,
