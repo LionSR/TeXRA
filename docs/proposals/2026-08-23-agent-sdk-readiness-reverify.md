@@ -280,3 +280,58 @@ unchanged and design-gated: the two open Tier-1 doors, the injectable
 logger/usage ports, the result-taxonomy doc, and the manifest decision on
 `IModelHandler`. Nothing else found warrants a speculative edit into the green
 tree.
+
+## 8. Correction — §4a/§4b do not survive a refactor attempt; withdrawn
+
+At the maintainer's request, this session attempted to execute §4a and §4b as
+refactors, plus a third item the core+runtime audit surfaced but this doc did
+not carry forward at the time (a naming nit on
+`inferPersistedModelHandlerCompatibilityKey`, below). Closer investigation
+before editing showed **none of the three survive**; all three are
+correctly-placed, deliberate design once read in full context. **No code was
+changed.** This section documents why, so tomorrow's pass does not re-flag
+the same non-issues.
+
+- **§4a `textConnection.ts`:** relocating the connector beside the latex layer
+  would create a `latex → agent` dependency edge.
+  `config/ratchets/architecture-edges-baseline.json:6` enforces exactly the
+  opposite direction — `{ "from": "agent", "to": "latex", "kind": "value" }` is
+  the only edge between the two; no `latex → agent` edge exists anywhere in the
+  baseline, and `src/latex/` has zero real imports from `@agent/*` (the one
+  `grep` hit, `latexdiff/executionDiscovery.ts:6`, is a comment, not an
+  import). The file's own doc comment already states the reasoning this audit
+  had missed: "Hosts inject this through the latex-owned factory; it keeps the
+  helper-model call out of the latex layer" — `agent/runtime` depending on
+  `@latex/texraResponseTextProcessing`'s *type* (the established, ratchet-backed
+  direction) is the correct shape; moving the connector's *implementation* to
+  latex would need to reverse it. Withdrawn — not a defect.
+
+- **§4b `ModelHandlerValidation`:** its root-level placement in
+  `src/agent/modelHandlers/` is explicitly documented, not accidental —
+  the modelHandlers `README.md`'s module table lists it alongside `ModelHandler`
+  itself as a root file "shared across all providers." It is CI-only (gated
+  behind `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL=1` plus an absolute
+  CI flag-file check in `internalValidationOverride.ts`), dynamically imported
+  only inside the `ModelFactory` provider switch (the same pattern every real
+  provider handler uses), and — as this pass's §4c already noted — not
+  referenced by `packages/agent/src`, so it never reaches the published `.d.ts`.
+  There is no reachable production or published-surface cost to its current
+  location. Withdrawn — not a defect.
+
+- **`inferPersistedModelHandlerCompatibilityKey` naming (core+runtime audit
+  finding #2, this pass):** re-reading both call sites
+  (`SessionResumeRetrieval.ts:190-192`, `:245-247`) shows the pattern
+  `persistedKey ?? inferPersistedModelHandlerCompatibilityKey(model)` — the
+  function's job is precisely to infer a compatibility key from the model alone
+  when none was persisted, returning `undefined` where no key is needed to
+  resume safely and throwing only for Google, the one provider where an absent
+  key makes resumption unsafe. That is inference (including the correct decision
+  *not* to infer a value), not merely a guard; the name is accurate for what the
+  function does in context. Withdrawn — not a defect.
+
+All three were flagged by this pass's own fresh audits without the follow-up
+context above; the audits' "recorded, not landed" framing (chosen precisely
+because they were low-confidence) held up. This is the discipline working as
+intended: an unattended pass records observations rather than acting on them,
+and a maintainer-requested follow-up gets the deeper read before any edit — in
+this case revealing there was nothing to land.
