@@ -503,9 +503,8 @@ export class TranscriptIndex {
       return;
     }
 
-    for (let i = this.timeline.length - 1; i >= 0; i--) {
-      const item = this.timeline[i];
-      if (!item || !('row' in item)) continue;
+    for (const item of this.timeline) {
+      if (!('row' in item)) continue;
       const ungroupedIndex = this.rowLocations.get(item.key)?.ungroupedIndex;
       const fresh =
         ungroupedIndex === undefined
