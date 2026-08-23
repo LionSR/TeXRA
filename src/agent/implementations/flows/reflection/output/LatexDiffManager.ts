@@ -76,7 +76,7 @@ export class LatexDiffManager {
       return;
     }
 
-    if (result.message?.includes('document environment')) {
+    if (result.message.includes('document environment')) {
       this.logger.debug(`Skipping ${operation}`, {
         data: result.message,
         messageType: MESSAGE_TYPES.INTERNAL,
@@ -364,7 +364,7 @@ export class LatexDiffManager {
     diffLocation: FileLocation;
     artifact: CompiledPdfArtifact | null;
   } | null> {
-    if (!result.success || !result.diffPath) {
+    if (!result.success) {
       return null;
     }
 

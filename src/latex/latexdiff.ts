@@ -16,17 +16,23 @@ import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
 import type { MathMarkupOption } from './latexdiff/mathMarkup';
 
-export interface LaTeXdiffResult {
-  success: boolean;
-  /**
-   * Absolute path of the generated diff `.tex`. The service picks the output
-   * directory (an `outputDirectory` option, the input's folder, or the git
-   * root for `runDiffVc`), so only it can name the file — consumers must not
-   * re-join a bare filename against a directory of their own guessing.
-   */
-  diffPath?: string;
-  message?: string;
-}
+export type LaTeXdiffResult =
+  | {
+      success: true;
+      /**
+       * Absolute path of the generated diff `.tex`. The service picks the
+       * output directory (an `outputDirectory` option, the input's folder,
+       * or the git root for `runDiffVc`), so only it can name the file —
+       * consumers must not re-join a bare filename against a directory of
+       * their own guessing.
+       */
+      diffPath: string;
+      message: string;
+    }
+  | {
+      success: false;
+      message: string;
+    };
 
 function hasDocumentEnvironment(content: string): boolean {
   return (

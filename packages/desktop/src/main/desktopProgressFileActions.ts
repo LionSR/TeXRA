@@ -9,7 +9,6 @@ import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
   latexdiffAllFailedMessage,
-  LATEXDIFF_GENERATE_FAILED_MESSAGE,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
@@ -180,10 +179,8 @@ export class DesktopProgressFileActions {
       DEFAULT_MATH_MARKUP,
     );
 
-    if (!result.success || !result.diffPath) {
-      await this.ui.showErrorMessage(
-        result.message ?? LATEXDIFF_GENERATE_FAILED_MESSAGE,
-      );
+    if (!result.success) {
+      await this.ui.showErrorMessage(result.message);
       return;
     }
 
@@ -252,8 +249,8 @@ export class DesktopProgressFileActions {
     outcome: DiffRunOutcome,
   ): Promise<boolean> {
     const successes = outcome.results.filter(
-      (entry): entry is DiffRunResult & { diffPath: string } =>
-        entry.success && Boolean(entry.diffPath),
+      (entry): entry is Extract<DiffRunResult, { success: true }> =>
+        entry.success,
     );
 
     for (const result of successes) {
