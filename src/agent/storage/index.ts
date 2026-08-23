@@ -50,7 +50,6 @@ export { formatConversationMessage } from './conversationFormat';
 export {
   ExecutionLeaseLostError,
   executionHeldMessage,
-  inspectExecutionLease,
 } from './executionLease';
 export { persistChildRunResultMeta } from './childRunPersistence';
 export { resolveChildRunOutput } from './childRunOutput';

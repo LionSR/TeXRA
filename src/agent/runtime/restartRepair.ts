@@ -109,13 +109,6 @@ type HoldClassification = Extract<
   { kind: 'owned_here' | 'held_elsewhere' | 'unclassified' }
 >;
 
-/**
- * A lease this process holds for a stream with no live flow context is a
- * registry/lease disagreement: neither foreign nor ready, so it is recorded
- * as unreadable rather than falling through to either.
- */
-const OWNED_HERE_CAUSE = 'lease owned by this process with no live run';
-
 interface ClassifiedStream {
   readonly streamId: StreamTabId;
   readonly executionId: ExecutionId | undefined;
@@ -225,40 +218,38 @@ export async function repairRestartedStreams(
     executionId: ExecutionId | undefined,
     classification: RunClassification,
   ): classification is HoldClassification => {
+    let detail: string;
     switch (classification.kind) {
+      case 'resumable':
+      case 'finished':
+        return false;
       case 'owned_here':
-        options.streamStatus.markUnavailable(
-          streamId,
-          streamUnreadableMessage(OWNED_HERE_CAUSE),
+        // A lease this process holds for a stream with no live flow context
+        // is a registry/lease disagreement: neither foreign nor ready.
+        detail = streamUnreadableMessage(
+          'lease owned by this process with no live run',
         );
         options.logger?.error(
           `Stream ${streamId} has no live flow context but this process holds execution ${executionId}; left unavailable`,
           { data: { streamId, executionId } },
         );
-        return true;
+        break;
       case 'held_elsewhere':
-        options.streamStatus.markUnavailable(
-          streamId,
-          streamHeldMessage(classification.owner),
-        );
+        detail = streamHeldMessage(classification.owner);
         options.logger?.debug(
           `Stream ${streamId} is held by pid ${classification.owner.pid} on ${classification.owner.hostname}; left untouched`,
         );
-        return true;
+        break;
       case 'unclassified':
-        options.streamStatus.markUnavailable(
-          streamId,
-          streamUnreadableMessage(classification.cause),
-        );
+        detail = streamUnreadableMessage(classification.cause);
         options.logger?.warn(
           `Stream ${streamId} left unavailable after restart: ${classification.cause}`,
           { data: { streamId, executionId } },
         );
-        return true;
-      case 'resumable':
-      case 'finished':
-        return false;
+        break;
     }
+    options.streamStatus.markUnavailable(streamId, detail);
+    return true;
   };
 
   // Phase 2: settle sequentially.

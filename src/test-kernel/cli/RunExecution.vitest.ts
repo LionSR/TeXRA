@@ -35,7 +35,6 @@ const mocks = vi.hoisted(() => ({
   prepareInteractivePrompt: vi.fn(),
   readCliRunOutcomeState: vi.fn(),
   deriveResumability: vi.fn(),
-  inspectExecutionLease: vi.fn(),
   releaseExecutionLeaseAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
@@ -72,7 +71,6 @@ vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   deriveResumability: mocks.deriveResumability,
   finalizeExecution: mocks.finalizeExecution,
-  inspectExecutionLease: mocks.inspectExecutionLease,
 }));
 
 vi.mock('@cli/runtime/cliPresentationHost', () => ({
@@ -239,7 +237,6 @@ async function stubRunExecutionDeps(): Promise<void> {
     resumable: true,
     cause: 'interrupted-with-flow',
   });
-  mocks.inspectExecutionLease.mockResolvedValue({ status: 'missing' });
   mocks.releaseExecutionLeaseAfterArtifacts.mockResolvedValue(undefined);
   // The CLI shutdown drain is the session's one exit choreography; the suite
   // observes it through the same spy the deleted host-local shim fed.
@@ -961,67 +958,6 @@ describe('executeCliRequest', () => {
 
   // The pre-checkpoint shutdown bound is the lifecycle host's per-phase
   // join-with-deadline; its regression pin lives in LifecycleHost.vitest.ts.
-
-  it.each([
-    {
-      label: 'a fresh lease remains',
-      inspection: {
-        status: 'foreign' as const,
-        acquiredAt: 1,
-        owner: { pid: 1, processStart: '1', hostname: 'test-host' },
-        provable: true,
-        reclaimable: false,
-      },
-    },
-    {
-      label: 'lease inspection fails',
-      inspection: new Error('lease read failed'),
-    },
-  ])(
-    'does not advertise signal recovery when $label',
-    async ({ inspection }) => {
-      const { platform, executeCliRequest } = await installFakePlatform();
-      if (inspection instanceof Error) {
-        mocks.inspectExecutionLease.mockRejectedValueOnce(inspection);
-      } else {
-        mocks.inspectExecutionLease.mockResolvedValueOnce(inspection);
-      }
-      const onInterruptedExecutionFinalized = vi.fn();
-      let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
-      let publishRun: LeaseOptions['onRun'];
-      const hangingRun = stubHangingRun((options) => {
-        publishLeaseScope = options.onExecutionLeaseAcquired;
-        publishRun = options.onRun;
-      });
-
-      const run = executeCliRequest(baseRequest(), cliContext(), {
-        onInterruptedExecutionFinalized,
-      });
-      await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
-      const shutdown = platform.lifecycle.runShutdown();
-      publishLeaseScope?.('exec-1' as ExecutionId);
-      publishRun?.();
-      mockCancelledOutcome();
-      hangingRun.resolve(COMPLETED_RUN);
-
-      await shutdown;
-      await expect(run).resolves.toEqual({
-        ok: true,
-        outcomePersisted: true,
-        result: {
-          category: 'toolUse',
-          executionId: 'exec-1',
-          outcome: 'cancelled',
-          streamId: 'stream-1',
-        },
-      });
-
-      expect(mocks.inspectExecutionLease).toHaveBeenCalledExactlyOnceWith(
-        'exec-1',
-      );
-      expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
-    },
-  );
 
   it('forwards a failed shutdown drain to the runtime release hook', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
