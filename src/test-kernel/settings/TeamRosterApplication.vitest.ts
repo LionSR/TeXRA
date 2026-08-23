@@ -4,6 +4,7 @@ import {
   applyTeamRosterWithPreflight,
   type TeamRosterApplicationDeps,
 } from '@common/teams/TeamRosterApplication';
+import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import type { AgentModePreset } from '@shared/schemas';
 
 const preset: AgentModePreset = {
@@ -223,6 +224,90 @@ describe('team roster application', () => {
 
     expect(choose).toHaveBeenCalledWith(['generic', 'remoteSpecialist']);
     expect(legacyPreset).not.toHaveProperty('texraHostedAgents');
+  });
+
+  it('refreshes the host before presenting a successful settings application', async () => {
+    const calls: string[] = [];
+    const getPresetToolUseRoot = vi.fn(() => 'orchestrator');
+
+    await applySettingsTeamRoster('research', {
+      catalog: {
+        resolvePreset: () => ({ ok: true, preset, resolution: resolved }),
+        commitPresetResolution: async () => {
+          calls.push('apply');
+        },
+        getPresetToolUseRoot,
+      },
+      loadLocalCatalog: async () => {},
+      canAccessRemoteCatalog: async () => false,
+      signIn: async () => false,
+      forceRefreshRemoteCatalog: async () => {},
+      presentation: {
+        chooseTeamAvailability: async () => 'cancel',
+        showErrorMessage: async () => {},
+        showInfoMessage: async (message) => {
+          calls.push(`info:${message}`);
+        },
+      },
+      refreshAfterApply: async (selectedToolUseAgent) => {
+        calls.push(`refresh:${selectedToolUseAgent}`);
+      },
+    });
+
+    expect(getPresetToolUseRoot).toHaveBeenCalledWith(
+      ['orchestrator'],
+      'research',
+    );
+    expect(calls).toEqual([
+      'apply',
+      'refresh:orchestrator',
+      'info:Applied "Research" team',
+    ]);
+  });
+
+  it('presents canonical unavailable-member choices and errors', async () => {
+    const prompts: unknown[] = [];
+    const errors: string[] = [];
+
+    await applySettingsTeamRoster('research', {
+      catalog: {
+        resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
+        commitPresetResolution: vi.fn(),
+        getPresetToolUseRoot: vi.fn(),
+      },
+      loadLocalCatalog: async () => {},
+      canAccessRemoteCatalog: async () => false,
+      signIn: async () => true,
+      forceRefreshRemoteCatalog: async () => {},
+      presentation: {
+        chooseTeamAvailability: async (prompt) => {
+          prompts.push(prompt);
+          return 'sign-in';
+        },
+        showErrorMessage: async (message) => {
+          errors.push(message);
+        },
+        showInfoMessage: async () => {},
+      },
+      refreshAfterApply: async () => {},
+    });
+
+    expect(prompts).toEqual([
+      {
+        severity: 'warning',
+        message:
+          'Team "Research" has unavailable TeXRA-hosted members: orchestrator.',
+        actions: [
+          { choice: 'sign-in', label: 'Sign In to TeXRA' },
+          {
+            choice: 'continue',
+            label: 'Continue with Available Members',
+          },
+          { choice: 'cancel', label: 'Cancel' },
+        ],
+      },
+    ]);
+    expect(errors).toEqual(['Team "Research" is unavailable: orchestrator.']);
   });
 
   it('proceeds on a provided "continue" choice without prompting or signing in', async () => {

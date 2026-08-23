@@ -11,7 +11,6 @@ import {
 } from '@agent/index';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
-import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
@@ -20,6 +19,10 @@ import {
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import {
+  applySettingsTeamRoster,
+  type SettingsTeamAvailabilityPrompt,
+} from '@controllers/settingsView/SettingsTeamRosterController';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   agentKey,
@@ -38,7 +41,6 @@ import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createTexraTempDir } from '@utils/files/tempDir';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 type AgentCommand = SettingsViewInboundMessage['command'];
 type AgentMessage<C extends AgentCommand> = SettingsMessageFor<C>;
@@ -94,10 +96,9 @@ export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsSt
       title: string;
       message: string;
     }) => Promise<boolean>;
-    readonly chooseTeamAvailability: (input: {
-      presetName: string;
-      unavailableNames: readonly string[];
-    }) => Promise<TeamAvailabilityChoice>;
+    readonly chooseTeamAvailability: (
+      prompt: SettingsTeamAvailabilityPrompt,
+    ) => Promise<TeamAvailabilityChoice | undefined>;
   };
   /**
    * Root of the packaged resources tree, used to read the bundled agent
@@ -442,48 +443,26 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       typeof SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET
     >,
   ): Promise<void> {
-    const { presetId } = message;
-    const result = await applyTeamRosterWithPreflight(presetId, {
+    await applySettingsTeamRoster(message.presetId, {
       catalog: this.catalogController,
       loadLocalCatalog: () =>
         this.registry.loadAgents({ includeRemote: false }),
       canAccessRemoteCatalog: this.remoteCatalog.canAccess,
-      choose: (preset, unavailableNames) =>
-        this.prompts.chooseTeamAvailability({
-          presetName: preset.name,
-          unavailableNames,
-        }),
       signIn: this.remoteCatalog.signIn,
       forceRefreshRemoteCatalog: () =>
         this.registry.refreshAgents({ includeRemote: true }),
+      presentation: {
+        chooseTeamAvailability: this.prompts.chooseTeamAvailability,
+        showInfoMessage: this.notifications.showInfoMessage,
+        showErrorMessage: this.notifications.showErrorMessage,
+      },
+      refreshAfterApply: async (selectedToolUseAgent) => {
+        await Promise.all([
+          this.postAgentSelectionData(),
+          this.postMainAgentAndTeamOptionsData(selectedToolUseAgent),
+        ]);
+      },
     });
-    if (result.status === 'unknown') {
-      await this.notifications.showErrorMessage(`Unknown team: ${presetId}`);
-      return;
-    }
-    if (result.status === 'cancelled' || result.status === 'choice-required')
-      return;
-    if (result.status === 'unavailable') {
-      await this.notifications.showErrorMessage(
-        `Team "${result.preset.name}" is still unavailable: ${result.unavailableNames.join(', ')}`,
-      );
-      return;
-    }
-    await Promise.all([
-      this.postAgentSelectionData(),
-      this.postMainAgentAndTeamOptionsData(
-        this.catalogController.getPresetToolUseRoot(
-          result.preset.agents.toolUse,
-          result.preset.id,
-        ),
-      ),
-    ]);
-    const unresolvedCount = result.resolution.unresolvedNames.length;
-    await this.notifications.showInfoMessage(
-      unresolvedCount === 0
-        ? `Applied "${result.preset.name}" team`
-        : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
-    );
   }
 
   private async saveAgentModePreset(): Promise<void> {
