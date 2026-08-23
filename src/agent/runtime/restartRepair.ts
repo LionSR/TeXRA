@@ -1,3 +1,13 @@
+/**
+ * Restart repair: reconcile streams whose owning process died mid-run.
+ *
+ * Invariant: a resume checkpoint (`executions/<id>/flow_<id>.json`) is deleted
+ * only by the user or by a genuinely COMPLETED run. Repair observes that the
+ * owner is gone; it never infers an error from that. A stream with a
+ * checkpoint is restored to WAITING; a stream without one is recorded as
+ * CANCELLED (an interruption) with its flow record preserved. Repair never
+ * writes FAILED and never passes `flowRecord: 'delete'`.
+ */
 import {
   finalizeExecution as defaultFinalizeExecution,
   type FinalizeExecutionInput,
@@ -40,8 +50,6 @@ export interface RestartRepairOptions {
     now: number,
   ): Promise<readonly StreamTabId[]>;
   repairStreams?: Iterable<StreamTabId>;
-  /** Retry terminal metadata after an earlier repair already moved a stream to FAILED. */
-  retryFailedStreams?: boolean;
   finalizeExecution?: (
     input: FinalizeExecutionInput,
   ) => Promise<FinalizeExecutionResult>;
@@ -115,8 +123,11 @@ type ExecutionSettlement =
 /**
  * Revalidate terminal metadata while holding the execution lease.
  *
- * A cancelled execution remains unsettled when it still has a resumable flow;
- * completed and failed executions are always terminal.
+ * A cancelled execution remains unsettled when it still has a resumable flow,
+ * so repair can restore it to WAITING. A completed or failed outcome was
+ * written by the run's owner and is displayed as such; a failed run with a
+ * checkpoint is still resumable through the resume path, which never consults
+ * the outcome.
  */
 async function readExecutionSettlement(
   executionId: ExecutionId,
@@ -173,23 +184,24 @@ function repairToWaiting(
 }
 
 /**
- * Persist the FAILED terminal outcome for a repaired stream's execution,
- * reporting whether that outcome reached disk. Finalization problems are
+ * Persist the CANCELLED outcome for a stream whose owner died without leaving
+ * a checkpoint. The flow record is preserved whatever its state: repair
+ * records the interruption, it never deletes. Finalization problems are
  * logged rather than thrown: the in-memory repair has already committed.
  */
-async function writeFailedOutcome(
+async function recordInterruption(
   streamId: StreamTabId,
   executionId: ExecutionId,
   finalizeExecution: (
     input: FinalizeExecutionInput,
   ) => Promise<FinalizeExecutionResult>,
   logger: RestartRepairLogger | undefined,
-): Promise<boolean> {
+): Promise<void> {
   try {
     const finalization = await finalizeExecution({
       executionId,
-      outcome: RUN_OUTCOME.FAILED,
-      flowRecord: 'delete',
+      outcome: RUN_OUTCOME.CANCELLED,
+      flowRecord: 'preserve',
     });
     if (finalization.status === 'failed') {
       logger?.warn('Failed to finalize restart-repair execution', {
@@ -202,12 +214,10 @@ async function writeFailedOutcome(
         },
       });
     }
-    return finalization.outcomePersisted;
   } catch (error) {
     logger?.warn('Restart-repair finalization rejected unexpectedly', {
       data: { streamId, executionId, error },
     });
-    return false;
   }
 }
 
@@ -332,23 +342,6 @@ async function closeStreamAsCancelled(
   await options.closeRunningGroups([streamId], RUN_OUTCOME.CANCELLED, now);
 }
 
-async function closeStreamAsFailed(
-  options: RestartRepairOptions,
-  streamId: StreamTabId,
-  executionId: ExecutionId | undefined,
-  now: number,
-): Promise<void> {
-  await options.closeRunningGroups([streamId], RUN_OUTCOME.FAILED, now);
-  if (executionId) {
-    await writeFailedOutcome(
-      streamId,
-      executionId,
-      options.finalizeExecution ?? defaultFinalizeExecution,
-      options.logger,
-    );
-  }
-}
-
 async function repairRestartedStream(
   options: RestartRepairOptions,
   streamId: StreamTabId,
@@ -365,18 +358,10 @@ async function repairRestartedStream(
       await closeStreamAsCancelled(options, streamId, now);
       return;
     }
-    // No in-memory phase: close the group as failed but leave the execution
-    // un-terminalized — nothing here observed it reach a terminal state.
-    await options.closeRunningGroups([streamId], RUN_OUTCOME.FAILED, now);
-    return;
-  }
-
-  if (
-    options.retryFailedStreams === true &&
-    currentStatus === STREAM_PHASE.FAILED &&
-    !isWaitingStream
-  ) {
-    await closeStreamAsFailed(options, streamId, executionId, now);
+    // No in-memory phase: close the group as interrupted but leave the
+    // execution un-terminalized; nothing here observed it reach a terminal
+    // state.
+    await closeStreamAsCancelled(options, streamId, now);
     return;
   }
 
@@ -393,17 +378,27 @@ async function repairRestartedStream(
     return;
   }
 
+  // Owner gone and no checkpoint to continue from: an interruption, not an
+  // error. Record CANCELLED and keep whatever flow record exists.
   if (
     options.streamStatus.transitionToTerminal(
       streamId,
-      STREAM_PHASE.FAILED,
+      STREAM_PHASE.CANCELLED,
       STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
     )
   ) {
     options.logger?.debug(
-      `Stream ${streamId} set to FAILED during restart repair`,
+      `Stream ${streamId} set to CANCELLED during restart repair (no checkpoint)`,
     );
-    await closeStreamAsFailed(options, streamId, executionId, now);
+    await closeStreamAsCancelled(options, streamId, now);
+    if (executionId) {
+      await recordInterruption(
+        streamId,
+        executionId,
+        options.finalizeExecution ?? defaultFinalizeExecution,
+        options.logger,
+      );
+    }
     return;
   }
 

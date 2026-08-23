@@ -62,8 +62,6 @@ function throwIfResumeStorageUnreadable(
     // Nothing to resume, but the storage itself read fine. The two lease
     // causes belong to the display-side `deriveOfferableResumability` and
     // cannot reach this path, which reads the durable decision directly.
-    case RESUMABILITY_CAUSE.TERMINAL_COMPLETED:
-    case RESUMABILITY_CAUSE.TERMINAL_FAILED:
     case RESUMABILITY_CAUSE.MISSING_FLOW:
     case RESUMABILITY_CAUSE.INVALID_FLOW:
     case RESUMABILITY_CAUSE.ACTIVE_LEASE:

@@ -41,6 +41,7 @@ describe('CLI ResumeListForm labels', () => {
         agent,
         model: 'deepseekT',
         status: CLI_HISTORY_RESUMABLE_STATUS,
+        resumable: true,
         inputBasename,
         description,
       }),

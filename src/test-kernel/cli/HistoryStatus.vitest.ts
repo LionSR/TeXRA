@@ -59,11 +59,19 @@ async function seedFlowRecord(
 }
 
 describe('CLI history status formatting', () => {
-  it('keeps failed terminal outcomes authoritative', () => {
+  it('keeps failed terminal outcomes in the frozen status even with a checkpoint', () => {
     expect(
       resolveHistoryRunStatus({
         outcome: 'failed',
         resumable: false,
+      }),
+    ).toBe('failed');
+    // The NDJSON `status` field is frozen; a failed run that kept its
+    // checkpoint is offered through the sibling `resumable` boolean instead.
+    expect(
+      resolveHistoryRunStatus({
+        outcome: 'failed',
+        resumable: true,
       }),
     ).toBe('failed');
   });
@@ -75,20 +83,6 @@ describe('CLI history status formatting', () => {
         resumable: true,
       }),
     ).toBe(CLI_HISTORY_RESUMABLE_STATUS);
-
-    expect(
-      resumableCliHistoryEntries([
-        {
-          id: 'stopped-with-flow',
-          status: resolveHistoryRunStatus({
-            outcome: 'cancelled',
-            resumable: true,
-          }),
-        },
-      ]),
-    ).toEqual([
-      { id: 'stopped-with-flow', status: CLI_HISTORY_RESUMABLE_STATUS },
-    ]);
   });
 
   it('marks flow records without a terminal outcome as resumable', () => {
@@ -97,14 +91,17 @@ describe('CLI history status formatting', () => {
     );
   });
 
-  it('filters history entries to resumable sessions only', () => {
+  it('filters history entries by the resumable flag, not the status', () => {
     expect(
       resumableCliHistoryEntries([
-        { id: 'resume-me', status: CLI_HISTORY_RESUMABLE_STATUS },
-        { id: 'done', status: 'completed' },
-        { id: 'errored', status: 'failed' },
+        { id: 'resume-me', resumable: true },
+        { id: 'done', resumable: false },
+        { id: 'errored-with-checkpoint', resumable: true },
       ] as const),
-    ).toEqual([{ id: 'resume-me', status: CLI_HISTORY_RESUMABLE_STATUS }]);
+    ).toEqual([
+      { id: 'resume-me', resumable: true },
+      { id: 'errored-with-checkpoint', resumable: true },
+    ]);
   });
 
   it('reports outcome-free entries as unknown when no flow remains', () => {
@@ -127,6 +124,7 @@ describe('CLI history status formatting', () => {
       conversationPreview: null,
       files: [],
       hasFlowRecord: true,
+      resumable: true,
     });
 
     expect(text).toContain('Status: Resumable');

@@ -22,11 +22,24 @@ export const HISTORY_RUN_STATUS_LABEL = {
   [HISTORY_RUN_STATUS.UNKNOWN]: 'Unknown',
 } as const satisfies Record<HistoryRunStatus, string>;
 
-/** Project persisted resumability onto the CLI history status vocabulary. */
+/**
+ * Project persisted resumability onto the CLI history status vocabulary.
+ *
+ * `status` is a frozen contract (the NDJSON stream is consumed by
+ * texra-action): a checkpoint promotes only an interrupted or outcome-less
+ * run to `resumable`. A failed run that kept its checkpoint still reports
+ * `failed`; whether it can be resumed is the sibling `resumable` boolean on
+ * the history entry.
+ */
 export function resolveHistoryRunStatus(decision: {
   readonly resumable: boolean;
   readonly outcome?: RunOutcome;
 }): HistoryRunStatus {
-  if (decision.resumable) return HISTORY_RUN_STATUS.RESUMABLE;
+  if (
+    decision.resumable &&
+    (decision.outcome == null || decision.outcome === RUN_OUTCOME.CANCELLED)
+  ) {
+    return HISTORY_RUN_STATUS.RESUMABLE;
+  }
   return decision.outcome ?? HISTORY_RUN_STATUS.UNKNOWN;
 }

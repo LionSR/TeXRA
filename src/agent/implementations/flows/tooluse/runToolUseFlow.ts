@@ -553,7 +553,13 @@ export async function runToolUseFlow<C = unknown>(
     if (finalAction === FlowTransition.WAITING && !shared.lastError) {
       outcome = STREAM_PHASE.WAITING;
     } else {
-      const cancelled = signal.aborted || Boolean(shared.userCancelledRetry);
+      // A follow-up wait that ended without a batch means the queue was
+      // cancelled or disposed under the parked flow, not that the turn
+      // finished: that is a cancellation and keeps the checkpoint.
+      const cancelled =
+        signal.aborted ||
+        Boolean(shared.userCancelledRetry) ||
+        sessionLifecycle.lastWaitCancelled;
       outcome = deriveRunOutcome({
         failed: Boolean(shared.lastError),
         // A retry the user declined ends the run without leaving a
@@ -599,6 +605,17 @@ export async function runToolUseFlow<C = unknown>(
     } else if (shared.userCancelledRetry) {
       preservationReason =
         'Flow record preserved for resume after retry cancellation';
+    } else if (flowRunStarted || input.resume) {
+      // A checkpoint can exist once the flow ran or a resume snapshot was
+      // handed in. Only a genuinely completed run reports `'delete'`; a
+      // failed or cancelled exit keeps it. A fresh launch that never started
+      // its flow has nothing to keep and reports `'delete'` for cleanup.
+      if (primaryFailure !== undefined || shared.lastError) {
+        preservationReason =
+          'Flow record preserved after failure for retry from the last checkpoint';
+      } else if (outcome !== RUN_OUTCOME.COMPLETED) {
+        preservationReason = 'Flow record preserved after cancellation';
+      }
     }
     const preserveFlowRecord = preservationReason !== undefined;
     const preserveFollowUpQueue =
