@@ -701,7 +701,7 @@ describe('NativeSubagentStrategy', () => {
           },
           'live_owner',
         ),
-      ).toEqual({ kind: 'live' });
+      ).toEqual({ kind: 'queued' });
 
       await vi.waitFor(() =>
         expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(1),
@@ -719,7 +719,7 @@ describe('NativeSubagentStrategy', () => {
           },
           'live_owner',
         ),
-      ).toEqual({ kind: 'live' });
+      ).toEqual({ kind: 'queued' });
 
       await vi.waitFor(() =>
         expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2),

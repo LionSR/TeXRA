@@ -94,7 +94,7 @@ describe('resumeRun tool-use queue ownership', () => {
         onFollowUpQueueReady: () => {
           expect(
             session.followUps.submit(STREAM, { text: 'second' }, 'recoverable'),
-          ).toEqual({ kind: 'recovering' });
+          ).toEqual({ kind: 'queued' });
         },
       }),
     ).resolves.toBe('started');
@@ -159,7 +159,7 @@ describe('resumeRun tool-use queue ownership', () => {
         { text: 'completed child', origin: 'subagent_result' },
         'recoverable',
       ),
-    ).toEqual({ kind: 'recovering' });
+    ).toEqual({ kind: 'queued' });
     rejectResume(new Error('resume failed'));
 
     await expect(resuming).rejects.toThrow('resume failed');
@@ -176,8 +176,10 @@ describe('resumeRun tool-use queue ownership', () => {
       { text: 'claimed' },
       'recoverable',
     );
-    expect(submission.kind).toBe('recovery');
-    if (submission.kind !== 'recovery') throw new Error('recovery not claimed');
+    expect(submission).toMatchObject({ kind: 'queued' });
+    if (submission.kind !== 'queued' || !submission.lease) {
+      throw new Error('recovery not claimed');
+    }
     const recovery = submission.lease;
 
     await expect(

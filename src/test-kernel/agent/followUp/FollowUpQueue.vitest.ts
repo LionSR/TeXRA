@@ -93,7 +93,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
     const recovery = queues.claimRecovery(id)!;
     expect(
       queues.submit(id, { text: 'during recovery' }, 'recoverable'),
-    ).toEqual({ kind: 'recovering' });
+    ).toEqual({ kind: 'queued' });
 
     expect(queues.release(child, 'terminal')).toBe(false);
     expect(queues.getAll(id)).toEqual(['before handoff', 'during recovery']);
@@ -176,7 +176,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(retry?.kind).toBe('child');
     expect(
       queues.submit(id, { text: 'current generation' }, 'live_owner'),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
     expect(queues.hasLiveOwner(id)).toBe(true);
   });
 
@@ -216,7 +216,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(queues.claimChildRun(childId, executionId)).toBeUndefined();
     expect(queues.claimRecovery(liveId, true)).toBeUndefined();
     expect(queues.submit(liveId, { text: 'late' }, 'recoverable')).toEqual({
-      kind: 'unavailable',
+      kind: 'refused',
     });
     expect(queues.terminalize(liveId)).toBe(false);
   });
@@ -228,7 +228,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
     const delivery = childResult('exec-1:turn:1:delivery');
 
     expect(queues.submit(id, delivery, 'live_owner')).toEqual({
-      kind: 'live_flow',
+      kind: 'delivered_live',
     });
     for (let replay = 0; replay < 100; replay++) {
       expect(queues.submit(id, delivery, 'live_owner')).toEqual({
@@ -252,8 +252,8 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
       'live_owner',
     );
 
-    expect(first).toEqual({ kind: 'live_flow' });
-    expect(second).toEqual({ kind: 'live_flow' });
+    expect(first).toEqual({ kind: 'delivered_live' });
+    expect(second).toEqual({ kind: 'delivered_live' });
     expect(queues.getAll(id)).toEqual(['same text', 'same text']);
   });
 
@@ -282,7 +282,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
     ];
 
     expect(
-      outcomes.filter((outcome) => outcome.kind === 'live_flow'),
+      outcomes.filter((outcome) => outcome.kind === 'delivered_live'),
     ).toHaveLength(1);
     expect(
       outcomes.filter((outcome) => outcome.kind === 'duplicate'),

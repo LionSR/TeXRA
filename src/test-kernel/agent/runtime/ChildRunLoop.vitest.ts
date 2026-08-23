@@ -531,7 +531,7 @@ describe('childRunLoop E2E fixtures', () => {
         delivery.expectedGenerationId,
       );
       admissions.push(admission.kind);
-      return admission.kind === 'duplicate' || admission.kind === 'unavailable'
+      return admission.kind === 'duplicate' || admission.kind === 'refused'
         ? { kind: 'dropped' as const }
         : { kind: 'delivered' as const };
     });
@@ -543,7 +543,7 @@ describe('childRunLoop E2E fixtures', () => {
       await expect(
         startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
       ).resolves.toBeUndefined();
-      expect(admissions).toEqual(['live_flow', 'live_flow']);
+      expect(admissions).toEqual(['delivered_live', 'delivered_live']);
       const delivered = session.followUps.queue(parentLease).drainItems();
       expect(delivered.map((item) => item.text)).toEqual([
         'delivered:done',
@@ -649,7 +649,7 @@ describe('childRunLoop E2E fixtures', () => {
         { text: 'keep going', origin: 'user' },
         'live_owner',
       ),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
     expect(callCount()).toBe(1);
 
     deliveryCompleted.resolve({ kind: 'delivered' });
@@ -877,7 +877,7 @@ describe('childRunLoop E2E fixtures', () => {
         { text: 'resume please', origin: 'user' },
         'live_owner',
       ),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
 
     const resumeFailure = new Error('resume storage unreadable');
     await rejectTurn(2, resumeFailure);
@@ -1068,7 +1068,7 @@ describe('childRunLoop E2E fixtures', () => {
         { text: 'go on', origin: 'user' },
         'live_owner',
       ),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
     // Waits for the loop to have actually invoked runTurn (calls increments
     // synchronously inside it) — not for the queue to read empty, which can
     // happen before the loop's own continuation runs (see the "delegate →

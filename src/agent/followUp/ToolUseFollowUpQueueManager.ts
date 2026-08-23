@@ -10,7 +10,6 @@ import { FollowUpQueue, type FollowUpQueueInput } from './FollowUpQueue';
 
 const logger = createLog('ToolUseFollowUpQueue');
 
-type QueueLifecycle = 'live' | 'recoverable' | 'recovering';
 export type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';
 
 interface QueueEntry {
@@ -23,7 +22,7 @@ interface QueueEntry {
    * deferred until crash/restart tests reproduce duplicate or lost insertion.
    */
   readonly admittedDeliveryIds: BoundedIdSet<string>;
-  lifecycle: QueueLifecycle;
+  /** At most one consumer; an unowned entry is a recoverable persisted cursor. */
   owner?: FollowUpConsumerLease;
 }
 
@@ -46,21 +45,25 @@ export interface FollowUpRecoveryLease
   readonly kind: 'recovery';
 }
 
+/**
+ * How one submission landed: a replayed delivery id, input a live flow
+ * consumer will read this turn, input parked on the stream's queue (with the
+ * recovery lease when this submission claimed it), a stream with no queue
+ * entry to join, or a boundary that cannot accept input at all (disposed
+ * session, terminalized stream).
+ */
 export type FollowUpSubmission =
-  | { readonly kind: 'unavailable' }
-  | { readonly kind: 'not_owned' }
   | { readonly kind: 'duplicate' }
-  | { readonly kind: 'queued' }
-  | { readonly kind: 'live' }
-  | { readonly kind: 'live_flow' }
-  | { readonly kind: 'recovering' }
-  | { readonly kind: 'recovery'; readonly lease: FollowUpRecoveryLease };
+  | { readonly kind: 'delivered_live' }
+  | { readonly kind: 'queued'; readonly lease?: FollowUpRecoveryLease }
+  | { readonly kind: 'not_owned' }
+  | { readonly kind: 'refused' };
 
 /**
  * Session-owned continuation boundary indexed by stream ID.
  *
- * Lifecycle is explicit: an owned entry is `live` or `recovering`, an unowned
- * persisted cursor is `recoverable`, and a terminal entry is gone. A stream
+ * An owned entry has a live or recovering consumer, an unowned entry is a
+ * recoverable persisted cursor, and a terminal entry is gone. A stream
  * whose queue was ended by {@link terminalize} (its stream deleted, or its
  * parked run torn down) is marked so that a producer that is not an owner,
  * such as a child whose activation outlives its parent's teardown, cannot
@@ -126,9 +129,7 @@ export class ToolUseFollowUpQueue {
     const entry =
       this.entries.get(streamId) ??
       (createIfMissing ? this.createEntry(streamId) : undefined);
-    if (!entry || entry.lifecycle !== 'recoverable' || entry.owner) {
-      return undefined;
-    }
+    if (!entry || entry.owner) return undefined;
     return this.claim(entry, streamId, 'recovery') as FollowUpRecoveryLease;
   }
 
@@ -153,17 +154,16 @@ export class ToolUseFollowUpQueue {
     followUp: FollowUpQueueInput,
     admission: 'live_owner' | 'recoverable',
   ): FollowUpSubmission {
-    if (this.disposed) return { kind: 'unavailable' };
+    if (this.disposed) return { kind: 'refused' };
 
     let entry = this.entries.get(streamId);
     if (admission === 'live_owner') {
       if (!entry) return { kind: 'not_owned' };
     } else {
       if (!entry && this.terminalized.has(streamId)) {
-        return { kind: 'unavailable' };
+        return { kind: 'refused' };
       }
       entry ??= this.createEntry(streamId);
-      if (!entry.owner) entry.lifecycle = 'recoverable';
     }
 
     // Replay suppression is synchronous check-and-add: concurrent submissions
@@ -181,9 +181,8 @@ export class ToolUseFollowUpQueue {
     entry.queue.enqueue(followUp);
     logger.debug(`Queued follow-up for stream ${streamId}.`);
     const owner = entry.owner;
-    if (owner?.kind === 'flow') return { kind: 'live_flow' };
-    if (owner?.kind === 'child') return { kind: 'live' };
-    if (owner?.kind === 'recovery') return { kind: 'recovering' };
+    if (owner?.kind === 'flow') return { kind: 'delivered_live' };
+    if (owner !== undefined) return { kind: 'queued' };
 
     if (admission === 'live_owner') {
       // Live notifications use this path to reach WAITING parents whose
@@ -192,8 +191,9 @@ export class ToolUseFollowUpQueue {
     }
 
     const lease = this.claim(entry, streamId, 'recovery');
-    if (!lease) return { kind: 'recovering' };
-    return { kind: 'recovery', lease: lease as FollowUpRecoveryLease };
+    return lease
+      ? { kind: 'queued', lease: lease as FollowUpRecoveryLease }
+      : { kind: 'queued' };
   }
 
   /** Read-only lifecycle probe used by diagnostics and teardown assertions. */
@@ -224,10 +224,7 @@ export class ToolUseFollowUpQueue {
     const entry = this.entryForLease(lease);
     if (!entry) return false;
     entry.owner = undefined;
-    if (next === 'recoverable') {
-      entry.lifecycle = 'recoverable';
-      return true;
-    }
+    if (next === 'recoverable') return true;
     entry.queue.dispose();
     this.entries.delete(lease.streamId);
     logger.debug(`Terminalized follow-up queue for stream ${lease.streamId}.`);
@@ -299,7 +296,6 @@ export class ToolUseFollowUpQueue {
       admittedDeliveryIds: createBoundedIdSet(
         ToolUseFollowUpQueue.DELIVERY_ID_CAP,
       ),
-      lifecycle: 'recoverable',
     };
     this.entries.set(streamId, entry);
     return entry;
@@ -313,7 +309,6 @@ export class ToolUseFollowUpQueue {
     if (entry.owner) return undefined;
     const lease: FollowUpConsumerLease = { streamId, kind };
     entry.owner = lease;
-    entry.lifecycle = kind === 'recovery' ? 'recovering' : 'live';
     return lease;
   }
 
