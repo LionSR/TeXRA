@@ -11,6 +11,8 @@ import {
   AgentDefinitionSchema,
   AgentWorkflowSettingSchema,
   type AgentDefinition,
+  type AgentPromptInput,
+  type AgentSettingInput,
 } from '@agent/core/definition/AgentDataclass';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { createLog } from '@logger/logUtils';
@@ -174,22 +176,21 @@ function formatSchemaIssue(issue: ZodIssue): string {
 
 type InheritedBlockName = 'prompts' | 'settings';
 
-interface InheritedDefinitionBlock {
-  readonly value: Record<string, unknown>;
+interface InheritedDefinitionBlock<T extends object> {
+  readonly value: T;
   readonly complete: boolean;
 }
 
-function inheritedDefinitionBlock(
+function inheritedDefinitionBlock<T extends object>(
   entry: ParsedAgentYaml,
   definitions: Map<string, ParsedAgentYaml>,
   block: InheritedBlockName,
   seen: ReadonlySet<string> = new Set([entry.name]),
-): InheritedDefinitionBlock {
-  // definition[block] is a validated raw YAML block; widen to
-  // Record<string, unknown> for the lightweight metadata extraction below.
-  const ownBlock: Record<string, unknown> = entry.definition[
-    block
-  ] as unknown as Record<string, unknown>;
+): InheritedDefinitionBlock<T> {
+  // `block` is a union of both block names, so indexing can't statically
+  // narrow to the one schema type the caller pinned T to ('settings' ->
+  // AgentSettingInput, 'prompts' -> AgentPromptInput).
+  const ownBlock = entry.definition[block] as T;
   const parentName = entry.definition.inherits;
   if (!parentName) return { value: ownBlock, complete: true };
 
@@ -198,7 +199,7 @@ function inheritedDefinitionBlock(
     return { value: ownBlock, complete: false };
   }
 
-  const inherited = inheritedDefinitionBlock(
+  const inherited = inheritedDefinitionBlock<T>(
     parent,
     definitions,
     block,
@@ -226,24 +227,23 @@ function scanYaml(
   definitions: Map<string, ParsedAgentYaml>,
 ): { ok: true; entry: AgentEntry } | { ok: false; message: string } {
   try {
-    const settingsBlock = inheritedDefinitionBlock(
+    const settingsBlock = inheritedDefinitionBlock<AgentSettingInput>(
       entry,
       definitions,
       'settings',
     );
-    const promptsBlock = inheritedDefinitionBlock(
+    const promptsBlock = inheritedDefinitionBlock<AgentPromptInput>(
       entry,
       definitions,
       'prompts',
     );
     const rawSettings = settingsBlock.value;
     const rawPrompts = promptsBlock.value;
-    const defaultOutputFiles = rawSettings.defaultOutputFiles as
-      string[] | undefined;
+    const defaultOutputFiles = rawSettings.defaultOutputFiles;
 
-    const tools = extractToolNames(rawSettings.tools as unknown[] | undefined);
+    const tools = extractToolNames(rawSettings.tools);
 
-    const rawCategory = rawSettings.agentCategory as string | undefined;
+    const rawCategory = rawSettings.agentCategory;
     const category =
       source === 'builtInToolUse' || rawCategory === AgentCategory.ToolUse
         ? AgentCategory.ToolUse
