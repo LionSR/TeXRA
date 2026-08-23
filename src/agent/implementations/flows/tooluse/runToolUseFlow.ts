@@ -559,7 +559,7 @@ export async function runToolUseFlow<C = unknown>(
       const cancelled =
         signal.aborted ||
         Boolean(shared.userCancelledRetry) ||
-        sessionLifecycle.lastWaitCancelled;
+        sessionLifecycle.parkedWaitCancelled;
       outcome = deriveRunOutcome({
         failed: Boolean(shared.lastError),
         // A retry the user declined ends the run without leaving a

@@ -25,7 +25,12 @@ const ResumableFlowRecordSchema = PersistedFlowRecordEnvelopeSchema.refine(
     message: 'Resumable flow shared state must be an object',
     path: ['shared'],
   },
-);
+).refine((record) => record.cursor.nextNodeId !== null, {
+  // A run that ended leaves a spent cursor; only a rewound record (cancelled
+  // or failed exits rewind to the start node) is a checkpoint to continue.
+  message: 'A spent cursor is not a resumable checkpoint',
+  path: ['cursor', 'nextNodeId'],
+});
 
 export const RESUMABILITY_CAUSE = {
   INTERRUPTED_WITH_FLOW: 'interrupted-with-flow',
