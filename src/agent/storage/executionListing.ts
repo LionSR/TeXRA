@@ -297,8 +297,11 @@ export function createLatexExecutionDiscovery(
 }
 
 /**
- * Delete a single execution and its KV data unless a fresh lease protects it.
- * The structured result distinguishes deletion, absence, and active ownership.
+ * Delete a single execution and its KV data unless a live owner holds it.
+ * The user asked for this run to go, and is the only party who can know that
+ * an unprovable owner (another host, unreadable identity) is gone, so such a
+ * claim is reaped here and nowhere else. The structured result distinguishes
+ * deletion, absence, and active ownership.
  */
 export type DeleteExecutionResult =
   | {
@@ -359,6 +362,7 @@ export async function deleteExecution(
       }
       return { status, executionId };
     },
+    'dead-or-unprovable',
   );
   if (guarded.status === 'active') {
     return { status: 'active', executionId };

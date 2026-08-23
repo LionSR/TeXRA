@@ -61,6 +61,7 @@ function answeredManifest(): ExternalInquiryThreadManifest {
     schemaVersion: 1,
     threadId: THREAD,
     parentStreamId: STREAM,
+    parentExecutionId: null,
     status: 'answered',
     createdAt: '2026-06-14T08:00:00.000Z',
     updatedAt: '2026-06-14T08:01:00.000Z',
@@ -85,6 +86,7 @@ describe('external inquiry continuation session routing', () => {
     getThreadSummaryMock.mockResolvedValue({
       threadId: THREAD,
       parentStreamId: STREAM,
+      parentExecutionId: null,
       status: 'answered',
       lastQuestionPreview: 'Check the boundary case.',
       lastActivityIso: '2026-06-14T08:01:00.000Z',
@@ -143,6 +145,7 @@ describe('external inquiry continuation session routing', () => {
             payload: {
               threadId: THREAD,
               parentStreamId: STREAM,
+              parentExecutionId: null,
               status: 'answered',
               lastQuestionPreview: 'Check the boundary case.',
               lastActivityIso: '2026-06-14T08:01:00.000Z',

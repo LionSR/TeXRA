@@ -736,26 +736,36 @@ export class SessionHandle {
    * that belongs after those artifacts; it runs before the claim is unlinked.
    * The claim is unlinked whatever the drain did: resumability is the
    * checkpoint, so a failed flush is logged and rethrown but never changes
-   * who owns the run. This is the one exit choreography every run driver
-   * calls.
+   * who owns the run. A release failure never masks a drain failure: the
+   * drain's error is the one the caller sees, and the release's is logged.
+   * This is the one exit choreography every run driver calls.
    */
   async releaseExecutionLease(
     executionId: ExecutionId,
     afterArtifactsDrained?: () => void | Promise<void>,
   ): Promise<void> {
+    let drainError: unknown;
     try {
       await validateOwnedExecutionLease(executionId);
       await this.flushArtifacts(executionId);
       await afterArtifactsDrained?.();
     } catch (error) {
+      drainError = error;
       logger.warn(
         `Execution ${executionId}: final artifacts did not all persist; releasing its lease anyway`,
         { data: error },
       );
-      throw error;
-    } finally {
-      await releaseOwnedExecutionLease(executionId);
     }
+    try {
+      await releaseOwnedExecutionLease(executionId);
+    } catch (releaseError) {
+      if (drainError === undefined) throw releaseError;
+      logger.warn(
+        `Execution ${executionId}: its lease could not be released after its final artifacts failed`,
+        { data: releaseError },
+      );
+    }
+    if (drainError !== undefined) throw drainError;
   }
 
   /** Persist one execution's trace plus the session's shared artifact stores. */

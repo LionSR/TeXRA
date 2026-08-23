@@ -175,6 +175,25 @@ function admitFollowUp(
 }
 
 /**
+ * The execution a stream currently belongs to. Prefer the resident snapshot
+ * record for a live session: `run.start` updates it synchronously while the
+ * sidecar FK write is still queued. A stream whose run metadata is not
+ * resident (after a host restart, or evicted by a storage-root change) falls
+ * back to the persisted sidecar, then to the summary mirror. Throws when the
+ * persisted identity is unreadable.
+ */
+export async function lookupStreamExecutionId(
+  streamId: StreamTabId,
+  session: SessionHandle,
+): Promise<ExecutionId | undefined> {
+  return (
+    session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
+    (await session.snapshots.readPersistedExecutionId(streamId)) ??
+    session.transcripts.getSummaryMeta(streamId)?.executionId
+  );
+}
+
+/**
  * Word the refusal of a stream with no live flow here from the persisted
  * facts: who holds the run, and whether a checkpoint is left. Read only on
  * the failure path; an unreadable fact is `not_resumable`.
@@ -185,15 +204,7 @@ async function classifyRefusal(
 ): Promise<FollowUpFailureReason> {
   let executionId: ExecutionId | undefined;
   try {
-    // Prefer the resident snapshot record for a live session: `run.start`
-    // updates it synchronously while the sidecar FK write is still queued. A
-    // stream whose run metadata is not resident (after a host restart, or
-    // evicted by a storage-root change) falls back to the persisted sidecar,
-    // then to the summary mirror.
-    executionId =
-      session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
-      (await session.snapshots.readPersistedExecutionId(streamId)) ??
-      session.transcripts.getSummaryMeta(streamId)?.executionId;
+    executionId = await lookupStreamExecutionId(streamId, session);
   } catch (error) {
     logger.warn(
       `Cannot classify the refusal for ${streamId}: persisted execution identity is unreadable.`,

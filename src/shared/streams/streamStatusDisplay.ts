@@ -88,12 +88,12 @@ export function streamHeldMessage(owner: {
   readonly pid: number;
   readonly hostname: string;
 }): string {
-  return `Held by another TeXRA process (pid ${owner.pid} on ${owner.hostname}). Let it finish or close it; delete this run to clear it here.`;
+  return `Held by another TeXRA process (pid ${owner.pid} on ${owner.hostname}). Let it finish or close it. Delete removes it.`;
 }
 
 /** Banner and tooltip copy for a run whose saved state could not be read. */
 export function streamUnreadableMessage(cause: string): string {
-  return `Could not read this run's state: ${cause}. Delete this run to clear it.`;
+  return `Could not read this run's state: ${cause}. Delete removes it.`;
 }
 
 /**
