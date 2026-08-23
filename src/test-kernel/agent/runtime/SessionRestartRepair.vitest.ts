@@ -396,7 +396,8 @@ describe('SessionHandle restart repair', () => {
 
     // Owner proven dead, checkpoint present: the interruption is recorded,
     // the checkpoint stays, and nothing is adopted. The explicit Resume
-    // affordance is the only way to continue; a follow-up is handed back.
+    // affordance is the only way to continue; a follow-up is handed back
+    // with the reason that points there.
     expect(session.status.get(resumableStreamId)).toBe(STREAM_PHASE.CANCELLED);
     expect(session.status.holdState(resumableStreamId)).toBeUndefined();
     await expect(executionStore.readMeta()).resolves.toMatchObject({
@@ -413,10 +414,7 @@ describe('SessionHandle restart repair', () => {
         session,
         onAdmitted,
       }),
-    ).resolves.toEqual({
-      status: 'no_session',
-      streamStatus: STREAM_PHASE.CANCELLED,
-    });
+    ).resolves.toEqual({ status: 'failed', reason: 'not_resumable' });
     expect(onAdmitted).toHaveBeenCalledExactlyOnceWith(false);
   });
 

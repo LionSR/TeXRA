@@ -11,9 +11,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createLog('ProgressFollowUpSubmit');
 
-const NO_ACTIVE_SESSION_MESSAGE =
-  'No active session. Start a new agent task to continue.';
-
 export interface ProgressFollowUpSubmitArgs {
   readonly session: SessionHandle;
   readonly streamId: StreamTabId;
@@ -30,8 +27,8 @@ export interface ProgressFollowUpSubmitArgs {
 /**
  * One follow-up submission path for the extension and desktop progress views:
  * admission, the composer ack, the queued-follow-ups refresh, and outcome
- * presentation. Hosts supply only their ports. Sending never starts a
- * resume: a stream with no live flow in this process refuses the draft.
+ * presentation. Hosts supply only their ports. A stream with no live flow in
+ * this process refuses the draft with a worded reason.
  *
  * Resolves at admission with whether the draft was accepted. Anything after
  * admission (a recovery resume may run a whole model turn, then present its
@@ -77,36 +74,15 @@ export function submitProgressFollowUp(
         return;
       }
 
-      switch (result.status) {
-        case 'sent':
-          acknowledge(true);
-          emitQueuedFollowUpsChanged();
-          return;
-        case 'queued': {
-          acknowledge(true);
-          emitQueuedFollowUpsChanged();
-          const presentation = presentFollowUpResult(result);
-          if (presentation.severity !== 'none') {
-            await showInfo(presentation.message);
-          }
-          return;
-        }
-        case 'duplicate':
-          acknowledge(true);
-          return;
-        case 'no_session':
-        case 'dropped':
-          acknowledge(false);
-          await showInfo(NO_ACTIVE_SESSION_MESSAGE);
-          return;
-        default:
-          // A result this switch does not know must not leave the composer
-          // frozen: hand the draft back and make the gap loud.
-          acknowledge(false);
-          logger.warn(
-            `Unhandled follow-up result for stream ${streamId}: ${JSON.stringify(result)}`,
-          );
-          return;
+      // A failed recovery resume still queued the input; every other
+      // failure hands the draft back.
+      acknowledge(
+        result.status !== 'failed' || result.reason === 'resume_failed',
+      );
+      emitQueuedFollowUpsChanged();
+      const presentation = presentFollowUpResult(result);
+      if (presentation.severity !== 'none') {
+        await showInfo(presentation.message);
       }
     })().catch((error: unknown) => {
       acknowledge(false);

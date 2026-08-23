@@ -1589,7 +1589,6 @@ describe('executionRegistry', () => {
       });
       expect(registry.getToolUseFollowUpTarget(resumingStreamId)).toEqual({
         kind: 'queue',
-        reason: 'resuming',
       });
 
       seedStreamStatusForTest(streamStatus, waitingStreamId, {
@@ -1597,7 +1596,6 @@ describe('executionRegistry', () => {
       });
       expect(registry.getToolUseFollowUpTarget(waitingStreamId)).toEqual({
         kind: 'queue',
-        reason: 'waiting',
       });
 
       seedStreamStatusForTest(streamStatus, stoppedStreamId, {
@@ -1620,7 +1618,6 @@ describe('executionRegistry', () => {
       );
       expect(registry.getToolUseFollowUpTarget(parentStreamId)).toEqual({
         kind: 'queue',
-        reason: 'children_running',
       });
     } finally {
       registry.dispose();

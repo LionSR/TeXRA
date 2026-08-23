@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 import { deriveResumability } from '@agent/storage/resumability';
-import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
+import { classifyRun } from '@agent/runtime/runClassification';
 import {
   currentSession,
   defaultSession,
@@ -16,30 +16,33 @@ import type { StreamTabId } from '@shared/schemas';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 import type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
 
+/**
+ * Why a submission could not be admitted, worded for the user by
+ * {@link presentFollowUpResult}.
+ *
+ * - `finished`: the run has no checkpoint left to continue from.
+ * - `owned_elsewhere`: another TeXRA process holds the run.
+ * - `not_resumable`: the stream has no live flow here and the submission was
+ *   refused (a replaced continuation generation, a disposed session, a run
+ *   this process cannot classify).
+ * - `resume_failed`: the input was queued, but the recovery resume it
+ *   triggered did not reach the run; an explicit Resume delivers it.
+ */
+export type FollowUpFailureReason =
+  'finished' | 'owned_elsewhere' | 'not_resumable' | 'resume_failed';
+
+/**
+ * Three outcomes: the input reached a live flow, it waits in the stream's
+ * queue for the next turn, or it was not admitted for a worded reason. A
+ * delivery the admission boundary had already accepted (#9531) is `sent`.
+ */
 export type SubmitFollowUpResult =
   | { status: 'sent' }
-  | {
-      status: 'queued';
-      reason: ToolUseFollowUpQueueReason;
-      continuation: 'live' | 'recovering' | 'resumed' | 'resume_failed';
-    }
-  | {
-      /**
-       * The admission boundary already accepted this exact delivery id
-       * (#9531): nothing was appended and no wake/resume was triggered.
-       */
-      status: 'duplicate';
-    }
-  | { status: 'no_session'; streamStatus: string | undefined }
-  | { status: 'dropped' };
+  | { status: 'queued' }
+  | { status: 'failed'; reason: FollowUpFailureReason };
 
 export type FollowUpPresentation =
-  | { severity: 'none' }
-  | {
-      severity: 'info' | 'warning';
-      message: string;
-      refreshQueuedFollowUps: boolean;
-    };
+  { severity: 'none' } | { severity: 'info' | 'warning'; message: string };
 
 export interface SubmitFollowUpOptions {
   readonly session?: SessionHandle;
@@ -60,26 +63,29 @@ export interface SubmitFollowUpOptions {
   readonly onAdmitted?: (admitted: boolean) => void;
 }
 
+const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
+  finished: 'This run has finished. Start a new agent task to continue.',
+  owned_elsewhere:
+    'This run is live in another TeXRA window. Send the message there.',
+  not_resumable:
+    'This run cannot accept messages right now. Resume it, or start a new agent task.',
+  resume_failed:
+    'Message queued, but the run could not be resumed automatically. Resume it to deliver the message, or start a new agent task.',
+};
+
+/** The one wording of each refusal, shared by every host and tool output. */
+export function describeFollowUpFailure(reason: FollowUpFailureReason): string {
+  return FAILURE_MESSAGES[reason];
+}
+
 export function presentFollowUpResult(
   result: SubmitFollowUpResult,
 ): FollowUpPresentation {
-  if (result.status === 'dropped') {
-    return {
-      severity: 'warning',
-      message:
-        'Message dropped because no session was available to receive it. Start a new agent task to continue.',
-      refreshQueuedFollowUps: true,
-    };
-  }
-  if (result.status === 'queued' && result.continuation === 'resume_failed') {
-    return {
-      severity: 'info',
-      message:
-        'Message queued, but the run could not be resumed automatically. Resume it to deliver the message, or start a new agent task.',
-      refreshQueuedFollowUps: false,
-    };
-  }
-  return { severity: 'none' };
+  if (result.status !== 'failed') return { severity: 'none' };
+  return {
+    severity: result.reason === 'resume_failed' ? 'info' : 'warning',
+    message: describeFollowUpFailure(result.reason),
+  };
 }
 
 const logger = createLog('ToolUseFollowUp');
@@ -189,8 +195,10 @@ export function notifyFollowUpSent(
 interface PendingResume {
   readonly resume: Promise<boolean>;
   readonly recovery: FollowUpRecoveryLease;
-  readonly reason: ToolUseFollowUpQueueReason;
 }
+
+type Admission =
+  SubmitFollowUpResult | PendingResume | { status: 'no_session' };
 
 /**
  * Route and admit one submission. Synchronous from the registry snapshot to
@@ -206,7 +214,7 @@ function admitFollowUp(
   item: FollowUpQueueInput,
   options: SubmitFollowUpOptions,
   ownerSession: SessionHandle,
-): SubmitFollowUpResult | PendingResume {
+): Admission {
   const target = ownerSession.executions.getToolUseFollowUpTarget(streamId);
 
   if (target.kind === 'active') {
@@ -218,28 +226,18 @@ function admitFollowUp(
       'live_owner',
       options.expectedGenerationId,
     );
-    if (submission.kind === 'duplicate') {
-      return { status: 'duplicate' };
-    }
+    if (submission.kind === 'duplicate') return { status: 'sent' };
     if (submission.kind === 'live_flow') {
-      if (options.mode === 'live_notification') {
-        return {
-          status: 'queued',
-          reason: 'waiting',
-          continuation: 'live',
-        };
-      }
+      if (options.mode === 'live_notification') return { status: 'queued' };
       notifyFollowUpSent(streamId, ownerSession);
       return { status: 'sent' };
     }
     if (submission.kind === 'live' || submission.kind === 'queued') {
-      return {
-        status: 'queued',
-        reason: 'waiting',
-        continuation: 'live',
-      };
+      return { status: 'queued' };
     }
-    if (submission.kind !== 'not_owned') return { status: 'dropped' };
+    if (submission.kind !== 'not_owned') {
+      return { status: 'failed', reason: 'not_resumable' };
+    }
     target.context.session.appendFollowUp(item);
     notifyFollowUpSent(streamId, ownerSession);
     return { status: 'sent' };
@@ -249,10 +247,9 @@ function admitFollowUp(
     logger.warn(
       `No active session for follow-up on stream ${streamId}. Status: ${target.streamStatus}`,
     );
-    return { status: 'no_session', streamStatus: target.streamStatus };
+    return { status: 'no_session' };
   }
 
-  const reason = target.reason;
   const admission =
     options.mode === 'live_notification' ? 'live_owner' : 'recoverable';
   const submission = ownerSession.followUps.submit(
@@ -261,26 +258,44 @@ function admitFollowUp(
     admission,
     options.expectedGenerationId,
   );
-  if (submission.kind === 'duplicate') {
-    return { status: 'duplicate' };
-  }
+  if (submission.kind === 'duplicate') return { status: 'sent' };
   if (submission.kind === 'unavailable' || submission.kind === 'not_owned') {
-    return { status: 'dropped' };
+    return { status: 'failed', reason: 'not_resumable' };
   }
-  if (submission.kind !== 'recovery') {
-    return {
-      status: 'queued',
-      reason,
-      continuation: submission.kind === 'recovering' ? 'recovering' : 'live',
-    };
-  }
+  if (submission.kind !== 'recovery') return { status: 'queued' };
 
   const recovery = submission.lease;
   const resume = (options.resumePort ?? platform().agentResume).tryResumeStream(
     streamId,
     recovery,
   );
-  return { resume, recovery, reason };
+  return { resume, recovery };
+}
+
+/**
+ * Word the refusal of a stream with no live flow here from the persisted
+ * facts: who holds the run, and whether a checkpoint is left. Read only on
+ * the failure path; an unreadable fact is `not_resumable`.
+ */
+async function classifyRefusal(
+  streamId: StreamTabId,
+  session: SessionHandle,
+): Promise<FollowUpFailureReason> {
+  const executionId = session.snapshots.getRunMetadata(streamId, {
+    quiet: true,
+  }).executionId;
+  if (!executionId) return 'not_resumable';
+  const classification = await classifyRun(executionId);
+  switch (classification.kind) {
+    case 'held_elsewhere':
+      return 'owned_elsewhere';
+    case 'finished':
+      return 'finished';
+    case 'resumable':
+    case 'owned_here':
+    case 'unclassified':
+      return 'not_resumable';
+  }
 }
 
 export async function submitFollowUp(
@@ -315,24 +330,23 @@ export async function submitFollowUp(
     !(await restorePersistedGeneration(streamId, ownerSession))
   ) {
     notifyAdmitted(false);
-    return { status: 'dropped' };
+    return { status: 'failed', reason: 'not_resumable' };
   }
   const dispatch = admitFollowUp(streamId, item, options, ownerSession);
-  if (!('resume' in dispatch)) {
-    notifyAdmitted(
-      dispatch.status !== 'no_session' && dispatch.status !== 'dropped',
-    );
-    return dispatch;
-  }
-  notifyAdmitted(true);
-
-  const resumed = await dispatch.resume;
-  if (!resumed) {
+  if ('resume' in dispatch) {
+    notifyAdmitted(true);
+    const resumed = await dispatch.resume;
+    if (resumed) return { status: 'queued' };
     ownerSession.followUps.release(dispatch.recovery, 'recoverable');
+    return { status: 'failed', reason: 'resume_failed' };
   }
-  return {
-    status: 'queued',
-    reason: dispatch.reason,
-    continuation: resumed ? 'resumed' : 'resume_failed',
-  };
+  if (dispatch.status === 'no_session') {
+    notifyAdmitted(false);
+    return {
+      status: 'failed',
+      reason: await classifyRefusal(streamId, ownerSession),
+    };
+  }
+  notifyAdmitted(dispatch.status !== 'failed');
+  return dispatch;
 }

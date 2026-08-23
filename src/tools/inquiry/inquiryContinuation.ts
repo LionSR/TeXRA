@@ -44,7 +44,7 @@ import {
 
 const logger = createLog('inquiryContinuation');
 
-export type InjectionOutcome = 'sent' | 'queued' | 'resumed' | 'archived';
+export type InjectionOutcome = 'sent' | 'queued' | 'archived';
 
 const QUESTION_TRUNCATION = 400;
 const ANSWER_TRUNCATION = 2000;
@@ -140,13 +140,10 @@ function mapSubmissionToInquiryOutcome(
   result: SubmitFollowUpResult,
 ): InjectionOutcome {
   if (result.status === 'sent') return 'sent';
-  if (result.status === 'dropped' || result.status === 'no_session') {
-    return 'archived';
-  }
-  // Inquiry continuations carry no delivery id, so 'duplicate' is
-  // unreachable; it maps to 'queued' (already admitted) by construction.
-  if (result.status === 'duplicate') return 'queued';
-  return result.continuation === 'resumed' ? 'resumed' : 'queued';
+  if (result.status === 'queued') return 'queued';
+  // A failed recovery resume still queued the continuation; an explicit
+  // Resume delivers it. Every other refusal has nothing left to continue.
+  return result.reason === 'resume_failed' ? 'queued' : 'archived';
 }
 
 async function deliverContinuation(params: {
@@ -161,20 +158,17 @@ async function deliverContinuation(params: {
     expectedGenerationId: params.parentGenerationId,
   });
 
-  if (result.status === 'no_session') {
+  const outcome = mapSubmissionToInquiryOutcome(result);
+  if (outcome === 'archived') {
     logger.warn(
-      `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} has no session.`,
+      `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} refused it (${result.status === 'failed' ? result.reason : result.status}).`,
     );
     return archiveAsParentFinished(params.threadId, params.session);
   }
 
-  const outcome = mapSubmissionToInquiryOutcome(result);
-
   await emitInquiryThreadUpdate(
     params.threadId,
-    {
-      resumeOutcome: outcome === 'archived' ? 'parent_finished' : outcome,
-    },
+    { resumeOutcome: outcome },
     params.session,
   );
   return outcome;
