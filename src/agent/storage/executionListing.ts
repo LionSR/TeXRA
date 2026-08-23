@@ -200,6 +200,23 @@ export async function listExecutionStreamReferences(
 }
 
 /**
+ * The one stream -> execution index, built on demand from the authored
+ * `ExecutionMeta.streamId` edge stamped at registration. Callers resolve a
+ * stream's execution from the resident snapshot record first (a live run
+ * updates it synchronously) and fall back to this scan for non-resident
+ * streams; the retired sidecar-FK and summary-mirror read ladders are gone.
+ * An unreadable execution row is logged and skipped by the listing.
+ */
+export async function readExecutionStreamIndex(): Promise<
+  ReadonlyMap<StreamTabId, ExecutionId>
+> {
+  const { references } = await listExecutionStreamReferences();
+  return new Map(
+    references.map(({ streamId, executionId }) => [streamId, executionId]),
+  );
+}
+
+/**
  * List all executions by scanning the executions/ directory.
  *
  * The storage root is shared by independent CLI, desktop, and extension

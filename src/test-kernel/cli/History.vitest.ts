@@ -1116,9 +1116,9 @@ describe('CLI history runtime', () => {
 
     await expect(persistedLogs.exists(streamId)).resolves.toBe(false);
     await expect(persistedLogs.exists(unrelated)).resolves.toBe(true);
-    await expect(
-      new StreamSnapshotStore().readPersistedExecutionId(streamId),
-    ).resolves.toBeUndefined();
+    const reopened = new StreamSnapshotStore();
+    await reopened.preload([streamId]);
+    expect(reopened.getRunMetadata(streamId).executionId).toBeUndefined();
   });
 
   it('clears a deleted parent from its child stream summary mirror', async () => {

@@ -1,5 +1,6 @@
 /** Tool-use follow-up routing and continuation ownership. */
 import { classifyRun } from '@agent/runtime/runClassification';
+import { readExecutionStreamIndex } from '@agent/storage/executionListing';
 import {
   currentSession,
   defaultSession,
@@ -176,11 +177,9 @@ function admitFollowUp(
 
 /**
  * The execution a stream currently belongs to. Prefer the resident snapshot
- * record for a live session: `run.start` updates it synchronously while the
- * sidecar FK write is still queued. A stream whose run metadata is not
- * resident (after a host restart, or evicted by a storage-root change) falls
- * back to the persisted sidecar, then to the summary mirror. Throws when the
- * persisted identity is unreadable.
+ * record for a live session: `run.start` updates it synchronously. A stream
+ * whose run metadata is not resident (after a host restart, or evicted by a
+ * storage-root change) resolves through the authored `meta.streamId` index.
  */
 export async function lookupStreamExecutionId(
   streamId: StreamTabId,
@@ -188,8 +187,7 @@ export async function lookupStreamExecutionId(
 ): Promise<ExecutionId | undefined> {
   return (
     session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
-    (await session.snapshots.readPersistedExecutionId(streamId)) ??
-    session.transcripts.getSummaryMeta(streamId)?.executionId
+    (await readExecutionStreamIndex()).get(streamId)
   );
 }
 

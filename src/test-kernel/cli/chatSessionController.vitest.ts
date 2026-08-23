@@ -262,7 +262,6 @@ function makeResumeSnapshotStore(options: {
   readonly preload?: () => Promise<void>;
   readonly load?: () => Promise<void>;
   readonly executionId?: string | undefined;
-  readonly persistedExecutionId?: string | undefined;
   readonly config?: AgentConfig | undefined;
   readonly parentStreamId?: StreamTabId | undefined;
 }): StreamSnapshotStore {
@@ -281,7 +280,6 @@ function makeResumeSnapshotStore(options: {
         ? { kind: 'agent' as const, agent: options.config.agent }
         : undefined,
     })),
-    readPersistedExecutionId: vi.fn(async () => options.persistedExecutionId),
     getParentStreamId: vi.fn(() => options.parentStreamId),
   } as unknown as StreamSnapshotStore;
 }

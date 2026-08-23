@@ -21,12 +21,8 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
     executions: { getToolUseFollowUpTarget: () => target },
     followUps: new ToolUseFollowUpQueue(),
     events: { emit: vi.fn() },
-    transcripts: {
-      getSummaryMeta: () => undefined,
-    },
     snapshots: {
       getRunMetadata: () => ({}),
-      readPersistedExecutionId: vi.fn(async () => undefined),
     },
   } as unknown as SessionHandle;
 }
