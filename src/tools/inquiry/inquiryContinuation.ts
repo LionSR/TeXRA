@@ -190,8 +190,7 @@ async function injectContinuation(
   const lastTurn = manifest.turns.at(-1);
   if (!lastTurn) {
     // Structural guard: the manifest schema does not require turns, so a
-    // turn-less thread is representable — there is nothing to continue and
-    // no parent generation to fence a follow-up against.
+    // turn-less thread is representable, and there is nothing to continue.
     logger.warn(
       `Inquiry continuation for ${threadId}: manifest has no turns; archiving.`,
     );

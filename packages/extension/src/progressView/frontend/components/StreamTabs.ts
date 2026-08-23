@@ -131,7 +131,6 @@ class StreamTab extends LitElement {
   @property({ attribute: false }) status: StreamLifecycleStatus =
     DEFAULT_STREAM_METADATA_STATUS;
   @property({ attribute: false }) substate: StreamSubstate | undefined;
-  /** Malformed saved state: Delete is the only affordance left. */
   @property({ attribute: false }) lastTimestamp: number | undefined = undefined;
   @property({ type: Boolean }) active = false;
   @property({ type: Boolean }) compact = false;

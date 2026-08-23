@@ -669,7 +669,6 @@ export class SessionHandle {
           !unreadableStreams.has(streamId) &&
           (executionIds.has(streamId) || unfinished.has(streamId)),
       ),
-      classificationConcurrency: RESTART_REPAIR_IO_CONCURRENCY,
       isRepairCandidateCurrent: (streamId, expectedExecutionId) => {
         if (
           this.status.getGeneration(streamId) !==
@@ -978,7 +977,7 @@ export function forEachLiveSession(
  * release is slow would be worse than the unsettled record. Once `signal`
  * fires, every remaining execution is named in the log instead of being
  * silently skipped: what is left behind is recoverable (the next launch
- * proves this process dead through its presence socket) but not free.
+ * proves this process dead from its pid) but not free.
  */
 export async function settleLiveSessionExecutions(
   signal: AbortSignal,
@@ -997,7 +996,7 @@ export async function settleLiveSessionExecutions(
       continue;
     }
     // Skips both a run whose driver already settled it and one this process
-    // never owned (an adopted or foreign execution).
+    // never owned (a run another TeXRA process holds).
     if (!ownsExecutionLease(executionId)) continue;
     try {
       await session.releaseExecutionLease(executionId, async () => {

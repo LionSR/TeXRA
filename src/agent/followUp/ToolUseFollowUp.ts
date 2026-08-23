@@ -50,7 +50,7 @@ export interface SubmitFollowUpOptions {
    * ordinary continuation: its parent counts the child as active until the
    * delivery has landed, so it always finds a live or recoverable queue.
    */
-  readonly mode?: 'continuation' | 'live_notification' | 'child_delivery';
+  readonly mode?: 'live_notification' | 'child_delivery';
   /**
    * Fires once admission is decided, before any recovery resume runs. `true`
    * means the input now belongs to the stream (sent, queued, or already
@@ -91,24 +91,6 @@ export function presentFollowUpResult(
 }
 
 const logger = createLog('ToolUseFollowUp');
-
-/**
- * The stream's execution id. Prefer the resident snapshot record for a live
- * session: `run.start` updates it synchronously while the sidecar FK write is
- * still queued. A stream whose run metadata is not resident (after a host
- * restart, or evicted by a storage-root change) falls back to the persisted
- * sidecar, then the summary mirror. Throws when the persisted read fails.
- */
-async function lookupExecutionId(
-  streamId: StreamTabId,
-  session: SessionHandle,
-): Promise<ExecutionId | undefined> {
-  return (
-    session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
-    (await session.snapshots.readPersistedExecutionId(streamId)) ??
-    session.transcripts.getSummaryMeta(streamId)?.executionId
-  );
-}
 
 export function notifyFollowUpSent(
   streamId: StreamTabId,
@@ -203,7 +185,15 @@ async function classifyRefusal(
 ): Promise<FollowUpFailureReason> {
   let executionId: ExecutionId | undefined;
   try {
-    executionId = await lookupExecutionId(streamId, session);
+    // Prefer the resident snapshot record for a live session: `run.start`
+    // updates it synchronously while the sidecar FK write is still queued. A
+    // stream whose run metadata is not resident (after a host restart, or
+    // evicted by a storage-root change) falls back to the persisted sidecar,
+    // then to the summary mirror.
+    executionId =
+      session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
+      (await session.snapshots.readPersistedExecutionId(streamId)) ??
+      session.transcripts.getSummaryMeta(streamId)?.executionId;
   } catch (error) {
     logger.warn(
       `Cannot classify the refusal for ${streamId}: persisted execution identity is unreadable.`,

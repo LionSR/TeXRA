@@ -496,10 +496,12 @@ async function attemptTurn<TTurn>(
  */
 function mintChildTurnRef(
   executionId: ExecutionId,
-  generationId: string,
+  attemptId: string,
   turnIndex: number,
 ): ChildTurnRef {
-  const token = `${executionId}:generation:${generationId}:turn:${turnIndex}`;
+  // The `:generation:` segment is the persisted spelling of this token and is
+  // frozen: delivery ids minted by an earlier build must keep comparing equal.
+  const token = `${executionId}:generation:${attemptId}:turn:${turnIndex}`;
   return { token, deliveryId: `${token}:delivery` };
 }
 
@@ -602,7 +604,6 @@ function resolveDeliveryTarget<TTurn>(
 interface PendingChildDelivery {
   readonly targetStreamId: StreamTabId;
   readonly followUp: FollowUpQueueInput;
-  readonly expectedGenerationId?: string;
 }
 
 /**
@@ -624,8 +625,6 @@ async function deliverTurn<TTurn>(params: {
   wallTimeMs: number;
   isError: boolean;
   prepareParentDelivery?: () => boolean;
-  /** Parent continuation generation captured before this producer started. */
-  parentDeliveryGenerationId?: string;
   /** Serializes turn-state writes against the acceptance write (#9531). */
   turnStateWrites: PQueue;
   onTurnSettled?: ChildRunLoopParams<TTurn>['onTurnSettled'];
