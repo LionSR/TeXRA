@@ -23,6 +23,7 @@ import {
   isToolUseState,
   isWorkflowState,
   STREAM_LIFECYCLE_HELD,
+  STREAM_LIFECYCLE_UNCLASSIFIED,
   STREAM_PHASE,
   STREAM_SUBSTATE,
 } from '@shared/schemas';
@@ -31,8 +32,8 @@ import { formatWorkflowRunContext } from '@shared/copy/workflowRunContext';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import {
   progressHeaderStatus,
-  STREAM_HELD_ELSEWHERE_MESSAGE,
   streamStatusIndicatorClass,
+  streamStatusTooltip,
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
@@ -113,6 +114,16 @@ const HELD_STATE_BUTTONS = [
 ];
 
 /**
+ * Buttons enabled while the run's state could not be read: the read-only
+ * verbs plus Resume, which re-reads and re-acquires the run and so is the
+ * retry for the failed classification.
+ */
+const UNCLASSIFIED_STATE_BUTTONS = [
+  ...HELD_STATE_BUTTONS,
+  ELEMENT_IDS.RESUME_BTN,
+];
+
+/**
  * Terminal-set buttons that make no sense before the stream's first run:
  * there is no prior run to resume, and no outputs to copy context from.
  */
@@ -143,6 +154,7 @@ const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
   [STREAM_PHASE.WAITING]: new Set(ACTIVE_STATE_BUTTONS),
   [STREAM_SUBSTATE.RESUMING]: new Set(ACTIVE_STATE_BUTTONS),
   [STREAM_LIFECYCLE_HELD]: new Set(HELD_STATE_BUTTONS),
+  [STREAM_LIFECYCLE_UNCLASSIFIED]: new Set(UNCLASSIFIED_STATE_BUTTONS),
 };
 
 /** Buttons that depend on having an executionId */
@@ -545,7 +557,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
             })}
           ></span>
           <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
-            ${status === STREAM_LIFECYCLE_HELD ? STREAM_HELD_ELSEWHERE_MESSAGE : statusLabel}
+            ${streamStatusTooltip(status, state?.statusDetail, statusLabel)}
           </wa-tooltip>
           ${this.renderRunElapsed(state?.runStartedAt)}
           ${this.renderGoalChip(goalActive, goalStatus, goalObjective)}

@@ -33,7 +33,10 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import { STREAM_LIFECYCLE_HELD } from '@shared/schemas';
+import {
+  STREAM_LIFECYCLE_HELD,
+  STREAM_LIFECYCLE_UNCLASSIFIED,
+} from '@shared/schemas';
 import { buildStreamContentRender } from '@shared/streams/streamContentSync';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import {
@@ -453,13 +456,19 @@ export class LitSessionRenderer implements SessionRendererPort {
   ): StreamMetadata {
     const current = this.state.getStreamState(streamInfo.name);
     const status = streamStates.get(streamInfo.name);
+    // A stream held by another process, or one whose run state could not be
+    // read, has no phase in this session; the wire carries the sentinel so
+    // the view renders it read-only (with the cause for an unclassified one).
+    const hold = this.state.streamStatus.holdState(streamInfo.name);
+    const holdStatus =
+      hold &&
+      (hold.kind === 'held'
+        ? STREAM_LIFECYCLE_HELD
+        : STREAM_LIFECYCLE_UNCLASSIFIED);
     return buildStreamMetadata({
       category: streamInfo.agentCategory,
-      // A stream held by another process has no phase in this session; the
-      // wire carries the held sentinel so the view renders it read-only.
-      status: this.state.streamStatus.isHeld(streamInfo.name)
-        ? STREAM_LIFECYCLE_HELD
-        : status?.phase,
+      status: holdStatus ?? status?.phase,
+      statusDetail: hold?.kind === 'unclassified' ? hold.cause : undefined,
       substate: status?.substate,
       runStartedAt: status?.runStartedAt,
       userFollowUpSupport: streamInfo.userFollowUpSupport,
