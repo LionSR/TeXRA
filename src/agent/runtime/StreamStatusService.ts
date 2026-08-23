@@ -293,6 +293,16 @@ export class StreamStatusMachine {
     this.holds.set(stream, { kind: 'unclassified', cause });
   }
 
+  /**
+   * Drop a hold overlay without touching the phase. Restart repair calls this
+   * when a classification resolves; `transition` clears holds only when it
+   * writes, so a repair that lands on the phase already in place would
+   * otherwise leave the stream read-only forever.
+   */
+  clearHold(stream: StreamTabId): void {
+    this.holds.delete(stream);
+  }
+
   holdState(stream: StreamTabId): StreamHoldState | undefined {
     return this.holds.get(stream);
   }

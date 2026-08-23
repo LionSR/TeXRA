@@ -241,10 +241,11 @@ describe('SessionHandle restart repair', () => {
     const classify = vi.spyOn(runClassification, 'classifyRun');
 
     const session = trackSession(new SessionHandle({ transcripts }));
-    await vi.waitFor(() => expect(classify).toHaveBeenCalledOnce());
     await session.waitUntilReady();
 
-    expect(classify).toHaveBeenCalledOnce();
+    // One pass: the pre-claim read plus the re-read under the settlement
+    // lease, never a second pass.
+    expect(classify).toHaveBeenCalledTimes(2);
     expect(session.status.get(eagerStreamId)).toBe(STREAM_PHASE.CANCELLED);
     expectClosedWith(transcripts, eagerStreamId, RUN_OUTCOME.CANCELLED);
   });

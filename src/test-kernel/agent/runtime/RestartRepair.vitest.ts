@@ -109,6 +109,51 @@ describe('repairRestartedStreams', () => {
 
     expect(setup.streamStatus.holdState(setup.streamId)).toBeUndefined();
     expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.CANCELLED);
+
+    // A hold overlaid on an already-terminal phase is released even though
+    // the terminal transition itself is a no-op.
+    setup.streamStatus.markUnclassified(setup.streamId, 'transient read error');
+    await runRepair(setup, {
+      closeRunningGroups: closeAllGroups,
+      finalizeExecution: createDurableFinalizer(),
+      classifyRun: classifyAs({
+        kind: 'finished',
+        outcome: RUN_OUTCOME.CANCELLED,
+      }),
+    });
+
+    expect(setup.streamStatus.holdState(setup.streamId)).toBeUndefined();
+    expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.CANCELLED);
+  });
+
+  it('acts on the classification taken under the settlement lease, not the pre-claim one', async () => {
+    const setup = setupStream('finished-under-lease');
+    const closeRunningGroups = vi.fn(closeAllGroups);
+    const finalizeExecution = createDurableFinalizer();
+    // Resumable before the claim; another process finished it before the
+    // lock was taken. The fresh read wins: nothing is written over COMPLETED.
+    const classifyRun = vi
+      .fn<(executionId: ExecutionId) => Promise<RunClassification>>()
+      .mockResolvedValueOnce({ kind: 'resumable' })
+      .mockResolvedValueOnce({
+        kind: 'finished',
+        outcome: RUN_OUTCOME.COMPLETED,
+      });
+
+    await runRepair(setup, {
+      closeRunningGroups,
+      finalizeExecution,
+      classifyRun,
+    });
+
+    expect(classifyRun).toHaveBeenCalledTimes(2);
+    expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.COMPLETED);
+    expect(closeRunningGroups).toHaveBeenCalledExactlyOnceWith(
+      [setup.streamId],
+      RUN_OUTCOME.COMPLETED,
+      expect.any(Number),
+    );
+    expect(finalizeExecution).not.toHaveBeenCalled();
   });
 
   it('settles a finished execution on its persisted outcome without recording', async () => {
