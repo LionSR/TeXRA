@@ -105,14 +105,25 @@ const ModelSchema = NonEmptyStringSchema.refine(isCliSupportedModelId, {
 });
 const OutputFormatSchema = z.enum(CLI_OUTPUT_FORMATS);
 
-const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
+type CliScalarConfigKey = 'agent' | 'model' | 'outputFormat' | 'approvalPolicy';
+
+/** Single source of truth for the top-level scalar fields: both value-picking
+ *  (`pickConfigValues`) and warning-collection walk this same list, instead of
+ *  each re-declaring the field/schema pairing by hand. */
+const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<
+  readonly [CliScalarConfigKey, z.ZodType]
+> = [
   ['agent', NonEmptyStringSchema],
   ['model', ModelSchema],
   ['outputFormat', OutputFormatSchema],
   ['approvalPolicy', TexraApprovalPolicySchema],
 ];
 
-const COMMAND_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
+/** Same role as {@link TOP_LEVEL_FIELD_SCHEMAS}, for the `chat`/`run` command
+ *  sections — shared by `pickCommandConfig` and warning-collection. */
+const COMMAND_FIELD_SCHEMAS: ReadonlyArray<
+  readonly [keyof CliCommandConfig, z.ZodType]
+> = [
   ['agent', NonEmptyStringSchema],
   ['model', ModelSchema],
 ];
@@ -192,19 +203,28 @@ function parseOptional<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
   return schema.optional().catch(undefined).parse(value);
 }
 
-function pickCommandConfig(record: Record<string, unknown>): CliCommandConfig {
-  return {
-    agent: parseOptional(NonEmptyStringSchema, record.agent),
-    model: parseOptional(ModelSchema, record.model),
-  };
+/** Picks every `[key, schema]` pair present and valid in `record`, reading
+ *  each field under `keyFor(key)` (the raw key for command sections, the
+ *  canonical `texra.*` key at the top level). */
+function pickFields<K extends string>(
+  record: Record<string, unknown>,
+  fields: ReadonlyArray<readonly [K, z.ZodType]>,
+  keyFor: (key: K) => string,
+): Partial<Record<K, unknown>> {
+  const picked: Partial<Record<K, unknown>> = {};
+  for (const [key, schema] of fields) {
+    const value = parseOptional(schema, record[keyFor(key)]);
+    if (value !== undefined) picked[key] = value;
+  }
+  return picked;
 }
 
-function pickValue<T>(
-  record: Record<string, unknown>,
-  key: string,
-  schema: z.ZodType<T>,
-): T | undefined {
-  return parseOptional(schema, record[canonicalConfigKey(key)]);
+function pickCommandConfig(record: Record<string, unknown>): CliCommandConfig {
+  return pickFields(
+    record,
+    COMMAND_FIELD_SCHEMAS,
+    (key) => key,
+  ) as CliCommandConfig;
 }
 
 function pickRecord(
@@ -219,14 +239,11 @@ function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
   const chat = pickRecord(record, 'chat');
   const run = pickRecord(record, 'run');
   return {
-    agent: pickValue(record, 'agent', NonEmptyStringSchema),
-    model: pickValue(record, 'model', ModelSchema),
-    outputFormat: pickValue(record, 'outputFormat', OutputFormatSchema),
-    approvalPolicy: pickValue(
+    ...(pickFields(
       record,
-      'approvalPolicy',
-      TexraApprovalPolicySchema,
-    ),
+      TOP_LEVEL_FIELD_SCHEMAS,
+      canonicalConfigKey,
+    ) as Partial<CliConfigValues>),
     chat: chat ? pickCommandConfig(chat) : undefined,
     run: run ? pickCommandConfig(run) : undefined,
   };
