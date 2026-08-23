@@ -120,13 +120,14 @@ type FieldSchemaEntry<T> = {
 /** Single source of truth for the top-level scalar fields: both value-picking
  *  (`pickConfigValues`) and warning-collection walk this same list, instead of
  *  each re-declaring the field/schema pairing by hand. */
-const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<FieldSchemaEntry<CliScalarFields>> =
-  [
-    ['agent', NonEmptyStringSchema],
-    ['model', ModelSchema],
-    ['outputFormat', OutputFormatSchema],
-    ['approvalPolicy', TexraApprovalPolicySchema],
-  ];
+const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<
+  FieldSchemaEntry<CliScalarFields>
+> = [
+  ['agent', NonEmptyStringSchema],
+  ['model', ModelSchema],
+  ['outputFormat', OutputFormatSchema],
+  ['approvalPolicy', TexraApprovalPolicySchema],
+];
 
 /** Same role as {@link TOP_LEVEL_FIELD_SCHEMAS}, for the `chat`/`run` command
  *  sections — shared by `pickCommandConfig` and warning-collection. */
@@ -251,7 +252,11 @@ function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
   const chat = pickRecord(record, 'chat');
   const run = pickRecord(record, 'run');
   return {
-    ...pickFields<CliScalarFields>(record, TOP_LEVEL_FIELD_SCHEMAS, canonicalConfigKey),
+    ...pickFields<CliScalarFields>(
+      record,
+      TOP_LEVEL_FIELD_SCHEMAS,
+      canonicalConfigKey,
+    ),
     chat: chat ? pickCommandConfig(chat) : undefined,
     run: run ? pickCommandConfig(run) : undefined,
   };
