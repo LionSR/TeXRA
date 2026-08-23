@@ -40,19 +40,8 @@ import type { ExternalInquiryThreadManifest } from '@tools/inquiry/externalInqui
 const THREAD = 'ei_aabbccdd0011' as InquiryThreadId;
 const STREAM = 'stream:desktop-parent' as StreamTabId;
 
-function restoreGeneration(session: SessionHandle): void {
-  expect(
-    session.followUps.restorePersistedGeneration(STREAM, 'generation-a'),
-  ).toBe('restored');
-}
-
 function sessionStub(tag?: string): SessionHandle {
-  return {
-    ...(tag ? { tag } : {}),
-    followUps: {
-      currentGenerationId: () => 'generation-a',
-    },
-  } as unknown as SessionHandle;
+  return { ...(tag ? { tag } : {}) } as unknown as SessionHandle;
 }
 
 /** Collects the session facts emitted on a hub until detached. */
@@ -80,7 +69,6 @@ function answeredManifest(): ExternalInquiryThreadManifest {
         kind: 'answered',
         turnIndex: 1,
         timestamp: '2026-06-14T08:00:00.000Z',
-        parentGenerationId: 'generation-a',
         question: 'Check the boundary case.',
         questionRelativePath: 'question.md',
         answerRelativePath: 'answer.md',
@@ -104,7 +92,6 @@ describe('external inquiry continuation session routing', () => {
     });
     listThreadsByStatusMock.mockClear();
     readExternalInquiryThreadMock.mockClear();
-    restoreGeneration(defaultSession());
   });
 
   it('passes the host-provided session through to sendFollowUp', async () => {
@@ -120,7 +107,7 @@ describe('external inquiry continuation session routing', () => {
     expect(submitFollowUpMock).toHaveBeenCalledWith(
       STREAM,
       expect.stringContaining('[inquiry] ei_aabbccdd0011 answered.'),
-      { session, expectedGenerationId: 'generation-a' },
+      { session },
     );
   });
 
@@ -138,7 +125,6 @@ describe('external inquiry continuation session routing', () => {
 
   it('emits inquiry thread updates through the explicit session hub', async () => {
     const session = createTestSession();
-    restoreGeneration(session);
     const explicit = captureFacts(session);
     const fallback = captureFacts(defaultSession());
 
@@ -176,7 +162,6 @@ describe('external inquiry continuation session routing', () => {
 
   it("emits inquiry thread updates through the active run's session when no explicit session is provided", async () => {
     const session = createTestSession();
-    restoreGeneration(session);
     const run = captureFacts(session);
     const fallback = captureFacts(defaultSession());
 

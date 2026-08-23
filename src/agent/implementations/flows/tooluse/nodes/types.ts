@@ -46,7 +46,7 @@ export type StateSlicesSnapshot = z.output<typeof StateSlicesSchema>;
  */
 export const ToolUseRunSharedSchema = z.object({
   messages: ProviderMessageArraySchema,
-  /** Durable identity of the continuation attempt that owns this flow. */
+  /** Written for persisted-shape compatibility; no longer read. */
   continuationGenerationId: z.uuid(),
   /**
    * The model the run is on, mirroring the live `ModelCell`. This is the

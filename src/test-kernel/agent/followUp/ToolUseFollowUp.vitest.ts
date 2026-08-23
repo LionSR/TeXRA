@@ -9,7 +9,7 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import type { ToolUseFollowUpTarget } from '@agent/runtime/executionRegistry';
 import type { LiveToolUseFlowContext } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 
 function mockTryResume(): Mock<() => Promise<boolean>> {
@@ -48,30 +48,6 @@ function activeTarget(
 }
 
 const id = (value: string) => value as StreamTabId;
-
-/** Stub the persisted sidecar FK the durable-producer path reads first. */
-function mockPersistedExecution(session: SessionHandle): void {
-  vi.spyOn(session.snapshots, 'readPersistedExecutionId').mockResolvedValue(
-    'persisted-execution' as ExecutionId,
-  );
-}
-
-/**
- * The resumability decision every durable-admission scenario shares: a
- * resumable flow whose snapshot carries the given continuation generation.
- */
-function durableResumabilityDecision(
-  generationId: string,
-): resumability.ResumabilityDecision {
-  return {
-    resumable: true,
-    cause: resumability.RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
-    flowRecord: {
-      shared: { continuationGenerationId: generationId },
-      cursor: { nextNodeId: 'start' },
-    },
-  };
-}
 
 describe('submitFollowUp', () => {
   afterEach(() => {
@@ -257,11 +233,10 @@ describe('submitFollowUp', () => {
     expect(tryResumeStream).toHaveBeenCalledTimes(1);
   });
 
-  it('trusts a matching retained generation after the parent completes', async () => {
+  it('admits a child delivery to the retained queue after the parent completes', async () => {
     const streamId = id('stream:retained-child-generation');
-    const generationId = 'a98f8f0a-b61a-4913-a88e-a934da14d4e5';
     const session = fakeSession({ kind: 'queue' });
-    const parent = session.followUps.claimLive(streamId, 'flow', generationId)!;
+    const parent = session.followUps.claimLive(streamId, 'flow')!;
     session.followUps.release(parent, 'recoverable');
     const deriveSpy = vi.spyOn(resumability, 'deriveResumability');
     const tryResumeStream = mockTryResume();
@@ -274,7 +249,6 @@ describe('submitFollowUp', () => {
           session,
           resumePort: { tryResumeStream },
           mode: 'child_delivery',
-          expectedGenerationId: generationId,
         },
       ),
     ).resolves.toEqual({ status: 'queued' });
@@ -339,112 +313,6 @@ describe('submitFollowUp', () => {
     }
     expect(tryResumeStream).toHaveBeenCalledTimes(1);
     expect(session.followUps.getAll(streamId)).toEqual(['child result']);
-  });
-
-  it('does not hold ordinary admission behind a durable generation lookup', async () => {
-    const streamId = id('stream:serialized-generation-lookup');
-    const session = fakeSession({ kind: 'queue' });
-    const generationId = '5038fe96-7113-449a-82a9-3e58f292d1ba';
-    mockPersistedExecution(session);
-    const lookup =
-      createDeferred<
-        Awaited<ReturnType<typeof resumability.deriveResumability>>
-      >();
-    const deriveResumability = vi
-      .spyOn(resumability, 'deriveResumability')
-      .mockReturnValueOnce(lookup.promise);
-    const resumeBarrier = createDeferred<boolean>();
-    const tryResumeStream = vi.fn(() => resumeBarrier.promise);
-
-    const first = submitFollowUp(streamId, 'durable inquiry', {
-      session,
-      resumePort: { tryResumeStream },
-      expectedGenerationId: generationId,
-    });
-    const second = submitFollowUp(streamId, 'ordinary follow-up', {
-      session,
-      resumePort: { tryResumeStream },
-    });
-
-    // Admission is synchronous: the ordinary submission is in the queue and
-    // owns the recovery before the durable producer's disk lookup settles.
-    await vi.waitFor(() => expect(deriveResumability).toHaveBeenCalledOnce());
-    expect(tryResumeStream).toHaveBeenCalledOnce();
-    expect(session.followUps.getAll(streamId)).toEqual(['ordinary follow-up']);
-
-    lookup.resolve(durableResumabilityDecision(generationId));
-
-    await expect(first).resolves.toEqual({ status: 'queued' });
-    expect(session.followUps.getAll(streamId)).toEqual([
-      'ordinary follow-up',
-      'durable inquiry',
-    ]);
-    expect(tryResumeStream).toHaveBeenCalledOnce();
-
-    resumeBarrier.resolve(true);
-    await expect(second).resolves.toEqual({ status: 'queued' });
-  });
-
-  it('fails closed when the persisted execution identity cannot be read', async () => {
-    const streamId = id('stream:unreadable-persisted-execution');
-    const session = fakeSession({ kind: 'queue' });
-    vi.spyOn(
-      session.snapshots,
-      'readPersistedExecutionId',
-    ).mockRejectedValueOnce(new Error('execution mapping unreadable'));
-    const tryResumeStream = mockTryResume();
-
-    await expect(
-      submitFollowUp(streamId, 'durable inquiry', {
-        session,
-        resumePort: { tryResumeStream },
-        expectedGenerationId: 'b7f001b0-02e7-4135-967f-5f43d7bb1aa5',
-      }),
-    ).resolves.toEqual({ status: 'failed', reason: 'not_resumable' });
-    expect(tryResumeStream).not.toHaveBeenCalled();
-    expect(session.followUps.getAll(streamId)).toEqual([]);
-  });
-
-  it('rebinds a provisional recovery before admitting a durable producer', async () => {
-    const streamId = id('stream:provisional-recovery');
-    const session = fakeSession({ kind: 'queue' });
-    const generationId = 'a2047268-908c-4ac5-8194-71fb377bd7f3';
-    mockPersistedExecution(session);
-    vi.spyOn(resumability, 'deriveResumability').mockResolvedValue(
-      durableResumabilityDecision(generationId),
-    );
-    const provisional = session.followUps.claimRecovery(streamId, true)!;
-    expect(provisional.generationId).not.toBe(generationId);
-
-    await expect(
-      submitFollowUp(streamId, 'answer during recovery startup', {
-        session,
-        resumePort: { tryResumeStream: mockTryResume() },
-        expectedGenerationId: generationId,
-      }),
-    ).resolves.toMatchObject({ status: 'queued' });
-    expect(provisional.generationId).toBe(generationId);
-  });
-
-  it('rebinds a released provisional recovery before durable admission', async () => {
-    const streamId = id('stream:released-provisional-recovery');
-    const session = fakeSession({ kind: 'queue' });
-    const generationId = '51c54412-e977-48ab-8304-53007cc0bb7a';
-    mockPersistedExecution(session);
-    vi.spyOn(resumability, 'deriveResumability').mockResolvedValue(
-      durableResumabilityDecision(generationId),
-    );
-    const provisional = session.followUps.claimRecovery(streamId, true)!;
-    session.followUps.release(provisional, 'recoverable');
-
-    await expect(
-      submitFollowUp(streamId, 'answer after failed recovery', {
-        session,
-        resumePort: { tryResumeStream: mockTryResume() },
-        expectedGenerationId: generationId,
-      }),
-    ).resolves.toEqual({ status: 'queued' });
-    expect(provisional.generationId).toBe(generationId);
   });
 });
 

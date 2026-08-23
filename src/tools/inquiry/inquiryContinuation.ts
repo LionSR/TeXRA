@@ -148,14 +148,12 @@ function mapSubmissionToInquiryOutcome(
 
 async function deliverContinuation(params: {
   parentStreamId: StreamTabId;
-  parentGenerationId: string;
   text: string;
   threadId: InquiryThreadId;
   session?: SessionHandle;
 }): Promise<InjectionOutcome> {
   const result = await submitFollowUp(params.parentStreamId, params.text, {
     session: params.session,
-    expectedGenerationId: params.parentGenerationId,
   });
 
   const outcome = mapSubmissionToInquiryOutcome(result);
@@ -222,7 +220,6 @@ async function injectContinuation(
 
   return deliverContinuation({
     parentStreamId: manifest.parentStreamId,
-    parentGenerationId: lastTurn.parentGenerationId,
     text,
     threadId,
     session,
