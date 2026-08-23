@@ -88,7 +88,7 @@ export function streamHeldMessage(owner: {
   readonly pid: number;
   readonly hostname: string;
 }): string {
-  return `Held by another TeXRA process (pid ${owner.pid} on ${owner.hostname}). Let it finish or close it. Delete removes it.`;
+  return `Held by another TeXRA process (pid ${owner.pid} on ${owner.hostname}). Let it finish or close it; if it is gone, Delete removes the run.`;
 }
 
 /** Banner and tooltip copy for a run whose saved state could not be read. */
