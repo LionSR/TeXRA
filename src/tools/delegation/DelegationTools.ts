@@ -22,7 +22,10 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  describeFollowUpFailure,
+  submitFollowUp,
+} from '@agent/followUp/ToolUseFollowUp';
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
 import { createLog } from '@logger/logUtils';
 import {
@@ -319,57 +322,49 @@ Git worktree support: resolved from the active workspace at runtime.`,
         session,
       },
     );
-    if (
-      result.status === 'dropped' ||
-      (result.status === 'queued' && result.continuation === 'resume_failed')
-    ) {
-      void deliverResumeWakeFailure(
-        handle,
-        session,
-        executionId,
-        new Error(
-          'The subagent follow-up could not be delivered to a live or recovered continuation.',
-        ),
-        parentDeliveryGenerationId,
+    if (result.status === 'failed') {
+      const worded = describeFollowUpFailure(result.reason);
+      if (result.reason === 'resume_failed') {
+        // The instruction is in the subagent's queue; only its wake failed.
+        // The parent learns of that through its own follow-up queue as well,
+        // the same way a child's turn failure reaches it.
+        void deliverResumeWakeFailure(
+          handle,
+          session,
+          executionId,
+          new Error(
+            'The subagent could not be resumed to process the follow-up.',
+          ),
+          parentDeliveryGenerationId,
+        );
+        return executed(
+          [
+            `Follow-up instruction queued for '${handle.agentName}', but the subagent could not be resumed (${result.reason}). ${worded}`,
+            `Execution ID: ${executionId}`,
+          ].join('\n'),
+          `Follow-up queued for '${handle.agentName}' (resume failed)`,
+        );
+      }
+      throw new Error(
+        `Follow-up for '${handle.agentName}' was not accepted (${result.reason}): ${worded}`,
       );
     }
 
-    switch (result.status) {
-      case 'sent':
-        return executed(
-          [
-            `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
-            `Execution ID: ${executionId}`,
-          ].join('\n'),
-          `Follow-up sent to '${handle.agentName}'`,
-        );
-      case 'queued':
-        return executed(
-          [
-            `Follow-up instruction queued for '${handle.agentName}' (${result.reason}). The subagent will process it and deliver a new result automatically.`,
-            `Execution ID: ${executionId}`,
-          ].join('\n'),
-          `Follow-up queued for '${handle.agentName}'`,
-        );
-      case 'no_session':
-        throw new Error(
-          `No active session for '${handle.agentName}' (stream status: ${result.streamStatus ?? 'unknown'}). The subagent may have stopped or its session expired.`,
-        );
-      case 'dropped':
-        throw new Error(
-          `No continuation owner is available for '${handle.agentName}'.`,
-        );
-      case 'duplicate':
-        // resumeAgent instructions carry no delivery id, so the admission
-        // boundary never flags them; reachable only if a future caller adds
-        // one — in which case the instruction was already admitted once.
-        return executed(
-          [
-            `The identical follow-up was already delivered to '${handle.agentName}'.`,
-            `Execution ID: ${executionId}`,
-          ].join('\n'),
-          `Follow-up already delivered to '${handle.agentName}'`,
-        );
+    if (result.status === 'sent') {
+      return executed(
+        [
+          `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
+          `Execution ID: ${executionId}`,
+        ].join('\n'),
+        `Follow-up sent to '${handle.agentName}'`,
+      );
     }
+    return executed(
+      [
+        `Follow-up instruction queued for '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
+        `Execution ID: ${executionId}`,
+      ].join('\n'),
+      `Follow-up queued for '${handle.agentName}'`,
+    );
   }
 }

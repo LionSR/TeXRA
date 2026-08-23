@@ -2,13 +2,11 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 
-import { submitFollowUp } from './ToolUseFollowUp';
+import { submitFollowUp, type FollowUpFailureReason } from './ToolUseFollowUp';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 
 export type ChildRunDeliveryResult =
-  | { kind: 'delivered' }
-  | { kind: 'no_session'; streamStatus: string | undefined }
-  | { kind: 'dropped' };
+  { kind: 'delivered' } | { kind: 'failed'; reason: FollowUpFailureReason };
 
 export async function deliverChildRunFollowUp(params: {
   readonly targetStreamId: StreamTabId;
@@ -23,10 +21,7 @@ export async function deliverChildRunFollowUp(params: {
     mode: params.mode ?? 'child_delivery',
     expectedGenerationId: params.expectedGenerationId,
   });
-  if (result.status === 'no_session') {
-    return { kind: 'no_session', streamStatus: result.streamStatus };
-  }
-  return result.status === 'dropped'
-    ? { kind: 'dropped' }
+  return result.status === 'failed'
+    ? { kind: 'failed', reason: result.reason }
     : { kind: 'delivered' };
 }

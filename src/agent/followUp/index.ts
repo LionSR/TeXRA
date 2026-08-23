@@ -3,8 +3,8 @@
  *
  * One curated barrel the hosts (CLI, desktop, extension) import instead of
  * deep-reaching each follow-up module by path: submitting a follow-up to a
- * live or resumable stream (`submitFollowUp`), presenting the admission
- * outcome (`presentFollowUpResult`), and notifying that a queued follow-up
+ * live or resumable stream (`submitFollowUp`), wording a refusal
+ * (`describeFollowUpFailure`, `presentFollowUpResult`), and notifying that a queued follow-up
  * was sent (`notifyFollowUpSent`), plus the queue-input and recovery-lease
  * types hosts name at their session seams — decoupling host code from the
  * follow-up internals' file layout, per the module-level barrel pattern set
@@ -19,6 +19,7 @@
  */
 
 export {
+  describeFollowUpFailure,
   notifyFollowUpSent,
   presentFollowUpResult,
   submitFollowUp,

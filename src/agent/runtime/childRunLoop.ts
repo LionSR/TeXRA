@@ -733,16 +733,14 @@ async function submitPendingDelivery(
       ? { expectedGenerationId: pending.expectedGenerationId }
       : {}),
   });
-  if (delivery.kind !== 'delivered') {
+  if (delivery.kind === 'failed') {
     logger.warn(
-      'Turn result not delivered: parent stream is unavailable. The result remains in the execution report.',
+      `Turn result not delivered: parent stream is unavailable (${delivery.reason}). The result remains in the execution report.`,
       {
         data: {
           executionId,
           parentStreamId: pending.targetStreamId,
-          ...(delivery.kind === 'no_session' && {
-            streamStatus: delivery.streamStatus ?? 'unknown',
-          }),
+          reason: delivery.reason,
         },
       },
     );

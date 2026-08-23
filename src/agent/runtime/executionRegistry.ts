@@ -101,18 +101,17 @@ function settled(promise: Promise<unknown>): Promise<void> {
   );
 }
 
-export type ToolUseFollowUpQueueReason =
-  'resuming' | 'waiting' | 'children_running';
-
+/**
+ * Where a follow-up for a stream goes: a live flow context, the stream's
+ * retained queue (a WAITING or resuming cursor, or a parent whose children
+ * are still active), or nowhere in this process.
+ */
 export type ToolUseFollowUpTarget =
   | {
       readonly kind: 'active';
       readonly context: LiveToolUseFlowContext;
     }
-  | {
-      readonly kind: 'queue';
-      readonly reason: ToolUseFollowUpQueueReason;
-    }
+  | { readonly kind: 'queue' }
   | {
       readonly kind: 'no_session';
       readonly streamStatus: StreamPhase | undefined;
@@ -559,23 +558,19 @@ export class ExecutionRegistry {
     const hasActiveChildren = this.hasActiveChildren(streamId);
 
     if (status !== undefined && !isInFlightPhase(status)) {
-      if (hasActiveChildren) {
-        return { kind: 'queue', reason: 'children_running' };
-      }
+      if (hasActiveChildren) return { kind: 'queue' };
       return { kind: 'no_session', streamStatus: status };
     }
 
     const context = this.getToolUseFlowContext(streamId);
     if (context) return { kind: 'active', context };
 
-    if (this.streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING) {
-      return { kind: 'queue', reason: 'resuming' };
-    }
-    if (status === STREAM_PHASE.WAITING) {
-      return { kind: 'queue', reason: 'waiting' };
-    }
-    if (hasActiveChildren) {
-      return { kind: 'queue', reason: 'children_running' };
+    if (
+      this.streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING ||
+      status === STREAM_PHASE.WAITING ||
+      hasActiveChildren
+    ) {
+      return { kind: 'queue' };
     }
     return { kind: 'no_session', streamStatus: status };
   }

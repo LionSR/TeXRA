@@ -277,11 +277,7 @@ describe('external inquiry continuation session routing', () => {
   ])(
     'delegates queued wake decisions to the follow-up owner ($name)',
     async ({ session }) => {
-      submitFollowUpMock.mockResolvedValueOnce({
-        status: 'queued',
-        reason: 'waiting',
-        continuation: 'resumed' as const,
-      });
+      submitFollowUpMock.mockResolvedValueOnce({ status: 'queued' });
 
       const outcome = await injectContinuationForAnsweredThread(
         THREAD,
@@ -289,13 +285,14 @@ describe('external inquiry continuation session routing', () => {
         session,
       );
 
-      expect(outcome).toBe('resumed');
+      expect(outcome).toBe('queued');
     },
   );
 
-  it('archives inquiries when the follow-up owner drops a stale queue', async () => {
+  it('archives inquiries when the follow-up owner refuses a stale queue', async () => {
     submitFollowUpMock.mockResolvedValueOnce({
-      status: 'dropped' as const,
+      status: 'failed' as const,
+      reason: 'not_resumable' as const,
     });
 
     const outcome = await injectContinuationForAnsweredThread(

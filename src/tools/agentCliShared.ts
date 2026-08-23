@@ -17,7 +17,10 @@ import {
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import {
+  describeFollowUpFailure,
+  submitFollowUp,
+} from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import {
   getRunContextExecutionId,
@@ -117,9 +120,9 @@ async function queueAgentCliFollowUp(
   const result = await submitFollowUp(stored.childStreamId, prompt, {
     session: currentSession(),
   });
-  if (result.status === 'no_session' || result.status === 'dropped') {
+  if (result.status === 'failed') {
     throw new ToolError(
-      `${labels.notActiveLabel} '${id}' no longer has a resumable continuation.`,
+      `${labels.notActiveLabel} '${id}' did not accept the follow-up (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
     );
   }
 
