@@ -11,6 +11,7 @@ import {
   type ProgressViewSecondTierActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
 import type { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
+import { submitProgressFollowUp } from '@controllers/progressView/progressFollowUpSubmit';
 import type { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -41,11 +42,15 @@ const followUpMocks = vi.hoisted(() => ({
 
 vi.mock('@tools/inquiry/inquiryActions', () => externalInquiryMocks);
 vi.mock('@agent/followUp/ToolUseFollowUp', () => followUpMocks);
+vi.mock('@controllers/progressView/progressFollowUpSubmit', () => ({
+  submitProgressFollowUp: vi.fn(async () => undefined),
+}));
 vi.mock('@utils/files/pastedImageUtils', () => ({
   savePastedImageBase64: vi.fn(),
 }));
 
 const savePastedImageBase64Mock = vi.mocked(savePastedImageBase64);
+const submitProgressFollowUpMock = vi.mocked(submitProgressFollowUp);
 
 /**
  * `createProgressViewCommandHandlers` returns only the cross-host shared
@@ -101,7 +106,7 @@ function createActions(
       handleAction: vi.fn(),
     } as unknown as ProgressAgentProposalController,
     followUp: {
-      sendFollowUp: vi.fn(),
+      acknowledge: vi.fn(),
       reportImageSaveError: vi.fn(),
     },
     bypass: { showInfo: vi.fn() },
@@ -339,6 +344,7 @@ describe('createProgressViewCommandHandlers', () => {
 describe('createProgressViewCommandHandlers - follow-up', () => {
   beforeEach(() => {
     savePastedImageBase64Mock.mockReset();
+    submitProgressFollowUpMock.mockClear();
   });
 
   it('routes text-only follow-ups to the host action', async () => {
@@ -355,10 +361,14 @@ describe('createProgressViewCommandHandlers - follow-up', () => {
 
     expect(savePastedImageBase64Mock).not.toHaveBeenCalled();
     expect(actions.followUp.reportImageSaveError).not.toHaveBeenCalled();
-    expect(actions.followUp.sendFollowUp).toHaveBeenCalledWith({
-      stream: 'stream-a',
-      text: 'continue',
-    });
+    await vi.waitFor(() =>
+      expect(submitProgressFollowUpMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          streamId: 'stream-a',
+          input: { text: 'continue' },
+        }),
+      ),
+    );
   });
 
   it('persists follow-up images and keeps sending text after an image save fails', async () => {
@@ -405,11 +415,14 @@ describe('createProgressViewCommandHandlers - follow-up', () => {
       failedImage,
       failedImageError,
     );
-    expect(actions.followUp.sendFollowUp).toHaveBeenCalledWith({
-      stream: 'stream-a',
-      text: 'look at these',
-      mediaFiles: ['/tmp/pasted/a.png'],
-    });
+    await vi.waitFor(() =>
+      expect(submitProgressFollowUpMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          streamId: 'stream-a',
+          input: { text: 'look at these', mediaFiles: ['/tmp/pasted/a.png'] },
+        }),
+      ),
+    );
   });
 });
 

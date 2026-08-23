@@ -97,6 +97,8 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
   transientState: FollowUpInputTransientState | null = null;
 
   @property({ attribute: false }) shouldFocus = false;
+  /** A send awaits its admission ack; the draft is frozen meanwhile. */
+  @property({ type: Boolean }) sending = false;
   @property({ attribute: false }) polishedText: string | null = null;
   @property({ attribute: false }) polishRevision = 0;
   @property({ attribute: false }) transcribedText: string | null = null;
@@ -300,6 +302,7 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
             placeholder="Message TeXRA…"
             rows="2"
             resize="vertical"
+            ?disabled=${this.sending}
             .value=${live(this.value)}
             @input=${this.handleInput}
             @keydown=${this.handleKeydown}
@@ -347,6 +350,7 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
               className: 'composer-primary-action',
               appearance: 'filled',
               size: 'l',
+              busy: this.sending,
               onClick: this.emitSend,
             })}
           </div>
@@ -395,7 +399,7 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
   private emitSend(): void {
     const streamId = this.streamId;
     const transientState = this.transientState;
-    if (!streamId || !transientState) return;
+    if (!streamId || !transientState || this.sending) return;
     this.emitSendForStream(streamId, transientState);
   }
 
@@ -408,13 +412,13 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
       transientState.sendAfterImagePastes = true;
       return;
     }
+    // Image chips stay in the draft until FOLLOW_UP_RESULT accepts the send.
     eventSink(
       ProgressEvents.followupSend({
         streamId,
         images: transientState.pendingImages,
       }),
     );
-    transientState.pendingImages = [];
     transientState.sendAfterImagePastes = false;
   }
 

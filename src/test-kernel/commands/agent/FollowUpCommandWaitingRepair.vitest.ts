@@ -103,19 +103,20 @@ describe('texra.sendFollowUp waiting repair admission', () => {
     mocks.submitFollowUp.mockResolvedValue({ status: 'sent' });
 
     const first = mocks.handler?.({ stream: STREAM, text: 'first' });
-    const firstRejection = expect(first).rejects.toBe(failure);
     defaultSession().status.transition(STREAM, STREAM_PHASE.RUNNING, 'resume');
 
     await expect(
       mocks.handler?.({ stream: STREAM, text: 'second' }),
     ).resolves.toBeUndefined();
     expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
-    expect(mocks.submitFollowUp).toHaveBeenCalledWith(STREAM, {
-      text: 'second',
-      mediaFiles: undefined,
-    });
+    expect(mocks.submitFollowUp).toHaveBeenCalledWith(
+      STREAM,
+      { text: 'second', mediaFiles: undefined },
+      expect.objectContaining({ session: defaultSession() }),
+    );
 
+    // A failed repair is reported, not thrown: the draft is handed back.
     rejectProbe?.(failure);
-    await firstRejection;
+    await expect(first).resolves.toBeUndefined();
   });
 });

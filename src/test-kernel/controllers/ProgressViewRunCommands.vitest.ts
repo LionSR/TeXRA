@@ -97,7 +97,7 @@ function createHostHarness(
       stopStream: vi.fn(),
     },
     followUp: {
-      sendFollowUp: vi.fn(),
+      acknowledge: vi.fn(),
       reportImageSaveError: vi.fn(),
     },
     bypass: {
