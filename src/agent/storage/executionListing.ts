@@ -36,6 +36,7 @@ import { getExecutionStore } from './ExecutionKVStore';
 import {
   inspectExecutionLease,
   runWithInactiveExecutionLease,
+  type LeaseReapPolicy,
 } from './executionLease';
 
 const log = createLog('ExecutionListing');
@@ -325,6 +326,12 @@ export interface DeleteAllExecutionsResult {
 export interface DeleteExecutionOptions {
   /** Cleanup that must succeed under the inactive lease before storage removal. */
   readonly beforeDelete?: () => Promise<void>;
+  /**
+   * Which surviving claims the deletion may reap. A single, explicit delete
+   * reaps an owner that cannot be proven alive (the user is the only one who
+   * can know); a bulk delete never does.
+   */
+  readonly reap?: LeaseReapPolicy;
 }
 
 export async function deleteExecution(
@@ -362,7 +369,7 @@ export async function deleteExecution(
       }
       return { status, executionId };
     },
-    'dead-or-unprovable',
+    options.reap ?? 'dead-or-unprovable',
   );
   if (guarded.status === 'active') {
     return { status: 'active', executionId };
@@ -395,6 +402,7 @@ export async function deleteAllExecutions(
     async (id) => {
       try {
         return await deleteExecution(id, {
+          reap: 'dead',
           beforeDelete: beforeDelete ? () => beforeDelete(id) : undefined,
         });
       } catch (error) {
