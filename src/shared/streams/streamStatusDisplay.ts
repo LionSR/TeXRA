@@ -84,8 +84,36 @@ const STREAM_STATUS_LABELS = {
 } as const;
 
 /** Tooltip and banner copy for a stream held by another TeXRA process. */
-export const STREAM_HELD_ELSEWHERE_MESSAGE =
+const STREAM_HELD_ELSEWHERE_MESSAGE =
   'Held by another TeXRA window. Close that window or let it finish before acting on this run here.';
+
+/**
+ * The facts of a hold that the copy depends on: who holds the run, whether
+ * that process was proven alive, and whether `--reclaim` would remove its
+ * record. The lease classifier is the one source of these.
+ */
+export interface StreamHoldFacts {
+  readonly owner: { readonly pid: number };
+  readonly provable: boolean;
+  readonly reclaimable: boolean;
+}
+
+/**
+ * Banner and tooltip copy for a held stream. The reclaim command is offered
+ * only when it would succeed; a pid on this machine whose identity could
+ * not be read is named instead, because reclaim refuses it. The session
+ * renderer sends the result as `StreamMetadata.statusDetail`.
+ */
+export function streamHeldMessage(
+  executionId: string,
+  hold: StreamHoldFacts,
+): string {
+  if (hold.provable) return STREAM_HELD_ELSEWHERE_MESSAGE;
+  if (hold.reclaimable) {
+    return `Held by a process that cannot be reached. If you are sure it is gone, reclaim the run with \`texra resume ${executionId} --reclaim\`.`;
+  }
+  return `Held by pid ${hold.owner.pid} on this machine; its identity could not be read. Wait for that process to exit before acting on this run here.`;
+}
 
 /** The unclassified-sentinel fields of a stream's backend-owned state. */
 export interface StreamUnclassifiedDetail {
@@ -109,7 +137,7 @@ export function isStreamStateMalformed(
 }
 
 /** Tooltip and banner copy for a stream whose run state could not be read. */
-export function streamUnclassifiedMessage(
+function streamUnclassifiedMessage(
   state: Omit<StreamUnclassifiedDetail, 'status'>,
 ): string {
   const cause = state.statusDetail ?? 'unknown cause';
@@ -119,15 +147,16 @@ export function streamUnclassifiedMessage(
 }
 
 /**
- * Status-indicator tooltip: the held and unclassified sentinels explain
- * themselves; every other status shows its label.
+ * Status-indicator tooltip and banner copy: the held and unclassified
+ * sentinels explain themselves from `statusDetail` (falling back to the
+ * generic held copy); every other status shows its label.
  */
 export function streamStatusTooltip(
   state: StreamUnclassifiedDetail | null | undefined,
   label: string | undefined,
 ): string | undefined {
   if (state?.status === STREAM_LIFECYCLE_HELD) {
-    return STREAM_HELD_ELSEWHERE_MESSAGE;
+    return state.statusDetail ?? STREAM_HELD_ELSEWHERE_MESSAGE;
   }
   if (state?.status === STREAM_LIFECYCLE_UNCLASSIFIED) {
     return streamUnclassifiedMessage(state);

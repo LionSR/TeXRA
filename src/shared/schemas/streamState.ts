@@ -126,7 +126,12 @@ export const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
 export const BackendOwnedFieldsSchema = z.object({
   status: StreamLifecycleStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
   substate: StreamSubstateSchema.optional(),
-  /** Why an `unclassified` stream could not be classified; absent otherwise. */
+  /**
+   * Present only with the `held` and `unclassified` sentinels: for `held`, the
+   * banner and tooltip copy (which says when the holder could not be reached
+   * and how to reclaim the run); for `unclassified`, why the run state could
+   * not be read.
+   */
   statusDetail: z.string().optional(),
   /**
    * Whether an `unclassified` stream's cause is a transient read failure

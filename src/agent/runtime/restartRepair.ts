@@ -29,7 +29,7 @@
 import pMap from 'p-map';
 
 import { runWithInactiveExecutionLease } from '@agent/storage/executionLease';
-import { ensureInstancePresence } from '@agent/storage/instancePresence';
+import { currentLeaseOwner } from '@agent/storage/leaseOwnerLiveness';
 import {
   deriveResumability as defaultDeriveResumability,
   type ResumabilityDecision,
@@ -116,7 +116,10 @@ interface ClassifiedStream {
 /**
  * Persist the CANCELLED outcome for a stream whose owner died without
  * recording one. The flow record is preserved whatever its state: repair
- * records the interruption, it never deletes. Finalization problems are
+ * records the interruption, it never deletes. The caller runs it inside the
+ * inactive-lease maintenance scope: the classifier proved the owner gone,
+ * and the settlement happens under a claim of its own, which reclaims the
+ * dead owner's record exactly as an acquirer would. Finalization problems are
  * logged rather than thrown: the in-memory repair has already committed.
  */
 async function recordInterruption(
@@ -240,9 +243,18 @@ export async function repairRestartedStreams(
         markOwnedHere(streamId, executionId);
         return true;
       case 'held_elsewhere':
-        options.streamStatus.markHeld(streamId);
+        // Only a stream with an execution is ever classified as held.
+        options.streamStatus.markHeld(
+          streamId,
+          executionId!,
+          classification.hold,
+        );
         options.logger?.debug(
-          `Stream ${streamId} is held by another process; left untouched`,
+          `Stream ${streamId} is held by ${
+            classification.hold.provable
+              ? 'another process'
+              : 'a process that cannot be reached'
+          }; left untouched`,
         );
         return true;
       case 'unclassified':
@@ -364,12 +376,20 @@ export async function repairRestartedStreams(
       // registry already owns its phase; one with no phase yet is the same
       // registry/lease disagreement as `owned_here`, never another window.
       if (isInFlightPhase(options.streamStatus.get(streamId))) continue;
-      const self = await ensureInstancePresence();
-      if (maintenance.owner.instanceId === self.instanceId) {
+      const self = await currentLeaseOwner();
+      const { owner } = maintenance;
+      // Same process requires both identities known and equal: two unknown
+      // identities prove nothing, and such an owner is held, not ours.
+      if (
+        owner.pid === self.pid &&
+        self.processStart !== null &&
+        owner.processStart === self.processStart &&
+        owner.hostname === self.hostname
+      ) {
         markOwnedHere(streamId, executionId);
         continue;
       }
-      options.streamStatus.markHeld(streamId);
+      options.streamStatus.markHeld(streamId, executionId, maintenance);
       options.logger?.warn(
         `Execution ${executionId} was claimed while restart repair settled stream ${streamId}; now held elsewhere`,
         { data: { streamId, owner: maintenance.owner } },

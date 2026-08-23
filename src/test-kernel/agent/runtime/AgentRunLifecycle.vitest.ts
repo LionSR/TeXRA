@@ -43,8 +43,8 @@ import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import {
-  executionLeasePath,
-  writeForeignLease,
+  displaceLease,
+  executionLeaseDir,
 } from '@test/support/executionLeaseFixtures';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -247,7 +247,10 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await runFlowWithLifecycle(ctx, async (handle) => {
-        await writeForeignLease(executionId);
+        await displaceLease(
+          executionId,
+          '00000000-0000-4000-8000-000000000001',
+        );
         // Displacement is discovered at the next fencing boundary, not on a
         // clock: the failed validation notifies loss and interrupts the run.
         await expect(
@@ -263,7 +266,9 @@ describe('runFlowWithLifecycle', () => {
       expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
     } finally {
       await releaseOwnedExecutionLease(executionId);
-      await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
+      await StorageFS.delete(executionLeaseDir(executionId), {
+        recursive: true,
+      }).catch(() => {});
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });

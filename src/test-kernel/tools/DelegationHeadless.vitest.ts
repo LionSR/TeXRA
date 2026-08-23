@@ -1083,12 +1083,9 @@ describe('headless delegation', () => {
     mocks.inspectExecutionLease.mockResolvedValueOnce({
       status: 'foreign',
       acquiredAt: Date.now(),
-      owner: {
-        instanceId: 'test-instance',
-        socketPath: '/tmp/texra-test.sock',
-        pid: 1,
-        hostname: 'test-host',
-      },
+      owner: { pid: 1, processStart: '1', hostname: 'test-host' },
+      provable: true,
+      reclaimable: false,
     });
 
     await expect(
