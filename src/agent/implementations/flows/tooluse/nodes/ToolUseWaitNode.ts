@@ -142,6 +142,11 @@ export class ToolUseWaitNode<C> extends BaseNode<
     }
 
     const batch = await session.waitForFollowUp(signal);
+    if (!batch && !signal.aborted) {
+      // The queue was cancelled or disposed under the parked flow: that is a
+      // cancellation, recorded here where it is unambiguous.
+      session.noteParkedWaitCancelled();
+    }
     if (!batch || signal.aborted) {
       return { kind: 'stop' };
     }
