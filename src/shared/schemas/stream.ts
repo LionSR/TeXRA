@@ -174,7 +174,27 @@ export function executionStatusToRunOutcome(
   }
 }
 
-export type StreamLifecycleStatus = StreamPhase | typeof STREAM_STATUS.READY;
+/**
+ * Wire-level lifecycle status of a stream whose execution lease is held by
+ * another TeXRA process. Not a `StreamPhase`: phases are facts about runs
+ * live in this process, and a held stream has none. Renderers show it
+ * read-only; no run control applies to it.
+ */
+export const STREAM_LIFECYCLE_HELD = 'held';
+
+/**
+ * Wire-level lifecycle status of a stream whose run state could not be read
+ * at startup (lease, metadata, or flow record unreadable). Nothing was
+ * mutated and nothing is known; `StreamMetadata.statusDetail` carries the
+ * cause. Resume re-reads and re-acquires, so it stays enabled as the retry.
+ */
+export const STREAM_LIFECYCLE_UNCLASSIFIED = 'unclassified';
+
+export type StreamLifecycleStatus =
+  | StreamPhase
+  | typeof STREAM_STATUS.READY
+  | typeof STREAM_LIFECYCLE_HELD
+  | typeof STREAM_LIFECYCLE_UNCLASSIFIED;
 
 export function streamStatusToLifecycleStatus(
   status: StreamStatus,
@@ -198,6 +218,8 @@ export function streamStatusToLifecycleStatus(
 export const StreamLifecycleStatusSchema = z.union([
   StreamPhaseSchema,
   z.literal(STREAM_STATUS.READY),
+  z.literal(STREAM_LIFECYCLE_HELD),
+  z.literal(STREAM_LIFECYCLE_UNCLASSIFIED),
   StreamStatusSchema.transform(streamStatusToLifecycleStatus),
 ]);
 

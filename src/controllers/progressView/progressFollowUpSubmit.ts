@@ -29,8 +29,9 @@ export interface ProgressFollowUpSubmitArgs {
 
 /**
  * One follow-up submission path for the extension and desktop progress views:
- * waiting repair, admission, the composer ack, the queued-follow-ups refresh,
- * and outcome presentation. Hosts supply only their ports.
+ * admission, the composer ack, the queued-follow-ups refresh, and outcome
+ * presentation. Hosts supply only their ports. Sending never starts a
+ * resume: a stream with no live flow in this process refuses the draft.
  *
  * Resolves at admission with whether the draft was accepted. Anything after
  * admission (a recovery resume may run a whole model turn, then present its
@@ -61,7 +62,6 @@ export function submitProgressFollowUp(
     void (async () => {
       let result: SubmitFollowUpResult;
       try {
-        await session.repairWaitingIfResumable(streamId);
         result = await submitFollowUp(streamId, input, {
           session,
           onAdmitted: acknowledge,

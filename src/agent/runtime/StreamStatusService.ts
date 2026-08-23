@@ -20,15 +20,28 @@ interface StreamStatusEmitOptions {
   substate?: StreamSubstate;
 }
 
-type WaitingTransitionCause = Extract<
-  StreamTransitionCause,
-  'wait' | 'restart-repair'
->;
+type WaitingTransitionCause = Extract<StreamTransitionCause, 'wait'>;
 
 type TerminalTransitionCause = Extract<
   StreamTransitionCause,
   'lifecycle' | 'restart-repair'
 >;
+
+/**
+ * What restart classification established about a stream that has no phase
+ * in this process. `held`: another TeXRA process holds its execution lease.
+ * `unclassified`: its lease, metadata, or flow record could not be read, so
+ * nothing is known and nothing was mutated; `cause` is shown to the user.
+ * `retryable` is false for present-but-malformed data, where Resume fails
+ * deterministically and only Delete clears the run.
+ */
+export type StreamHoldState =
+  | { readonly kind: 'held' }
+  | {
+      readonly kind: 'unclassified';
+      readonly cause: string;
+      readonly retryable: boolean;
+    };
 
 export interface StreamPhaseState {
   readonly phase: StreamPhase;
@@ -68,6 +81,14 @@ function effectiveState(entry: StreamEntry): StreamPhaseState {
 
 export class StreamStatusMachine {
   private readonly streams = new Map<StreamTabId, StreamEntry>();
+  /**
+   * Streams restart classification could not settle on a phase: held by
+   * another process, or unreadable. RUNNING/WAITING mean a live flow in this
+   * process, and this process never adopts anyone else's run, so these carry
+   * no phase. Display facts for the session renderer, published with the
+   * next full metadata sync rather than as a phase transition.
+   */
+  private readonly holds = new Map<StreamTabId, StreamHoldState>();
 
   /**
    * @param eventHub Session hub this machine publishes canonical `status` facts
@@ -196,6 +217,7 @@ export class StreamStatusMachine {
     const runStartedAt = isActivePhase(to)
       ? (previousRunStartedAt ?? Date.now())
       : undefined;
+    this.holds.delete(stream);
     this.streams.set(stream, {
       kind: 'phase',
       state: {
@@ -267,12 +289,42 @@ export class StreamStatusMachine {
     return false;
   }
 
+  /** Record that another process holds `stream`'s execution. */
+  markHeld(stream: StreamTabId): void {
+    this.holds.set(stream, { kind: 'held' });
+  }
+
+  /** Record that `stream`'s run state could not be read; nothing was mutated. */
+  markUnclassified(
+    stream: StreamTabId,
+    cause: string,
+    retryable: boolean,
+  ): void {
+    this.holds.set(stream, { kind: 'unclassified', cause, retryable });
+  }
+
+  /**
+   * Drop a hold overlay without touching the phase. Restart repair calls this
+   * when a classification resolves; `transition` clears holds only when it
+   * writes, so a repair that lands on the phase already in place would
+   * otherwise leave the stream read-only forever.
+   */
+  clearHold(stream: StreamTabId): void {
+    this.holds.delete(stream);
+  }
+
+  holdState(stream: StreamTabId): StreamHoldState | undefined {
+    return this.holds.get(stream);
+  }
+
   clearStream(stream: StreamTabId): void {
     this.streams.delete(stream);
+    this.holds.delete(stream);
   }
 
   clearAll(): void {
     this.streams.clear();
+    this.holds.clear();
   }
 
   entries(): IterableIterator<[StreamTabId, StreamPhase]> {

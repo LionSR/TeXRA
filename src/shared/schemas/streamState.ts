@@ -126,6 +126,14 @@ export const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
 export const BackendOwnedFieldsSchema = z.object({
   status: StreamLifecycleStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
   substate: StreamSubstateSchema.optional(),
+  /** Why an `unclassified` stream could not be classified; absent otherwise. */
+  statusDetail: z.string().optional(),
+  /**
+   * Whether an `unclassified` stream's cause is a transient read failure
+   * (Resume retries) rather than malformed saved state (only Delete clears
+   * it); absent otherwise.
+   */
+  statusRetryable: z.boolean().optional(),
   /**
    * Epoch ms when the stream entered its current active phase, stamped once by
    * the session status machine (`StreamPhaseState.runStartedAt`). Absent while
