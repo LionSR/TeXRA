@@ -85,8 +85,9 @@ describe('execution interaction ownership', () => {
 
     // The child is never claimed by the host: it inherits through the stream
     // lineage of the root the host did claim.
+    // The child is proved to have inherited the scope by the release rule
+    // below: an unowned child would let the finished root release at once.
     trackRun(registry, 'child', rootStream, 'child-stream' as StreamTabId);
-    expect(registry.interactionOwnership.ownerOf('child')).toBe(scope);
 
     registry.untrack('root');
     scope.finish();
@@ -97,7 +98,7 @@ describe('execution interaction ownership', () => {
   });
 
   it('inherits a grandchild through the child stream it already owns', () => {
-    const { registry, scope, rootStream } = openRootScope();
+    const { registry, onRelease, scope, rootStream } = openRootScope();
     const childStream = 'child-stream' as StreamTabId;
 
     trackRun(registry, 'child', rootStream, childStream);
@@ -108,14 +109,20 @@ describe('execution interaction ownership', () => {
       'grandchild-stream' as StreamTabId,
     );
 
-    expect(registry.interactionOwnership.ownerOf('grandchild')).toBe(scope);
+    registry.untrack('root');
+    registry.untrack('child');
+    scope.finish();
+    expect(onRelease).not.toHaveBeenCalled();
+
+    registry.untrack('grandchild');
+    expect(onRelease).toHaveBeenCalledOnce();
   });
 
-  it('holds the owner across the gap between a child activation and its handle', () => {
+  it('holds the owner for the whole life of a child activation', () => {
     const { registry, onRelease, scope, rootStream } = openRootScope();
     const childStream = 'child-stream' as StreamTabId;
 
-    registry.reserveChildActivation({
+    const releaseActivation = registry.reserveChildActivation({
       executionId: 'child',
       parentStreamId: rootStream,
       childStreamId: childStream,
@@ -127,12 +134,15 @@ describe('execution interaction ownership', () => {
     scope.finish();
     expect(onRelease).not.toHaveBeenCalled();
 
-    // Tracking the child's first handle promotes the reservation; the run it
-    // promoted into is what now holds the owner open.
+    // The activation holds the owner for the loop's whole life: across the
+    // child's turn handles and the gaps between them, until the loop's own
+    // disposer runs after its final delivery.
     trackRun(registry, 'child', rootStream, childStream);
     expect(onRelease).not.toHaveBeenCalled();
-
     registry.untrack('child');
+    expect(onRelease).not.toHaveBeenCalled();
+
+    releaseActivation();
     expect(onRelease).toHaveBeenCalledOnce();
   });
 
@@ -154,7 +164,6 @@ describe('execution interaction ownership', () => {
 
     releaseActivation();
     expect(onRelease).toHaveBeenCalledOnce();
-    expect(registry.interactionOwnership.ownerOf('child')).toBeUndefined();
   });
 
   it('does not let a later generation inherit or release an earlier one', () => {
@@ -184,9 +193,9 @@ describe('execution interaction ownership', () => {
 
     expect(releaseSecond).toHaveBeenCalledOnce();
     expect(releaseFirst).not.toHaveBeenCalled();
-    // The second generation's release must not strip the first's claims.
-    expect(registry.interactionOwnership.ownerOf('first-child')).toBe(first);
 
+    // The second generation's release must not strip the first's claims: the
+    // first still holds its child, and releases only when that child goes.
     registry.untrack('first-child');
     expect(releaseFirst).toHaveBeenCalledOnce();
   });
@@ -216,6 +225,30 @@ describe('execution interaction ownership', () => {
     expect(releaseSecond).toHaveBeenCalledOnce();
   });
 
+  it('drops every activation observer when the registry disposes', () => {
+    const { registry, onRelease, scope, rootStream } = openRootScope();
+
+    registry.dispose();
+
+    // No observer may survive registry disposal. One that did would still see
+    // this dispatch, claim a pending activation on the root stream it owns,
+    // and hold the scope open past its own finish.
+    registry.interactionOwnership.observeChildActivation(
+      {
+        executionId: 'post-disposal-child',
+        parentStreamId: rootStream,
+        childStreamId: 'post-disposal-child-stream' as StreamTabId,
+        interrupt: vi.fn(),
+        detach: vi.fn(),
+        isDetached: () => false,
+      },
+      true,
+    );
+    scope.finish();
+
+    expect(onRelease).toHaveBeenCalledOnce();
+  });
+
   it('stops observing the registry after an explicit release', () => {
     const { registry, onRelease, scope, rootStream } = openRootScope();
 
@@ -223,13 +256,11 @@ describe('execution interaction ownership', () => {
     scope.release();
 
     expect(onRelease).toHaveBeenCalledOnce();
-    expect(registry.interactionOwnership.ownerOf('root')).toBeUndefined();
 
     // A late registration event must not revive a released generation.
     trackRun(registry, 'root', rootStream, rootStream);
     registry.untrack('root');
     scope.finish();
     expect(onRelease).toHaveBeenCalledOnce();
-    expect(registry.interactionOwnership.ownerOf('root')).toBeUndefined();
   });
 });

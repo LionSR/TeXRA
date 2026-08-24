@@ -34,14 +34,12 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import { detectStatusCode } from '@common/errors/sdkError/errorInspection';
-import {
-  attachManualRetryOnlyError,
-  attachPartialText,
-} from '@common/errors/sdkError/errorMetadata';
+import { attachManualRetryOnlyError } from '@common/errors/sdkError/errorMetadata';
 import {
   PARTIAL_TEXT_TAIL_MAX,
   takeTail,
 } from '@common/errors/sdkError/errorPatterns';
+import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import { composeLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import {
   type FileLocation,
@@ -692,16 +690,14 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     }
   }
 
-  private hasSupportedMedia(
-    mediaFiles: FileLocation[] | undefined,
-  ): mediaFiles is FileLocation[] {
+  private canAttachMedia(mediaFiles: FileLocation[] | undefined): boolean {
     return Boolean(mediaFiles?.length) && this.supportsFileUploads();
   }
 
   protected override async createMediaMessage(
     mediaFiles: FileLocation[],
   ): Promise<Content[]> {
-    if (!this.hasSupportedMedia(mediaFiles)) {
+    if (!this.canAttachMedia(mediaFiles)) {
       return [];
     }
 
@@ -930,9 +926,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   ): Promise<Step[]> {
     // System prompt is NOT a step — it rides on request-level system_instruction
     // (resent on every create, spec §6.2).
-    const media = this.hasSupportedMedia(mediaFiles)
-      ? await this.createMediaForRound(mediaFiles, 'initial')
-      : [];
+    const media =
+      mediaFiles && this.canAttachMedia(mediaFiles)
+        ? await this.createMediaForRound(mediaFiles, 'initial')
+        : [];
     const content: Content[] = [
       ...(userPrefix.trim() ? [this.textMedia(userPrefix)] : []),
       ...media,
@@ -956,9 +953,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     userMessage: string,
     mediaFiles?: FileLocation[],
   ): Promise<Step[]> {
-    const media = this.hasSupportedMedia(mediaFiles)
-      ? await this.createMediaForRound(mediaFiles, 'followUp')
-      : [];
+    const media =
+      mediaFiles && this.canAttachMedia(mediaFiles)
+        ? await this.createMediaForRound(mediaFiles, 'followUp')
+        : [];
     const content: Content[] = [
       ...media,
       ...(userMessage.trim() ? [this.textMedia(userMessage)] : []),
@@ -1403,7 +1401,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     messages: Step[],
     mediaFiles: FileLocation[],
   ): Promise<MediaAttachmentKind[]> {
-    if (!mediaFiles.length || !this.supportsFileUploads()) return [];
+    if (!this.canAttachMedia(mediaFiles)) return [];
     const media = await this.createMediaForRound(mediaFiles, 'insert');
     if (media.length === 0) return [];
     const trailing = messages.at(-1);
@@ -1705,13 +1703,12 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         this.chainState.invalidateChain();
         return this.createResponseImpl(options);
       }
-      if (aggregatedText) {
-        attachPartialText(
-          error,
-          takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX),
-        );
-      }
-      throw error;
+      return handleStreamingFailure(error, {
+        // No `finalizeOnError` hook: a streaming call's own `finally` already
+        // finalized the progress streams before this outer catch ever runs.
+        partialTail: () =>
+          aggregatedText ? takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX) : '',
+      });
     }
   }
 

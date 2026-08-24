@@ -1,5 +1,3 @@
-import PQueue from 'p-queue';
-
 import { defaultSession } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import type {
@@ -15,10 +13,12 @@ import {
 } from '@shared/quotaFallbackRoutes';
 import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';
 import { safeTerminalText } from '../terminalText';
+import type PQueue from 'p-queue';
 
 /**
  * Approval requests the CLI can settle by policy (auto-approve / auto-deny)
@@ -66,12 +66,7 @@ const cliPromptQueues = new WeakMap<CliContext, PQueue>();
 const warnedApprovalContexts = new WeakSet<CliContext>();
 
 function cliPromptQueue(context: CliContext): PQueue {
-  let queue = cliPromptQueues.get(context);
-  if (!queue) {
-    queue = new PQueue({ concurrency: 1 });
-    cliPromptQueues.set(context, queue);
-  }
-  return queue;
+  return getOrCreatePQueue(cliPromptQueues, context);
 }
 
 /**

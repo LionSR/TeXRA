@@ -40,7 +40,6 @@ import {
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { warnAbandonedSlotValue } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { requireRunStream, requireStreamId } from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import {
@@ -140,8 +139,7 @@ Use view_range: [start, end] to paginate file and background-command output cont
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed executions to change.
 Use action: "kill" on /executions/{id} to terminate a running execution.
-Use action: "subscribe" on /executions/{id} to receive future status and termination events as <execution-activity> follow-ups (auto-disposes when the execution finishes or this stream is released). Use action: "unsubscribe" on /executions/{id} to stop them.
-Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait or subscription is needed for executions you launched. Use action: "wait" only when you cannot proceed without a status change; use action: "subscribe" for push updates on executions whose results are not auto-delivered.`,
+Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait is needed for executions you launched. Use action: "wait" only when you cannot proceed without a status change.`,
   schema: ExecutionsToolInputSchema,
 }) {
   protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {
@@ -156,11 +154,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     // /executions - list all executions
     if (!id) {
-      if (
-        input.action === 'subscribe' ||
-        input.action === 'unsubscribe' ||
-        input.action === 'kill'
-      ) {
+      if (input.action === 'kill') {
         throw new ToolError(
           `action='${input.action}' requires a specific execution: use /executions/{id}.`,
         );
@@ -178,10 +172,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       switch (input.action) {
         case 'kill':
           return this.handleKill(executionId);
-        case 'subscribe':
-          return this.handleSubscribe(executionId);
-        case 'unsubscribe':
-          return this.handleUnsubscribe(executionId);
         case 'wait':
           await this.waitForChange(executionId, input.timeout);
           return this.showSummary(executionId, {
@@ -197,8 +187,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     // Sub-resource paths (config, conversation, files, ...) only support
-    // reading — wait/kill/subscribe/unsubscribe operate on /executions or
-    // /executions/{id}, never a deeper resource.
+    // reading — wait/kill operate on /executions or /executions/{id}, never a
+    // deeper resource.
     if (input.action !== 'view') {
       throw new ToolError(
         `action='${input.action}' is only valid on /executions or /executions/{id}; use action='view' to read /executions/${id}/${resource}.`,
@@ -411,7 +401,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     if (!meta && !record) {
       const resumability = await deriveResumability(executionId);
-      if (!resumability.resumable) {
+      if (resumability.kind !== 'checkpoint') {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
       return executed(
@@ -549,38 +539,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     throw new ToolError(`Execution ${executionId} could not be terminated.`);
   }
 
-  private handleSubscribe(executionId: ExecutionId): ToolResult {
-    const { streamId, context: ctx } = requireRunStream('subscribe');
-    // Subscribing to your own execution would feed every status transition
-    // back into the same session, creating a self-sustaining loop of
-    // <execution-activity> follow-ups.
-    if (getRunContextExecutionId(ctx) === executionId) {
-      throw new ToolError(
-        `Cannot subscribe to your own execution (${executionId}).`,
-      );
-    }
-    // A bind failure propagates as-is: `BaseTool.call` already formats the
-    // message with `toErrorMessage`, so re-wrapping it added nothing.
-    currentSession().subscriptions.bind(streamId, executionId);
-    return executed(
-      `Subscribed to ${executionId}. Status and termination events will arrive as follow-ups wrapped in <execution-activity>. Auto-disposes when the execution finishes or this stream is released. Call again with action='unsubscribe' to stop sooner.`,
-      `Subscribed to ${executionId}`,
-    );
-  }
-
-  private handleUnsubscribe(executionId: ExecutionId): ToolResult {
-    const streamId = requireStreamId('unsubscribe');
-    const removed = currentSession().subscriptions.unbind(
-      streamId,
-      executionId,
-    );
-    return executed(
-      removed
-        ? `Unsubscribed from ${executionId}.`
-        : `No active subscription to ${executionId} on this stream.`,
-    );
-  }
-
   /**
    * Same source of truth as `showSummary()`'s completed-run todos branch: a
    * running execution's task list is read from session snapshot state. Once
@@ -694,7 +652,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       const resumability = await deriveResumability(executionId);
       const exists =
         meta !== null ||
-        resumability.resumable ||
+        resumability.kind === 'checkpoint' ||
         hasCompletedRunConversationEvidence(conversationResult);
       if (!exists) {
         throw new ToolError(`Execution not found: ${executionId}`);

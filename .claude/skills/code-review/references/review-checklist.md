@@ -10,7 +10,7 @@ The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code cou
 
 - **`grep -nE "from ['\"]vscode['\"]"`** in `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`, `src/shared/`, `src/replacement/`, `src/eventBus/`, or any webview `frontend/`. Any hit is a finding.
 - **New `from '@agent/*'` imports in `src/shared/`** → finding. `src/shared/` is for wire contracts and UI-shared message types; host-neutral orchestration belongs under `src/controllers/`.
-- **Direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets`** in agnostic code → use `platform().config`, `platform().fs`, `platform().secrets` (see `src/platform/platform.ts`). Note: `@utils/config/configUtils` is the VS Code-allowed module; agnostic code goes through `platform()`.
+- **Direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets`** in agnostic code → use `platform().config`, `platform().fs`, `platform().secrets` (see `src/platform/platform.ts`). Note: `src/utils/config/configUtils.ts` and `src/utils/config/platformSettings.ts` are host-neutral (VS Code-free) and are called directly from agnostic code too, not only VS Code-allowed code.
 - **`instanceof vscode.FileSystemError`** → `isFileNotFoundError(err)` from `@common/errors`.
 - **`vscode.FileType.File` / `.Directory`** → `isFile()` / `isDirectory()` from `@utils/files/fsEntryType`.
 - **`vscode.window.show*Message()` in business logic** → return error results; let the command/frontend layer handle UI.
@@ -40,7 +40,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 
 ## 4. Configuration, storage, files
 
-- **Inline config strings** sprinkled across modules → use the typed accessors (`platform().config` in agnostic code; `getConfig`/`watchConfig` from `@utils/config/configUtils` in VS Code-allowed code) so `watchConfig` can react. Verify keys exist in `package.json`'s `contributes.configuration`.
+- **Inline config strings** sprinkled across modules → use the typed accessors: `getConfig`/`getValidatedConfig` (`src/utils/config/configUtils.ts`) for a raw path, `readPlatformSetting`/`writePlatformSetting` (`src/utils/config/platformSettings.ts`) for a setting modeled in the Zod catalog, or `platform().config` directly only when you need `update`/`inspect`/`isExplicitlySet`. The catalog helpers default to the `vscode` host slot and read global scope only for `configTarget: 'global'` rows — see AGENTS.md's settings note before swapping one accessor for the other on an existing call site, and prefer `applyStateSettingUpdate` (`src/shared/settingsView/handlers/stateSettingWrite.ts`) over a bare `writePlatformSetting` for any write a settings UI can reach. Verify a catalog key exists via `settingByKey` against `src/shared/schemas/coreSettings.ts`/`stateSettings.ts`, not `package.json`'s `contributes.configuration` — the extension manifest intentionally contributes no configuration block (see CLAUDE.md's "Layout" section and `scripts/sync-package-contributes.mjs`).
 - **Manual workspace path joining** → `WorkspaceFS.getPath()` and the helpers in `@utils/files`.
 - **Pasted-image paths** generated/resolved manually → `pastedImageUtils`.
 - **Long-running writers without retention** → `RelativeFS.cleanupOldFiles` (or equivalent).

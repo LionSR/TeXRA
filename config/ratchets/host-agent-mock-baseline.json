@@ -14,12 +14,7 @@
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.ts",
       "form": "mock",
-      "specifier": "@agent/runtime/resolveAndResumeStream"
-    },
-    {
-      "file": "src/test-kernel/cli/chatSessionController.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/runtime/resumeQueuedToolUse"
+      "specifier": "@agent/runtime/resumeRun"
     },
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.ts",
@@ -75,11 +70,6 @@
       "file": "src/test-kernel/cli/ResumeCommand.vitest.ts",
       "form": "mock",
       "specifier": "@agent/runtime/SessionResumeRetrieval"
-    },
-    {
-      "file": "src/test-kernel/cli/ResumeCommand.vitest.ts",
-      "form": "mock",
-      "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/cli/RunChatConfig.vitest.ts",

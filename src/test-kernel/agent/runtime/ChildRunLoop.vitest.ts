@@ -13,47 +13,34 @@ import pDefer, { type DeferredPromise } from 'p-defer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  finalizeExecution: vi.fn(),
+  finalizeRun: vi.fn(),
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
   releaseExecutionLeaseAfterArtifacts: vi.fn(
     async (_session: unknown, _executionId: ExecutionId) => {},
   ),
-  captureOwnedExecutionLease: vi.fn(
-    (_executionId: ExecutionId) => (operation: () => unknown) => operation(),
-  ),
-  leaseLossListener: undefined as (() => void) | undefined,
+  assertOwnedExecutionLease: vi.fn((_executionId: ExecutionId) => undefined),
 }));
 
 // Turn-state persistence runs against the real (memfs-backed) execution store:
 // the loop writes it best-effort and no assertion here depends on it.
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
-  finalizeExecution: mocks.finalizeExecution,
+  finalizeRun: mocks.finalizeRun,
 }));
-// terminalPersistence deep-imports finalizeExecution from executionLifecycle.
+// The registry deep-imports finalizeRun from executionLifecycle.
 vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('@agent/storage/executionLifecycle')
   >()),
-  finalizeExecution: mocks.finalizeExecution,
+  finalizeRun: mocks.finalizeRun,
 }));
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
   markOwnedExecutionLeaseUndurable: vi.fn(),
-  captureOwnedExecutionLease: mocks.captureOwnedExecutionLease,
-  onOwnedExecutionLeaseLost: vi.fn(
-    (_executionId: ExecutionId, listener: () => void) => {
-      mocks.leaseLossListener = listener;
-      return () => {
-        if (mocks.leaseLossListener === listener) {
-          mocks.leaseLossListener = undefined;
-        }
-      };
-    },
-  ),
+  assertOwnedExecutionLease: mocks.assertOwnedExecutionLease,
 }));
 
 vi.mock('@agent/storage/childRunPersistence', () => ({
@@ -276,12 +263,7 @@ beforeEach(() => {
   vi.spyOn(session, 'releaseExecutionLease').mockImplementation((executionId) =>
     mocks.releaseExecutionLeaseAfterArtifacts(session, executionId),
   );
-  mocks.leaseLossListener = undefined;
-  mocks.finalizeExecution.mockResolvedValue({
-    status: 'durable',
-    terminalStatusPersisted: true,
-    flowRecord: 'deleted',
-  });
+  mocks.finalizeRun.mockResolvedValue({ ok: true });
   mocks.persistChildRunReport.mockImplementation(async (_id, msg: string) => {
     return { kind: 'persisted' as const, msg };
   });
@@ -300,7 +282,7 @@ describe('childRunLoop E2E fixtures', () => {
   it('validates the captured lease before registering loop resources', () => {
     const { childStreamId, executionId } = loopIds('lost-before-setup');
     const { strategy, callCount } = createFakeStrategy();
-    mocks.captureOwnedExecutionLease.mockImplementationOnce(() => {
+    mocks.assertOwnedExecutionLease.mockImplementationOnce(() => {
       throw new Error('lease generation lost');
     });
 
@@ -309,7 +291,6 @@ describe('childRunLoop E2E fixtures', () => {
     );
 
     expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false);
-    expect(mocks.leaseLossListener).toBeUndefined();
     expect(callCount()).toBe(0);
   });
 
@@ -317,10 +298,8 @@ describe('childRunLoop E2E fixtures', () => {
     const { childStreamId, executionId } = loopIds('lost-during-setup');
     const { strategy, callCount } = createFakeStrategy();
     const claimChildRun = vi.spyOn(session.followUps, 'claimChildRun');
-    mocks.captureOwnedExecutionLease
-      .mockImplementationOnce(
-        (_id) => (operation: () => unknown) => operation(),
-      )
+    mocks.assertOwnedExecutionLease
+      .mockImplementationOnce(() => undefined)
       .mockImplementationOnce(() => {
         throw new Error('lease generation lost during setup');
       });
@@ -331,7 +310,6 @@ describe('childRunLoop E2E fixtures', () => {
 
     expect(claimChildRun).not.toHaveBeenCalled();
     expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false);
-    expect(mocks.leaseLossListener).toBeUndefined();
     expect(callCount()).toBe(0);
   });
 
@@ -375,7 +353,6 @@ describe('childRunLoop E2E fixtures', () => {
 
       expect(releaseSessionOwnership).toHaveBeenCalledOnce();
       expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false);
-      expect(mocks.leaseLossListener).toBeUndefined();
       expect(handle.interrupt()).toBe(false);
       interruptHandle.mockClear();
       registry.interruptAll();
@@ -462,8 +439,13 @@ describe('childRunLoop E2E fixtures', () => {
           agentName: name,
         });
 
-        expect(events).toEqual(['registered', 'launch']);
+        expect(events).toEqual(['registered']);
         expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true);
+        // The loop body is a generation on the execution's lane: it starts
+        // once the lane admits it, not inside `startChildRunLoop`.
+        await vi.waitFor(() =>
+          expect(events).toEqual(['registered', 'launch']),
+        );
         interruptAll();
 
         await vi.waitFor(() => {
@@ -477,21 +459,6 @@ describe('childRunLoop E2E fixtures', () => {
       }
     },
   );
-
-  it('interrupts an in-flight child when its execution lease is lost', async () => {
-    const { childStreamId, executionId } = loopIds('lease-loss');
-    const { strategy, rejectTurn } = createFakeStrategy();
-
-    startLoop({ childStreamId, executionId }, strategy);
-    expect(mocks.captureOwnedExecutionLease).toHaveBeenCalledTimes(3);
-    await vi.waitFor(() => expect(mocks.leaseLossListener).toBeDefined());
-
-    mocks.leaseLossListener?.();
-    await rejectTurn(1, createAbortError());
-
-    await waitForLoopEnd(childStreamId);
-    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
-  });
 
   it('drains accepted-turn attribution before releasing the execution lease', async () => {
     const { childStreamId, executionId } = loopIds('turn-state-drain');
@@ -509,7 +476,10 @@ describe('childRunLoop E2E fixtures', () => {
     try {
       const handle = startLoop({ childStreamId, executionId }, strategy);
       await writeStarted.promise;
-      mocks.leaseLossListener?.();
+      // Interrupt the loop through its parent lineage: no turn handle is
+      // tracked in this fixture, so the stop reaches the loop via its
+      // child activation.
+      session.executions.stopAgentStream(PARENT_STREAM_ID);
       await rejectTurn(1, createAbortError());
 
       await vi.waitFor(() =>
@@ -561,7 +531,7 @@ describe('childRunLoop E2E fixtures', () => {
         delivery.expectedGenerationId,
       );
       admissions.push(admission.kind);
-      return admission.kind === 'duplicate' || admission.kind === 'unavailable'
+      return admission.kind === 'duplicate' || admission.kind === 'refused'
         ? { kind: 'dropped' as const }
         : { kind: 'delivered' as const };
     });
@@ -573,7 +543,7 @@ describe('childRunLoop E2E fixtures', () => {
       await expect(
         startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
       ).resolves.toBeUndefined();
-      expect(admissions).toEqual(['live_flow', 'live_flow']);
+      expect(admissions).toEqual(['delivered_live', 'delivered_live']);
       const delivered = session.followUps.queue(parentLease).drainItems();
       expect(delivered.map((item) => item.text)).toEqual([
         'delivered:done',
@@ -679,7 +649,7 @@ describe('childRunLoop E2E fixtures', () => {
         { text: 'keep going', origin: 'user' },
         'live_owner',
       ),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
     expect(callCount()).toBe(1);
 
     deliveryCompleted.resolve({ kind: 'delivered' });
@@ -699,25 +669,6 @@ describe('childRunLoop E2E fixtures', () => {
       );
     });
     await waitForLoopEnd(childStreamId);
-  });
-
-  it('fences parent deliveries to the continuation generation that launched the child', async () => {
-    const parentLease = session.followUps.claimLive(PARENT_STREAM_ID, 'flow')!;
-    const { childStreamId, executionId } = loopIds('parent-generation-fence');
-    const strategy = createTerminalStrategy('Parent generation fence');
-
-    startLoop({ childStreamId, executionId }, strategy);
-
-    await vi.waitFor(() => {
-      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
-        expect.objectContaining({
-          targetStreamId: PARENT_STREAM_ID,
-          expectedGenerationId: parentLease.generationId,
-        }),
-      );
-    });
-    await waitForLoopEnd(childStreamId);
-    session.followUps.release(parentLease, 'terminal');
   });
 
   it('late result after parent stop: a turn that resolves after interruption is persisted but not delivered', async () => {
@@ -788,11 +739,10 @@ describe('childRunLoop E2E fixtures', () => {
     // resumable-looking — would never settle or untrack.
     const { childStreamId, executionId } = loopIds('ghost-handle-stop');
     const { strategy, resolveTurn } = createFakeStrategy();
-    mocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
+    mocks.finalizeRun.mockResolvedValueOnce({
+      ok: false,
       error: new Error('metadata disk full'),
-      stage: 'terminal-status',
-      terminalStatusPersisted: false,
+      outcomePersisted: false,
     });
 
     startLoop({ childStreamId, executionId }, strategy);
@@ -830,7 +780,7 @@ describe('childRunLoop E2E fixtures', () => {
     // The loop routes the cancellation through the durable outcome's only
     // writer; the interim result envelope is left exactly as its turn wrote
     // it, and reads project the durable outcome onto it.
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+    expect(mocks.finalizeRun).toHaveBeenCalledWith({
       executionId,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
@@ -927,7 +877,7 @@ describe('childRunLoop E2E fixtures', () => {
         { text: 'resume please', origin: 'user' },
         'live_owner',
       ),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
 
     const resumeFailure = new Error('resume storage unreadable');
     await rejectTurn(2, resumeFailure);
@@ -1006,7 +956,7 @@ describe('childRunLoop E2E fixtures', () => {
     // the loop's finalize, so the loop reports an interrupted run for a stream
     // whose phase already carries the failure.
     const interruptAfterFailure = vi.fn(() => {
-      mocks.leaseLossListener?.();
+      session.executions.kill(executionId);
     });
 
     startLoop({ childStreamId, executionId }, strategy, {
@@ -1028,7 +978,7 @@ describe('childRunLoop E2E fixtures', () => {
         message: expect.stringContaining('turn blew up'),
       }),
     });
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith(
+    expect(mocks.finalizeRun).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: RUN_OUTCOME.FAILED }),
     );
   });
@@ -1118,7 +1068,7 @@ describe('childRunLoop E2E fixtures', () => {
         { text: 'go on', origin: 'user' },
         'live_owner',
       ),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
     // Waits for the loop to have actually invoked runTurn (calls increments
     // synchronously inside it) — not for the queue to read empty, which can
     // happen before the loop's own continuation runs (see the "delegate →

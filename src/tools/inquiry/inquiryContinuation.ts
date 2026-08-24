@@ -13,10 +13,12 @@
  */
 
 import {
+  lookupStreamExecutionId,
   submitFollowUp,
   type SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
 import {
+  currentSession,
   defaultSession,
   resolveEmitSession,
   type SessionHandle,
@@ -44,7 +46,7 @@ import {
 
 const logger = createLog('inquiryContinuation');
 
-export type InjectionOutcome = 'sent' | 'queued' | 'resumed' | 'archived';
+export type InjectionOutcome = 'sent' | 'queued' | 'archived';
 
 const QUESTION_TRUNCATION = 400;
 const ANSWER_TRUNCATION = 2000;
@@ -140,41 +142,33 @@ function mapSubmissionToInquiryOutcome(
   result: SubmitFollowUpResult,
 ): InjectionOutcome {
   if (result.status === 'sent') return 'sent';
-  if (result.status === 'dropped' || result.status === 'no_session') {
-    return 'archived';
-  }
-  // Inquiry continuations carry no delivery id, so 'duplicate' is
-  // unreachable; it maps to 'queued' (already admitted) by construction.
-  if (result.status === 'duplicate') return 'queued';
-  return result.continuation === 'resumed' ? 'resumed' : 'queued';
+  // A queued continuation whose wake failed is still queued; an explicit
+  // Resume delivers it. A refusal has nothing left to continue.
+  if (result.status === 'queued') return 'queued';
+  return 'archived';
 }
 
 async function deliverContinuation(params: {
   parentStreamId: StreamTabId;
-  parentGenerationId: string;
   text: string;
   threadId: InquiryThreadId;
   session?: SessionHandle;
 }): Promise<InjectionOutcome> {
   const result = await submitFollowUp(params.parentStreamId, params.text, {
     session: params.session,
-    expectedGenerationId: params.parentGenerationId,
   });
 
-  if (result.status === 'no_session') {
+  const outcome = mapSubmissionToInquiryOutcome(result);
+  if (outcome === 'archived') {
     logger.warn(
-      `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} has no session.`,
+      `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} refused it (${result.status === 'failed' ? result.reason : result.status}).`,
     );
     return archiveAsParentFinished(params.threadId, params.session);
   }
 
-  const outcome = mapSubmissionToInquiryOutcome(result);
-
   await emitInquiryThreadUpdate(
     params.threadId,
-    {
-      resumeOutcome: outcome === 'archived' ? 'parent_finished' : outcome,
-    },
+    { resumeOutcome: outcome },
     params.session,
   );
   return outcome;
@@ -183,8 +177,9 @@ async function deliverContinuation(params: {
 /**
  * Shared body of the answered / dropped injectors: resolve the manifest,
  * archive when there is nothing to continue (missing thread, a turn-less
- * manifest, an `answered` event whose last turn is no longer answered, or
- * no parent stream), then build and deliver the continuation.
+ * manifest, an `answered` event whose last turn is no longer answered, no
+ * parent stream, or a parent stream since re-run under another execution),
+ * then build and deliver the continuation.
  */
 async function injectContinuation(
   event: 'answered' | 'dropped',
@@ -198,8 +193,7 @@ async function injectContinuation(
   const lastTurn = manifest.turns.at(-1);
   if (!lastTurn) {
     // Structural guard: the manifest schema does not require turns, so a
-    // turn-less thread is representable — there is nothing to continue and
-    // no parent generation to fence a follow-up against.
+    // turn-less thread is representable, and there is nothing to continue.
     logger.warn(
       `Inquiry continuation for ${threadId}: manifest has no turns; archiving.`,
     );
@@ -208,6 +202,20 @@ async function injectContinuation(
   if (event === 'answered' && lastTurn.kind !== 'answered') return 'archived';
   if (manifest.parentStreamId == null) {
     return archiveAsParentFinished(threadId, session);
+  }
+  // The answer is addressed to the execution that asked. A manifest written
+  // before the field existed names none and is delivered by stream alone.
+  if (manifest.parentExecutionId != null) {
+    const current = await lookupStreamExecutionId(
+      manifest.parentStreamId,
+      session ?? currentSession(),
+    );
+    if (current !== manifest.parentExecutionId) {
+      logger.warn(
+        `Inquiry continuation for ${threadId}: parent stream ${manifest.parentStreamId} now runs execution ${current ?? 'none'}, not ${manifest.parentExecutionId}; archiving.`,
+      );
+      return archiveAsParentFinished(threadId, session);
+    }
   }
 
   const stillOpen = await listThreadsByStatus({
@@ -228,7 +236,6 @@ async function injectContinuation(
 
   return deliverContinuation({
     parentStreamId: manifest.parentStreamId,
-    parentGenerationId: lastTurn.parentGenerationId,
     text,
     threadId,
     session,

@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your 24/7 AI Theorist.",
-  "version": "0.40.4",
+  "version": "0.40.5",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.125.0"
@@ -1127,7 +1127,7 @@
     "@vscode/vsce": "^3.9.2",
     "concurrently": "^10.0.5",
     "esbuild": "^0.28.2",
-    "eslint": "^10.8.1",
+    "eslint": "^10.9.0",
     "eslint-plugin-import-x": "^4.17.1",
     "eslint-plugin-unicorn": "^73.0.0",
     "globals": "^17.11.0",
@@ -1136,8 +1136,8 @@
     "prettier": "^3.9.6",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-eslint": "^8.67.0",
-    "vite": "^8.2.1",
-    "vitest": "^4.1.10"
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   },
   "packageManager": "pnpm@11.5.2+sha512.71c631e382066efc25625d5cf029075de07b61b37f6e27350fbd84b1bda5864c8c1967adc280776b45c30a715c0359a3be08fef42d5bb09e2b99029979692916",
   "private": false,

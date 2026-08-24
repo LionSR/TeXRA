@@ -9,7 +9,11 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import PQueue from 'p-queue';
 
 import type { SessionHandle } from '@agent/runtime';
-import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
+import {
+  describeFollowUpFailure,
+  presentFollowUpResult,
+  submitFollowUp,
+} from '@agent/followUp';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
@@ -53,9 +57,6 @@ import {
 } from './state/transcript';
 import type { ChatSessionController } from '../chatSessionController';
 import type { SkillActivation } from './forms/SkillsListForm';
-
-const FOLLOW_UP_NOT_ACCEPTED =
-  'No active session accepted that message; it has been restored to the input.';
 
 interface PreparedChatInstruction {
   readonly instruction: string;
@@ -305,28 +306,25 @@ export function createChatSubmitDriver(
           mediaFiles,
           displayText: prepared.displayInstruction,
         });
-        if (result.status === 'sent') {
+        if (result.status !== 'failed') {
           emitQueuedFollowUpsChanged(followUpTarget);
           delivered = true;
-        } else if (result.status === 'queued') {
-          emitQueuedFollowUpsChanged(followUpTarget);
           const presentation = presentFollowUpResult(result);
           if (presentation.severity !== 'none') {
-            if (presentation.refreshQueuedFollowUps) {
-              emitQueuedFollowUpsChanged(followUpTarget);
-            }
+            // The input is in the stream's queue; only its wake failed.
             appendLocalAssistantTranscript(
               presentation.message,
               followUpTarget,
             );
           }
-          delivered = result.continuation !== 'resume_failed';
-        }
-        if (result.status === 'no_session' || result.status === 'dropped') {
+        } else {
           // The draft is the user's until admitted: hand it back before any
           // notice, so a refused send never costs a retype.
           requestDraftRestore(line);
-          setTransientNotice(FOLLOW_UP_NOT_ACCEPTED, { ttlMs: Infinity });
+          setTransientNotice(
+            `${describeFollowUpFailure(result.reason)} The message has been restored to the input.`,
+            { ttlMs: Infinity },
+          );
           // Child stream ids are keys in parentStream; the root session id is not.
           if (followUpTarget === session.streamId) {
             session.stopRequested = true;

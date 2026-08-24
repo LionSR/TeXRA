@@ -1,11 +1,11 @@
 // Local imports
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { captureOwnedExecutionLeaseIfPresent } from '@agent/storage/executionLease';
 import {
   finalizeRunTerminal,
   type RunTerminalPersistence,
 } from '@agent/runtime/AgentRunLifecycle';
+import type { ChildRunOutcome } from '@agent/runtime/childRunLoop';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import {
   currentSession,
@@ -40,16 +40,6 @@ interface CreateChildStreamOptions {
   reservedWriter?: TranscriptWriter;
 }
 
-/**
- * What the child observed about its own exit. It is a report, not a verdict:
- * the stream phase owns the terminal outcome, so an explicit stop/kill that
- * already landed CANCELLED outranks the non-zero exit it caused.
- */
-type ChildStreamOutcome =
-  | { kind: 'completed' }
-  | { kind: 'failed'; error?: unknown; errorMessage?: string }
-  | { kind: 'cancelled' };
-
 interface FinalizeChildStreamOptions {
   wallTimeMs?: number;
   usage?: {
@@ -57,7 +47,7 @@ interface FinalizeChildStreamOptions {
     output_tokens: number;
   } | null;
   /** Defaults to `{ kind: 'completed' }` when omitted. */
-  outcome?: ChildStreamOutcome;
+  outcome?: ChildRunOutcome;
   /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
   stage?: Pick<StageHandle, 'end'>;
   /** Durable execution-state action. */
@@ -171,11 +161,6 @@ export function createChildStream(
       parentStreamId,
       runTrace.trace,
     );
-    const executionLeaseScope =
-      captureOwnedExecutionLeaseIfPresent(executionId);
-    if (executionLeaseScope) {
-      handle.attachExecutionLeaseScope(executionLeaseScope);
-    }
     // The process-owned snapshot listener persists both facts before handle
     // tracking; a later presentation replays them from the snapshot store during
     // canonical state loading (#8258).

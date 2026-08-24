@@ -9,6 +9,8 @@
 //
 // Host-agnostic, VS Code-free.
 
+import { randomUUID } from 'node:crypto';
+
 import PQueue from 'p-queue';
 
 import { getExecutionStore, type ResultMeta } from '@agent/storage';
@@ -19,9 +21,8 @@ import type {
   ChildTurnState,
 } from '@agent/storage/ExecutionKVStore';
 import {
-  onOwnedExecutionLeaseLost,
-  captureOwnedExecutionLease,
-  markOwnedExecutionLeaseUndurable,
+  assertOwnedExecutionLease,
+  ExecutionLeaseLostError,
 } from '@agent/storage/executionLease';
 import {
   currentSession,
@@ -43,7 +44,7 @@ import type {
 } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
-import { persistChildRunDeliveryBestEffort } from '@agent/storage/childRunDeliveryPersistence';
+import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
@@ -105,11 +106,12 @@ export interface ChildRunPorts {
 }
 
 /**
- * A child run's reported terminal outcome. A report, not a verdict: the
- * stream phase owns the terminal outcome, so an explicit stop/kill that
- * already landed CANCELLED outranks a non-zero exit this reports.
+ * A child run's reported terminal outcome, shared with the tool-layer child
+ * stream that finalizes one. A report, not a verdict: the stream phase owns
+ * the terminal outcome, so an explicit stop/kill that already landed
+ * CANCELLED outranks a non-zero exit this reports.
  */
-type ChildRunOutcome =
+export type ChildRunOutcome =
   | { kind: 'completed' }
   | { kind: 'failed'; error?: unknown; errorMessage?: string }
   | { kind: 'cancelled' };
@@ -495,10 +497,12 @@ async function attemptTurn<TTurn>(
  */
 function mintChildTurnRef(
   executionId: ExecutionId,
-  generationId: string,
+  attemptId: string,
   turnIndex: number,
 ): ChildTurnRef {
-  const token = `${executionId}:generation:${generationId}:turn:${turnIndex}`;
+  // The `:generation:` segment is the persisted spelling of this token and is
+  // frozen: delivery ids minted by an earlier build must keep comparing equal.
+  const token = `${executionId}:generation:${attemptId}:turn:${turnIndex}`;
   return { token, deliveryId: `${token}:delivery` };
 }
 
@@ -548,12 +552,7 @@ function emitTurnDiagnostic(
       ...(turnRef
         ? { turnToken: turnRef.token, deliveryId: turnRef.deliveryId }
         : {}),
-      ...(queueOwner
-        ? {
-            queueGeneration: queueOwner.generation,
-            queueOwner: queueOwner.kind,
-          }
-        : {}),
+      ...(queueOwner ? { queueOwner: queueOwner.kind } : {}),
       ...(interruptionCause ? { interruptionCause } : {}),
     },
   });
@@ -606,7 +605,6 @@ function resolveDeliveryTarget<TTurn>(
 interface PendingChildDelivery {
   readonly targetStreamId: StreamTabId;
   readonly followUp: FollowUpQueueInput;
-  readonly expectedGenerationId?: string;
 }
 
 /**
@@ -628,8 +626,6 @@ async function deliverTurn<TTurn>(params: {
   wallTimeMs: number;
   isError: boolean;
   prepareParentDelivery?: () => boolean;
-  /** Parent continuation generation captured before this producer started. */
-  parentDeliveryGenerationId?: string;
   /** Serializes turn-state writes against the acceptance write (#9531). */
   turnStateWrites: PQueue;
   onTurnSettled?: ChildRunLoopParams<TTurn>['onTurnSettled'];
@@ -645,7 +641,6 @@ async function deliverTurn<TTurn>(params: {
     wallTimeMs,
     isError,
     prepareParentDelivery,
-    parentDeliveryGenerationId,
   } = params;
   const delivered = turn != null && !isError;
   const msg = await (delivered
@@ -666,16 +661,16 @@ async function deliverTurn<TTurn>(params: {
       ? { ...resultMeta, turnToken: turnRef.token }
       : resultMeta;
 
-  await persistChildRunDeliveryBestEffort(
-    executionId,
-    msg,
-    stampedMeta,
-    (kind, error) => {
-      logger.warn(`Failed to persist ${kind} for ${executionId}`, {
-        data: error,
-      });
-    },
-  );
+  // The settled facts reach the caller whether or not they persisted: a
+  // durable caller decides from them what a missing manifest means. The
+  // persistence failure is then this turn's failure, thrown once the turn
+  // is settled, and the delivery never reaches the parent.
+  let persistFailure: unknown;
+  try {
+    await persistChildRunDelivery(executionId, msg, stampedMeta);
+  } catch (error) {
+    persistFailure = error;
+  }
   // The turn's result slots now hold this turn: record it as the latest
   // completed turn, clearing the active marker written at acceptance. The
   // store does not serialize per-key writes, so this must queue behind the
@@ -695,6 +690,7 @@ async function deliverTurn<TTurn>(params: {
     isError,
     ...(err != null && { error: err }),
   });
+  if (persistFailure !== undefined) throw persistFailure;
 
   if (strategy.deliveryMode === 'persistOnly') return undefined;
 
@@ -709,9 +705,6 @@ async function deliverTurn<TTurn>(params: {
   if (prepareParentDelivery?.() === false) return undefined;
   return {
     targetStreamId,
-    ...(parentDeliveryGenerationId !== undefined
-      ? { expectedGenerationId: parentDeliveryGenerationId }
-      : {}),
     followUp: {
       text: msg,
       origin: 'subagent_result',
@@ -735,22 +728,22 @@ async function submitPendingDelivery(
     targetStreamId: pending.targetStreamId,
     followUp: pending.followUp,
     session,
-    ...(pending.expectedGenerationId !== undefined
-      ? { expectedGenerationId: pending.expectedGenerationId }
-      : {}),
   });
-  if (delivery.kind !== 'delivered') {
+  if (delivery.kind === 'failed') {
     logger.warn(
-      'Turn result not delivered: parent stream is unavailable. The result remains in the execution report.',
+      `Turn result not delivered: parent stream is unavailable (${delivery.reason}). The result remains in the execution report.`,
       {
         data: {
           executionId,
           parentStreamId: pending.targetStreamId,
-          ...(delivery.kind === 'no_session' && {
-            streamStatus: delivery.streamStatus ?? 'unknown',
-          }),
+          reason: delivery.reason,
         },
       },
+    );
+  } else if (delivery.wake === 'failed') {
+    logger.warn(
+      'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
+      { data: { executionId, parentStreamId: pending.targetStreamId } },
     );
   }
 }
@@ -778,33 +771,29 @@ export function startChildRunLoop<TTurn>(
   // own run trace inside `runFlowWithLifecycle`), so this is a channel-only
   // fallback for the loop's own turn-summary/warning lines.
   const logger = childStream?.logger ?? createChannelTrace('childRunLoop');
-  // The code below is synchronous until the scoped loop task is spawned, so a
-  // lost generation fails before any queue, listener, stage, or loop exists.
-  captureOwnedExecutionLease(executionId);
+  // The code below is synchronous until the loop task is spawned, so a run
+  // that does not own its lease fails before any queue, stage, or loop exists.
+  assertOwnedExecutionLease(executionId);
   const runSession = currentSession();
-  // Parent delivery belongs to the continuation generation under which this
-  // producer started. A terminal retry may reuse the same stream ID, but late
-  // progress or results from this child must not enter the replacement queue.
-  const parentDeliveryGenerationId =
-    runSession.followUps.currentGenerationId(parentStreamId);
   const loop = new ChildRunInterruptible(
     runSession,
     childStreamId,
     strategy.ownsBackgroundProcess === true,
   );
+  // The parent counts this child as active from here until the final delivery
+  // below has landed, whatever turn handles come and go in between: a child
+  // result can therefore never reach a parent whose queue already went terminal.
   let activationDetached = false;
-  const releaseChildActivation = childStream
-    ? () => undefined
-    : runSession.executions.reserveChildActivation({
-        executionId,
-        parentStreamId,
-        childStreamId,
-        interrupt: () => loop.interrupt(),
-        detach: () => {
-          activationDetached = true;
-        },
-        isDetached: () => activationDetached,
-      });
+  const releaseChildActivation = runSession.executions.reserveChildActivation({
+    executionId,
+    parentStreamId,
+    childStreamId,
+    interrupt: () => loop.interrupt(),
+    detach: () => {
+      activationDetached = true;
+    },
+    isDetached: () => activationDetached,
+  });
   let sessionOwnershipReleased = false;
   const releaseSessionOwnershipOnce = (): void => {
     if (sessionOwnershipReleased) return;
@@ -812,7 +801,6 @@ export function startChildRunLoop<TTurn>(
     strategy.releaseSessionOwnership?.();
   };
 
-  let stopWatchingLease: (() => void) | undefined;
   let queue!: FollowUpQueue;
   let queueLease: FollowUpConsumerLease | undefined;
   let attachedHandle: AgentExecutionHandle | undefined;
@@ -825,32 +813,10 @@ export function startChildRunLoop<TTurn>(
     detachLoopInterrupt = handle.attachInterruptHandler(loop);
   };
   let sessionStage: StageHandle | undefined;
-
-  try {
-    strategy.onLoopStart?.(runSession);
-    stopWatchingLease = onOwnedExecutionLeaseLost(executionId, () => {
-      logger.error('Execution lease was lost; interrupting the former owner', {
-        data: { executionId, childStreamId },
-      });
-      loop.interrupt();
-    });
-    // Revalidate at the state transition itself: setup hooks above may run
-    // arbitrary synchronous code after the early fail-fast lease check.
-    captureOwnedExecutionLease(executionId);
-    queueLease = runSession.followUps.claimChildRun(childStreamId, executionId);
-    if (!queueLease) {
-      throw new Error(
-        `Follow-up continuation already has an owner for child ${childStreamId}.`,
-      );
-    }
-    queue = runSession.followUps.queue(queueLease);
-    loop.setQueue(queue);
-    attachLoopInterrupt();
-    sessionStage = childStream
-      ? logger.openStage(strategy.stageLabel)
-      : undefined;
-  } catch (error) {
-    // Preserve the setup error while unwinding every resource acquired so far.
+  // Preserve the setup error while unwinding every resource acquired so far.
+  // Used when setup throws and when the lane refuses the run before it
+  // starts; in both cases `run` never executes, so nothing else unwinds.
+  const unwindSetup = (error: unknown): unknown => {
     const cleanupErrors: unknown[] = [];
     const cleanup = (operation: () => void): void => {
       try {
@@ -864,19 +830,39 @@ export function startChildRunLoop<TTurn>(
     cleanup(() => {
       if (queueLease) runSession.followUps.release(queueLease, 'terminal');
     });
-    cleanup(() => stopWatchingLease?.());
     cleanup(releaseChildActivation);
     cleanup(releaseSessionOwnershipOnce);
     // The primary error always heads the list, so a single throw covers both
     // shapes: `error` unwrapped when rollback was clean, an AggregateError when
     // cleanup also failed.
-    throw aggregateError(
+    return aggregateError(
       [error, ...cleanupErrors],
       `Child run ${executionId} setup failed and rollback was incomplete`,
     );
+  };
+
+  try {
+    strategy.onLoopStart?.(runSession);
+    // Revalidate at the state transition itself: setup hooks above may run
+    // arbitrary synchronous code after the early fail-fast lease check.
+    assertOwnedExecutionLease(executionId);
+    queueLease = runSession.followUps.claimChildRun(childStreamId, executionId);
+    if (!queueLease) {
+      throw new Error(
+        `Follow-up continuation already has an owner for child ${childStreamId}.`,
+      );
+    }
+    queue = runSession.followUps.queue(queueLease);
+    loop.setQueue(queue);
+    attachLoopInterrupt();
+    sessionStage = childStream
+      ? logger.openStage(strategy.stageLabel)
+      : undefined;
+  } catch (error) {
+    throw unwindSetup(error);
   }
 
-  const childRunGenerationId = queueLease.generationId;
+  const attemptId = randomUUID();
 
   let bestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
@@ -894,9 +880,6 @@ export function startChildRunLoop<TTurn>(
         followUp: { text: msg, origin: 'subagent_result' },
         session: runSession,
         mode: 'live_notification',
-        ...(parentDeliveryGenerationId !== undefined
-          ? { expectedGenerationId: parentDeliveryGenerationId }
-          : {}),
       });
     },
     recordCost: (totalCostUsd) => {
@@ -942,7 +925,9 @@ export function startChildRunLoop<TTurn>(
             { signal: ac.signal },
           ) as Promise<TTurn>;
 
+  let runStarted = false;
   const run = async (): Promise<void> => {
+    runStarted = true;
     // A release failure after a clean run must reach awaited callers: the
     // child's artifacts did not drain and its lease was abandoned, so a
     // required-result parent must not journal the turn as durably settled.
@@ -964,11 +949,7 @@ export function startChildRunLoop<TTurn>(
     try {
       while (!loop.isInterrupted()) {
         turnIndex += 1;
-        const turnRef = mintChildTurnRef(
-          executionId,
-          childRunGenerationId,
-          turnIndex,
-        );
+        const turnRef = mintChildTurnRef(executionId, attemptId, turnIndex);
         emitTurnDiagnostic(logger, 'turn.accepted', {
           executionId,
           turnRef,
@@ -1015,7 +996,6 @@ export function startChildRunLoop<TTurn>(
           strategy,
           executionId,
           parentStreamId,
-          parentDeliveryGenerationId,
           logger,
           turn,
           turnRef,
@@ -1087,11 +1067,13 @@ export function startChildRunLoop<TTurn>(
       // A throw from the loop body itself — delivery formatting, report
       // persistence, the queue wait — is this run's failure. Without this the
       // terminal block below would finalize a child that never delivered as
-      // COMPLETED, and the abandoned generation would still look durably
-      // released.
+      // COMPLETED.
       sawTurnFailure = true;
       lastTurnErr ??= error;
-      markOwnedExecutionLeaseUndurable(executionId);
+      // A fenced write found the lease gone: another owner holds this
+      // execution now, so the loop stops here instead of delivering or
+      // accepting anything further on the former owner's behalf.
+      if (error instanceof ExecutionLeaseLostError) loop.interrupt();
       throw error;
     } finally {
       // A retry may reuse this execution ID as soon as its lease is released.
@@ -1205,17 +1187,19 @@ export function startChildRunLoop<TTurn>(
         );
       } finally {
         try {
-          await runSession.releaseExecutionLease(
-            executionId,
-            params.afterArtifactsDrained,
-          );
+          await runSession.releaseExecutionLease(executionId, async () => {
+            // A turn that failed (its delivery persistence included) leaves
+            // nothing the caller may attest as committed; the failure itself
+            // is already this run's, propagated by the loop.
+            if (sawTurnFailure) return;
+            await params.afterArtifactsDrained?.();
+          });
         } catch (error) {
           logger.warn('Failed to persist final child-run artifacts', {
             data: { executionId, error },
           });
           releaseFailure = error;
         } finally {
-          stopWatchingLease?.();
           releaseChildActivation();
         }
       }
@@ -1224,13 +1208,21 @@ export function startChildRunLoop<TTurn>(
     // threw: the lease drain failure is then the run's failure.
     if (releaseFailure !== undefined) throw releaseFailure;
   };
+  // The loop is this execution's generation: it starts on the execution's
+  // lane once any earlier generation of the id has disposed, and later steps
+  // (a resume, a delete) wait for its completion.
+  let completion: Promise<void>;
   try {
-    const completion = Promise.resolve(
-      captureOwnedExecutionLease(executionId)(run),
-    );
-    return { completion };
+    completion = runSession.executions.launchExecution(executionId, run);
   } catch (error) {
-    releaseChildActivation();
-    throw error;
+    throw unwindSetup(error);
   }
+  return {
+    completion: completion.catch((error: unknown) => {
+      // Refused before `run` began (the registry disposed, or a storage-root
+      // change holds the lifecycle): `run`'s own unwinding never ran.
+      if (runStarted) throw error;
+      throw unwindSetup(error);
+    }),
+  };
 }

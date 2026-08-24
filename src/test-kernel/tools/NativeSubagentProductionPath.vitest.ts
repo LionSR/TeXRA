@@ -30,17 +30,16 @@ import {
 } from '@agent/storage';
 import { clearInlineAgents } from '@agent/index/agentRegistry';
 import {
-  captureOwnedExecutionLease,
+  assertOwnedExecutionLease,
+  ownsExecutionLease,
   releaseOwnedExecutionLease,
-  waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { ModelCell } from '@agent/runtime/ModelCell';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import { resumeRun } from '@agent/runtime/resumeRun';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
@@ -55,8 +54,8 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { roundModelHandler } from '@test/agent/toolUseRoundTestUtils';
@@ -75,7 +74,7 @@ const PARENT_MODEL = 'gpt54';
 const CHILD_MODEL = 'gpt55';
 const MODEL_HANDLER_KEY = 'ModelHandlerOpenAIResponse';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 let session: SessionHandle;
 let childId: ExecutionId | undefined;
 let resumedStreams: StreamTabId[];
@@ -153,20 +152,15 @@ async function resumePersistedStream(
   const executionId = streamId.slice(
     streamId.lastIndexOf('#') + 1,
   ) as ExecutionId;
-  const config = await getExecutionStore(executionId).readConfig();
-  if (!config) return false;
-  const resume = await retrieveSessionResumeData(streamId, executionId, config);
-  if (!resume || resume.type !== 'toolUse') return false;
-  const resumed = await resumeQueuedToolUseFromResumeData(streamId, resume, {
+  const resumed = await resumeRun(executionId, {
     session,
     recovery,
-    isCancellationRequested: () => false,
-    onError: (error) => {
-      throw error;
+    executeWorkflow: async () => {
+      throw new Error('Workflow resume is not part of this fixture.');
     },
   });
   completedResumes.push(streamId);
-  return resumed;
+  return 'started' in resumed && resumed.delivered;
 }
 
 async function integrationPlatform(): Promise<Platform> {
@@ -223,13 +217,24 @@ async function waitForCompletedResumes(count: number): Promise<void> {
   });
 }
 
+type ParentOwnerRunner = <T>(operation: () => T) => T;
+
+/**
+ * Wait for the child's lease release. The loop's lane stays held past that
+ * point while its final delivery wakes the parent, so the lease, not the
+ * lane, is the durable boundary these assertions read against.
+ */
+function waitForLeaseRelease(executionId: ExecutionId): Promise<void> {
+  return vi.waitFor(() => expect(ownsExecutionLease(executionId)).toBe(false));
+}
+
 /**
  * Queue the second-assertion follow-up onto a WAITING child through the real
  * DelegateAgentTool path, asserting the queue accepted it.
  */
 async function queueSecondAssertionFollowUp(
   parentContext: ReturnType<typeof createRunContext>,
-  runAsParentOwner: ReturnType<typeof captureOwnedExecutionLease>,
+  runAsParentOwner: ParentOwnerRunner,
   executionId: ExecutionId,
   instruction = 'Now prove the second assertion.',
 ) {
@@ -261,7 +266,7 @@ async function launchWaitingChild(options: {
 }): Promise<{
   readonly executionId: ExecutionId;
   readonly parentContext: ReturnType<typeof createRunContext>;
-  readonly runAsParentOwner: ReturnType<typeof captureOwnedExecutionLease>;
+  readonly runAsParentOwner: ParentOwnerRunner;
   readonly observedFollowUps: ObservedFollowUp[];
 }> {
   const observedFollowUps: ObservedFollowUp[] = [];
@@ -308,7 +313,10 @@ async function launchWaitingChild(options: {
     modelCell: new ModelCell({} as never, PARENT_MODEL),
     session,
   });
-  const runAsParentOwner = captureOwnedExecutionLease(PARENT_EXECUTION_ID);
+  const runAsParentOwner: ParentOwnerRunner = (operation) => {
+    assertOwnedExecutionLease(PARENT_EXECUTION_ID);
+    return operation();
+  };
   const launch = await runAsParentOwner(() =>
     withRunContext(parentContext, () =>
       executeSubagent(
@@ -352,13 +360,12 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
   afterEach(async () => {
     interruptActiveExecutions(session);
-    if (childId) await waitForOwnedExecutionLeaseRelease(childId);
+    if (childId) await waitForLeaseRelease(childId);
     await releaseOwnedExecutionLease(PARENT_EXECUTION_ID);
     session.dispose();
     clearInlineAgents();
     clearStoreCache();
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('resumes one persisted child through the real queue and archives both turns once', async () => {
@@ -666,10 +673,12 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       result: { response: 'Result A.' },
     });
 
-    // Interrupt turn 2 before it persists any result.
-    interruptActiveExecutions(session);
+    // Stop the child before turn 2 persists any result. The registry stop
+    // reaches the loop as well as the turn, so the turn is interrupted rather
+    // than delivered as a cancelled completion.
+    expect(session.executions.kill(executionId)).toBe(true);
     releaseTurn2(new Error('interrupted before result persistence'));
-    await waitForOwnedExecutionLeaseRelease(executionId);
+    await waitForLeaseRelease(executionId);
 
     // Turn 1 stays the latest completed turn; turn 2 remains on record as
     // the interrupted active turn instead of turn 1 posing as current.

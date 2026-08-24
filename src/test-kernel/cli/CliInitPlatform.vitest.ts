@@ -4,10 +4,11 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
 import * as agentRuntime from '@agent/runtime';
-import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
-import { initCliPlatform } from '@cli/runtime/initPlatform';
+import {
+  initCliPlatform,
+  setCliAgentResumeHandler,
+} from '@cli/runtime/initPlatform';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { StreamTabId } from '@shared/schemas';
@@ -441,30 +442,12 @@ describe('CLI platform init', () => {
     if (!nodePlatformOptions) throw new Error('expected node platform options');
 
     const streamId = 'stream:cli-resume' as StreamTabId;
-    let releaseResumeState!: () => void;
-    const pendingResumeState = new Promise<{
-      status: 'incomplete';
-      runState: undefined;
-      executionId: undefined;
-    }>((resolve) => {
-      releaseResumeState = () =>
-        resolve({
-          status: 'incomplete',
-          runState: undefined,
-          executionId: undefined,
-        });
-    });
-    const pendingResume = resolveAndResumeStream(streamId, {
-      streamStatus: { isActiveOrResuming: () => false },
-      resolveResumeState: () => pendingResumeState,
-      resumeToolUse: vi.fn(async () => false),
-      executeWorkflow: vi.fn(async () => {}),
-    });
+    await expect(
+      nodePlatformOptions.agentResume.tryResumeStream(streamId),
+    ).resolves.toBe(false);
 
     const tryResumeStream = vi.fn(async () => true);
-    const dispose = setCliAgentResumeHandler({
-      tryResumeStream,
-    });
+    const dispose = setCliAgentResumeHandler(tryResumeStream);
 
     try {
       await expect(
@@ -473,8 +456,6 @@ describe('CLI platform init', () => {
       expect(tryResumeStream).toHaveBeenCalledWith(streamId, undefined);
     } finally {
       dispose();
-      releaseResumeState();
-      await pendingResume;
     }
   });
 

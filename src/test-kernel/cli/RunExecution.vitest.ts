@@ -35,12 +35,11 @@ const mocks = vi.hoisted(() => ({
   prepareInteractivePrompt: vi.fn(),
   readCliRunOutcomeState: vi.fn(),
   deriveResumability: vi.fn(),
-  inspectExecutionLease: vi.fn(),
   releaseExecutionLeaseAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStderrAndWait: vi.fn<() => Promise<void>>(async () => undefined),
-  finalizeExecution: vi.fn(),
+  finalizeRun: vi.fn(),
 }));
 
 const tempDirs = useTempDirs();
@@ -71,8 +70,7 @@ vi.mock('@agent/runtime/runAgent', () => ({
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   deriveResumability: mocks.deriveResumability,
-  finalizeExecution: mocks.finalizeExecution,
-  inspectExecutionLease: mocks.inspectExecutionLease,
+  finalizeRun: mocks.finalizeRun,
 }));
 
 vi.mock('@cli/runtime/cliPresentationHost', () => ({
@@ -159,10 +157,7 @@ type LeaseOptions = {
   onRun?: () => void;
   launchSignal?: AbortSignal;
   session?: SessionHandle;
-  onExecutionLeaseAcquired?: (
-    scope: (operation: () => unknown) => unknown,
-    executionId: ExecutionId,
-  ) => void;
+  onExecutionLeaseAcquired?: (executionId: ExecutionId) => void;
 };
 
 /**
@@ -210,11 +205,6 @@ async function spyOnTranscriptFlush() {
   return { store, flushSpy };
 }
 
-/** Lease-scope runner for tests that don't need to observe the wrapper. */
-function runOperationSync(operation: () => unknown): unknown {
-  return operation();
-}
-
 async function stubRunExecutionDeps(): Promise<void> {
   vi.clearAllMocks();
   mocks.close.mockResolvedValue(undefined);
@@ -244,10 +234,9 @@ async function stubRunExecutionDeps(): Promise<void> {
     outcomePersisted: true,
   });
   mocks.deriveResumability.mockResolvedValue({
-    resumable: true,
-    cause: 'interrupted-with-flow',
+    kind: 'checkpoint',
+    flowRecord: { shared: {}, cursor: { nextNodeId: 'start' } },
   });
-  mocks.inspectExecutionLease.mockResolvedValue({ status: 'missing' });
   mocks.releaseExecutionLeaseAfterArtifacts.mockResolvedValue(undefined);
   // The CLI shutdown drain is the session's one exit choreography; the suite
   // observes it through the same spy the deleted host-local shim fed.
@@ -257,16 +246,9 @@ async function stubRunExecutionDeps(): Promise<void> {
       return mocks.releaseExecutionLeaseAfterArtifacts(this, executionId);
     },
   );
-  mocks.finalizeExecution.mockResolvedValue({
-    status: 'durable',
-    outcomePersisted: true,
-    flowRecord: 'deleted',
-  });
+  mocks.finalizeRun.mockResolvedValue({ ok: true });
   mocks.runAgent.mockImplementation(async (_request, options) => {
-    options.onExecutionLeaseAcquired?.(
-      runOperationSync,
-      'exec-1' as ExecutionId,
-    );
+    options.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     return COMPLETED_RUN;
   });
 }
@@ -750,11 +732,13 @@ describe('executeCliRequest', () => {
       }),
     ).rejects.toBe(cleanupError);
 
-    expect(mocks.finalizeExecution).not.toHaveBeenCalledWith({
-      executionId: 'exec-1',
-      outcome: RUN_OUTCOME.FAILED,
-      flowRecord: 'delete',
-    });
+    expect(mocks.finalizeRun).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionId: 'exec-1',
+        outcome: RUN_OUTCOME.FAILED,
+        flowRecord: 'delete',
+      }),
+    );
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
@@ -771,7 +755,7 @@ describe('executeCliRequest', () => {
     const result = await executeCliRequest(request, cliContext());
 
     expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.finalizeRun).not.toHaveBeenCalled();
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
@@ -798,10 +782,7 @@ describe('executeCliRequest', () => {
     const request = baseRequest();
     const context = cliContext();
     mocks.runAgent.mockImplementationOnce(async (_request, options) => {
-      options.onExecutionLeaseAcquired?.(
-        runOperationSync,
-        'exec-1' as ExecutionId,
-      );
+      options.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
       options.onApprovalPolicyDenial?.();
       return COMPLETED_RUN;
     });
@@ -867,7 +848,6 @@ describe('executeCliRequest', () => {
       mocks.releaseExecutionLeaseAfterArtifacts.mockImplementationOnce(
         async (session, executionId) => session.flushArtifacts(executionId),
       );
-      const runWithOwnership = vi.fn((operation: () => unknown) => operation());
       let settleRecoveryWrite!: () => void;
       const recoveryWrite = new Promise<void>((resolve) => {
         settleRecoveryWrite = resolve;
@@ -886,8 +866,8 @@ describe('executeCliRequest', () => {
       await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
       const shutdown = platform.lifecycle.runShutdown();
       await Promise.resolve();
-      expect(mocks.finalizeExecution).not.toHaveBeenCalled();
-      publishLeaseScope?.(runWithOwnership, 'exec-1' as ExecutionId);
+      expect(mocks.finalizeRun).not.toHaveBeenCalled();
+      publishLeaseScope?.('exec-1' as ExecutionId);
       publishRun?.();
       await Promise.resolve();
       expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
@@ -908,15 +888,16 @@ describe('executeCliRequest', () => {
       expect(shutdownResolved).toBe(false);
       settleRecoveryWrite();
       await shutdown;
-      expect(runWithOwnership).toHaveBeenCalledOnce();
       expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledOnce();
       expect(flushSpy).toHaveBeenCalled();
-      expect(mocks.finalizeExecution).toHaveBeenCalledWith({
-        executionId: 'exec-1',
-        outcome: RUN_OUTCOME.CANCELLED,
-        flowRecord: 'preserve',
-      });
-      expect(mocks.finalizeExecution.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(mocks.finalizeRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          executionId: 'exec-1',
+          outcome: RUN_OUTCOME.CANCELLED,
+          flowRecord: 'preserve',
+        }),
+      );
+      expect(mocks.finalizeRun.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.releaseExecutionLeaseAfterArtifacts.mock.invocationCallOrder[0] ??
           Number.POSITIVE_INFINITY,
       );
@@ -939,15 +920,14 @@ describe('executeCliRequest', () => {
           streamId: 'stream-1',
         },
       });
-      expect(mocks.finalizeExecution).toHaveBeenCalledOnce();
+      expect(mocks.finalizeRun).toHaveBeenCalledOnce();
     },
   );
 
   it('does not advertise signal recovery before a flow checkpoint exists', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     mocks.deriveResumability.mockResolvedValueOnce({
-      resumable: false,
-      cause: 'missing-flow',
+      kind: 'none',
       outcome: RUN_OUTCOME.CANCELLED,
     });
     const onInterruptedExecutionFinalized = vi.fn();
@@ -963,7 +943,7 @@ describe('executeCliRequest', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
+    publishLeaseScope?.('exec-1' as ExecutionId);
     publishRun?.();
     mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
@@ -978,72 +958,10 @@ describe('executeCliRequest', () => {
   // The pre-checkpoint shutdown bound is the lifecycle host's per-phase
   // join-with-deadline; its regression pin lives in LifecycleHost.vitest.ts.
 
-  it.each([
-    {
-      label: 'a fresh lease remains',
-      inspection: {
-        status: 'foreign' as const,
-        acquiredAt: 1,
-        owner: { pid: 1, processStart: '1', hostname: 'test-host' },
-        provable: true,
-        reclaimable: false,
-      },
-    },
-    {
-      label: 'lease inspection fails',
-      inspection: new Error('lease read failed'),
-    },
-  ])(
-    'does not advertise signal recovery when $label',
-    async ({ inspection }) => {
-      const { platform, executeCliRequest } = await installFakePlatform();
-      if (inspection instanceof Error) {
-        mocks.inspectExecutionLease.mockRejectedValueOnce(inspection);
-      } else {
-        mocks.inspectExecutionLease.mockResolvedValueOnce(inspection);
-      }
-      const onInterruptedExecutionFinalized = vi.fn();
-      let publishLeaseScope: LeaseOptions['onExecutionLeaseAcquired'];
-      let publishRun: LeaseOptions['onRun'];
-      const hangingRun = stubHangingRun((options) => {
-        publishLeaseScope = options.onExecutionLeaseAcquired;
-        publishRun = options.onRun;
-      });
-
-      const run = executeCliRequest(baseRequest(), cliContext(), {
-        onInterruptedExecutionFinalized,
-      });
-      await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
-      const shutdown = platform.lifecycle.runShutdown();
-      publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
-      publishRun?.();
-      mockCancelledOutcome();
-      hangingRun.resolve(COMPLETED_RUN);
-
-      await shutdown;
-      await expect(run).resolves.toEqual({
-        ok: true,
-        outcomePersisted: true,
-        result: {
-          category: 'toolUse',
-          executionId: 'exec-1',
-          outcome: 'cancelled',
-          streamId: 'stream-1',
-        },
-      });
-
-      expect(mocks.inspectExecutionLease).toHaveBeenCalledExactlyOnceWith(
-        'exec-1',
-      );
-      expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
-    },
-  );
-
   it('forwards a failed shutdown drain to the runtime release hook', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     const drainError = new Error('snapshot drain failed');
     mocks.releaseExecutionLeaseAfterArtifacts.mockRejectedValueOnce(drainError);
-    const runWithOwnership = vi.fn((operation: () => unknown) => operation());
     let leaseOptions: LeaseOptions | undefined;
     const hangingRun = stubHangingRun((options) => {
       leaseOptions = options;
@@ -1051,10 +969,7 @@ describe('executeCliRequest', () => {
 
     const run = executeCliRequest(baseRequest(), cliContext(), {});
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
-    leaseOptions?.onExecutionLeaseAcquired?.(
-      runWithOwnership,
-      'exec-1' as ExecutionId,
-    );
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     const shutdown = platform.lifecycle.runShutdown();
 
     await expect(leaseOptions?.beforeLeaseRelease?.()).rejects.toBe(drainError);
@@ -1089,7 +1004,7 @@ describe('executeCliRequest', () => {
       exitCode: CliExitCode.Interrupted,
     });
     expect(launchSignal?.aborted).toBe(true);
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.finalizeRun).not.toHaveBeenCalled();
   });
 
   it('preserves a terminal outcome when shutdown cannot interrupt the finished run', async () => {
@@ -1102,10 +1017,7 @@ describe('executeCliRequest', () => {
     });
     const run = executeCliRequest(baseRequest(), cliContext(), {});
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
-    leaseOptions?.onExecutionLeaseAcquired?.(
-      runOperationSync,
-      'exec-1' as ExecutionId,
-    );
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     leaseOptions?.onRun?.();
 
     const shutdown = platform.lifecycle.runShutdown();
@@ -1113,7 +1025,7 @@ describe('executeCliRequest', () => {
     await shutdown;
     await run;
 
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.finalizeRun).not.toHaveBeenCalled();
     expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
   });
 
@@ -1132,10 +1044,7 @@ describe('executeCliRequest', () => {
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
 
     const shutdown = platform.lifecycle.runShutdown();
-    leaseOptions?.onExecutionLeaseAcquired?.(
-      runOperationSync,
-      'exec-1' as ExecutionId,
-    );
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     leaseOptions?.onRun?.();
     await leaseOptions?.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
     mockCancelledOutcome();
@@ -1147,11 +1056,13 @@ describe('executeCliRequest', () => {
       result: { outcome: RUN_OUTCOME.CANCELLED },
     });
     expect(publicationCommitted).toBe(false);
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
-      executionId: 'exec-1',
-      outcome: RUN_OUTCOME.CANCELLED,
-      flowRecord: 'preserve',
-    });
+    expect(mocks.finalizeRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionId: 'exec-1',
+        outcome: RUN_OUTCOME.CANCELLED,
+        flowRecord: 'preserve',
+      }),
+    );
   });
 
   it('preserves the workflow verdict after output publication commits', async () => {
@@ -1169,10 +1080,7 @@ describe('executeCliRequest', () => {
       },
     });
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
-    leaseOptions?.onExecutionLeaseAcquired?.(
-      runOperationSync,
-      'exec-1' as ExecutionId,
-    );
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     leaseOptions?.onRun?.();
     await leaseOptions?.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
 
@@ -1186,7 +1094,7 @@ describe('executeCliRequest', () => {
     });
     expect(publicationCommitted).toBe(true);
     expect(killSpy).not.toHaveBeenCalled();
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.finalizeRun).not.toHaveBeenCalled();
   });
 
   it('does not convert a committed output failure to cancelled by a later shutdown', async () => {
@@ -1197,7 +1105,6 @@ describe('executeCliRequest', () => {
     // earlier test's `vi.resetModules()` in this file.
     const { AgentError: RuntimeAgentError } = await import('@common/errors');
     const killSpy = vi.spyOn(defaultSession().executions, 'kill');
-    const runWithOwnership = vi.fn((operation: () => unknown) => operation());
     const outputFailure = new Error(
       'Workflow completed without generated outputs; nothing was copied to out.',
     );
@@ -1209,10 +1116,7 @@ describe('executeCliRequest', () => {
     });
     mocks.runAgent.mockImplementationOnce(
       async (_request: unknown, options: LeaseOptions) => {
-        options.onExecutionLeaseAcquired?.(
-          runWithOwnership,
-          'exec-1' as ExecutionId,
-        );
+        options.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
         options.onRun?.();
         try {
           await options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN);
@@ -1249,51 +1153,51 @@ describe('executeCliRequest', () => {
       exitCode: CliExitCode.AgentError,
     });
     expect(publicationCommitted).toBe(true);
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.finalizeRun).not.toHaveBeenCalled();
     expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
       message: `Error executing agent polish: ${outputFailure.message}`,
     });
   });
 
-  it('does not finalize shutdown through a captured lease that is already lost', async () => {
+  it('does not report a shutdown drain that fails because the lease is already lost', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     // Imported dynamically (matching the module above) so the `instanceof`
     // check in runExecution.ts sees the same module instance even after an
     // earlier test's `vi.resetModules()` in this file.
-    const { ExecutionLeaseLostError } =
-      await import('@agent/storage/executionLease');
+    const { ExecutionLeaseLostError } = await import('@agent/storage');
+    mocks.releaseExecutionLeaseAfterArtifacts.mockRejectedValueOnce(
+      new ExecutionLeaseLostError('exec-1' as ExecutionId),
+    );
+    let leaseOptions: LeaseOptions | undefined;
     const hangingRun = stubHangingRun((options) => {
-      options.onExecutionLeaseAcquired?.(() => {
-        throw new ExecutionLeaseLostError('exec-1');
-      }, 'exec-1' as ExecutionId);
+      leaseOptions = options;
     });
 
     const run = executeCliRequest(baseRequest(), cliContext(), {});
-    await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(leaseOptions).toBeDefined());
+    leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     const shutdown = platform.lifecycle.runShutdown();
-    await Promise.resolve();
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
 
+    await expect(leaseOptions?.beforeLeaseRelease?.()).resolves.toBe(false);
     hangingRun.resolve(COMPLETED_RUN);
     await shutdown;
     await run;
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
 
   it('closes the runtime host when shutdown finalization fails', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     const persistenceError = new Error('terminal metadata disk full');
-    mocks.finalizeExecution.mockResolvedValue({
-      status: 'failed',
-      error: persistenceError,
-      stage: 'terminal-status',
-      outcomePersisted: false,
+    mocks.finalizeRun.mockImplementation(async (input) => {
+      input.report?.(
+        new Error(
+          `Failed to persist ${input.outcome} terminal state for execution ${input.executionId}: terminal metadata disk full`,
+          { cause: persistenceError },
+        ),
+      );
+      return { ok: false, error: persistenceError, outcomePersisted: false };
     });
     const hangingRun = stubHangingRun((options) => {
-      options.onExecutionLeaseAcquired?.(
-        runOperationSync,
-        'exec-1' as ExecutionId,
-      );
+      options.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
     });
 
     const onInterruptedExecutionFinalized = vi.fn();
@@ -1309,7 +1213,7 @@ describe('executeCliRequest', () => {
     await shutdown;
     expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
       message:
-        'Failed to persist cancelled status for execution exec-1: terminal metadata disk full',
+        'Failed to persist cancelled terminal state for execution exec-1: terminal metadata disk full',
     });
 
     await expect(run).resolves.toEqual({
@@ -1322,7 +1226,7 @@ describe('executeCliRequest', () => {
         streamId: 'stream-1',
       },
     });
-    expect(mocks.finalizeExecution).toHaveBeenCalledOnce();
+    expect(mocks.finalizeRun).toHaveBeenCalledOnce();
     expect(mocks.emit).toHaveBeenCalledTimes(1);
     expect(mocks.close).toHaveBeenCalledTimes(1);
     expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
@@ -1333,10 +1237,10 @@ describe('executeCliRequest', () => {
     const request = baseRequest();
 
     await executeCliRequest(request, cliContext(), {});
-    mocks.finalizeExecution.mockClear();
+    mocks.finalizeRun.mockClear();
     await platform.lifecycle.runShutdown();
 
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.finalizeRun).not.toHaveBeenCalled();
   });
 });
 
@@ -1393,7 +1297,7 @@ describe('executeCliConfig', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
+    publishLeaseScope?.('exec-1' as ExecutionId);
     publishRun?.();
     mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
@@ -1433,7 +1337,7 @@ describe('executeCliConfig', () => {
     });
     await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
     const shutdown = platform.lifecycle.runShutdown();
-    publishLeaseScope?.(runOperationSync, 'exec-1' as ExecutionId);
+    publishLeaseScope?.('exec-1' as ExecutionId);
     publishRun?.();
     mockCancelledOutcome();
     hangingRun.resolve(COMPLETED_RUN);
@@ -1519,21 +1423,27 @@ describe('executeCliConfig', () => {
     const result = await runWorkflowCategoryMismatch();
 
     expect(result).toMatchObject({ ok: false });
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
-      executionId: expect.any(String),
-      outcome: RUN_OUTCOME.FAILED,
-      flowRecord: 'delete',
-    });
+    expect(mocks.finalizeRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionId: expect.any(String),
+        outcome: RUN_OUTCOME.FAILED,
+        flowRecord: 'delete',
+      }),
+    );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith('wrong category');
     expect(mocks.close).toHaveBeenCalledOnce();
   });
 
   it('reports category finalization failures and still returns the mismatch', async () => {
-    mocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
-      error: new Error('terminal metadata disk full'),
-      stage: 'terminal-status',
-      outcomePersisted: false,
+    const persistenceError = new Error('terminal metadata disk full');
+    mocks.finalizeRun.mockImplementationOnce(async (input) => {
+      input.report?.(
+        new Error(
+          `Failed to persist ${input.outcome} terminal state for execution ${input.executionId}: terminal metadata disk full`,
+          { cause: persistenceError },
+        ),
+      );
+      return { ok: false, error: persistenceError, outcomePersisted: false };
     });
 
     await expect(runWorkflowCategoryMismatch()).resolves.toEqual({
@@ -1544,7 +1454,7 @@ describe('executeCliConfig', () => {
     expect(mocks.writeTextStderr).toHaveBeenNthCalledWith(
       1,
       expect.stringMatching(
-        /^Warning: Failed to persist failed status for execution .+: terminal metadata disk full$/,
+        /^Warning: Failed to persist failed terminal state for execution .+: terminal metadata disk full$/,
       ),
     );
     expect(mocks.writeTextStderr).toHaveBeenNthCalledWith(2, 'wrong category');

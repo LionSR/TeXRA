@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## [0.40.4] - 2026-08-22
+## [0.40.4] - 2026-08-23
 
 ### Shared (all surfaces)
 
@@ -31,12 +31,16 @@ All notable changes to this project will be documented in this file.
 - **Google and VS Code models can tell attachments apart** — Google models now
   receive each attachment's filename, and VS Code-hosted models receive a label
   for every image, so models can match their analysis to the correct file.
-- **Nested delegation cannot create recursive lead-agent chains** — a delegated
-  lead no longer sees itself or another delegation-capable lead as a target,
-  preventing loops while keeping ordinary specialist delegation available.
-- **OpenAI WebSocket authentication failures use the normal recovery path** — a
-  rejected connection now reports the credential or access problem instead of
-  surfacing as an unhandled or generic connection failure.
+- **Refused follow-ups keep their drafts** — text and attachments are cleared
+  only after the session accepts them, so a failed submission can be retried.
+- **Interrupted runs remain safely resumable** — valid recovery state is
+  preserved after failures, stops, and restarts, while a run active in another
+  window stays read-only instead of being taken over.
+- **Delayed inquiry answers return only to the run that asked** — a late answer
+  can no longer be delivered to a newer run in the same conversation.
+- **OpenAI authentication failures use the normal recovery path** — a rejected
+  connection now reports the credential or access problem instead of surfacing
+  as an unhandled or generic connection failure.
 - **Delegation errors use current model-access guidance** — an unavailable model
   no longer prompts you to switch the retired API mode and instead points you to
   the configured model access that needs attention.

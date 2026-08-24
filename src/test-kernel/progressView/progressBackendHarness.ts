@@ -159,15 +159,15 @@ export async function writeExecutionConfig(
 ): Promise<void> {
   const store = getExecutionStore(executionId);
   await store.writeRunRecord(toolUseConfig('search', 'deepseekproT'));
-  // Identity hydrates from the persisted execution meta — what
-  // `registerExecution` writes at birth — so tests exercising the
-  // identity-keyed sweep must persist it the same way.
-  if (options.streamId && options.identity) {
+  // The stream FK and identity hydrate from the persisted execution meta —
+  // what `registerExecution` writes at birth — so tests exercising the
+  // stream index or the identity-keyed sweep must persist it the same way.
+  if (options.streamId) {
     await store.writeMeta({
       schemaVersion: 1,
       timestamp: new Date().toISOString(),
       streamId: options.streamId,
-      identity: options.identity,
+      identity: options.identity ?? { kind: 'agent', agent: 'search' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     });
   }

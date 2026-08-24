@@ -69,7 +69,7 @@ import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProce
 import { createLog, setOutputChannelFactory } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
+import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { initPlatform, platform } from '@platform/platform';
@@ -438,15 +438,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
     })(),
     (async () => {
       try {
-        const {
-          added,
-          currentVersion,
-          previousVersion,
-          removed,
-          reordered,
-          routePreferencesCleared,
-          skipped,
-        } = await refreshModelListStateIfNeeded(context.globalState);
+        const { currentVersion, previousVersion, skipped, messages } =
+          await refreshModelListAndLog(context.globalState);
         if (!skipped) {
           if (previousVersion !== currentVersion) {
             log.info(
@@ -454,25 +447,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
             );
           }
           log.info('Model list refresh completed successfully');
-          if (
-            added.length > 0 ||
-            removed.length > 0 ||
-            reordered ||
-            routePreferencesCleared.length > 0
-          ) {
-            invalidateModelOptionsCache();
-            if (added.length > 0 || removed.length > 0 || reordered) {
-              log.info(
-                `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
-              );
-            }
-            if (routePreferencesCleared.length > 0) {
-              log.info(
-                `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
-              );
-            }
-          }
         }
+        for (const message of messages) log.info(message);
       } catch (err) {
         log.error(`Failed to refresh model list: ${toErrorMessage(err)}`);
       }
@@ -538,25 +514,30 @@ async function activateExtension(context: vscode.ExtensionContext) {
       authProvider.setUriHandler(uriHandler);
 
       log.info('Supabase authentication provider registered');
-
-      try {
-        const extensionVersion =
-          typeof context.extension.packageJSON?.version === 'string'
-            ? context.extension.packageJSON.version
-            : undefined;
-        const editorType = vscode.env.appName || undefined;
-        UsageLogService.initialize({}, extensionVersion, editorType);
-      } catch (usageError) {
-        log.warn(
-          `Usage logging service failed to initialize: ${toErrorMessage(usageError)}`,
-        );
-      }
     }
   } catch (error) {
     SupabaseClient.setInitError(ensureError(error));
     log.error(
       `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
     );
+  }
+
+  // Usage logging is a runtime service, not an authentication-provider
+  // capability. Initialize it even when Supabase sign-in is not configured,
+  // matching desktop and CLI; the service itself decides which records can be
+  // sent and preserves plan-accounting records for hosted routes.
+  const extensionVersion =
+    typeof context.extension.packageJSON?.version === 'string'
+      ? context.extension.packageJSON.version
+      : undefined;
+  try {
+    UsageLogService.initialize(
+      {},
+      extensionVersion,
+      vscode.env.appName || undefined,
+    );
+  } catch (error) {
+    log.warn(`Failed to initialize usage logging: ${toErrorMessage(error)}`);
   }
 
   const progressViewProvider = new ProgressViewProvider(

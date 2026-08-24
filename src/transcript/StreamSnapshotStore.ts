@@ -18,7 +18,6 @@
 
 import { Mutex } from 'async-mutex';
 import pMap from 'p-map';
-import PQueue from 'p-queue';
 import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
@@ -61,6 +60,7 @@ import {
 } from '@shared/schemas';
 
 import { mapToRecord, throwAggregated } from '@utils/core';
+import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 
@@ -82,11 +82,11 @@ import {
   EMPTY_WORK_PLAN,
   emptyStreamData,
   readMeta,
-  readMetaForOwnership,
   readStreamData,
   readUsageData,
   type StreamData,
 } from './streamSnapshotRead';
+import type PQueue from 'p-queue';
 import type { StreamSummaryMeta } from './StreamLogStore';
 
 const log = createLog('StreamSnapshotStore');
@@ -230,6 +230,25 @@ const OVERLAY_TO_SIDECAR_KEY = {
 /** Sidecar keys an overlay flush can target (values of {@link OVERLAY_TO_SIDECAR_KEY}). */
 type OverlaySidecarKey =
   (typeof OVERLAY_TO_SIDECAR_KEY)[keyof typeof OVERLAY_TO_SIDECAR_KEY];
+
+/**
+ * Apply one pending overlay patch, mark its sidecar for the merged write, and
+ * clear it. Factors out the check/apply/track/clear shape every
+ * {@link OverlayPatches} field replays through in `applyStreamData`; each
+ * field's own apply logic stays with its caller.
+ */
+function consumeOverlay<K extends keyof OverlayPatches>(
+  overlays: Partial<OverlayPatches>,
+  key: K,
+  sidecarsToWrite: Set<OverlaySidecarKey>,
+  apply: (patch: OverlayPatches[K]) => void,
+): void {
+  const patch = overlays[key];
+  if (patch === undefined) return;
+  apply(patch);
+  sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY[key]);
+  overlays[key] = undefined;
+}
 
 /** Later unseeded todos/plan patches win per field. */
 function mergeWorkPlanOverlay(
@@ -444,12 +463,7 @@ export class StreamSnapshotStore {
   private readonly seedQueues = new Map<StreamTabId, PQueue>();
 
   private seedQueueFor(stream: StreamTabId): PQueue {
-    let queue = this.seedQueues.get(stream);
-    if (!queue) {
-      queue = new PQueue({ concurrency: 1 });
-      this.seedQueues.set(stream, queue);
-    }
-    return queue;
+    return getOrCreatePQueue(this.seedQueues, stream);
   }
 
   /**
@@ -822,23 +836,16 @@ export class StreamSnapshotStore {
     return rounds;
   }
 
-  // Shallow copies: each write is queued, so snapshot the record at call time
-  // rather than letting later round mutations leak into a pending write.
-  private writeOutputFiles(stream: StreamTabId): void {
-    this.write(stream, STREAM_DATA_KEYS.OUTPUT_FILES, {
-      ...this.records.get(stream)?.outputFiles,
-    });
-  }
-
-  private writeMissingOutputs(stream: StreamTabId): void {
-    this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {
-      ...this.records.get(stream)?.missingOutputs,
-    });
-  }
-
-  private writeCompileFailures(stream: StreamTabId): void {
-    this.write(stream, STREAM_DATA_KEYS.COMPILE_FAILURES, {
-      ...this.records.get(stream)?.compileFailures,
+  // Shallow copy: each write is queued, so the record is snapshotted at call
+  // time rather than letting later round mutations leak into a pending write.
+  // The sidecar key is derived from OVERLAY_TO_SIDECAR_KEY rather than taken
+  // as a separate param, so a caller can't pass a field/key pair that disagree.
+  private writeRoundKeyedField(
+    stream: StreamTabId,
+    field: 'outputFiles' | 'missingOutputs' | 'compileFailures',
+  ): void {
+    this.write(stream, OVERLAY_TO_SIDECAR_KEY[field], {
+      ...this.records.get(stream)?.[field],
     });
   }
 
@@ -933,7 +940,7 @@ export class StreamSnapshotStore {
           this.getOrCreateRecord(stream),
           patch,
         ),
-      () => this.writeOutputFiles(stream),
+      () => this.writeRoundKeyedField(stream, 'outputFiles'),
     );
   }
 
@@ -957,7 +964,7 @@ export class StreamSnapshotStore {
           this.getOrCreateRecord(stream),
           patch,
         ),
-      () => this.writeMissingOutputs(stream),
+      () => this.writeRoundKeyedField(stream, 'missingOutputs'),
     );
   }
 
@@ -984,7 +991,7 @@ export class StreamSnapshotStore {
           this.getOrCreateRecord(stream),
           patch,
         ),
-      () => this.writeCompileFailures(stream),
+      () => this.writeRoundKeyedField(stream, 'compileFailures'),
     );
   }
 
@@ -1468,28 +1475,6 @@ export class StreamSnapshotStore {
   /** Streams left in reversible staging by an interrupted deletion. */
   async listStagedDeletions(): Promise<StreamTabId[]> {
     return this.listStreamsUnder(STREAM_DATA_DELETION_DIR);
-  }
-
-  /**
-   * Execution id recorded in a stream sidecar's `meta.json`, without seeding
-   * memory or reading the stream's other sidecar files. Callers that scan
-   * every persisted stream (bulk admin sweeps in `SessionStores`) only ever
-   * need this one field, so this reads just `meta.json` rather than the full
-   * 6-file `readStreamData()`.
-   */
-  async readPersistedExecutionId(
-    stream: StreamTabId,
-  ): Promise<ExecutionId | undefined> {
-    // Resolve the KV handle directly rather than through `kv()`, which would
-    // mint an in-memory record for a stream this caller only needs one disk
-    // field from. The bounded-startup invariant (#9947) keeps cold historical
-    // streams record-free until a caller actually seeds or mutates them.
-    //
-    // Use the strict ownership read: corrupt-present metadata must surface as
-    // an unreadable sidecar (and skip the stream) rather than masquerade as a
-    // legacy stream with no persisted FK.
-    return (await readMetaForOwnership(this.kvHandles.get(stream)))
-      ?.executionId;
   }
 
   /**
@@ -2087,39 +2072,25 @@ export class StreamSnapshotStore {
     }
 
     const { overlays } = record;
-    if (overlays.outputFiles) {
-      this.applyRoundPatch((r) => r.outputFiles, record, overlays.outputFiles);
-      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.outputFiles);
-      overlays.outputFiles = undefined;
-    }
-    if (overlays.missingOutputs) {
-      if (overlays.missingOutputs.reset) record.missingOutputs = {};
-      this.applyRoundPatch(
-        (r) => r.missingOutputs,
-        record,
-        overlays.missingOutputs.patch,
-      );
-      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.missingOutputs);
-      overlays.missingOutputs = undefined;
-    }
-    if (overlays.compileFailures) {
-      this.applyRoundPatch(
-        (r) => r.compileFailures,
-        record,
-        overlays.compileFailures,
-      );
-      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.compileFailures);
-      overlays.compileFailures = undefined;
-    }
-    if (overlays.usage) {
+    consumeOverlay(overlays, 'outputFiles', sidecarsToWrite, (patch) =>
+      this.applyRoundPatch((r) => r.outputFiles, record, patch),
+    );
+    consumeOverlay(overlays, 'missingOutputs', sidecarsToWrite, (patch) => {
+      if (patch.reset) record.missingOutputs = {};
+      this.applyRoundPatch((r) => r.missingOutputs, record, patch.patch);
+    });
+    consumeOverlay(overlays, 'compileFailures', sidecarsToWrite, (patch) =>
+      this.applyRoundPatch((r) => r.compileFailures, record, patch),
+    );
+    // Pre-await snapshot, not `patch`: deltas that landed during the hydration
+    // await were already applied to the refreshed record.usage, so replaying
+    // the merged overlay would count them twice.
+    consumeOverlay(overlays, 'usage', sidecarsToWrite, () => {
       for (const [storageKey, delta] of usageOverlayToReplay) {
         this.applyUsageDeltaMemory(record, storageKey, delta);
       }
-      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.usage);
-      overlays.usage = undefined;
-    }
-    if (overlays.workPlan) {
-      const overlay = overlays.workPlan;
+    });
+    consumeOverlay(overlays, 'workPlan', sidecarsToWrite, (overlay) => {
       if (overlay.todos !== undefined) {
         record.workPlan = { ...record.workPlan, todos: [...overlay.todos] };
       }
@@ -2132,9 +2103,7 @@ export class StreamSnapshotStore {
             : null,
         };
       }
-      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.workPlan);
-      overlays.workPlan = undefined;
-    }
+    });
     record.diskState = provenance;
     this.writeMergedSidecars(stream, record, sidecarsToWrite);
     // Hydration republishes the metadata mirror: the deep-equal gate makes an
@@ -2162,16 +2131,16 @@ export class StreamSnapshotStore {
     for (const key of keys) {
       switch (key) {
         case STREAM_DATA_KEYS.OUTPUT_FILES:
-          this.writeOutputFiles(stream);
+          this.writeRoundKeyedField(stream, 'outputFiles');
           break;
         case STREAM_DATA_KEYS.USAGE_STATS:
           this.writeUsage(stream);
           break;
         case STREAM_DATA_KEYS.MISSING_OUTPUTS:
-          this.writeMissingOutputs(stream);
+          this.writeRoundKeyedField(stream, 'missingOutputs');
           break;
         case STREAM_DATA_KEYS.COMPILE_FAILURES:
-          this.writeCompileFailures(stream);
+          this.writeRoundKeyedField(stream, 'compileFailures');
           break;
         case STREAM_DATA_KEYS.WORK_PLAN:
           this.writeWorkPlan(stream, record.workPlan);

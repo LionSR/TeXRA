@@ -89,12 +89,7 @@ async function executeDiffOperations(
             { cwd: operation.cwd },
           );
 
-    results.push({
-      success: diffResult.success,
-      message: diffResult.message,
-      diffPath: diffResult.diffPath,
-      description: operation.description,
-    });
+    results.push({ ...diffResult, description: operation.description });
   }
 
   return { results };
@@ -324,7 +319,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
   const operations: DiffOperation[] = [];
 
   for (const [baseFile, roundOutputs] of inputToOutputsMap.entries()) {
-    const sorted = [...roundOutputs].sort((a, b) => a.round - b.round);
+    const sorted = roundOutputs.toSorted((a, b) => a.round - b.round);
 
     for (const { round, outputPath } of sorted) {
       const resolvedOutput = toAbsolute(outputPath);

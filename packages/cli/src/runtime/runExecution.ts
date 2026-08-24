@@ -9,9 +9,8 @@ import {
 import {
   deriveResumability,
   ExecutionLeaseLostError,
-  inspectExecutionLease,
-  type OwnedExecutionLeaseScope,
   type ResumabilityDecision,
+  finalizeRun,
 } from '@agent/storage';
 import { validateExecutionRequest } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
@@ -30,7 +29,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { warnApprovalDenied } from './approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
-import { finalizeCliExecution } from './executionFinalization';
 import {
   formatInterruptedResumeHint,
   tryReadCliCwd,
@@ -76,7 +74,7 @@ interface CliExecuteOptions {
   ) => void | Promise<void>;
   /** Refine generic flow resumability for the launched workflow's state. */
   readonly canAdvertiseInterruptedExecution?: (
-    resumability: Extract<ResumabilityDecision, { resumable: true }>,
+    resumability: Extract<ResumabilityDecision, { kind: 'checkpoint' }>,
   ) => boolean;
   /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
    *  runtime-host lifecycle into the caller. */
@@ -155,13 +153,13 @@ export async function executeCliConfig<
   const { result } = execution;
 
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
-    await finalizeCliExecution(
+    await finalizeRun({
       executionId,
-      RUN_OUTCOME.FAILED,
-      'delete',
-      (finalizationError) =>
+      outcome: RUN_OUTCOME.FAILED,
+      flowRecord: 'delete',
+      report: (finalizationError) =>
         writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
-    );
+    });
     writeTextStderr(
       categoryMismatchMessage ??
         `Agent resolved to a non ${expectedCategory} run.`,
@@ -311,14 +309,12 @@ export async function executeCliRequest(
     shutdownFinalizationFailureReported = true;
     reportFinalizationFailure(error);
   };
-  let settleLeaseScope: (
-    scope: OwnedExecutionLeaseScope | undefined,
+  let settleLeaseAcquired: (
+    executionId: ExecutionId | undefined,
   ) => void = () => undefined;
-  const leaseScopeReady = new Promise<OwnedExecutionLeaseScope | undefined>(
-    (resolve) => {
-      settleLeaseScope = resolve;
-    },
-  );
+  const leaseAcquired = new Promise<ExecutionId | undefined>((resolve) => {
+    settleLeaseAcquired = resolve;
+  });
   let settleShutdownFinalization: () => void = () => undefined;
   const shutdownFinalizationDone = new Promise<void>((resolve) => {
     settleShutdownFinalization = resolve;
@@ -338,41 +334,27 @@ export async function executeCliRequest(
   const finalizeShutdownStatus = (): Promise<boolean> => {
     if (!shutdownInterrupted) return Promise.resolve(false);
     shutdownStatusFinalized ??= (async () => {
-      const runWithOwnership = await leaseScopeReady;
-      const executionId = ownedExecutionId;
-      if (!runWithOwnership || !executionId) return false;
+      const executionId = await leaseAcquired;
+      if (!executionId) return false;
       try {
-        let terminalStatusPersisted = false;
-        await runWithOwnership(async () => {
-          terminalStatusPersisted = await finalizeCliExecution(
+        const terminalStatusPersisted = (
+          await finalizeRun({
             executionId,
-            RUN_OUTCOME.CANCELLED,
-            'preserve',
-            reportShutdownFinalizationFailure,
-          );
-          await session.releaseExecutionLease(executionId);
-        });
+            outcome: RUN_OUTCOME.CANCELLED,
+            flowRecord: 'preserve',
+            report: reportShutdownFinalizationFailure,
+          })
+        ).ok;
+        await session.releaseExecutionLease(executionId);
         const resumability = terminalStatusPersisted
           ? await deriveResumability(executionId)
           : undefined;
-        const canAdvertiseRecovery =
-          resumability?.resumable === true &&
-          options.onInterruptedExecutionFinalized !== undefined &&
-          (options.canAdvertiseInterruptedExecution?.(resumability) ?? true);
-        let lease:
-          Awaited<ReturnType<typeof inspectExecutionLease>> | undefined;
-        if (canAdvertiseRecovery) {
-          try {
-            lease = await inspectExecutionLease(executionId);
-          } catch {
-            // Lease inspection only decides whether the optional recovery
-            // notice is immediately usable. Failure suppresses that notice;
-            // it does not invalidate the durable cancellation above.
-          }
-        }
+        // The lease was released just above, so the checkpoint alone decides
+        // whether the recovery notice is usable.
         if (
-          canAdvertiseRecovery &&
-          (lease?.status === 'missing' || lease?.status === 'orphaned')
+          resumability?.kind === 'checkpoint' &&
+          options.onInterruptedExecutionFinalized !== undefined &&
+          (options.canAdvertiseInterruptedExecution?.(resumability) ?? true)
         ) {
           settleRecoveryNoticeStarted();
           await options.onInterruptedExecutionFinalized(executionId);
@@ -409,11 +391,13 @@ export async function executeCliRequest(
           : false;
       shutdownInterrupted = interruptionAccepted || shutdownInterrupted;
       let resumableCheckpoint:
-        Extract<ResumabilityDecision, { resumable: true }> | undefined;
+        Extract<ResumabilityDecision, { kind: 'checkpoint' }> | undefined;
       if (shutdownInterrupted && ownedExecutionId) {
         try {
           const resumability = await deriveResumability(ownedExecutionId);
-          if (resumability.resumable) resumableCheckpoint = resumability;
+          if (resumability.kind === 'checkpoint') {
+            resumableCheckpoint = resumability;
+          }
         } catch {
           // The ordinary bounded shutdown path below remains authoritative
           // when checkpoint inspection itself is unavailable.
@@ -473,9 +457,9 @@ export async function executeCliRequest(
           }
           return handled;
         },
-        onExecutionLeaseAcquired: (runWithOwnership, executionId) => {
+        onExecutionLeaseAcquired: (executionId) => {
           ownedExecutionId = executionId;
-          settleLeaseScope(runWithOwnership);
+          settleLeaseAcquired(executionId);
         },
         stopAfterCycle: options.stopAfterCycle,
         approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
@@ -492,7 +476,7 @@ export async function executeCliRequest(
     } finally {
       // Unblock an in-flight shutdown when acquisition failed before a scope
       // became available. Promise resolution is one-shot after success.
-      settleLeaseScope(undefined);
+      settleLeaseAcquired(undefined);
     }
   };
 

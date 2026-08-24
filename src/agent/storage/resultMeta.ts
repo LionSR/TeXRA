@@ -7,11 +7,7 @@ import {
   type AgentFinalResult,
 } from '@agent/runtime/AgentFinalResult';
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
-import {
-  ExecutionIdSchema,
-  RUN_OUTCOME,
-  type RunOutcome,
-} from '@shared/schemas';
+import { ExecutionIdSchema, type RunOutcome } from '@shared/schemas';
 
 const BackgroundBashResultMetaSchema = z.strictObject({
   producer: z.literal('backgroundBash'),
@@ -53,34 +49,6 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
 ]);
 
 export type ResultMeta = z.infer<typeof ResultMetaSchema>;
-
-/**
- * Project the execution's durable terminal outcome onto a persisted result
- * record. `meta.outcome` is the only writer of "how did this run end": the
- * result record is an interim envelope rewritten by every turn, and a run can
- * end after its last turn wrote one (interrupted between turns, stopped while
- * suspended, failed by restart repair). A durable `completed` is never
- * projected: it only ever agrees with the envelope, whose producer may already
- * have downgraded a nominally completed flow that reported an application-level
- * error (`buildSubagentFailureResultMeta`).
- */
-export function applyExecutionOutcome(
-  record: ResultMeta,
-  executionOutcome: RunOutcome | undefined,
-): ResultMeta {
-  if (
-    record.producer === 'backgroundBash' ||
-    executionOutcome === undefined ||
-    executionOutcome === RUN_OUTCOME.COMPLETED ||
-    record.result.outcome === executionOutcome
-  ) {
-    return record;
-  }
-  return ResultMetaSchema.parse({
-    ...record,
-    result: { ...record.result, outcome: executionOutcome },
-  });
-}
 
 /** Remove persistence-only producer context from the public result value. */
 export function unwrapResultMeta(

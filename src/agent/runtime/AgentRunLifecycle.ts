@@ -6,11 +6,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import {
-  onOwnedExecutionLeaseLost,
-  captureOwnedExecutionLeaseIfPresent,
-} from '@agent/storage/executionLease';
-import { persistTerminalExecution } from '@agent/storage/terminalPersistence';
+import { finalizeRun } from '@agent/storage/executionLifecycle';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -205,16 +201,23 @@ export async function finalizeRunTerminal(
   let outcomePersisted = false;
   if (params.persistence.kind === 'finalize') {
     const { flowRecord } = params.persistence;
-    const persisted = await persistTerminalExecution({
+    const finalization = await finalizeRun({
       executionId: handle.executionId,
-      agentName: handle.agentName,
       outcome,
       flowRecord:
         typeof flowRecord === 'function' ? flowRecord(outcome) : flowRecord,
-      logger,
-      failedMessage: 'Failed to finalize durable execution state',
     });
-    outcomePersisted = persisted.outcomePersisted;
+    outcomePersisted = finalization.ok || finalization.outcomePersisted;
+    if (!finalization.ok) {
+      logger.warn('Failed to finalize durable execution state', {
+        data: {
+          agentIdentifier: handle.agentName,
+          executionId: handle.executionId,
+          outcomePersisted: finalization.outcomePersisted,
+          error: finalization.error,
+        },
+      });
+    }
   }
   if (params.stage) {
     try {
@@ -425,14 +428,12 @@ async function closeSuspendedTranscriptGroup(
   handle: AgentExecutionHandle,
   parentStageId: string | undefined,
 ): Promise<void> {
-  if (handle.executionLeaseLost) return;
   if (!parentStageId) return;
   const writer = await session.transcripts.loadAndAcquireWriter(
     streamId,
     handle.executionId,
   );
   try {
-    if (handle.executionLeaseLost) return;
     writer.update(parentStageId, {
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
       data: {
@@ -478,10 +479,6 @@ export async function runFlowWithLifecycle(
     parentStreamId,
     ctx.logger,
   );
-  const executionLeaseScope = captureOwnedExecutionLeaseIfPresent(executionId);
-  if (executionLeaseScope) {
-    handle.attachExecutionLeaseScope(executionLeaseScope);
-  }
   // Roster display fields must be on the handle BEFORE it is tracked:
   // `track()` emits `child.activity` synchronously, so anything assigned
   // later (e.g. from `onRun`) misses the parent's first roster snapshot.
@@ -497,16 +494,9 @@ export async function runFlowWithLifecycle(
   };
   const detachRunInterrupt = handle.attachInterruptHandler(runInterruptHandler);
   session.executions.track(handle);
-  let leaseLost = false;
-  let keepLeaseWatcher = false;
-  const stopWatchingLease = onOwnedExecutionLeaseLost(executionId, () => {
-    leaseLost = true;
-    handle.markExecutionLeaseLost();
-    logger.error('Execution lease was lost; interrupting the former owner', {
-      data: { executionId, streamId },
-    });
-    handle.interrupt();
-  });
+  // A lease record removed out from under this run is not watched: the next
+  // fenced write throws `ExecutionLeaseLostError` and the run aborts dirty.
+  let suspended = false;
   let flowRecordDisposition: FlowRecordDisposition | undefined;
   const lifecycleControl: FlowLifecycleControl = {
     setFlowRecordDisposition(disposition): void {
@@ -544,19 +534,17 @@ export async function runFlowWithLifecycle(
       stage: ctx.parentStage,
       trace: ctx.logger,
       flushArtifacts: () => session.flushArtifacts(handle.executionId),
-      persistence: leaseLost
-        ? { kind: 'skip' }
-        : {
-            kind: 'finalize',
-            // Tool-use flows report the exact recovery decision through the
-            // private lifecycle control. Other flows retain the historical
-            // policy, read against the outcome finalization resolves rather
-            // than this arm's report.
-            flowRecord:
-              flowRecordDisposition ??
-              ((resolved) =>
-                resolved === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve'),
-          },
+      persistence: {
+        kind: 'finalize',
+        // Tool-use flows report the exact recovery decision through the
+        // private lifecycle control. Other flows retain the historical
+        // policy, read against the outcome finalization resolves rather
+        // than this arm's report.
+        flowRecord:
+          flowRecordDisposition ??
+          ((resolved) =>
+            resolved === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve'),
+      },
       ...arm,
     });
   /**
@@ -715,7 +703,7 @@ export async function runFlowWithLifecycle(
       detachRunInterrupt();
     }
     if (isWaitingFlowResult(result)) {
-      keepLeaseWatcher = true;
+      suspended = true;
       logger.debug(`Task suspended with outcome: ${result.outcome}`);
       // The handle stays tracked (correct for resume) but the live tool-use
       // session and its interrupt handler are already gone by the time
@@ -786,7 +774,6 @@ export async function runFlowWithLifecycle(
     return await finalizeFailedRun(err, undefined);
   } finally {
     detachRunInterrupt();
-    if (!keepLeaseWatcher) stopWatchingLease();
     // Settle every host interaction this run left pending. The lifecycle owns
     // it for both flows: a run that ends with an approval still on screen must
     // release the host whether it completed, failed, was stopped, or parked at
@@ -810,7 +797,7 @@ export async function runFlowWithLifecycle(
     // result this run already published. A WAITING suspension is not a run
     // end, so its return skips this and leaves the stop to the suspended-handle
     // teardown if a later kill actually ends the run.
-    if (!keepLeaseWatcher) {
+    if (!suspended) {
       await runOnRunEnd();
     }
     // Release long-lived resources (e.g., WebSocket connections, keepalive

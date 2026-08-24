@@ -5,20 +5,22 @@
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
-import { getExecutionStore } from '@agent/storage';
+import {
+  ExecutionLeaseActiveError,
+  getExecutionStore,
+  readExecutionStreamIndex,
+} from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
-  describeResumeFailure,
+  describeFollowUpFailure,
   detachSubagentsOnStop,
-  resolveAndResumeStream,
-  resumeQueuedToolUseFromResumeData,
-  resumeToolUseFromResumeData,
+  resumeRun,
   runAgent,
   type AgentConfig,
   type AgentConfigPayload,
+  type ResumeRunOptions,
   type SessionHandle,
-  type ToolUseResumeData,
 } from '@agent/runtime';
 import type {
   FollowUpQueueInput,
@@ -35,7 +37,6 @@ import {
   createCliRuntimeHost,
   type CliRuntimeHost,
 } from '@cli/runtime/cliPresentationHost';
-import { readCliToolUseResumeData } from '@cli/runtime/toolUseResumeData';
 import {
   runOutcomeExitCode,
   type TurnOutcome,
@@ -135,7 +136,7 @@ export interface ChatSessionController {
    * when the resume resolution and rehydration are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
-  resume(id: ExecutionId, preResolved?: ToolUseResumeData): Promise<void>;
+  resume(id: ExecutionId): Promise<void>;
 
   /** Request stop of the root run using the configured child policy. */
   stop(): void;
@@ -321,24 +322,43 @@ export function createChatSessionController(
     // A launch failure already rendered through a targeted presentation
     // (e.g. the model-not-recognized instruction) is marked -- skip the
     // generic transcript line so the TUI doesn't show the same failure twice.
-    const resumeFailure = describeResumeFailure(error);
     const alreadyPresented =
       hasErrorPresentedMarker(error) || hasErrorPresentationPending(error);
     if (!session.stopRequested && !alreadyPresented) {
-      appendLocalErrorTranscript(
-        resumeFailure.kind === 'lease-active'
-          ? resumeFailure.message
-          : toErrorMessage(error),
-      );
+      appendLocalErrorTranscript(toErrorMessage(error));
     }
     if (session.stopRequested) {
       session.runExitCode = CliExitCode.Success;
-    } else if (resumeFailure.kind === 'lease-active') {
+    } else if (error instanceof ExecutionLeaseActiveError) {
       session.runExitCode = CliExitCode.Usage;
     } else {
       session.runExitCode = CliExitCode.AgentError;
     }
   };
+
+  /** The CLI chat's tool-use run policy, shared by every resume path. */
+  const toolUseResumeOptions = (
+    sessionContext: CliContext,
+    approvalsUnavailable: boolean,
+  ): Pick<
+    ResumeRunOptions,
+    | 'session'
+    | 'approvalPromptsUnavailable'
+    | 'onApprovalPolicyDenial'
+    | 'runtimeUnavailableTools'
+    | 'executeWorkflow'
+  > => ({
+    session: runtimeSession,
+    approvalPromptsUnavailable: approvalsUnavailable,
+    onApprovalPolicyDenial: () =>
+      warnApprovalDenied(sessionContext, 'Tool or edit approval'),
+    runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
+    executeWorkflow: async (_config, executionId) => {
+      throw new Error(
+        `Execution ${executionId} is a workflow; resume it with \`texra resume ${executionId}\`.`,
+      );
+    },
+  });
 
   // Build the runtime host shared by start and resume. Root completion marks
   // the root row complete and detaches its terminal-result presenter
@@ -474,10 +494,7 @@ export function createChatSessionController(
   // resume
   // -----------------------------------------------------------------------
 
-  const resume = async (
-    id: ExecutionId,
-    preResolved?: ToolUseResumeData,
-  ): Promise<void> => {
+  const resume = async (id: ExecutionId): Promise<void> => {
     // Claim the root-run slot as the FIRST statement, synchronously, before
     // any `await` below — see tryClaimRootRunSlot. This fuses the
     // availability check and the claim into one atomic step so a concurrent
@@ -498,46 +515,40 @@ export function createChatSessionController(
 
     const supersededRecovery = supersedeInterruptedRecovery();
     try {
-      // Inline resolution over the shared retrieval (the durable record plus
-      // `retrieveSessionResumeData` via the FK-stamped stream id). Workflow
-      // runs resume headless through `texra resume`, not inside a chat.
-      let resolution = preResolved;
-      if (!resolution) {
-        const config = await getExecutionStore(id).readConfig();
-        let failure: string | undefined;
-        if (!config) {
-          failure = `Execution not found: ${id}`;
-        } else if (config.agentCategory !== AgentCategory.ToolUse) {
-          failure = `Execution ${id} is a workflow; resume it with \`texra resume ${id}\`.`;
-        } else {
-          resolution =
-            (await readCliToolUseResumeData(id, config)) ?? undefined;
-        }
-        if (!resolution) {
-          restoreInterruptedRecovery(supersededRecovery);
-          appendLocalErrorTranscript(
-            failure ??
-              `Execution ${id} has no resumable session state (it completed or was cleared).`,
-          );
-          session.markRunCompleted();
-          resolveRunPromise();
-          return;
-        }
+      // The durable record names the stream (FK stamped at registration) and
+      // the config the TUI adopts before the run. Workflow runs resume
+      // headless through `texra resume`, not inside a chat.
+      const store = getExecutionStore(id);
+      const [config, meta] = await Promise.all([
+        store.readConfig(),
+        store.readMeta(),
+      ]);
+      const streamId = meta?.streamId;
+      let failure: string | undefined;
+      if (!config || !streamId) {
+        failure = `Execution not found: ${id}`;
+      } else if (config.agentCategory !== AgentCategory.ToolUse) {
+        failure = `Execution ${id} is a workflow; resume it with \`texra resume ${id}\`.`;
+      }
+      if (failure || !config || !streamId) {
+        restoreInterruptedRecovery(supersededRecovery);
+        appendLocalErrorTranscript(failure ?? `Execution not found: ${id}`);
+        session.markRunCompleted();
+        resolveRunPromise();
+        return;
       }
 
       clearLocalTranscript();
       followUpQueue.clear();
-      session.streamId = resolution.streamId;
-      session.executionId = resolution.executionId;
-      rootStreamId.set(resolution.streamId);
+      session.streamId = streamId;
+      session.executionId = id;
+      rootStreamId.set(streamId);
 
-      const sessionContext = beginRunContext(resolution.agentConfig, 'history');
+      const sessionContext = beginRunContext(config, 'history');
 
-      const loadedStreamsReconcile = beginLoadedStreamsReconcile([
-        resolution.streamId,
-      ]);
+      const loadedStreamsReconcile = beginLoadedStreamsReconcile([streamId]);
 
-      await runtimeSession.transcripts.ensureLoaded(resolution.streamId);
+      await runtimeSession.transcripts.ensureLoaded(streamId);
       // `load` evicts synchronously before its async seed. Drop those markers
       // before the await yields so `readStreamArtifacts` cannot project an
       // evicted/unseeded record (and re-emit warnIfUnseeded) mid-seed. On
@@ -546,16 +557,16 @@ export function createChatSessionController(
       // reseeding: this keeps its canonical pre-resume projection visible at
       // the cost of bounded warnIfUnseeded notices until the seed completes.
       loadedStreamsReconcile.dropStale();
-      await snapshotStore.load([resolution.streamId]);
+      await snapshotStore.load([streamId]);
       // Mark the retained root before the log sync below can render a stale
       // pre-resume projection.
       loadedStreamsReconcile.reconcile();
       // A resumed stream may be one the user /clear-ed; the empty patch mints
       // the slice and drops the retired mark so `syncStreamLog` and
       // `focusStream` accept it again.
-      patchStream(resolution.streamId, (slice) => ({ ...slice }));
-      syncStreamLog(runtimeSession, resolution.streamId);
-      focusStream(resolution.streamId);
+      patchStream(streamId, (slice) => ({ ...slice }));
+      syncStreamLog(runtimeSession, streamId);
+      focusStream(streamId);
       // Re-reconcile now that focus has moved: a stale in-flight preload for the
       // previous stream that re-added it during the awaited load above is cleared
       // again, while any stream preloaded in the meantime is preserved. Later
@@ -564,7 +575,7 @@ export function createChatSessionController(
 
       const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
-      ownExecution(resolution.executionId);
+      ownExecution(id);
       session.presentationHost = presentationHost;
 
       // A Ctrl-C during the rehydration awaits above (resume resolution,
@@ -579,23 +590,45 @@ export function createChatSessionController(
         return;
       }
 
-      const runChain = setCliHelperModel(resolution.agentConfig.model)
+      let resumedOutcome: TurnOutcome = RUN_OUTCOME.COMPLETED;
+      // The seeded batch stays this call's until the stream queue takes it
+      // over. Every refusal before that point (the stream already active
+      // here, a lost recovery claim, no resumable state, a storage error)
+      // hands it back, and `supersedeInterruptedRecovery()` above already
+      // cleared the interrupted stream, so the follow-ups typed during the
+      // interruption are lost unless both go back where they came from.
+      let followUpQueueReady = false;
+      const runChain = setCliHelperModel(config.model)
         .then(() =>
-          resumeToolUseFromResumeData(resolution, {
-            approvalPromptsUnavailable: approvalsUnavailable,
-            onApprovalPolicyDenial: () =>
-              warnApprovalDenied(sessionContext, 'Tool or edit approval'),
-            runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
-            drainedFollowUps: supersededRecovery?.followUps.map((followUp) => ({
-              ...followUp,
-              origin: 'user' as const,
-            })),
+          resumeRun(id, {
+            ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
+            extraFollowUps: supersededRecovery?.followUps,
+            onFollowUpQueueReady: () => {
+              followUpQueueReady = true;
+            },
             isCancellationRequested: () => session.stopRequested,
+            onResult: (result) => {
+              resumedOutcome = result.outcome;
+            },
           }),
         )
-        .then((result) => settleResumedTurn(result.outcome))
+        .then((result) => {
+          if ('started' in result) {
+            settleResumedTurn(resumedOutcome);
+          } else if (session.stopRequested) {
+            session.runExitCode = CliExitCode.Interrupted;
+          } else {
+            appendLocalErrorTranscript(describeFollowUpFailure(result.failed));
+            session.runExitCode = CliExitCode.Usage;
+          }
+        })
         .catch(reportRunFailure)
-        .finally(finalize);
+        .finally(() => {
+          if (!followUpQueueReady) {
+            restoreInterruptedRecovery(supersededRecovery);
+          }
+          finalize();
+        });
       // `session.runPromise` was already claimed synchronously above with
       // `claimedRunPromise`; forward its settlement to the real run chain so
       // exit-drain's `await session.runPromise` blocks until the continued
@@ -665,7 +698,7 @@ export function createChatSessionController(
         const runMetadata = snapshotStore.getRunMetadata(streamId);
         const executionId =
           runMetadata.executionId ??
-          (await snapshotStore.readPersistedExecutionId(streamId));
+          (await readExecutionStreamIndex()).byStream.get(streamId);
         if (!executionId) return false;
 
         const config =
@@ -697,75 +730,45 @@ export function createChatSessionController(
         session.runExitCode = CliExitCode.Success;
 
         let resumedOutcome: TurnOutcome = RUN_OUTCOME.COMPLETED;
-        const resumed = await setCliHelperModel(config.model).then(() =>
-          resolveAndResumeStream(
-            streamId,
-            {
-              streamStatus: runtimeSession.status,
-              isCancellationRequested,
-              resolveResumeState: async () => ({
-                status: 'resolved',
-                state: { runState: config, executionId, parentStreamId },
-              }),
-              resumeToolUse: (resume, claimedRecovery) =>
-                resumeQueuedToolUseFromResumeData(streamId, resume, {
-                  session: runtimeSession,
-                  recovery: claimedRecovery,
-                  approvalPromptsUnavailable: approvalsUnavailable,
-                  onApprovalPolicyDenial: () =>
-                    warnApprovalDenied(sessionContext, 'Tool or edit approval'),
-                  runtimeUnavailableTools:
-                    getDefaultUnavailableToolNames('cli'),
-                  extraFollowUps: options.extraFollowUps,
-                  onFollowUpQueueReady: (lease) => {
-                    if (options.onFollowUpQueueReady) {
-                      options.onFollowUpQueueReady(lease);
-                      return;
-                    }
-                    const recovery = supersedeInterruptedRecovery();
-                    runtimeSession.followUps
-                      .queue(lease)
-                      .restore(recovery?.followUps ?? []);
-                    if (recovery?.followUps.length) {
-                      runtimeSession.events.emit({
-                        scope: 'session',
-                        event: {
-                          type: 'updateQueuedFollowUps',
-                          payload: { streamId: lease.streamId },
-                        },
-                      });
-                    }
+        const result = await setCliHelperModel(config.model).then(() =>
+          resumeRun(executionId, {
+            ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
+            recovery: options.recovery,
+            extraFollowUps: options.extraFollowUps,
+            onFollowUpQueueReady: (lease) => {
+              if (options.onFollowUpQueueReady) {
+                options.onFollowUpQueueReady(lease);
+                return;
+              }
+              const recovery = supersedeInterruptedRecovery();
+              runtimeSession.followUps
+                .queue(lease)
+                .restore(recovery?.followUps ?? []);
+              if (recovery?.followUps.length) {
+                runtimeSession.events.emit({
+                  scope: 'session',
+                  event: {
+                    type: 'updateQueuedFollowUps',
+                    payload: { streamId: lease.streamId },
                   },
-                  isCancellationRequested,
-                  onResult: (result) => {
-                    resumedOutcome = result.outcome;
-                  },
-                  onError: reportRunFailure,
-                  canAcquireResumeLease: () => !isCancellationRequested(),
-                }),
-              executeWorkflow: async () => {
-                throw new Error(
-                  'CLI chat cannot auto-resume workflow streams from follow-up wake.',
-                );
-              },
-              reportNoResumableSession: () => {
-                appendLocalAssistantTranscript(
-                  'Message queued, but that session could not be continued automatically. Resume it with /resume, or start a new task.',
-                  streamId,
-                );
-              },
-              reportFailure: (_failedStream, error) => reportRunFailure(error),
+                });
+              }
             },
-            options.recovery,
-          ),
+            isCancellationRequested,
+            onResult: (result) => {
+              resumedOutcome = result.outcome;
+            },
+          }),
         );
 
-        if (resumed) {
+        if ('started' in result && result.delivered) {
           settleResumedTurn(resumedOutcome);
-        } else if (isCancellationRequested()) {
+          return true;
+        }
+        if (isCancellationRequested()) {
           session.runExitCode = CliExitCode.Interrupted;
         }
-        return resumed;
+        return false;
       } catch (error: unknown) {
         reportRunFailure(error);
         return false;

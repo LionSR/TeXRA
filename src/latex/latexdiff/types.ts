@@ -36,13 +36,19 @@ export type RunLatexdiffCommandConfig = Pick<
   'agent' | 'model' | 'inputFile' | 'outputFiles' | 'runId' | 'outputsByRound'
 >;
 
-export interface DiffRunResult {
-  success: boolean;
-  message?: string;
-  /** Absolute path of the generated diff, as reported by the diff service. */
-  diffPath?: string;
-  description?: string;
-}
+export type DiffRunResult =
+  | {
+      success: true;
+      /** Absolute path of the generated diff, as reported by the diff service. */
+      diffPath: string;
+      message: string;
+      description: string;
+    }
+  | {
+      success: false;
+      message: string;
+      description: string;
+    };
 
 export interface DiffRunOutcome {
   results: DiffRunResult[];

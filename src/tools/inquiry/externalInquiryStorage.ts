@@ -8,6 +8,7 @@ import { createLog } from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
+  ExecutionIdSchema,
   InquiryDraftSchema,
   InquirySessionLinksSchema,
   InquiryThreadIdSchema,
@@ -48,8 +49,6 @@ const logger = createLog('ExternalInquiryStorage');
 const InquiryTurnBaseShape = {
   turnIndex: z.int().positive(),
   timestamp: z.string().min(1),
-  /** Fences a delayed answer to the continuation that dispatched this turn. */
-  parentGenerationId: z.uuid(),
   question: z.string(),
   context: z.string().nullish(),
   questionRelativePath: z.string().min(1),
@@ -91,6 +90,13 @@ const ManifestBaseShape = {
   schemaVersion: z.literal(EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION),
   threadId: InquiryThreadIdSchema,
   parentStreamId: StreamTabIdSchema.nullable(),
+  /**
+   * The execution the last question was asked under. A continuation is
+   * addressed to it: a stream re-run under a new execution never receives
+   * an answer meant for the old one. Absent on manifests written before the
+   * field existed, which are delivered by stream alone.
+   */
+  parentExecutionId: ExecutionIdSchema.nullable().default(null),
   status: z.enum(['open', 'answered', 'dropped']),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
@@ -98,7 +104,8 @@ const ManifestBaseShape = {
 };
 
 /**
- * New canonical manifest form: explicit `status` + `parentStreamId`.
+ * New canonical manifest form: explicit `status` + `parentStreamId` +
+ * `parentExecutionId`.
  */
 const ExternalInquiryThreadManifestSchema = z.looseObject(ManifestBaseShape);
 export type ExternalInquiryThreadManifest = z.infer<
@@ -297,8 +304,8 @@ async function withOpenTurnUpdate<T>(
 /**
  * Append a new open question to a thread. Creates the thread when no
  * thread_id is passed (or the existing thread is unknown). Updates the
- * thread's `parentStreamId` to the caller — continuations always flow
- * back to the most-recent asker.
+ * thread's `parentStreamId` and `parentExecutionId` to the caller —
+ * continuations always flow back to the most-recent asker.
  *
  * Behavior depends on the current status of the addressed thread:
  *   - new thread        → create with status='open'
@@ -309,7 +316,7 @@ async function withOpenTurnUpdate<T>(
 export async function recordOpenQuestion(params: {
   threadId?: InquiryThreadId;
   parentStreamId: StreamTabId;
-  parentGenerationId: string;
+  parentExecutionId: ExecutionId | null;
   question: string;
   context?: string;
   suggestSearch?: boolean;
@@ -344,6 +351,7 @@ export async function recordOpenQuestion(params: {
       schemaVersion: EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION,
       threadId,
       parentStreamId: params.parentStreamId,
+      parentExecutionId: params.parentExecutionId,
       status: 'open',
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -383,7 +391,6 @@ export async function recordOpenQuestion(params: {
     const turn: OpenInquiryTurn = {
       turnIndex,
       timestamp,
-      parentGenerationId: params.parentGenerationId,
       question: params.question,
       context: trimmedContext,
       questionRelativePath,
@@ -396,6 +403,7 @@ export async function recordOpenQuestion(params: {
     const nextManifest: ExternalInquiryThreadManifest = {
       ...baseManifest,
       parentStreamId: params.parentStreamId,
+      parentExecutionId: params.parentExecutionId,
       status: 'open',
       updatedAt: timestamp,
       turns: [...baseManifest.turns, turn],

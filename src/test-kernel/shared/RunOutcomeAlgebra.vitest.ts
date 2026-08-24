@@ -17,8 +17,7 @@ import {
   isActivePhase,
   isInFlightPhase,
   isTerminalOutcomePhase,
-  projectRunOutcome,
-  RUN_OUTCOME_PROJECTION,
+  runOutcomeToExecutionStatus,
   STREAM_TRANSITION_CAUSE,
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
@@ -45,21 +44,21 @@ describe('run outcome algebra', () => {
   );
 
   it('projects each outcome into the injective legacy execution vocabulary', () => {
-    expect(RUN_OUTCOME_PROJECTION[RUN_OUTCOME.COMPLETED]).toEqual({
-      executionStatus: EXECUTION_STATUS.COMPLETED,
-    });
+    expect(runOutcomeToExecutionStatus(RUN_OUTCOME.COMPLETED)).toBe(
+      EXECUTION_STATUS.COMPLETED,
+    );
     // A user stop persists 'interrupted' and ends the transcript group
     // neutral — cancelled is a sibling of failed, never folded into it.
-    expect(RUN_OUTCOME_PROJECTION[RUN_OUTCOME.CANCELLED]).toEqual({
-      executionStatus: EXECUTION_STATUS.INTERRUPTED,
-    });
-    expect(RUN_OUTCOME_PROJECTION[RUN_OUTCOME.FAILED]).toEqual({
-      executionStatus: EXECUTION_STATUS.ERROR,
-    });
+    expect(runOutcomeToExecutionStatus(RUN_OUTCOME.CANCELLED)).toBe(
+      EXECUTION_STATUS.INTERRUPTED,
+    );
+    expect(runOutcomeToExecutionStatus(RUN_OUTCOME.FAILED)).toBe(
+      EXECUTION_STATUS.ERROR,
+    );
   });
 
   it('fails loudly on an out-of-vocabulary outcome', () => {
-    expect(() => projectRunOutcome('bogus' as RunOutcome)).toThrow(
+    expect(() => runOutcomeToExecutionStatus('bogus' as RunOutcome)).toThrow(
       'Unhandled run outcome: bogus',
     );
   });

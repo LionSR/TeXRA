@@ -33,7 +33,7 @@ import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { writeSkill } from '@test/support/skillFixtures';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
   createFakePlatform,
   FakeConfigProvider,
@@ -105,7 +105,7 @@ describe('getToolFlags', () => {
 
 describe('buildUserVars runtime skill diagnostics', () => {
   const missingSource = '/missing/runtime-skill-source';
-  const tempRoots: string[] = [];
+  const tempRoots = useTempDirs();
 
   beforeEach(() => {
     fakeConfig.set('texra.skills.enabled', true);
@@ -122,7 +122,6 @@ describe('buildUserVars runtime skill diagnostics', () => {
   afterEach(async () => {
     setRuntimeSkillSources([]);
     await fakeConfig.update('texra.skills.enabled', undefined);
-    await cleanupTempDirs(tempRoots);
   });
 
   it('emits catalog load issues and the exact accepted snapshot through the agent trace', async () => {

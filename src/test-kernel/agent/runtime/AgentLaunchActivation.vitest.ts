@@ -39,9 +39,7 @@ vi.mock('@agent/storage/executionLifecycle', () => ({
 vi.mock('@agent/storage/executionLease', () => ({
   abandonOwnedExecutionLease: vi.fn(),
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
-  captureOwnedExecutionLease:
-    (_executionId: ExecutionId) => (operation: () => unknown) =>
-      operation(),
+  assertOwnedExecutionLease: vi.fn(),
   completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
   releaseOwnedExecutionLeaseAfterFailure:
     mocks.releaseOwnedExecutionLeaseAfterFailure,

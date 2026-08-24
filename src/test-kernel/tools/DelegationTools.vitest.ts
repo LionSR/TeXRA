@@ -25,7 +25,8 @@ vi.mock('@agent/runtime/SessionHandle', () => ({
   currentSession: mocks.currentSession,
 }));
 
-vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
+vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/followUp/ToolUseFollowUp')>()),
   submitFollowUp: mocks.submitFollowUp,
 }));
 
@@ -177,19 +178,12 @@ describe('DelegateAgentTool resume ownership', () => {
     } as never);
     mocks.currentSession.mockReturnValue({
       executions: { getHandle: () => makeHandle() },
-      followUps: {
-        currentGenerationId: () => 'parent-generation',
-      },
     } as never);
     mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
   });
 
   it('uses the merged submission result without a caller-local owner check', async () => {
-    mocks.submitFollowUp.mockResolvedValue({
-      status: 'queued',
-      reason: 'waiting',
-      continuation: 'live',
-    });
+    mocks.submitFollowUp.mockResolvedValue({ status: 'queued' });
 
     const result = await new DelegateAgentTool().call({
       execution_id: executionId,
@@ -204,8 +198,7 @@ describe('DelegateAgentTool resume ownership', () => {
   it('reports a merged recovery failure to the parent', async () => {
     mocks.submitFollowUp.mockResolvedValue({
       status: 'queued',
-      reason: 'waiting',
-      continuation: 'resume_failed',
+      wake: 'failed',
     });
 
     await new DelegateAgentTool().call({
@@ -217,7 +210,7 @@ describe('DelegateAgentTool resume ownership', () => {
       assert.strictEqual(mocks.deliverChildRunFollowUp.mock.calls.length, 1),
     );
     expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
-      expect.objectContaining({ expectedGenerationId: 'parent-generation' }),
+      expect.objectContaining({ targetStreamId: parentStreamId }),
     );
   });
 });

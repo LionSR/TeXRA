@@ -32,46 +32,30 @@ const ResumableFlowRecordSchema = PersistedFlowRecordEnvelopeSchema.refine(
   path: ['cursor', 'nextNodeId'],
 });
 
-export const RESUMABILITY_CAUSE = {
-  INTERRUPTED_WITH_FLOW: 'interrupted-with-flow',
-  MISSING_TERMINAL_WITH_FLOW: 'missing-terminal-with-flow',
-  MISSING_FLOW: 'missing-flow',
-  INVALID_FLOW: 'invalid-flow',
-  INVALID_META: 'invalid-meta',
-  UNREADABLE_FLOW: 'unreadable-flow',
-  UNREADABLE_META: 'unreadable-meta',
-} as const;
-
-type ResumabilityCause =
-  (typeof RESUMABILITY_CAUSE)[keyof typeof RESUMABILITY_CAUSE];
-type ResumableCause =
-  | typeof RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW
-  | typeof RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW;
-type NonResumableCause = Exclude<ResumabilityCause, ResumableCause>;
-
+/**
+ * What the durable run facts alone say about continuing an execution:
+ * a valid checkpoint exists, nothing is left to resume, or the storage
+ * itself could not be read (reported with its cause, never guessed).
+ */
 export type ResumabilityDecision =
   | {
-      readonly resumable: true;
-      readonly cause: ResumableCause;
+      readonly kind: 'checkpoint';
       readonly flowRecord: FlowRecord;
       readonly outcome?: RunOutcome;
     }
-  | {
-      readonly resumable: false;
-      readonly cause: NonResumableCause;
-      readonly outcome?: RunOutcome;
-    };
+  | { readonly kind: 'none'; readonly outcome?: RunOutcome }
+  | { readonly kind: 'unreadable'; readonly cause: string };
 
 /**
  * Single storage-owned resumability decision.
  *
- * Resumable means exactly one thing: a valid flow record (the resume
- * checkpoint) exists. The terminal outcome is read and reported on the
- * decision for display, but it never blocks: a checkpoint is deleted only by
- * the user or by a genuinely completed run, so a failed run that still has
- * one is offered as "retry from the last checkpoint". Ownership is not
- * decided here; `classifyRun` (`@agent/runtime/runClassification`) combines
- * this decision with the execution lease.
+ * A checkpoint means exactly one thing: a valid flow record exists. The
+ * terminal outcome is read and reported on the decision for display, but it
+ * never blocks: a checkpoint is deleted only by the user or by a genuinely
+ * completed run, so a failed run that still has one is offered as "retry
+ * from the last checkpoint". Ownership is not decided here; `classifyRun`
+ * (`@agent/runtime/runClassification`) combines this decision with the
+ * execution lease.
  */
 export async function deriveResumability(
   executionId: ExecutionId,
@@ -87,8 +71,8 @@ export async function deriveResumability(
       )}`,
     );
     return {
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.UNREADABLE_META,
+      kind: 'unreadable',
+      cause: `execution metadata could not be read (${toErrorMessage(error)})`,
     };
   }
 
@@ -102,10 +86,7 @@ export async function deriveResumability(
         )}`,
         { data: metaResult.error },
       );
-      return {
-        resumable: false,
-        cause: RESUMABILITY_CAUSE.INVALID_META,
-      };
+      return { kind: 'unreadable', cause: 'execution metadata is malformed' };
     }
     meta = metaResult.data;
   }
@@ -120,36 +101,20 @@ export async function deriveResumability(
       `Failed to read flow record for ${executionId}: ${toErrorMessage(error)}`,
     );
     return {
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.UNREADABLE_FLOW,
-      ...metaFields,
+      kind: 'unreadable',
+      cause: `checkpoint could not be read (${toErrorMessage(error)})`,
     };
   }
 
   if (rawFlowRecord === undefined) {
-    return {
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.MISSING_FLOW,
-      ...metaFields,
-    };
+    return { kind: 'none', ...metaFields };
   }
 
   const flowResult = ResumableFlowRecordSchema.safeParse(rawFlowRecord);
   if (!flowResult.success) {
-    return {
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.INVALID_FLOW,
-      ...metaFields,
-    };
+    // A present-but-malformed checkpoint is corruption, not an absent run.
+    return { kind: 'unreadable', cause: 'checkpoint is malformed' };
   }
 
-  return {
-    resumable: true,
-    cause:
-      meta?.outcome == null
-        ? RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW
-        : RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
-    flowRecord: flowResult.data,
-    ...metaFields,
-  };
+  return { kind: 'checkpoint', flowRecord: flowResult.data, ...metaFields };
 }

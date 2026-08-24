@@ -1586,18 +1586,6 @@
       "name": "ExecutionLeaseSchema"
     },
     {
-      "file": "src/agent/storage/executionLease.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "ownsExecutionLease"
-    },
-    {
-      "file": "src/agent/storage/executionLease.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resetExecutionLeaseCoordinationForTests"
-    },
-    {
       "file": "src/agent/trace/events.ts",
       "category": "production-dead",
       "kind": "types",
@@ -2222,30 +2210,6 @@
       "name": "resolveStateSettingWrite"
     },
     {
-      "file": "src/shared/streams/streamStatus.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "projectRunOutcome"
-    },
-    {
-      "file": "src/shared/streams/streamStatus.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "RUN_OUTCOME_PROJECTION"
-    },
-    {
-      "file": "src/shared/streams/streamStatus.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "RunOutcomeProjection"
-    },
-    {
-      "file": "src/shared/streams/streamStatusDisplay.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "streamStatusDisplayKey"
-    },
-    {
       "file": "src/shared/streams/streamStatusDisplay.ts",
       "category": "production-dead",
       "kind": "types",
@@ -2330,7 +2294,7 @@
       "name": "ToolEditApprovalResult"
     },
     {
-      "file": "src/tools/citation/rateLimiter.ts",
+      "file": "src/tools/support/rateLimiter.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "abandonOnAbort"

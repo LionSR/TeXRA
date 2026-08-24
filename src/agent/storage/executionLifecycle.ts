@@ -28,8 +28,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getExecutionStore } from './ExecutionKVStore';
 import {
   acquireFreshExecutionLease,
-  captureOwnedExecutionLease,
-  type OwnedExecutionLeaseScope,
   releaseOwnedExecutionLease,
 } from './executionLease';
 
@@ -128,80 +126,59 @@ export async function registerExecution(
     description,
   } = options;
   await acquireFreshExecutionLease(executionId);
-  const runWithOwnership = captureOwnedExecutionLease(executionId);
-  await runWithOwnership(async () => {
-    try {
-      const timestamp = new Date().toISOString();
-      const store = getExecutionStore(executionId);
-      const meta: RegisteredExecutionMeta = {
-        schemaVersion: 1,
-        timestamp,
-        streamId,
-        identity,
-        userFollowUpSupport:
-          userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-        parentExecutionId,
-        ...(description ? { description } : {}),
-      };
-      const persistedRecord = pinExecutionWorkingDirectory(record);
+  try {
+    const timestamp = new Date().toISOString();
+    const store = getExecutionStore(executionId);
+    const meta: RegisteredExecutionMeta = {
+      schemaVersion: 1,
+      timestamp,
+      streamId,
+      identity,
+      userFollowUpSupport:
+        userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      parentExecutionId,
+      ...(description ? { description } : {}),
+    };
+    const persistedRecord = pinExecutionWorkingDirectory(record);
 
-      const writes: Promise<void>[] = [
-        store.writeRunRecord(persistedRecord),
-        store.writeMeta(meta),
-      ];
-      if (parentExecutionId) {
-        writes.push(
-          getExecutionStore(parentExecutionId).writeChild(executionId, {
-            agent: agentName,
-            timestamp,
-          }),
-        );
-      }
-
-      const results = await Promise.allSettled(writes);
-      const errors = results.flatMap((result) =>
-        result.status === 'rejected' ? [result.reason] : [],
+    const writes: Promise<void>[] = [
+      store.writeRunRecord(persistedRecord),
+      store.writeMeta(meta),
+    ];
+    if (parentExecutionId) {
+      writes.push(
+        getExecutionStore(parentExecutionId).writeChild(executionId, {
+          agent: agentName,
+          timestamp,
+        }),
       );
-      throwAggregated(
-        errors,
-        `Multiple execution registration writes failed for ${executionId}`,
-      );
-    } catch (error) {
-      try {
-        await releaseOwnedExecutionLease(executionId);
-      } catch (releaseError) {
-        throw new AggregateError(
-          [error, releaseError],
-          `Execution registration and lease rollback failed for ${executionId}`,
-        );
-      }
-      throw error;
     }
-  });
-}
 
-/**
- * Register a detached child execution and capture its fresh lease as the
- * caller's ownership scope — the register → capture pair every detached
- * launch site shares, owned here so the launch failure path has one home.
- * Wrap the pre-handoff launch work in `runWithOwnedExecutionLeaseLaunchGuard`
- * (from `./executionLease`) inside the returned scope so a failed launch
- * releases the lease instead of stranding it until the stale horizon.
- */
-export async function registerOwnedExecution(
-  executionId: ExecutionId,
-  record: RunRecord,
-  agentName: string,
-  options: RegisterExecutionOptions,
-): Promise<OwnedExecutionLeaseScope> {
-  await registerExecution(executionId, record, agentName, options);
-  return captureOwnedExecutionLease(executionId);
+    const results = await Promise.allSettled(writes);
+    const errors = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
+    throwAggregated(
+      errors,
+      `Multiple execution registration writes failed for ${executionId}`,
+    );
+  } catch (error) {
+    try {
+      await releaseOwnedExecutionLease(executionId);
+    } catch (releaseError) {
+      throw new AggregateError(
+        [error, releaseError],
+        `Execution registration and lease rollback failed for ${executionId}`,
+      );
+    }
+    throw error;
+  }
 }
 
 /**
  * Drop the previous run's terminal facts as a persisted execution is admitted
  * for resumption. `meta.outcome` owns "how did this run end" and every reader
- * projects it onto the turn-owned result envelope (`applyExecutionOutcome`), so
+ * projects it onto the turn-owned result envelope (`readResultMeta`), so
  * an execution that resumes while still carrying its interrupted predecessor's
  * outcome relabels every turn the resumed run writes until its next terminal
  * finalize.
@@ -238,35 +215,46 @@ export interface FinalizeExecutionInput {
    * the same locked cycle, so "already settled" cannot go stale between them.
    */
   readonly keepExistingOutcome?: boolean;
+  /**
+   * Where a persistence failure is reported, wrapped in one worded Error.
+   * `finalizeRun` never throws; a caller with its own logging reads the
+   * result instead.
+   */
+  readonly report?: (error: Error) => void;
 }
 
 export type FinalizeExecutionResult =
+  | { readonly ok: true }
   | {
-      readonly status: 'durable';
-      readonly outcomePersisted: true;
-      readonly flowRecord: 'preserved' | 'deleted';
-    }
-  | {
-      readonly status: 'failed';
+      readonly ok: false;
       readonly error: unknown;
-      readonly stage:
-        'terminal-status' | 'terminal-status-and-flow-record-delete';
-      readonly outcomePersisted: false;
-    }
-  | {
-      readonly status: 'failed';
-      readonly error: unknown;
-      readonly stage: 'flow-record-delete';
-      readonly outcomePersisted: true;
+      readonly outcomePersisted: boolean;
     };
 
-/** Persist terminal metadata, then apply the requested flow-record policy. */
-export async function finalizeExecution({
-  executionId,
-  outcome,
-  flowRecord,
-  keepExistingOutcome,
-}: FinalizeExecutionInput): Promise<FinalizeExecutionResult> {
+/**
+ * The one terminal-persistence tail: persist the run's terminal outcome,
+ * then apply the requested flow-record policy. Never throws — every
+ * persistence failure comes back as an `ok: false` result (and through
+ * `report`, when given).
+ */
+export async function finalizeRun(
+  input: FinalizeExecutionInput,
+): Promise<FinalizeExecutionResult> {
+  const { executionId, outcome, flowRecord, keepExistingOutcome } = input;
+  const failed = (
+    error: unknown,
+    outcomePersisted: boolean,
+  ): FinalizeExecutionResult => {
+    input.report?.(
+      new Error(
+        outcomePersisted
+          ? `Persisted ${outcome} status for execution ${executionId}, but failed to delete its flow record: ${toErrorMessage(error)}`
+          : `Failed to persist ${outcome} terminal state for execution ${executionId}: ${toErrorMessage(error)}`,
+        { cause: error },
+      ),
+    );
+    return { ok: false, error, outcomePersisted };
+  };
   try {
     // Persist the canonical terminal outcome — the one terminal write.
     await enqueueMetaUpdate(executionId, (existing) =>
@@ -276,54 +264,31 @@ export async function finalizeExecution({
     );
   } catch (error) {
     // The caller's disposition stands even when the outcome write failed: a
-    // checkpoint is deleted only on request, never to fail closed. A failed
-    // metadata write with a preserved record is reported loudly below.
+    // checkpoint is deleted only on request, never to fail closed.
     if (flowRecord === 'delete') {
       try {
         await getExecutionStore(executionId).delete(flowKey(executionId));
       } catch (deleteError) {
-        return {
-          status: 'failed',
-          error: new AggregateError(
+        return failed(
+          new AggregateError(
             [error, deleteError],
             `Terminal metadata and flow deletion failed for ${executionId}`,
           ),
-          stage: 'terminal-status-and-flow-record-delete',
-          outcomePersisted: false,
-        };
+          false,
+        );
       }
     }
-    return {
-      status: 'failed',
-      error,
-      stage: 'terminal-status',
-      outcomePersisted: false,
-    };
+    return failed(error, false);
   }
 
-  if (flowRecord === 'preserve') {
-    return {
-      status: 'durable',
-      outcomePersisted: true,
-      flowRecord: 'preserved',
-    };
+  if (flowRecord === 'delete') {
+    try {
+      await getExecutionStore(executionId).delete(flowKey(executionId));
+    } catch (error) {
+      return failed(error, true);
+    }
   }
-
-  try {
-    await getExecutionStore(executionId).delete(flowKey(executionId));
-    return {
-      status: 'durable',
-      outcomePersisted: true,
-      flowRecord: 'deleted',
-    };
-  } catch (error) {
-    return {
-      status: 'failed',
-      error,
-      stage: 'flow-record-delete',
-      outcomePersisted: true,
-    };
-  }
+  return { ok: true };
 }
 
 /** Persist an AI-generated session description on an existing execution's metadata. */

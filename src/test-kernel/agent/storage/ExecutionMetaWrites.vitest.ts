@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { finalizeExecution, getExecutionStore } from '@agent/storage';
+import { finalizeRun, getExecutionStore } from '@agent/storage';
 import { writeSessionDescription } from '@agent/storage/executionLifecycle';
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -18,7 +18,7 @@ describe('execution metadata updates', () => {
     // per-execution serialization the later write drops the earlier field.
     await Promise.all([
       writeSessionDescription(id, 'A described session'),
-      finalizeExecution({
+      finalizeRun({
         executionId: id,
         outcome: RUN_OUTCOME.COMPLETED,
         flowRecord: 'preserve',
@@ -40,12 +40,12 @@ describe('execution metadata updates', () => {
       timestamp: new Date(0).toISOString(),
     });
 
-    await finalizeExecution({
+    await finalizeRun({
       executionId: id,
       outcome: RUN_OUTCOME.COMPLETED,
       flowRecord: 'preserve',
     });
-    await finalizeExecution({
+    await finalizeRun({
       executionId: id,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
@@ -69,12 +69,12 @@ describe('execution metadata updates', () => {
 
     await writeSessionDescription(id, 'Updated description');
     await expect(
-      finalizeExecution({
+      finalizeRun({
         executionId: id,
         outcome: RUN_OUTCOME.COMPLETED,
         flowRecord: 'preserve',
       }),
-    ).resolves.toMatchObject({ status: 'durable' });
+    ).resolves.toMatchObject({ ok: true });
 
     const meta = await store.readMeta();
     expect(meta).toMatchObject({
@@ -92,25 +92,24 @@ describe('execution metadata updates', () => {
       timestamp: new Date(0).toISOString(),
     });
 
-    // Catchless callers (terminalPersistence, runAgent, CLI finalization)
-    // rely on finalizeExecution never rejecting: every store failure must
-    // surface as a 'failed' result (#10614). CANCELLED + 'preserve' skips
-    // the fail-closed flow-record delete, isolating the terminal-write arm.
+    // Catchless callers rely on finalizeRun never rejecting: every store
+    // failure must surface as an ok: false result (#10614). CANCELLED +
+    // 'preserve' skips the fail-closed flow-record delete, isolating the
+    // terminal-write arm.
     const writeError = new Error('terminal write rejected');
     const writeSpy = vi
       .spyOn(store, 'writeMeta')
       .mockRejectedValueOnce(writeError);
     try {
       await expect(
-        finalizeExecution({
+        finalizeRun({
           executionId: id,
           outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'preserve',
         }),
       ).resolves.toEqual({
-        status: 'failed',
+        ok: false,
         error: writeError,
-        stage: 'terminal-status',
         outcomePersisted: false,
       });
     } finally {

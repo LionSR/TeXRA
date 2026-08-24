@@ -31,7 +31,7 @@ export {
   resolveExecutionWorkspaceFilePath,
 } from './executionWorkspaceFiles';
 export {
-  finalizeExecution,
+  finalizeRun,
   registerExecution,
   type FinalizeExecutionInput,
   writeWorkflowExecutionSnapshot,
@@ -44,16 +44,14 @@ export {
   deleteExecution,
   deleteAllExecutions,
   isUserVisibleExecution,
+  readExecutionStreamIndex,
 } from './executionListing';
 export { deriveResumability, type ResumabilityDecision } from './resumability';
 export { formatConversationMessage } from './conversationFormat';
 export {
+  ExecutionLeaseActiveError,
   ExecutionLeaseLostError,
   executionHeldMessage,
-  inspectExecutionLease,
-  markOwnedExecutionLeaseUndurable,
-  reclaimExecutionLease,
-  type OwnedExecutionLeaseScope,
 } from './executionLease';
 export { persistChildRunResultMeta } from './childRunPersistence';
 export { resolveChildRunOutput } from './childRunOutput';

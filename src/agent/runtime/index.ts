@@ -20,6 +20,7 @@
 // SessionHandle
 export {
   SessionHandle,
+  StorageRootChangeRefusedError,
   currentSession,
   defaultSession,
   initializeDefaultSession,
@@ -61,7 +62,6 @@ export type { RunAgentOptions, RunAgentRequest } from './runAgent';
 
 // SessionResumeRetrieval
 export { retrieveSessionResumeData } from './SessionResumeRetrieval';
-export type { ToolUseResumeData } from './SessionResumeRetrieval';
 
 // runClassification
 export { classifyRun } from './runClassification';
@@ -72,14 +72,15 @@ export {
   trackTerminalResultPresentation,
 } from './terminalResultToast';
 
-// resolveAndResumeStream
+// resumeRun
+export { resumeRun } from './resumeRun';
+export type { ResumeRunOptions } from './resumeRun';
+// The refusal wording a host applies to a `ResumeRunResult` failure, and the
+// stream -> execution lookup the stream-keyed host resume ports need.
 export {
-  describeResumeFailure,
-  describeResumeStateResolution,
-  resolveAndResumeStream,
-  resolveResumeStateFromSnapshots,
-  resumeStreamWithRecovery,
-} from './resolveAndResumeStream';
+  describeFollowUpFailure,
+  lookupStreamExecutionId,
+} from '@agent/followUp/ToolUseFollowUp';
 
 // detachSubagentsOnStop
 export { detachSubagentsOnStop } from './detachSubagentsOnStop';
@@ -96,14 +97,8 @@ export type {
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
 
-// resumeQueuedToolUse
-export { resumeQueuedToolUseFromResumeData } from './resumeQueuedToolUse';
-
 // executionRegistry
 export type { ManualCompactionRequestResult } from './executionRegistry';
-
-// executeAgent
-export { resumeToolUseFromResumeData } from './executeAgent';
 
 // textEnhancement
 export { polishTextWithAI } from './textEnhancement';

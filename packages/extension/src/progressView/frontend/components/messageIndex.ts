@@ -212,10 +212,9 @@ export class TranscriptIndex {
   ): boolean {
     if (previousGroups.length !== nextGroups.length) return false;
 
-    for (let i = 0; i < nextGroups.length; i++) {
+    for (const [i, next] of nextGroups.entries()) {
       const previous = previousGroups[i];
-      const next = nextGroups[i];
-      if (!previous || !next) return false;
+      if (!previous) return false;
       if (
         previous.id !== next.id ||
         previous.parentGroupId !== next.parentGroupId ||
@@ -478,8 +477,8 @@ export class TranscriptIndex {
     for (const location of this.rowLocations.values()) {
       delete location.ungroupedIndex;
     }
-    for (let i = 0; i < ungrouped.length; i++) {
-      this.locationFor(ungrouped[i].id).ungroupedIndex = i;
+    for (const [i, row] of ungrouped.entries()) {
+      this.locationFor(row.id).ungroupedIndex = i;
     }
   }
 
@@ -503,9 +502,8 @@ export class TranscriptIndex {
       return;
     }
 
-    for (let i = this.timeline.length - 1; i >= 0; i--) {
-      const item = this.timeline[i];
-      if (!item || !('row' in item)) continue;
+    for (const item of this.timeline) {
+      if (!('row' in item)) continue;
       const ungroupedIndex = this.rowLocations.get(item.key)?.ungroupedIndex;
       const fresh =
         ungroupedIndex === undefined

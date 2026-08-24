@@ -4,21 +4,17 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - platform
 import {
   canonicalizeWorkspacePath,
   createNodeWorkspace,
 } from '@platform/defaults/nodeWorkspace';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 describe('Node workspace identity', () => {
-  const tempDirs: string[] = [];
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
+  const tempDirs = useTempDirs();
 
   it('uses the physical directory for a symlinked workspace', async () => {
     const root = await makeTempDir('texra-node-workspace-', tempDirs);

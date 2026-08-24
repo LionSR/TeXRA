@@ -4,7 +4,7 @@ import path from 'node:path';
 import PQueue from 'p-queue';
 
 // Local imports
-import type { PlatformSecrets } from '@platform/secrets';
+import { secretWithEnvOverride, type PlatformSecrets } from '@platform/secrets';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 
@@ -37,7 +37,7 @@ export class CliSecrets implements PlatformSecrets {
   constructor(private readonly filePath = cliSecretsPath()) {}
 
   async get(key: string): Promise<string | undefined> {
-    return cliEnvValue(key) ?? (await this.getStored(key));
+    return secretWithEnvOverride(key, cliEnvValue, (k) => this.getStored(k));
   }
 
   async getStored(key: string): Promise<string | undefined> {
@@ -56,7 +56,7 @@ export class CliSecrets implements PlatformSecrets {
 
   async listStoredKeys(): Promise<readonly string[]> {
     const store = await this.openStore();
-    return Object.keys(store.snapshot());
+    return store.keys();
   }
 
   getEnv(name: string): string | undefined {

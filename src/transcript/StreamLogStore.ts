@@ -563,9 +563,9 @@ export class StreamLogStore {
 
   /**
    * Recheck the authoritative transcript source rather than this instance's
-   * cached summary. Resume admission uses this while holding the execution
-   * lease lock, so another process cannot delete a stream and have a stale
-   * in-memory store recreate it afterwards.
+   * cached summary. Desktop resume admission reads this before resuming, so a
+   * stream another process deleted is not recreated from a stale in-memory
+   * store.
    */
   async hasAuthoritativeStream(streamId: StreamTabId): Promise<boolean> {
     if (this.mode.kind === 'ephemeral') return this.has(streamId);

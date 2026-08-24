@@ -48,6 +48,7 @@ import {
   MAIN_VIEW_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@shared/ipc';
+import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -388,10 +389,6 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   mocks.doMock('@agent/runtime/executeAgent', () => ({
     resumeToolUseFromResumeData:
       options.resumeToolUseFromResumeData ?? vi.fn(async () => {}),
-    // `resumeQueuedToolUse` narrows admission cancellation by `instanceof`
-    // against this module's error; the stubbed launcher never throws one, so a
-    // stand-in class keeps that branch false.
-    ResumeAdmissionCancelledError: class extends Error {},
   }));
   mocks.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(),
@@ -881,6 +878,28 @@ function emitSearchRunConfig(bridge: TestableBridge): void {
     executionId: 'ec1001' as ExecutionId,
     config: SEARCH_TOOL_USE_AGENT_CONFIG,
   });
+}
+
+/**
+ * Durable execution rows `resumeRun` resolves before dispatching: the run
+ * record plus registration-stamped `meta.streamId`.
+ */
+function executionSeed(
+  executionId: string,
+  streamId: string,
+  config: AgentConfig,
+): [string, unknown][] {
+  return [
+    [`executions/${executionId}/config`, config],
+    [
+      `executions/${executionId}/meta`,
+      {
+        timestamp: '2026-07-10T00:00:00.000Z',
+        streamId,
+        identity: { kind: 'agent', agent: config.agent },
+      },
+    ],
+  ];
 }
 
 function stubWorkflowResumeData(
@@ -1632,15 +1651,13 @@ describe('DesktopProgressBridge', () => {
     });
 
     // One unreadable run never takes the host down: the stream is shown as
-    // unclassified with its cause, nothing is mutated, and its transcript
-    // stays open for the Resume retry.
+    // unavailable with its cause, nothing is mutated, and its transcript
+    // stays open.
     expect(repairRestartedStreams).toHaveBeenCalledOnce();
     expect(bridgeStatus(bridge).get(mappedStream)).toBeUndefined();
-    expect(bridgeStatus(bridge).holdState(mappedStream)).toEqual({
-      kind: 'unclassified',
-      cause: 'flow records unavailable',
-      retryable: true,
-    });
+    expect(bridgeStatus(bridge).holdState(mappedStream)).toBe(
+      streamUnreadableMessage('flow records unavailable'),
+    );
     expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([mappedStream]);
   });
 
@@ -1953,9 +1970,9 @@ describe('DesktopProgressBridge', () => {
     });
     const bridge = await createBridge(messages, {
       canonicalStreamIds: [streamId],
-      kvStoreBacking: new Map<string, unknown>([
-        [`executions/${executionId}/config`, runConfig],
-      ]),
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed(executionId, streamId, runConfig),
+      ),
       configureProgressSnapshotStore: (store) => {
         snapshotFacts(store).setRunConfig(streamId, runConfig, executionId);
       },
@@ -2118,23 +2135,6 @@ describe('DesktopProgressBridge', () => {
       PERMISSION_KIND.PLAN_APPROVAL,
       'plan-cancel-on-delete',
     );
-  });
-
-  it('does not resume a stream deleted in this desktop session', async () => {
-    const retrieveSessionResumeData = vi.fn(async () =>
-      searchToolUseResumeData(),
-    );
-    const bridge = await createBridge([], {
-      canonicalStreamIds: ['stream-1'],
-      retrieveSessionResumeData,
-    });
-
-    emitSearchRunConfig(bridge);
-
-    await deleteStreamViaInbound(bridge, 'stream-1');
-    emitSearchRunConfig(bridge);
-    await expect(tryResumeStream('stream-1')).resolves.toBe(false);
-    expect(retrieveSessionResumeData).not.toHaveBeenCalled();
   });
 
   it('forgets desktop goal records when deleting a stream', async () => {
@@ -2307,6 +2307,7 @@ describe('DesktopProgressBridge', () => {
       if (key === 'meta') {
         return {
           executionId,
+          streamId: 'stream-1',
           timestamp: '2026-07-10T00:00:00.000Z',
           identity: { kind: 'agent', agent: runConfig.agent },
           description: 'Persisted workflow',
@@ -2394,9 +2395,9 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       runAgent,
       canonicalStreamIds: [streamId],
-      kvStoreBacking: new Map<string, unknown>([
-        [`executions/${executionId}/config`, runConfig],
-      ]),
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed(executionId, streamId, runConfig),
+      ),
       configureProgressSnapshotStore: (store) => {
         snapshots = store;
         snapshotFacts(store).setRunConfig(streamId, runConfig, executionId);
@@ -2454,6 +2455,9 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       resumeToolUseFromResumeData,
       canonicalStreamIds: ['stream-1'],
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed('ec1001', 'stream-1', SEARCH_TOOL_USE_AGENT_CONFIG),
+      ),
     });
     try {
       emitSearchRunConfig(bridge);
@@ -2511,6 +2515,9 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       resumeToolUseFromResumeData,
       canonicalStreamIds: ['stream-1'],
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed('ec1001', 'stream-1', SEARCH_TOOL_USE_AGENT_CONFIG),
+      ),
     });
 
     try {
@@ -2558,6 +2565,9 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], {
       retrieveSessionResumeData,
       canonicalStreamIds: ['stream-1'],
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed('ec1001', 'stream-1', SEARCH_TOOL_USE_AGENT_CONFIG),
+      ),
     });
 
     try {
@@ -3657,10 +3667,17 @@ describe('DesktopProgressBridge', () => {
       owner.processSession.transcripts.ensureStream(childStreamId);
       owner.close();
 
+      // The deletion is pending while its ownership read is in flight: the
+      // child stream has no resident run metadata, so the read goes to the
+      // authored stream index.
       const leaseReleased = createDeferred();
+      const executionListing = await import('@agent/storage/executionListing');
       const waitForRelease = vi
-        .spyOn(owner.sessionStores, 'waitForOwnedExecutionRelease')
-        .mockReturnValue(leaseReleased.promise);
+        .spyOn(executionListing, 'readExecutionStreamIndex')
+        .mockImplementation(async () => {
+          await leaseReleased.promise;
+          return { byStream: new Map(), unreadable: new Map() };
+        });
 
       try {
         owner.processSession.events.emit({
@@ -3671,9 +3688,7 @@ describe('DesktopProgressBridge', () => {
           },
         });
 
-        await vi.waitFor(() =>
-          expect(waitForRelease).toHaveBeenCalledWith(childStreamId),
-        );
+        await vi.waitFor(() => expect(waitForRelease).toHaveBeenCalled());
         owner.processSession.events.emit({
           scope: 'session',
           event: {
@@ -3719,14 +3734,18 @@ describe('DesktopProgressBridge', () => {
       });
       const firstRelease = createDeferred();
       const secondRelease = createDeferred();
+      // The deletion runs as a step on the execution lane; gate the lane.
       const waitForRelease = vi
-        .spyOn(owner.sessionStores, 'waitForOwnedExecutionRelease')
-        .mockReturnValueOnce(firstRelease.promise)
-        .mockReturnValueOnce(secondRelease.promise);
-      const processFallback = vi.spyOn(
-        owner.sessionStores,
-        'deleteStreamAfterOwnedExecutionRelease',
-      );
+        .spyOn(owner.processSession.executions, 'runExecutionStep')
+        .mockImplementationOnce(async (_executionId, step) => {
+          await firstRelease.promise;
+          return step();
+        })
+        .mockImplementationOnce(async (_executionId, step) => {
+          await secondRelease.promise;
+          return step();
+        });
+      const deleteStream = vi.spyOn(owner.sessionStores, 'deleteStream');
 
       try {
         emitSessionFact(owner.bridgeA, 'removeStream', {
@@ -3777,7 +3796,12 @@ describe('DesktopProgressBridge', () => {
         await vi.waitFor(() => expect(waitForRelease).toHaveBeenCalledTimes(2));
         await settleProgressEvents();
 
-        expect(processFallback).not.toHaveBeenCalled();
+        // Both deletions are the presentation's (incarnations 0 and 1); a
+        // process fallback would have issued a third.
+        expect(deleteStream).toHaveBeenCalledTimes(2);
+        expect(
+          deleteStream.mock.calls.map(([, o]) => o?.expectedIncarnation),
+        ).toEqual([0, 1]);
         expect(owner.processSession.transcripts.has(streamId)).toBe(true);
       } finally {
         firstRelease.resolve();
@@ -3796,9 +3820,10 @@ describe('DesktopProgressBridge', () => {
       const failure = new Error('execution metadata unavailable');
       const deletionStarted = createDeferred();
       const deletionGate = createDeferred();
+      const executionListing = await import('@agent/storage/executionListing');
       vi.spyOn(
-        owner.progressSnapshotStore,
-        'readPersistedExecutionId',
+        executionListing,
+        'readExecutionStreamIndex',
       ).mockImplementationOnce(async () => {
         deletionStarted.resolve();
         await deletionGate.promise;

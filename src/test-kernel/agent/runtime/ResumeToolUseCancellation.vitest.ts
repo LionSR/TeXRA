@@ -2,7 +2,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  abandonOwnedExecutionLease: vi.fn(),
   buildAgentLaunchContext: vi.fn(),
   clearTerminalExecutionState: vi.fn(),
   getPersistedUserFollowUpSupport: vi.fn(),
@@ -18,24 +17,17 @@ const mocks = vi.hoisted(() => ({
       operation(),
   ),
   releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
-  completeOwnedExecutionLease: vi.fn(),
+  releaseOwnedExecutionLease: vi.fn(),
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
-  abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
-  captureOwnedExecutionLease:
-    (_executionId: ExecutionId) => (operation: () => unknown) =>
-      operation(),
-  completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
+  assertOwnedExecutionLease: vi.fn(),
+  releaseOwnedExecutionLease: mocks.releaseOwnedExecutionLease,
   validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
   runWithExecutionLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
   releaseOwnedExecutionLeaseAfterFailure:
     mocks.releaseOwnedExecutionLeaseAfterFailure,
-  runWithOwnedExecutionLease: (
-    _executionId: ExecutionId,
-    operation: () => unknown,
-  ) => operation(),
 }));
 
 vi.mock('@agent/runtime/AgentLaunchContext', () => ({
@@ -73,9 +65,9 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import {
-  resumeToolUseFromResumeData,
-  ResumeAdmissionCancelledError,
+  resumeToolUseFromResumeData as resumeOnLane,
   ResumeSessionUnavailableError,
+  type ResumeToolUseFromResumeDataOptions,
 } from '@agent/runtime/executeAgent';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -103,6 +95,24 @@ interface ModelSwitchingFlowInput {
   onModelChanged: (model: string) => void;
 }
 
+/**
+ * The session whose execution lane admits the resume. No competing generation
+ * exists in this fixture, so the lane is a passthrough.
+ */
+const LANE_SESSION = {
+  executions: {
+    launchExecution: (_executionId: ExecutionId, start: () => unknown) =>
+      start(),
+  },
+} as never;
+
+function resumeToolUseFromResumeData(
+  resume: Parameters<typeof resumeOnLane>[0],
+  options: ResumeToolUseFromResumeDataOptions = {},
+): ReturnType<typeof resumeOnLane> {
+  return resumeOnLane(resume, { session: LANE_SESSION, ...options });
+}
+
 /** Minimal launch context for a resumed tool-use run that reaches the flow. */
 function buildResumeContext(
   executionId: ExecutionId,
@@ -119,7 +129,7 @@ function buildResumeContext(
         transcripts: { ensureLoaded: vi.fn(async () => {}) },
         flushArtifacts: vi.fn(async () => {}),
         // The real exit choreography over the fake's flushArtifacts and the
-        // mocked lease verbs, so the completeOwnedExecutionLease assertion
+        // mocked lease verbs, so the releaseOwnedExecutionLease assertion
         // keeps observing the drain through its one owner.
         releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
       },
@@ -159,7 +169,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
       async (_executionId: ExecutionId, error: unknown) => error,
     );
-    mocks.completeOwnedExecutionLease.mockResolvedValue({ status: 'released' });
+    mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
     // mockImplementationOnce, which takes precedence for their single call.
@@ -172,7 +182,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   // The predecessor run's terminal outcome is projected onto every result
-  // envelope read back (`applyExecutionOutcome`), so it has to be gone before
+  // envelope read back (`readResultMeta`), so it has to be gone before
   // the resumed run can write a turn of its own.
   it('clears the previous run terminal facts before the resumed run starts', async () => {
     const executionId = 'e9503-boundary' as ExecutionId;
@@ -280,25 +290,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledTimes(
       1,
     );
-  });
-
-  it('does not build a launch context when canonical admission is withdrawn under the lease lock', async () => {
-    const snapshot = createToolUseResumeData();
-    let canonical = true;
-    mocks.acquireResumedExecutionLease.mockImplementationOnce(
-      async (_executionId: ExecutionId, canAcquire: () => boolean) => {
-        canonical = false;
-        return canAcquire() ? 'acquired' : 'cancelled';
-      },
-    );
-
-    await expect(
-      resumeToolUseFromResumeData(snapshot, {
-        canAcquireResumeLease: () => canonical,
-      }),
-    ).rejects.toBeInstanceOf(ResumeAdmissionCancelledError);
-
-    expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
   });
 
   it('reports a reloaded session that is no longer resumable distinctly', async () => {
@@ -411,7 +402,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     });
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(executionId);
+    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(executionId);
     expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
     expect(order).toEqual([
       'attach',

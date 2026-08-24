@@ -6,8 +6,8 @@
  * (`session.interactions.x(...)`, `session.executions.y(...)`). Its sole
  * lifecycle gate, {@link SessionHandle.waitUntilReady}, ensures persistent
  * restart repair has settled before a host exposes the session. It composes
- * {@link ExecutionRegistry}, {@link ExecutionSubscriptionBinder},
- * {@link SessionHostInteractions}, and the other session-scoped owners.
+ * {@link ExecutionRegistry}, {@link SessionHostInteractions}, and the other
+ * session-scoped owners.
  *
  * A session is one per host context: extension activation (per VS Code window),
  * CLI process, or desktop Electron process. The default instance is installed
@@ -30,22 +30,20 @@
  */
 
 import pDefer, { type DeferredPromise } from 'p-defer';
-import pMap from 'p-map';
 import PQueue from 'p-queue';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
-  abandonOwnedExecutionLease,
-  captureOwnedExecutionLeaseIfPresent,
-  completeOwnedExecutionLease,
-  isOwnedExecutionLeaseDurable,
-  type OwnedExecutionLeaseScope,
-  runWithOwnedExecutionLeaseQuiescence,
+  ownsExecutionLease,
+  releaseOwnedExecutionLease,
   validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
-import { finalizeExecution } from '@agent/storage/executionLifecycle';
-import { listExecutionStreamReferences } from '@agent/storage/executionListing';
+import { finalizeRun } from '@agent/storage/executionLifecycle';
+import {
+  listExecutionStreamReferences,
+  readExecutionStreamIndex,
+} from '@agent/storage/executionListing';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
@@ -64,6 +62,7 @@ import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
+import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
@@ -71,7 +70,6 @@ import { throwAggregated } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getRunContextSession, tryUseRunContext } from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
-import { ExecutionSubscriptionBinder } from './ExecutionSubscriptionBinder';
 import { StreamStatusMachine } from './StreamStatusService';
 import {
   SessionHostInteractions,
@@ -88,9 +86,6 @@ import { repairRestartedStreams } from './restartRepair';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 
 const logger = createLog('sessionHandle');
-
-/** Bounded fan-out for restart repair's sidecar ownership/preload sweeps. */
-const RESTART_REPAIR_IO_CONCURRENCY = 8;
 
 function isReplayableTerminalResult(event: ResultEvent): boolean {
   return (
@@ -115,7 +110,6 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
 } & Partial<
     Pick<
       SessionHandle,
-      | 'subscriptions'
       | 'events'
       | 'followUps'
       | 'snapshots'
@@ -134,6 +128,19 @@ export interface WorkspaceStorageTransitionHooks {
   afterStorageFinalize(): void;
 }
 
+/**
+ * A storage-root change was refused because executions are live in this
+ * session. Nothing was changed; the caller retries once they have finished.
+ */
+export class StorageRootChangeRefusedError extends Error {
+  constructor(readonly liveExecutionIds: readonly string[]) {
+    super(
+      `TeXRA cannot change its storage location while ${liveExecutionIds.length} ${liveExecutionIds.length === 1 ? 'run is' : 'runs are'} live in this window. Stop or finish them, then retry the workspace change.`,
+    );
+    this.name = 'StorageRootChangeRefusedError';
+  }
+}
+
 export class SessionHandle {
   /**
    * Per-run execution handles: registration, lookup, change listeners, and
@@ -141,8 +148,6 @@ export class SessionHandle {
    * {@link status} publishes on.
    */
   readonly executions: ExecutionRegistry;
-  /** Execution-status subscriptions bound to agent stream lifecycles. */
-  readonly subscriptions: ExecutionSubscriptionBinder;
   /** Session-scoped one-way fact plane. */
   readonly events: SessionEventHub;
   /** Session-scoped status plane. */
@@ -205,13 +210,6 @@ export class SessionHandle {
     });
 
     this.executions = executions;
-    this.subscriptions =
-      init.subscriptions ??
-      new ExecutionSubscriptionBinder({
-        registry: executions,
-        releaseSource: followUps,
-        session: this,
-      });
     this.events = events;
     this.status = status;
     this.transcripts = transcripts;
@@ -259,7 +257,6 @@ export class SessionHandle {
     this.teardown.add(() => this.approvals.clearAll());
     this.teardown.add(() => this.executions.dispose());
     this.teardown.add(() => this.followUps.dispose());
-    this.teardown.add(() => this.subscriptions.dispose());
     this.teardown.add(() => this.restartRepairAbort.abort());
     this.teardown.add(() => this.flushPendingTraces());
     if (
@@ -317,10 +314,28 @@ export class SessionHandle {
         hooks && { workspacePath: hooks.workspacePath },
       );
     if (hasPendingStorageChange === false) return Promise.resolve(false);
+    // A storage-root change is refused, not queued, while any execution is
+    // live: a run writes under the root it was claimed in, so the two may not
+    // overlap. The hold is taken before any session state moves, so a refusal
+    // changes nothing; while it is held, launches and resumes are refused.
+    let releaseHold: () => void;
+    try {
+      releaseHold = this.executions.holdLifecycle(
+        (live) => new StorageRootChangeRefusedError(live),
+        () =>
+          new Error(
+            'TeXRA is changing its storage location. Start this run again in a moment.',
+          ),
+      );
+    } catch (error) {
+      return Promise.reject(error);
+    }
     this.storageGeneration += 1;
     const generation = this.storageGeneration;
     const repair = this.enqueueRestartRepair(() =>
-      this.repairStoresAfterRestart(generation, true, hooks),
+      this.repairStoresAfterRestart(generation, true, hooks).finally(
+        releaseHold,
+      ),
     );
     this.restartRepairPromise = repair;
     return repair;
@@ -364,13 +379,10 @@ export class SessionHandle {
     try {
       if (this.restartRepairAbort.signal.aborted) return false;
       if (reloadTranscripts) {
-        return await runWithOwnedExecutionLeaseQuiescence(async () => {
-          if (this.restartRepairAbort.signal.aborted) return false;
-          return this.replaceStoresAfterStorageRootChange(
-            generation,
-            transitionHooks,
-          );
-        });
+        return await this.replaceStoresAfterStorageRootChange(
+          generation,
+          transitionHooks,
+        );
       }
       if (generation !== this.storageGeneration) return false;
       await this.snapshots.preload([...this.computeStartupSeedSet()]);
@@ -532,9 +544,7 @@ export class SessionHandle {
       if (unreadable.size > 0) {
         const residentExecutionIds = this.snapshots.getExecutionIdMap();
         for (const streamId of this.transcripts.keys()) {
-          const executionId =
-            residentExecutionIds.get(streamId) ??
-            this.transcripts.getSummaryMeta(streamId)?.executionId;
+          const executionId = residentExecutionIds.get(streamId);
           if (executionId && unreadable.has(executionId)) {
             candidateSet.add(streamId);
           }
@@ -561,63 +571,59 @@ export class SessionHandle {
       );
     }
     // Resident snapshot records already resolved their execution id from the
-    // sidecar when they were seeded (#9947); only a candidate outside the
-    // seed needs the one-file sidecar read below.
+    // sidecar when they were seeded (#9947). A candidate outside both the
+    // checkpointed scan and the resident set resolves through the authored
+    // `meta.streamId` index — one full-directory read, only when needed. A
+    // stream absent from all three stays unmapped and is closed as
+    // interrupted with nothing recorded.
     const executionIds = new Map([
       ...scannedExecutionIds,
       ...this.snapshots.getExecutionIdMap(),
     ]);
-    const unreadableStreams = new Map<StreamTabId, string>();
-    // Bound the one-file ownership scan. Each mapper is self-contained: one
-    // unreadable sidecar is logged and marked unclassified, never allowed to
-    // fail the whole pass.
-    await pMap(
-      candidates.filter((streamId) => !executionIds.has(streamId)),
-      async (streamId) => {
-        // The stream→execution reverse edge is the persisted sidecar FK;
-        // name resemblance is never ownership. Read that authority first and
-        // fall back to the always-resident summary mirror. The mirror arm is
-        // load-bearing beyond legacy streams without a persisted FK: `run.start`
-        // publishes to the mirror synchronously while the sidecar FK flush is
-        // async, so a crash inside that window leaves the mirror as the only
-        // record of ownership. A stream with neither stays unmapped and is
-        // closed as interrupted with nothing recorded.
-        try {
-          const persisted =
-            await this.snapshots.readPersistedExecutionId(streamId);
-          if (persisted) {
-            executionIds.set(streamId, persisted);
-            return;
-          }
-        } catch (error) {
-          // A transient storage failure proves nothing about this stream.
-          // Its state is unknown, so it is shown as unclassified (Resume
-          // re-reads) rather than falling through to the ready default.
-          unreadableStreams.set(
-            streamId,
-            `execution identity unreadable (${toErrorMessage(error)})`,
-          );
-          logger.warn(
-            `Stream ${streamId} left unclassified after restart: its execution identity could not be read`,
-            { data: error },
-          );
-          return;
-        }
-        const summaryExecutionId =
-          this.transcripts.getSummaryMeta(streamId)?.executionId;
-        if (summaryExecutionId) {
-          executionIds.set(streamId, summaryExecutionId);
-        }
-      },
-      { concurrency: RESTART_REPAIR_IO_CONCURRENCY },
+    const unmapped = candidates.filter(
+      (streamId) => !executionIds.has(streamId),
     );
+    // Streams the index could not prove unowned. Their state is unknown, so
+    // they are shown as unavailable (Delete clears them, Resume re-reads)
+    // instead of being settled as interrupted on a guess.
+    const unreadableStreams = new Map<StreamTabId, string>();
+    if (unmapped.length > 0) {
+      try {
+        const { byStream, unreadable } = await readExecutionStreamIndex();
+        for (const streamId of unmapped) {
+          const executionId = byStream.get(streamId);
+          if (executionId) executionIds.set(streamId, executionId);
+        }
+        // An execution whose storage could not be read has no `meta.streamId`
+        // to attribute, and it may be the owner of any stream still unmapped
+        // here. Attribute the unreadable rows to those streams rather than
+        // letting them fall through to the ready default.
+        if (unreadable.size > 0) {
+          const cause = `${unreadable.size} execution record(s) could not be read`;
+          for (const streamId of unmapped) {
+            if (!executionIds.has(streamId)) {
+              unreadableStreams.set(streamId, cause);
+            }
+          }
+        }
+      } catch (error) {
+        // The index proves nothing when it fails, so neither does the absence
+        // of these streams from it.
+        const cause = `execution identity unreadable (${toErrorMessage(error)})`;
+        for (const streamId of unmapped) unreadableStreams.set(streamId, cause);
+        logger.warn(
+          'Could not read the stream index during restart repair; unmapped streams are left unavailable',
+          { data: error },
+        );
+      }
+    }
     if (this.isRepairSuperseded(generation)) return;
     for (const [streamId, cause] of unreadableStreams) {
       if (
         this.status.getGeneration(streamId) ===
         statusGenerationsAtScan.get(streamId)
       ) {
-        this.status.markUnclassified(streamId, cause, true);
+        this.status.markUnavailable(streamId, streamUnreadableMessage(cause));
       }
     }
 
@@ -644,7 +650,6 @@ export class SessionHandle {
           !unreadableStreams.has(streamId) &&
           (executionIds.has(streamId) || unfinished.has(streamId)),
       ),
-      classificationConcurrency: RESTART_REPAIR_IO_CONCURRENCY,
       isRepairCandidateCurrent: (streamId, expectedExecutionId) => {
         if (
           this.status.getGeneration(streamId) !==
@@ -707,39 +712,41 @@ export class SessionHandle {
   }
 
   /**
-   * End ownership of one execution only after every session-owned durable
-   * writer has drained. Session artifacts persist between two short
-   * owner-token validations — the persisted record and this process's
-   * presence already prove ownership while the session drains, so no file
-   * lock needs to cover unrelated transcript and snapshot I/O. An optional post-drain operation may publish lifecycle state
-   * that is valid only once those artifacts are durable; it still runs before
-   * the lease record is deleted. A drain or post-drain failure abandons the
-   * lease (record retained until this process exits) and rethrows. A poisoned
-   * lease or failed lease deletion also retains the record and rejects this
-   * boundary.
+   * End ownership of one execution after every session-owned durable writer
+   * has drained. An optional post-drain operation publishes lifecycle state
+   * that belongs after those artifacts; it runs before the claim is unlinked.
+   * The claim is unlinked whatever the drain did: resumability is the
+   * checkpoint, so a failed flush is logged and rethrown but never changes
+   * who owns the run. A release failure never masks a drain failure: the
+   * drain's error is the one the caller sees, and the release's is logged.
    * This is the one exit choreography every run driver calls.
    */
   async releaseExecutionLease(
     executionId: ExecutionId,
     afterArtifactsDrained?: () => void | Promise<void>,
   ): Promise<void> {
+    let drainError: unknown;
     try {
       await validateOwnedExecutionLease(executionId);
       await this.flushArtifacts(executionId);
-      await validateOwnedExecutionLease(executionId);
-      if (afterArtifactsDrained && isOwnedExecutionLeaseDurable(executionId)) {
-        await afterArtifactsDrained();
-      }
+      await afterArtifactsDrained?.();
     } catch (error) {
-      abandonOwnedExecutionLease(executionId);
-      throw error;
+      drainError = error;
+      logger.warn(
+        `Execution ${executionId}: final artifacts did not all persist; releasing its lease anyway`,
+        { data: error },
+      );
     }
-    const completion = await completeOwnedExecutionLease(executionId);
-    if (completion.status === 'released') return;
-    if (completion.reason === 'release-failed') throw completion.error;
-    throw new Error(
-      `Execution ${executionId} retained its lease because required artifacts are not durable.`,
-    );
+    try {
+      await releaseOwnedExecutionLease(executionId);
+    } catch (releaseError) {
+      if (drainError === undefined) throw releaseError;
+      logger.warn(
+        `Execution ${executionId}: its lease could not be released after its final artifacts failed`,
+        { data: releaseError },
+      );
+    }
+    if (drainError !== undefined) throw drainError;
   }
 
   /** Persist one execution's trace plus the session's shared artifact stores. */
@@ -955,13 +962,13 @@ export function forEachLiveSession(
  * Each such execution gets the same durable settlement the CLI has always
  * given its own: the CANCELLED outcome, its flow record preserved so
  * `deriveResumability` can still offer the checkpoint, and its lease record
- * deleted rather than left for a later launch to reclaim.
+ * deleted rather than left for a later launch to prove dead.
  *
  * Bounded by the caller's phase deadline — a host that cannot exit because a
  * release is slow would be worse than the unsettled record. Once `signal`
  * fires, every remaining execution is named in the log instead of being
  * silently skipped: what is left behind is recoverable (the next launch
- * proves this process dead through its presence socket) but not free.
+ * proves this process dead from its pid) but not free.
  */
 export async function settleLiveSessionExecutions(
   signal: AbortSignal,
@@ -979,46 +986,30 @@ export async function settleLiveSessionExecutions(
       );
       continue;
     }
-    let runWithOwnership: OwnedExecutionLeaseScope | undefined;
+    // Skips both a run whose driver already settled it and one this process
+    // never owned (a run another TeXRA process holds).
+    if (!ownsExecutionLease(executionId)) continue;
     try {
-      // Skips both a run whose driver already settled it and one this
-      // process never owned (an adopted or foreign execution).
-      runWithOwnership = captureOwnedExecutionLeaseIfPresent(executionId);
-    } catch (error) {
-      // Ownership moved between the registry read and this turn — a release
-      // in flight, or a later generation of the same id. Nothing to settle.
-      logger.debug(
-        `Execution ${executionId} is no longer settleable at host exit: ${String(error)}`,
-      );
-      continue;
-    }
-    if (!runWithOwnership) continue;
-    try {
-      await runWithOwnership(() =>
-        session.releaseExecutionLease(executionId, async () => {
-          const finalization = await finalizeExecution({
-            executionId,
-            outcome: RUN_OUTCOME.CANCELLED,
-            flowRecord: 'preserve',
-            // A driver that reached its own terminal write between the
-            // registry read above and this one owns the result: this drain
-            // records what the exit interrupted, never what already finished.
-            keepExistingOutcome: true,
-          });
-          if (finalization.status === 'failed') {
-            // Rejecting here is what keeps the lease record: an execution
-            // whose terminal outcome never reached disk must not look
-            // settled to the next launch.
-            throw new Error(
-              `Failed to persist the CANCELLED outcome for execution ${executionId}`,
-              { cause: finalization.error },
-            );
-          }
-        }),
-      );
+      await session.releaseExecutionLease(executionId, async () => {
+        const finalization = await finalizeRun({
+          executionId,
+          outcome: RUN_OUTCOME.CANCELLED,
+          flowRecord: 'preserve',
+          // A driver that reached its own terminal write between the
+          // registry read above and this one owns the result: this drain
+          // records what the exit interrupted, never what already finished.
+          keepExistingOutcome: true,
+        });
+        if (!finalization.ok) {
+          throw new Error(
+            `Failed to persist the CANCELLED outcome for execution ${executionId}`,
+            { cause: finalization.error },
+          );
+        }
+      });
     } catch (error) {
       logger.warn(
-        `Failed to settle execution ${executionId} at host exit; its record is repaired on a later launch`,
+        `Failed to settle execution ${executionId} at host exit; a later launch classifies it from its checkpoint`,
         { data: error },
       );
     }

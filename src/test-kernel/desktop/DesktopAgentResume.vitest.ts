@@ -6,13 +6,16 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Local imports
 import type { ResultEvent } from '@agent/trace';
-import { ToolUseAgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { getExecutionStore } from '@agent/storage';
+import {
+  AgentConfigSchema,
+  ToolUseAgentConfigSchema,
+} from '@agent/core/definition/AgentConfig';
 import * as AgentExecution from '@agent/runtime/executeAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import * as AgentRunner from '@agent/runtime/runAgent';
-import { ResumeAdmissionCancelledError } from '@agent/runtime/executeAgent';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
 import {
@@ -44,6 +47,24 @@ const config = ToolUseAgentConfigSchema.parse({
   model: 'deepseekproT',
   agentCategory: AgentCategory.ToolUse,
 });
+const workflowConfig = AgentConfigSchema.parse({
+  agent: 'proofreader',
+  model: 'deepseekproT',
+  agentCategory: AgentCategory.Workflow,
+});
+
+/** Persist the durable run record `resumeRun` resolves before launching. */
+async function persistRunRecord(
+  category: 'toolUse' | 'workflow',
+): Promise<void> {
+  const store = getExecutionStore(executionId);
+  await store.writeMeta({
+    timestamp: '2026-08-23T00:00:00.000Z',
+    streamId: stream,
+    identity: { kind: 'agent', agent: 'proofreader' },
+  });
+  await store.writeRunRecord(category === 'toolUse' ? config : workflowConfig);
+}
 
 function failedResult(
   category: ResultEvent['category'],
@@ -145,25 +166,27 @@ function createResumeHarness(): {
   return { owner, session, dispose };
 }
 
-function mockWorkflowResume(): void {
+async function mockWorkflowResume(): Promise<void> {
+  await persistRunRecord('workflow');
   retrieveSessionResumeData.mockResolvedValue({
     type: 'workflow',
-    agentConfig: config,
+    agentConfig: workflowConfig,
     executionId,
   });
 }
 
 /** Hold workflow resume data retrieval open until the test releases it. */
-function gateWorkflowResume(): {
+async function gateWorkflowResume(): Promise<{
   started: Promise<void>;
   release: () => void;
-} {
+}> {
+  await persistRunRecord('workflow');
   const started = createDeferred();
   const gate = createDeferred();
   retrieveSessionResumeData.mockImplementation(async () => {
     started.resolve();
     await gate.promise;
-    return { type: 'workflow', agentConfig: config, executionId };
+    return { type: 'workflow', agentConfig: workflowConfig, executionId };
   });
   return { started: started.promise, release: () => gate.resolve() };
 }
@@ -176,7 +199,7 @@ describe('desktop process resume owner', () => {
   });
 
   it('resumes while no BrowserWindow presentation exists', async () => {
-    mockWorkflowResume();
+    await mockWorkflowResume();
     const harness = createResumeHarness();
 
     await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(true);
@@ -184,7 +207,7 @@ describe('desktop process resume owner', () => {
   });
 
   it('presents one fallback when workflow resume fails before lifecycle startup', async () => {
-    mockWorkflowResume();
+    await mockWorkflowResume();
     runAgent.mockRejectedValue(new Error('launch failed'));
     const harness = createResumeHarness();
     const presenter = attachResultPresenter(harness.session);
@@ -199,7 +222,7 @@ describe('desktop process resume owner', () => {
   });
 
   it('leaves post-lifecycle workflow failure presentation to the terminal result', async () => {
-    mockWorkflowResume();
+    await mockWorkflowResume();
     const harness = createResumeHarness();
     failAfterLifecycle(
       harness.session,
@@ -213,7 +236,7 @@ describe('desktop process resume owner', () => {
   });
 
   it('replays one detached post-lifecycle workflow failure on replacement', async () => {
-    mockWorkflowResume();
+    await mockWorkflowResume();
     const harness = createResumeHarness();
     failAfterLifecycle(
       harness.session,
@@ -234,6 +257,7 @@ describe('desktop process resume owner', () => {
   });
 
   it('leaves post-lifecycle tool-use failure presentation to the terminal result and restores follow-ups', async () => {
+    await persistRunRecord('toolUse');
     retrieveSessionResumeData.mockResolvedValue(
       createToolUseResumeData({ streamId: stream, executionId }),
     );
@@ -259,7 +283,7 @@ describe('desktop process resume owner', () => {
   });
 
   it('does not duplicate a terminal resume failure presentation', async () => {
-    mockWorkflowResume();
+    await mockWorkflowResume();
     const harness = createResumeHarness();
     failAfterLifecycle(harness.session, 'workflow', 'terminal resume failed');
 
@@ -270,7 +294,7 @@ describe('desktop process resume owner', () => {
   });
 
   it('reports a resume failure that follows a completed terminal result', async () => {
-    mockWorkflowResume();
+    await mockWorkflowResume();
     const harness = createResumeHarness();
     runAgent.mockImplementation(async (_request, options) => {
       await options.onRun?.({} as never);
@@ -296,7 +320,7 @@ describe('desktop process resume owner', () => {
   });
 
   it('cancels an in-flight resume before shutdown can launch it', async () => {
-    const retrieval = gateWorkflowResume();
+    const retrieval = await gateWorkflowResume();
     const harness = createResumeHarness();
 
     const resume = harness.owner.tryResumeStream(stream);
@@ -309,7 +333,7 @@ describe('desktop process resume owner', () => {
   });
 
   it('does not resume or recreate a stream deleted during retrieval', async () => {
-    const retrieval = gateWorkflowResume();
+    const retrieval = await gateWorkflowResume();
     const harness = createResumeHarness();
 
     const resume = harness.owner.tryResumeStream(stream);
@@ -323,23 +347,16 @@ describe('desktop process resume owner', () => {
   });
 
   it('rejects a stale process store after another process deletes the stream', async () => {
-    mockWorkflowResume();
+    await mockWorkflowResume();
     const harness = createResumeHarness();
     vi.spyOn(
       harness.session.transcripts,
       'hasAuthoritativeStream',
     ).mockResolvedValue(false);
-    runAgent.mockImplementation(async (_request, options) => {
-      if ((await options.canAcquireResumeLease?.()) === false) {
-        throw new ResumeAdmissionCancelledError(executionId);
-      }
-      return completedRunResult();
-    });
 
     await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(retrieveSessionResumeData).not.toHaveBeenCalled();
     expect(harness.session.transcripts.has(stream)).toBe(true);
-
-    const presenter = attachResultPresenter(harness.session);
-    expect(presenter.emit).not.toHaveBeenCalled();
   });
 });

@@ -1,10 +1,8 @@
 import type { StatusEvent } from '@agent/trace';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import type { OwnerHold } from '@agent/storage/leaseOwnerLiveness';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  type ExecutionId,
   type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
@@ -28,28 +26,6 @@ type TerminalTransitionCause = Extract<
   StreamTransitionCause,
   'lifecycle' | 'restart-repair'
 >;
-
-/**
- * What restart classification established about a stream that has no phase
- * in this process. `held`: another TeXRA process holds its execution lease;
- * `hold` says which process, whether it was proven alive, and whether an
- * explicit reclaim of `executionId` would remove its record.
- * `unclassified`: its lease, metadata, or flow record could not be read, so
- * nothing is known and nothing was mutated; `cause` is shown to the user.
- * `retryable` is false for present-but-malformed data, where Resume fails
- * deterministically and only Delete clears the run.
- */
-export type StreamHoldState =
-  | {
-      readonly kind: 'held';
-      readonly executionId: ExecutionId;
-      readonly hold: OwnerHold;
-    }
-  | {
-      readonly kind: 'unclassified';
-      readonly cause: string;
-      readonly retryable: boolean;
-    };
 
 export interface StreamPhaseState {
   readonly phase: StreamPhase;
@@ -90,13 +66,13 @@ function effectiveState(entry: StreamEntry): StreamPhaseState {
 export class StreamStatusMachine {
   private readonly streams = new Map<StreamTabId, StreamEntry>();
   /**
-   * Streams restart classification could not settle on a phase: held by
-   * another process, or unreadable. RUNNING/WAITING mean a live flow in this
-   * process, and this process never adopts anyone else's run, so these carry
-   * no phase. Display facts for the session renderer, published with the
-   * next full metadata sync rather than as a phase transition.
+   * Streams restart classification could not settle on a phase (held by
+   * another process, or their run state unreadable), keyed to the detail the
+   * user is shown. RUNNING/WAITING mean a live flow in this process, and this
+   * process never adopts anyone else's run, so these carry no phase. Published
+   * with the next full metadata sync rather than as a phase transition.
    */
-  private readonly holds = new Map<StreamTabId, StreamHoldState>();
+  private readonly holds = new Map<StreamTabId, string>();
 
   /**
    * @param eventHub Session hub this machine publishes canonical `status` facts
@@ -116,14 +92,6 @@ export class StreamStatusMachine {
   /** Opaque identity replaced whenever this stream's status entry changes. */
   getGeneration(stream: StreamTabId): object | undefined {
     return this.streams.get(stream);
-  }
-
-  /** Whether an earlier status read, including absence, is still current. */
-  isCurrentGeneration(
-    stream: StreamTabId,
-    generation: object | undefined,
-  ): boolean {
-    return this.streams.get(stream) === generation;
   }
 
   getSubstate(stream: StreamTabId): StreamSubstate | undefined {
@@ -297,22 +265,9 @@ export class StreamStatusMachine {
     return false;
   }
 
-  /** Record that another process holds `stream`'s execution. */
-  markHeld(
-    stream: StreamTabId,
-    executionId: ExecutionId,
-    hold: OwnerHold,
-  ): void {
-    this.holds.set(stream, { kind: 'held', executionId, hold });
-  }
-
-  /** Record that `stream`'s run state could not be read; nothing was mutated. */
-  markUnclassified(
-    stream: StreamTabId,
-    cause: string,
-    retryable: boolean,
-  ): void {
-    this.holds.set(stream, { kind: 'unclassified', cause, retryable });
+  /** Record that `stream` has no phase here and why; nothing was mutated. */
+  markUnavailable(stream: StreamTabId, detail: string): void {
+    this.holds.set(stream, detail);
   }
 
   /**
@@ -325,7 +280,8 @@ export class StreamStatusMachine {
     this.holds.delete(stream);
   }
 
-  holdState(stream: StreamTabId): StreamHoldState | undefined {
+  /** The detail recorded by `markUnavailable`, if the stream has no phase here. */
+  holdState(stream: StreamTabId): string | undefined {
     return this.holds.get(stream);
   }
 
@@ -358,10 +314,6 @@ export class StreamStatusMachine {
       values.set(stream, effectiveState(entry));
     }
     return values;
-  }
-
-  isActiveOrResuming(stream: StreamTabId): boolean {
-    return isActivePhase(this.get(stream));
   }
 
   isInFlight(stream: StreamTabId): boolean {

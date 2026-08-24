@@ -93,7 +93,7 @@ async function seedOwnedStream(
     await backend.state.snapshots.load([ids.stream]);
   }
   registerStream(backend, ids);
-  await writeExecutionConfig(ids.executionId);
+  await writeExecutionConfig(ids.executionId, { streamId: ids.stream });
   await backend.state.flush();
 }
 
@@ -110,7 +110,7 @@ async function seedOrphanedSnapshots(
       toolUseConfig('search', 'deepseekproT'),
       executionId,
     );
-    await writeExecutionConfig(executionId);
+    await writeExecutionConfig(executionId, { streamId: stream });
   }
   await seed.flush();
   return seed;
@@ -594,7 +594,7 @@ describe('ProgressBackend cleanup', () => {
       toolUseConfig('search', 'deepseekproT'),
       executionId,
     );
-    await writeExecutionConfig(executionId);
+    await writeExecutionConfig(executionId, { streamId: stream });
     await backend.state.flush();
     await GoalStore.start(stream, 'finish same-session cleanup');
     const deletion = await backend.state.snapshots.stageDeleteStream(stream);
@@ -631,6 +631,12 @@ describe('ProgressBackend cleanup', () => {
 
   const orphanSweepFailures: Array<{
     case: string;
+    /**
+     * What survives for the failing pair. A locked stream sidecar is
+     * retained, but the execution-keyed pass still removes its registered
+     * execution; a locked execution dir retains both.
+     */
+    failingSurvives: { sidecar: boolean; execution: boolean };
     install: (
       backend: IsolatedBackend,
       failing: StreamExecution,
@@ -638,6 +644,7 @@ describe('ProgressBackend cleanup', () => {
   }> = [
     {
       case: 'one orphan cleanup fails',
+      failingSurvives: { sidecar: true, execution: false },
       install: (backend, failing) => {
         const stageDeleteStream =
           backend.state.snapshots.stageDeleteStream.bind(
@@ -655,6 +662,7 @@ describe('ProgressBackend cleanup', () => {
     },
     {
       case: 'one execution cleanup fails',
+      failingSurvives: { sidecar: true, execution: true },
       install: (backend, failing) => {
         const stores = executionDeleter(backend);
         const deleteExecution = stores.deleteExecution.bind(stores);
@@ -672,7 +680,7 @@ describe('ProgressBackend cleanup', () => {
 
   it.each(orphanSweepFailures)(
     'continues sweeping streamData orphans when $case',
-    async ({ install }) => {
+    async ({ install, failingSurvives }) => {
       const failing = toolStreamAndExecution('d6966d');
       const swept = toolStreamAndExecution('e6966e');
       await seedOrphanedSnapshots([failing, swept]);
@@ -689,8 +697,14 @@ describe('ProgressBackend cleanup', () => {
           `Skipping orphaned execution cleanup for ${failing.executionId}; startup will continue.`,
           { data: expect.any(Error) },
         );
-        await expectStored(streamDataDir(failing.stream), true);
-        await expectStored(`executions/${failing.executionId}`, true);
+        await expectStored(
+          streamDataDir(failing.stream),
+          failingSurvives.sidecar,
+        );
+        await expectStored(
+          `executions/${failing.executionId}`,
+          failingSurvives.execution,
+        );
         await expectStored(streamDataDir(swept.stream), false);
         await expectStored(`executions/${swept.executionId}`, false);
       } finally {
@@ -725,9 +739,10 @@ describe('ProgressBackend cleanup', () => {
       await second.backend.state.load();
 
       expect(second.backend.state.streamLogs.has(stream)).toBe(true);
-      await expect(
-        second.backend.state.snapshots.readPersistedExecutionId(stream),
-      ).resolves.toBe(executionId);
+      await second.backend.state.snapshots.preload([stream]);
+      expect(
+        second.backend.state.snapshots.getRunMetadata(stream).executionId,
+      ).toBe(executionId);
       await expectStored(streamDataDir(stream), true);
       await expectStored(`executions/${executionId}`, true);
     } finally {

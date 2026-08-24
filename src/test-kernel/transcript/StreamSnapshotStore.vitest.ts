@@ -29,8 +29,8 @@ import type {
   WorkPlanSnapshot,
 } from '@shared/schemas';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
@@ -43,7 +43,7 @@ import {
 } from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files/storageFS';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 const STREAM = 'polish@gpt#abc123def' as StreamTabId;
 const OTHER_STREAM = 'review@gpt#fed321cba' as StreamTabId;
@@ -189,7 +189,6 @@ describe('StreamSnapshotStore', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('persists todos/plan/usage from direct mutators and reassembles them on a fresh store', async () => {
@@ -1009,45 +1008,6 @@ describe('StreamSnapshotStore', () => {
     expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
   });
 
-  it('treats corrupt-present ownership metadata as unreadable, not missing', async () => {
-    await StorageFS.ensureDir(streamDataDir(STREAM));
-    await StorageFS.write(
-      path.join(streamDataDir(STREAM), 'meta.json'),
-      '{bad json',
-    );
-
-    const store = new StreamSnapshotStore();
-    await expect(store.readPersistedExecutionId(STREAM)).rejects.toBeInstanceOf(
-      SyntaxError,
-    );
-  });
-
-  it('rejects valid-JSON ownership metadata with an invalid execution FK', async () => {
-    await StorageFS.ensureDir(streamDataDir(STREAM));
-    await StorageFS.write(
-      path.join(streamDataDir(STREAM), 'meta.json'),
-      JSON.stringify({ schemaVersion: 1, executionId: 42 }),
-    );
-
-    const store = new StreamSnapshotStore();
-    await expect(store.readPersistedExecutionId(STREAM)).rejects.toThrow(
-      'Invalid persisted stream metadata ownership',
-    );
-  });
-
-  it('rejects non-object ownership metadata instead of treating it as missing', async () => {
-    await StorageFS.ensureDir(streamDataDir(STREAM));
-    await StorageFS.write(
-      path.join(streamDataDir(STREAM), 'meta.json'),
-      JSON.stringify(['not', 'a', 'meta']),
-    );
-
-    const store = new StreamSnapshotStore();
-    await expect(store.readPersistedExecutionId(STREAM)).rejects.toThrow(
-      'Invalid persisted stream metadata ownership',
-    );
-  });
-
   it('usage-only preload supplies usage without warning and preserves live deltas', async () => {
     await writeStreamFile(STREAM, 'usageStats.json', {
       [RUN]: usage(1, 2, 0.1),
@@ -1147,7 +1107,6 @@ describe('StreamSnapshotStore', () => {
     });
 
     const store = new StreamSnapshotStore();
-    expect(await store.readPersistedExecutionId(STREAM)).toBeUndefined();
     await store.load([STREAM]);
 
     expect(store.getRunMetadata(STREAM).executionId).toBeUndefined();
@@ -2858,7 +2817,6 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   function unseededWarnings(warnSpy: {

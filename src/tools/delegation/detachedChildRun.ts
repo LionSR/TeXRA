@@ -12,11 +12,8 @@
  */
 
 // Local imports
-import {
-  runWithOwnedExecutionLeaseLaunchGuard,
-  type OwnedExecutionLeaseScope,
-} from '@agent/storage/executionLease';
-import { registerOwnedExecution } from '@agent/storage/executionLifecycle';
+import { runWithOwnedExecutionLeaseLaunchGuard } from '@agent/storage/executionLease';
+import { registerExecution } from '@agent/storage/executionLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   startChildRunLoop,
@@ -53,24 +50,16 @@ export async function registerChildExecution(input: {
   readonly agentName: string;
   readonly userFollowUpSupport: UserFollowUpSupport;
   readonly parentExecutionId?: ExecutionId;
-}): Promise<{
-  readonly childStreamId: StreamTabId;
-  readonly runWithOwnership: OwnedExecutionLeaseScope;
-}> {
+}): Promise<{ readonly childStreamId: StreamTabId }> {
   const { executionId, config } = input;
   const childStreamId = getStreamTabId(config.agent, { executionId });
-  const runWithOwnership = await registerOwnedExecution(
-    executionId,
-    config,
-    input.agentName,
-    {
-      streamId: childStreamId,
-      identity: { kind: 'agent', agent: config.agent },
-      userFollowUpSupport: input.userFollowUpSupport,
-      parentExecutionId: input.parentExecutionId,
-    },
-  );
-  return { childStreamId, runWithOwnership };
+  await registerExecution(executionId, config, input.agentName, {
+    streamId: childStreamId,
+    identity: { kind: 'agent', agent: config.agent },
+    userFollowUpSupport: input.userFollowUpSupport,
+    parentExecutionId: input.parentExecutionId,
+  });
+  return { childStreamId };
 }
 
 /** The strategy wiring a launch site supplies inside the guard. */

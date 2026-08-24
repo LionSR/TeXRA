@@ -19,8 +19,8 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -33,7 +33,7 @@ import {
   StreamSnapshotStore,
 } from '@transcript';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 /** Persists a single stream-log entry so the stream is discoverable on disk. */
 async function appendLogEntry(
@@ -90,7 +90,6 @@ describe('assembleTrace', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('resolves a registered execution from its metadata without any sidecar scan (#9590 A1)', async () => {

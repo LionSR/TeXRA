@@ -16,7 +16,7 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { FileLocation, ToolConfig } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
   createExternalLocation,
   createWorkspaceLocation,
@@ -58,11 +58,10 @@ const compilePdfConfig: ToolConfig = {
 
 const logger: LatexTrace = spiedTrace();
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 afterEach(async () => {
   vi.clearAllMocks();
-  await cleanupTempDirs(tempDirs);
 });
 
 describe('DiffFileProcessor line formatting', () => {
@@ -167,14 +166,7 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
     texPath: string;
     figurePath: string;
   }> {
-    // Canonicalize up front: on macOS os.tmpdir() lives under a /tmp -> /private/tmp
-    // symlink, and resolveLatexDir follows real paths. Without this, the
-    // workspace root and the realpath'd baseDir it computes would disagree,
-    // and mirrorWorkspaceFile would (correctly, but confusingly for this test)
-    // classify the figure as external and skip mirroring it.
-    const tempDir = await realpath(
-      await makeTempDir('texra-latex-media-', tempDirs),
-    );
+    const tempDir = await makeTempDir('texra-latex-media-', tempDirs);
     const workspaceDir = path.join(tempDir, 'workspace');
     const storageRoot = path.join(tempDir, 'storage');
     const figureDir = path.join(workspaceDir, 'figures');

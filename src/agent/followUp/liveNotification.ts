@@ -3,9 +3,9 @@
  *
  * Producers that fire outside a model turn — execution-status subscriptions,
  * GitHub polling sources — share the same sequence: submit as a
- * `live_notification` fenced to the continuation generation the producer was
- * bound in, refresh the queued-follow-up view once the delivery lands, and warn
- * instead of leaking an unhandled rejection when it does not. Only the failure
+ * `live_notification` to whatever continuation the stream has now, refresh
+ * the queued-follow-up view once the delivery lands, and warn instead of
+ * leaking an unhandled rejection when it does not. Only the failure
  * message and its data belong to the producer.
  */
 
@@ -26,8 +26,6 @@ export function deliverLiveNotification(delivery: {
    * must travel with the notification rather than be re-derived at delivery.
    */
   readonly session?: SessionHandle;
-  /** Continuation generation the producer was bound in. */
-  readonly expectedGenerationId?: string;
   readonly logger: {
     warn(message: string, options?: { data?: unknown }): void;
   };
@@ -40,7 +38,6 @@ export function deliverLiveNotification(delivery: {
   void submitFollowUp(streamId, delivery.followUp, {
     session,
     mode: 'live_notification',
-    expectedGenerationId: delivery.expectedGenerationId,
   })
     .then((result) => {
       if (result.status !== 'sent' && result.status !== 'queued') return;

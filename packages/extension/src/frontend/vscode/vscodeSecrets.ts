@@ -7,7 +7,7 @@
  */
 import * as vscode from 'vscode';
 
-import type { PlatformSecrets } from '@platform/secrets';
+import { secretWithEnvOverride, type PlatformSecrets } from '@platform/secrets';
 
 export class VscodeSecrets implements PlatformSecrets {
   private readonly storage: vscode.SecretStorage;
@@ -17,9 +17,11 @@ export class VscodeSecrets implements PlatformSecrets {
   }
 
   async get(key: string): Promise<string | undefined> {
-    const envValue = process.env[key];
-    if (envValue !== undefined) return envValue;
-    return this.getStored(key);
+    return secretWithEnvOverride(
+      key,
+      (k) => process.env[k],
+      (k) => this.getStored(k),
+    );
   }
 
   async getStored(key: string): Promise<string | undefined> {

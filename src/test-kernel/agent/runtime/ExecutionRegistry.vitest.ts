@@ -4,10 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import { getExecutionStore } from '@agent/storage';
 import type { AgentTrace, ResultEvent } from '@agent/trace';
-import {
-  ExecutionLeaseLostError,
-  type OwnedExecutionLeaseScope,
-} from '@agent/storage/executionLease';
 import type {
   AgentExecutionHandle,
   LiveToolUseFlowContext,
@@ -45,14 +41,14 @@ import {
 } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
-  finalizeExecution: vi.fn(),
+  finalizeRun: vi.fn(),
 }));
 
 const channelTraceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
-// terminalPersistence deep-imports finalizeExecution from executionLifecycle
+// The registry deep-imports finalizeRun from executionLifecycle
 // (not the `@agent/storage` barrel), so the spy lives on that leaf module.
 // Mocking both the barrel and the leaf with the same `vi.fn` whose
 // implementation points at `importOriginal`'s barrel export recurses through
@@ -60,17 +56,17 @@ const channelTraceMocks = vi.hoisted(() => ({
 vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
-  storageMocks.finalizeExecution.mockImplementation(actual.finalizeExecution);
+  storageMocks.finalizeRun.mockImplementation(actual.finalizeRun);
   return {
     ...actual,
-    finalizeExecution: storageMocks.finalizeExecution,
+    finalizeRun: storageMocks.finalizeRun,
   };
 });
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
   return {
     ...actual,
-    finalizeExecution: storageMocks.finalizeExecution,
+    finalizeRun: storageMocks.finalizeRun,
   };
 });
 
@@ -91,7 +87,6 @@ type HandleOverrides = {
   agentName?: string;
   category?: AgentCategory;
   trace?: AgentTrace;
-  leaseScope?: OwnedExecutionLeaseScope;
 };
 
 /** Builds an `AgentExecutionHandle` for a toolUse test-subagent, the shape most tests need. */
@@ -109,9 +104,6 @@ function createHandle(
     category: overrides.category,
     trace: overrides.trace,
   });
-  handle.attachExecutionLeaseScope(
-    overrides.leaseScope ?? ((operation) => operation()),
-  );
   return handle;
 }
 
@@ -202,38 +194,6 @@ function trackSuspendedWaitingHandle(
 }
 
 describe('executionRegistry', () => {
-  it('promotes a pending child activation without an ownership gap', () => {
-    const { registry } = createRegistry();
-    const activationEvents: boolean[] = [];
-    const executionId = 'pending-child-exec' as ExecutionId;
-    const parentStreamId = 'pending-parent' as StreamTabId;
-    const childStreamId = 'pending-child' as StreamTabId;
-    const detach = registry.addChildActivationListener((_activation, active) =>
-      activationEvents.push(active),
-    );
-
-    try {
-      const release = registry.reserveChildActivation({
-        executionId,
-        parentStreamId,
-        childStreamId,
-        interrupt: vi.fn(),
-        detach: vi.fn(),
-        isDetached: () => false,
-      });
-      expect(activationEvents).toEqual([true]);
-
-      registry.track(createHandle(executionId, parentStreamId, childStreamId));
-      expect(activationEvents).toEqual([true, false]);
-
-      release();
-      expect(activationEvents).toEqual([true, false]);
-    } finally {
-      detach();
-      registry.dispose();
-    }
-  });
-
   it('retains and detaches a parent whose child is still activating', () => {
     const { registry } = createRegistry();
     const executionId = 'queued-child-exec' as ExecutionId;
@@ -293,32 +253,6 @@ describe('executionRegistry', () => {
     expect(observedCompletion).toBe(true);
   });
 
-  it('settles without persisting a stopped waiting handle after lease loss', async () => {
-    const { streamStatus, registry } = createRegistry();
-    const executionId = 'exec-waiting-lease-lost' as ExecutionId;
-    const streamId = 'stream-waiting-lease-lost' as StreamTabId;
-    storageMocks.finalizeExecution.mockClear();
-
-    try {
-      const handle = trackSuspendedWaitingHandle(registry, streamStatus, {
-        executionId,
-        childStreamId: streamId,
-      });
-      handle.markExecutionLeaseLost();
-
-      expect(registry.kill(executionId)).toBe(true);
-      await expect(handle.result).resolves.toMatchObject({
-        type: 'result',
-        outcome: RUN_OUTCOME.CANCELLED,
-        executionId,
-      });
-      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
-      expect(registry.getHandle(executionId)).toBeUndefined();
-    } finally {
-      registry.dispose();
-    }
-  });
-
   it('observes handle replacements and removal in order', () => {
     const { registry } = createRegistry();
     const executionId = 'exec-observe-handle';
@@ -338,17 +272,11 @@ describe('executionRegistry', () => {
       },
     );
     registry.track(first);
-    const seen: unknown[] = [];
-    const detach = registry.addListener(executionId, (handle) => {
-      seen.push(handle);
-    });
 
     registry.track(second);
     registry.untrack(executionId);
 
-    expect(seen).toEqual([second, undefined]);
     expect(registrations).toEqual([first, second, undefined]);
-    detach();
     detachRegistrations();
     registry.dispose();
   });
@@ -497,23 +425,17 @@ describe('executionRegistry', () => {
     const childStreamId =
       'child-waiting-kill-publish-result-test' as StreamTabId;
     const trace = spiedTrace({ emit: vi.fn() }, { strict: true });
-    const leaseScopeInvoked = vi.fn();
-    const leaseScope: OwnedExecutionLeaseScope = (operation) => {
-      leaseScopeInvoked();
-      return operation();
-    };
 
     try {
       const handle = trackSuspendedWaitingHandle(registry, streamStatus, {
         executionId,
         parentStreamId,
         childStreamId,
-        overrides: { trace, leaseScope },
+        overrides: { trace },
       });
 
       expect(registry.kill(executionId)).toBe(true);
       await handle.result;
-      expect(leaseScopeInvoked).toHaveBeenCalledOnce();
 
       expect(publishResult).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
@@ -586,7 +508,7 @@ describe('executionRegistry', () => {
   });
 
   it('hands a waiting stop to a successor tracked during cleanup', async () => {
-    storageMocks.finalizeExecution.mockClear();
+    storageMocks.finalizeRun.mockClear();
     const publishResult = vi.fn();
     const { streamStatus, registry } = createRegistry({ publishResult });
     const executionId = 'exec-waiting-stop-handoff' as ExecutionId;
@@ -623,39 +545,8 @@ describe('executionRegistry', () => {
 
       expect(registry.getHandle(executionId)).toBe(successor);
       expect(publishResult).not.toHaveBeenCalled();
-      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
+      expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('does not let lost-generation recovery mutate a successor handle or lease', async () => {
-    const releaseLease = vi.fn(async () => undefined);
-    const { streamStatus, registry } = createRegistry({
-      releaseRootExecutionLease: releaseLease,
-    });
-    const executionId = 'exec-waiting-lost-generation' as ExecutionId;
-    const streamId = 'stream-waiting-lost-generation' as StreamTabId;
-    const lostScope: OwnedExecutionLeaseScope = () => {
-      throw new ExecutionLeaseLostError(executionId);
-    };
-
-    try {
-      const previous = trackSuspendedWaitingHandle(registry, streamStatus, {
-        executionId,
-        childStreamId: streamId,
-        overrides: { leaseScope: lostScope },
-      });
-
-      expect(registry.kill(executionId)).toBe(true);
-      const successor = createHandle(executionId, streamId, streamId);
-      registry.track(successor);
-
-      await previous.result;
-      expect(registry.getHandle(executionId)).toBe(successor);
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
-      expect(releaseLease).not.toHaveBeenCalled();
     } finally {
       registry.dispose();
     }
@@ -697,9 +588,8 @@ describe('executionRegistry', () => {
       'parent-waiting-kill-metadata-failure' as StreamTabId;
     const childStreamId = 'child-waiting-kill-metadata-failure' as StreamTabId;
     const durabilityError = new Error('metadata disk write failed');
-    storageMocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
-      stage: 'terminal-status',
+    storageMocks.finalizeRun.mockResolvedValueOnce({
+      ok: false,
       outcomePersisted: false,
       error: durabilityError,
     });
@@ -727,7 +617,6 @@ describe('executionRegistry', () => {
           {
             data: {
               executionId,
-              stage: 'terminal-status',
               outcomePersisted: false,
               error: durabilityError,
             },
@@ -744,11 +633,7 @@ describe('executionRegistry', () => {
     const executionId = 'exec-waiting-cleanup-failure' as ExecutionId;
     const childStreamId = 'child-waiting-cleanup-failure' as StreamTabId;
     const cleanupError = new Error('transcript reload failed');
-    storageMocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'durable',
-      outcomePersisted: true,
-      flowRecord: 'deleted',
-    });
+    storageMocks.finalizeRun.mockResolvedValueOnce({ ok: true });
     channelTraceMocks.warn.mockClear();
 
     try {
@@ -762,7 +647,7 @@ describe('executionRegistry', () => {
       expect(registry.kill(executionId)).toBe(true);
 
       await vi.waitFor(() => {
-        expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
+        expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
           executionId,
           outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'delete',
@@ -783,9 +668,8 @@ describe('executionRegistry', () => {
     const childStreamId =
       'child-waiting-kill-flow-delete-failure' as StreamTabId;
     const cleanupError = new Error('flow delete failed');
-    storageMocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
-      stage: 'flow-record-delete',
+    storageMocks.finalizeRun.mockResolvedValueOnce({
+      ok: false,
       outcomePersisted: true,
       error: cleanupError,
     });
@@ -802,7 +686,7 @@ describe('executionRegistry', () => {
       expect(registry.kill(executionId)).toBe(true);
 
       await vi.waitFor(() => {
-        expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
+        expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
           executionId,
           outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'delete',
@@ -813,7 +697,6 @@ describe('executionRegistry', () => {
         {
           data: {
             executionId,
-            stage: 'flow-record-delete',
             outcomePersisted: true,
             error: cleanupError,
           },
@@ -884,17 +767,12 @@ describe('executionRegistry', () => {
     const executionId = 'exec-waiting-stop-after-claim' as ExecutionId;
     const childStreamId = 'child-waiting-stop-after-claim' as StreamTabId;
     const teardown = vi.fn();
-    storageMocks.finalizeExecution.mockClear();
+    storageMocks.finalizeRun.mockClear();
     let releasePersist: (() => void) | undefined;
-    storageMocks.finalizeExecution.mockImplementationOnce(
+    storageMocks.finalizeRun.mockImplementationOnce(
       async () =>
         new Promise((resolve) => {
-          releasePersist = () =>
-            resolve({
-              status: 'durable',
-              outcomePersisted: true,
-              flowRecord: 'deleted',
-            });
+          releasePersist = () => resolve({ ok: true });
         }),
     );
 
@@ -924,7 +802,7 @@ describe('executionRegistry', () => {
       await expect(handle.result).resolves.toMatchObject({
         outcome: RUN_OUTCOME.COMPLETED,
       });
-      expect(storageMocks.finalizeExecution).toHaveBeenCalledExactlyOnceWith({
+      expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith({
         executionId,
         outcome: RUN_OUTCOME.COMPLETED,
         flowRecord: 'delete',
@@ -1658,7 +1536,6 @@ describe('executionRegistry', () => {
       });
       expect(registry.getToolUseFollowUpTarget(resumingStreamId)).toEqual({
         kind: 'queue',
-        reason: 'resuming',
       });
 
       seedStreamStatusForTest(streamStatus, waitingStreamId, {
@@ -1666,7 +1543,6 @@ describe('executionRegistry', () => {
       });
       expect(registry.getToolUseFollowUpTarget(waitingStreamId)).toEqual({
         kind: 'queue',
-        reason: 'waiting',
       });
 
       seedStreamStatusForTest(streamStatus, stoppedStreamId, {
@@ -1689,7 +1565,6 @@ describe('executionRegistry', () => {
       );
       expect(registry.getToolUseFollowUpTarget(parentStreamId)).toEqual({
         kind: 'queue',
-        reason: 'children_running',
       });
     } finally {
       registry.dispose();

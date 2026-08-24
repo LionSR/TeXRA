@@ -3,11 +3,9 @@ import {
   classifyRun,
   retrieveSessionResumeData,
   type AgentConfig,
-  type ToolUseResumeData,
 } from '@agent/runtime';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createLog('CliToolUseResumeData');
@@ -25,17 +23,6 @@ async function readCliSessionResumeData(
   const streamId = (await getExecutionStore(id).readMeta())?.streamId;
   if (!streamId) return null;
   return (await retrieveSessionResumeData(streamId, id, config)) ?? null;
-}
-
-export async function readCliToolUseResumeData(
-  id: ExecutionId,
-  config: AgentConfig,
-): Promise<ToolUseResumeData | null> {
-  if (config.agentCategory !== AgentCategory.ToolUse) return null;
-
-  const resume = await readCliSessionResumeData(id, config);
-  if (resume?.type !== 'toolUse') return null;
-  return resume;
 }
 
 /**
