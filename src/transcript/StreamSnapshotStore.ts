@@ -842,15 +842,15 @@ export class StreamSnapshotStore {
 
   // Shallow copy: each write is queued, so the record is snapshotted at call
   // time rather than letting later round mutations leak into a pending write.
+  // The sidecar key is derived from OVERLAY_TO_SIDECAR_KEY rather than taken
+  // as a separate param, so a caller can't pass a field/key pair that disagree.
   private writeRoundKeyedField(
     stream: StreamTabId,
-    key:
-      | typeof STREAM_DATA_KEYS.OUTPUT_FILES
-      | typeof STREAM_DATA_KEYS.MISSING_OUTPUTS
-      | typeof STREAM_DATA_KEYS.COMPILE_FAILURES,
     field: 'outputFiles' | 'missingOutputs' | 'compileFailures',
   ): void {
-    this.write(stream, key, { ...this.records.get(stream)?.[field] });
+    this.write(stream, OVERLAY_TO_SIDECAR_KEY[field], {
+      ...this.records.get(stream)?.[field],
+    });
   }
 
   private applyUsageDeltaMemory(
@@ -944,12 +944,7 @@ export class StreamSnapshotStore {
           this.getOrCreateRecord(stream),
           patch,
         ),
-      () =>
-        this.writeRoundKeyedField(
-          stream,
-          STREAM_DATA_KEYS.OUTPUT_FILES,
-          'outputFiles',
-        ),
+      () => this.writeRoundKeyedField(stream, 'outputFiles'),
     );
   }
 
@@ -973,12 +968,7 @@ export class StreamSnapshotStore {
           this.getOrCreateRecord(stream),
           patch,
         ),
-      () =>
-        this.writeRoundKeyedField(
-          stream,
-          STREAM_DATA_KEYS.MISSING_OUTPUTS,
-          'missingOutputs',
-        ),
+      () => this.writeRoundKeyedField(stream, 'missingOutputs'),
     );
   }
 
@@ -1005,12 +995,7 @@ export class StreamSnapshotStore {
           this.getOrCreateRecord(stream),
           patch,
         ),
-      () =>
-        this.writeRoundKeyedField(
-          stream,
-          STREAM_DATA_KEYS.COMPILE_FAILURES,
-          'compileFailures',
-        ),
+      () => this.writeRoundKeyedField(stream, 'compileFailures'),
     );
   }
 
@@ -2147,16 +2132,16 @@ export class StreamSnapshotStore {
     for (const key of keys) {
       switch (key) {
         case STREAM_DATA_KEYS.OUTPUT_FILES:
-          this.writeRoundKeyedField(stream, key, 'outputFiles');
+          this.writeRoundKeyedField(stream, 'outputFiles');
           break;
         case STREAM_DATA_KEYS.USAGE_STATS:
           this.writeUsage(stream);
           break;
         case STREAM_DATA_KEYS.MISSING_OUTPUTS:
-          this.writeRoundKeyedField(stream, key, 'missingOutputs');
+          this.writeRoundKeyedField(stream, 'missingOutputs');
           break;
         case STREAM_DATA_KEYS.COMPILE_FAILURES:
-          this.writeRoundKeyedField(stream, key, 'compileFailures');
+          this.writeRoundKeyedField(stream, 'compileFailures');
           break;
         case STREAM_DATA_KEYS.WORK_PLAN:
           this.writeWorkPlan(stream, record.workPlan);
