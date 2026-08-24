@@ -18,7 +18,6 @@
 
 import { Mutex } from 'async-mutex';
 import pMap from 'p-map';
-import PQueue from 'p-queue';
 import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
@@ -61,6 +60,7 @@ import {
 } from '@shared/schemas';
 
 import { mapToRecord, throwAggregated } from '@utils/core';
+import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 
@@ -86,6 +86,7 @@ import {
   readUsageData,
   type StreamData,
 } from './streamSnapshotRead';
+import type PQueue from 'p-queue';
 import type { StreamSummaryMeta } from './StreamLogStore';
 
 const log = createLog('StreamSnapshotStore');
@@ -462,12 +463,7 @@ export class StreamSnapshotStore {
   private readonly seedQueues = new Map<StreamTabId, PQueue>();
 
   private seedQueueFor(stream: StreamTabId): PQueue {
-    let queue = this.seedQueues.get(stream);
-    if (!queue) {
-      queue = new PQueue({ concurrency: 1 });
-      this.seedQueues.set(stream, queue);
-    }
-    return queue;
+    return getOrCreatePQueue(this.seedQueues, stream);
   }
 
   /**

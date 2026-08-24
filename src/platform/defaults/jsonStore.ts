@@ -1,10 +1,11 @@
 import { chmod, mkdir, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
-import PQueue from 'p-queue';
 import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
+import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
+import type PQueue from 'p-queue';
 
 import type { FileLockProvider, StateStore } from '../interfaces';
 
@@ -162,11 +163,7 @@ export class JsonStore implements StateStore {
     value: unknown,
     missingFallback: JsonRecord,
   ): Promise<void> {
-    let queue = writeQueues.get(this.filePath);
-    if (!queue) {
-      queue = new PQueue({ concurrency: 1 });
-      writeQueues.set(this.filePath, queue);
-    }
+    const queue = getOrCreatePQueue(writeQueues, this.filePath);
     // `add` widens to `T | void` to cover abort via signal/timeout; we pass
     // neither, so the task always runs and resolves with `void`.
     const task = queue.add(() =>

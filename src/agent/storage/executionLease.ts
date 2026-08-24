@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import pDefer from 'p-defer';
-import PQueue from 'p-queue';
 import { z } from 'zod';
 
 import { isFileNotFoundError } from '@common/errors';
@@ -14,6 +13,7 @@ import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files/storageFS';
+import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
 
 import {
   currentLeaseOwner,
@@ -22,6 +22,7 @@ import {
   type OwnerLiveness,
   proveOwnerLiveness,
 } from './leaseOwnerLiveness';
+import type PQueue from 'p-queue';
 
 const log = createLog('ExecutionLease');
 
@@ -644,9 +645,7 @@ export async function runWithExecutionLeaseWriteFence<T>(
   if (lease) return runWithValidatedOwnership(lease, operation);
   // Unleased writers in this process take turns, so that two of them never
   // refuse each other over the maintenance claim the first one holds.
-  const queue =
-    unleasedWriteQueues.get(key) ??
-    unleasedWriteQueues.set(key, new PQueue({ concurrency: 1 })).get(key)!;
+  const queue = getOrCreatePQueue(unleasedWriteQueues, key);
   const claimed = (await queue.add(() =>
     runWithInactiveExecutionLease(executionId, operation),
   )) as InactiveExecutionLeaseResult<T>;

@@ -2294,7 +2294,7 @@
       "name": "ToolEditApprovalResult"
     },
     {
-      "file": "src/tools/citation/rateLimiter.ts",
+      "file": "src/tools/support/rateLimiter.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "abandonOnAbort"
