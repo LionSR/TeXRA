@@ -44,7 +44,7 @@ export const claudeAgentSessionsFor = claudeAgentSessions.for;
  * during platform startup and the core never depends on tool-layer teardown
  * wiring.
  */
-export function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
+function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     killAllSessionBackgroundProcesses(),
   );

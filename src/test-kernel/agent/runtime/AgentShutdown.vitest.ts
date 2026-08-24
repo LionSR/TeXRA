@@ -11,7 +11,6 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   claudeAgentSessionsFor,
   codexThreadsFor,
-  registerAgentShutdownHandlers,
   registerRuntimeShutdownHandlers,
 } from '@tools/agentCliSessionStores';
 
@@ -46,7 +45,9 @@ describe('agent shutdown', () => {
 
     try {
       const lifecycle = createLifecycleHost();
-      registerAgentShutdownHandlers(lifecycle);
+      registerRuntimeShutdownHandlers(lifecycle, {
+        flushArtifacts: () => {},
+      });
 
       await Promise.all([lifecycle.runShutdown(), lifecycle.runShutdown()]);
       await lifecycle.runShutdown();
