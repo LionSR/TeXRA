@@ -7,6 +7,9 @@ A non-exhaustive list of public projects and papers that used TeXRA. To add your
 - [**TNLean**](https://github.com/LionSR/TNLean): Lean 4 formalization of
   tensor-network theory, including matrix-product states and their canonical
   forms.
+- [**QICLean**](https://github.com/LionSR/QICLean): Lean 4 formalization of
+  quantum information and channels, including states, entanglement, channel
+  representations, and entropy.
 - [**MIPStarRE**](https://github.com/LionSR/MIPStarRE): Lean formalization of
   mathematics around $\mathrm{MIP}^* = \mathrm{RE}$.
 
