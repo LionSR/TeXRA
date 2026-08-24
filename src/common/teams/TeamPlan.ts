@@ -398,6 +398,32 @@ export const TEAM_LAUNCH_SIGN_IN_LABEL = 'Sign In to TeXRA';
 export const TEAM_LAUNCH_CONTINUE_LABEL = 'Continue with Available Members';
 export const TEAM_LAUNCH_CANCEL_LABEL = 'Cancel';
 
+export interface TeamAvailabilityPrompt {
+  readonly severity: 'warning';
+  readonly message: string;
+  readonly actions: readonly [
+    { readonly choice: 'sign-in'; readonly label: string },
+    { readonly choice: 'continue'; readonly label: string },
+    { readonly choice: 'cancel'; readonly label: string },
+  ];
+}
+
+/** Build the unavailable-member prompt shared by launch and settings flows. */
+export function teamAvailabilityPrompt(
+  unavailableNames: readonly string[],
+  teamId?: string,
+): TeamAvailabilityPrompt {
+  return {
+    severity: 'warning',
+    message: formatUnavailableTeamMembersMessage(unavailableNames, teamId),
+    actions: [
+      { choice: 'sign-in', label: TEAM_LAUNCH_SIGN_IN_LABEL },
+      { choice: 'continue', label: TEAM_LAUNCH_CONTINUE_LABEL },
+      { choice: 'cancel', label: TEAM_LAUNCH_CANCEL_LABEL },
+    ],
+  };
+}
+
 export const TEAM_SELECTION_REQUIRED_MESSAGE = 'Team selection required.';
 
 export function formatUnknownTeamMessage(teamId: string): string {

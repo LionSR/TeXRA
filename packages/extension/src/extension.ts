@@ -514,19 +514,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
       authProvider.setUriHandler(uriHandler);
 
       log.info('Supabase authentication provider registered');
-
-      try {
-        const extensionVersion =
-          typeof context.extension.packageJSON?.version === 'string'
-            ? context.extension.packageJSON.version
-            : undefined;
-        const editorType = vscode.env.appName || undefined;
-        UsageLogService.initialize({}, extensionVersion, editorType);
-      } catch (usageError) {
-        log.warn(
-          `Usage logging service failed to initialize: ${toErrorMessage(usageError)}`,
-        );
-      }
     }
   } catch (error) {
     SupabaseClient.setInitError(ensureError(error));
@@ -534,6 +521,20 @@ async function activateExtension(context: vscode.ExtensionContext) {
       `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
     );
   }
+
+  // Usage logging is a runtime service, not an authentication-provider
+  // capability. Initialize it even when Supabase sign-in is not configured,
+  // matching desktop and CLI; the service itself decides which records can be
+  // sent and preserves plan-accounting records for hosted routes.
+  const extensionVersion =
+    typeof context.extension.packageJSON?.version === 'string'
+      ? context.extension.packageJSON.version
+      : undefined;
+  UsageLogService.initialize(
+    {},
+    extensionVersion,
+    vscode.env.appName || undefined,
+  );
 
   const progressViewProvider = new ProgressViewProvider(
     context,

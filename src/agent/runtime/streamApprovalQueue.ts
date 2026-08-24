@@ -10,12 +10,12 @@
  * sessions queue, resolve, and clean up approvals independently.
  */
 
-import PQueue from 'p-queue';
-
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { StreamTabId } from '@shared/schemas';
+import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
 
 import { SessionHostInteractions } from './HostInteractions';
+import type PQueue from 'p-queue';
 
 /** The three independently-tracked bypass kinds `SessionApprovals` owns. */
 type BypassAncestryKind = 'toolEdit' | 'bash' | 'proposal';
@@ -169,11 +169,7 @@ function createStreamApprovalController(
       streamId: StreamTabId | undefined,
       approval: QueuedApproval<T>,
     ): Promise<T> {
-      let queue = queues.get(streamId);
-      if (!queue) {
-        queue = new PQueue({ concurrency: 1 });
-        queues.set(streamId, queue);
-      }
+      const queue = getOrCreatePQueue(queues, streamId);
 
       // `add` widens to `T | void` to cover abort via signal/timeout; we pass
       // neither, so the task always runs and resolves with `T`.
