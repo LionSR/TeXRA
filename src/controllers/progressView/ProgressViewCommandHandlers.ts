@@ -190,8 +190,12 @@ interface ProgressViewFollowUpCommandActions {
    * extension omits it so the module default applies.
    */
   session?: SessionHandle;
-  /** Admission ack back to the composer that sent the draft. */
-  acknowledge(stream: StreamTabId, accepted: boolean): void;
+  /**
+   * Capture the admission-result route before image persistence yields. The
+   * extension has two progress surfaces, so resolving through whichever view
+   * is active later can clear a different composer's draft.
+   */
+  captureAdmissionReporter(): (stream: StreamTabId, accepted: boolean) => void;
   reportImageSaveError(image: ProgressViewFollowUpImage, error: unknown): void;
 }
 
@@ -335,6 +339,7 @@ export function createProgressViewCommandHandlers(
       workflowFileActions.openLabel(data.label),
 
     [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: async (data) => {
+      const acknowledge = followUp.captureAdmissionReporter();
       const mediaFiles = await saveFollowUpImages(
         data.images ?? [],
         followUp.reportImageSaveError,
@@ -347,7 +352,7 @@ export function createProgressViewCommandHandlers(
           text: data.text,
           ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
         },
-        acknowledge: (accepted) => followUp.acknowledge(data.stream, accepted),
+        acknowledge: (accepted) => acknowledge(data.stream, accepted),
         showInfo,
       });
     },

@@ -99,6 +99,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly apiKeyRetryController: ProgressApiKeyRetryController;
   private readonly followUpController: ProgressFollowUpController;
   private readonly followUpPolishController: ProgressFollowUpPolishController;
+  private dispatchSource: vscode.WebviewView | vscode.WebviewPanel | undefined;
   private chatExportController: ChatExportController | undefined;
 
   /**
@@ -370,6 +371,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
+  protected override onDispatch(
+    webviewView: vscode.WebviewView | vscode.WebviewPanel,
+  ): void {
+    this.dispatchSource = webviewView;
+  }
+
   /**
    * Commands this registry declares `unsupported(...)`, for the derived
    * frontend capability view (see `ProgressBackendOptions.getUnsupportedCommands`).
@@ -529,12 +536,25 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         stopStream: (stream) => this.provider.backend.stopStream(stream),
       },
       followUp: {
-        acknowledge: (stream, accepted) =>
-          this.postToActiveView({
-            command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
-            stream,
-            accepted,
-          }),
+        captureAdmissionReporter: () => {
+          const source = this.dispatchSource?.webview;
+          return (stream, accepted) => {
+            if (!source) return;
+            void Promise.resolve(
+              source.postMessage({
+                command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
+                stream,
+                accepted,
+              }),
+            ).catch((error: unknown) => {
+              this.logger.debug(
+                this.channel,
+                'Follow-up result target is no longer attached',
+                { data: error },
+              );
+            });
+          };
+        },
         reportImageSaveError: (_image, error) => {
           // Best-effort: a failed image save must not block the text, but log
           // it so a missing attachment is diagnosable.

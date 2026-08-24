@@ -750,7 +750,7 @@ export class DesktopProgressBridge {
       },
       followUp: {
         session: this.session,
-        acknowledge: (stream, accepted) => {
+        captureAdmissionReporter: () => (stream, accepted) => {
           this.postToRenderer({
             command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
             stream,
