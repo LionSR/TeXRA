@@ -1,6 +1,6 @@
 /** Tool-use follow-up routing and continuation ownership. */
 import { classifyRun } from '@agent/runtime/runClassification';
-import { lookupStreamExecutionId } from '@agent/runtime/resumeRun';
+import { readExecutionStreamIndex } from '@agent/storage/executionListing';
 import {
   currentSession,
   defaultSession,
@@ -174,6 +174,22 @@ function admitFollowUp(
     recovery,
   );
   return { resume, recovery };
+}
+
+/**
+ * The execution a stream currently belongs to. Prefer the resident snapshot
+ * record for a live session: `run.start` updates it synchronously. A stream
+ * whose run metadata is not resident (after a host restart, or evicted by a
+ * storage-root change) resolves through the authored `meta.streamId` index.
+ */
+export async function lookupStreamExecutionId(
+  streamId: StreamTabId,
+  session: SessionHandle,
+): Promise<ExecutionId | undefined> {
+  return (
+    session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
+    (await readExecutionStreamIndex()).byStream.get(streamId)
+  );
 }
 
 /**

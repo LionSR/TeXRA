@@ -124,6 +124,7 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: mocks.notify,
 }));
 
+import type { FollowUpRecoveryLease } from '@agent/followUp';
 import type {
   AgentConfig,
   AgentConfigPayload,

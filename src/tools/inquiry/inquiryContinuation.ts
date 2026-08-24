@@ -13,10 +13,10 @@
  */
 
 import {
+  lookupStreamExecutionId,
   submitFollowUp,
   type SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
-import { lookupStreamExecutionId } from '@agent/runtime/resumeRun';
 import {
   currentSession,
   defaultSession,

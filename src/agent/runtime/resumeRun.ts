@@ -12,11 +12,13 @@ import type {
   FollowUpQueueBatchItem,
   FollowUpQueueInput,
 } from '@agent/followUp/FollowUpQueue';
-import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
+import {
+  lookupStreamExecutionId,
+  type FollowUpFailureReason,
+} from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
-import { readExecutionStreamIndex } from '@agent/storage/executionListing';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   AgentCategory,
@@ -122,7 +124,10 @@ export async function resumeStream(
   const recovery = options.recovery
     ? session.followUps.useRecovery(options.recovery)
     : session.followUps.claimRecovery(streamId, true);
-  if (!recovery || recovery.streamId !== streamId) return REFUSED;
+  if (!recovery || recovery.streamId !== streamId) {
+    if (recovery) session.followUps.release(recovery, 'recoverable');
+    return REFUSED;
+  }
 
   try {
     const executionId = await lookupStreamExecutionId(streamId, session);
@@ -139,16 +144,7 @@ export async function resumeStream(
   }
 }
 
-/** Resolve a stream from resident metadata, then the authored disk index. */
-export async function lookupStreamExecutionId(
-  streamId: StreamTabId,
-  session: SessionHandle,
-): Promise<ExecutionId | undefined> {
-  return (
-    session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
-    (await readExecutionStreamIndex()).byStream.get(streamId)
-  );
-}
+export { lookupStreamExecutionId } from '@agent/followUp/ToolUseFollowUp';
 
 const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 /** A workflow run carries no follow-up batch, so nothing awaits delivery. */
