@@ -69,7 +69,7 @@ import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProce
 import { createLog, setOutputChannelFactory } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
+import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { initPlatform, platform } from '@platform/platform';
@@ -438,15 +438,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
     })(),
     (async () => {
       try {
-        const {
-          added,
-          currentVersion,
-          previousVersion,
-          removed,
-          reordered,
-          routePreferencesCleared,
-          skipped,
-        } = await refreshModelListStateIfNeeded(context.globalState);
+        const { currentVersion, previousVersion, skipped, messages } =
+          await refreshModelListAndLog(context.globalState);
         if (!skipped) {
           if (previousVersion !== currentVersion) {
             log.info(
@@ -454,25 +447,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
             );
           }
           log.info('Model list refresh completed successfully');
-          if (
-            added.length > 0 ||
-            removed.length > 0 ||
-            reordered ||
-            routePreferencesCleared.length > 0
-          ) {
-            invalidateModelOptionsCache();
-            if (added.length > 0 || removed.length > 0 || reordered) {
-              log.info(
-                `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
-              );
-            }
-            if (routePreferencesCleared.length > 0) {
-              log.info(
-                `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
-              );
-            }
-          }
         }
+        for (const message of messages) log.info(message);
       } catch (err) {
         log.error(`Failed to refresh model list: ${toErrorMessage(err)}`);
       }
