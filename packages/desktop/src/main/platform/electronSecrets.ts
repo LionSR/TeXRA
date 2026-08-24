@@ -1,6 +1,6 @@
 import { safeStorage } from 'electron';
 
-import type { PlatformSecrets } from '@platform/secrets';
+import { secretWithEnvOverride, type PlatformSecrets } from '@platform/secrets';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -67,10 +67,11 @@ export class ElectronSecrets implements PlatformSecrets {
 
   /** Environment variables override persisted Electron secrets. */
   async get(key: string): Promise<string | undefined> {
-    const envValue = process.env[key];
-    if (envValue !== undefined) return envValue;
-
-    return this.getStored(key);
+    return secretWithEnvOverride(
+      key,
+      (k) => process.env[k],
+      (k) => this.getStored(k),
+    );
   }
 
   async getStored(key: string): Promise<string | undefined> {
