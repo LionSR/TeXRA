@@ -22,16 +22,16 @@ updated: 2026-08-01
 > `main` denotes the
 > unrelated persisted stream schema introduced in [#7164].
 
-[#7164]: https://github.com/LionSR/TeXRA/pull/7164
-[#7457]: https://github.com/LionSR/TeXRA/pull/7457
-[#7474]: https://github.com/LionSR/TeXRA/pull/7474
-[#7504]: https://github.com/LionSR/TeXRA/pull/7504
-[#7600]: https://github.com/LionSR/TeXRA/pull/7600
-[#7602]: https://github.com/LionSR/TeXRA/pull/7602
-[#7623]: https://github.com/LionSR/TeXRA/pull/7623
-[#7624]: https://github.com/LionSR/TeXRA/pull/7624
-[#7914]: https://github.com/LionSR/TeXRA/pull/7914
-[#8322]: https://github.com/LionSR/TeXRA/pull/8322
+[#7164]: https://github.com/texra-ai/texra-issues/pull/7164
+[#7457]: https://github.com/texra-ai/texra-issues/pull/7457
+[#7474]: https://github.com/texra-ai/texra-issues/pull/7474
+[#7504]: https://github.com/texra-ai/texra-issues/pull/7504
+[#7600]: https://github.com/texra-ai/texra-issues/pull/7600
+[#7602]: https://github.com/texra-ai/texra-issues/pull/7602
+[#7623]: https://github.com/texra-ai/texra-issues/pull/7623
+[#7624]: https://github.com/texra-ai/texra-issues/pull/7624
+[#7914]: https://github.com/texra-ai/texra-issues/pull/7914
+[#8322]: https://github.com/texra-ai/texra-issues/pull/8322
 [modelcell-ownership-ruling]: ../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell
 
 ## Overview

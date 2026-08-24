@@ -702,5 +702,5 @@ That's it! No Supabase URLs, API keys, or other configuration.
 ## Support
 
 - **Supabase Docs**: https://supabase.com/docs
-- **TeXRA GitHub**: https://github.com/LionSR/TeXRA
-- **Issues**: https://github.com/LionSR/TeXRA/issues
+- **TeXRA GitHub**: https://github.com/texra-ai/texra-issues
+- **Issues**: https://github.com/texra-ai/texra-issues/issues

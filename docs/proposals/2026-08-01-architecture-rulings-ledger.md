@@ -101,7 +101,7 @@ it the assert is knowingly wrong for `LogList`.
 `ModelCell` ownership primitive now present on `main`?
 
 **Ruling.** No. The implementation merged in
-[#9547](https://github.com/LionSR/TeXRA/pull/9547) is authoritative for the
+[#9547](https://github.com/texra-ai/texra-issues/pull/9547) is authoritative for the
 narrow ownership and lifecycle guarantees below. It supersedes the retired
 PRD's top-level [historical-status clause](../prds/2026-06-29-prd-runtime-gold-standard.md),
 which says the listed designs “must not be implemented from this record,” and

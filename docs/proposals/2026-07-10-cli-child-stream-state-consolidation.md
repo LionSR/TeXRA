@@ -1,6 +1,6 @@
 # CLI child-stream state consolidation
 
-> **Status:** Design gate for [issue #7864](https://github.com/LionSR/TeXRA/issues/7864). This document is
+> **Status:** Design gate for [issue #7864](https://github.com/texra-ai/texra-issues/issues/7864). This document is
 > grounded on `origin/main` commit `4cd0881b4` (2026-07-10). It proposes no production change. Implementation
 > remains gated on maintainer review of this design.
 

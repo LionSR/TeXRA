@@ -30,7 +30,7 @@ The closest thing to a root cause is a **discoverability/naming mismatch**: the 
 
 ### 1. Desktop never force-closes crash-orphaned transcript groups or distinguishes resumable streams on restart
 
-**Issue:** [#6887](https://github.com/LionSR/TeXRA/issues/6887)
+**Issue:** [#6887](https://github.com/texra-ai/texra-issues/issues/6887)
 
 Desktop's `DesktopStreamSnapshotStore` (`packages/desktop/src/main/desktopStreamSnapshot.ts`) force-normalizes restored streams to `STOPPED` on relaunch — so it does _not_ show stuck-RUNNING ghosts (an earlier framing of this bug, sourced from a self-contradicting line in `2026-06-10-lifecycle-status-ownership.md`, overstated the symptom; this was corrected by direct re-investigation before filing). But the module's own docstring admits scope: _"Live re-establishment of agent runtimes is intentionally out of scope here — that's tracked as a Phase 2 follow-up."_ Concretely, desktop startup never calls `detectWaitingStreams` (can't tell resumable-from-flow-record from truly-dead — blanket-labels everything `STOPPED`) or `endRunningTaskGroups`/`StreamLogStore.endRunningGroups` (never force-closes a transcript log group left open by a crash — reopening that ghost stream renders a permanently incomplete `GROUP_START` with no `GROUP_END`). The extension calls this repair sequence once, from `packages/extension/src/extension.ts:499` (`await progressViewProvider.cleanupTasksAfterRestart()`). Desktop already instantiates the _identical_ host-neutral `ProgressBackend`/`ProgressEventHandler`/`StreamLogStore` graph (`packages/desktop/src/main/desktopAgentExecution.ts:232`) — it just never invokes the repair call on it.
 
@@ -42,7 +42,7 @@ Related closed work confirms this is a real, previously-tracked gap that was nev
 
 ### 2. CLI bypasses the shared `ProgressAgentProposalController` for approval/proposal orchestration
 
-**Issue:** [#6888](https://github.com/LionSR/TeXRA/issues/6888)
+**Issue:** [#6888](https://github.com/texra-ai/texra-issues/issues/6888)
 
 Extension and desktop both route every proposal action (`setup`/`approve`/`reject`) through one shared controller, `src/controllers/progressView/ProgressAgentProposalController.ts` (113 LOC). CLI reimplements this by hand in 2 places — `packages/cli/src/chat/tui/state/subscribeApprovals.ts:408-417` (`dispatchProposal`) and `packages/cli/src/runtime/approval/eventDispatch.ts:66-72` (`dispatchApprovalDecision`, case `showAgentProposal`) — calling `runCoordinatorBridge.resolveProposal` directly. Direct, confirmed consequence: the CLI cannot do `setup` proposal actions the other two hosts support.
 
@@ -52,7 +52,7 @@ This fits a well-established pattern the team has been actively closing: #6692 (
 
 ### 3. CLI's shared-bus usage is vestigial, and headless `texra run` silently never persists stream sidecars
 
-**Issue:** [#6889](https://github.com/LionSR/TeXRA/issues/6889)
+**Issue:** [#6889](https://github.com/texra-ai/texra-issues/issues/6889)
 
 `createCliRuntimeHost` (headless CLI's `AgentRuntimeHost`, `packages/cli/src/runtime/runtimeHost.ts`) never touches the shared `bus` — confirmed via full-file read and repo-wide grep (zero matches). `StreamSnapshotStore` (`src/transcript/StreamSnapshotStore.ts`) is the sole persister of todos/plan/usage/output-files sidecars, and its `subscribe(bus)` method has exactly one real production caller in the entire codebase: the CLI's interactive TUI (`packages/cli/src/chat/tui/runChatTui.tsx:413`). Extension and desktop populate the same store through _direct method calls_ inside their own bus handlers, never via `subscribe()`. Net effect: a stream driven through headless `texra run` produces empty todos/plan/usage if later viewed in desktop/extension/CLI-TUI. Degrades gracefully — execution state itself (the `getExecutionStore()`/TaskState checkpoint store, used by `texra resume`/`texra history`) is entirely unaffected; only _display_ state is empty on cross-host restore.
 
@@ -68,7 +68,7 @@ Separately: CLI TUI's `wrapRuntimeHost` mirrors events onto `bus` _purely_ to fe
 
 ### 4. `setToolEditApprovalHandler` — one of the remaining ambient-approval-ownership module globals
 
-**Issue:** [#6890](https://github.com/LionSR/TeXRA/issues/6890)
+**Issue:** [#6890](https://github.com/texra-ai/texra-issues/issues/6890)
 
 `docs/proposals/2026-06-07-dependency-injection-cleanup.md` (audited 2026-06-07, addendum 06-10, not fully implemented) documents 22 module-level `set*` singletons and a fat `AgentCore` context bag. PR #6883 (2026-07-02, landed during this audit) folded 4 of them — `setLinterProvider`, `setAddCriticismSink`, `setToolMissingHandler`, `setToolNotificationHandler` — into typed `Platform` ports, and de-duplicated 3 flow nodes' reads of `runtimeHost`/`streamId`/`executionId` via `RunContext`, both explicitly citing that doc. `setToolEditApprovalHandler` was **not** among them — re-verified at current `HEAD`: still a bare module-level singleton (`src/tools/approval/toolEditApproval.ts`), still written from 4 files across all 3 hosts (`packages/cli/src/chat/tui/state/subscribeApprovals.ts:153,175`, `packages/cli/src/runtime/approvalAdapter.ts:86,90`, `packages/desktop/src/main/desktopToolEditApproval.ts:66,150`, `packages/extension/src/frontend/approval/nativeToolEditApproval.ts:386`). The DI-cleanup doc's own description: _"the active session's approval channel, currently a single module global mutated by whichever host UI is active."_ This is the same disease as finding #2, one layer down the stack — ambient runtime state owned by "whichever UI happens to be running" instead of resolved once at a composition root.
 

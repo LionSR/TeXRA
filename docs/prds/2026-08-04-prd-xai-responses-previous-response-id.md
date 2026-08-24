@@ -12,7 +12,7 @@ updated: 2026-08-13
 
 - xAI docs: [Generate text (Responses preferred)](https://docs.x.ai/developers/model-capabilities/text/generate-text), [Comparison vs Chat Completions](https://docs.x.ai/developers/model-capabilities/text/comparison), [REST inference](https://docs.x.ai/developers/rest-api-reference/inference/chat)
 - TeXRA OpenAI Responses proposal: `docs/proposals/2025-06-04-openai-responses-api.md`
-- Landed experimental SuperGrok OAuth route (separate concern): `docs/proposals/2026-08-04-xai-grok-oauth-subscription.md`, PR [#9709](https://github.com/LionSR/TeXRA/pull/9709)
+- Landed experimental SuperGrok OAuth route (separate concern): `docs/proposals/2026-08-04-xai-grok-oauth-subscription.md`, PR [#9709](https://github.com/texra-ai/texra-issues/pull/9709)
 - Difficulty notes: session audit 2026-08-04 (`ModelHandlerOpenAIResponse` ~2.9k lines; Codex already multi-backend via capability profiles)
 
 ## 1. Summary
@@ -185,11 +185,11 @@ Core chaining is protocol-shaped. Risk is **live compatibility**, not missing Te
 
 ## 9. Explicit non-consolidation with landed PRs
 
-| Landed PR                                                                   | Relationship                                                                         |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| [#9709](https://github.com/LionSR/TeXRA/pull/9709) Grok OAuth               | **Auth only.** Responses routing remains separate and reuses the landed Bearer path. |
-| [#9708](https://github.com/LionSR/TeXRA/pull/9708) TypeScript 7             | **Toolchain only.** No product overlap with Responses routing.                       |
-| [#9706](https://github.com/LionSR/TeXRA/pull/9706) Agent SDK readiness docs | **Docs only.** It may be cross-linked but introduces no Responses implementation.    |
+| Landed PR                                                                            | Relationship                                                                         |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| [#9709](https://github.com/texra-ai/texra-issues/pull/9709) Grok OAuth               | **Auth only.** Responses routing remains separate and reuses the landed Bearer path. |
+| [#9708](https://github.com/texra-ai/texra-issues/pull/9708) TypeScript 7             | **Toolchain only.** No product overlap with Responses routing.                       |
+| [#9706](https://github.com/texra-ai/texra-issues/pull/9706) Agent SDK readiness docs | **Docs only.** It may be cross-linked but introduces no Responses implementation.    |
 
 See §10 for consolidation advice among current workstreams (not code from this PRD).
 

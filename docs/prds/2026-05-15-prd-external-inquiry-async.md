@@ -8,7 +8,7 @@ updated: 2026-06-20
 **Status:** Draft (v0.1)
 **Owner:** TBD
 **Date:** 2026-05-15
-**Related issue:** [#4023 — external_inquiry should not block](https://github.com/LionSR/TeXRA/issues/4023)
+**Related issue:** [#4023 — external_inquiry should not block](https://github.com/texra-ai/texra-issues/issues/4023)
 
 > **Naming.** The model-facing tool is renamed from `external_inquiry` to `inquiry` — shorter, parallel with `goal`/`memory`/`executions`, and "external" was implicit. Internal class/file names (`ExternalInquiryTool.ts`, `ExternalInquiryPanel.ts`, schema names like `ExternalInquiryThreadManifestSchema`) keep their current names for diff-locality; a mechanical rename pass is an independent follow-up.
 

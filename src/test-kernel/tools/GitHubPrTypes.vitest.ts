@@ -19,7 +19,8 @@ describe('GitHub REST response schemas', () => {
           user: { login: 'octocat', type: null },
           created_at: '2026-06-21T00:00:00Z',
           updated_at: null,
-          html_url: 'https://github.com/LionSR/TeXRA/issues/1#issuecomment-1',
+          html_url:
+            'https://github.com/texra-ai/texra-issues/issues/1#issuecomment-1',
           issue_url: null,
         },
       ]).success,
@@ -35,7 +36,8 @@ describe('GitHub REST response schemas', () => {
           line: null,
           original_line: null,
           in_reply_to_id: null,
-          html_url: 'https://github.com/LionSR/TeXRA/pull/1#discussion_r2',
+          html_url:
+            'https://github.com/texra-ai/texra-issues/pull/1#discussion_r2',
           created_at: '2026-06-21T00:00:00Z',
           updated_at: null,
         },
@@ -57,7 +59,7 @@ describe('GitHub REST response schemas', () => {
         state: 'open',
         state_reason: null,
         title: 'Issue',
-        html_url: 'https://github.com/LionSR/TeXRA/issues/1',
+        html_url: 'https://github.com/texra-ai/texra-issues/issues/1',
         user: null,
         pull_request: null,
       }).success,

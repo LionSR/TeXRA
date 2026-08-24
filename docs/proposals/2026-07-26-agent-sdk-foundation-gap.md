@@ -350,7 +350,7 @@ silent-degradation rule; and the five `onDidChange` listeners are all legitimate
 consumers, one of them inside the runtime itself. **Restate the acceptance target as 10.**
 
 > **Corrected 2026-07-26 — "deleting the three projector trace-arms" is not the mechanism that
-> gets there; see [#9250 comment](https://github.com/LionSR/TeXRA/issues/9250#issuecomment-5084548544)
+> gets there; see [#9250 comment](https://github.com/texra-ai/texra-issues/issues/9250#issuecomment-5084548544)
 > and #9263.** `publishStatus` gates the session-fact emit on `options.events`, and no production
 > call site has ever passed `trace` and `events` together
 > (`ExecutionRegistry.streamStatusEmitOptions` returns one or the other; `AgentLaunchContext`
@@ -468,7 +468,7 @@ Orthogonal, each needing its own ruling: the reveal-stream fold (7) and the stat
 > silences status for every trace-owned transition (run start, terminal, manual-retry
 > WAITING/RESUME/CANCEL, restart repair) — the two do not compose into "one rail." See the
 > corrected acceptance-criteria row 5 note (§7) and
-> [#9250 comment](https://github.com/LionSR/TeXRA/issues/9250#issuecomment-5084548544) / #9263
+> [#9250 comment](https://github.com/texra-ai/texra-issues/issues/9250#issuecomment-5084548544) / #9263
 > for the mechanism that actually ships 13 → 10.
 
 ### Correction to a premise this doc previously carried

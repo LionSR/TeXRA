@@ -14,20 +14,20 @@
 The audit is descriptive; a finding remains open until its pull request is
 reviewed and merged. This ledger tracks the first high-impact batch:
 
-| Finding    | Change                                                         | Pull request                                       | Status     |
-| ---------- | -------------------------------------------------------------- | -------------------------------------------------- | ---------- |
-| `P0.S1/S4` | Require relay enforcement and distinguish unavailable spend    | [#8269](https://github.com/LionSR/TeXRA/pull/8269) | Merged     |
-| `P0.S2`    | Require a configured signup-hook verification secret           | [#8268](https://github.com/LionSR/TeXRA/pull/8268) | Merged     |
-| `P0.S3`    | Require an explicit boolean device-approval decision           | [#8266](https://github.com/LionSR/TeXRA/pull/8266) | Open draft |
-| `P0.1`     | Retry or quarantine every unacknowledged client usage batch    | [#8267](https://github.com/LionSR/TeXRA/pull/8267) | Open draft |
-| `P0.1`     | Validate usage batches atomically and mark permanent rejection | [#8270](https://github.com/LionSR/TeXRA/pull/8270) | Open draft |
-| `P0.2`     | Omit diagnostics when a host has no linter                     | [#8271](https://github.com/LionSR/TeXRA/pull/8271) | Merged     |
-| `P0.4`     | Require explicit persistent or ephemeral transcript stores     | [#8287](https://github.com/LionSR/TeXRA/pull/8287) | Open draft |
-| `P0.10`    | Fail closed when ignore policy cannot be read or applied       | [#8272](https://github.com/LionSR/TeXRA/pull/8272) | Merged     |
-| `P0.11`    | Preserve unreadable or invalid resumable flow state            | [#8277](https://github.com/LionSR/TeXRA/pull/8277) | Open draft |
-| `P0.12`    | Remove automatic delete-and-replace on circular symlinks       | [#8276](https://github.com/LionSR/TeXRA/pull/8276) | Merged     |
-| `P0.13`    | Refuse approval when current proposed content is unreadable    | [#8275](https://github.com/LionSR/TeXRA/pull/8275) | Merged     |
-| `P2.1`     | Keep one desktop project-configuration source after failures   | [#8237](https://github.com/LionSR/TeXRA/pull/8237) | Merged     |
+| Finding    | Change                                                         | Pull request                                                | Status     |
+| ---------- | -------------------------------------------------------------- | ----------------------------------------------------------- | ---------- |
+| `P0.S1/S4` | Require relay enforcement and distinguish unavailable spend    | [#8269](https://github.com/texra-ai/texra-issues/pull/8269) | Merged     |
+| `P0.S2`    | Require a configured signup-hook verification secret           | [#8268](https://github.com/texra-ai/texra-issues/pull/8268) | Merged     |
+| `P0.S3`    | Require an explicit boolean device-approval decision           | [#8266](https://github.com/texra-ai/texra-issues/pull/8266) | Open draft |
+| `P0.1`     | Retry or quarantine every unacknowledged client usage batch    | [#8267](https://github.com/texra-ai/texra-issues/pull/8267) | Open draft |
+| `P0.1`     | Validate usage batches atomically and mark permanent rejection | [#8270](https://github.com/texra-ai/texra-issues/pull/8270) | Open draft |
+| `P0.2`     | Omit diagnostics when a host has no linter                     | [#8271](https://github.com/texra-ai/texra-issues/pull/8271) | Merged     |
+| `P0.4`     | Require explicit persistent or ephemeral transcript stores     | [#8287](https://github.com/texra-ai/texra-issues/pull/8287) | Open draft |
+| `P0.10`    | Fail closed when ignore policy cannot be read or applied       | [#8272](https://github.com/texra-ai/texra-issues/pull/8272) | Merged     |
+| `P0.11`    | Preserve unreadable or invalid resumable flow state            | [#8277](https://github.com/texra-ai/texra-issues/pull/8277) | Open draft |
+| `P0.12`    | Remove automatic delete-and-replace on circular symlinks       | [#8276](https://github.com/texra-ai/texra-issues/pull/8276) | Merged     |
+| `P0.13`    | Refuse approval when current proposed content is unreadable    | [#8275](https://github.com/texra-ai/texra-issues/pull/8275) | Merged     |
+| `P2.1`     | Keep one desktop project-configuration source after failures   | [#8237](https://github.com/texra-ai/texra-issues/pull/8237) | Merged     |
 
 The two `P0.1` pull requests form one protocol change and should be reviewed
 and merged together. The server marks only permanent payload rejection as
@@ -178,7 +178,7 @@ unavailable, the relay should fail initialization or return `503` for every
 key-bearing request. Public metadata routes may remain available through a
 separate handler that does not forward provider requests.
 
-**Disposition:** Resolved on main by [#8269](https://github.com/LionSR/TeXRA/pull/8269).
+**Disposition:** Resolved on main by [#8269](https://github.com/texra-ai/texra-issues/pull/8269).
 Remove the fail-open configuration path before other fallback work.
 
 ### P0.S2 Missing signup-hook secret permits unsigned hook handling
@@ -196,7 +196,7 @@ different trust assumptions, selected by a missing environment variable.
 `503` until configured. Development should use an explicitly selected local
 adapter or emulator, not the production handler's missing-secret branch.
 
-**Disposition:** Resolved on main by [#8268](https://github.com/LionSR/TeXRA/pull/8268).
+**Disposition:** Resolved on main by [#8268](https://github.com/texra-ai/texra-issues/pull/8268).
 Remove unsigned production mode.
 
 ### P0.S3 Missing or malformed device-approval intent means approval
@@ -219,7 +219,7 @@ const approve = body?.approve !== false;
 missing or malformed intent with `400`. Approval and denial should both require
 an explicit boolean.
 
-**Disposition:** Draft implementation: [#8266](https://github.com/LionSR/TeXRA/pull/8266).
+**Disposition:** Draft implementation: [#8266](https://github.com/texra-ai/texra-issues/pull/8266).
 Remove the implicit-approval fallback.
 
 ### P0.S4 Spending-check failure becomes zero spend for paid tiers
@@ -238,7 +238,7 @@ makes the grace policy unbounded and difficult to audit.
 allowance using last-verified spend, an expiry, a maximum request/cost budget, and
 metrics. Never report unavailable spend as zero.
 
-**Disposition:** Resolved on main by [#8269](https://github.com/LionSR/TeXRA/pull/8269).
+**Disposition:** Resolved on main by [#8269](https://github.com/texra-ai/texra-issues/pull/8269).
 Remove synthetic zero; preserve availability only through an explicit grace
 policy.
 
@@ -283,8 +283,8 @@ owns restoring HTTP 422 after those clients age out. The client should retain or
 quarantine every entry not explicitly acknowledged. Missing legacy fields may
 use `.prefault(...)`; invalid present fields must not use `.catch(...)`.
 
-**Disposition:** Draft implementations: [#8267](https://github.com/LionSR/TeXRA/pull/8267)
-and [#8270](https://github.com/LionSR/TeXRA/pull/8270), deployed server first.
+**Disposition:** Draft implementations: [#8267](https://github.com/texra-ai/texra-issues/pull/8267)
+and [#8270](https://github.com/texra-ai/texra-issues/pull/8270), deployed server first.
 Remove the success fallback.
 
 ### P0.2 Unavailable diagnostics are reported as an empty successful result
@@ -323,7 +323,7 @@ Either provide a host-neutral linter for CLI and desktop, or omit the read
 capability from their tool roster. `diagnostics.add` must likewise distinguish
 "unsupported" from "supported but disabled."
 
-**Disposition:** Resolved on main by [#8271](https://github.com/LionSR/TeXRA/pull/8271);
+**Disposition:** Resolved on main by [#8271](https://github.com/texra-ai/texra-issues/pull/8271);
 the capability subsequently moved from the process-wide Platform object to the
 active session interaction adapter in #8508. The empty-result fallback remains
 removed.
@@ -406,7 +406,7 @@ fail when persistence cannot open unless the caller explicitly selects an
 ephemeral mode. Interactive hosts may continue with `ephemeral(reason)`, but must
 display that state.
 
-**Disposition:** Draft implementation: [#8287](https://github.com/LionSR/TeXRA/pull/8287).
+**Disposition:** Draft implementation: [#8287](https://github.com/texra-ai/texra-issues/pull/8287).
 
 ### P0.5 Invalid persisted snapshots become valid empty/current snapshots
 
@@ -625,7 +625,7 @@ context-building operation or require an explicit caller policy that excludes
 uncertain paths. Matcher failure should fail closed for that path and report the
 rule source.
 
-**Disposition:** Resolved on main by [#8272](https://github.com/LionSR/TeXRA/pull/8272).
+**Disposition:** Resolved on main by [#8272](https://github.com/texra-ai/texra-issues/pull/8272).
 Remove fail-open behavior at the model-context boundary.
 
 ### P0.11 Unreadable or invalid resumable flow state is deleted and restarted
@@ -663,7 +663,7 @@ const state = await readFlowState();
 An explicit restart should allocate or record a new attempt and preserve the old
 record for diagnosis. Automatic fresh start is valid only for confirmed absence.
 
-**Disposition:** Draft implementation: [#8277](https://github.com/LionSR/TeXRA/pull/8277).
+**Disposition:** Draft implementation: [#8277](https://github.com/texra-ai/texra-issues/pull/8277).
 Remove destructive recovery from both flow runners and place the policy in the
 persistence/resume facade.
 
@@ -685,7 +685,7 @@ may delete and replace only after the owning workflow explicitly selects that
 policy and records the affected path. Prefer preserving or renaming the link for
 diagnosis.
 
-**Disposition:** Resolved on main by [#8276](https://github.com/LionSR/TeXRA/pull/8276).
+**Disposition:** Resolved on main by [#8276](https://github.com/texra-ai/texra-issues/pull/8276).
 Remove destructive behavior from the general write primitive.
 
 ### P0.13 Diff approval falls back to stale proposed content
@@ -705,7 +705,7 @@ the same action.
 can be read. If recovery offers the original proposal, it must open it as a new
 explicit review revision rather than substituting it under the existing approval.
 
-**Disposition:** Resolved on main by [#8275](https://github.com/LionSR/TeXRA/pull/8275).
+**Disposition:** Resolved on main by [#8275](https://github.com/texra-ai/texra-issues/pull/8275).
 Remove stale-content approval fallback.
 
 ### P1.1 Process output read failures are swallowed before the logger can see them
@@ -1279,7 +1279,7 @@ configuration inaccessible/corrupt." Absence may select a documented default
 location. Failure should put configuration into a visible degraded read-only
 state until repaired.
 
-**Disposition:** Resolved on main by [#8237](https://github.com/LionSR/TeXRA/pull/8237),
+**Disposition:** Resolved on main by [#8237](https://github.com/texra-ai/texra-issues/pull/8237),
 which selects the configuration source once and preserves that choice after
 read or migration failures.
 

@@ -8,7 +8,7 @@ updated: 2026-08-03
 **Status:** Draft (v1.1 — every factual claim re-verified against main @ `363e2941d4`, 2026-08-03)
 **Owner:** TBD
 **Date:** 2026-08-03
-**Tracking issue:** [#9597](https://github.com/LionSR/TeXRA/issues/9597)
+**Tracking issue:** [#9597](https://github.com/texra-ai/texra-issues/issues/9597)
 **Branch:** `claude/texra-9597-design-review-5tyyls`
 **Prior stages (merged):** #9610, #9673, #9687, #9689, #9692
 

@@ -169,7 +169,7 @@ function expectPairedToolResults(
 }
 
 /**
- * Regression test for https://github.com/LionSR/TeXRA/issues/7163.
+ * Regression test for https://github.com/texra-ai/texra-issues/issues/7163.
  *
  * An assistant turn persisted with N tool_use blocks but fewer than N
  * tool_result entries is unresumable: providers with strict tool-call pairing
