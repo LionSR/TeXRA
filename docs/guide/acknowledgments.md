@@ -25,6 +25,9 @@ TeXRA grew out of research, and it is built to produce more of it. A selection o
 - **He, X., Lu, S., & Zeng, B.** (2025). [_Co-Designing Quantum Codes with Transversal Diagonal Gates via Multi-Agent Systems_](https://arxiv.org/abs/2510.20728). arXiv:2510.20728.
   A multi-agent system pairs symbolic synthesis and search with Lean 4 formal verification to produce a certified catalogue of 14,116 nonadditive quantum codes with prescribed transversal diagonal gates, and resolves the transversal-T problem for distance-3 codes.
 
+- **Lu, S., Tjoa, E., & Cirac, J. I.** (2026). [_Multi-agent Autoformalization of Tensor Network Theory_](https://arxiv.org/abs/2607.07857). arXiv:2607.07857.
+  A team of specialized agents, run in TeXRA, autoformalizes the fundamental theorem of matrix-product states in Lean 4 and releases the [TNLean](https://github.com/LionSR/TNLean) library.
+
 If you used TeXRA in your own work, read [Acknowledging TeXRA](#acknowledging-texra) above, or write to [contact@texra.ai](mailto:contact@texra.ai).
 
 ## Conceptual background & references
