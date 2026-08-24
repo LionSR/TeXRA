@@ -247,7 +247,9 @@ export async function finalizeRun(
   ): FinalizeExecutionResult => {
     input.report?.(
       new Error(
-        `Failed to persist ${outcome} terminal state for execution ${executionId}: ${toErrorMessage(error)}`,
+        outcomePersisted
+          ? `Persisted ${outcome} status for execution ${executionId}, but failed to delete its flow record: ${toErrorMessage(error)}`
+          : `Failed to persist ${outcome} terminal state for execution ${executionId}: ${toErrorMessage(error)}`,
         { cause: error },
       ),
     );

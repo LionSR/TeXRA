@@ -381,15 +381,18 @@ function trackRunningExecution(
   );
 }
 
+/** `resumeRun`'s started result: the run ran and the batch reached it. */
+const STARTED = { started: true, delivered: true } as const;
+
 const defaultResumeRun = async (
   _executionId: ExecutionId,
   options: ResumeRunOptions,
-): Promise<'started'> => {
+): Promise<typeof STARTED> => {
   options.onFollowUpQueueReady?.({
     streamId: 'stream:test' as StreamTabId,
     kind: 'recovery',
   });
-  return 'started';
+  return STARTED;
 };
 
 function resumeWithAutoResumeData(): void {
@@ -1189,7 +1192,7 @@ describe('createChatSessionController', () => {
           executionId: 'exec-resume' as ExecutionId,
           streamId: 'stream-resume' as StreamTabId,
         } as never);
-        return 'started';
+        return STARTED;
       },
     );
     // A fake store, like every other resume test: the real store against
@@ -1413,7 +1416,7 @@ describe('createChatSessionController', () => {
           executionId: 'exec-resume' as ExecutionId,
           streamId: 'stream-resume' as StreamTabId,
         } as never);
-        return 'started';
+        return STARTED;
       },
     );
 
@@ -1478,7 +1481,7 @@ describe('createChatSessionController', () => {
           executionId: 'exec-1' as ExecutionId,
           streamId: 'stream-1' as StreamTabId,
         } as never);
-        return 'started';
+        return STARTED;
       },
     );
     const init = makeInit({ session, snapshotStore });
@@ -1524,7 +1527,7 @@ describe('createChatSessionController', () => {
         await releaseLeaseCheck.promise;
         return options.isCancellationRequested?.()
           ? { failed: 'not_resumable' as const }
-          : 'started';
+          : STARTED;
       },
     );
     const ctrl = createChatSessionController(
@@ -1735,7 +1738,7 @@ describe('createChatSessionController', () => {
   });
 
   it('stops batching once ordinary follow-up routing is ready', async () => {
-    const resume = pDefer<'started'>();
+    const resume = pDefer<typeof STARTED>();
     const { ctrl } = makeInterruptedController(Promise.resolve(), true);
     mocks.resumeRun.mockImplementationOnce(
       async (_id: ExecutionId, options: ResumeRunOptions) => {
@@ -1755,7 +1758,7 @@ describe('createChatSessionController', () => {
     expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
       kind: 'not_interrupted',
     });
-    resume.resolve('started');
+    resume.resolve(STARTED);
     await expect(first.completion).resolves.toBe(true);
   });
 
@@ -1798,6 +1801,34 @@ describe('createChatSessionController', () => {
     await expectInterruptedRetry(ctrl, ['First attempt.', 'Retry.']);
   });
 
+  it('keeps the seeded batch when manual resume is refused', async () => {
+    const { ctrl, session } = makeInterruptedController(
+      Promise.resolve(),
+      true,
+    );
+    await retainInterruptedFollowUp(ctrl, 'First attempt.');
+    // A refusal that never reaches the follow-up queue hands the seeded batch
+    // back; nothing else owns it, so the resume must put it and the
+    // interrupted stream back or the input typed during the interruption is
+    // lost.
+    mocks.resumeRun
+      .mockReset()
+      .mockResolvedValueOnce({ failed: 'not_resumable' });
+
+    await ctrl.resume('aaaaaa' as ExecutionId);
+
+    expect(mocks.resumeRun).toHaveBeenCalledWith(
+      'aaaaaa',
+      expect.objectContaining({
+        extraFollowUps: [{ text: 'First attempt.' }],
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(session.interruptedStreamId).toBe('stream-1'),
+    );
+    await expectInterruptedRetry(ctrl, ['First attempt.', 'Retry.']);
+  });
+
   it('preserves root ownership when auto-resuming a child stream', async () => {
     const root = 'root-stream' as StreamTabId;
     const child = 'child-stream' as StreamTabId;
@@ -1828,7 +1859,7 @@ describe('createChatSessionController', () => {
       async (_id: ExecutionId, options: ResumeRunOptions) =>
         options.isCancellationRequested?.() === true
           ? { failed: 'not_resumable' as const }
-          : 'started',
+          : STARTED,
     );
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),

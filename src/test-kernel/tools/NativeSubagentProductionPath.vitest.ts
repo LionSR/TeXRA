@@ -160,7 +160,7 @@ async function resumePersistedStream(
     },
   });
   completedResumes.push(streamId);
-  return resumed === 'started';
+  return 'started' in resumed && resumed.delivered;
 }
 
 async function integrationPlatform(): Promise<Platform> {

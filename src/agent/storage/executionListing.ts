@@ -205,15 +205,26 @@ export async function listExecutionStreamReferences(
  * stream's execution from the resident snapshot record first (a live run
  * updates it synchronously) and fall back to this scan for non-resident
  * streams; the retired sidecar-FK and summary-mirror read ladders are gone.
- * An unreadable execution row is logged and skipped by the listing.
  */
-export async function readExecutionStreamIndex(): Promise<
-  ReadonlyMap<StreamTabId, ExecutionId>
-> {
-  const { references } = await listExecutionStreamReferences();
-  return new Map(
-    references.map(({ streamId, executionId }) => [streamId, executionId]),
-  );
+export async function readExecutionStreamIndex(): Promise<{
+  /** Streams named by a readable `ExecutionMeta.streamId`. */
+  readonly byStream: ReadonlyMap<StreamTabId, ExecutionId>;
+  /**
+   * Executions whose metadata could not be read, with the cause (each is also
+   * logged where the read failed). Their `meta.streamId` is unknown and may
+   * name any stream, so absence from `byStream` proves a stream unowned only
+   * while this is empty: a caller that would delete or settle an unowned
+   * stream must retain it instead.
+   */
+  readonly unreadable: ReadonlyMap<ExecutionId, string>;
+}> {
+  const { references, unreadable } = await listExecutionStreamReferences();
+  return {
+    byStream: new Map(
+      references.map(({ streamId, executionId }) => [streamId, executionId]),
+    ),
+    unreadable,
+  };
 }
 
 /**

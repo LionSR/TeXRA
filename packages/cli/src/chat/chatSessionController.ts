@@ -591,11 +591,21 @@ export function createChatSessionController(
       }
 
       let resumedOutcome: TurnOutcome = RUN_OUTCOME.COMPLETED;
+      // The seeded batch stays this call's until the stream queue takes it
+      // over. Every refusal before that point (the stream already active
+      // here, a lost recovery claim, no resumable state, a storage error)
+      // hands it back, and `supersedeInterruptedRecovery()` above already
+      // cleared the interrupted stream, so the follow-ups typed during the
+      // interruption are lost unless both go back where they came from.
+      let followUpQueueReady = false;
       const runChain = setCliHelperModel(config.model)
         .then(() =>
           resumeRun(id, {
             ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
             extraFollowUps: supersededRecovery?.followUps,
+            onFollowUpQueueReady: () => {
+              followUpQueueReady = true;
+            },
             isCancellationRequested: () => session.stopRequested,
             onResult: (result) => {
               resumedOutcome = result.outcome;
@@ -603,7 +613,7 @@ export function createChatSessionController(
           }),
         )
         .then((result) => {
-          if (result === 'started') {
+          if ('started' in result) {
             settleResumedTurn(resumedOutcome);
           } else if (session.stopRequested) {
             session.runExitCode = CliExitCode.Interrupted;
@@ -613,7 +623,12 @@ export function createChatSessionController(
           }
         })
         .catch(reportRunFailure)
-        .finally(finalize);
+        .finally(() => {
+          if (!followUpQueueReady) {
+            restoreInterruptedRecovery(supersededRecovery);
+          }
+          finalize();
+        });
       // `session.runPromise` was already claimed synchronously above with
       // `claimedRunPromise`; forward its settlement to the real run chain so
       // exit-drain's `await session.runPromise` blocks until the continued
@@ -683,7 +698,7 @@ export function createChatSessionController(
         const runMetadata = snapshotStore.getRunMetadata(streamId);
         const executionId =
           runMetadata.executionId ??
-          (await readExecutionStreamIndex()).get(streamId);
+          (await readExecutionStreamIndex()).byStream.get(streamId);
         if (!executionId) return false;
 
         const config =
@@ -746,7 +761,7 @@ export function createChatSessionController(
           }),
         );
 
-        if (result === 'started') {
+        if ('started' in result && result.delivered) {
           settleResumedTurn(resumedOutcome);
           return true;
         }

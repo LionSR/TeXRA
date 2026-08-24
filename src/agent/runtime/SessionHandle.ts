@@ -62,6 +62,7 @@ import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
+import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
@@ -87,7 +88,6 @@ import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 
 const logger = createLog('sessionHandle');
 
-/** Bounded fan-out for restart repair's sidecar ownership/preload sweeps. */
 function isReplayableTerminalResult(event: ResultEvent): boolean {
   return (
     !event.isSubagent && event.error != null && event.error.kind !== 'abort'
@@ -595,23 +595,49 @@ export class SessionHandle {
     const unmapped = candidates.filter(
       (streamId) => !executionIds.has(streamId),
     );
+    // Streams the index could not prove unowned. Their state is unknown, so
+    // they are shown as unavailable (Delete clears them, Resume re-reads)
+    // instead of being settled as interrupted on a guess.
+    const unreadableStreams = new Map<StreamTabId, string>();
     if (unmapped.length > 0) {
       try {
-        const index = await readExecutionStreamIndex();
+        const { byStream, unreadable } = await readExecutionStreamIndex();
         for (const streamId of unmapped) {
-          const executionId = index.get(streamId);
+          const executionId = byStream.get(streamId);
           if (executionId) executionIds.set(streamId, executionId);
         }
+        // An execution whose storage could not be read has no `meta.streamId`
+        // to attribute, and it may be the owner of any stream still unmapped
+        // here. Attribute the unreadable rows to those streams rather than
+        // letting them fall through to the ready default.
+        if (unreadable.size > 0) {
+          const cause = `${unreadable.size} execution record(s) could not be read`;
+          for (const streamId of unmapped) {
+            if (!executionIds.has(streamId)) {
+              unreadableStreams.set(streamId, cause);
+            }
+          }
+        }
       } catch (error) {
-        // The index proves nothing when it fails; the streams stay unmapped
-        // and are classified from what the scan and resident records showed.
+        // The index proves nothing when it fails, so neither does the absence
+        // of these streams from it.
+        const cause = `execution identity unreadable (${toErrorMessage(error)})`;
+        for (const streamId of unmapped) unreadableStreams.set(streamId, cause);
         logger.warn(
-          'Could not read the stream index during restart repair; unmapped streams are closed as interrupted',
+          'Could not read the stream index during restart repair; unmapped streams are left unavailable',
           { data: error },
         );
       }
     }
     if (this.isRepairSuperseded(generation)) return;
+    for (const [streamId, cause] of unreadableStreams) {
+      if (
+        this.status.getGeneration(streamId) ===
+        statusGenerationsAtScan.get(streamId)
+      ) {
+        this.status.markUnavailable(streamId, streamUnreadableMessage(cause));
+      }
+    }
 
     // The ownership scan is async. Refresh resident ownership once here so
     // the map is current, then let `repairRestartedStreams` revalidate each
@@ -632,7 +658,9 @@ export class SessionHandle {
       // still open (closing it as interrupted is the one honest fact); a
       // closed stream with nothing to classify keeps no phase.
       repairStreams: candidates.filter(
-        (streamId) => executionIds.has(streamId) || unfinished.has(streamId),
+        (streamId) =>
+          !unreadableStreams.has(streamId) &&
+          (executionIds.has(streamId) || unfinished.has(streamId)),
       ),
       isRepairCandidateCurrent: (streamId, expectedExecutionId) => {
         if (

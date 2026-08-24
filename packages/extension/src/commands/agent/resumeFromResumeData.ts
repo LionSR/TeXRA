@@ -50,7 +50,7 @@ export async function tryResumeFromResumeData(
             }),
         })
       : { failed: 'not_resumable' as const };
-    if (result === 'started') return true;
+    if ('started' in result) return result.delivered;
     if (!isCancellationRequested()) {
       logger.warn(`Stream ${streamId} was not resumed: ${result.failed}`);
       await session.interactions.showInfoMessage(
