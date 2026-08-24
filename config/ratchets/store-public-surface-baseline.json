@@ -49,7 +49,6 @@
       "preload",
       "read",
       "readOutputFiles",
-      "readPersistedExecutionId",
       "reconcileStagedDeletions",
       "stageDeleteStream"
     ]
