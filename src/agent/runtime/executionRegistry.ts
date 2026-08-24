@@ -1158,40 +1158,38 @@ export class ExecutionRegistry {
       teardown,
       cancelledResult,
     ).catch(async (error: unknown) => {
+      // Durable finalization never ran, so recovery only settles what this
+      // generation privately owns. Each step is guarded on its own: a failure
+      // in one must not cost the others. A former generation owns only its
+      // private result — it must not mark, release, untrack, or cancel a
+      // locally reacquired successor, which is what `untrackIfCurrent` gates.
       const recoveryFailures = [error];
-      if (!(error instanceof ExecutionLeaseLostError)) {
-        try {
-          const untracked = this.settleTerminal(handle, cancelledResult, {
-            publish: false,
-            untrackMode: 'ifCurrent',
-          });
-          if (untracked && !handle.isChildExecution) {
-            await this.releaseRootExecutionLease(handle.executionId);
-          }
-          logger.warn(
-            'Waiting-execution termination failed; recovered under the execution lease',
-            { data: { executionId: handle.executionId, recoveryFailures } },
-          );
-          return;
-        } catch (recoveryError) {
-          recoveryFailures.push(recoveryError);
-        }
-      }
-
-      // A former generation owns only its private result. It must not mark,
-      // release, untrack, or cancel a locally reacquired successor.
+      let untracked = false;
       try {
         handle.settleResult(cancelledResult);
       } catch (recoveryError) {
         recoveryFailures.push(recoveryError);
       }
       try {
-        const untracked = this.untrackIfCurrent(handle);
+        untracked = this.untrackIfCurrent(handle);
         if (untracked) {
           this.cancelStreamStatus(handle.childStreamId);
         }
       } catch (recoveryError) {
         recoveryFailures.push(recoveryError);
+      }
+      // A lost lease is already gone: releasing it would reach whatever holds
+      // the record now. Every other failure still owes the release.
+      if (
+        untracked &&
+        !handle.isChildExecution &&
+        !(error instanceof ExecutionLeaseLostError)
+      ) {
+        try {
+          await this.releaseRootExecutionLease(handle.executionId);
+        } catch (recoveryError) {
+          recoveryFailures.push(recoveryError);
+        }
       }
       logger.warn(
         'Waiting-execution termination failed; settled the run without durable finalization',
@@ -1238,11 +1236,13 @@ export class ExecutionRegistry {
 
     // Cleanup closes the suspended run's transcript group. Publish the
     // terminal state only after that owned artifact is settled so every host
-    // observes one coherent cancellation boundary.
-    this.settleTerminal(handle, cancelledResult, {
-      publish: true,
-      untrackMode: 'unconditional',
-    });
+    // observes one coherent cancellation boundary, and in one fixed order:
+    // publish, settle the envelope, drop the handle, cancel the stream.
+    handle.trace?.emit(cancelledResult);
+    this.publishResult?.(cancelledResult, handle.childStreamId);
+    handle.settleResult(cancelledResult);
+    this.untrackHandle(handle);
+    this.cancelStreamStatus(handle.childStreamId);
 
     try {
       const finalization = await finalizeRun({
@@ -1270,45 +1270,6 @@ export class ExecutionRegistry {
         }
       }
     }
-  }
-
-  /**
-   * Owns the settle -> untrack -> cancel-stream ordering shared by the
-   * waiting-termination arms so every arm settles the terminal envelope, drops
-   * the handle from the registry, and cancels the stream in the same order.
-   *
-   * `publish` prepends the trace emit + `publishResult` fan-out used only by the
-   * happy path, where cleanup has already closed the suspended run's transcript
-   * group so hosts observe one coherent cancellation boundary. The
-   * recovery/lease-lost arms settle the private result without republishing.
-   *
-   * `untrackMode` selects the registry drop: `'unconditional'` uses
-   * `untrackHandle` (the caller has already confirmed this handle still owns the
-   * slot) and always cancels; `'ifCurrent'` uses `untrackIfCurrent` and cancels
-   * only when the drop actually removed this handle. The returned boolean
-   * reports whether the handle was untracked (always true for `'unconditional'`)
-   * so a caller can gate a lease release on it.
-   */
-  private settleTerminal(
-    handle: AgentExecutionHandle,
-    result: ResultEvent,
-    opts: { publish: boolean; untrackMode: 'unconditional' | 'ifCurrent' },
-  ): boolean {
-    if (opts.publish) {
-      handle.trace?.emit(result);
-      this.publishResult?.(result, handle.childStreamId);
-    }
-    handle.settleResult(result);
-    if (opts.untrackMode === 'ifCurrent') {
-      const untracked = this.untrackIfCurrent(handle);
-      if (untracked) {
-        this.cancelStreamStatus(handle.childStreamId);
-      }
-      return untracked;
-    }
-    this.untrackHandle(handle);
-    this.cancelStreamStatus(handle.childStreamId);
-    return true;
   }
 
   /**
