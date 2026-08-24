@@ -200,6 +200,34 @@ export async function listExecutionStreamReferences(
 }
 
 /**
+ * The one stream -> execution index, built on demand from the authored
+ * `ExecutionMeta.streamId` edge stamped at registration. Callers resolve a
+ * stream's execution from the resident snapshot record first (a live run
+ * updates it synchronously) and fall back to this scan for non-resident
+ * streams; the retired sidecar-FK and summary-mirror read ladders are gone.
+ */
+export async function readExecutionStreamIndex(): Promise<{
+  /** Streams named by a readable `ExecutionMeta.streamId`. */
+  readonly byStream: ReadonlyMap<StreamTabId, ExecutionId>;
+  /**
+   * Executions whose metadata could not be read, with the cause (each is also
+   * logged where the read failed). Their `meta.streamId` is unknown and may
+   * name any stream, so absence from `byStream` proves a stream unowned only
+   * while this is empty: a caller that would delete or settle an unowned
+   * stream must retain it instead.
+   */
+  readonly unreadable: ReadonlyMap<ExecutionId, string>;
+}> {
+  const { references, unreadable } = await listExecutionStreamReferences();
+  return {
+    byStream: new Map(
+      references.map(({ streamId, executionId }) => [streamId, executionId]),
+    ),
+    unreadable,
+  };
+}
+
+/**
  * List all executions by scanning the executions/ directory.
  *
  * The storage root is shared by independent CLI, desktop, and extension

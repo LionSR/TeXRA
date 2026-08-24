@@ -30,7 +30,6 @@
  */
 
 import pDefer, { type DeferredPromise } from 'p-defer';
-import pMap from 'p-map';
 import PQueue from 'p-queue';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
@@ -40,8 +39,11 @@ import {
   releaseOwnedExecutionLease,
   validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
-import { finalizeExecution } from '@agent/storage/executionLifecycle';
-import { listExecutionStreamReferences } from '@agent/storage/executionListing';
+import { finalizeRun } from '@agent/storage/executionLifecycle';
+import {
+  listExecutionStreamReferences,
+  readExecutionStreamIndex,
+} from '@agent/storage/executionListing';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
@@ -85,9 +87,6 @@ import { repairRestartedStreams } from './restartRepair';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 
 const logger = createLog('sessionHandle');
-
-/** Bounded fan-out for restart repair's sidecar ownership/preload sweeps. */
-const RESTART_REPAIR_IO_CONCURRENCY = 8;
 
 function isReplayableTerminalResult(event: ResultEvent): boolean {
   return (
@@ -557,9 +556,7 @@ export class SessionHandle {
       if (unreadable.size > 0) {
         const residentExecutionIds = this.snapshots.getExecutionIdMap();
         for (const streamId of this.transcripts.keys()) {
-          const executionId =
-            residentExecutionIds.get(streamId) ??
-            this.transcripts.getSummaryMeta(streamId)?.executionId;
+          const executionId = residentExecutionIds.get(streamId);
           if (executionId && unreadable.has(executionId)) {
             candidateSet.add(streamId);
           }
@@ -586,56 +583,52 @@ export class SessionHandle {
       );
     }
     // Resident snapshot records already resolved their execution id from the
-    // sidecar when they were seeded (#9947); only a candidate outside the
-    // seed needs the one-file sidecar read below.
+    // sidecar when they were seeded (#9947). A candidate outside both the
+    // checkpointed scan and the resident set resolves through the authored
+    // `meta.streamId` index — one full-directory read, only when needed. A
+    // stream absent from all three stays unmapped and is closed as
+    // interrupted with nothing recorded.
     const executionIds = new Map([
       ...scannedExecutionIds,
       ...this.snapshots.getExecutionIdMap(),
     ]);
-    const unreadableStreams = new Map<StreamTabId, string>();
-    // Bound the one-file ownership scan. Each mapper is self-contained: one
-    // unreadable sidecar is logged and marked unclassified, never allowed to
-    // fail the whole pass.
-    await pMap(
-      candidates.filter((streamId) => !executionIds.has(streamId)),
-      async (streamId) => {
-        // The stream→execution reverse edge is the persisted sidecar FK;
-        // name resemblance is never ownership. Read that authority first and
-        // fall back to the always-resident summary mirror. The mirror arm is
-        // load-bearing beyond legacy streams without a persisted FK: `run.start`
-        // publishes to the mirror synchronously while the sidecar FK flush is
-        // async, so a crash inside that window leaves the mirror as the only
-        // record of ownership. A stream with neither stays unmapped and is
-        // closed as interrupted with nothing recorded.
-        try {
-          const persisted =
-            await this.snapshots.readPersistedExecutionId(streamId);
-          if (persisted) {
-            executionIds.set(streamId, persisted);
-            return;
-          }
-        } catch (error) {
-          // A transient storage failure proves nothing about this stream.
-          // Its state is unknown, so it is shown as unclassified (Resume
-          // re-reads) rather than falling through to the ready default.
-          unreadableStreams.set(
-            streamId,
-            `execution identity unreadable (${toErrorMessage(error)})`,
-          );
-          logger.warn(
-            `Stream ${streamId} left unclassified after restart: its execution identity could not be read`,
-            { data: error },
-          );
-          return;
-        }
-        const summaryExecutionId =
-          this.transcripts.getSummaryMeta(streamId)?.executionId;
-        if (summaryExecutionId) {
-          executionIds.set(streamId, summaryExecutionId);
-        }
-      },
-      { concurrency: RESTART_REPAIR_IO_CONCURRENCY },
+    const unmapped = candidates.filter(
+      (streamId) => !executionIds.has(streamId),
     );
+    // Streams the index could not prove unowned. Their state is unknown, so
+    // they are shown as unavailable (Delete clears them, Resume re-reads)
+    // instead of being settled as interrupted on a guess.
+    const unreadableStreams = new Map<StreamTabId, string>();
+    if (unmapped.length > 0) {
+      try {
+        const { byStream, unreadable } = await readExecutionStreamIndex();
+        for (const streamId of unmapped) {
+          const executionId = byStream.get(streamId);
+          if (executionId) executionIds.set(streamId, executionId);
+        }
+        // An execution whose storage could not be read has no `meta.streamId`
+        // to attribute, and it may be the owner of any stream still unmapped
+        // here. Attribute the unreadable rows to those streams rather than
+        // letting them fall through to the ready default.
+        if (unreadable.size > 0) {
+          const cause = `${unreadable.size} execution record(s) could not be read`;
+          for (const streamId of unmapped) {
+            if (!executionIds.has(streamId)) {
+              unreadableStreams.set(streamId, cause);
+            }
+          }
+        }
+      } catch (error) {
+        // The index proves nothing when it fails, so neither does the absence
+        // of these streams from it.
+        const cause = `execution identity unreadable (${toErrorMessage(error)})`;
+        for (const streamId of unmapped) unreadableStreams.set(streamId, cause);
+        logger.warn(
+          'Could not read the stream index during restart repair; unmapped streams are left unavailable',
+          { data: error },
+        );
+      }
+    }
     if (this.isRepairSuperseded(generation)) return;
     for (const [streamId, cause] of unreadableStreams) {
       if (
@@ -1010,7 +1003,7 @@ export async function settleLiveSessionExecutions(
     if (!ownsExecutionLease(executionId)) continue;
     try {
       await session.releaseExecutionLease(executionId, async () => {
-        const finalization = await finalizeExecution({
+        const finalization = await finalizeRun({
           executionId,
           outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'preserve',
@@ -1019,7 +1012,7 @@ export async function settleLiveSessionExecutions(
           // records what the exit interrupted, never what already finished.
           keepExistingOutcome: true,
         });
-        if (finalization.status === 'failed') {
+        if (!finalization.ok) {
           throw new Error(
             `Failed to persist the CANCELLED outcome for execution ${executionId}`,
             { cause: finalization.error },

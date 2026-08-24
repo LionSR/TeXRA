@@ -25,7 +25,7 @@ vi.mock('@agent/storage/ExecutionKVStore', () => ({
 }));
 
 import {
-  finalizeExecution,
+  finalizeRun,
   registerExecution,
 } from '@agent/storage/executionLifecycle';
 import { inspectExecutionLease } from '@agent/storage/executionLease';
@@ -113,7 +113,7 @@ describe('execution lifecycle', () => {
       identity: { kind: 'agent', agent: 'chat' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     });
-    await finalizeExecution({
+    await finalizeRun({
       executionId,
       outcome: RUN_OUTCOME.COMPLETED,
       flowRecord: 'preserve',
@@ -179,7 +179,7 @@ describe('execution lifecycle', () => {
       resultMeta('completed', 'Interim result.'),
     );
 
-    await finalizeExecution({
+    await finalizeRun({
       executionId,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
@@ -203,16 +203,15 @@ describe('execution lifecycle', () => {
     mocks.writeMeta.mockRejectedValueOnce(error);
 
     const executionId = 'failed-terminal-write' as ExecutionId;
-    const result = await finalizeExecution({
+    const result = await finalizeRun({
       executionId,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
     });
 
     expect(result).toEqual({
-      status: 'failed',
+      ok: false,
       error,
-      stage: 'terminal-status',
       outcomePersisted: false,
     });
     expect(mocks.readResultMeta).not.toHaveBeenCalled();
@@ -223,17 +222,13 @@ describe('execution lifecycle', () => {
     const executionId = 'preserved-flow' as ExecutionId;
     mocks.readMeta.mockResolvedValue(executionMeta());
 
-    const result = await finalizeExecution({
+    const result = await finalizeRun({
       executionId,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
     });
 
-    expect(result).toEqual({
-      status: 'durable',
-      outcomePersisted: true,
-      flowRecord: 'preserved',
-    });
+    expect(result).toEqual({ ok: true });
     expect(mocks.delete).not.toHaveBeenCalled();
   });
 
@@ -241,17 +236,13 @@ describe('execution lifecycle', () => {
     const executionId = 'deleted-flow' as ExecutionId;
     mocks.readMeta.mockResolvedValue(executionMeta());
 
-    const result = await finalizeExecution({
+    const result = await finalizeRun({
       executionId,
       outcome: RUN_OUTCOME.COMPLETED,
       flowRecord: 'delete',
     });
 
-    expect(result).toEqual({
-      status: 'durable',
-      outcomePersisted: true,
-      flowRecord: 'deleted',
-    });
+    expect(result).toEqual({ ok: true });
     expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
   });
 
@@ -260,16 +251,15 @@ describe('execution lifecycle', () => {
     const error = new Error('metadata disk full');
     mocks.readMeta.mockRejectedValueOnce(error);
 
-    const result = await finalizeExecution({
+    const result = await finalizeRun({
       executionId,
       outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
 
     expect(result).toEqual({
-      status: 'failed',
+      ok: false,
       error,
-      stage: 'terminal-status',
       outcomePersisted: false,
     });
     expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
@@ -280,15 +270,14 @@ describe('execution lifecycle', () => {
     mocks.readMeta.mockRejectedValueOnce(new Error('metadata disk full'));
     mocks.delete.mockRejectedValueOnce(new Error('flow delete failed'));
 
-    const result = await finalizeExecution({
+    const result = await finalizeRun({
       executionId,
       outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
 
     expect(result).toMatchObject({
-      status: 'failed',
-      stage: 'terminal-status-and-flow-record-delete',
+      ok: false,
       outcomePersisted: false,
       error: expect.any(AggregateError),
     });
@@ -301,16 +290,15 @@ describe('execution lifecycle', () => {
     mocks.readMeta.mockResolvedValue(executionMeta());
     mocks.delete.mockRejectedValueOnce(error);
 
-    const result = await finalizeExecution({
+    const result = await finalizeRun({
       executionId,
       outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
 
     expect(result).toEqual({
-      status: 'failed',
+      ok: false,
       error,
-      stage: 'flow-record-delete',
       outcomePersisted: true,
     });
     expect(mocks.writeMeta).toHaveBeenCalledWith(

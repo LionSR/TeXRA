@@ -106,11 +106,12 @@ export interface ChildRunPorts {
 }
 
 /**
- * A child run's reported terminal outcome. A report, not a verdict: the
- * stream phase owns the terminal outcome, so an explicit stop/kill that
- * already landed CANCELLED outranks a non-zero exit this reports.
+ * A child run's reported terminal outcome, shared with the tool-layer child
+ * stream that finalizes one. A report, not a verdict: the stream phase owns
+ * the terminal outcome, so an explicit stop/kill that already landed
+ * CANCELLED outranks a non-zero exit this reports.
  */
-type ChildRunOutcome =
+export type ChildRunOutcome =
   | { kind: 'completed' }
   | { kind: 'failed'; error?: unknown; errorMessage?: string }
   | { kind: 'cancelled' };

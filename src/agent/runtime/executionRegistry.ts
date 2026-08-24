@@ -9,7 +9,7 @@ import PQueue from 'p-queue';
 
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import { ExecutionLeaseLostError } from '@agent/storage/executionLease';
-import { persistTerminalExecution } from '@agent/storage/terminalPersistence';
+import { finalizeRun } from '@agent/storage/executionLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -1082,13 +1082,20 @@ export class ExecutionRegistry {
     });
 
     try {
-      await persistTerminalExecution({
+      const finalization = await finalizeRun({
         executionId: handle.executionId,
         outcome: RUN_OUTCOME.CANCELLED,
         flowRecord: 'delete',
-        logger,
-        failedMessage: 'Failed to finalize stopped waiting execution',
       });
+      if (!finalization.ok) {
+        logger.warn('Failed to finalize stopped waiting execution', {
+          data: {
+            executionId: handle.executionId,
+            outcomePersisted: finalization.outcomePersisted,
+            error: finalization.error,
+          },
+        });
+      }
     } finally {
       if (!handle.isChildExecution) {
         try {

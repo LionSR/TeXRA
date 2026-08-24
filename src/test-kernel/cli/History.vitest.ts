@@ -35,7 +35,6 @@ const mocks = vi.hoisted(() => ({
   listExecutions: vi.fn(),
   deleteExecution: vi.fn(),
   deleteAllExecutions: vi.fn(),
-  readCliToolUseResumeData: vi.fn(),
   readCliResumeDataForListing: vi.fn(),
   assembleTrace: vi.fn(),
 }));
@@ -68,7 +67,6 @@ vi.mock('@utils/files/taskRunStorage', () => ({
 }));
 
 vi.mock('@cli/runtime/toolUseResumeData', () => ({
-  readCliToolUseResumeData: mocks.readCliToolUseResumeData,
   readCliResumeDataForListing: mocks.readCliResumeDataForListing,
 }));
 
@@ -286,7 +284,6 @@ describe('CLI history runtime', () => {
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
-    mocks.readCliToolUseResumeData.mockResolvedValue(null);
     mocks.readCliResumeDataForListing.mockResolvedValue(null);
   });
 
@@ -1119,9 +1116,9 @@ describe('CLI history runtime', () => {
 
     await expect(persistedLogs.exists(streamId)).resolves.toBe(false);
     await expect(persistedLogs.exists(unrelated)).resolves.toBe(true);
-    await expect(
-      new StreamSnapshotStore().readPersistedExecutionId(streamId),
-    ).resolves.toBeUndefined();
+    const reopened = new StreamSnapshotStore();
+    await reopened.preload([streamId]);
+    expect(reopened.getRunMetadata(streamId).executionId).toBeUndefined();
   });
 
   it('clears a deleted parent from its child stream summary mirror', async () => {

@@ -1,5 +1,6 @@
 /** Tool-use follow-up routing and continuation ownership. */
 import { classifyRun } from '@agent/runtime/runClassification';
+import { readExecutionStreamIndex } from '@agent/storage/executionListing';
 import {
   currentSession,
   defaultSession,
@@ -134,17 +135,16 @@ function admitFollowUp(
       'live_owner',
     );
     if (submission.kind === 'duplicate') return { status: 'sent' };
-    if (submission.kind === 'live_flow') {
+    if (submission.kind === 'delivered_live') {
       if (options.mode === 'live_notification') return { status: 'queued' };
       notifyFollowUpSent(streamId, ownerSession);
       return { status: 'sent' };
     }
-    if (submission.kind === 'live' || submission.kind === 'queued') {
-      return { status: 'queued' };
-    }
-    if (submission.kind !== 'not_owned') {
+    if (submission.kind === 'queued') return { status: 'queued' };
+    if (submission.kind === 'refused') {
       return { status: 'failed', reason: 'not_resumable' };
     }
+    // No queue entry to join: deliver to the live context directly.
     target.context.session.appendFollowUp(item);
     notifyFollowUpSent(streamId, ownerSession);
     return { status: 'sent' };
@@ -161,10 +161,12 @@ function admitFollowUp(
     options.mode === 'live_notification' ? 'live_owner' : 'recoverable';
   const submission = ownerSession.followUps.submit(streamId, item, admission);
   if (submission.kind === 'duplicate') return { status: 'sent' };
-  if (submission.kind === 'unavailable' || submission.kind === 'not_owned') {
+  if (submission.kind === 'refused' || submission.kind === 'not_owned') {
     return { status: 'failed', reason: 'not_resumable' };
   }
-  if (submission.kind !== 'recovery') return { status: 'queued' };
+  if (submission.kind !== 'queued' || !submission.lease) {
+    return { status: 'queued' };
+  }
 
   const recovery = submission.lease;
   const resume = (options.resumePort ?? platform().agentResume).tryResumeStream(
@@ -176,11 +178,9 @@ function admitFollowUp(
 
 /**
  * The execution a stream currently belongs to. Prefer the resident snapshot
- * record for a live session: `run.start` updates it synchronously while the
- * sidecar FK write is still queued. A stream whose run metadata is not
- * resident (after a host restart, or evicted by a storage-root change) falls
- * back to the persisted sidecar, then to the summary mirror. Throws when the
- * persisted identity is unreadable.
+ * record for a live session: `run.start` updates it synchronously. A stream
+ * whose run metadata is not resident (after a host restart, or evicted by a
+ * storage-root change) resolves through the authored `meta.streamId` index.
  */
 export async function lookupStreamExecutionId(
   streamId: StreamTabId,
@@ -188,8 +188,7 @@ export async function lookupStreamExecutionId(
 ): Promise<ExecutionId | undefined> {
   return (
     session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
-    (await session.snapshots.readPersistedExecutionId(streamId)) ??
-    session.transcripts.getSummaryMeta(streamId)?.executionId
+    (await readExecutionStreamIndex()).byStream.get(streamId)
   );
 }
 

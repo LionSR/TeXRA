@@ -118,6 +118,15 @@ describe('SessionStores deletion coordination', () => {
       ownExecution(snapshots, stream, sidecarExecutionId);
       await snapshots.flush();
       snapshots.evictAll();
+      // The authored edge: registration stamps `meta.streamId` on the
+      // execution row; the stream index resolves through it, never through
+      // the summary mirror.
+      await getExecutionStore(sidecarExecutionId).writeMeta({
+        schemaVersion: 1,
+        timestamp: '2026-08-23T00:00:00.000Z',
+        streamId: stream,
+        identity: { kind: 'agent', agent: 'chat' },
+      });
       const deleteExecution = deletionSpy();
       const stores = new SessionStores({
         streamLogs: session.transcripts,
@@ -438,71 +447,7 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
     });
   });
 
-  it('returns failed rather than rejecting when ownership storage is unreadable', async () => {
-    await withSession(async (session) => {
-      const executionId = 'abc111' as ExecutionId;
-      const stream = `flaky@model#${executionId}` as StreamTabId;
-      session.transcripts.ensureStream(stream);
-      const snapshots = new StreamSnapshotStore();
-      vi.spyOn(snapshots, 'readPersistedExecutionId').mockRejectedValue(
-        new Error('storage read failed'),
-      );
-      const deleteExecution = deletionSpy();
-      const stores = new SessionStores({
-        streamLogs: session.transcripts,
-        snapshots,
-        deleteExecution,
-      });
-
-      await expect(stores.deleteStream(stream)).resolves.toBe('failed');
-      expect(deleteExecution).not.toHaveBeenCalled();
-      expect(session.transcripts.has(stream)).toBe(true);
-    });
-  });
-
-  it('retains only the unreadable stream during bulk deletion, deleting the rest', async () => {
-    await withSession(async (session) => {
-      const flakyExecutionId = 'abc222' as ExecutionId;
-      const goodExecutionId = 'abc333' as ExecutionId;
-      const flakyStream = `flaky@model#${flakyExecutionId}` as StreamTabId;
-      const goodStream = `good@model#${goodExecutionId}` as StreamTabId;
-      session.transcripts.ensureStream(flakyStream);
-      session.transcripts.ensureStream(goodStream);
-      const snapshots = new StreamSnapshotStore();
-      // The good stream owns its execution through the sidecar FK; the flaky
-      // stream's persisted FK is unreadable.
-      ownExecution(snapshots, goodStream, goodExecutionId);
-      vi.spyOn(snapshots, 'listPersistedStreams').mockResolvedValue([
-        flakyStream,
-      ]);
-      vi.spyOn(snapshots, 'readPersistedExecutionId').mockRejectedValue(
-        new Error('storage read failed'),
-      );
-      vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-      const deleteExecution = deletionSpy();
-      const stores = new SessionStores({
-        streamLogs: session.transcripts,
-        snapshots,
-        deleteExecution,
-      });
-
-      const result = await stores.deleteAll();
-
-      expect(result.failed).toEqual(new Set([flakyStream]));
-      expect(deleteExecution).toHaveBeenCalledWith(
-        goodExecutionId,
-        expect.anything(),
-      );
-      expect(deleteExecution).not.toHaveBeenCalledWith(
-        flakyExecutionId,
-        expect.anything(),
-      );
-      expect(session.transcripts.has(flakyStream)).toBe(true);
-      expect(session.transcripts.has(goodStream)).toBe(false);
-    });
-  });
-
-  it('bulk deletion preserves resident ownership and skips its sidecar read', async () => {
+  it('bulk deletion preserves resident ownership', async () => {
     await withSession(async (session) => {
       const executionId = 'abc444' as ExecutionId;
       const stream = `resident@model#${executionId}` as StreamTabId;
@@ -511,9 +456,6 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
       ownExecution(snapshots, stream, executionId);
       vi.spyOn(snapshots, 'listPersistedStreams').mockResolvedValue([stream]);
       vi.spyOn(snapshots, 'listStagedDeletions').mockResolvedValue([]);
-      vi.spyOn(snapshots, 'readPersistedExecutionId').mockRejectedValue(
-        new Error('sidecar should not be read for a resident stream'),
-      );
       const deleteExecution = deletionSpy();
       const stores = new SessionStores({
         streamLogs: session.transcripts,

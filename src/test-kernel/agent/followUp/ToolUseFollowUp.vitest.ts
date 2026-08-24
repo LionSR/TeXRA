@@ -21,12 +21,8 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
     executions: { getToolUseFollowUpTarget: () => target },
     followUps: new ToolUseFollowUpQueue(),
     events: { emit: vi.fn() },
-    transcripts: {
-      getSummaryMeta: () => undefined,
-    },
     snapshots: {
       getRunMetadata: () => ({}),
-      readPersistedExecutionId: vi.fn(async () => undefined),
     },
   } as unknown as SessionHandle;
 }
@@ -320,9 +316,13 @@ describe('ToolUseFollowUpQueue claim exclusivity', () => {
   it('makes recovery-vs-child claims exclusive in either order', () => {
     const streamId = id('stream:claim-race');
     const recoveryFirst = new ToolUseFollowUpQueue();
-    expect(
-      recoveryFirst.submit(streamId, { text: 'recover' }, 'recoverable').kind,
-    ).toBe('recovery');
+    const submission = recoveryFirst.submit(
+      streamId,
+      { text: 'recover' },
+      'recoverable',
+    );
+    expect(submission).toMatchObject({ kind: 'queued' });
+    expect(submission.kind === 'queued' && submission.lease).toBeTruthy();
     expect(recoveryFirst.claimLive(streamId, 'child')).toBeUndefined();
 
     const childFirst = new ToolUseFollowUpQueue();
