@@ -7,14 +7,17 @@ A non-exhaustive list of public projects and papers that used TeXRA. To add your
 - [**TNLean**](https://github.com/LionSR/TNLean): Lean 4 formalization of
   tensor-network theory, including matrix-product states and their canonical
   forms.
+- [**QICLean**](https://github.com/LionSR/QICLean): Lean 4 formalization of
+  quantum information and channels, including states, entanglement, channel
+  representations, and entropy.
 - [**MIPStarRE**](https://github.com/LionSR/MIPStarRE): Lean formalization of
   mathematics around $\mathrm{MIP}^* = \mathrm{RE}$.
 
 ## Papers
 
 - [**Can Theoretical Physics Research Benefit from Language Agents?**](https://arxiv.org/abs/2506.06214),
-  Sirui Lu, Zhuo Jin, Tian-Jun Zhang, Pavel Kos, J. Ignacio Cirac, and Bernhard
-  Schölkopf (ICML 2026). The position paper behind TeXRA.
+  Sirui Lu, Zhijing Jin, Terry Jingchen Zhang, Pavel Kos, J. Ignacio Cirac, and
+  Bernhard Schölkopf (ICML 2026). The position paper behind TeXRA.
 - [**Quantum computer architecture with ions in tweezer arrays**](https://arxiv.org/abs/2606.27249),
   Benjamin F. Schiffer, Christopher Monroe, Peter Zoller, and J. Ignacio Cirac
   (2026).
