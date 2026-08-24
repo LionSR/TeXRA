@@ -99,7 +99,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly apiKeyRetryController: ProgressApiKeyRetryController;
   private readonly followUpController: ProgressFollowUpController;
   private readonly followUpPolishController: ProgressFollowUpPolishController;
-  private dispatchSource: vscode.WebviewView | vscode.WebviewPanel | undefined;
   private chatExportController: ChatExportController | undefined;
 
   /**
@@ -371,12 +370,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  protected override onDispatch(
-    webviewView: vscode.WebviewView | vscode.WebviewPanel,
-  ): void {
-    this.dispatchSource = webviewView;
-  }
-
   /**
    * Commands this registry declares `unsupported(...)`, for the derived
    * frontend capability view (see `ProgressBackendOptions.getUnsupportedCommands`).
@@ -537,7 +530,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       followUp: {
         captureAdmissionReporter: () => {
-          const source = this.dispatchSource?.webview;
+          const source = this.getActiveView()?.webview;
           return (stream, accepted) => {
             if (!source) return;
             void Promise.resolve(

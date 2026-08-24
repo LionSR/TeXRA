@@ -23,6 +23,7 @@ import type * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
   safeExecuteCommand: vi.fn(),
+  savePastedImageBase64: vi.fn(),
   submitProgressFollowUp: vi.fn(),
 }));
 
@@ -32,6 +33,10 @@ vi.mock('@frontend/system/commandUtils', () => ({
 
 vi.mock('@controllers/progressView/progressFollowUpSubmit', () => ({
   submitProgressFollowUp: mocks.submitProgressFollowUp,
+}));
+
+vi.mock('@utils/files/pastedImageUtils', () => ({
+  savePastedImageBase64: mocks.savePastedImageBase64,
 }));
 
 function createWebviewView(): vscode.WebviewView {
@@ -138,6 +143,7 @@ describe('progress-view onboarding refresh wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.safeExecuteCommand.mockResolvedValue(undefined);
+    mocks.savePastedImageBase64.mockResolvedValue('/tmp/pasted.png');
     mocks.submitProgressFollowUp.mockResolvedValue(true);
   });
 
@@ -170,6 +176,13 @@ describe('progress-view onboarding refresh wiring', () => {
   });
 
   it('returns follow-up admission to the originating surface', async () => {
+    let finishImageSave: () => void = () => undefined;
+    mocks.savePastedImageBase64.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          finishImageSave = () => resolve('/tmp/pasted.png');
+        }),
+    );
     let finishSubmission: () => void = () => undefined;
     mocks.submitProgressFollowUp.mockImplementation(
       (args: ProgressFollowUpSubmitArgs) =>
@@ -190,17 +203,28 @@ describe('progress-view onboarding refresh wiring', () => {
         command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
         stream: 'originating-surface',
         text: 'continue',
+        images: [
+          {
+            base64: 'aGVsbG8=',
+            mediaType: 'image/png',
+            fileName: 'pasted_origin.png',
+          },
+        ],
       },
       sidebar,
     );
     await vi.waitFor(() => {
-      expect(mocks.submitProgressFollowUp).toHaveBeenCalledOnce();
+      expect(mocks.savePastedImageBase64).toHaveBeenCalledOnce();
     });
 
     await handler.handleMessage(
       { command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY, view: 'progress' },
       panel,
     );
+    finishImageSave();
+    await vi.waitFor(() => {
+      expect(mocks.submitProgressFollowUp).toHaveBeenCalledOnce();
+    });
     finishSubmission();
     await sending;
 
