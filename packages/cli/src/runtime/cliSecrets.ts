@@ -56,7 +56,7 @@ export class CliSecrets implements PlatformSecrets {
 
   async listStoredKeys(): Promise<readonly string[]> {
     const store = await this.openStore();
-    return Object.keys(store.snapshot());
+    return store.keys();
   }
 
   getEnv(name: string): string | undefined {

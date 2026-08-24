@@ -146,6 +146,10 @@ export class JsonStore implements StateStore {
     return { ...this.data };
   }
 
+  keys(): string[] {
+    return Object.keys(this.data);
+  }
+
   /**
    * Add the flush to the file's entry in {@link writeQueues} so flushes run
    * in `set()` call order. The task is enqueued synchronously, before any

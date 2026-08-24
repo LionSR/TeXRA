@@ -34,9 +34,18 @@ const convertFencedLatexBlock: ReplacementFunction = (
   return `${safeLeadingBreak}${safeIndent}\\begin{${safeEnvironment}}${newline}${emptyBodyPadding}${bodyWithTrailingBreak}${safeIndent}\\end{${safeEnvironment}}`;
 };
 
+// Escape-aware, matching the depth-tracking rules in
+// `@utils/text/braceBalancedMacro`'s `readBraceGroup`: `\{`, `\}`, and `\\`
+// don't count as brace characters, so a caption like `\caption{a \{ b}` is
+// correctly judged balanced rather than rejected.
 function hasBalancedBraces(value: string): boolean {
   let depth = 0;
-  for (const char of value) {
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    if (char === '\\' && i + 1 < value.length) {
+      i += 1;
+      continue;
+    }
     if (char === '{') {
       depth += 1;
     } else if (char === '}') {
