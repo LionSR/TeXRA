@@ -34,10 +34,10 @@ const ViewActionSchema = z.strictObject({
   // clean single-value `const` (not an `anyOf` with `null`) — required so
   // `convertToolSchema`'s `flattenTopLevelUnion`/`schemaLiteralValue` (which
   // only recognizes a bare `const`/one-item `enum` as a discriminator
-  // literal) still merges all five actions into one enum for the
+  // literal) still merges all three actions into one enum for the
   // OpenAI/Anthropic/Google-facing schema. `.nullish()` here produces an
   // `anyOf` that flattening can't read as a literal, silently dropping
-  // wait/kill/subscribe/unsubscribe from the advertised schema instead.
+  // wait/kill from the advertised schema instead.
   // The explicit-`null` case AGENTS.md's rule calls out (a structured-output
   // provider representing an omitted optional field as `null` rather than
   // absent) is handled separately below by ExecutionsToolInputSchema's
@@ -115,30 +115,10 @@ const KillActionSchema = z.strictObject({
     .describe('Terminate a running execution by ID (use on /executions/{id}).'),
 });
 
-const SubscribeActionSchema = z.strictObject({
-  path: PathFieldSchema,
-  action: z
-    .literal('subscribe')
-    .describe(
-      'Receive future status changes for /executions/{id} as <execution-activity> follow-ups; auto-disposes when the execution finishes or this stream is released.',
-    ),
-});
-
-const UnsubscribeActionSchema = z.strictObject({
-  path: PathFieldSchema,
-  action: z
-    .literal('unsubscribe')
-    .describe(
-      'Stop receiving <execution-activity> follow-ups for /executions/{id}.',
-    ),
-});
-
 const ExecutionsToolActionSchema = z.discriminatedUnion('action', [
   ViewActionSchema,
   WaitActionSchema,
   KillActionSchema,
-  SubscribeActionSchema,
-  UnsubscribeActionSchema,
 ]);
 
 // A structured-output provider represents an omitted optional field as an
