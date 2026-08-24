@@ -54,8 +54,8 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { roundModelHandler } from '@test/agent/toolUseRoundTestUtils';
@@ -74,7 +74,7 @@ const PARENT_MODEL = 'gpt54';
 const CHILD_MODEL = 'gpt55';
 const MODEL_HANDLER_KEY = 'ModelHandlerOpenAIResponse';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 let session: SessionHandle;
 let childId: ExecutionId | undefined;
 let resumedStreams: StreamTabId[];
@@ -366,7 +366,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     clearInlineAgents();
     clearStoreCache();
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('resumes one persisted child through the real queue and archives both turns once', async () => {

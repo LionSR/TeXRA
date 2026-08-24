@@ -1,21 +1,17 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { isGitRepository } from '@utils/git/isGitRepository';
 
 const execFileAsync = promisify(execFile);
 
 describe('isGitRepository', () => {
-  const tempDirs: string[] = [];
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
+  const tempDirs = useTempDirs();
 
   function tempRepoDir(): Promise<string> {
     return makeTempDir('texra-is-git-repo-', tempDirs);

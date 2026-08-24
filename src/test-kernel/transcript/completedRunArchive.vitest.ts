@@ -71,8 +71,8 @@ import {
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -91,7 +91,7 @@ import {
 } from '@transcript';
 import type { TranscriptWriter } from '@transcript/StreamLogStore';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 function runConfig(agent: string, model = 'deepseekproT'): AgentConfig {
   return AgentConfigSchema.parse({
@@ -264,7 +264,6 @@ describe('completedRunArchive facade', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('serves conversation, chat export, and todos from the sidecars alone (projections gone)', async () => {

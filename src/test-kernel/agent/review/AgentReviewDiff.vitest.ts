@@ -3,7 +3,7 @@ import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import {
@@ -15,8 +15,8 @@ import {
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
-  cleanupTempDirs,
   makeTempDir,
+  useTempDirs,
   withTempDir,
 } from '@test/support/tempDirPlatform';
 import { executeCommand } from '@utils/system/execUtils';
@@ -35,7 +35,7 @@ describe('isPathInChangeSet', () => {
 });
 
 describe('collectReviewDiff (real git repository)', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
   let repo: string;
 
   async function git(...args: string[]): Promise<string> {
@@ -57,10 +57,6 @@ describe('collectReviewDiff (real git repository)', () => {
     await writeFile(path.join(repo, 'paper.tex'), 'original line\n');
     await git('add', '.');
     await git('commit', '-m', 'initial');
-  });
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
   });
 
   async function collectDiff(options: Partial<CollectReviewDiffOptions> = {}) {
@@ -94,7 +90,7 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(value.diff).not.toContain('untracked content');
     expect(value.changedFiles).toEqual(['paper.tex']);
     expect(value.truncated).toBe(false);
-    expect(await realpath(value.repoRoot)).toBe(await realpath(repo));
+    expect(await realpath(value.repoRoot)).toBe(repo);
   });
 
   it('ignores inherited interactive git environment variables', async () => {
@@ -139,7 +135,7 @@ describe('collectReviewDiff (real git repository)', () => {
     const value = await collectDiffOrFail({
       cwd: path.join(repo, 'sub'),
     });
-    expect(await realpath(value.repoRoot)).toBe(await realpath(repo));
+    expect(await realpath(value.repoRoot)).toBe(repo);
     expect(value.changedFiles).toEqual(['sub/note.txt']);
   });
 

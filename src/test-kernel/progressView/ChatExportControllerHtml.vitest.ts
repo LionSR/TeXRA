@@ -1,8 +1,7 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import * as os from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -21,6 +20,7 @@ import {
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
   appendTranscriptEntry,
   snapshotFacts,
@@ -33,11 +33,10 @@ const TEMPLATE =
   '<script type="module" crossorigin src="./index.js"></script>' +
   '</head><body></body></html>';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 async function installStoragePlatform(): Promise<void> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-html-export-'));
-  tempDirs.push(tempDir);
+  const tempDir = await makeTempDir('texra-html-export-', tempDirs);
   const workspaceDir = path.join(tempDir, 'workspace');
   const storageRoot = path.join(tempDir, 'storage');
   const { initPlatform } = await import('@platform/platform');
@@ -56,8 +55,7 @@ async function installStoragePlatform(): Promise<void> {
 }
 
 async function writeTemplate(): Promise<string> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-template-'));
-  tempDirs.push(tempDir);
+  const tempDir = await makeTempDir('texra-template-', tempDirs);
   const templatePath = path.join(tempDir, 'index.html');
   await writeFile(templatePath, TEMPLATE, 'utf8');
   return templatePath;
@@ -116,14 +114,6 @@ describe('ChatExportController.exportAsHtml', () => {
   }
 
   beforeEach(installStoragePlatform);
-
-  afterEach(async () => {
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((dir) => rm(dir, { recursive: true, force: true })),
-    );
-  });
 
   it('returns config_missing when nothing is stored', async () => {
     const templatePath = await writeTemplate();
