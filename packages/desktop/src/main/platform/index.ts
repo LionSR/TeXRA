@@ -123,9 +123,8 @@ export async function initializeElectronPlatform(
   // Copilot route preferences are swept on every startup. Runs here so it is
   // upstream of the settings view's first model-list paint.
   try {
-    await refreshModelListAndLog(globalStateStore, (message) =>
-      console.info(`[desktop] ${message}`),
-    );
+    const { messages } = await refreshModelListAndLog(globalStateStore);
+    for (const message of messages) console.info(`[desktop] ${message}`);
   } catch (error) {
     console.error(
       `[desktop] Failed to refresh model list: ${toErrorMessage(error)}`,

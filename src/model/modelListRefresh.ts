@@ -192,31 +192,32 @@ export async function refreshModelListStateIfNeeded(
 
 /**
  * Runs {@link refreshModelListStateIfNeeded} and, when it changed anything,
- * invalidates the model-options cache and logs what changed. Every host
- * (extension, desktop, CLI) calls this at startup with the same
- * added/removed/reordered/route-preference handling; only the logger and any
- * host-specific follow-up (e.g. the extension's version-change message) stay
- * at the call site.
+ * invalidates the model-options cache. Every host (extension, desktop, CLI)
+ * calls this at startup with the same added/removed/reordered/route-
+ * preference handling; only the resulting `messages` (logged by the caller,
+ * so a host can interleave its own follow-up lines, e.g. the extension's
+ * version-change message, in whatever order it already logs) stay at the
+ * call site.
  */
 export async function refreshModelListAndLog(
   state: ModelListState,
-  log: (message: string) => void,
-): Promise<ModelListRefreshResult> {
+): Promise<ModelListRefreshResult & { messages: readonly string[] }> {
   const result = await refreshModelListStateIfNeeded(state);
   const { added, removed, reordered, routePreferencesCleared } = result;
   const changed = added.length > 0 || removed.length > 0 || reordered;
+  const messages: string[] = [];
   if (changed || routePreferencesCleared.length > 0) {
     invalidateModelOptionsCache();
     if (changed) {
-      log(
+      messages.push(
         `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
       );
     }
     if (routePreferencesCleared.length > 0) {
-      log(
+      messages.push(
         `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
       );
     }
   }
-  return result;
+  return { ...result, messages };
 }
