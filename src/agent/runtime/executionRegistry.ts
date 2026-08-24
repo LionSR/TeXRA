@@ -794,13 +794,16 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Add a persistent listener invoked on every change to `executionId` (status
-   * transition, progress update, kill, untrack). Returns a disposer.
+   * Register a change waiter for `executionId` (status transition, progress
+   * update, kill, untrack) and return its disposer. Private: the only callers
+   * are {@link waitForChange} and {@link waitForAnyChange}, which each detach
+   * on the first event, so nothing observes a second change through the same
+   * callback.
    *
    * The callback receives the current handle, or `undefined` once the
    * execution has been untracked (terminal event).
    */
-  addListener(
+  private addListener(
     executionId: string,
     cb: (handle: AgentExecutionHandle | undefined) => void,
   ): () => void {

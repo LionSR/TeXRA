@@ -1,8 +1,7 @@
 // Single source of truth for the child-run delivery-envelope XML root tags
 // (`<subagent-result>`, `<codex-error>`, `<execution-activity>`, …) that
-// producers (src/tools/*, src/agent/runtime/ExecutionSubscriptionBinder.ts)
-// mint and render surfaces (progressView UserMessage, the CLI transcript)
-// must recognize. Previously each render surface hand-listed the tag
+// producers (src/tools/*) mint and render surfaces (progressView
+// UserMessage, the CLI transcript) must recognize. Previously each render surface hand-listed the tag
 // vocabulary separately from the producers, so a new child-run kind (e.g.
 // `claude-agent-result`) could ship without ever being added to a render
 // list and would render as raw XML. Adding a new child-run kind is now one
@@ -48,6 +47,10 @@ export interface DeliveryTagEntry {
 /** The tags whose bodies are neutralized rather than XML-entity-escaped. */
 const UNESCAPED_DELIVERY_TAGS = new Set<DeliveryTagName>([
   DELIVERY_TAG.githubWebhookActivity,
+  // `execution-activity` has no live producer since the model-facing
+  // `executions subscribe` action was removed, but transcripts recorded
+  // before then still carry the envelope and must keep rendering as a block
+  // instead of raw XML.
   DELIVERY_TAG.executionActivity,
 ]);
 

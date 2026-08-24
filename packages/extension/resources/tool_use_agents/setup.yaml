@@ -289,8 +289,8 @@ prompts:
       3. The delegation goes through the normal proposal/approval UI.
          Tell the user to watch the Progress view (for `orchestrator`,
          further proposals appear there as it dispatches subagents).
-      4. Monitor with the `executions` tool: subscribe or wait rather
-         than polling in a tight loop. Report progress in one sentence
+      4. Monitor with the `executions` tool: wait rather than polling
+         in a tight loop. Report progress in one sentence
          per status change; stop when the subagent reaches `completed`.
       5. If the user declines, do not push: say "you're set; hit
          Execute in the main view whenever you're ready" and finish.

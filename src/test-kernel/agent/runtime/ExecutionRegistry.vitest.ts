@@ -306,17 +306,11 @@ describe('executionRegistry', () => {
       },
     );
     registry.track(first);
-    const seen: unknown[] = [];
-    const detach = registry.addListener(executionId, (handle) => {
-      seen.push(handle);
-    });
 
     registry.track(second);
     registry.untrack(executionId);
 
-    expect(seen).toEqual([second, undefined]);
     expect(registrations).toEqual([first, second, undefined]);
-    detach();
     detachRegistrations();
     registry.dispose();
   });
