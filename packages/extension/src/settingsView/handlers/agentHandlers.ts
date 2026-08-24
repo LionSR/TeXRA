@@ -43,6 +43,7 @@ import {
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 import {
@@ -319,7 +320,14 @@ export class AgentHandlers {
                 return Promise.resolve();
               },
               showErrorMessage: (message) => {
-                void showLoggedMessage(this.ctx.channel, message);
+                void showLoggedMessage(this.ctx.channel, message).catch(
+                  (err: unknown) => {
+                    this.ctx.logger.warn(
+                      this.ctx.channel,
+                      `Error notification failed after handoff: ${toErrorMessage(err)}`,
+                    );
+                  },
+                );
                 return Promise.resolve();
               },
             },
