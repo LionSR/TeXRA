@@ -21,16 +21,6 @@ import { getValidatedConfig } from '@utils/config/configUtils';
 
 import type { SessionHandle } from './SessionHandle';
 
-/**
- * High enough that deliberate double-digit concurrent fan-out never queues,
- * low enough to stop a runaway recursive fan-out from opening unbounded
- * model conversations. The canonical value now lives in
- * `CHILD_RUN_CONCURRENCY_BUDGET_SETTING`; this re-export keeps the original
- * seam (and existing explicit-pin tests) authoritative.
- */
-export const DEFAULT_CHILD_RUN_BUDGET =
-  CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue;
-
 const budgets = new WeakMap<SessionHandle, PQueue>();
 
 /**

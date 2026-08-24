@@ -1540,9 +1540,9 @@ export class StreamSnapshotStore {
     for (const [stream, record] of this.records) {
       // Per-record loudness: a resident record without established disk
       // provenance may be missing its persisted executionId here. Streams
-      // with no record at all are this accessor's contract (callers merge
-      // `readPersistedExecutionId` for those), so only resident-but-unknown
-      // records warrant a warning.
+      // with no record at all are outside this accessor's contract (callers
+      // merge `readExecutionStreamIndex` for those), so only
+      // resident-but-unknown records warrant a warning.
       this.warnIfUnseeded('getExecutionIdMap', stream);
       const executionId = record.runExecutionId;
       if (executionId) map.set(stream, executionId);

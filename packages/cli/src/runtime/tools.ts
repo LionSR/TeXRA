@@ -97,10 +97,6 @@ export function findCliToolDef(id: string): ExternalToolDef | undefined {
   return getCliToolDefs().find((def) => def.id === id);
 }
 
-export function cliToolIds(): string[] {
-  return getCliToolDefs().map((def) => def.id);
-}
-
 export function readCliToolGuide(
   id: string,
   kind: CliToolGuideKind,

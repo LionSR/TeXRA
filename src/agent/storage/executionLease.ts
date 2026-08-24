@@ -55,11 +55,11 @@ type ExecutionLeaseRecord = z.infer<typeof ExecutionLeaseSchema>;
 /**
  * The single-file records of the two retired protocols, still found at
  * `executionLeases/<executionId>.json`. A presence-socket record (v2,
- * shipped in 0.40.4) can belong to a process that is live during a rolling
+ * shipped in 0.40.3) can belong to a process that is live during a rolling
  * upgrade, so it is read as an ordinary claim whose owner is proven by pid
  * alone (no start identity was ever recorded). A heartbeat record (v1)
- * predates 0.40.4 and names no process: it is a tombstone, retired on
- * contact, exactly as 0.40.4 treated it.
+ * predates 0.40.3 and names no process: it is a tombstone, retired on
+ * contact, exactly as 0.40.3 treated it.
  */
 const LegacyLeaseSchema = z.union([
   z
@@ -92,13 +92,22 @@ const LegacyLeaseSchema = z.union([
 ]);
 
 /**
- * COMPATIBILITY SHIM, delete after v0.41 ships: the v2 record a 0.40.4
- * process reads at the single-file path. While this process holds a v3
- * claim it keeps one of these beside it, naming its own token and pid and a
- * socket path that does not exist. A 0.40.4 reader probes that path, gets
+ * COMPATIBILITY SHIM: the v2 record a 0.40.3-or-earlier process reads at the
+ * single-file path. 0.40.3 is the last release that writes and reads v2;
+ * 0.40.4 already ships the v3 per-token protocol. While this process holds a
+ * v3 claim it keeps one of these beside it, naming its own token and pid and
+ * a socket path that does not exist. A 0.40.3 reader probes that path, gets
  * ENOENT, sees the pid alive, and treats the owner as active, so it backs
- * off instead of claiming beside a v3 owner it cannot see. 0.40.4 validates
+ * off instead of claiming beside a v3 owner it cannot see. 0.40.3 validates
  * the record strictly, so every field it expects is present.
+ *
+ * Retire after 2026-11-24 (#6981 ledger, row on #9627), deleting this
+ * function and its caller together. The original "delete after v0.41 ships"
+ * trigger was derived from the wrong last-v2 release (0.40.4 rather than
+ * 0.40.3); this date is three months past 0.40.3's release on 2026-08-20,
+ * the upgrade window after which a process still writing v2 against a shared
+ * ~/.texra is not worth carrying. It shares a date with the delivery-tag read
+ * shim in `src/shared/deliveryTags.ts` so both retire in one pass.
  */
 function legacyShadowRecord(record: ExecutionLeaseRecord): string {
   const socketPath =
@@ -361,7 +370,7 @@ async function judgeClaims(
  * any lock: a claim file is named by a token that is never reused, so the
  * file of a dead owner can never become a live claim again, and unlinking
  * it cannot displace anyone. (The one exception is a legacy single-file
- * record, whose path a 0.40.4 process could in principle rewrite in the same
+ * record, whose path a 0.40.3 process could in principle rewrite in the same
  * window; that process's own write fence catches the displacement.)
  */
 async function reapClaims(
@@ -437,7 +446,7 @@ async function unlinkOwnClaim(
   root: string,
   ownerToken: string,
 ): Promise<void> {
-  // The shadow is only this process's while it names this token; a 0.40.4
+  // The shadow is only this process's while it names this token; a 0.40.3
   // process could have rewritten the path in the meantime.
   const legacy = await readLegacyRecord(executionId, root).catch((error) => {
     log.warn(`Execution ${executionId}: could not read its legacy record`, {
@@ -513,8 +522,9 @@ async function claimLease(
           reap,
         );
         if (others.length === 0) {
-          // COMPATIBILITY SHIM, delete after v0.41 ships: keep a v2 record a
-          // 0.40.4 process can see for as long as this claim is held.
+          // COMPATIBILITY SHIM (see `legacyShadowRecord`): keep a v2 record a
+          // 0.40.3-or-earlier process can see for as long as this claim is
+          // held.
           await StorageFS.writeAtomic(
             legacyLeasePath(root, executionId),
             legacyShadowRecord(record),

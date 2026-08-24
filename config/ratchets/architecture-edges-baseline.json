@@ -15,7 +15,6 @@
     { "from": "agent", "to": "transcript", "kind": "value" },
     { "from": "agent", "to": "utils", "kind": "value" },
     { "from": "auth", "to": "common", "kind": "value" },
-    { "from": "auth", "to": "eventBus", "kind": "value" },
     { "from": "auth", "to": "logger", "kind": "value" },
     { "from": "auth", "to": "platform", "kind": "value" },
     { "from": "auth", "to": "shared", "kind": "value" },

@@ -15,11 +15,12 @@ import {
   isTexraApprovalDenied,
   texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
-import type {
-  LineChanges,
-  StreamTabId,
-  ToolEditPermission,
-  ToolResult,
+import {
+  TOOL_EDIT_APPROVAL_CONFIG_KEY,
+  type LineChanges,
+  type StreamTabId,
+  type ToolEditPermission,
+  type ToolResult,
 } from '@shared/schemas';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
@@ -61,8 +62,6 @@ export type ToolEditApprovalResult =
       readonly startLine?: number;
     }
   | ({ readonly action: 'reject' } & RejectionProvenance);
-
-const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
 
 export const REVEAL_TIMEOUT_MS = 1500;
 

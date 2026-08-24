@@ -1,7 +1,13 @@
 # PRD: Proven execution liveness (presence sockets), full retirement of heartbeat leases
 
 **Date:** 2026-08-16
-**Status:** Approved for implementation
+**Status:** Superseded by
+[Single-owner sessions](../proposals/2026-08-23-single-owner-sessions.md).
+The presence-socket layer specified here shipped and was then removed:
+`src/agent/storage/instancePresence.ts` no longer exists, and
+`src/agent/storage/executionLease.ts` is now a v3 record whose owner is
+proven by pid liveness. Kept as a historical record of the decision; the
+body below describes the design as approved, not the current tree.
 **Owner:** Ray
 **Replaces:** the wall-clock heartbeat/staleness layer of `src/agent/storage/executionLease.ts`
 

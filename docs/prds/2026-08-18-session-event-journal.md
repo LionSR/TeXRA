@@ -36,7 +36,7 @@ fix.)
   migration chain", "one-shot legacy conversion and a temporary reader").
 - **C3 — designed from the current surface.** The Stream tab is the only
   history surface (#10811); `SessionState` owns removal tombstones and
-  incarnation fences (#10805, #10839); presence-proven leases (#10778).
+  incarnation fences (#10805, #10839); pid-liveness execution leases (#10778).
   These are foundations, not problems.
 - **C4 — the sidecar/overlay chain is in scope.** The design must collapse
   `StreamSnapshotStore`'s parallel persistence (seed chains, overlay replay,
@@ -140,8 +140,8 @@ derived tier, discard-and-rebuild, never migrate):
 ### 3.4 Writes, durability, streaming
 
 - **Single writer per stream:** the session's admission door is the only
-  producer; writer authority rides the existing execution model (presence
-  leases, #10778) unchanged.
+  producer; writer authority rides the existing execution model (pid-liveness
+  execution leases, #10778) unchanged.
 - **Durability policy:** boundary events (turn/tool/group/stream terminal
   events, user prompts) append eagerly — durable at once, no batching
   window. High-frequency non-boundary facts may share a bounded max-wait

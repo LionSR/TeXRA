@@ -69,7 +69,7 @@ function isStdinWorkflowInputSpec(inputSpec: string): boolean {
   return inputSpec.trim() === STDIN_INPUT_TOKEN;
 }
 
-export interface WorkflowInputExpansionOptions {
+interface WorkflowInputExpansionOptions {
   readonly allowEmpty?: boolean;
   readonly requireWorkspaceFiles?: boolean;
   readonly stdinInputFile?: () => Promise<string>;
@@ -264,19 +264,6 @@ async function expandWorkflowInputSpec(
     throw new CliUsageError(`${flagLabel}: file not found: ${trimmed}`);
   }
   return [normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options)];
-}
-
-export async function expandWorkflowInputSpecs(
-  inputSpecs: readonly string[],
-  cwd: string,
-  flagLabel: string = '--input',
-  options: WorkflowInputExpansionOptions = {},
-): Promise<string[]> {
-  return finishWorkflowInputExpansion(
-    await prepareWorkflowInputExpansion(inputSpecs, cwd, flagLabel, options),
-    cwd,
-    options,
-  );
 }
 
 async function prepareWorkflowInputExpansion(

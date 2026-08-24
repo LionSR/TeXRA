@@ -48,8 +48,8 @@ tool-availability host — and requires the host to supply the rest:
 When Step 3 will copy the packaged bundle, `agentDirectories` must be the
 matching global-storage port from `createPlatformAgentDirectories`, or an
 equivalent port that resolves the same copied directories. The factory and the
-bootstrap both use `GlobalStorageAgentDirectoryStorage`
-(`src/agent/index/platformAgentDirectories.ts:25-29,59-65`). Bootstrapping
+bootstrap both resolve those directories through `GlobalStorageFS`
+(`src/agent/index/platformAgentDirectories.ts:41-42,166-169`). Bootstrapping
 alone does not replace the port already installed in the platform.
 
 Only a composition root calls `initPlatform`; that rule is stated in the
