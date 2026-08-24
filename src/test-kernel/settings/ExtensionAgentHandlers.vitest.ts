@@ -10,6 +10,7 @@ import { installPlatform } from '@test/support/setupPlatform';
 type AgentCatalog = Record<AgentCategory, AgentEntry[]>;
 
 const host = vi.hoisted(() => ({
+  showErrorMessage: vi.fn(),
   showInformationMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   executeCommand: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('vscode', async () => {
     ...actual,
     window: {
       ...actual.window,
+      showErrorMessage: host.showErrorMessage,
       showInformationMessage: host.showInformationMessage,
       showWarningMessage: host.showWarningMessage,
     },
@@ -112,7 +114,7 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
   });
   host.showWarningMessage.mockImplementation(async (message: string) => {
     modalPrompts.push(message);
-    return options.modalChoice;
+    return options.modalChoice ? { title: options.modalChoice } : undefined;
   });
 
   const refreshAfterAgentMutation = vi.fn(
@@ -268,9 +270,12 @@ describe('extension settings AgentHandlers', () => {
     expect(host.showWarningMessage).toHaveBeenCalledWith(
       modalPrompts[0],
       { modal: true },
-      'Sign In to TeXRA',
-      'Continue with Available Members',
-      'Cancel',
+      { title: 'Sign In to TeXRA', isCloseAffordance: false },
+      {
+        title: 'Continue with Available Members',
+        isCloseAffordance: false,
+      },
+      { title: 'Cancel', isCloseAffordance: true },
     );
     expect(registry.refreshAgents).not.toHaveBeenCalled();
     expect(refreshAfterAgentMutation).not.toHaveBeenCalled();

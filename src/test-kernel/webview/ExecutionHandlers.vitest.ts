@@ -32,12 +32,17 @@ vi.mock('@common/teams/TeamPlan', () => ({
   formatPartialTeamLaunchMessage: vi.fn(),
   formatTeamLaunchBlockedMessage: vi.fn(),
   formatTeamUnavailableMessage: vi.fn(),
-  formatUnavailableTeamMembersMessage: vi.fn(),
   formatUnknownTeamMessage: vi.fn(),
   resolveTeamLaunch: vi.fn(),
-  TEAM_LAUNCH_CANCEL_LABEL: 'Cancel',
-  TEAM_LAUNCH_CONTINUE_LABEL: 'Continue',
-  TEAM_LAUNCH_SIGN_IN_LABEL: 'Sign in',
+  teamAvailabilityPrompt: vi.fn(() => ({
+    severity: 'warning',
+    message: 'Unavailable members',
+    actions: [
+      { choice: 'sign-in', label: 'Sign in' },
+      { choice: 'continue', label: 'Continue' },
+      { choice: 'cancel', label: 'Cancel' },
+    ],
+  })),
   TEAM_SELECTION_REQUIRED_MESSAGE: 'Select a team',
 }));
 vi.mock('@controllers/mainView/teamCatalogPorts', () => ({

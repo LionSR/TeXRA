@@ -43,6 +43,7 @@ import {
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 import {
@@ -318,8 +319,16 @@ export class AgentHandlers {
                 void vscode.window.showInformationMessage(message);
                 return Promise.resolve();
               },
-              showErrorMessage: async (message) => {
-                await showLoggedMessage(this.ctx.channel, message);
+              showErrorMessage: (message) => {
+                void showLoggedMessage(this.ctx.channel, message).catch(
+                  (err: unknown) => {
+                    this.ctx.logger.warn(
+                      this.ctx.channel,
+                      `Error notification failed after handoff: ${toErrorMessage(err)}`,
+                    );
+                  },
+                );
+                return Promise.resolve();
               },
             },
             refreshAfterApply: (selectedToolUseAgent) =>
@@ -389,12 +398,17 @@ export class AgentHandlers {
   // ── Private helpers ──
 
   private async chooseTeamAvailability(prompt: TeamAvailabilityPrompt) {
+    const items = prompt.actions.map((action) => ({
+      title: action.label,
+      isCloseAffordance: action.choice === 'cancel',
+    }));
     const choice = await vscode.window.showWarningMessage(
       prompt.message,
       { modal: true },
-      ...prompt.actions.map((action) => action.label),
+      ...items,
     );
-    return prompt.actions.find((action) => action.label === choice)?.choice;
+    return prompt.actions.find((action) => action.label === choice?.title)
+      ?.choice;
   }
 
   private async createAgentFromTemplate(
