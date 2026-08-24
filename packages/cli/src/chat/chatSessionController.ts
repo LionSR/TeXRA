@@ -366,7 +366,7 @@ export function createChatSessionController(
   // inherited this runtime host settles, so detached children retain a visible,
   // answerable approval path without keeping the completed root turn pending.
   // The runtime owns that "still inherited" fact (see
-  // `ExecutionRegistry.interactionOwnership`); this host only claims its root
+  // `ExecutionRegistry.openInteractionScope`); this host only claims its root
   // run and reacts to the release.
   const setupRunHost = (
     sessionContext: CliContext,
@@ -390,7 +390,7 @@ export function createChatSessionController(
       resultToastAttached = false;
       detachResultToast();
     };
-    const ownership = runtimeSession.executions.interactionOwnership.open(
+    const ownership = runtimeSession.executions.openInteractionScope(
       (): void => {
         detachResultToastOnce();
         detachHostInteractions();

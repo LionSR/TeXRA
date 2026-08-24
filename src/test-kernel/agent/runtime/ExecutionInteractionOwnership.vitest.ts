@@ -1,5 +1,5 @@
-// Interaction-ownership index (D3/T5): which host-interaction generation owns
-// each live execution. Pins the release rule a host depends on — surfaces stay
+// Interaction ownership (D3/T5): which host-interaction generation owns each
+// live execution. Pins the release rule a host depends on — surfaces stay
 // attached while any inheriting run is alive, and one generation never inherits
 // another's runs. Design note: docs/design/2026-08-01-execution-interaction-ownership.md.
 
@@ -48,7 +48,7 @@ function trackRun(
 function openRootScope() {
   const registry = createRegistry();
   const onRelease = vi.fn();
-  const scope = registry.interactionOwnership.open(onRelease);
+  const scope = registry.openInteractionScope(onRelease);
   const rootStream = 'root-stream' as StreamTabId;
 
   scope.claim('root');
@@ -71,7 +71,7 @@ describe('execution interaction ownership', () => {
   it('releases immediately when a claimed run never reached the registry', () => {
     const registry = createRegistry();
     const onRelease = vi.fn();
-    const scope = registry.interactionOwnership.open(onRelease);
+    const scope = registry.openInteractionScope(onRelease);
 
     scope.claim('never-tracked');
     expect(onRelease).not.toHaveBeenCalled();
@@ -85,8 +85,9 @@ describe('execution interaction ownership', () => {
 
     // The child is never claimed by the host: it inherits through the stream
     // lineage of the root the host did claim.
+    // The child is proved to have inherited the scope by the release rule
+    // below: an unowned child would let the finished root release at once.
     trackRun(registry, 'child', rootStream, 'child-stream' as StreamTabId);
-    expect(registry.interactionOwnership.ownerOf('child')).toBe(scope);
 
     registry.untrack('root');
     scope.finish();
@@ -97,7 +98,7 @@ describe('execution interaction ownership', () => {
   });
 
   it('inherits a grandchild through the child stream it already owns', () => {
-    const { registry, scope, rootStream } = openRootScope();
+    const { registry, onRelease, scope, rootStream } = openRootScope();
     const childStream = 'child-stream' as StreamTabId;
 
     trackRun(registry, 'child', rootStream, childStream);
@@ -108,7 +109,13 @@ describe('execution interaction ownership', () => {
       'grandchild-stream' as StreamTabId,
     );
 
-    expect(registry.interactionOwnership.ownerOf('grandchild')).toBe(scope);
+    registry.untrack('root');
+    registry.untrack('child');
+    scope.finish();
+    expect(onRelease).not.toHaveBeenCalled();
+
+    registry.untrack('grandchild');
+    expect(onRelease).toHaveBeenCalledOnce();
   });
 
   it('holds the owner for the whole life of a child activation', () => {
@@ -157,14 +164,13 @@ describe('execution interaction ownership', () => {
 
     releaseActivation();
     expect(onRelease).toHaveBeenCalledOnce();
-    expect(registry.interactionOwnership.ownerOf('child')).toBeUndefined();
   });
 
   it('does not let a later generation inherit or release an earlier one', () => {
     const registry = createRegistry();
     const releaseFirst = vi.fn();
     const releaseSecond = vi.fn();
-    const first = registry.interactionOwnership.open(releaseFirst);
+    const first = registry.openInteractionScope(releaseFirst);
     const firstRootStream = 'first-root' as StreamTabId;
 
     first.claim('first-root');
@@ -178,7 +184,7 @@ describe('execution interaction ownership', () => {
     registry.untrack('first-root');
     first.finish();
 
-    const second = registry.interactionOwnership.open(releaseSecond);
+    const second = registry.openInteractionScope(releaseSecond);
     const secondRootStream = 'second-root' as StreamTabId;
     second.claim('second-root');
     trackRun(registry, 'second-root', secondRootStream, secondRootStream);
@@ -187,9 +193,9 @@ describe('execution interaction ownership', () => {
 
     expect(releaseSecond).toHaveBeenCalledOnce();
     expect(releaseFirst).not.toHaveBeenCalled();
-    // The second generation's release must not strip the first's claims.
-    expect(registry.interactionOwnership.ownerOf('first-child')).toBe(first);
 
+    // The second generation's release must not strip the first's claims: the
+    // first still holds its child, and releases only when that child goes.
     registry.untrack('first-child');
     expect(releaseFirst).toHaveBeenCalledOnce();
   });
@@ -198,8 +204,8 @@ describe('execution interaction ownership', () => {
     const registry = createRegistry();
     const releaseFirst = vi.fn();
     const releaseSecond = vi.fn();
-    const first = registry.interactionOwnership.open(releaseFirst);
-    const second = registry.interactionOwnership.open(releaseSecond);
+    const first = registry.openInteractionScope(releaseFirst);
+    const second = registry.openInteractionScope(releaseSecond);
     const rootStream = 'root-stream' as StreamTabId;
 
     first.claim('root');
@@ -226,13 +232,11 @@ describe('execution interaction ownership', () => {
     scope.release();
 
     expect(onRelease).toHaveBeenCalledOnce();
-    expect(registry.interactionOwnership.ownerOf('root')).toBeUndefined();
 
     // A late registration event must not revive a released generation.
     trackRun(registry, 'root', rootStream, rootStream);
     registry.untrack('root');
     scope.finish();
     expect(onRelease).toHaveBeenCalledOnce();
-    expect(registry.interactionOwnership.ownerOf('root')).toBeUndefined();
   });
 });
