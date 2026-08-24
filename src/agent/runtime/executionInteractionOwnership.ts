@@ -91,6 +91,23 @@ export class ExecutionInteractionOwnership {
     }
   }
 
+  /**
+   * Drop every open scope's activation observer, so none survives the
+   * registry's disposal. The registry calls this beside the `clear()` of its
+   * own listener channels, which is where that invariant used to be readable
+   * for this one before the registry stopped holding it.
+   *
+   * The owner maps need no clear: both routes that read them are severed here
+   * (the registration listeners are cleared by the same `dispose()`, and
+   * `claim()` resolves through a `handles` map that is already empty), and
+   * they die with the registry that owns this index. Scopes stay releasable
+   * on purpose — a later `release()` still fires its `onRelease`, which is how
+   * a host detaches the interaction surfaces it attached.
+   */
+  dispose(): void {
+    this.activationObservers.clear();
+  }
+
   /** Start an owner generation. `onRelease` fires exactly once, at release. */
   open(onRelease: () => void): ExecutionInteractionScope {
     const liveExecutions = new Set<string>();

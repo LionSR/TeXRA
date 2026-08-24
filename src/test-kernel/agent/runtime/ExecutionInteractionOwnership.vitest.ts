@@ -225,6 +225,30 @@ describe('execution interaction ownership', () => {
     expect(releaseSecond).toHaveBeenCalledOnce();
   });
 
+  it('drops every activation observer when the registry disposes', () => {
+    const { registry, onRelease, scope, rootStream } = openRootScope();
+
+    registry.dispose();
+
+    // No observer may survive registry disposal. One that did would still see
+    // this dispatch, claim a pending activation on the root stream it owns,
+    // and hold the scope open past its own finish.
+    registry.interactionOwnership.observeChildActivation(
+      {
+        executionId: 'post-disposal-child',
+        parentStreamId: rootStream,
+        childStreamId: 'post-disposal-child-stream' as StreamTabId,
+        interrupt: vi.fn(),
+        detach: vi.fn(),
+        isDetached: () => false,
+      },
+      true,
+    );
+    scope.finish();
+
+    expect(onRelease).toHaveBeenCalledOnce();
+  });
+
   it('stops observing the registry after an explicit release', () => {
     const { registry, onRelease, scope, rootStream } = openRootScope();
 

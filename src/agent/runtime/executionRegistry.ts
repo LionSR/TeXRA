@@ -244,6 +244,7 @@ export class ExecutionRegistry {
     this.childActivations.clear();
     this.listeners.clear();
     this.registrationListeners.clear();
+    this.interactionOwnership.dispose();
   }
 
   /**
@@ -634,8 +635,8 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Wait for any change on an execution: status transition, kill, or
-   * completion (untrack). Pass an AbortSignal for timeout cleanup.
+   * Wait for the next change on an execution — see {@link addListener} for the
+   * full wake set. Pass an AbortSignal for timeout cleanup.
    */
   waitForChange(executionId: string, signal?: AbortSignal): Promise<void> {
     return new Promise<void>((resolve) => {
@@ -790,14 +791,25 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Register a change waiter for `executionId` (status transition, progress
-   * update, kill, untrack) and return its disposer. Private: the only callers
-   * are {@link waitForChange} and {@link waitForAnyChange}, which each detach
-   * on the first event, so nothing observes a second change through the same
-   * callback.
+   * Register a change waiter for `executionId` and return its disposer.
+   *
+   * The full wake set, which is what an `executions wait` observes:
+   *
+   * - a status transition on this execution's child stream;
+   * - {@link track}, including a *replacement* handle for the same id (a
+   *   resumed generation taking over from its predecessor) — a `track` that
+   *   skipped this would strand a waiter across a resume;
+   * - {@link untrack}, including for an id that holds no handle;
+   * - {@link kill}, unconditionally, even when no live interrupt target was
+   *   reached;
+   * - {@link dispose}, for every execution still tracked at session teardown.
+   *
+   * Private: the only callers are {@link waitForChange} and
+   * {@link waitForAnyChange}, which each detach inside the callback, so
+   * nothing observes a second wake through the same callback.
    *
    * The callback receives the current handle, or `undefined` once the
-   * execution has been untracked (terminal event).
+   * execution has been untracked (terminal event) or the session disposed.
    */
   private addListener(
     executionId: string,
