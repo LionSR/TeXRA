@@ -23,8 +23,9 @@ import { createFakePlatform } from './FakePlatform';
  *
  * Resolves the realpath so the returned path is canonical: on Windows CI the
  * 8.3 short-name form of the temp dir (`RUNNER~1`) differs from the resolved
- * long form (`runneradmin`), and production code that realpaths the temp dir
- * would otherwise produce a path that never equals the one returned here.
+ * long form (`runneradmin`), while on macOS the temporary root may traverse
+ * the `/tmp` to `/private/tmp` symlink. Production code that resolves either
+ * path would otherwise produce a path that never equals the one returned here.
  */
 export async function makeTempDir(
   prefix: string,

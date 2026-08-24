@@ -24,14 +24,13 @@ function createStorage(
 
 describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
   const tempDirs = useTempDirs();
-  let tempDir: string | undefined;
 
   async function createTempLayout(): Promise<{
     workspace: string;
     internalStorage: string;
     globalStorage: string;
   }> {
-    tempDir = await makeTempDir('texra-extension-config-', tempDirs);
+    const tempDir = await makeTempDir('texra-extension-config-', tempDirs);
     const workspace = join(tempDir, 'project');
     const internalStorage = join(tempDir, 'internal');
     const globalStorage = join(tempDir, 'global');
@@ -83,7 +82,7 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
   });
 
   it('rebinds reads and writes when the workspace folder changes', async () => {
-    tempDir = await makeTempDir('texra-extension-config-', tempDirs);
+    const tempDir = await makeTempDir('texra-extension-config-', tempDirs);
     const firstWorkspace = join(tempDir, 'first');
     const secondWorkspace = join(tempDir, 'second');
     const firstConfig = join(firstWorkspace, '.texra', 'config.json');
