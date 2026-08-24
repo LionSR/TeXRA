@@ -37,11 +37,27 @@ and the parent/child stream lineage on `AgentExecutionHandle`.
   happens when the last claimed handle is untracked and the last reserved child
   activation is released — immediately, when none is left.
 - `scope.release()` drops every claim now and fires `onRelease` exactly once.
-- `ownerOf(executionId)` is the read side.
+
+The index answers no queries. Its owner maps are private, and the one output a
+host sees is the scope's `onRelease`; ownership is observed, never read back.
+
+It derives that ownership from two registry facts, which reach it by two
+deliberately different routes:
+
+- **Handle registration** arrives through
+  `ExecutionRegistry.addRegistrationListener`, a channel with a second consumer
+  (the desktop window title). It is the route that carries grandchild
+  inheritance through an already-owned child stream, and the drop of a run
+  whose replacement handle a later generation claimed.
+- **Child activation** has exactly one consumer — this index — so the registry
+  calls `observeChildActivation` on it directly rather than keeping a listener
+  set for a single subscriber. `ExecutionRegistry.dispose()` then calls the
+  index's `dispose()` beside the `clear()` of its own channels, so no observer
+  survives disposal.
 
 That is the whole surface, per the accepted ruling: owner token, refcount,
-`ownedBy` query, release notification. No host-facing port, no per-host
-adapter, no speculative API.
+release notification. No host-facing port, no per-host adapter, no speculative
+API.
 
 ## Who writes, who reads
 
@@ -51,9 +67,9 @@ execution, and calls `finish()` when the root run settles; the release callback
 tears down the presentation host, the interaction adapter, and the
 terminal-result presenter.
 
-The extension and desktop hosts stay read-only. They neither claim nor query:
-their run-scoped views are fed by the transcript plane and the session-fact
-rail (`SessionEventHub`, `@agent/trace`), which already carry every fact those
+The extension and desktop hosts stay uninvolved. They open no scope, and there
+is nothing for them to ask: their run-scoped views are fed by the transcript
+plane and the session-fact rail (`SessionEventHub`, `@agent/trace`), which already carry every fact those
 UIs render. Adding a host port for them would freeze an unvalidated surface for
 a consumer that does not exist.
 
