@@ -38,6 +38,7 @@ import {
   runCompileFixer,
   sendFollowupCommand,
 } from '@progressView/frontend/eventHandlers';
+import { prepareFollowUpDraftRestore } from '@progressView/frontend/followUpDraftPersistence';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import {
   activeStreamId$,
@@ -1688,6 +1689,7 @@ window.addEventListener(
 );
 
 function postWebviewReady(): void {
+  prepareFollowUpDraftRestore();
   // The desktop main process expects `WEBVIEW_READY` from both the 'main' and
   // 'progress' views to drive startup messages and a full progress sync; this
   // single renderer plays both roles.

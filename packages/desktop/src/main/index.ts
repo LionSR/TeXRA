@@ -81,6 +81,10 @@ import {
 } from './desktopOnboardingIpc.js';
 import { DesktopPromptController } from './desktopPromptController.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
+import {
+  DesktopWebviewStateStore,
+  desktopWebviewStatePath,
+} from './desktopWebviewStateStore.js';
 import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import { DefaultDesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import { DesktopHistoryHandlers } from './desktopHistoryHandlers.js';
@@ -233,6 +237,9 @@ function createWindow(options: {
   const initialWindowTitle = getDesktopWindowTitle(
     options.processSession,
     options.workspacePath,
+  );
+  const webviewState = new DesktopWebviewStateStore(
+    desktopWebviewStatePath(app.getPath('userData'), options.workspacePath),
   );
   const window = new BrowserWindow({
     // The task canvas remains useful with a project sidebar and an optional
@@ -1056,6 +1063,7 @@ function createWindow(options: {
       authenticated: await SupabaseClient.isAuthenticated(),
     }),
     onAsyncError: reportAsyncError,
+    webviewState,
   });
   ipcRef.current = mainViewIpc;
   Menu.setApplicationMenu(

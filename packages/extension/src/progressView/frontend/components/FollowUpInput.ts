@@ -14,6 +14,7 @@ import { consume } from '@lit/context';
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import type { ToolUseStreamState } from '@shared/schemas';
 import { RecordingButtonController } from '@shared/litControllers/RecordingButtonController';
 import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
 import {
@@ -22,6 +23,7 @@ import {
   readFileAsBase64,
   type ExtractedClipboardImage,
 } from '@shared/utils/clipboardImages';
+import type { UserFollowUpAvailability } from '@shared/streams/followUpCapability';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { filterNotNullish } from '@utils/core';
@@ -167,6 +169,15 @@ export class FollowUpInput extends LitElement {
         line-height: var(--line-height-relaxed);
       }
 
+      .follow-up-error {
+        min-height: 1.4em;
+        margin: 0;
+        padding-inline: var(--wa-space-s);
+        color: var(--wa-color-danger-on-quiet);
+        font-size: var(--font-size-small);
+        line-height: 1.4;
+      }
+
       .follow-up-actions {
         display: flex;
         flex-direction: row;
@@ -241,6 +252,14 @@ export class FollowUpInput extends LitElement {
   @property({ attribute: false }) polishRevision = 0;
   @property({ attribute: false }) transcribedText: string | null = null;
   @property({ attribute: false }) recording = false;
+  @property({ attribute: false })
+  submission: ToolUseStreamState['ui']['followUpSubmission'] = null;
+  @property({ attribute: false })
+  availability: UserFollowUpAvailability = {
+    available: false,
+    reason: 'pending',
+    message: 'Wait for this run to start, then try again.',
+  };
   /**
    * Progress-view commands the active host's registry declares
    * `unsupported(...)` (see StreamHeader's `unsupportedCommands` for the
@@ -433,6 +452,12 @@ export class FollowUpInput extends LitElement {
     `;
   }
 
+  private get submissionMessage(): string {
+    if (this.submission?.status === 'sending') return 'Sending...';
+    if (this.submission?.status === 'failed') return this.submission.error;
+    return this.availability.available ? '' : this.availability.message;
+  }
+
   private renderComposerBody(): TemplateResult {
     return html`
       <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container">
@@ -452,10 +477,16 @@ export class FollowUpInput extends LitElement {
             rows="2"
             resize="vertical"
             .value=${live(this.value)}
+            ?disabled=${this.submission?.status === 'sending'}
+            aria-busy=${this.submission?.status === 'sending' ? 'true' : 'false'}
             @input=${this.handleInput}
             @keydown=${this.handleKeydown}
             @paste=${this.handlePaste}
           ></wa-textarea>
+
+          <p class="follow-up-error" role="status" aria-live="polite">
+            ${this.submissionMessage}
+          </p>
 
           <div class="follow-up-actions">
             ${
@@ -470,6 +501,7 @@ export class FollowUpInput extends LitElement {
                     label: 'Polish follow-up',
                     tooltip: 'Polish follow-up with AI',
                     busy: this.polishing,
+                    disabled: this.submission?.status === 'sending',
                     onClick: this.emitPolish,
                   })
             }
@@ -487,6 +519,9 @@ export class FollowUpInput extends LitElement {
                     className: this.recordingController.state.recording
                       ? this.recordingController.state.recordingClass
                       : '',
+                    disabled:
+                      this.submission?.status === 'sending' &&
+                      !this.recordingController.state.recording,
                     onClick: this.recordingController.handleClick,
                   })
             }
@@ -497,6 +532,10 @@ export class FollowUpInput extends LitElement {
               tooltip: 'Send follow-up message',
               className: 'composer-primary-action',
               appearance: 'filled',
+              busy: this.submission?.status === 'sending',
+              disabled:
+                this.submission?.status === 'sending' ||
+                !this.availability.available,
               size: 'l',
               onClick: this.emitSend,
             })}
@@ -565,7 +604,6 @@ export class FollowUpInput extends LitElement {
         images: transientState.pendingImages,
       }),
     );
-    transientState.pendingImages = [];
     transientState.sendAfterImagePastes = false;
   }
 

@@ -1,6 +1,9 @@
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
+import {
+  notifyFollowUpSent,
+  type SubmitFollowUpResult,
+} from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isApiProvider } from '@model/apiProviders';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -9,12 +12,18 @@ import type {
   AgentProposal,
   ModelOptionData,
 } from '@shared/schemas';
-import type { RunIdentity, StreamTabId } from '@shared/schemas';
+import type {
+  RunIdentity,
+  StreamPhase,
+  StreamTabId,
+  UserFollowUpSupport,
+} from '@shared/schemas';
 import type {
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
   ProgressViewOutboundMessage,
 } from '@shared/schemas/progressView';
+import { userFollowUpAvailability } from '@shared/streams/followUpCapability';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   isApprovalBypassedForStream,
@@ -78,8 +87,19 @@ type ProgressViewFollowUpImage = NonNullable<
 interface ProgressViewFollowUpSubmission {
   stream: StreamTabId;
   text: string;
+  deliveryId: string;
   mediaFiles?: readonly string[];
 }
+
+interface ProgressViewFollowUpTargetMetadata {
+  readonly userFollowUpSupport?: UserFollowUpSupport;
+  readonly status?: StreamPhase;
+}
+
+type FollowUpSubmissionResultMessage = Extract<
+  ProgressViewOutboundMessage,
+  { command: typeof PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT }
+>;
 
 export interface ProgressViewLifecycleCommandActions {
   setActiveStream(stream: StreamTabId): Promise<void> | void;
@@ -110,9 +130,15 @@ export interface ProgressViewFileCommandActions {
 }
 
 export interface ProgressViewFollowUpCommandActions {
+  getCurrentTargetMetadata(
+    stream: StreamTabId,
+  ): ProgressViewFollowUpTargetMetadata;
   sendFollowUp(
     submission: ProgressViewFollowUpSubmission,
-  ): Promise<void> | void;
+  ): Promise<SubmitFollowUpResult>;
+  captureSubmissionResultReporter(): (
+    result: FollowUpSubmissionResultMessage,
+  ) => void;
   reportImageSaveError(image: ProgressViewFollowUpImage, error: unknown): void;
 }
 
@@ -243,15 +269,63 @@ export function createProgressViewCommandHandlers(
     [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: (data) => file.openLabel(data.label),
 
     [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: async (data) => {
-      const mediaFiles = await saveFollowUpImages(
-        data.images ?? [],
-        followUp.reportImageSaveError,
+      const reportToOrigin = followUp.captureSubmissionResultReporter();
+      const report = (
+        result:
+          | { readonly accepted: true }
+          | { readonly accepted: false; readonly error: string },
+      ): void => {
+        reportToOrigin({
+          command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT,
+          stream: data.stream,
+          deliveryId: data.deliveryId,
+          ...result,
+        });
+      };
+
+      const availability = userFollowUpAvailability(
+        followUp.getCurrentTargetMetadata(data.stream),
       );
-      await followUp.sendFollowUp({
-        stream: data.stream,
-        text: data.text,
-        ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
-      });
+      if (!availability.available) {
+        report({ accepted: false, error: availability.message });
+        return;
+      }
+
+      try {
+        const mediaFiles = await saveFollowUpImages(
+          data.images ?? [],
+          followUp.reportImageSaveError,
+        );
+        const result = await followUp.sendFollowUp({
+          stream: data.stream,
+          text: data.text,
+          deliveryId: data.deliveryId,
+          ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
+        });
+        if (
+          result.status === 'sent' ||
+          result.status === 'queued' ||
+          result.status === 'duplicate'
+        ) {
+          report({ accepted: true });
+          return;
+        }
+        report({
+          accepted: false,
+          error:
+            result.status === 'no_session'
+              ? 'This run is no longer active. Refresh the run and try again.'
+              : 'Unable to deliver this message. Refresh the run and try again.',
+        });
+      } catch (error) {
+        report({
+          accepted: false,
+          error:
+            error instanceof FollowUpImageSaveError
+              ? 'An image could not be saved. Remove and paste the images again, then try again.'
+              : 'Unable to send. Check your connection and try again.',
+        });
+      }
     },
 
     // The shield is the explicit both-kinds preset: one click sets file edits
@@ -568,6 +642,8 @@ export function createProgressViewSecondTierHandlers(
   } satisfies Partial<ProgressViewInboundHandlerRegistry>;
 }
 
+class FollowUpImageSaveError extends Error {}
+
 async function saveFollowUpImages(
   images: readonly ProgressViewFollowUpImage[],
   reportImageSaveError: ProgressViewFollowUpCommandActions['reportImageSaveError'],
@@ -580,6 +656,7 @@ async function saveFollowUpImages(
       );
     } catch (error) {
       reportImageSaveError(image, error);
+      throw new FollowUpImageSaveError();
     }
   }
   return mediaFiles;

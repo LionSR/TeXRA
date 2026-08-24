@@ -23,6 +23,7 @@ import type { DesktopProgressIpc } from './desktopProgressIpc.js';
 import type { DesktopPromptIpc } from './desktopPromptController.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
+import type { DesktopWebviewStateStore } from './desktopWebviewStateStore.js';
 
 export interface DesktopMainViewIpcOptions {
   debugMode?: boolean;
@@ -48,6 +49,7 @@ export interface DesktopMainViewIpcOptions {
   loadStartupOptions?: () => Promise<MainViewStartupOptions>;
   handleExecuteMessage(message: MainViewExecuteMessage): Promise<void>;
   onAsyncError?: (error: unknown) => void;
+  webviewState?: DesktopWebviewStateStore;
 }
 
 export interface DesktopMainViewIpc {
@@ -70,6 +72,7 @@ export function installDesktopMainViewIpc(
 
   const bridge = installDesktopHostBridge(window, {
     onRendererMessage: handleRendererMessage,
+    webviewState: options.webviewState,
   });
   const viewState = createDesktopViewStateIpc(bridge, {
     debugMode: options.debugMode,

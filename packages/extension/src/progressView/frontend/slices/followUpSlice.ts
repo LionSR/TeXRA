@@ -8,6 +8,16 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundHandlerRegistry } from '@shared/schemas';
 
+import {
+  persistFollowUpDraft,
+  recoverInterruptedFollowUpSubmission,
+} from '../followUpDraftPersistence';
+import {
+  followUpAttachmentFingerprintsMatch,
+  followUpAttachmentSnapshot,
+  getFollowUpInputTransientState,
+  removeAcceptedFollowUpImages,
+} from '../followUpInputState';
 import { appState } from '../progressState';
 import { updateToolUseState } from '../stateUtils';
 
@@ -48,6 +58,73 @@ export const followUpHandlers = {
         }
       }),
     );
+    persistFollowUpDraft(streamId);
+  },
+
+  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TRANSPORT_RESTORED]: () => {
+    const interrupted = [...appState.get().streamStates.entries()]
+      .filter(
+        ([, streamState]) =>
+          'ui' in streamState &&
+          streamState.ui.followUpSubmission?.status === 'sending',
+      )
+      .map(([streamId]) => streamId);
+    appState.set(
+      create(appState.get(), (draft) => {
+        for (const streamId of interrupted) {
+          const streamState = draft.streamStates.get(streamId);
+          if (!streamState || !('ui' in streamState)) continue;
+          const submission = streamState.ui.followUpSubmission;
+          if (submission?.status !== 'sending') continue;
+          streamState.ui.followUpSubmission =
+            recoverInterruptedFollowUpSubmission(submission);
+        }
+      }),
+    );
+    for (const streamId of interrupted) persistFollowUpDraft(streamId);
+  },
+
+  [PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT]: (data) => {
+    const streamState = appState.get().streamStates.get(data.stream);
+    if (!streamState || !('ui' in streamState)) return;
+    const submission = streamState.ui.followUpSubmission;
+    if (!submission || submission.deliveryId !== data.deliveryId) return;
+    const transientState = getFollowUpInputTransientState(data.stream);
+    const currentText = streamState.ui.followUpText.trim();
+    const currentAttachmentFingerprints = followUpAttachmentSnapshot(
+      currentText,
+      transientState.pendingImages,
+    ).fingerprints;
+    const draftStillMatches =
+      currentText === submission.text &&
+      followUpAttachmentFingerprintsMatch(
+        currentAttachmentFingerprints,
+        submission.attachmentFingerprints,
+      );
+
+    updateToolUseState(data.stream, (prev) =>
+      create(prev, (draft) => {
+        if (data.accepted) {
+          if (draftStillMatches) {
+            draft.ui.followUpText = '';
+          }
+          draft.ui.followUpSubmission = null;
+          return;
+        }
+        draft.ui.followUpSubmission = {
+          ...submission,
+          status: 'failed',
+          error: data.error,
+        };
+      }),
+    );
+    if (data.accepted) {
+      removeAcceptedFollowUpImages(
+        transientState,
+        submission.attachmentFingerprints,
+      );
+    }
+    persistFollowUpDraft(data.stream);
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING]: (data) => {

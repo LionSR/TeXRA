@@ -12,5 +12,6 @@
  *                  union + dispatcher
  */
 export * from './data';
+export * from './followUpPolicy';
 export * from './outbound';
 export * from './inbound';

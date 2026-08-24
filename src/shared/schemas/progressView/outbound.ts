@@ -26,6 +26,10 @@ import { CompileFailureSchema, OutputFileInfoSchema } from '../output';
 import { roundIndexedRecord } from '../roundIndexed';
 import { InquiryThreadUpdatedEventSchema } from '../inquiry';
 import {
+  MAX_FOLLOW_UP_ERROR_LENGTH,
+  MAX_FOLLOW_UP_ID_LENGTH,
+} from './followUpPolicy';
+import {
   AgentProposalPermissionSchema,
   BashPermissionSchema,
   ExternalInquiryPermissionSchema,
@@ -261,6 +265,24 @@ const UpdateFollowUpTextMessageSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 
+const FollowUpSubmissionResultMessageSchema = z.discriminatedUnion('accepted', [
+  StreamScopedBaseSchema.extend({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT),
+    deliveryId: z.string().min(1).max(MAX_FOLLOW_UP_ID_LENGTH),
+    accepted: z.literal(true),
+  }),
+  StreamScopedBaseSchema.extend({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT),
+    deliveryId: z.string().min(1).max(MAX_FOLLOW_UP_ID_LENGTH),
+    accepted: z.literal(false),
+    error: z.string().min(1).max(MAX_FOLLOW_UP_ERROR_LENGTH),
+  }),
+]);
+
+const FollowUpTransportRestoredMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TRANSPORT_RESTORED),
+});
+
 const RecordingStatusSchema = z.enum(['started', 'stopped', 'error']);
 
 const UpdateRecordingMessageSchema = z.object({
@@ -408,6 +430,8 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateBypassMessageSchema,
     GoalActiveUpdatedMessageSchema,
     UpdateFollowUpTextMessageSchema,
+    FollowUpSubmissionResultMessageSchema,
+    FollowUpTransportRestoredMessageSchema,
     UpdateRecordingMessageSchema,
     SyncInquiryThreadsMessageSchema,
     UpdateInquiryThreadMessageSchema,

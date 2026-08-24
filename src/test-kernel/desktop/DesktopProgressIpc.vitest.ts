@@ -44,6 +44,7 @@ function createProgress(
   return {
     completeWebviewReady: vi.fn(async () => undefined),
     progressViewInboundHandlers: fillRegistry(progressViewInboundHandlers),
+    reportRejectedFollowUpSubmission: vi.fn(),
   };
 }
 
@@ -213,6 +214,7 @@ describe('desktop Progress IPC', () => {
     const progress = {
       completeWebviewReady: vi.fn(() => Promise.reject(error)),
       progressViewInboundHandlers: fillRegistry(),
+      reportRejectedFollowUpSubmission: vi.fn(),
     };
     const ipc = createDesktopProgressIpc({
       source: readySource(progress),
@@ -229,6 +231,129 @@ describe('desktop Progress IPC', () => {
     await Promise.resolve();
     expect(onAsyncError).toHaveBeenCalledWith(error);
   });
+
+  it.each([
+    [
+      'nine images',
+      Array.from({ length: 9 }, (_, index) => ({
+        fileName: `pasted-${index}.png`,
+        mediaType: 'image/png',
+        base64: 'A',
+      })),
+    ],
+    [
+      'an image over 3 MiB',
+      [
+        {
+          fileName: 'pasted.png',
+          mediaType: 'image/png',
+          base64: 'A'.repeat(3 * 1024 * 1024 + 1),
+        },
+      ],
+    ],
+    [
+      'an aggregate payload over 4 MiB',
+      [
+        {
+          fileName: 'pasted-a.png',
+          mediaType: 'image/png',
+          base64: 'A'.repeat(2 * 1024 * 1024 + 1),
+        },
+        {
+          fileName: 'pasted-b.png',
+          mediaType: 'image/png',
+          base64: 'B'.repeat(2 * 1024 * 1024 + 1),
+        },
+      ],
+    ],
+  ])(
+    'returns the normal rejected-submission result for %s',
+    async (_name, images) => {
+      const progress = createProgress();
+      const ipc = createDesktopProgressIpc({ source: readySource(progress) });
+
+      expect(
+        ipc.handleMessage({
+          command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+          stream: 'run-1',
+          text: 'continue',
+          deliveryId: 'delivery-1',
+          images,
+        }),
+      ).toBe(true);
+      expect(progress.reportRejectedFollowUpSubmission).toHaveBeenCalledWith({
+        command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT,
+        stream: 'run-1',
+        deliveryId: 'delivery-1',
+        accepted: false,
+        error:
+          'Attachment limits are 8 images, 3 MiB per image, and 4 MiB total. Remove an image and try again.',
+      });
+    },
+  );
+
+  it.each([
+    ['whitespace text', { text: '   ' }, 'Enter a message before sending.'],
+    [
+      'malformed text',
+      { text: 42 },
+      'The message details are invalid. Refresh the run and try again.',
+    ],
+    [
+      'non-canonical base64',
+      {
+        text: 'continue',
+        images: [
+          {
+            fileName: 'pasted_1.png',
+            mediaType: 'image/png',
+            base64: 'not base64',
+          },
+        ],
+      },
+      'One or more images are invalid. Remove and paste them again, then try again.',
+    ],
+    [
+      'mismatched image metadata',
+      {
+        text: 'continue',
+        images: [
+          {
+            fileName: 'pasted_1.jpg',
+            mediaType: 'image/png',
+            base64: 'AAAA',
+          },
+        ],
+      },
+      'One or more images are invalid. Remove and paste them again, then try again.',
+    ],
+  ])(
+    'reports %s accurately without dispatching it',
+    async (_name, fields, error) => {
+      const sendFollowUp = vi.fn();
+      const progress = createProgress({
+        [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: sendFollowUp,
+      });
+      const ipc = createDesktopProgressIpc({ source: readySource(progress) });
+
+      expect(
+        ipc.handleMessage({
+          command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+          stream: 'run-1',
+          deliveryId: 'delivery-1',
+          ...fields,
+        }),
+      ).toBe(true);
+      expect(sendFollowUp).not.toHaveBeenCalled();
+      expect(progress.reportRejectedFollowUpSubmission).toHaveBeenCalledWith({
+        command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT,
+        stream: 'run-1',
+        deliveryId: 'delivery-1',
+        accepted: false,
+        error,
+      });
+    },
+  );
 
   it('ignores invalid Progress IPC payloads', async () => {
     const ipc = createDesktopProgressIpc({

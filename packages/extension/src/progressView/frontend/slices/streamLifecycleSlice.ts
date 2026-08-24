@@ -36,6 +36,11 @@ import {
   clearProposalInputStore,
 } from '../formatters/contentStore';
 import {
+  applyPreparedFollowUpDrafts,
+  clearPersistedFollowUpDrafts,
+  deletePersistedFollowUpDraft,
+} from '../followUpDraftPersistence';
+import {
   clearFollowUpInputTransientStateStore,
   deleteFollowUpInputTransientState,
 } from '../followUpInputState';
@@ -91,6 +96,7 @@ function updateStreamInfo(
     if (!newStreamById.has(key)) {
       pendingDescriptions.delete(key);
       deleteFollowUpInputTransientState(key);
+      deletePersistedFollowUpDraft(key);
     }
   }
 
@@ -147,10 +153,8 @@ export const streamLifecycleHandlers = {
     if (data.unsupportedCommands) {
       unsupportedProgressCommands$.set(new Set(data.unsupportedCommands));
     }
-    const updated = updateStreamInfo(
-      appState.get(),
-      data.streams,
-      data.streamStates,
+    const updated = applyPreparedFollowUpDrafts(
+      updateStreamInfo(appState.get(), data.streams, data.streamStates),
     );
     // Honor explicit empty-string as "no selection" — backend sends this
     // when the current filter excludes every stream. Since the backend now
@@ -190,6 +194,7 @@ export const streamLifecycleHandlers = {
     clearCopyContentStore();
     clearProposalInputStore();
     deleteFollowUpInputTransientState(streamId);
+    deletePersistedFollowUpDraft(streamId);
     webviewStorage.delete(logListStateKey(streamId));
 
     // Remove permissions for the deleted stream to prevent orphaned entries
@@ -213,6 +218,7 @@ export const streamLifecycleHandlers = {
     clearCopyContentStore();
     clearProposalInputStore();
     clearFollowUpInputTransientStateStore();
+    clearPersistedFollowUpDrafts();
     pendingDescriptions.clear();
 
     // Clear all permissions — no streams means no valid permissions

@@ -28,6 +28,16 @@ import { AgentProposalSchema, UserQuestionAnswersSchema } from '../prompts';
 import { StreamScopedBaseSchema } from './data';
 import { GettingStartedActionSchema } from '../mainView/state';
 import { ExhaustionReasonSchema } from '../errors';
+import {
+  FollowUpImageSchema,
+  MAX_FOLLOW_UP_ID_LENGTH,
+  MAX_FOLLOW_UP_IMAGE_BASE64_BYTES,
+  MAX_FOLLOW_UP_IMAGES,
+  MAX_FOLLOW_UP_PAYLOAD_BYTES,
+  MAX_FOLLOW_UP_TEXT_LENGTH,
+  serializedFollowUpPayloadBytes,
+} from './followUpPolicy';
+import type { ProgressViewOutboundMessage } from './outbound';
 
 const TrimmedStringSchema = z
   .string()
@@ -111,18 +121,101 @@ const EnableApprovalBypassMessageSchema = StreamScopedBaseSchema.extend({
 
 const SendFollowUpMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP),
-  text: TrimmedStringSchema,
+  stream: z.string().min(1).max(MAX_FOLLOW_UP_ID_LENGTH),
+  text: TrimmedStringSchema.pipe(z.string().max(MAX_FOLLOW_UP_TEXT_LENGTH)),
+  deliveryId: z.string().min(1).max(MAX_FOLLOW_UP_ID_LENGTH),
   /** Pasted images (base64) to attach to this follow-up turn. */
-  images: z
-    .array(
-      z.object({
-        base64: z.string(),
-        mediaType: z.string(),
-        fileName: z.string(),
-      }),
-    )
-    .optional(),
+  images: z.array(FollowUpImageSchema).max(MAX_FOLLOW_UP_IMAGES).optional(),
+}).refine(
+  (message) =>
+    serializedFollowUpPayloadBytes(message) <= MAX_FOLLOW_UP_PAYLOAD_BYTES,
+  { message: 'Follow-up payload exceeds the 4 MiB limit.' },
+);
+
+const FollowUpSubmissionIdentitySchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP),
+  stream: z.string().min(1).max(MAX_FOLLOW_UP_ID_LENGTH),
+  deliveryId: z.string().min(1).max(MAX_FOLLOW_UP_ID_LENGTH),
 });
+
+export type RejectedFollowUpSubmissionResult = Extract<
+  ProgressViewOutboundMessage,
+  {
+    command: typeof PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT;
+    accepted: false;
+  }
+>;
+
+function rejectedFollowUp(
+  identity: z.infer<typeof FollowUpSubmissionIdentitySchema>,
+  error: string,
+): RejectedFollowUpSubmissionResult {
+  return {
+    command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT,
+    stream: identity.stream,
+    deliveryId: identity.deliveryId,
+    accepted: false,
+    error,
+  };
+}
+
+/** Build a safe retryable rejection for an invalid renderer submission. */
+export function rejectedInvalidFollowUpSubmission(
+  message: unknown,
+): RejectedFollowUpSubmissionResult | undefined {
+  const identity = FollowUpSubmissionIdentitySchema.safeParse(message);
+  if (
+    !identity.success ||
+    SendFollowUpMessageSchema.safeParse(message).success
+  ) {
+    return undefined;
+  }
+  const candidate = message as Record<string, unknown>;
+  if (typeof candidate.text === 'string' && !candidate.text.trim()) {
+    return rejectedFollowUp(identity.data, 'Enter a message before sending.');
+  }
+  if (typeof candidate.text !== 'string') {
+    return rejectedFollowUp(
+      identity.data,
+      'The message details are invalid. Refresh the run and try again.',
+    );
+  }
+  if (candidate.text.length > MAX_FOLLOW_UP_TEXT_LENGTH) {
+    return rejectedFollowUp(
+      identity.data,
+      'The message is too long. Shorten it and try again.',
+    );
+  }
+  if (Array.isArray(candidate.images)) {
+    const exceedsAttachmentLimits =
+      candidate.images.length > MAX_FOLLOW_UP_IMAGES ||
+      candidate.images.some(
+        (image) =>
+          typeof image === 'object' &&
+          image !== null &&
+          typeof (image as Record<string, unknown>).base64 === 'string' &&
+          ((image as Record<string, unknown>).base64 as string).length >
+            MAX_FOLLOW_UP_IMAGE_BASE64_BYTES,
+      ) ||
+      serializedFollowUpPayloadBytes(message) > MAX_FOLLOW_UP_PAYLOAD_BYTES;
+    if (exceedsAttachmentLimits) {
+      return rejectedFollowUp(
+        identity.data,
+        'Attachment limits are 8 images, 3 MiB per image, and 4 MiB total. Remove an image and try again.',
+      );
+    }
+    if (!z.array(FollowUpImageSchema).safeParse(candidate.images).success) {
+      return rejectedFollowUp(
+        identity.data,
+        'One or more images are invalid. Remove and paste them again, then try again.',
+      );
+    }
+  }
+  return rejectedFollowUp(
+    identity.data,
+    'The message details are invalid. Refresh the run and try again.',
+  );
+}
 
 const PolishFollowUpMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP),

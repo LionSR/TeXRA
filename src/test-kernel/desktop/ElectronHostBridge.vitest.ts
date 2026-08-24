@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
+  ELECTRON_WEBVIEW_STATE_GET_CHANNEL,
+  ELECTRON_WEBVIEW_STATE_SET_CHANNEL,
 } from '@desktop/shared/hostBridgeChannels';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { createModuleMocks } from '@test/support/moduleMocks';
@@ -14,27 +16,44 @@ import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.ts';
 
 const mocks = createModuleMocks();
 
+type IpcListener = (
+  event: { sender: unknown; returnValue?: unknown },
+  message?: unknown,
+) => void;
+
 interface HostBridgeModule {
   installElectronHostBridge(options: {
     exposeInMainWorld(name: string, api: unknown): void;
+    getStateFromMain(channel: string): unknown;
     onHostMessage(channel: string, listener: (message: unknown) => void): void;
     postToRenderer(message: unknown): void;
     sendToMain(channel: string, message: unknown): void;
-  }): unknown;
+    setStateInMain(channel: string, state: unknown): unknown;
+  }): {
+    postMessage(message: unknown): void;
+    getState(): unknown;
+    setState(state: unknown): void;
+  };
+}
+
+interface FakeMainWindow {
+  isDestroyed(): boolean;
+  once(event: 'closed', listener: () => void): void;
+  webContents: {
+    isDestroyed(): boolean;
+    send(channel: string, message: unknown): void;
+  };
 }
 
 interface MainHostBridgeModule {
   installDesktopHostBridge(
-    window: {
-      isDestroyed(): boolean;
-      once(event: 'closed', listener: () => void): void;
-      webContents: {
-        isDestroyed(): boolean;
-        send(channel: string, message: unknown): void;
-      };
-    },
+    window: FakeMainWindow,
     options?: {
       onRendererMessage?(message: unknown, window: unknown): void;
+      webviewState?: {
+        getState(): Record<string, unknown> | undefined;
+        setState(state: unknown): void;
+      };
     },
   ): {
     postToRenderer(message: unknown): void;
@@ -49,29 +68,14 @@ async function loadHostBridgeModule(): Promise<HostBridgeModule> {
 }
 
 async function loadMainHostBridgeModule(ipcMain: {
-  on(
-    channel: string,
-    listener: (event: { sender: unknown }, message: unknown) => void,
-  ): void;
-  off(
-    channel: string,
-    listener: (event: { sender: unknown }, message: unknown) => void,
-  ): void;
+  on(channel: string, listener: IpcListener): void;
+  off(channel: string, listener: IpcListener): void;
 }): Promise<MainHostBridgeModule> {
   vi.resetModules();
   mocks.doMock('electron', () => ({ ipcMain }));
   return import(
     moduleFileUrl(desktopSourcePath('main', 'hostBridge.ts'))
   ) as Promise<MainHostBridgeModule>;
-}
-
-interface FakeMainWindow {
-  isDestroyed(): boolean;
-  once(event: 'closed', listener: () => void): void;
-  webContents: {
-    isDestroyed(): boolean;
-    send(channel: string, message: unknown): void;
-  };
 }
 
 function fakeMainWindow(sends: Array<{ channel: string; message: unknown }>) {
@@ -92,22 +96,31 @@ function fakeMainWindow(sends: Array<{ channel: string; message: unknown }>) {
   return { closedListeners, webContents, window };
 }
 
+function createPreloadOptions() {
+  let state: unknown;
+  return {
+    exposeInMainWorld: vi.fn(),
+    getStateFromMain: vi.fn(() => ({ ok: true, state })),
+    onHostMessage: vi.fn(),
+    postToRenderer: vi.fn(),
+    sendToMain: vi.fn(),
+    setStateInMain: vi.fn((_channel: string, nextState: unknown) => {
+      state = nextState;
+      return { ok: true };
+    }),
+  };
+}
+
 describe('desktop Electron host bridge', () => {
   it('exposes only the shared synchronous host bridge surface', async () => {
     const { installElectronHostBridge } = await loadHostBridgeModule();
-    const sends: Array<{ channel: string; message: unknown }> = [];
     const exposed: Record<string, unknown> = {};
-
-    installElectronHostBridge({
-      exposeInMainWorld: (name, api) => {
-        exposed[name] = api;
-      },
-      onHostMessage: () => undefined,
-      postToRenderer: () => undefined,
-      sendToMain: (channel, message) => {
-        sends.push({ channel, message });
-      },
+    const options = createPreloadOptions();
+    options.exposeInMainWorld.mockImplementation((name, api) => {
+      exposed[name] = api;
     });
+
+    installElectronHostBridge(options);
     const bridge = exposed[HOST_BRIDGE_API_KEY] as {
       postMessage(message: unknown): void;
       getState(): unknown;
@@ -120,16 +133,51 @@ describe('desktop Electron host bridge', () => {
       'setState',
     ]);
     expect(bridge.getState()).toBeUndefined();
-
     const state = { route: 'main' };
     bridge.setState(state);
     expect(bridge.getState()).toBe(state);
+    expect(options.setStateInMain).toHaveBeenCalledWith(
+      ELECTRON_WEBVIEW_STATE_SET_CHANNEL,
+      state,
+    );
 
     const message = { command: 'webview.ready' };
     bridge.postMessage(message);
-    expect(sends).toEqual([
-      { channel: ELECTRON_WEBVIEW_MESSAGE_CHANNEL, message },
-    ]);
+    expect(options.sendToMain).toHaveBeenCalledWith(
+      ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
+      message,
+    );
+  });
+
+  it('reads every state snapshot from the main-process authority', async () => {
+    const { installElectronHostBridge } = await loadHostBridgeModule();
+    const options = createPreloadOptions();
+    options.getStateFromMain
+      .mockReturnValueOnce({ ok: true, state: { draft: 'first' } })
+      .mockReturnValueOnce({ ok: true, state: { draft: 'recreated' } });
+    const bridge = installElectronHostBridge(options);
+
+    expect(bridge.getState()).toEqual({ draft: 'first' });
+    expect(bridge.getState()).toEqual({ draft: 'recreated' });
+    expect(options.getStateFromMain).toHaveBeenCalledWith(
+      ELECTRON_WEBVIEW_STATE_GET_CHANNEL,
+    );
+  });
+
+  it('reports a rejected replacement without keeping a preload copy', async () => {
+    const { installElectronHostBridge } = await loadHostBridgeModule();
+    const options = createPreloadOptions();
+    options.getStateFromMain.mockReturnValue({
+      ok: true,
+      state: { draft: 'known-good' },
+    });
+    options.setStateInMain.mockReturnValue({ ok: false });
+    const bridge = installElectronHostBridge(options);
+
+    expect(() => bridge.setState({ draft: 'new' })).toThrow(
+      'Desktop webview state could not be persisted.',
+    );
+    expect(bridge.getState()).toEqual({ draft: 'known-good' });
   });
 
   it('installs the bridge on the shared key and forwards host pushes', async () => {
@@ -137,77 +185,88 @@ describe('desktop Electron host bridge', () => {
     const exposed: Record<string, unknown> = {};
     const pushes: unknown[] = [];
     let pushListener: ((message: unknown) => void) | undefined;
-
-    const installed = installElectronHostBridge({
-      exposeInMainWorld: (name, api) => {
-        exposed[name] = api;
-      },
-      onHostMessage: (channel, listener) => {
-        expect(channel).toBe(ELECTRON_WEBVIEW_PUSH_CHANNEL);
-        pushListener = listener;
-      },
-      postToRenderer: (message) => {
-        pushes.push(message);
-      },
-      sendToMain: () => undefined,
+    const options = createPreloadOptions();
+    options.exposeInMainWorld.mockImplementation((name, api) => {
+      exposed[name] = api;
+    });
+    options.onHostMessage.mockImplementation((_channel, listener) => {
+      pushListener = listener;
+    });
+    options.postToRenderer.mockImplementation((message) => {
+      pushes.push(message);
     });
 
+    const installed = installElectronHostBridge(options);
     expect(exposed[HOST_BRIDGE_API_KEY]).toBe(installed);
-    expect(pushListener).toBeDefined();
-
+    expect(options.onHostMessage).toHaveBeenCalledWith(
+      ELECTRON_WEBVIEW_PUSH_CHANNEL,
+      expect.any(Function),
+    );
     const message = { command: 'setTheme', theme: 'vscode-dark' };
     pushListener?.(message);
     expect(pushes).toEqual([message]);
   });
 
-  it('routes main-process bridge messages over fixed Electron channels', async () => {
-    let rendererListener:
-      ((event: { sender: unknown }, message: unknown) => void) | undefined;
+  it('routes messages and synchronous state through fixed Electron channels', async () => {
+    const listeners = new Map<string, IpcListener>();
     const ipcMain = {
-      on: vi.fn((channel, listener) => {
-        expect(channel).toBe(ELECTRON_WEBVIEW_MESSAGE_CHANNEL);
-        rendererListener = listener;
+      on: vi.fn((channel: string, listener: IpcListener) => {
+        listeners.set(channel, listener);
       }),
-      off: vi.fn(),
+      off: vi.fn((channel: string) => {
+        listeners.delete(channel);
+      }),
     };
     const { installDesktopHostBridge } =
       await loadMainHostBridgeModule(ipcMain);
     const sends: Array<{ channel: string; message: unknown }> = [];
     const { closedListeners, webContents, window } = fakeMainWindow(sends);
     const rendererMessages: unknown[] = [];
+    let state: Record<string, unknown> | undefined = { draft: 'stored' };
     const bridge = installDesktopHostBridge(window, {
       onRendererMessage: (message) => rendererMessages.push(message),
+      webviewState: {
+        getState: () => state,
+        setState: (nextState) => {
+          state = nextState as Record<string, unknown>;
+        },
+      },
     });
 
-    expect(rendererListener).toBeDefined();
-    rendererListener?.({ sender: {} }, { ignored: true });
-    rendererListener?.({ sender: webContents }, { command: 'ready' });
+    listeners.get(ELECTRON_WEBVIEW_MESSAGE_CHANNEL)?.(
+      { sender: {} },
+      { ignored: true },
+    );
+    listeners.get(ELECTRON_WEBVIEW_MESSAGE_CHANNEL)?.(
+      { sender: webContents },
+      { command: 'ready' },
+    );
     expect(rendererMessages).toEqual([{ command: 'ready' }]);
 
-    // `theme` must be a real `ProgressSetThemeMessageSchema` value
-    // ('dark' | 'light') — `postToRenderer` now runs every message through
-    // `assertKnownOutboundMessage` (dev/test only), so an arbitrary
-    // placeholder like the renderer-side test's `'vscode-dark'` would throw
-    // here instead of exercising the channel-routing behavior under test.
+    const getEvent = { sender: webContents, returnValue: undefined as unknown };
+    listeners.get(ELECTRON_WEBVIEW_STATE_GET_CHANNEL)?.(getEvent);
+    expect(getEvent.returnValue).toEqual({
+      ok: true,
+      state: { draft: 'stored' },
+    });
+    const setEvent = { sender: webContents, returnValue: undefined as unknown };
+    listeners.get(ELECTRON_WEBVIEW_STATE_SET_CHANNEL)?.(setEvent, {
+      draft: 'next',
+    });
+    expect(setEvent.returnValue).toEqual({ ok: true });
+    expect(state).toEqual({ draft: 'next' });
+
     const hostMessage = { command: 'setTheme', theme: 'dark' };
     bridge.postToRenderer(hostMessage);
     expect(sends).toEqual([
       { channel: ELECTRON_WEBVIEW_PUSH_CHANNEL, message: hostMessage },
     ]);
-
     bridge.dispose();
-    expect(ipcMain.off).toHaveBeenCalledWith(
-      ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
-      rendererListener,
-    );
+    expect(ipcMain.off).toHaveBeenCalledTimes(3);
     closedListeners[0]?.();
-    expect(ipcMain.off).toHaveBeenCalledTimes(1);
+    expect(ipcMain.off).toHaveBeenCalledTimes(3);
   });
 
-  // #8123: `postToRenderer` now routes every message through the existing
-  // MainView / ProgressView outbound Zod schemas (dev/test only) before
-  // handing it to `webContents.send`, instead of forwarding whatever shape
-  // the caller happened to build.
   describe('outbound schema validation (#8123)', () => {
     async function createBridge() {
       const ipcMain = { on: vi.fn(), off: vi.fn() };
@@ -215,18 +274,11 @@ describe('desktop Electron host bridge', () => {
         await loadMainHostBridgeModule(ipcMain);
       const sends: Array<{ channel: string; message: unknown }> = [];
       const { window } = fakeMainWindow(sends);
-      return {
-        bridge: installDesktopHostBridge(window),
-        sends,
-      };
+      return { bridge: installDesktopHostBridge(window), sends };
     }
 
-    it('throws on a ProgressView-domain message with a bad field (schema/producer drift)', async () => {
+    it('throws on a ProgressView-domain message with a bad field', async () => {
       const { bridge } = await createBridge();
-      // Same fixture shape as the channel-routing test above, but with the
-      // invalid theme value restored — proves the assertion actually fires
-      // for a real MainView/ProgressView schema mismatch, not just that the
-      // production code compiles.
       expect(() =>
         bridge.postToRenderer({ command: 'setTheme', theme: 'vscode-dark' }),
       ).toThrow(/Outbound message failed schema validation/);
@@ -245,12 +297,8 @@ describe('desktop Electron host bridge', () => {
       ]);
     });
 
-    it('passes a desktop-only command unrecognized by either outbound schema through unchecked', async () => {
+    it('passes desktop-only commands through unchecked', async () => {
       const { bridge, sends } = await createBridge();
-      // `desktop:showPdf` (and settings/history/onboarding commands) aren't
-      // modeled by MainViewMessageSchema or ProgressViewOutboundMessageSchema
-      // — out of scope for this change, so no schema claims the command and
-      // it must not throw.
       const message = { command: 'desktop:showPdf', title: 't' };
       expect(() => bridge.postToRenderer(message)).not.toThrow();
       expect(sends).toEqual([

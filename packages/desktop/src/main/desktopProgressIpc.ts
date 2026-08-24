@@ -2,7 +2,9 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchProgressViewInbound,
   ProgressViewInboundMessageSchema,
+  rejectedInvalidFollowUpSubmission,
   type ProgressViewInboundHandlerRegistry,
+  type RejectedFollowUpSubmissionResult,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
 import { UnsupportedCommandError } from '@shared/utils/dispatcher';
@@ -31,6 +33,9 @@ export type DesktopProgressInboundHandlerRegistry = Omit<
 interface DesktopProgressIpcBridge {
   readonly progressViewInboundHandlers: DesktopProgressInboundHandlerRegistry;
   completeWebviewReady(): Promise<void>;
+  reportRejectedFollowUpSubmission(
+    result: RejectedFollowUpSubmissionResult,
+  ): void;
 }
 
 interface DesktopProgressSource {
@@ -105,6 +110,13 @@ export function createDesktopProgressIpc(
 
   return {
     handleMessage(message: DesktopCommandMessage): boolean {
+      const rejectedFollowUp = rejectedInvalidFollowUpSubmission(message);
+      if (rejectedFollowUp) {
+        withProgress((progress) =>
+          progress.reportRejectedFollowUpSubmission(rejectedFollowUp),
+        );
+        return true;
+      }
       const result = ProgressViewInboundMessageSchema.safeParse(message);
       if (!result.success) return false;
 

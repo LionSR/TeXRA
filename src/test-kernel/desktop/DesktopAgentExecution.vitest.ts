@@ -110,7 +110,7 @@ type TestableBridge = Bridge & {
     streamId: StreamTabId,
     text: string,
     mediaFiles?: readonly string[],
-  ): Promise<void>;
+  ): Promise<unknown>;
   setActiveStream(streamId: StreamTabId): void;
   revealStream(streamId: StreamTabId): Promise<'revealed' | 'missing'>;
   progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
@@ -600,7 +600,7 @@ async function waitForShownPermission(
 }
 
 describe('desktop follow-up submission', () => {
-  it('does not hold the IPC request open for the resumed turn', async () => {
+  it('returns the delivery admission result before the resumed turn completes', async () => {
     const streamId = 'desktop-detached-follow-up' as StreamTabId;
     let finishResumeLookup!: (value: null) => void;
     const resumeLookup = new Promise<null>((resolve) => {
@@ -615,9 +615,11 @@ describe('desktop follow-up submission', () => {
       },
     });
 
-    await expect(bridge.sendFollowUp(streamId, 'continue')).resolves.toBe(
-      undefined,
-    );
+    await expect(bridge.sendFollowUp(streamId, 'continue')).resolves.toEqual({
+      status: 'queued',
+      reason: 'waiting',
+      continuation: 'resume_failed',
+    });
     expect(bridgeFollowUps(bridge).getAll(streamId)).toEqual(['continue']);
 
     finishResumeLookup(null);
@@ -1492,6 +1494,22 @@ describe('DesktopProgressBridge', () => {
         progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS)
           .length,
       ).toBeGreaterThan(0);
+      expect(messages).toContainEqual({
+        command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TRANSPORT_RESTORED,
+      });
+      expect(
+        messages.findIndex(
+          (message) =>
+            (message as { command?: string }).command ===
+            PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TRANSPORT_RESTORED,
+        ),
+      ).toBeGreaterThan(
+        messages.findIndex(
+          (message) =>
+            (message as { command?: string }).command ===
+            PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+        ),
+      );
     });
   });
 

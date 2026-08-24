@@ -19,6 +19,7 @@ const rendererWindow = globalThis as typeof globalThis & {
 
 installElectronHostBridge({
   exposeInMainWorld: (name, api) => contextBridge.exposeInMainWorld(name, api),
+  getStateFromMain: (channel) => ipcRenderer.sendSync(channel),
   onHostMessage: (channel, listener) => {
     const handler = (_event: IpcRendererEvent, message: unknown) =>
       listener(message);
@@ -35,6 +36,7 @@ installElectronHostBridge({
       resolvePostMessageTargetOrigin(rendererWindow.location?.origin),
     ),
   sendToMain: (channel, message) => ipcRenderer.send(channel, message),
+  setStateInMain: (channel, state) => ipcRenderer.sendSync(channel, state),
 });
 
 contextBridge.exposeInMainWorld('texraDesktop', {

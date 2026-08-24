@@ -5,6 +5,8 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - progress view
+import { userFollowUpAvailability } from '@shared/streams/followUpCapability';
+
 import { ProgressEvents } from '../events';
 import { getFollowUpInputTransientState } from '../followUpInputState';
 import { BaseStreamContent } from './BaseStreamContent';
@@ -98,6 +100,11 @@ export class ToolUseStreamContent extends BaseStreamContent {
             .polishRevision=${currentState.ui.polishRevision}
             .transcribedText=${currentState.ui.transcribedText}
             .recording=${currentState.ui.recording}
+            .submission=${currentState.ui.followUpSubmission}
+            .availability=${userFollowUpAvailability({
+              userFollowUpSupport: currentState.userFollowUpSupport,
+              status: currentState.status,
+            })}
             .unsupportedCommands=${this.streamContext.unsupportedCommands}
             @focus-complete=${this.handleFocusComplete}
           ></follow-up-input>

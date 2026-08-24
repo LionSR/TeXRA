@@ -17,6 +17,13 @@ import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
 import { ContextStateDataSchema } from './contextManagement';
 import { RunUsageMapSchema } from './usage';
+import {
+  MAX_FOLLOW_UP_ERROR_LENGTH,
+  MAX_FOLLOW_UP_FINGERPRINT_LENGTH,
+  MAX_FOLLOW_UP_ID_LENGTH,
+  MAX_FOLLOW_UP_IMAGES,
+  MAX_FOLLOW_UP_TEXT_LENGTH,
+} from './progressView/followUpPolicy';
 
 // Active Child Info — one flat row shape. Every child owns a stream tab
 // (`childStreamId` always present) and carries its parsed `identity`
@@ -162,8 +169,29 @@ const BaseStreamStateSchema = BackendOwnedFieldsSchema.extend({
 
 // Tool-Use UI State (frontend-only, preserved during backend updates)
 
+export const FollowUpAttachmentFingerprintSchema = z
+  .string()
+  .min(1)
+  .max(MAX_FOLLOW_UP_FINGERPRINT_LENGTH);
+
+const FollowUpSubmissionBaseSchema = z.object({
+  deliveryId: z.string().min(1).max(MAX_FOLLOW_UP_ID_LENGTH),
+  text: z.string().max(MAX_FOLLOW_UP_TEXT_LENGTH),
+  attachmentFingerprints: z
+    .array(FollowUpAttachmentFingerprintSchema)
+    .max(MAX_FOLLOW_UP_IMAGES),
+});
+export const FollowUpSubmissionStateSchema = z.discriminatedUnion('status', [
+  FollowUpSubmissionBaseSchema.extend({ status: z.literal('sending') }),
+  FollowUpSubmissionBaseSchema.extend({
+    status: z.literal('failed'),
+    error: z.string().min(1).max(MAX_FOLLOW_UP_ERROR_LENGTH),
+  }),
+]);
+
 const ToolUseUIStateSchema = z.object({
-  followUpText: z.string().prefault(''),
+  followUpText: z.string().max(MAX_FOLLOW_UP_TEXT_LENGTH).prefault(''),
+  followUpSubmission: FollowUpSubmissionStateSchema.nullable().prefault(null),
   polishedText: z.string().nullable().prefault(null),
   polishRevision: z.int().prefault(0),
   transcribedText: z.string().nullable().prefault(null),

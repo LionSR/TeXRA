@@ -8,7 +8,10 @@ import {
   type StreamPhase,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import { streamAllowsChildFollowUpComposer } from '@shared/streams/followUpCapability';
+import {
+  streamAllowsChildFollowUpComposer,
+  userFollowUpAvailability,
+} from '@shared/streams/followUpCapability';
 
 describe('streamAllowsChildFollowUpComposer', () => {
   const inFlightPhases = [STREAM_PHASE.RUNNING, STREAM_PHASE.WAITING] as const;
@@ -140,4 +143,37 @@ describe('streamAllowsChildFollowUpComposer', () => {
       ).toBe(false);
     },
   );
+});
+
+describe('userFollowUpAvailability', () => {
+  it.each([
+    USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+  ])('admits %s host delivery in running and waiting phases', (support) => {
+    for (const status of [STREAM_PHASE.RUNNING, STREAM_PHASE.WAITING]) {
+      expect(
+        userFollowUpAvailability({
+          userFollowUpSupport: support,
+          status,
+        }),
+      ).toEqual({ available: true });
+    }
+  });
+
+  it.each([
+    STREAM_PHASE.COMPLETED,
+    STREAM_PHASE.CANCELLED,
+    STREAM_PHASE.FAILED,
+  ])('rejects terminal phase %s', (status) => {
+    expect(
+      userFollowUpAvailability({
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+        status,
+      }),
+    ).toEqual({
+      available: false,
+      reason: 'terminal',
+      message: 'This run has ended. Start a new agent task to continue.',
+    });
+  });
 });

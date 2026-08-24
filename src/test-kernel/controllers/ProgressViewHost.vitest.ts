@@ -17,7 +17,11 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type { RunIdentity } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  USER_FOLLOW_UP_SUPPORT,
+  type RunIdentity,
+} from '@shared/schemas';
 
 // Local file imports
 import {
@@ -96,7 +100,12 @@ function createHostHarness(
         stopStream: vi.fn(),
       },
       followUp: {
-        sendFollowUp: vi.fn(),
+        getCurrentTargetMetadata: () => ({
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+          status: STREAM_PHASE.RUNNING,
+        }),
+        sendFollowUp: vi.fn(async () => ({ status: 'sent' as const })),
+        captureSubmissionResultReporter: vi.fn(() => vi.fn()),
         reportImageSaveError: vi.fn(),
       },
       bypass: {

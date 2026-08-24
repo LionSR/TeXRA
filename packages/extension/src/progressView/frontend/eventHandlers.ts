@@ -7,7 +7,9 @@ import {
   type GettingStartedActionDetail,
   type ProgressViewInboundMessage,
   type StreamTabId,
+  type ToolUseStreamState,
 } from '@shared/schemas';
+import { userFollowUpAvailability } from '@shared/streams/followUpCapability';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - progress view
@@ -17,7 +19,15 @@ import {
   firstStreamId,
   isToolUseState,
 } from './store';
-import { deleteFollowUpInputTransientState } from './followUpInputState';
+import {
+  deleteFollowUpInputTransientState,
+  followUpAttachmentFingerprintsMatch,
+  followUpAttachmentSnapshot,
+} from './followUpInputState';
+import {
+  deletePersistedFollowUpDraft,
+  persistFollowUpDraft,
+} from './followUpDraftPersistence';
 import { addResolvedProposalId, removePrompt } from './slices/permissionSlice';
 import { updateToolUseState } from './stateUtils';
 import { clearInquiryDraft } from './components/ExternalInquiryPanel';
@@ -52,6 +62,7 @@ export function handleStreamDelete(
 ): void {
   const streamId = event.detail.streamId;
   deleteFollowUpInputTransientState(streamId);
+  deletePersistedFollowUpDraft(streamId);
 
   // Optimistic removal: apply delete locally before notifying backend
   appState.set(
@@ -106,6 +117,12 @@ export function handleFollowUpChange(
     create(prev, (draft) => {
       if (mode === 'replace') {
         draft.ui.followUpText = value;
+        if (
+          draft.ui.followUpSubmission?.status === 'failed' &&
+          draft.ui.followUpSubmission.text !== value.trim()
+        ) {
+          draft.ui.followUpSubmission = null;
+        }
         return;
       }
       if (!value) return;
@@ -115,44 +132,92 @@ export function handleFollowUpChange(
       draft.ui.followUpText = `${current}${separator}${value}`;
     }),
   );
+  persistFollowUpDraft(streamId);
 }
 
 /** Resolve one tool-use stream's trimmed follow-up text, or null if unavailable. */
-function getFollowUpText(
-  streamId: StreamTabId,
-): { streamId: StreamTabId; text: string } | null {
-  const state = appState.get();
-  const streamState = state.streamStates.get(streamId);
+function getFollowUpText(streamId: StreamTabId): {
+  streamState: ToolUseStreamState;
+  text: string;
+} | null {
+  const streamState = appState.get().streamStates.get(streamId);
   if (!streamState || !isToolUseState(streamState)) return null;
 
-  const text = streamState.ui.followUpText?.trim() ?? '';
-  if (!text) return null;
-
-  return { streamId, text };
+  const text = streamState.ui.followUpText.trim();
+  return text ? { streamState, text } : null;
 }
 
 export function handleFollowUpSend(
   event: CustomEvent<FollowUpSendDetail>,
 ): void {
-  const result = getFollowUpText(event.detail.streamId);
+  const { streamId } = event.detail;
+  const result = getFollowUpText(streamId);
   if (!result) return;
+
+  if (result.streamState.ui.followUpSubmission?.status === 'sending') return;
 
   // Orphan gate: only attach images whose [fileName] token survives in the
   // submitted text (the user may have deleted a pasted chip before sending).
-  const attached = event.detail.images.filter((img) =>
-    result.text.includes(`[${img.fileName}]`),
-  );
+  const { images: attached, fingerprints: attachmentFingerprints } =
+    followUpAttachmentSnapshot(result.text, event.detail.images);
+  const previousSubmission = result.streamState.ui.followUpSubmission;
+  const reuseDelivery =
+    previousSubmission?.status === 'failed' &&
+    previousSubmission.text === result.text &&
+    followUpAttachmentFingerprintsMatch(
+      previousSubmission.attachmentFingerprints,
+      attachmentFingerprints,
+    );
+  const deliveryId = reuseDelivery
+    ? previousSubmission.deliveryId
+    : globalThis.crypto.randomUUID();
+  const availability = userFollowUpAvailability(result.streamState);
+  if (!availability.available) {
+    updateToolUseState(streamId, (prev) =>
+      create(prev, (draft) => {
+        draft.ui.followUpSubmission = {
+          status: 'failed',
+          deliveryId,
+          text: result.text,
+          attachmentFingerprints,
+          error: availability.message,
+        };
+      }),
+    );
+    persistFollowUpDraft(streamId);
+    return;
+  }
 
-  postMessage(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP, {
-    stream: result.streamId,
-    text: result.text,
-    ...(attached.length > 0 ? { images: attached } : {}),
-  });
-  updateToolUseState(result.streamId, (prev) =>
+  updateToolUseState(streamId, (prev) =>
     create(prev, (draft) => {
-      draft.ui.followUpText = '';
+      draft.ui.followUpSubmission = {
+        status: 'sending',
+        deliveryId,
+        text: result.text,
+        attachmentFingerprints,
+      };
     }),
   );
+  const persistence = persistFollowUpDraft(streamId);
+  if (!persistence.persisted) {
+    updateToolUseState(streamId, (prev) =>
+      create(prev, (draft) => {
+        draft.ui.followUpSubmission = {
+          ...draft.ui.followUpSubmission!,
+          status: 'failed',
+          error: persistence.error,
+        };
+      }),
+    );
+    persistFollowUpDraft(streamId);
+    return;
+  }
+  postMessage(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP, {
+    stream: streamId,
+    text: result.text,
+    deliveryId,
+    ...(attached.length > 0 ? { images: attached } : {}),
+  });
 }
 
 export function handleFollowUpPolish(): void {
@@ -161,7 +226,7 @@ export function handleFollowUpPolish(): void {
   if (!result) return;
 
   postMessage(PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP, {
-    stream: result.streamId,
+    stream: streamId,
     text: result.text,
   });
 }

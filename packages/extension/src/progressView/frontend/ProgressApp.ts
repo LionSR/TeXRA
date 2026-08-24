@@ -26,6 +26,7 @@ import '@shared/wa/tabs';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 
 // Local imports - progress view frontend
+import { prepareFollowUpDraftRestore } from './followUpDraftPersistence';
 import { progressAppStyles } from './progressAppStyles';
 import {
   activeStreamId$,
@@ -118,6 +119,7 @@ export class ProgressApp extends ProgressAppBase {
   constructor() {
     super();
     resetProgressState();
+    prepareFollowUpDraftRestore();
   }
 
   override connectedCallback(): void {

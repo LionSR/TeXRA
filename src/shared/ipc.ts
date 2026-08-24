@@ -178,6 +178,8 @@ export const PROGRESS_VIEW_COMMANDS = {
   PACK_STREAM: 'packStream',
   RESTORE_STATE: 'restoreState',
   SEND_FOLLOW_UP: 'sendFollowUp',
+  FOLLOW_UP_SUBMISSION_RESULT: 'followUpSubmissionResult',
+  FOLLOW_UP_TRANSPORT_RESTORED: 'followUpTransportRestored',
   POLISH_FOLLOW_UP: 'polishFollowUp',
   UPDATE_FOLLOW_UP_TEXT: 'updateFollowUpText',
   SETUP_FOLLOWUP: 'setupFollowup',

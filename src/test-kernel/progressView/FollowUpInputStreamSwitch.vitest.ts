@@ -52,6 +52,10 @@ type FollowUpInputInternals = HTMLElement & {
   value: string;
   streamId: string;
   transientState: FollowUpInputTransientState | null;
+  submission: unknown;
+  availability: unknown;
+  unsupportedCommands: ReadonlySet<string> | null;
+  recording: boolean;
   followUpEventSink: (event: CustomEvent) => void;
   updateComplete: Promise<boolean>;
   handlePaste: (event: ClipboardEvent) => void;
@@ -144,6 +148,42 @@ describe('follow-up-input layout', () => {
     expect(textarea?.resize).toBe('vertical');
     expect(textarea?.input.rows).toBe(2);
   });
+
+  it('announces sending and disables draft-mutating controls', async () => {
+    const element = createFollowUpInput('stream-sending');
+    element.availability = { available: true };
+    element.unsupportedCommands = new Set();
+    element.submission = {
+      status: 'sending',
+      deliveryId: 'delivery-a',
+      text: 'draft',
+      attachmentFingerprints: [],
+    };
+    await element.updateComplete;
+
+    const root = element.shadowRoot;
+    expect(root?.querySelector('[role="status"]')?.textContent?.trim()).toBe(
+      'Sending...',
+    );
+    expect(root?.querySelector('wa-textarea')?.hasAttribute('disabled')).toBe(
+      true,
+    );
+    expect(
+      root?.querySelector('#polishFollowUpBtn')?.hasAttribute('disabled'),
+    ).toBe(true);
+    expect(
+      root?.querySelector('#sendFollowUpBtn')?.classList.contains('is-busy'),
+    ).toBe(true);
+    expect(
+      root?.querySelector('#recordFollowUpBtn')?.hasAttribute('disabled'),
+    ).toBe(true);
+
+    element.recording = true;
+    await element.updateComplete;
+    expect(
+      root?.querySelector('#recordFollowUpBtn')?.hasAttribute('disabled'),
+    ).toBe(false);
+  });
 });
 
 describe('follow-up-input pasted-image state across stream switches', () => {
@@ -158,8 +198,8 @@ describe('follow-up-input pasted-image state across stream switches', () => {
     await element.updateComplete;
 
     const streamB = getFollowUpInputTransientState('stream-b');
-    const imageA = seedPendingImage('stream-a', 'pasted-a.png');
-    const imageB = image('pasted-b.png');
+    const imageA = seedPendingImage('stream-a', 'pasted_a.png');
+    const imageB = image('pasted_b.png');
 
     bindStream(element, 'stream-b');
     streamB.pendingImages = [imageB];
@@ -177,7 +217,7 @@ describe('follow-up-input pasted-image state across stream switches', () => {
     await element.updateComplete;
 
     const streamA = getFollowUpInputTransientState('stream-a');
-    const imageA = seedPendingImage('stream-a', 'pasted-a.png');
+    const imageA = seedPendingImage('stream-a', 'pasted_a.png');
     const pendingPaste = new Promise<void>(() => {});
     streamA.pendingImagePastes.add(pendingPaste);
 
@@ -200,7 +240,7 @@ describe('follow-up-input pasted-image state across stream switches', () => {
     const element = createFollowUpInput('stream-a');
     await element.updateComplete;
 
-    const imageA = seedPendingImage('stream-a', 'pasted-a.png');
+    const imageA = seedPendingImage('stream-a', 'pasted_a.png');
 
     element.value = 'follow-up text';
     await element.updateComplete;
@@ -266,6 +306,15 @@ describe('follow-up-input pasted-image state across stream switches', () => {
         },
       ],
     });
-    expect(streamA.pendingImages).toEqual([]);
+    // The delivery result handler clears attachments only after the host
+    // accepts this send. A rejected or interrupted delivery must retain them
+    // for the retry together with the text draft.
+    expect(streamA.pendingImages).toEqual([
+      {
+        fileName: 'pasted-test.png',
+        base64: 'encoded-image',
+        mediaType: 'image/png',
+      },
+    ]);
   });
 });

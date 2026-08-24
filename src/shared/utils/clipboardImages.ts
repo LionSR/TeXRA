@@ -26,8 +26,16 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
   'image/x-psd': 'psd',
 };
 
+export function getSupportedImageExtension(
+  mimeType: string,
+): string | undefined {
+  return IMAGE_MIME_TYPES[mimeType];
+}
+
 export function getExtensionFromMimeType(mimeType: string): string {
-  return IMAGE_MIME_TYPES[mimeType] || mimeType.split('/')[1] || 'png';
+  return (
+    getSupportedImageExtension(mimeType) || mimeType.split('/')[1] || 'png'
+  );
 }
 
 export interface ExtractedClipboardImage {

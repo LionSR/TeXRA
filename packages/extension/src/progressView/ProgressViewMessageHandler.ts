@@ -2,6 +2,10 @@ import * as vscode from 'vscode';
 
 import { getAgent } from '@agent/index';
 import {
+  presentFollowUpResult,
+  submitFollowUp,
+} from '@agent/followUp/ToolUseFollowUp';
+import {
   validateExecutionRequest,
   type ExecutionRequest,
 } from '@agent/core/state/executionRequests';
@@ -42,6 +46,7 @@ import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   dispatchProgressViewInbound,
+  rejectedInvalidFollowUpSubmission,
   type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
@@ -261,6 +266,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         const view = this.getActiveView();
         if (view) {
           await this.provider.markWebviewReady(view);
+          await view.webview.postMessage({
+            command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TRANSPORT_RESTORED,
+          });
         }
       },
       [PROGRESS_VIEW_COMMANDS.THEME_SET]: forwardToActiveView,
@@ -338,6 +346,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
+    const rejectedFollowUp = rejectedInvalidFollowUpSubmission(message);
+    if (rejectedFollowUp) {
+      await webviewView.webview.postMessage(rejectedFollowUp);
+      return;
+    }
     await this.dispatchInbound(
       message,
       webviewView,
@@ -513,21 +526,58 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           stopStream: (stream) => this.provider.backend.stopStream(stream),
         },
         followUp: {
-          sendFollowUp: async ({ stream, text, mediaFiles }) => {
-            await this.runViewCommand('texra.sendFollowUp', [
-              {
-                stream,
-                text,
-                ...(mediaFiles && mediaFiles.length > 0 ? { mediaFiles } : {}),
-              },
-            ]);
+          getCurrentTargetMetadata: (stream) => ({
+            userFollowUpSupport:
+              this.provider.state.getStreamMetadata(stream).userFollowUpSupport,
+            status: defaultSession().status.get(stream),
+          }),
+          sendFollowUp: async ({ stream, text, deliveryId, mediaFiles }) => {
+            const result = await submitFollowUp(stream, {
+              text,
+              deliveryId,
+              ...(mediaFiles && mediaFiles.length > 0 ? { mediaFiles } : {}),
+            });
+            if (result.status === 'sent' || result.status === 'queued') {
+              defaultSession().events.emit({
+                scope: 'session',
+                event: {
+                  type: 'updateQueuedFollowUps',
+                  payload: { streamId: stream },
+                },
+              });
+              const presentation = presentFollowUpResult(result);
+              if (presentation.severity === 'info') {
+                await vscode.window.showInformationMessage(
+                  presentation.message,
+                );
+              }
+            }
+            return result;
+          },
+          captureSubmissionResultReporter: () => {
+            const source = this.getActiveView()?.webview;
+            return (result) => {
+              if (!source) return;
+              void Promise.resolve(source.postMessage(result)).catch(
+                (error: unknown) => {
+                  this.logger.debug(
+                    this.channel,
+                    'Follow-up result target is no longer attached',
+                    { data: error },
+                  );
+                },
+              );
+            };
           },
           reportImageSaveError: (_image, error) => {
-            // Best-effort: a failed image save must not block the text, but log
-            // it so a missing attachment is diagnosable.
             this.logger.warn(
               this.channel,
-              `Failed to save pasted follow-up image: ${toErrorMessage(error)}`,
+              'Failed to save a pasted follow-up image',
+              {
+                data: {
+                  category: error instanceof Error ? 'error' : 'non-error',
+                },
+              },
             );
           },
         },

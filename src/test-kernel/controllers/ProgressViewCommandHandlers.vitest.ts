@@ -12,6 +12,7 @@ import {
   type ProgressViewSecondTierActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { STREAM_PHASE, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import {
   ProgressViewInboundMessageSchema,
   dispatchProgressViewInbound,
@@ -92,7 +93,12 @@ function createActions(
       openLabel: vi.fn(),
     },
     followUp: {
-      sendFollowUp: vi.fn(),
+      getCurrentTargetMetadata: vi.fn(() => ({
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+        status: STREAM_PHASE.RUNNING,
+      })),
+      sendFollowUp: vi.fn().mockResolvedValue({ status: 'sent' }),
+      captureSubmissionResultReporter: vi.fn(() => vi.fn()),
       reportImageSaveError: vi.fn(),
     },
     bypass: { showInfo: vi.fn() },
@@ -109,6 +115,11 @@ function createActions(
     },
     ...overrides,
   };
+}
+
+function capturedSubmissionReporter(actions: ProgressViewCommandActions) {
+  return vi.mocked(actions.followUp.captureSubmissionResultReporter).mock
+    .results[0]?.value;
 }
 
 function createSecondTierActions(
@@ -338,6 +349,7 @@ describe('createProgressViewCommandHandlers - follow-up', () => {
         command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
         stream: 'stream-a',
         text: 'continue',
+        deliveryId: 'delivery-1',
       }),
     );
 
@@ -346,10 +358,56 @@ describe('createProgressViewCommandHandlers - follow-up', () => {
     expect(actions.followUp.sendFollowUp).toHaveBeenCalledWith({
       stream: 'stream-a',
       text: 'continue',
+      deliveryId: 'delivery-1',
+    });
+    expect(capturedSubmissionReporter(actions)).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT,
+      stream: 'stream-a',
+      deliveryId: 'delivery-1',
+      accepted: true,
     });
   });
 
-  it('persists follow-up images and keeps sending text after an image save fails', async () => {
+  it('captures the result transport before asynchronous image persistence', async () => {
+    let finishSave: (path: string) => void = () => {};
+    savePastedImageBase64Mock.mockReturnValue(
+      new Promise((resolve) => {
+        finishSave = resolve;
+      }),
+    );
+    const actions = createActions();
+    const handlers = createProgressViewCommandHandlers(actions);
+
+    const handling = assertSupported(
+      handlers[PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP],
+    )(
+      parseSendFollowUpMessage({
+        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+        stream: 'stream-a',
+        text: 'look [pasted_1.png]',
+        deliveryId: 'delivery-captured',
+        images: [
+          {
+            base64: 'aW1hZ2U=',
+            mediaType: 'image/png',
+            fileName: 'pasted_1.png',
+          },
+        ],
+      }),
+    );
+
+    expect(
+      actions.followUp.captureSubmissionResultReporter,
+    ).toHaveBeenCalledOnce();
+    expect(actions.followUp.sendFollowUp).not.toHaveBeenCalled();
+    finishSave('/tmp/pasted.png');
+    await handling;
+    expect(capturedSubmissionReporter(actions)).toHaveBeenCalledWith(
+      expect.objectContaining({ accepted: true }),
+    );
+  });
+
+  it('rejects the whole multi-image submission when one image save fails', async () => {
     const failedImageError = new Error('bad image');
     savePastedImageBase64Mock
       .mockResolvedValueOnce('/tmp/pasted/a.png')
@@ -358,7 +416,7 @@ describe('createProgressViewCommandHandlers - follow-up', () => {
     const actions = createActions();
     const handlers = createProgressViewCommandHandlers(actions);
     const failedImage = {
-      base64: 'broken',
+      base64: 'YnJva2Vu',
       mediaType: 'image/png',
       fileName: 'pasted_2.png',
     };
@@ -368,9 +426,10 @@ describe('createProgressViewCommandHandlers - follow-up', () => {
         command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
         stream: 'stream-a',
         text: 'look at these',
+        deliveryId: 'delivery-2',
         images: [
           {
-            base64: 'ok',
+            base64: 'b2s=',
             mediaType: 'image/png',
             fileName: 'pasted_1.png',
           },
@@ -381,22 +440,97 @@ describe('createProgressViewCommandHandlers - follow-up', () => {
 
     expect(savePastedImageBase64Mock).toHaveBeenNthCalledWith(
       1,
-      'ok',
+      'b2s=',
       'pasted_1.png',
     );
     expect(savePastedImageBase64Mock).toHaveBeenNthCalledWith(
       2,
-      'broken',
+      'YnJva2Vu',
       'pasted_2.png',
     );
     expect(actions.followUp.reportImageSaveError).toHaveBeenCalledWith(
       failedImage,
       failedImageError,
     );
-    expect(actions.followUp.sendFollowUp).toHaveBeenCalledWith({
+    expect(actions.followUp.sendFollowUp).not.toHaveBeenCalled();
+    expect(capturedSubmissionReporter(actions)).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT,
       stream: 'stream-a',
-      text: 'look at these',
-      mediaFiles: ['/tmp/pasted/a.png'],
+      deliveryId: 'delivery-2',
+      accepted: false,
+      error:
+        'An image could not be saved. Remove and paste the images again, then try again.',
+    });
+  });
+
+  it.each([
+    [
+      'unsupported',
+      {
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+        status: STREAM_PHASE.RUNNING,
+      },
+      'This run does not accept follow-up messages.',
+    ],
+    [
+      'terminal',
+      {
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+        status: STREAM_PHASE.COMPLETED,
+      },
+      'This run has ended. Start a new agent task to continue.',
+    ],
+  ])(
+    'rejects %s current metadata before delivery',
+    async (_name, metadata, error) => {
+      const actions = createActions();
+      vi.mocked(actions.followUp.getCurrentTargetMetadata).mockReturnValue(
+        metadata,
+      );
+      const handlers = createProgressViewCommandHandlers(actions);
+
+      await assertSupported(handlers[PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP])(
+        parseSendFollowUpMessage({
+          command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+          stream: 'stream-a',
+          text: 'continue',
+          deliveryId: 'delivery-rejected',
+        }),
+      );
+
+      expect(actions.followUp.sendFollowUp).not.toHaveBeenCalled();
+      expect(capturedSubmissionReporter(actions)).toHaveBeenCalledWith({
+        command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT,
+        stream: 'stream-a',
+        deliveryId: 'delivery-rejected',
+        accepted: false,
+        error,
+      });
+    },
+  );
+
+  it('reports failed delivery without accepting the draft', async () => {
+    const actions = createActions();
+    vi.mocked(actions.followUp.sendFollowUp).mockRejectedValueOnce(
+      new Error('offline'),
+    );
+    const handlers = createProgressViewCommandHandlers(actions);
+
+    await assertSupported(handlers[PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP])(
+      parseSendFollowUpMessage({
+        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+        stream: 'stream-a',
+        text: 'continue',
+        deliveryId: 'delivery-failed',
+      }),
+    );
+
+    expect(capturedSubmissionReporter(actions)).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT,
+      stream: 'stream-a',
+      deliveryId: 'delivery-failed',
+      accepted: false,
+      error: 'Unable to send. Check your connection and try again.',
     });
   });
 });

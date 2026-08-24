@@ -3,14 +3,22 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as vscode from 'vscode';
 
 // Local imports
+import type { SubmitFollowUpResult } from '@agent/followUp/ToolUseFollowUp';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
 import * as logger from '@logger/logUtils';
 import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  USER_FOLLOW_UP_SUPPORT,
+  type StreamTabId,
+} from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 
 // Local file imports
 import { FakePromptHost } from '../support/FakeHosts';
@@ -19,11 +27,16 @@ import {
   createWorkflowConfig,
 } from '../support/ProgressControllerHarnesses';
 
-import type * as vscode from 'vscode';
-
 const mocks = vi.hoisted(() => ({
   safeExecuteCommand: vi.fn(),
+  submitFollowUp: vi.fn(),
 }));
+
+vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@agent/followUp/ToolUseFollowUp')>();
+  return { ...actual, submitFollowUp: mocks.submitFollowUp };
+});
 
 vi.mock('@frontend/system/commandUtils', () => ({
   safeExecuteCommand: mocks.safeExecuteCommand,
@@ -90,6 +103,9 @@ function createProgressViewProvider(): ProgressViewProviderFake {
     streamLogs: new Map<StreamTabId, unknown>(),
     snapshots,
     pickValidActiveStream: vi.fn(() => ''),
+    getStreamMetadata: vi.fn(() => ({
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    })),
     waitForOwnedExecutionRelease: vi.fn(async () => undefined),
   };
   return {
@@ -131,8 +147,13 @@ function createProviderShell(
 
 describe('progress-view onboarding refresh wiring', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
     mocks.safeExecuteCommand.mockResolvedValue(undefined);
+    mocks.submitFollowUp.mockResolvedValue({ status: 'sent' });
+    vi.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(
+      undefined,
+    );
   });
 
   it('refreshes the onboarding funnel after progress setup actions', async () => {
@@ -163,6 +184,153 @@ describe('progress-view onboarding refresh wiring', () => {
       expect(refreshCallOrder).toBeDefined();
       expect(setupCallOrder!).toBeLessThan(refreshCallOrder!);
     });
+  });
+
+  it('syncs restored drafts before reporting restored follow-up transport', async () => {
+    const provider = createProgressViewProvider();
+    const view = createWebviewView();
+    vi.mocked(provider.markWebviewReady).mockImplementation(async () => {
+      await view.webview.postMessage({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+      });
+    });
+    const handler = createMessageHandler(provider);
+
+    await handler.handleMessage(
+      { command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY, view: 'progress' },
+      view,
+    );
+
+    expect(view.webview.postMessage).toHaveBeenNthCalledWith(1, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+    });
+    expect(view.webview.postMessage).toHaveBeenNthCalledWith(2, {
+      command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TRANSPORT_RESTORED,
+    });
+  });
+
+  it('rejects an oversized renderer follow-up through the normal result channel', async () => {
+    const source = createWebviewView();
+    const handler = createMessageHandler(createProgressViewProvider());
+
+    await handler.handleMessage(
+      {
+        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+        stream: 'oversized-renderer',
+        text: 'continue',
+        deliveryId: 'oversized-delivery',
+        images: Array.from({ length: 9 }, (_, index) => ({
+          fileName: `pasted-${index}.png`,
+          mediaType: 'image/png',
+          base64: 'A',
+        })),
+      },
+      source,
+    );
+
+    expect(source.webview.postMessage).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT,
+      stream: 'oversized-renderer',
+      deliveryId: 'oversized-delivery',
+      accepted: false,
+      error:
+        'Attachment limits are 8 images, 3 MiB per image, and 4 MiB total. Remove an image and try again.',
+    });
+    expect(mocks.submitFollowUp).not.toHaveBeenCalled();
+  });
+
+  it('returns a pending follow-up result to its originating surface', async () => {
+    const streamId = 'originating-surface' as StreamTabId;
+    seedStreamStatusForTest(defaultSession().status, streamId, {
+      phase: STREAM_PHASE.RUNNING,
+    });
+    let finishSubmission: (result: SubmitFollowUpResult) => void = () => {};
+    mocks.submitFollowUp.mockReturnValue(
+      new Promise((resolve) => {
+        finishSubmission = resolve;
+      }),
+    );
+    const emit = vi.spyOn(defaultSession().events, 'emit');
+    const provider = createProgressViewProvider();
+    const handler = createMessageHandler(provider);
+    const sidebar = createWebviewView();
+    const panel = createWebviewView();
+
+    await handler.handleMessage(
+      {
+        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+        stream: streamId,
+        text: 'continue',
+        deliveryId: 'delivery-origin',
+      },
+      sidebar,
+    );
+    await handler.handleMessage(
+      { command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY, view: 'progress' },
+      panel,
+    );
+    finishSubmission({
+      status: 'queued',
+      reason: 'waiting',
+      continuation: 'resume_failed',
+    });
+
+    await vi.waitFor(() => {
+      expect(sidebar.webview.postMessage).toHaveBeenCalledWith({
+        command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT,
+        stream: streamId,
+        deliveryId: 'delivery-origin',
+        accepted: true,
+      });
+    });
+    expect(panel.webview.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_SUBMISSION_RESULT,
+      }),
+    );
+    expect(emit).toHaveBeenCalledWith({
+      scope: 'session',
+      event: {
+        type: 'updateQueuedFollowUps',
+        payload: { streamId },
+      },
+    });
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      'Message queued. Auto-resume failed; start a new agent task to continue.',
+    );
+  });
+
+  it('accepts a duplicate follow-up without repeating runtime effects', async () => {
+    const streamId = 'duplicate-delivery' as StreamTabId;
+    seedStreamStatusForTest(defaultSession().status, streamId, {
+      phase: STREAM_PHASE.RUNNING,
+    });
+    mocks.submitFollowUp.mockResolvedValue({ status: 'duplicate' });
+    const emit = vi.spyOn(defaultSession().events, 'emit');
+    const handler = createMessageHandler(createProgressViewProvider());
+    const source = createWebviewView();
+
+    await handler.handleMessage(
+      {
+        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+        stream: streamId,
+        text: 'continue',
+        deliveryId: 'delivery-duplicate',
+      },
+      source,
+    );
+
+    await vi.waitFor(() => {
+      expect(source.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ accepted: true }),
+      );
+    });
+    expect(emit).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ type: 'updateQueuedFollowUps' }),
+      }),
+    );
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
   });
 
   it('acknowledges a replacement run when the runtime publishes its handle', async () => {
