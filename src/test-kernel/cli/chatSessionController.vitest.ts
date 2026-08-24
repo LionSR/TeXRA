@@ -22,8 +22,6 @@ const mocks = vi.hoisted(() => ({
   defaultSession: vi.fn(),
   getActiveExecutionIds: vi.fn(),
   getExecutionHandle: vi.fn(),
-  addExecutionRegistrationListener: vi.fn(),
-  addChildActivationListener: vi.fn(),
   detachHostInteractions: vi.fn(),
   attachTerminalResultToast: vi.fn(),
   attachSessionSignalsAdapter: vi.fn(),
@@ -127,7 +125,6 @@ import type {
   AgentConfig,
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { ExecutionInteractionOwnership } from '@agent/runtime/executionInteractionOwnership';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
@@ -303,12 +300,22 @@ function installResumeExecutionStore(
  * untyped here exactly as the returned session is.
  */
 function installSession(overrides: Record<string, unknown> = {}): void {
+  // Interaction ownership is registry-owned, so the stub borrows a real,
+  // otherwise-unused registry for it: with no handles tracked there, a scope
+  // releases as soon as the host finishes it, which is what every stubbed
+  // test expects. Ownership retention is covered by `installOwnerSession`.
+  const ownershipEvents = new SessionEventHub();
+  const ownershipRegistry = new ExecutionRegistry({
+    events: ownershipEvents,
+    streamStatus: new StreamStatusMachine(ownershipEvents),
+    releaseRootExecutionLease: async () => {},
+  });
   const executions = {
     stopAgentStream: mocks.stopAgentStream,
     getActiveIds: mocks.getActiveExecutionIds,
     getHandle: mocks.getExecutionHandle,
-    addRegistrationListener: mocks.addExecutionRegistrationListener,
-    addChildActivationListener: mocks.addChildActivationListener,
+    openInteractionScope: (onRelease: () => void) =>
+      ownershipRegistry.openInteractionScope(onRelease),
   };
   mocks.defaultSession.mockReturnValue({
     approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -321,14 +328,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
       }),
     },
     approvals: { registerStreamParent: vi.fn() },
-    executions: {
-      ...executions,
-      // The stubbed registry still answers the three surfaces the real
-      // ownership index reads, so the controller runs against real ownership.
-      interactionOwnership: new ExecutionInteractionOwnership(
-        executions as unknown as ExecutionRegistry,
-      ),
-    },
+    executions,
     transcripts: { ensureLoaded: vi.fn(async () => undefined) },
     ...overrides,
   });
@@ -573,8 +573,6 @@ describe('createChatSessionController', () => {
       emit: vi.fn(),
     });
     mocks.getActiveExecutionIds.mockReturnValue([]);
-    mocks.addExecutionRegistrationListener.mockReturnValue(vi.fn());
-    mocks.addChildActivationListener.mockReturnValue(vi.fn());
     mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
     mocks.attachSessionSignalsAdapter.mockReturnValue(vi.fn());
     mocks.createTuiHostInteractions.mockReturnValue({});
@@ -1079,42 +1077,6 @@ describe('createChatSessionController', () => {
     expect(hostA.close).toHaveBeenCalledOnce();
     expect(hostB.close).toHaveBeenCalledOnce();
     expect(resultPresenters).toHaveLength(0);
-  });
-
-  it('cannot miss the final survivor untracking at host-listener registration', async () => {
-    const presentationHost = {
-      emit: vi.fn(),
-      close: mocks.presentationHostClose,
-    } as unknown as CliRuntimeHost;
-    const detachRegistrationListener = vi.fn();
-    let childActive = true;
-    mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
-    mocks.getActiveExecutionIds.mockImplementation(() =>
-      childActive ? ['child-exec'] : [],
-    );
-    mocks.getExecutionHandle.mockImplementation(() =>
-      childActive ? { presentationHost } : undefined,
-    );
-    mocks.addExecutionRegistrationListener.mockImplementation(
-      (listener: () => void) => {
-        // Adversarial boundary: the final survivor disappears while the
-        // listener is being installed, before the initial liveness check.
-        childActive = false;
-        listener();
-        return detachRegistrationListener;
-      },
-    );
-
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
-    ctrl.startRootRun(makeRunRequest('Check listener registration.'));
-    await session.runPromise;
-
-    expect(session.runCompleted).toBe(true);
-    expect(mocks.addExecutionRegistrationListener).toHaveBeenCalledOnce();
-    expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
-    expect(mocks.detachHostInteractions).toHaveBeenCalledOnce();
-    expect(detachRegistrationListener).toHaveBeenCalledOnce();
   });
 
   it('reserves the root-run slot before tryResumeStream awaits persisted state', async () => {
