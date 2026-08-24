@@ -6,8 +6,8 @@
  * (`session.interactions.x(...)`, `session.executions.y(...)`). Its sole
  * lifecycle gate, {@link SessionHandle.waitUntilReady}, ensures persistent
  * restart repair has settled before a host exposes the session. It composes
- * {@link ExecutionRegistry}, {@link ExecutionSubscriptionBinder},
- * {@link SessionHostInteractions}, and the other session-scoped owners.
+ * {@link ExecutionRegistry}, {@link SessionHostInteractions}, and the other
+ * session-scoped owners.
  *
  * A session is one per host context: extension activation (per VS Code window),
  * CLI process, or desktop Electron process. The default instance is installed
@@ -70,7 +70,6 @@ import { throwAggregated } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getRunContextSession, tryUseRunContext } from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
-import { ExecutionSubscriptionBinder } from './ExecutionSubscriptionBinder';
 import { StreamStatusMachine } from './StreamStatusService';
 import {
   SessionHostInteractions,
@@ -111,7 +110,6 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
 } & Partial<
     Pick<
       SessionHandle,
-      | 'subscriptions'
       | 'events'
       | 'followUps'
       | 'snapshots'
@@ -150,8 +148,6 @@ export class SessionHandle {
    * {@link status} publishes on.
    */
   readonly executions: ExecutionRegistry;
-  /** Execution-status subscriptions bound to agent stream lifecycles. */
-  readonly subscriptions: ExecutionSubscriptionBinder;
   /** Session-scoped one-way fact plane. */
   readonly events: SessionEventHub;
   /** Session-scoped status plane. */
@@ -214,13 +210,6 @@ export class SessionHandle {
     });
 
     this.executions = executions;
-    this.subscriptions =
-      init.subscriptions ??
-      new ExecutionSubscriptionBinder({
-        registry: executions,
-        releaseSource: followUps,
-        session: this,
-      });
     this.events = events;
     this.status = status;
     this.transcripts = transcripts;
@@ -268,7 +257,6 @@ export class SessionHandle {
     this.teardown.add(() => this.approvals.clearAll());
     this.teardown.add(() => this.executions.dispose());
     this.teardown.add(() => this.followUps.dispose());
-    this.teardown.add(() => this.subscriptions.dispose());
     this.teardown.add(() => this.restartRepairAbort.abort());
     this.teardown.add(() => this.flushPendingTraces());
     if (

@@ -199,7 +199,6 @@ describe('SessionHandle', () => {
     const second = defaultSession();
     expect(second).toBe(first);
     expect(second.executions).toBe(first.executions);
-    expect(second.subscriptions).toBe(first.subscriptions);
     expect(second.status).toBe(first.status);
     expect(second.events).toBe(first.events);
     expect(second.transcripts).toBe(first.transcripts);
@@ -212,7 +211,6 @@ describe('SessionHandle', () => {
     const fallback = defaultSession();
     try {
       expect(fresh.executions).not.toBe(fallback.executions);
-      expect(fresh.subscriptions).not.toBe(fallback.subscriptions);
       expect(fresh.interactions).not.toBe(fallback.interactions);
       expect(fresh.status).not.toBe(fallback.status);
       expect(fresh.events).not.toBe(fallback.events);
@@ -319,13 +317,11 @@ describe('SessionHandle', () => {
   it('dispose tears down each owned member', () => {
     const session = createTestSession();
     const interactions = vi.spyOn(session.interactions, 'dispose');
-    const subscriptions = vi.spyOn(session.subscriptions, 'dispose');
     const executions = vi.spyOn(session.executions, 'dispose');
 
     session.dispose();
 
     expect(interactions).toHaveBeenCalledOnce();
-    expect(subscriptions).toHaveBeenCalledOnce();
     expect(executions).toHaveBeenCalledOnce();
   });
 
@@ -334,7 +330,6 @@ describe('SessionHandle', () => {
     const failure = new Error('latched transcript failure');
     const laterFlusher = vi.fn();
     const interactions = vi.spyOn(session.interactions, 'dispose');
-    const subscriptions = vi.spyOn(session.subscriptions, 'dispose');
     const executions = vi.spyOn(session.executions, 'dispose');
     session.flushers.set(
       'failed',
@@ -348,7 +343,6 @@ describe('SessionHandle', () => {
 
     expect(laterFlusher).toHaveBeenCalledOnce();
     expect(interactions).toHaveBeenCalledOnce();
-    expect(subscriptions).toHaveBeenCalledOnce();
     expect(executions).toHaveBeenCalledOnce();
   });
 
