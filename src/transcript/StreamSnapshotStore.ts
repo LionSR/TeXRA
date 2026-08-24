@@ -2086,6 +2086,9 @@ export class StreamSnapshotStore {
     consumeOverlay(overlays, 'compileFailures', sidecarsToWrite, (patch) =>
       this.applyRoundPatch((r) => r.compileFailures, record, patch),
     );
+    // Pre-await snapshot, not `patch`: deltas that landed during the hydration
+    // await were already applied to the refreshed record.usage, so replaying
+    // the merged overlay would count them twice.
     consumeOverlay(overlays, 'usage', sidecarsToWrite, () => {
       for (const [storageKey, delta] of usageOverlayToReplay) {
         this.applyUsageDeltaMemory(record, storageKey, delta);
