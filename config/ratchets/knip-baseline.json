@@ -2012,12 +2012,6 @@
       "name": "resolveKimiCodeRoute"
     },
     {
-      "file": "src/model/modelListRefresh.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "refreshModelListStateIfNeeded"
-    },
-    {
       "file": "src/model/modelOptionsBasic.ts",
       "category": "production-dead",
       "kind": "exports",

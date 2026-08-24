@@ -125,8 +125,12 @@ function sameModelList(
  * sweep and version-gated default reconciliation; Copilot route preferences
  * are swept unconditionally so stale retired/deprecated routes are cleared
  * even when MODEL_LIST_VERSION is already current.
+ *
+ * File-local: {@link refreshModelListAndLog} is the public entry point.
+ * `ModelListRefresh.vitest.ts` exercises this reconciliation logic through
+ * that wrapper.
  */
-export async function refreshModelListStateIfNeeded(
+async function refreshModelListStateIfNeeded(
   state: ModelListState,
 ): Promise<ModelListRefreshResult> {
   const previousVersion = state.get<number>(GlobalStateKey.MODEL_LIST_VERSION);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
+import { refreshModelListAndLog } from '@model/modelListRefresh';
 import {
   computeModelListVersion,
   DEFAULT_MODELS,
@@ -29,7 +29,7 @@ function enabledModels(state: FakeStateStore): string[] {
  * every reconciliation regardless of which versioning scheme produced
  * `previousVersion`.
  */
-describe('refreshModelListStateIfNeeded', () => {
+describe('refreshModelListAndLog', () => {
   it('reconciles when a non-preferred model retires in a catalogue update', async () => {
     expect(MODEL_CONFIGS.kimi2?.retired).toBe(true);
     const previousCatalogue = staticModelConfigEntries().map(
@@ -50,7 +50,7 @@ describe('refreshModelListStateIfNeeded', () => {
       [GlobalStateKey.ENABLED_MODELS]: ['opus5T', 'kimi2'],
     });
 
-    const result = await refreshModelListStateIfNeeded(state);
+    const result = await refreshModelListAndLog(state);
 
     expect(result.skipped).toBe(false);
     expect(result.added).toEqual([]);
@@ -67,7 +67,7 @@ describe('refreshModelListStateIfNeeded', () => {
       [GlobalStateKey.ENABLED_MODELS]: ['opus48T', 'grok4'],
     });
 
-    const result = await refreshModelListStateIfNeeded(state);
+    const result = await refreshModelListAndLog(state);
 
     expect(result.skipped).toBe(false);
     expect(result.removed).toContain('grok4');
@@ -82,7 +82,7 @@ describe('refreshModelListStateIfNeeded', () => {
       [GlobalStateKey.ENABLED_MODELS]: ['gemini36f'],
     });
 
-    const result = await refreshModelListStateIfNeeded(state);
+    const result = await refreshModelListAndLog(state);
 
     expect(result.previousVersion).toBe(previousVersion);
     expect(result.added).toContain('gemini37f');
@@ -102,7 +102,7 @@ describe('refreshModelListStateIfNeeded', () => {
       [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f', 'gemini31p'],
     });
 
-    const result = await refreshModelListStateIfNeeded(state);
+    const result = await refreshModelListAndLog(state);
 
     expect(result.skipped).toBe(false);
     expect(result.routePreferencesCleared).toEqual(['gemini36f']);
@@ -120,7 +120,7 @@ describe('refreshModelListStateIfNeeded', () => {
       [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['kimi2', 'gemini31p'],
     });
 
-    const result = await refreshModelListStateIfNeeded(state);
+    const result = await refreshModelListAndLog(state);
 
     expect(result.skipped).toBe(false);
     expect(result.routePreferencesCleared).toEqual(['kimi2']);
@@ -138,8 +138,8 @@ describe('refreshModelListStateIfNeeded', () => {
       [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f', 'gemini31p'],
     });
 
-    const first = await refreshModelListStateIfNeeded(state);
-    const second = await refreshModelListStateIfNeeded(state);
+    const first = await refreshModelListAndLog(state);
+    const second = await refreshModelListAndLog(state);
 
     expect(first.skipped).toBe(false);
     expect(first.routePreferencesCleared).toEqual(['gemini36f']);
@@ -169,7 +169,7 @@ describe('refreshModelListStateIfNeeded', () => {
       },
     };
 
-    await expect(refreshModelListStateIfNeeded(failingState)).rejects.toThrow(
+    await expect(refreshModelListAndLog(failingState)).rejects.toThrow(
       'route write failed',
     );
 
@@ -191,7 +191,7 @@ describe('refreshModelListStateIfNeeded', () => {
       [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
     });
 
-    const result = await refreshModelListStateIfNeeded(state);
+    const result = await refreshModelListAndLog(state);
 
     expect(result.skipped).toBe(true);
     expect(result.routePreferencesCleared).toEqual([]);
@@ -206,7 +206,7 @@ describe('refreshModelListStateIfNeeded', () => {
       [GlobalStateKey.ENABLED_MODELS]: ['gemini31p', 'sonnet5T', 'custom'],
     });
 
-    const result = await refreshModelListStateIfNeeded(state);
+    const result = await refreshModelListAndLog(state);
 
     expect(result.skipped).toBe(false);
     expect(result.reordered).toBe(true);
