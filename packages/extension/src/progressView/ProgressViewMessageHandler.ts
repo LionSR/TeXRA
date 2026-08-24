@@ -529,12 +529,35 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         stopStream: (stream) => this.provider.backend.stopStream(stream),
       },
       followUp: {
-        acknowledge: (stream, accepted) =>
-          this.postToActiveView({
-            command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
-            stream,
-            accepted,
-          }),
+        captureAdmissionReporter: () => {
+          const source = this.getActiveView()?.webview;
+          return (stream, accepted) => {
+            if (!source) return;
+            void Promise.resolve(
+              source.postMessage({
+                command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
+                stream,
+                accepted,
+              }),
+            ).then(
+              (delivered) => {
+                if (!delivered) {
+                  this.logger.debug(
+                    this.channel,
+                    'Follow-up result target did not accept the message',
+                  );
+                }
+              },
+              (error: unknown) => {
+                this.logger.debug(
+                  this.channel,
+                  'Follow-up result target is no longer attached',
+                  { data: error },
+                );
+              },
+            );
+          };
+        },
         reportImageSaveError: (_image, error) => {
           // Best-effort: a failed image save must not block the text, but log
           // it so a missing attachment is diagnosable.

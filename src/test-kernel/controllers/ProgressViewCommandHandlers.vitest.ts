@@ -106,7 +106,7 @@ function createActions(
       handleAction: vi.fn(),
     } as unknown as ProgressAgentProposalController,
     followUp: {
-      acknowledge: vi.fn(),
+      captureAdmissionReporter: vi.fn(() => vi.fn()),
       reportImageSaveError: vi.fn(),
     },
     bypass: { showInfo: vi.fn() },
