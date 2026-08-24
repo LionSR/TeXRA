@@ -24,6 +24,7 @@ import type {
   CompactionActivityBlock,
   CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
+import type { StreamArtifactAuthority } from '@transcript';
 import { isChildStreamRemoved } from './childExecutions';
 
 // ---------------------------------------------------------------------------
@@ -518,6 +519,7 @@ type ForegroundReaderTarget =
       readonly kind: 'workPlan';
       readonly streamId: StreamTabId;
       readonly loading?: false;
+      readonly authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>;
     }
   | {
       readonly kind: 'workPlan';
@@ -565,10 +567,47 @@ export function workPlanReaderRequestIsCurrent(
 /** Resolve the loading reader without allowing an older request to replace it. */
 export function finishWorkPlanReaderRequest(
   request: WorkPlanReaderRequest,
+  authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>,
 ): boolean {
   if (!workPlanReaderRequestIsCurrent(request)) return false;
-  FOREGROUND_READER.set({ kind: 'workPlan', streamId: request.streamId });
+  FOREGROUND_READER.set({
+    kind: 'workPlan',
+    streamId: request.streamId,
+    ...(authority ? { authority } : {}),
+  });
   return true;
+}
+
+/** Promote fields whose provenance was established after a partial `/plan`
+ * load. Live writes and later successful preloads must replace the reader's
+ * failure-time mask rather than leaving a now-current field unavailable. */
+export function establishWorkPlanReaderAuthority(
+  streamId: StreamTabId,
+  fields: readonly (keyof Pick<StreamArtifactAuthority, 'plan' | 'todos'>)[],
+): void {
+  const target = FOREGROUND_READER.get();
+  if (
+    target?.kind !== 'workPlan' ||
+    target.loading === true ||
+    target.streamId !== streamId ||
+    target.authority === undefined
+  ) {
+    return;
+  }
+  const authority = { ...target.authority };
+  let changed = false;
+  for (const field of fields) {
+    if (!authority[field]) {
+      authority[field] = true;
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  FOREGROUND_READER.set(
+    authority.plan && authority.todos
+      ? { kind: 'workPlan', streamId }
+      : { ...target, authority },
+  );
 }
 
 export function cancelPendingWorkPlanReaderRequest(): void {

@@ -34,7 +34,11 @@ import {
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
-import { StreamSnapshotStore, streamDataDir } from '@transcript';
+import {
+  StreamSnapshotPreloadError,
+  StreamSnapshotStore,
+  streamDataDir,
+} from '@transcript';
 import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
 import {
   stagedStreamDataDir,
@@ -2564,25 +2568,70 @@ describe('StreamSnapshotStore', () => {
     expect((await reloadWorkPlan()).plan).toEqual(revisedPlan);
   });
 
-  it('retains a mutation queued during a failed refresh', async () => {
+  it('reports and retains authoritative work-plan state after preload fails', async () => {
+    const previous = await storeWithPersistedPlan();
+    previous.evictAll();
+    const readError = new Error('snapshot disk is unreadable');
+    const read = StorageFS.read.bind(StorageFS);
+    const readStarted = pDefer<void>();
+    const failRead = pDefer<void>();
+    let shouldFailRead = true;
+    const readSpy = vi
+      .spyOn(StorageFS, 'read')
+      .mockImplementation(async (...args) => {
+        if (shouldFailRead && args[0].startsWith(streamDataDir(STREAM))) {
+          shouldFailRead = false;
+          readStarted.resolve();
+          await failRead.promise;
+          throw readError;
+        }
+        return read(...args);
+      });
     const store = new StreamSnapshotStore();
-    await store.load([]);
-    const writeSpy = vi
-      .spyOn(StorageFS, 'writeAtomic')
-      .mockRejectedValue(new Error('snapshot disk is full'));
+    const output = outputFile('accepted-live.tex', 1);
 
+    const refresh = store.preload([STREAM], {
+      reportArtifactAuthority: true,
+    });
+    await readStarted.promise;
     snapshotFacts(store).setPlan(STREAM, PLAN);
-    await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
-    const refresh = store.load([STREAM]);
     snapshotFacts(store).setTodos(STREAM, [TODO]);
-    await expect(refresh).rejects.toThrow('Sidecar writes remain dirty');
+    snapshotFacts(store).addOutputFiles(STREAM, { 1: [output] });
+    expect(store.getWorkPlan(STREAM)).toMatchObject({
+      plan: PLAN,
+      todos: [TODO],
+    });
+    const newerRefresh = store.preload([STREAM], {
+      reportArtifactAuthority: true,
+    });
+    failRead.resolve();
+    const error = await refresh.catch((cause) => cause);
+    expect(error).toBeInstanceOf(StreamSnapshotPreloadError);
+    expect(error).toMatchObject({
+      message: expect.stringContaining('snapshot disk is unreadable'),
+      streamId: STREAM,
+      authoritativeFields: {
+        outputFiles: false,
+        missingOutputs: false,
+        compileFailures: false,
+        usage: false,
+        todos: true,
+        plan: true,
+      },
+    });
+    await newerRefresh;
 
-    writeSpy.mockRestore();
+    readSpy.mockRestore();
     await store.flush();
 
     expect(await reloadWorkPlan()).toMatchObject({
       plan: PLAN,
       todos: [TODO],
+    });
+    expect(
+      (await readStreamFile(STREAM, 'outputFiles.json')) as object,
+    ).toEqual({
+      1: [output],
     });
   });
 

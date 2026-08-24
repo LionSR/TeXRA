@@ -38,7 +38,10 @@ import {
   isChildStreamRemoved,
   unbindChildStreamState,
 } from './childExecutions';
-import { markArtifactStreamHydrated } from './subscribeStreamArtifacts';
+import {
+  markArtifactStreamHydrated,
+  markWorkPlanArtifactHydrated,
+} from './subscribeStreamArtifacts';
 import {
   releaseInactiveStreamTranscript,
   syncStreamLog,
@@ -177,11 +180,11 @@ class TuiSessionRenderer implements SessionRendererPort {
   // (StreamSnapshotStore eager-apply overlay), so renderers read the store.
   // See `invalidate` for why the write marks the stream hydrated.
   onTodosChanged(streamId: StreamTabId, _todos: TodoItem[]): void {
-    markArtifactStreamHydrated(streamId);
+    markWorkPlanArtifactHydrated(streamId, 'todos');
   }
 
   onPlanChanged(streamId: StreamTabId, _plan: Plan | null): void {
-    markArtifactStreamHydrated(streamId);
+    markWorkPlanArtifactHydrated(streamId, 'plan');
   }
 
   onInquiryThreadUpdated(_thread: InquiryThreadUpdatedEvent): void {}

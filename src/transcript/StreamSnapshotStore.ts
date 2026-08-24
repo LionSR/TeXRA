@@ -99,6 +99,38 @@ const MAX_DIRTY_WRITE_RETRIES = 3;
 
 class DirtySidecarWritesError extends Error {}
 
+/** Artifact fields whose in-memory values remain authoritative after preload fails. */
+export interface StreamArtifactAuthority {
+  readonly outputFiles: boolean;
+  readonly missingOutputs: boolean;
+  readonly compileFailures: boolean;
+  readonly usage: boolean;
+  readonly todos: boolean;
+  readonly plan: boolean;
+}
+
+const ALL_STREAM_ARTIFACTS_AUTHORITATIVE = Object.freeze({
+  outputFiles: true,
+  missingOutputs: true,
+  compileFailures: true,
+  usage: true,
+  todos: true,
+  plan: true,
+}) satisfies StreamArtifactAuthority;
+
+/** A failed preload together with the in-memory fields that remain usable. */
+export class StreamSnapshotPreloadError extends Error {
+  readonly name = 'StreamSnapshotPreloadError';
+
+  constructor(
+    cause: unknown,
+    readonly streamId: StreamTabId,
+    readonly authoritativeFields: StreamArtifactAuthority,
+  ) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+  }
+}
+
 /**
  * The run facts this store subscribes to, and the single source of truth for
  * the `attachSessionEvents` run-fact switch.
@@ -309,6 +341,23 @@ function mergeUsagePatch(
  * without a disk read. Never inferred from any global fact (#9956).
  */
 type DiskState = 'unknown' | 'verified-absent' | 'loaded';
+
+function artifactAuthorityAfterPreloadFailure(
+  baseline: DiskState,
+  overlays: Partial<OverlayPatches>,
+): StreamArtifactAuthority {
+  if (baseline !== 'unknown') return ALL_STREAM_ARTIFACTS_AUTHORITATIVE;
+  return {
+    // These four overlays are deltas over an unread disk baseline, so they do
+    // not establish the complete field value. Plan and todos are replacements.
+    outputFiles: false,
+    missingOutputs: false,
+    compileFailures: false,
+    usage: false,
+    todos: overlays.workPlan?.todos !== undefined,
+    plan: overlays.workPlan?.plan !== undefined,
+  };
+}
 
 /**
  * Every per-stream field this store tracks, keyed by stream id in ONE map
@@ -1826,10 +1875,17 @@ export class StreamSnapshotStore {
    * it for parked WAITING streams so the status-bar usage total is correct
    * immediately without making the full 6-file record resident for the whole
    * session (#9947, #10520).
+   *
+   * `reportArtifactAuthority` wraps a failed full preload with the fields whose
+   * prior seed or live overlay remains authoritative, so a reader may retain
+   * accepted in-memory state without treating unread disk defaults as facts.
    */
   async preload(
     streamIds: readonly StreamTabId[],
-    options?: { readonly usageOnly?: boolean },
+    options?: {
+      readonly usageOnly?: boolean;
+      readonly reportArtifactAuthority?: boolean;
+    },
   ): Promise<void> {
     if (options?.usageOnly) {
       await pMap(streamIds, (streamId) => this.seedUsageOnly(streamId), {
@@ -1837,7 +1893,7 @@ export class StreamSnapshotStore {
       });
       return;
     }
-    await this.seedStreams(streamIds);
+    await this.seedStreams(streamIds, options?.reportArtifactAuthority);
   }
 
   private async seedUsageOnly(streamId: StreamTabId): Promise<void> {
@@ -1867,10 +1923,15 @@ export class StreamSnapshotStore {
     current.usageProvenance = true;
   }
 
-  private async seedStreams(streamIds: readonly StreamTabId[]): Promise<void> {
-    await pMap(streamIds, (streamId) => this.refreshSeed(streamId), {
-      concurrency: SEED_IO_CONCURRENCY,
-    });
+  private async seedStreams(
+    streamIds: readonly StreamTabId[],
+    reportArtifactAuthority = false,
+  ): Promise<void> {
+    await pMap(
+      streamIds,
+      (streamId) => this.refreshSeed(streamId, reportArtifactAuthority),
+      { concurrency: SEED_IO_CONCURRENCY },
+    );
   }
 
   private evictStreamsExcept(keep: ReadonlySet<StreamTabId>): void {
@@ -1879,7 +1940,10 @@ export class StreamSnapshotStore {
     }
   }
 
-  private refreshSeed(stream: StreamTabId): Promise<void> {
+  private refreshSeed(
+    stream: StreamTabId,
+    reportArtifactAuthority = false,
+  ): Promise<void> {
     const version = this.streamVersion(stream);
     const record = this.getOrCreateRecord(stream);
     const refreshBaseline = record.seedRefreshBaseline ?? record.diskState;
@@ -1906,9 +1970,19 @@ export class StreamSnapshotStore {
         },
         (error: unknown) => {
           const current = this.records.get(stream);
+          const versionIsCurrent = this.streamVersion(stream) === version;
+          const authoritativeFields =
+            reportArtifactAuthority && current && versionIsCurrent
+              ? artifactAuthorityAfterPreloadFailure(
+                  refreshBaseline === 'unknown'
+                    ? current.diskState
+                    : refreshBaseline,
+                  current.overlays,
+                )
+              : undefined;
           if (
             current?.seedRefreshGeneration === refreshGeneration &&
-            this.streamVersion(stream) === version
+            versionIsCurrent
           ) {
             current.diskState = refreshBaseline;
             current.seedRefreshBaseline = undefined;
@@ -1916,6 +1990,13 @@ export class StreamSnapshotStore {
               this.persistEagerOverlays(stream, current);
             }
             if (current.seedChain === next) current.seedChain = undefined;
+          }
+          if (authoritativeFields) {
+            throw new StreamSnapshotPreloadError(
+              error,
+              stream,
+              authoritativeFields,
+            );
           }
           throw error;
         },

@@ -20,10 +20,15 @@ import {
 } from '@controllers/session/StreamArtifactProjection';
 import { type StreamTabId, type TokenUsageStats } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
+import {
+  StreamSnapshotPreloadError,
+  type StreamArtifactAuthority,
+} from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   activeStreamId,
+  establishWorkPlanReaderAuthority,
   getCliStateGeneration,
   isCliStreamRetired,
   registerCliStateResetHook,
@@ -73,6 +78,16 @@ export function markArtifactStreamHydrated(streamId: StreamTabId): void {
   bumpStreamArtifactRevision();
 }
 
+/** Record a live plan/todo write as authority for an already-open partial
+ * reader, then invalidate the canonical projection like any artifact write. */
+export function markWorkPlanArtifactHydrated(
+  streamId: StreamTabId,
+  field: 'plan' | 'todos',
+): void {
+  establishWorkPlanReaderAuthority(streamId, [field]);
+  markArtifactStreamHydrated(streamId);
+}
+
 /** Prepare reconciliation for an authoritative full-set `load` of `retained`.
  *  `load` evicts every other record, so capture the markers it will evict up
  *  front (plus the active stream, whose first focus preload may still be in
@@ -98,7 +113,10 @@ export function beginLoadedStreamsReconcile(retained: readonly StreamTabId[]): {
   const apply = (markRetained: boolean): void => {
     for (const streamId of stale) hydratedArtifactStreams.delete(streamId);
     if (markRetained) {
-      for (const streamId of retained) hydratedArtifactStreams.add(streamId);
+      for (const streamId of retained) {
+        hydratedArtifactStreams.add(streamId);
+        establishWorkPlanReaderAuthority(streamId, ['plan', 'todos']);
+      }
     }
     bumpStreamArtifactRevision();
   };
@@ -155,41 +173,63 @@ function streamCanReceiveArtifacts(
   );
 }
 
+/** Complete, partially authoritative, and unusable preload outcomes. */
+type StreamArtifactHydrationOutcome =
+  | { readonly kind: 'complete' }
+  | {
+      readonly kind: 'partial';
+      readonly authoritativeFields: StreamArtifactAuthority;
+      readonly error: unknown;
+    }
+  | { readonly kind: 'failed'; readonly error: unknown };
+
 /**
  * Preload one stream from the canonical artifact accumulator and invalidate
- * the artifact projection. Callers own request currentness: focus hydration
- * invalidates on a focus change, while `/plan` keeps the stream id it
- * captured before awaiting.
+ * the artifact projection. Callers own request currentness and error
+ * presentation. `undefined` means the request was superseded; a partial
+ * outcome is usable only for fields selected by `authoritativeFields`.
  */
 export async function hydrateStreamArtifacts(
   store: StreamArtifactReader,
   streamId: StreamTabId,
   requestIsCurrent: () => boolean = () => true,
-  onError?: (error: unknown) => void,
-): Promise<boolean> {
+): Promise<StreamArtifactHydrationOutcome | undefined> {
   const generation = getCliStateGeneration();
   try {
     // `preload` warms only this stream. `load([streamId])` would incorrectly
     // claim an authoritative complete stream set and evict sibling state.
-    await store.preload([streamId]);
+    await store.preload([streamId], { reportArtifactAuthority: true });
   } catch (error) {
     if (!streamCanReceiveArtifacts(streamId, generation, requestIsCurrent)) {
-      return false;
+      return undefined;
     }
-    if (onError) {
-      onError(error);
-    } else {
-      setTransientNotice(
-        `Could not load workflow artifacts: ${toErrorMessage(error)}`,
+    if (
+      error instanceof StreamSnapshotPreloadError &&
+      error.streamId === streamId
+    ) {
+      establishWorkPlanReaderAuthority(
+        streamId,
+        (['plan', 'todos'] as const).filter(
+          (field) => error.authoritativeFields[field],
+        ),
       );
+      if (Object.values(error.authoritativeFields).every(Boolean)) {
+        markArtifactStreamHydrated(streamId);
+      }
+      return {
+        kind: 'partial',
+        authoritativeFields: error.authoritativeFields,
+        error,
+      };
     }
-    return false;
+    return { kind: 'failed', error };
   }
   if (!streamCanReceiveArtifacts(streamId, generation, requestIsCurrent)) {
-    return false;
+    return undefined;
   }
+  establishWorkPlanReaderAuthority(streamId, ['plan', 'todos']);
   markArtifactStreamHydrated(streamId);
-  return true;
+  return { kind: 'complete' };
 }
 
 /**
@@ -210,7 +250,12 @@ export function subscribeStreamArtifacts(
       store,
       streamId,
       () => focusRevision === revision && activeStreamId.get() === streamId,
-    );
+    ).then((outcome) => {
+      if (!outcome || outcome.kind === 'complete') return;
+      setTransientNotice(
+        `Could not load workflow artifacts: ${toErrorMessage(outcome.error)}`,
+      );
+    });
   };
   if (previous) hydrate(previous);
 
