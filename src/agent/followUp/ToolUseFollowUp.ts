@@ -188,7 +188,7 @@ export async function lookupStreamExecutionId(
 ): Promise<ExecutionId | undefined> {
   return (
     session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
-    (await readExecutionStreamIndex()).get(streamId)
+    (await readExecutionStreamIndex()).byStream.get(streamId)
   );
 }
 

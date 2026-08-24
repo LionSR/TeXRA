@@ -93,7 +93,7 @@ async function resumeDesktopStream(
             ),
         })
       : { failed: 'not_resumable' as const };
-    if (result === 'started') return true;
+    if ('started' in result) return result.delivered;
     if (!isCancellationRequested()) {
       await session.interactions.showInfoMessage(
         describeFollowUpFailure(result.failed),

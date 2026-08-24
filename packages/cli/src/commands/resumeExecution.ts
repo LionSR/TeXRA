@@ -183,7 +183,7 @@ export async function runResumeExecution(
         );
       },
     });
-    if (result === 'started') return exitCode;
+    if ('started' in result) return exitCode;
     writeTextStderr(describeFollowUpFailure(result.failed));
     return CliExitCode.Usage;
   } catch (error) {

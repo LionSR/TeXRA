@@ -3676,7 +3676,7 @@ describe('DesktopProgressBridge', () => {
         .spyOn(executionListing, 'readExecutionStreamIndex')
         .mockImplementation(async () => {
           await leaseReleased.promise;
-          return new Map();
+          return { byStream: new Map(), unreadable: new Map() };
         });
 
       try {

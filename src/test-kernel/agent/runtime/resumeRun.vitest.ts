@@ -97,7 +97,7 @@ describe('resumeRun tool-use queue ownership', () => {
           ).toEqual({ kind: 'queued' });
         },
       }),
-    ).resolves.toBe('started');
+    ).resolves.toEqual({ started: true, delivered: true });
 
     const options = resumeToolUseFromResumeDataMock.mock
       .calls[0]?.[1] as ResumeToolUseFromResumeDataOptions;
@@ -184,7 +184,7 @@ describe('resumeRun tool-use queue ownership', () => {
 
     await expect(
       resumeRun(EXECUTION, { session, recovery, executeWorkflow }),
-    ).resolves.toBe('started');
+    ).resolves.toEqual({ started: true, delivered: true });
     expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
   });
 

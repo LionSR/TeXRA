@@ -36,7 +36,9 @@ async function captureOptions(): Promise<ResumeRunOptions> {
 
 describe('tryResumeFromResumeData', () => {
   beforeEach(() => {
-    mocks.resumeRun.mockReset().mockResolvedValue('started');
+    mocks.resumeRun
+      .mockReset()
+      .mockResolvedValue({ started: true, delivered: true });
     mocks.lookupStreamExecutionId.mockReset().mockResolvedValue(EXECUTION);
   });
 

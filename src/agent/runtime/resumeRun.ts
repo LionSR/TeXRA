@@ -41,13 +41,18 @@ import { defaultSession, type SessionHandle } from './SessionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 /**
- * `'started'` once the resumed generation has settled (a tool-use turn
- * parked at WAITING or finished; a workflow run returned). A refusal carries
- * the reason a host words with `describeFollowUpFailure`. Unexpected failures
- * (storage errors, the run itself throwing) reject.
+ * `started` once the resumed generation has settled (a tool-use turn parked
+ * at WAITING or finished; a workflow run returned). `delivered` is false when
+ * that generation returned but its drained follow-up batch was replayed onto
+ * the stream queue instead of being consumed: the input still awaits
+ * delivery, so a follow-up wake reports it as queued while an explicit resume
+ * settles the turn it just ran. A refusal carries the reason a host words
+ * with `describeFollowUpFailure`. Unexpected failures (storage errors, the
+ * run itself throwing) reject.
  */
 export type ResumeRunResult =
-  'started' | { readonly failed: FollowUpFailureReason };
+  | { readonly started: true; readonly delivered: boolean }
+  | { readonly failed: FollowUpFailureReason };
 
 export interface ResumeRunOptions extends Pick<
   SubagentRunOptions,
@@ -65,11 +70,18 @@ export interface ResumeRunOptions extends Pick<
    * (e.g. an explicit follow-up typed alongside a manual resume). Seeded
    * before the drain so the failure path re-enqueues them even if the drain
    * throws before the full list is assigned.
+   *
+   * The batch stays the caller's until {@link onFollowUpQueueReady} fires:
+   * every refusal before that point returns it unqueued, and the caller must
+   * put it back where it came from or the user's input is lost. Once the
+   * queue owns it, a replay lands on the stream queue (`delivered: false`)
+   * rather than back with the caller.
    */
   readonly extraFollowUps?: readonly FollowUpQueueInput[];
   /**
    * Fires after the shared stream queue is acquired and marked RESUMING, but
-   * before its queued items are drained into the rebuilt session.
+   * before its queued items are drained into the rebuilt session. This is the
+   * one signal that the queue has taken ownership of `extraFollowUps`.
    */
   readonly onFollowUpQueueReady?: (recovery: FollowUpRecoveryLease) => void;
   /**
@@ -90,6 +102,8 @@ export interface ResumeRunOptions extends Pick<
 }
 
 const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
+/** A workflow run carries no follow-up batch, so nothing awaits delivery. */
+const WORKFLOW_STARTED: ResumeRunResult = { started: true, delivered: true };
 
 export async function resumeRun(
   executionId: ExecutionId,
@@ -170,7 +184,7 @@ export async function resumeRun(
     } catch (error) {
       return refusalFor(error) ?? Promise.reject(error);
     }
-    return 'started';
+    return WORKFLOW_STARTED;
   }
   // The persisted config and checkpoint disagree on the category.
   if (queueLease) session.followUps.release(queueLease, 'recoverable');
@@ -300,7 +314,10 @@ async function resumeQueuedToolUse(
   if (resumeError) {
     return refusalFor(resumeError.error) ?? Promise.reject(resumeError.error);
   }
-  return cancelledAtFlowAttachment || followUpsRestored ? REFUSED : 'started';
+  // Cancellation at flow attachment means the run was never reached; a replay
+  // means it ran and returned with the batch back on the stream queue.
+  if (cancelledAtFlowAttachment) return REFUSED;
+  return { started: true, delivered: !followUpsRestored };
 }
 
 function toFollowUpBatchItem(item: FollowUpQueueInput): FollowUpQueueBatchItem {
