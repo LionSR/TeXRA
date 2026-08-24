@@ -1,5 +1,6 @@
 import type { SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
+import { storeCredential } from '@common/secrets/storeCredential';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
   listGitHubSubscriptionEntries,
@@ -323,8 +324,15 @@ export function createDesktopSettingsIpc(
       title: 'GitHub token',
       prompt: GITHUB_TOKEN_PROMPT,
     });
-    if (!token?.trim()) return;
-    await platform().secrets.set(GITHUB_TOKEN_STORAGE_KEY, token.trim());
+    if (token == null) return;
+    const stored = await storeCredential(platform().secrets, {
+      secretName: GITHUB_TOKEN_STORAGE_KEY,
+      value: token,
+      kind: 'github',
+      placeholderMessage:
+        'This looks like a placeholder rather than a GitHub token. Enter a personal access token from GitHub.',
+    });
+    if (!stored) return;
     await options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE);
     await postGitHubTokenStatus();
     await refreshToolAvailability();

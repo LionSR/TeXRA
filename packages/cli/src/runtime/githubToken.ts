@@ -1,9 +1,9 @@
+import { storeCredential } from '@common/secrets/storeCredential';
 import { platform } from '@platform/platform';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
-import { looksLikeCredentialPlaceholder } from '@utils/text/credentialPlaceholder';
 
 export type GitHubTokenStatus = 'secret' | 'env' | 'none';
 
@@ -13,14 +13,14 @@ export function loadGitHubTokenStatus(): Promise<GitHubTokenStatus> {
 
 /** Persist a GitHub PAT without exposing it outside the credential store. */
 export async function saveGitHubToken(token: string): Promise<void> {
-  const trimmed = token.trim();
-  if (!trimmed) throw new Error('GitHub token is empty.');
-  if (looksLikeCredentialPlaceholder(trimmed, 'github')) {
-    throw new Error(
+  await storeCredential(platform().secrets, {
+    secretName: GITHUB_TOKEN_STORAGE_KEY,
+    value: token,
+    kind: 'github',
+    emptyMessage: 'GitHub token is empty.',
+    placeholderMessage:
       'This looks like a placeholder rather than a GitHub token. Enter a personal access token from GitHub.',
-    );
-  }
-  await platform().secrets.set(GITHUB_TOKEN_STORAGE_KEY, trimmed);
+  });
 }
 
 export async function removeGitHubToken(): Promise<void> {

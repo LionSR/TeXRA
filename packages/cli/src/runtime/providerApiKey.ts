@@ -1,3 +1,4 @@
+import { storeCredential } from '@common/secrets/storeCredential';
 import {
   API_PROVIDERS,
   apiKeySecretName,
@@ -7,7 +8,6 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import { platform } from '@platform/platform';
-import { looksLikeCredentialPlaceholder } from '@utils/text/credentialPlaceholder';
 
 export function loadProviderApiKeyStatuses(): Promise<
   Record<ApiProvider, ApiKeyStatus>
@@ -20,16 +20,13 @@ export async function saveProviderApiKey(
   provider: ApiProvider,
   key: string,
 ): Promise<void> {
-  const trimmed = key.trim();
-  if (!trimmed) throw new Error('API key is empty.');
-  if (looksLikeCredentialPlaceholder(trimmed)) {
-    throw new Error(
-      `This looks like a placeholder rather than a ${provider} API key. Enter the key issued by the provider.`,
-    );
-  }
-
   // Write before invalidating so a concurrent lookup cannot restore a stale
   // missing-key cache entry after the credential has been saved.
-  await platform().secrets.set(apiKeySecretName(provider), trimmed);
+  await storeCredential(platform().secrets, {
+    secretName: apiKeySecretName(provider),
+    value: key,
+    emptyMessage: 'API key is empty.',
+    placeholderMessage: `This looks like a placeholder rather than a ${provider} API key. Enter the key issued by the provider.`,
+  });
   invalidateApiKeyCache();
 }

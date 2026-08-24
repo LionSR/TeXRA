@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - tools
 import * as arxivShared from '@tools/arxiv/arxivShared';
-import * as rateLimiter from '@tools/citation/rateLimiter';
+import * as rateLimiter from '@tools/support/rateLimiter';
 import { ArxivSearchTool } from '@tools/arxiv/ArxivSearchTool';
 
 const sampleEntries = [

@@ -13,11 +13,11 @@ import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
+import { rateLimitedApiCall } from '@tools/support/rateLimiter';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
 import { CROSSREF_CONSTANTS, CrossrefClient } from './constants';
-import { rateLimitedApiCall } from './rateLimiter';
 
 const CROSSREF_SEARCH_FIELDS = {
   query: z.string().describe('Bibliographic search query for Crossref works.'),

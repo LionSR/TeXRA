@@ -3,10 +3,12 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawn } from 'node:child_process';
 import process from 'node:process';
 import os from 'node:os';
-import { formatExit, waitForExit } from './smoke-process-utils.mjs';
+import {
+  renderWebviewHtml,
+  runElectronWebviewHarness,
+} from './webview-electron-harness.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const extensionRoot = join(repoRoot, 'packages', 'extension');
@@ -486,14 +488,6 @@ function logEntry(seqNo, id, timestamp, messageType, text) {
   };
 }
 
-function applyReplacements(template, replacements) {
-  let html = template;
-  for (const [key, value] of Object.entries(replacements)) {
-    html = html.replaceAll(`\${${key}}`, value);
-  }
-  return html;
-}
-
 function hostBridgeShim() {
   const shim = `
     const texraCaptureBridge = {
@@ -524,65 +518,14 @@ function hostBridgeShim() {
   return `<script nonce="${nonce}">${shim}</script>`;
 }
 
-function injectHostBridge(html) {
-  const bodyTagPattern = /<body\b[^>]*>/i;
-  if (!bodyTagPattern.test(html)) {
-    throw new Error('Webview template is missing a <body> tag.');
-  }
-  return html.replace(
-    bodyTagPattern,
-    (bodyTag) => `${bodyTag}\n    ${hostBridgeShim()}`,
-  );
-}
-
-function injectDesktopThemeTokens(html) {
-  return html.replace(
-    /<link rel="stylesheet" href="\$\{commonStyleUri\}" \/>/,
-    `$&\n    <link rel="stylesheet" href="\${desktopThemeTokensUri}" />`,
-  );
-}
-
-function escapeAttributeValue(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
-}
-
-function serializeAttributes(attributes = {}) {
-  return Object.entries(attributes)
-    .map(([name, value]) => {
-      if (!/^[A-Za-z_:][\w:.-]*$/.test(name)) {
-        throw new Error(`Invalid capture attribute name: ${name}`);
-      }
-      return ` ${name}="${escapeAttributeValue(value)}"`;
-    })
-    .join('');
-}
-
-function injectViewAttributes(html, view) {
-  const attributes = serializeAttributes(view.attributes);
-  if (!attributes) return html;
-
-  const tagPattern = new RegExp(`<${view.tagName}(?=[\\s>])`, 'i');
-  if (!tagPattern.test(html)) {
-    throw new Error(`Webview template is missing <${view.tagName}>.`);
-  }
-  return html.replace(tagPattern, `$&${attributes}`);
-}
-
 async function prepareViewHtml(view) {
   const template = await readFile(view.templatePath, 'utf8');
-  const html = injectViewAttributes(
-    injectHostBridge(
-      applyReplacements(injectDesktopThemeTokens(template), {
-        ...commonReplacements,
-        ...view.replacements,
-      }),
-    ),
+  const html = renderWebviewHtml(template, {
+    attributeLabel: 'capture',
+    bridgeScript: hostBridgeShim(),
+    replacements: { ...commonReplacements, ...view.replacements },
     view,
-  );
+  });
   const htmlPath = join(generatedHtmlDir, `${view.name}.html`);
   await writeFile(htmlPath, html);
   return {
@@ -620,31 +563,19 @@ function assertBuiltAssetsExist() {
 }
 
 async function runElectron(configPath) {
-  const electronBinaryPath = desktopRequire('electron');
-  const runnerPath = join(
-    repoRoot,
-    'scripts',
-    'capture-walkthrough-media-runner.cjs',
-  );
-  const electronArgs =
-    process.env.TEXRA_WALKTHROUGH_CAPTURE_NO_SANDBOX === '1'
-      ? ['--no-sandbox', runnerPath]
-      : [runnerPath];
-  const child = spawn(electronBinaryPath, electronArgs, {
+  await runElectronWebviewHarness({
+    configEnv: 'TEXRA_WALKTHROUGH_CAPTURE_CONFIG',
+    configPath,
     cwd: repoRoot,
-    env: {
-      ...process.env,
-      TEXRA_WALKTHROUGH_CAPTURE_CONFIG: configPath,
-    },
-    stdio: 'inherit',
+    electronBinaryPath: desktopRequire('electron'),
+    failureLabel: 'Electron walkthrough capture',
+    noSandboxEnv: 'TEXRA_WALKTHROUGH_CAPTURE_NO_SANDBOX',
+    runnerPath: join(
+      repoRoot,
+      'scripts',
+      'capture-walkthrough-media-runner.cjs',
+    ),
   });
-
-  const exit = await waitForExit(child);
-  if (exit.code === 0) return;
-
-  throw new Error(
-    `Electron walkthrough capture failed with ${formatExit(exit)}.`,
-  );
 }
 
 function vscodeExecutablePath() {

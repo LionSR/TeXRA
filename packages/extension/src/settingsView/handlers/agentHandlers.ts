@@ -17,11 +17,9 @@ import {
 } from '@agent/index';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import {
-  applySettingsTeamRoster,
-  type SettingsTeamAvailabilityPrompt,
-} from '@controllers/settingsView/SettingsTeamRosterController';
+import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
   templateAgentNamePrompt,
@@ -390,7 +388,7 @@ export class AgentHandlers {
 
   // ── Private helpers ──
 
-  private async chooseTeamAvailability(prompt: SettingsTeamAvailabilityPrompt) {
+  private async chooseTeamAvailability(prompt: TeamAvailabilityPrompt) {
     const choice = await vscode.window.showWarningMessage(
       prompt.message,
       { modal: true },
