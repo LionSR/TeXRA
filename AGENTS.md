@@ -141,7 +141,7 @@ frozen deep-import lists, not another lint rule.
     - `utils/core/keyedMutex.ts` - `KeyedMutex` for independently serialized asynchronous work by key
     - `utils/core/pathCore.ts` - sibling Node-only path module
   - `utils/files/` - Filesystem utilities, rules, and vars
-  - `utils/config/` - Settings helpers (`getConfig`, `updateConfig`, `watchConfig`)
+  - `utils/config/` - Settings helpers: raw path reads (`getConfig`, `getValidatedConfig` in `configUtils.ts`) and catalog-modeled settings (`readPlatformSetting`, `writePlatformSetting` in `platformSettings.ts`)
   - `utils/system/` - Shell command execution (`execUtils`)
   - `utils/text/` - Text, string, and XML processing utilities — the single home for generic string helpers (validation, truncation, duration/token/percent formatting)
   - `src/utils/prompt.ts` - Prompt builder utilities
@@ -464,7 +464,7 @@ For good separation of concerns and platform independence, core business logic s
 
 **Configuration, storage, and workspace files**
 
-- Use `getConfig`, `updateConfig`, and `watchConfig` from `@utils/config/configUtils` to read and react to settings changes.
+- For a raw config path, read with `getConfig`/`getValidatedConfig` from `@utils/config/configUtils` and write with `platform().config.update(...)` (the `ConfigProvider.update` port) — there is no standalone `updateConfig`/`watchConfig` helper, and no change-notification API today. For a setting modeled in the Zod catalog (`src/shared/schemas/coreSettings.ts` / `stateSettings.ts`), prefer `readPlatformSetting`/`writePlatformSetting` from `@utils/config/platformSettings` instead — they resolve defaults from the catalog schema and route through the shared validation/`onWrite` path.
 - Interact with the filesystem through `@utils/files` helpers (`WorkspaceFS`, `RelativeFS`, `StorageFS`, `GlobalStorageFS`, `AbsoluteFS`). They resolve workspace paths, manage global storage, and expose cleanup helpers like `RelativeFS.cleanupOldFiles`.
 - Generate and identify pasted-image filenames with
   `@utils/files/pastedImageName`. Resolve, validate, and persist their paths
