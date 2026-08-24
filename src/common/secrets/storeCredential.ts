@@ -1,7 +1,9 @@
-// Local imports - platform
-import { platform } from '@platform/platform';
 // Local imports - utilities
 import { looksLikeCredentialPlaceholder } from '@utils/text/credentialPlaceholder';
+
+interface CredentialStore {
+  set(secretName: string, value: string): Promise<void>;
+}
 
 interface StoreCredentialOptions {
   readonly secretName: string;
@@ -13,6 +15,7 @@ interface StoreCredentialOptions {
 
 /** Validate, normalize, and persist a credential consistently across hosts. */
 export async function storeCredential(
+  store: CredentialStore,
   options: StoreCredentialOptions,
 ): Promise<boolean> {
   const normalized = options.value.trim();
@@ -24,6 +27,6 @@ export async function storeCredential(
     throw new Error(options.placeholderMessage);
   }
 
-  await platform().secrets.set(options.secretName, normalized);
+  await store.set(options.secretName, normalized);
   return true;
 }

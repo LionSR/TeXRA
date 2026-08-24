@@ -530,11 +530,15 @@ async function activateExtension(context: vscode.ExtensionContext) {
     typeof context.extension.packageJSON?.version === 'string'
       ? context.extension.packageJSON.version
       : undefined;
-  UsageLogService.initialize(
-    {},
-    extensionVersion,
-    vscode.env.appName || undefined,
-  );
+  try {
+    UsageLogService.initialize(
+      {},
+      extensionVersion,
+      vscode.env.appName || undefined,
+    );
+  } catch (error) {
+    log.warn(`Failed to initialize usage logging: ${toErrorMessage(error)}`);
+  }
 
   const progressViewProvider = new ProgressViewProvider(
     context,

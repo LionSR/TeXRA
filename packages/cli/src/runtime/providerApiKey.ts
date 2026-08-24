@@ -22,7 +22,7 @@ export async function saveProviderApiKey(
 ): Promise<void> {
   // Write before invalidating so a concurrent lookup cannot restore a stale
   // missing-key cache entry after the credential has been saved.
-  await storeCredential({
+  await storeCredential(platform().secrets, {
     secretName: apiKeySecretName(provider),
     value: key,
     emptyMessage: 'API key is empty.',

@@ -76,7 +76,7 @@ export class SettingsProfileKeyController {
     apiKey: string,
   ): Promise<boolean> {
     const displayName = this.deps.getProviderDisplayName(provider);
-    const stored = await storeCredential({
+    const stored = await storeCredential(platform().secrets, {
       secretName: secretNameFor(provider),
       value: apiKey,
       placeholderMessage: `This looks like a placeholder rather than a ${displayName} API key. Enter the key issued by the provider.`,

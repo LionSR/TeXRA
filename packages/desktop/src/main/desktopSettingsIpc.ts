@@ -325,7 +325,7 @@ export function createDesktopSettingsIpc(
       prompt: GITHUB_TOKEN_PROMPT,
     });
     if (token == null) return;
-    const stored = await storeCredential({
+    const stored = await storeCredential(platform().secrets, {
       secretName: GITHUB_TOKEN_STORAGE_KEY,
       value: token,
       kind: 'github',
