@@ -19,7 +19,6 @@ import {
   agentResponseTextConnector,
   attachTerminalResultToast,
   SessionHandle,
-  settleLiveSessionExecutions,
 } from '@agent/runtime';
 import {
   computeAgentOptionsData,
@@ -40,13 +39,12 @@ import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionU
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { DisposableStore } from '@platform/disposable';
 import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, agentKeyOf, type AgentSource } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
-import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
+import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { killActiveRecording } from '@tools/media/audio';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -1260,33 +1258,23 @@ if (protocolLifecycle.shouldContinue) {
       processResources.add(() => processSession.dispose());
       processResources.add(detachTerminalResultToast);
       let sessionStores!: SessionStores;
-      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-        agentResumeHandler.dispose(),
-      );
-      registerAgentShutdownHandlers(lifecycle);
-      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
-      // Agent shutdown runs first so its final events enter the process-owned
-      // stores. Flush in BEFORE so persistence cannot be delayed by a later
-      // ON-phase language-service disposal.
-      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-        processSession.flushArtifacts(),
-      );
-      // Each window's closed handler starts diff temp-dir removal before the
-      // quit lifecycle drains; awaiting the queue's idle here keeps the
-      // process alive until the directories are actually gone.
-      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-        diffHostDisposeQueue.onIdle(),
-      );
-      // First ON handler: every BEFORE handler above has had its turn at the
-      // runs it owns, so this settles what quitting left mid-run — a durable
-      // CANCELLED outcome and a released lease instead of a record the next
-      // launch has to repair — before the disposal below.
-      lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
-        settleLiveSessionExecutions(signal),
-      );
-      lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
-        agentResumeHandler.dispose();
-        processResources.dispose();
+      registerRuntimeShutdownHandlers(lifecycle, {
+        beforeAgentShutdown: [() => agentResumeHandler.dispose()],
+        afterAgentShutdown: [() => killActiveRecording()],
+        // Agent shutdown runs first so its final events enter the
+        // process-owned stores. Flush in BEFORE so persistence cannot be
+        // delayed by a later ON-phase language-service disposal.
+        flushArtifacts: () => processSession.flushArtifacts(),
+        // Each window's closed handler starts diff temp-dir removal before the
+        // quit lifecycle drains; awaiting idle keeps the process alive until
+        // the directories are actually gone.
+        afterFlushArtifacts: [() => diffHostDisposeQueue.onIdle()],
+        afterExecutionSettlement: [
+          () => {
+            agentResumeHandler.dispose();
+            processResources.dispose();
+          },
+        ],
       });
 
       // Until the initial window is fully wired, any startup failure must run

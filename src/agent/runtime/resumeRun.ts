@@ -12,7 +12,10 @@ import type {
   FollowUpQueueBatchItem,
   FollowUpQueueInput,
 } from '@agent/followUp/FollowUpQueue';
-import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
+import {
+  lookupStreamExecutionId,
+  type FollowUpFailureReason,
+} from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
@@ -22,6 +25,7 @@ import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type ExecutionId,
+  type StreamTabId,
 } from '@shared/schemas';
 
 import {
@@ -101,6 +105,49 @@ export interface ResumeRunOptions extends Pick<
   ) => Promise<void>;
 }
 
+/**
+ * Resume a stream through the single host entry path. Recovery is claimed
+ * synchronously, before the stream-to-execution index can perform disk I/O.
+ */
+export async function resumeStream(
+  streamId: StreamTabId,
+  options: ResumeRunOptions,
+): Promise<ResumeRunResult> {
+  const session = options.session ?? defaultSession();
+  if (
+    options.isCancellationRequested?.() === true ||
+    session.executions.isActiveOrResuming(streamId)
+  ) {
+    return REFUSED;
+  }
+
+  const recovery = options.recovery
+    ? session.followUps.useRecovery(options.recovery)
+    : session.followUps.claimRecovery(streamId, true);
+  if (!recovery || recovery.streamId !== streamId) {
+    if (recovery) session.followUps.release(recovery, 'recoverable');
+    return REFUSED;
+  }
+
+  try {
+    const executionId = await lookupStreamExecutionId(streamId, session);
+    if (!executionId) {
+      releaseUnstartedRecovery(session, recovery, options.recovery == null);
+      return REFUSED;
+    }
+    return resumeRunWithRecoveryProvenance(
+      executionId,
+      { ...options, session, recovery },
+      options.recovery == null,
+    );
+  } catch (error) {
+    releaseUnstartedRecovery(session, recovery, options.recovery == null);
+    throw error;
+  }
+}
+
+export { lookupStreamExecutionId } from '@agent/followUp/ToolUseFollowUp';
+
 const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 /** A workflow run carries no follow-up batch, so nothing awaits delivery. */
 const WORKFLOW_STARTED: ResumeRunResult = { started: true, delivered: true };
@@ -109,19 +156,54 @@ export async function resumeRun(
   executionId: ExecutionId,
   options: ResumeRunOptions,
 ): Promise<ResumeRunResult> {
+  return resumeRunWithRecoveryProvenance(executionId, options, false);
+}
+
+async function resumeRunWithRecoveryProvenance(
+  executionId: ExecutionId,
+  options: ResumeRunOptions,
+  recoveryIsProvisional: boolean,
+): Promise<ResumeRunResult> {
   const session = options.session ?? defaultSession();
   const isCancellationRequested = (): boolean =>
     options.isCancellationRequested?.() === true;
 
+  const suppliedRecovery = options.recovery
+    ? session.followUps.useRecovery(options.recovery)
+    : undefined;
+
   const store = getExecutionStore(executionId);
-  const [config, meta] = await Promise.all([
-    store.readConfig(),
-    store.readMeta(),
-  ]);
+  let config: Awaited<ReturnType<typeof store.readConfig>>;
+  let meta: Awaited<ReturnType<typeof store.readMeta>>;
+  try {
+    [config, meta] = await Promise.all([store.readConfig(), store.readMeta()]);
+  } catch (error) {
+    if (suppliedRecovery) {
+      releaseUnstartedRecovery(
+        session,
+        suppliedRecovery,
+        recoveryIsProvisional,
+      );
+    }
+    throw error;
+  }
   // FK-first: the stream id stamped at registration is the reproduction
   // contract. A row without one has no persisted stream to continue.
   const streamId = meta?.streamId;
-  if (!config || !streamId) return REFUSED;
+  if (!config || !streamId) {
+    if (suppliedRecovery) {
+      releaseUnstartedRecovery(
+        session,
+        suppliedRecovery,
+        recoveryIsProvisional,
+      );
+    }
+    return REFUSED;
+  }
+  if (suppliedRecovery && suppliedRecovery.streamId !== streamId) {
+    releaseUnstartedRecovery(session, suppliedRecovery, false);
+    return REFUSED;
+  }
   // A stream that is already running or resuming in this process is refused,
   // not queued on the lane: a workflow run holds no follow-up queue consumer
   // and a queued resume would otherwise rerun it after it finishes.
@@ -129,6 +211,13 @@ export async function resumeRun(
     isCancellationRequested() ||
     session.executions.isActiveOrResuming(streamId)
   ) {
+    if (suppliedRecovery) {
+      releaseUnstartedRecovery(
+        session,
+        suppliedRecovery,
+        recoveryIsProvisional,
+      );
+    }
     return REFUSED;
   }
 
@@ -140,6 +229,11 @@ export async function resumeRun(
       ? session.followUps.useRecovery(options.recovery)
       : session.followUps.claimRecovery(streamId, true);
     if (!queueLease) return REFUSED;
+  } else if (suppliedRecovery) {
+    // Workflow runs have no follow-up consumer. An empty entry created only
+    // for lookup can be terminalized; caller-supplied or raced input remains
+    // recoverable so no user message or release observer is lost.
+    releaseUnstartedRecovery(session, suppliedRecovery, recoveryIsProvisional);
   }
 
   let resume: Awaited<ReturnType<typeof retrieveSessionResumeData>>;
@@ -189,6 +283,20 @@ export async function resumeRun(
   // The persisted config and checkpoint disagree on the category.
   if (queueLease) session.followUps.release(queueLease, 'recoverable');
   return REFUSED;
+}
+
+function releaseUnstartedRecovery(
+  session: SessionHandle,
+  recovery: FollowUpRecoveryLease,
+  provisional: boolean,
+): void {
+  const current = session.followUps.useRecovery(recovery);
+  if (!current) return;
+  if (provisional && session.followUps.queue(current).isEmpty()) {
+    session.followUps.terminalize(current.streamId);
+    return;
+  }
+  session.followUps.release(current, 'recoverable');
 }
 
 /** The two expected launch failures a host words; anything else rejects. */

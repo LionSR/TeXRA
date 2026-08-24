@@ -4,8 +4,7 @@ import * as vscode from 'vscode';
 import {
   defaultSession,
   describeFollowUpFailure,
-  lookupStreamExecutionId,
-  resumeRun,
+  resumeStream,
   trackTerminalResultPresentation,
 } from '@agent/runtime';
 import { createLog } from '@logger/logUtils';
@@ -37,19 +36,16 @@ export async function tryResumeFromResumeData(
     return cancellationRequested;
   };
   try {
-    const executionId = await lookupStreamExecutionId(streamId, session);
-    const result = executionId
-      ? await resumeRun(executionId, {
-          recovery,
-          isCancellationRequested,
-          executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
-            runExecuteCommand({
-              config,
-              executionId: id,
-              modelHandlerCompatibilityKey,
-            }),
-        })
-      : { failed: 'not_resumable' as const };
+    const result = await resumeStream(streamId, {
+      recovery,
+      isCancellationRequested,
+      executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
+        runExecuteCommand({
+          config,
+          executionId: id,
+          modelHandlerCompatibilityKey,
+        }),
+    });
     if ('started' in result) return result.delivered;
     if (!isCancellationRequested()) {
       logger.warn(`Stream ${streamId} was not resumed: ${result.failed}`);

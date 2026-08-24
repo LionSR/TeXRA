@@ -15,7 +15,6 @@ import {
   defaultSession,
   initializeBundledPrompts,
   initializeDefaultSession,
-  settleLiveSessionExecutions,
   teardownDefaultSession,
 } from '@agent/runtime';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
@@ -91,7 +90,7 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { UsageLogService } from '@telemetry/UsageLogService';
-import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
+import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { setSetupPlatform } from '@tools/setup';
 import {
   refreshToolAvailability,
@@ -338,12 +337,17 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // `disposeStatusListener` and `statusBarItem` are owned solely by
   // `context.subscriptions` (see the push near the end of `activate`), matching
   // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
-  registerAgentShutdownHandlers(lifecycle);
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    runtimeSession.flushArtifacts(),
-  );
+  registerRuntimeShutdownHandlers(lifecycle, {
+    afterAgentShutdown: [
+      () => killActiveRecording(),
+      () => UsageLogService.dispose(),
+    ],
+    flushArtifacts: () => runtimeSession.flushArtifacts(),
+    afterExecutionSettlement: [
+      () => clearStoreCache(),
+      () => disposeDiffRefresh(),
+    ],
+  });
   await runtimeSession.waitUntilReady();
   runtimeSession.setApprovalPolicy(
     readPersistedTexraApprovalPolicy((key, fallback) =>
@@ -361,15 +365,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
     cwd: workspaceRoot,
     resourcesPath: path.join(context.extensionPath, 'resources'),
   });
-  // First settling ON handler: every BEFORE handler above has had its turn at
-  // the runs it owns, so this settles what closing the window left mid-run: a
-  // durable CANCELLED outcome and a released lease instead of a record the next
-  // activation has to repair.
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
-    settleLiveSessionExecutions(signal),
-  );
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   FileLister.initialize(context);
 

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
-import { resumeRun } from '@agent/runtime/resumeRun';
+import { resumeRun, resumeStream } from '@agent/runtime/resumeRun';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
@@ -23,6 +23,12 @@ const getExecutionStoreMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/storage/ExecutionKVStore', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/ExecutionKVStore')>()),
   getExecutionStore: getExecutionStoreMock,
+}));
+
+const readExecutionStreamIndexMock = vi.hoisted(() => vi.fn());
+vi.mock('@agent/storage/executionListing', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/executionListing')>()),
+  readExecutionStreamIndex: readExecutionStreamIndexMock,
 }));
 
 const EXECUTION = 'exec:resume' as ExecutionId;
@@ -74,6 +80,10 @@ describe('resumeRun tool-use queue ownership', () => {
       readMeta: async () => ({ streamId: STREAM }),
     });
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
+    readExecutionStreamIndexMock.mockReset().mockResolvedValue({
+      byStream: new Map([[STREAM, EXECUTION]]),
+      unreadable: new Map(),
+    });
     resumeToolUseFromResumeDataMock.mockReset();
     resumeToolUseFromResumeDataMock.mockImplementation(
       async (_resume: unknown, options: ResumeToolUseFromResumeDataOptions) => {
@@ -81,6 +91,52 @@ describe('resumeRun tool-use queue ownership', () => {
         return completed;
       },
     );
+  });
+
+  it('claims stream recovery before resolving the disk index', async () => {
+    const session = createSession();
+    const index = createDeferred<{
+      byStream: ReadonlyMap<StreamTabId, ExecutionId>;
+      unreadable: ReadonlyMap<ExecutionId, string>;
+    }>();
+    readExecutionStreamIndexMock.mockReturnValueOnce(index.promise);
+
+    const resumed = resumeStream(STREAM, { session, executeWorkflow });
+    expect(
+      session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
+    ).toEqual({ kind: 'queued' });
+
+    index.resolve({
+      byStream: new Map([[STREAM, EXECUTION]]),
+      unreadable: new Map(),
+    });
+    await expect(resumed).resolves.toEqual({
+      started: true,
+      delivered: true,
+    });
+    const options = resumeToolUseFromResumeDataMock.mock
+      .calls[0]?.[1] as ResumeToolUseFromResumeDataOptions;
+    expect(options.drainedFollowUps?.map((item) => item.text)).toEqual([
+      'raced',
+    ]);
+  });
+
+  it('preserves raced input when stream lookup finds no execution', async () => {
+    const session = createSession();
+    const index = createDeferred<{
+      byStream: ReadonlyMap<StreamTabId, ExecutionId>;
+      unreadable: ReadonlyMap<ExecutionId, string>;
+    }>();
+    readExecutionStreamIndexMock.mockReturnValueOnce(index.promise);
+
+    const resumed = resumeStream(STREAM, { session, executeWorkflow });
+    expect(
+      session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
+    ).toEqual({ kind: 'queued' });
+
+    index.resolve({ byStream: new Map(), unreadable: new Map() });
+    await expect(resumed).resolves.toEqual({ failed: 'not_resumable' });
+    expect(session.followUps.getAll(STREAM)).toEqual(['raced']);
   });
 
   it('claims recovery before draining and preserves ordered raced input', async () => {
@@ -126,6 +182,35 @@ describe('resumeRun tool-use queue ownership', () => {
     barrier.resolve();
     await first;
     expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
+  });
+
+  it('refuses a recovery lease invalidated during storage reads', async () => {
+    const session = createSession();
+    const submission = session.followUps.submit(
+      STREAM,
+      { text: 'stale' },
+      'recoverable',
+    );
+    expect(submission).toMatchObject({ kind: 'queued' });
+    if (submission.kind !== 'queued' || !submission.lease) {
+      throw new Error('recovery not claimed');
+    }
+    const config = createDeferred<ReturnType<typeof snapshot>['agentConfig']>();
+    getExecutionStoreMock.mockReturnValueOnce({
+      readConfig: () => config.promise,
+      readMeta: async () => ({ streamId: STREAM }),
+    });
+
+    const resumed = resumeRun(EXECUTION, {
+      session,
+      recovery: submission.lease,
+      executeWorkflow,
+    });
+    session.followUps.terminalize(STREAM);
+    config.resolve(snapshot().agentConfig);
+
+    await expect(resumed).resolves.toEqual({ failed: 'not_resumable' });
+    expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
   });
 
   it('restores an unconsumed batch after resume failure', async () => {
@@ -186,6 +271,36 @@ describe('resumeRun tool-use queue ownership', () => {
       resumeRun(EXECUTION, { session, recovery, executeWorkflow }),
     ).resolves.toEqual({ started: true, delivered: true });
     expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
+  });
+
+  it('keeps caller-supplied input recoverable for workflow records', async () => {
+    const session = createSession();
+    const submission = session.followUps.submit(
+      STREAM,
+      { text: 'workflow input' },
+      'recoverable',
+    );
+    expect(submission).toMatchObject({ kind: 'queued' });
+    if (submission.kind !== 'queued' || !submission.lease) {
+      throw new Error('recovery not claimed');
+    }
+    getExecutionStoreMock.mockReturnValueOnce({
+      readConfig: async () => ({
+        ...snapshot().agentConfig,
+        agentCategory: AgentCategory.Workflow,
+      }),
+      readMeta: async () => ({ streamId: STREAM }),
+    });
+    retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
+
+    await expect(
+      resumeRun(EXECUTION, {
+        session,
+        recovery: submission.lease,
+        executeWorkflow,
+      }),
+    ).resolves.toEqual({ failed: 'finished' });
+    expect(session.followUps.getAll(STREAM)).toEqual(['workflow input']);
   });
 
   it('refuses with `finished` when no checkpoint remains', async () => {

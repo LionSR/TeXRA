@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   attachSessionSignalsAdapter: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resumeRun: vi.fn(),
+  lookupStreamExecutionId: vi.fn(),
   syncStreamLog: vi.fn(),
   notify: vi.fn(),
   appendLocalAssistantTranscript: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/runtime/resumeRun', () => ({
   resumeRun: mocks.resumeRun,
+  lookupStreamExecutionId: mocks.lookupStreamExecutionId,
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
@@ -122,6 +124,7 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: mocks.notify,
 }));
 
+import type { FollowUpRecoveryLease } from '@agent/followUp';
 import type {
   AgentConfig,
   AgentConfigPayload,
@@ -314,6 +317,12 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     interactions: { cancel: mocks.cancelInteractions },
     events: { emit: mocks.sessionEventEmit },
     followUps: {
+      claimRecovery: vi.fn((streamId: StreamTabId) => ({
+        streamId,
+        kind: 'recovery' as const,
+      })),
+      useRecovery: vi.fn((recovery: FollowUpRecoveryLease) => recovery),
+      release: vi.fn(),
       queue: mocks.followUpQueueForLease.mockReturnValue({
         restore: mocks.followUpEnqueue,
       }),
@@ -577,6 +586,7 @@ describe('createChatSessionController', () => {
     mocks.createTuiHostInteractions.mockReturnValue({});
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);
+    mocks.lookupStreamExecutionId.mockResolvedValue('exec-1');
     installResumeExecutionStore();
     rootStreamId.set(undefined);
     rootRunPending.set(false);
@@ -1121,6 +1131,7 @@ describe('createChatSessionController', () => {
       preload: () => preload.promise,
       executionId: undefined,
     });
+    mocks.lookupStreamExecutionId.mockResolvedValueOnce(undefined);
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
     );
