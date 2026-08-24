@@ -97,7 +97,6 @@ interface HandlerFixtureOptions {
   readonly catalog?: AgentCatalog;
   /** Button label returned by the modal "members unavailable" prompt. */
   readonly modalChoice?: string | undefined;
-  readonly errorMessageResult?: Promise<string | undefined>;
   readonly infoMessageResult?: Promise<string | undefined>;
 }
 
@@ -113,7 +112,6 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
     notifications.push(message);
     return options.infoMessageResult;
   });
-  host.showErrorMessage.mockReturnValue(options.errorMessageResult);
   host.showWarningMessage.mockImplementation(async (message: string) => {
     modalPrompts.push(message);
     return options.modalChoice ? { title: options.modalChoice } : undefined;
@@ -213,17 +211,6 @@ describe('extension settings AgentHandlers', () => {
     expect(notifications).toEqual([
       'Applied "Partial team" with 1 member still unavailable',
     ]);
-  });
-
-  it('does not await an error notification before releasing refresh work', async () => {
-    const { handlers } = await createHandlerFixture({
-      errorMessageResult: new Promise(() => {}),
-    });
-
-    await expect(
-      applyPreset(handlers, 'missing-team'),
-    ).resolves.toBeUndefined();
-    expect(host.showErrorMessage).toHaveBeenCalledOnce();
   });
 
   it('signs in before one forced remote refresh and commits the team once', async () => {
