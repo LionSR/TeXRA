@@ -144,7 +144,7 @@ export class ElectronSecrets implements PlatformSecrets {
   }
 
   async listStoredKeys(): Promise<readonly string[]> {
-    return Object.keys(this.store.snapshot());
+    return this.store.keys();
   }
 
   getEnv(name: string): string | undefined {

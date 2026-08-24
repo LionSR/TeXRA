@@ -1,5 +1,6 @@
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
+import { invalidateModelOptionsCache } from './computeModelOptions';
 import {
   DEFAULT_MODELS,
   isDeprecatedModel,
@@ -187,4 +188,35 @@ export async function refreshModelListStateIfNeeded(
     reordered,
     routePreferencesCleared,
   };
+}
+
+/**
+ * Runs {@link refreshModelListStateIfNeeded} and, when it changed anything,
+ * invalidates the model-options cache and logs what changed. Every host
+ * (extension, desktop, CLI) calls this at startup with the same
+ * added/removed/reordered/route-preference handling; only the logger and any
+ * host-specific follow-up (e.g. the extension's version-change message) stay
+ * at the call site.
+ */
+export async function refreshModelListAndLog(
+  state: ModelListState,
+  log: (message: string) => void,
+): Promise<ModelListRefreshResult> {
+  const result = await refreshModelListStateIfNeeded(state);
+  const { added, removed, reordered, routePreferencesCleared } = result;
+  const changed = added.length > 0 || removed.length > 0 || reordered;
+  if (changed || routePreferencesCleared.length > 0) {
+    invalidateModelOptionsCache();
+    if (changed) {
+      log(
+        `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
+      );
+    }
+    if (routePreferencesCleared.length > 0) {
+      log(
+        `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
+      );
+    }
+  }
+  return result;
 }
