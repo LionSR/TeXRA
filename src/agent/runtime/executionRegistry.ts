@@ -37,6 +37,7 @@ import {
   type ExecutionStatusInfo,
   type LiveToolUseFlowContext,
 } from './ExecutionHandle';
+import { ExecutionInteractionOwnership } from './executionInteractionOwnership';
 import { SessionEventHub } from './SessionEventHub';
 
 const logger = createChannelTrace('executionRegistry');
@@ -72,53 +73,6 @@ export interface ChildExecutionActivation {
 
 interface TerminateOptions {
   readonly cascadeChildren?: boolean;
-}
-
-/**
- * One host-interaction owner generation.
- *
- * A host attaches interaction surfaces (presentation host, approval adapter,
- * terminal-result presenter) once per run generation, and must keep them
- * attached while any execution that inherited them is still alive — a detached
- * child outliving its stopped root still needs an answerable approval path —
- * without a later generation inheriting the earlier one's runs. Ownership is
- * decided from registry facts (handle registration, child-activation
- * reservation, parent/child stream lineage), so the registry owns it rather
- * than each host. Design note:
- * `docs/design/2026-08-01-execution-interaction-ownership.md`.
- *
- * The scope object is its own owner token, so the ownership maps can answer
- * with the scope itself instead of a parallel identity.
- */
-export interface ExecutionInteractionScope {
-  /**
-   * Claim `executionId` and everything it goes on to spawn: once the run's
-   * handle is tracked, its child stream is owned too, so descendants join this
-   * scope through stream lineage.
-   */
-  claim(executionId: string): void;
-
-  /**
-   * State that no further root claims are coming. The scope releases once its
-   * last claimed handle is untracked and its last reserved child activation is
-   * released — immediately, when none is left.
-   */
-  finish(): void;
-
-  /** Drop every claim now and fire the release callback (idempotent). */
-  release(): void;
-}
-
-/** How one open {@link ExecutionInteractionScope} observes registry facts. */
-interface ExecutionInteractionObservers {
-  readonly onRegistration: (
-    executionId: string,
-    handle: AgentExecutionHandle | undefined,
-  ) => void;
-  readonly onActivation: (
-    activation: ChildExecutionActivation,
-    active: boolean,
-  ) => void;
 }
 
 /**
@@ -203,21 +157,11 @@ interface ExecutionRegistryInit {
  */
 export class ExecutionRegistry {
   /**
-   * Which host-interaction generation owns each live execution, and the stream
-   * lineage its descendants inherit through. Session-wide so generations of
-   * one host hand ownership over without inheriting each other's runs; the CLI
-   * chat controller is its only writer. See {@link ExecutionInteractionScope}.
+   * Which host-interaction generation owns each live execution. Session-wide so
+   * generations of one host hand ownership over without inheriting each
+   * other's runs; the CLI chat controller is its only writer.
    */
-  private readonly interactionExecutionOwners = new Map<
-    string,
-    ExecutionInteractionScope
-  >();
-  private readonly interactionStreamOwners = new Map<
-    StreamTabId,
-    ExecutionInteractionScope
-  >();
-  /** Observers of the open interaction scopes, in open order. */
-  private readonly interactionScopes = new Set<ExecutionInteractionObservers>();
+  readonly interactionOwnership = new ExecutionInteractionOwnership(this);
   private readonly handles = new Map<string, AgentExecutionHandle>();
   private disposed = false;
   private readonly disposeStatusSubscription: () => void;
@@ -247,6 +191,9 @@ export class ExecutionRegistry {
     string,
     ChildExecutionActivation
   >();
+  private readonly childActivationListeners: ListenerSet<
+    (activation: ChildExecutionActivation, active: boolean) => void
+  > = createListenerSet();
   private readonly lanes = new Map<string, ExecutionLane>();
   /** While set, every new lifecycle step is refused with this error. */
   private lifecycleHold: Error | undefined;
@@ -300,7 +247,7 @@ export class ExecutionRegistry {
     this.childActivations.clear();
     this.listeners.clear();
     this.registrationListeners.clear();
-    this.interactionScopes.clear();
+    this.childActivationListeners.clear();
   }
 
   /**
@@ -882,120 +829,6 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Start a host-interaction owner generation. `onRelease` fires exactly once,
-   * once the generation has finished and its last claimed handle and reserved
-   * child activation are gone. See {@link ExecutionInteractionScope}.
-   */
-  openInteractionScope(onRelease: () => void): ExecutionInteractionScope {
-    const liveExecutions = new Set<string>();
-    const pendingActivations = new Set<string>();
-    let finished = false;
-    let released = false;
-
-    const releaseIfIdle = (): void => {
-      if (!finished) return;
-      if (liveExecutions.size > 0 || pendingActivations.size > 0) return;
-      scope.release();
-    };
-
-    const onRegistration = (
-      executionId: string,
-      handle: AgentExecutionHandle | undefined,
-    ): void => {
-      if (!handle) {
-        if (this.interactionExecutionOwners.get(executionId) === scope) {
-          this.interactionExecutionOwners.delete(executionId);
-          liveExecutions.delete(executionId);
-        }
-        releaseIfIdle();
-        return;
-      }
-
-      const owned =
-        this.interactionExecutionOwners.get(executionId) === scope ||
-        this.interactionStreamOwners.get(handle.parentStreamId) === scope;
-      if (!owned) {
-        // A replacement handle owned by another generation: drop the live
-        // claim rather than holding this generation's surfaces open for it.
-        liveExecutions.delete(executionId);
-        releaseIfIdle();
-        return;
-      }
-
-      this.interactionExecutionOwners.set(executionId, scope);
-      liveExecutions.add(executionId);
-      this.interactionStreamOwners.set(handle.childStreamId, scope);
-    };
-
-    const onActivation = (
-      activation: ChildExecutionActivation,
-      active: boolean,
-    ): void => {
-      if (active) {
-        if (
-          this.interactionStreamOwners.get(activation.parentStreamId) !== scope
-        ) {
-          return;
-        }
-        // A child loop starts synchronously and builds its first handle
-        // asynchronously; the reservation keeps that gap from reading as idle.
-        pendingActivations.add(activation.executionId);
-        this.interactionExecutionOwners.set(activation.executionId, scope);
-        this.interactionStreamOwners.set(activation.childStreamId, scope);
-        return;
-      }
-
-      pendingActivations.delete(activation.executionId);
-      if (
-        !this.handles.has(activation.executionId) &&
-        this.interactionExecutionOwners.get(activation.executionId) === scope
-      ) {
-        this.interactionExecutionOwners.delete(activation.executionId);
-        if (
-          this.interactionStreamOwners.get(activation.childStreamId) === scope
-        ) {
-          this.interactionStreamOwners.delete(activation.childStreamId);
-        }
-      }
-      releaseIfIdle();
-    };
-
-    const observers: ExecutionInteractionObservers = {
-      onRegistration,
-      onActivation,
-    };
-    const scope: ExecutionInteractionScope = {
-      claim: (executionId): void => {
-        this.interactionExecutionOwners.set(executionId, scope);
-        const handle = this.handles.get(executionId);
-        if (handle) onRegistration(executionId, handle);
-      },
-      finish: (): void => {
-        finished = true;
-        releaseIfIdle();
-      },
-      release: (): void => {
-        if (released) return;
-        released = true;
-        try {
-          this.interactionScopes.delete(observers);
-        } finally {
-          for (const [id, owner] of this.interactionExecutionOwners) {
-            if (owner === scope) this.interactionExecutionOwners.delete(id);
-          }
-          for (const [id, owner] of this.interactionStreamOwners) {
-            if (owner === scope) this.interactionStreamOwners.delete(id);
-          }
-          onRelease();
-        }
-      },
-    };
-
-    this.interactionScopes.add(observers);
-    return scope;
-  }
-
-  /**
    * Retain a child loop's lineage until the returned disposer runs, which the
    * loop does only after its final delivery to the parent.
    */
@@ -1008,6 +841,13 @@ export class ExecutionRegistry {
     this.notifyChildActivationListeners(activation, true);
     return () =>
       this.releaseChildActivation(activation.executionId, activation);
+  }
+
+  /** Observe child-loop activation reservations and their release/promotion. */
+  addChildActivationListener(
+    cb: (activation: ChildExecutionActivation, active: boolean) => void,
+  ): () => void {
+    return this.childActivationListeners.add(cb);
   }
 
   private emitChildActivity(parentStreamId: StreamTabId): void {
@@ -1300,9 +1140,6 @@ export class ExecutionRegistry {
     executionId: string,
     handle: AgentExecutionHandle | undefined,
   ): void {
-    for (const scope of [...this.interactionScopes]) {
-      scope.onRegistration(executionId, handle);
-    }
     for (const listener of [...this.registrationListeners]) {
       listener(executionId, handle);
     }
@@ -1322,8 +1159,8 @@ export class ExecutionRegistry {
     activation: ChildExecutionActivation,
     active: boolean,
   ): void {
-    for (const scope of [...this.interactionScopes]) {
-      scope.onActivation(activation, active);
+    for (const listener of [...this.childActivationListeners]) {
+      listener(activation, active);
     }
   }
 }
