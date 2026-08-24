@@ -101,10 +101,13 @@ const LegacyLeaseSchema = z.union([
  * off instead of claiming beside a v3 owner it cannot see. 0.40.3 validates
  * the record strictly, so every field it expects is present.
  *
- * Removal window: the original "delete after v0.41 ships" trigger was derived
- * from the wrong last-v2 release (0.40.4 rather than 0.40.3), so it is not a
- * trustworthy deadline. Re-derive the window from how far back a rolling
- * upgrade must still interoperate before deleting this.
+ * Retire after 2026-11-24 (#6981 ledger, row on #9627), deleting this
+ * function and its caller together. The original "delete after v0.41 ships"
+ * trigger was derived from the wrong last-v2 release (0.40.4 rather than
+ * 0.40.3); this date is three months past 0.40.3's release on 2026-08-20,
+ * the upgrade window after which a process still writing v2 against a shared
+ * ~/.texra is not worth carrying. It shares a date with the delivery-tag read
+ * shim in `src/shared/deliveryTags.ts` so both retire in one pass.
  */
 function legacyShadowRecord(record: ExecutionLeaseRecord): string {
   const socketPath =
