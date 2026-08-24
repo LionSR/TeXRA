@@ -23,7 +23,6 @@ const mocks = vi.hoisted(() => ({
   getActiveExecutionIds: vi.fn(),
   getExecutionHandle: vi.fn(),
   addExecutionRegistrationListener: vi.fn(),
-  addChildActivationListener: vi.fn(),
   detachHostInteractions: vi.fn(),
   attachTerminalResultToast: vi.fn(),
   attachSessionSignalsAdapter: vi.fn(),
@@ -308,7 +307,6 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     getActiveIds: mocks.getActiveExecutionIds,
     getHandle: mocks.getExecutionHandle,
     addRegistrationListener: mocks.addExecutionRegistrationListener,
-    addChildActivationListener: mocks.addChildActivationListener,
   };
   mocks.defaultSession.mockReturnValue({
     approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -323,8 +321,8 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     approvals: { registerStreamParent: vi.fn() },
     executions: {
       ...executions,
-      // The stubbed registry still answers the three surfaces the real
-      // ownership index reads, so the controller runs against real ownership.
+      // The stubbed registry still answers the surfaces the real ownership
+      // index reads, so the controller runs against real ownership.
       interactionOwnership: new ExecutionInteractionOwnership(
         executions as unknown as ExecutionRegistry,
       ),
@@ -574,7 +572,6 @@ describe('createChatSessionController', () => {
     });
     mocks.getActiveExecutionIds.mockReturnValue([]);
     mocks.addExecutionRegistrationListener.mockReturnValue(vi.fn());
-    mocks.addChildActivationListener.mockReturnValue(vi.fn());
     mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
     mocks.attachSessionSignalsAdapter.mockReturnValue(vi.fn());
     mocks.createTuiHostInteractions.mockReturnValue({});

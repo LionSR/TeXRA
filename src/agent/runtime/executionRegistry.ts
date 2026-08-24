@@ -191,9 +191,6 @@ export class ExecutionRegistry {
     string,
     ChildExecutionActivation
   >();
-  private readonly childActivationListeners: ListenerSet<
-    (activation: ChildExecutionActivation, active: boolean) => void
-  > = createListenerSet();
   private readonly lanes = new Map<string, ExecutionLane>();
   /** While set, every new lifecycle step is refused with this error. */
   private lifecycleHold: Error | undefined;
@@ -242,12 +239,11 @@ export class ExecutionRegistry {
       this.notifyWaiters(executionId);
     }
     for (const activation of this.childActivations.values()) {
-      this.notifyChildActivationListeners(activation, false);
+      this.interactionOwnership.observeChildActivation(activation, false);
     }
     this.childActivations.clear();
     this.listeners.clear();
     this.registrationListeners.clear();
-    this.childActivationListeners.clear();
   }
 
   /**
@@ -838,16 +834,9 @@ export class ExecutionRegistry {
       return () => {};
     }
     this.childActivations.set(activation.executionId, activation);
-    this.notifyChildActivationListeners(activation, true);
+    this.interactionOwnership.observeChildActivation(activation, true);
     return () =>
       this.releaseChildActivation(activation.executionId, activation);
-  }
-
-  /** Observe child-loop activation reservations and their release/promotion. */
-  addChildActivationListener(
-    cb: (activation: ChildExecutionActivation, active: boolean) => void,
-  ): () => void {
-    return this.childActivationListeners.add(cb);
   }
 
   private emitChildActivity(parentStreamId: StreamTabId): void {
@@ -1152,15 +1141,6 @@ export class ExecutionRegistry {
     const activation = this.childActivations.get(executionId);
     if (!activation || (expected && activation !== expected)) return;
     this.childActivations.delete(executionId);
-    this.notifyChildActivationListeners(activation, false);
-  }
-
-  private notifyChildActivationListeners(
-    activation: ChildExecutionActivation,
-    active: boolean,
-  ): void {
-    for (const listener of [...this.childActivationListeners]) {
-      listener(activation, active);
-    }
+    this.interactionOwnership.observeChildActivation(activation, false);
   }
 }
