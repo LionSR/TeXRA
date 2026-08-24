@@ -14,11 +14,12 @@ that archived source branch, not `main`.
 
 ## Retired proposals
 
-| Document                                                               | Created    | Retired    |
-| ---------------------------------------------------------------------- | ---------- | ---------- |
-| [Runtime/host decoupling](./2026-06-27-prd-runtime-host-decoupling.md) | 2026-06-27 | 2026-07-18 |
-| [Agent SDK boundary](./2026-06-29-prd-agent-sdk-boundary.md)           | 2026-06-29 | 2026-07-18 |
-| [Runtime gold standard](./2026-06-29-prd-runtime-gold-standard.md)     | 2026-06-29 | 2026-07-18 |
+| Document                                                                                        | Created    | Retired    |
+| ----------------------------------------------------------------------------------------------- | ---------- | ---------- |
+| [Runtime/host decoupling](./2026-06-27-prd-runtime-host-decoupling.md)                          | 2026-06-27 | 2026-07-18 |
+| [Agent SDK boundary](./2026-06-29-prd-agent-sdk-boundary.md)                                    | 2026-06-29 | 2026-07-18 |
+| [Runtime gold standard](./2026-06-29-prd-runtime-gold-standard.md)                              | 2026-06-29 | 2026-07-18 |
+| [Proven execution liveness (presence sockets)](./2026-08-16-prd-execution-liveness-presence.md) | 2026-08-16 | 2026-08-23 |
 
 ## Other records
 
