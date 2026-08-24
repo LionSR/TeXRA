@@ -2601,6 +2601,9 @@ describe('StreamSnapshotStore', () => {
       plan: PLAN,
       todos: [TODO],
     });
+    const newerRefresh = store.preload([STREAM], {
+      reportArtifactAuthority: true,
+    });
     failRead.resolve();
     const error = await refresh.catch((cause) => cause);
     expect(error).toBeInstanceOf(StreamSnapshotPreloadError);
@@ -2616,6 +2619,7 @@ describe('StreamSnapshotStore', () => {
         plan: true,
       },
     });
+    await newerRefresh;
 
     readSpy.mockRestore();
     await store.flush();

@@ -1970,17 +1970,18 @@ export class StreamSnapshotStore {
         },
         (error: unknown) => {
           const current = this.records.get(stream);
-          let authoritativeFields: StreamArtifactAuthority | undefined;
+          const versionIsCurrent = this.streamVersion(stream) === version;
+          const authoritativeFields =
+            reportArtifactAuthority && current && versionIsCurrent
+              ? artifactAuthorityAfterPreloadFailure(
+                  refreshBaseline,
+                  current.overlays,
+                )
+              : undefined;
           if (
             current?.seedRefreshGeneration === refreshGeneration &&
-            this.streamVersion(stream) === version
+            versionIsCurrent
           ) {
-            if (reportArtifactAuthority) {
-              authoritativeFields = artifactAuthorityAfterPreloadFailure(
-                refreshBaseline,
-                current.overlays,
-              );
-            }
             current.diskState = refreshBaseline;
             current.seedRefreshBaseline = undefined;
             if (refreshBaseline !== 'unknown') {

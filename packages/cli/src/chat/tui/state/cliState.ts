@@ -578,6 +578,38 @@ export function finishWorkPlanReaderRequest(
   return true;
 }
 
+/** Promote fields whose provenance was established after a partial `/plan`
+ * load. Live writes and later successful preloads must replace the reader's
+ * failure-time mask rather than leaving a now-current field unavailable. */
+export function establishWorkPlanReaderAuthority(
+  streamId: StreamTabId,
+  fields: readonly (keyof Pick<StreamArtifactAuthority, 'plan' | 'todos'>)[],
+): void {
+  const target = FOREGROUND_READER.get();
+  if (
+    target?.kind !== 'workPlan' ||
+    target.loading === true ||
+    target.streamId !== streamId ||
+    target.authority === undefined
+  ) {
+    return;
+  }
+  const authority = { ...target.authority };
+  let changed = false;
+  for (const field of fields) {
+    if (!authority[field]) {
+      authority[field] = true;
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  FOREGROUND_READER.set(
+    authority.plan && authority.todos
+      ? { kind: 'workPlan', streamId }
+      : { ...target, authority },
+  );
+}
+
 export function cancelPendingWorkPlanReaderRequest(): void {
   const target = FOREGROUND_READER.get();
   if (target?.kind === 'workPlan' && target.loading === true) {

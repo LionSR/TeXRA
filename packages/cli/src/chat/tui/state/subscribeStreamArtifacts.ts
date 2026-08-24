@@ -28,6 +28,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   activeStreamId,
+  establishWorkPlanReaderAuthority,
   getCliStateGeneration,
   isCliStreamRetired,
   registerCliStateResetHook,
@@ -77,6 +78,16 @@ export function markArtifactStreamHydrated(streamId: StreamTabId): void {
   bumpStreamArtifactRevision();
 }
 
+/** Record a live plan/todo write as authority for an already-open partial
+ * reader, then invalidate the canonical projection like any artifact write. */
+export function markWorkPlanArtifactHydrated(
+  streamId: StreamTabId,
+  field: 'plan' | 'todos',
+): void {
+  establishWorkPlanReaderAuthority(streamId, [field]);
+  markArtifactStreamHydrated(streamId);
+}
+
 /** Prepare reconciliation for an authoritative full-set `load` of `retained`.
  *  `load` evicts every other record, so capture the markers it will evict up
  *  front (plus the active stream, whose first focus preload may still be in
@@ -102,7 +113,10 @@ export function beginLoadedStreamsReconcile(retained: readonly StreamTabId[]): {
   const apply = (markRetained: boolean): void => {
     for (const streamId of stale) hydratedArtifactStreams.delete(streamId);
     if (markRetained) {
-      for (const streamId of retained) hydratedArtifactStreams.add(streamId);
+      for (const streamId of retained) {
+        hydratedArtifactStreams.add(streamId);
+        establishWorkPlanReaderAuthority(streamId, ['plan', 'todos']);
+      }
     }
     bumpStreamArtifactRevision();
   };
@@ -193,6 +207,12 @@ export async function hydrateStreamArtifacts(
       error instanceof StreamSnapshotPreloadError &&
       error.streamId === streamId
     ) {
+      establishWorkPlanReaderAuthority(
+        streamId,
+        (['plan', 'todos'] as const).filter(
+          (field) => error.authoritativeFields[field],
+        ),
+      );
       if (Object.values(error.authoritativeFields).every(Boolean)) {
         markArtifactStreamHydrated(streamId);
       }
@@ -207,6 +227,7 @@ export async function hydrateStreamArtifacts(
   if (!streamCanReceiveArtifacts(streamId, generation, requestIsCurrent)) {
     return undefined;
   }
+  establishWorkPlanReaderAuthority(streamId, ['plan', 'todos']);
   markArtifactStreamHydrated(streamId);
   return { kind: 'complete' };
 }

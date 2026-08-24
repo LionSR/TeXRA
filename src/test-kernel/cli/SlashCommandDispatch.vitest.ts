@@ -44,6 +44,7 @@ import {
   invalidateChildStreams,
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
+import { markWorkPlanArtifactHydrated } from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -562,6 +563,9 @@ describe('handleTuiSlashCommand', () => {
         authority: { plan: authority.plan, todos: authority.todos },
       });
       expect(transientNotice.get()).toBeUndefined();
+
+      markWorkPlanArtifactHydrated(streamId, authority.plan ? 'todos' : 'plan');
+      expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
     },
   );
 
