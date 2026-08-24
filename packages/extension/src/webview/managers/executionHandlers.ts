@@ -3,12 +3,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { AUTH_COMMANDS } from '@auth/constants';
-import {
-  formatUnavailableTeamMembersMessage,
-  TEAM_LAUNCH_CANCEL_LABEL,
-  TEAM_LAUNCH_CONTINUE_LABEL,
-  TEAM_LAUNCH_SIGN_IN_LABEL,
-} from '@common/teams/TeamPlan';
+import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { createLog } from '@logger/logUtils';
@@ -59,15 +54,15 @@ export async function handleExecute(
 
   const launch = await prepareMainViewExecutionLaunch(message, {
     chooseTeamAvailability: async (unavailableNames) => {
+      const prompt = teamAvailabilityPrompt(unavailableNames);
       const choice = await vscode.window.showWarningMessage(
-        formatUnavailableTeamMembersMessage(unavailableNames),
-        TEAM_LAUNCH_SIGN_IN_LABEL,
-        TEAM_LAUNCH_CONTINUE_LABEL,
-        TEAM_LAUNCH_CANCEL_LABEL,
+        prompt.message,
+        ...prompt.actions.map((action) => action.label),
       );
-      if (choice === TEAM_LAUNCH_SIGN_IN_LABEL) return 'sign-in';
-      if (choice === TEAM_LAUNCH_CONTINUE_LABEL) return 'continue';
-      return 'cancel';
+      return (
+        prompt.actions.find((action) => action.label === choice)?.choice ??
+        'cancel'
+      );
     },
     signInForRemoteAgentCatalog: async () =>
       Boolean(
