@@ -774,7 +774,7 @@ export class SessionStores {
     const sweptStreams: StreamTabId[] = [];
     const sweptExecutionIds: ExecutionId[] = [];
 
-    const { byStream } = await readExecutionStreamIndex();
+    const { byStream, unreadable } = await readExecutionStreamIndex();
     await Promise.all(
       orphanedStreams.map(async (stream) => {
         try {
@@ -805,6 +805,16 @@ export class SessionStores {
               sweptExecutionIds.push(executionId);
             }
           } else {
+            if (unreadable.size > 0) {
+              // Absence from the index proves this stream unowned only when
+              // every execution was readable. One unreadable record makes it
+              // unknown state, and unknown state is never swept, matching
+              // `sweepOrphanedExecutions`.
+              log.warn(
+                `Retaining orphaned stream ${stream}: ${unreadable.size} execution record(s) could not be read, so its ownership is unknown.`,
+              );
+              return;
+            }
             await this.deleteStreamSidecars(stream);
           }
           sweptStreams.push(stream);
