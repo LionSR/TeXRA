@@ -10,6 +10,7 @@ import { installPlatform } from '@test/support/setupPlatform';
 type AgentCatalog = Record<AgentCategory, AgentEntry[]>;
 
 const host = vi.hoisted(() => ({
+  showErrorMessage: vi.fn(),
   showInformationMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   executeCommand: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('vscode', async () => {
     ...actual,
     window: {
       ...actual.window,
+      showErrorMessage: host.showErrorMessage,
       showInformationMessage: host.showInformationMessage,
       showWarningMessage: host.showWarningMessage,
     },
@@ -95,6 +97,7 @@ interface HandlerFixtureOptions {
   readonly catalog?: AgentCatalog;
   /** Button label returned by the modal "members unavailable" prompt. */
   readonly modalChoice?: string | undefined;
+  readonly errorMessageResult?: Promise<string | undefined>;
   readonly infoMessageResult?: Promise<string | undefined>;
 }
 
@@ -110,9 +113,10 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
     notifications.push(message);
     return options.infoMessageResult;
   });
+  host.showErrorMessage.mockReturnValue(options.errorMessageResult);
   host.showWarningMessage.mockImplementation(async (message: string) => {
     modalPrompts.push(message);
-    return options.modalChoice;
+    return options.modalChoice ? { title: options.modalChoice } : undefined;
   });
 
   const refreshAfterAgentMutation = vi.fn(
@@ -211,6 +215,17 @@ describe('extension settings AgentHandlers', () => {
     ]);
   });
 
+  it('does not await an error notification before releasing refresh work', async () => {
+    const { handlers } = await createHandlerFixture({
+      errorMessageResult: new Promise(() => {}),
+    });
+
+    await expect(
+      applyPreset(handlers, 'missing-team'),
+    ).resolves.toBeUndefined();
+    expect(host.showErrorMessage).toHaveBeenCalledOnce();
+  });
+
   it('signs in before one forced remote refresh and commits the team once', async () => {
     const workspaceState = new FakeStateStore(REMOTE_TEAM_STATE);
     const order: string[] = [];
@@ -268,9 +283,12 @@ describe('extension settings AgentHandlers', () => {
     expect(host.showWarningMessage).toHaveBeenCalledWith(
       modalPrompts[0],
       { modal: true },
-      'Sign In to TeXRA',
-      'Continue with Available Members',
-      'Cancel',
+      { title: 'Sign In to TeXRA', isCloseAffordance: false },
+      {
+        title: 'Continue with Available Members',
+        isCloseAffordance: false,
+      },
+      { title: 'Cancel', isCloseAffordance: true },
     );
     expect(registry.refreshAgents).not.toHaveBeenCalled();
     expect(refreshAfterAgentMutation).not.toHaveBeenCalled();

@@ -393,11 +393,7 @@ export async function refreshRemoteCatalogForGaps<T>(
 // (VS Code vs Electron native); keeping the literals here stops them drifting.
 // ---------------------------------------------------------------------------
 
-/** Button labels for the unavailable-members choice, in display order. */
-export const TEAM_LAUNCH_SIGN_IN_LABEL = 'Sign In to TeXRA';
-export const TEAM_LAUNCH_CONTINUE_LABEL = 'Continue with Available Members';
-export const TEAM_LAUNCH_CANCEL_LABEL = 'Cancel';
-
+/** Host-neutral unavailable-members prompt, including action order. */
 export interface TeamAvailabilityPrompt {
   readonly severity: 'warning';
   readonly message: string;
@@ -417,9 +413,9 @@ export function teamAvailabilityPrompt(
     severity: 'warning',
     message: formatUnavailableTeamMembersMessage(unavailableNames, teamId),
     actions: [
-      { choice: 'sign-in', label: TEAM_LAUNCH_SIGN_IN_LABEL },
-      { choice: 'continue', label: TEAM_LAUNCH_CONTINUE_LABEL },
-      { choice: 'cancel', label: TEAM_LAUNCH_CANCEL_LABEL },
+      { choice: 'sign-in', label: 'Sign In to TeXRA' },
+      { choice: 'continue', label: 'Continue with Available Members' },
+      { choice: 'cancel', label: 'Cancel' },
     ],
   };
 }
@@ -451,7 +447,7 @@ export function formatTeamUnavailableMessage(
  * context: the main-view launch path already displays the team being launched,
  * while the settings path names it inline.
  */
-export function formatUnavailableTeamMembersMessage(
+function formatUnavailableTeamMembersMessage(
   unavailableNames: readonly string[],
   teamId?: string,
 ): string {
