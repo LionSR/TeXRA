@@ -15,7 +15,7 @@ import { warn } from '@logger/logUtils';
 import type { ToolResult } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
-import { rateLimitedApiCall } from '@tools/citation/rateLimiter';
+import { rateLimitedApiCall } from '@tools/support/rateLimiter';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import {

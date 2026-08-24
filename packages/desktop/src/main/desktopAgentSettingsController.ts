@@ -10,7 +10,10 @@ import {
   type refresh,
 } from '@agent/index';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
-import { loadTeamOptions } from '@common/teams/TeamPlan';
+import {
+  loadTeamOptions,
+  type TeamAvailabilityPrompt,
+} from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
@@ -19,10 +22,7 @@ import {
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import {
-  applySettingsTeamRoster,
-  type SettingsTeamAvailabilityPrompt,
-} from '@controllers/settingsView/SettingsTeamRosterController';
+import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   agentKey,
@@ -97,7 +97,7 @@ export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsSt
       message: string;
     }) => Promise<boolean>;
     readonly chooseTeamAvailability: (
-      prompt: SettingsTeamAvailabilityPrompt,
+      prompt: TeamAvailabilityPrompt,
     ) => Promise<TeamAvailabilityChoice | undefined>;
   };
   /**

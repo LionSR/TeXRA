@@ -27,7 +27,6 @@
  * Redaction is lossy by construction: a literal `API_KEY=<value>` in a
  * model-written code sample is scrubbed along with a real key.
  */
-import PQueue from 'p-queue';
 
 import type {
   AgentEvent,
@@ -59,6 +58,8 @@ import {
   isObject,
   type FlushableDebounce,
 } from '@utils/core';
+import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
+import type PQueue from 'p-queue';
 
 import type { StreamLogAppendInput, StreamLogUpdatePatch } from './StreamLog';
 import type { TranscriptWriter } from './StreamLogStore';
@@ -275,11 +276,7 @@ export function attachTranscriptRecorder(
   ): string | undefined => {
     if (preview === text || !spillWriter) return undefined;
     const path = spillWriter.pathFor(id);
-    let queue = spillQueues.get(path);
-    if (!queue) {
-      queue = new PQueue({ concurrency: 1 });
-      spillQueues.set(path, queue);
-    }
+    const queue = getOrCreatePQueue(spillQueues, path);
     const pending = queue
       .add(() => spillWriter.write(path, text))
       .catch((error: unknown) => {
