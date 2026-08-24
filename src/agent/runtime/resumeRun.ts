@@ -132,14 +132,16 @@ export async function resumeStream(
   try {
     const executionId = await lookupStreamExecutionId(streamId, session);
     if (!executionId) {
-      session.followUps.release(recovery, 'recoverable');
+      releaseUnstartedRecovery(session, recovery, options.recovery == null);
       return REFUSED;
     }
-    return resumeRun(executionId, { ...options, session, recovery });
+    return resumeRunWithRecoveryProvenance(
+      executionId,
+      { ...options, session, recovery },
+      options.recovery == null,
+    );
   } catch (error) {
-    if (session.followUps.useRecovery(recovery)) {
-      session.followUps.release(recovery, 'recoverable');
-    }
+    releaseUnstartedRecovery(session, recovery, options.recovery == null);
     throw error;
   }
 }
@@ -153,6 +155,14 @@ const WORKFLOW_STARTED: ResumeRunResult = { started: true, delivered: true };
 export async function resumeRun(
   executionId: ExecutionId,
   options: ResumeRunOptions,
+): Promise<ResumeRunResult> {
+  return resumeRunWithRecoveryProvenance(executionId, options, false);
+}
+
+async function resumeRunWithRecoveryProvenance(
+  executionId: ExecutionId,
+  options: ResumeRunOptions,
+  recoveryIsProvisional: boolean,
 ): Promise<ResumeRunResult> {
   const session = options.session ?? defaultSession();
   const isCancellationRequested = (): boolean =>
@@ -169,7 +179,11 @@ export async function resumeRun(
     [config, meta] = await Promise.all([store.readConfig(), store.readMeta()]);
   } catch (error) {
     if (suppliedRecovery) {
-      session.followUps.release(suppliedRecovery, 'recoverable');
+      releaseUnstartedRecovery(
+        session,
+        suppliedRecovery,
+        recoveryIsProvisional,
+      );
     }
     throw error;
   }
@@ -178,12 +192,16 @@ export async function resumeRun(
   const streamId = meta?.streamId;
   if (!config || !streamId) {
     if (suppliedRecovery) {
-      session.followUps.release(suppliedRecovery, 'recoverable');
+      releaseUnstartedRecovery(
+        session,
+        suppliedRecovery,
+        recoveryIsProvisional,
+      );
     }
     return REFUSED;
   }
   if (suppliedRecovery && suppliedRecovery.streamId !== streamId) {
-    session.followUps.release(suppliedRecovery, 'recoverable');
+    releaseUnstartedRecovery(session, suppliedRecovery, false);
     return REFUSED;
   }
   // A stream that is already running or resuming in this process is refused,
@@ -194,7 +212,11 @@ export async function resumeRun(
     session.executions.isActiveOrResuming(streamId)
   ) {
     if (suppliedRecovery) {
-      session.followUps.release(suppliedRecovery, 'recoverable');
+      releaseUnstartedRecovery(
+        session,
+        suppliedRecovery,
+        recoveryIsProvisional,
+      );
     }
     return REFUSED;
   }
@@ -204,13 +226,14 @@ export async function resumeRun(
   let queueLease: FollowUpRecoveryLease | undefined;
   if (config.agentCategory === AgentCategory.ToolUse) {
     queueLease = options.recovery
-      ? suppliedRecovery
+      ? session.followUps.useRecovery(options.recovery)
       : session.followUps.claimRecovery(streamId, true);
     if (!queueLease) return REFUSED;
   } else if (suppliedRecovery) {
-    // `resumeStream` claims before it knows the persisted category. Workflow
-    // runs have no follow-up consumer, so discard that provisional entry.
-    session.followUps.release(suppliedRecovery, 'terminal');
+    // Workflow runs have no follow-up consumer. An empty entry created only
+    // for lookup can be terminalized; caller-supplied or raced input remains
+    // recoverable so no user message or release observer is lost.
+    releaseUnstartedRecovery(session, suppliedRecovery, recoveryIsProvisional);
   }
 
   let resume: Awaited<ReturnType<typeof retrieveSessionResumeData>>;
@@ -260,6 +283,20 @@ export async function resumeRun(
   // The persisted config and checkpoint disagree on the category.
   if (queueLease) session.followUps.release(queueLease, 'recoverable');
   return REFUSED;
+}
+
+function releaseUnstartedRecovery(
+  session: SessionHandle,
+  recovery: FollowUpRecoveryLease,
+  provisional: boolean,
+): void {
+  const current = session.followUps.useRecovery(recovery);
+  if (!current) return;
+  if (provisional && session.followUps.queue(current).isEmpty()) {
+    session.followUps.terminalize(current.streamId);
+    return;
+  }
+  session.followUps.release(current, 'recoverable');
 }
 
 /** The two expected launch failures a host words; anything else rejects. */

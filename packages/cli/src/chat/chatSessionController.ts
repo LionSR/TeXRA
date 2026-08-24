@@ -716,12 +716,13 @@ export function createChatSessionController(
 
     const runResume = async (): Promise<boolean> => {
       let finalize = (): void => session.markRunCompleted();
-      const recovery = options.recovery
-        ? runtimeSession.followUps.useRecovery(options.recovery)
-        : runtimeSession.followUps.claimRecovery(streamId, true);
-      if (!recovery) return false;
+      let recovery: FollowUpRecoveryLease | undefined;
       let recoveryHandedOff = false;
       try {
+        recovery = options.recovery
+          ? runtimeSession.followUps.useRecovery(options.recovery)
+          : runtimeSession.followUps.claimRecovery(streamId, true);
+        if (!recovery) return false;
         await snapshotStore.preload([streamId]);
         // Invalidate the memo immediately after the direct seed, before the
         // awaited metadata/patch/focus below can render a stale projection.
@@ -806,6 +807,7 @@ export function createChatSessionController(
         return false;
       } finally {
         if (
+          recovery &&
           !recoveryHandedOff &&
           runtimeSession.followUps.useRecovery(recovery)
         ) {
