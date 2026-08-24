@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
-import { resumeRun } from '@agent/runtime/resumeRun';
+import { resumeRun, resumeStream } from '@agent/runtime/resumeRun';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { RUN_OUTCOME } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -23,6 +23,12 @@ const getExecutionStoreMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/storage/ExecutionKVStore', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/ExecutionKVStore')>()),
   getExecutionStore: getExecutionStoreMock,
+}));
+
+const readExecutionStreamIndexMock = vi.hoisted(() => vi.fn());
+vi.mock('@agent/storage/executionListing', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/executionListing')>()),
+  readExecutionStreamIndex: readExecutionStreamIndexMock,
 }));
 
 const EXECUTION = 'exec:resume' as ExecutionId;
@@ -74,6 +80,10 @@ describe('resumeRun tool-use queue ownership', () => {
       readMeta: async () => ({ streamId: STREAM }),
     });
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
+    readExecutionStreamIndexMock.mockReset().mockResolvedValue({
+      byStream: new Map([[STREAM, EXECUTION]]),
+      unreadable: new Map(),
+    });
     resumeToolUseFromResumeDataMock.mockReset();
     resumeToolUseFromResumeDataMock.mockImplementation(
       async (_resume: unknown, options: ResumeToolUseFromResumeDataOptions) => {
@@ -81,6 +91,34 @@ describe('resumeRun tool-use queue ownership', () => {
         return completed;
       },
     );
+  });
+
+  it('claims stream recovery before resolving the disk index', async () => {
+    const session = createSession();
+    const index = createDeferred<{
+      byStream: ReadonlyMap<StreamTabId, ExecutionId>;
+      unreadable: ReadonlyMap<ExecutionId, string>;
+    }>();
+    readExecutionStreamIndexMock.mockReturnValueOnce(index.promise);
+
+    const resumed = resumeStream(STREAM, { session, executeWorkflow });
+    expect(
+      session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
+    ).toEqual({ kind: 'queued' });
+
+    index.resolve({
+      byStream: new Map([[STREAM, EXECUTION]]),
+      unreadable: new Map(),
+    });
+    await expect(resumed).resolves.toEqual({
+      started: true,
+      delivered: true,
+    });
+    const options = resumeToolUseFromResumeDataMock.mock
+      .calls[0]?.[1] as ResumeToolUseFromResumeDataOptions;
+    expect(options.drainedFollowUps?.map((item) => item.text)).toEqual([
+      'raced',
+    ]);
   });
 
   it('claims recovery before draining and preserves ordered raced input', async () => {

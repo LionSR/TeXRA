@@ -4,16 +4,11 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  resumeRun: vi.fn(),
-  lookupStreamExecutionId: vi.fn(),
+  resumeStream: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/resumeRun', () => ({
-  resumeRun: mocks.resumeRun,
-}));
-vi.mock('@agent/followUp/ToolUseFollowUp', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/followUp/ToolUseFollowUp')>()),
-  lookupStreamExecutionId: mocks.lookupStreamExecutionId,
+  resumeStream: mocks.resumeStream,
 }));
 vi.mock('@commands/agent/executeCommand', () => ({
   runExecuteCommand: vi.fn(),
@@ -29,17 +24,16 @@ const EXECUTION = 'exec:ext-resume' as ExecutionId;
 
 async function captureOptions(): Promise<ResumeRunOptions> {
   await tryResumeFromResumeData(STREAM);
-  const options = mocks.resumeRun.mock.calls[0]?.[1];
+  const options = mocks.resumeStream.mock.calls[0]?.[1];
   expect(options).toBeDefined();
   return options as ResumeRunOptions;
 }
 
 describe('tryResumeFromResumeData', () => {
   beforeEach(() => {
-    mocks.resumeRun
+    mocks.resumeStream
       .mockReset()
       .mockResolvedValue({ started: true, delivered: true });
-    mocks.lookupStreamExecutionId.mockReset().mockResolvedValue(EXECUTION);
   });
 
   it('reports cancellation once the stream transcript is gone', async () => {
@@ -64,7 +58,7 @@ describe('tryResumeFromResumeData', () => {
     const showInfoMessage = vi
       .spyOn(session.interactions, 'showInfoMessage')
       .mockReturnValue(undefined);
-    mocks.resumeRun.mockResolvedValueOnce({ failed: 'finished' });
+    mocks.resumeStream.mockResolvedValueOnce({ failed: 'finished' });
 
     await expect(tryResumeFromResumeData(STREAM)).resolves.toBe(false);
 

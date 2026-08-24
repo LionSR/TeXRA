@@ -90,11 +90,16 @@ describe('desktop composition root and launch environment', () => {
       'windowResources.dispose()',
     ]);
 
-    expectOrderedAfter(source, 'lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE', [
+    expectOrderedAfter(source, 'registerRuntimeShutdownHandlers(lifecycle', [
+      'beforeAgentShutdown:',
       'agentResumeHandler.dispose()',
-      'registerAgentShutdownHandlers(lifecycle)',
+      'afterAgentShutdown:',
+      'killActiveRecording()',
+      'flushArtifacts:',
       'processSession.flushArtifacts()',
-      'lifecycle.onShutdown(SHUTDOWN_PHASE.ON',
+      'afterFlushArtifacts:',
+      'diffHostDisposeQueue.onIdle()',
+      'afterExecutionSettlement:',
       'processResources.dispose()',
     ]);
   });

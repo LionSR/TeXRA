@@ -73,14 +73,11 @@ export {
 } from './terminalResultToast';
 
 // resumeRun
-export { resumeRun } from './resumeRun';
+export { lookupStreamExecutionId, resumeRun, resumeStream } from './resumeRun';
 export type { ResumeRunOptions } from './resumeRun';
 // The refusal wording a host applies to a `ResumeRunResult` failure, and the
 // stream -> execution lookup the stream-keyed host resume ports need.
-export {
-  describeFollowUpFailure,
-  lookupStreamExecutionId,
-} from '@agent/followUp/ToolUseFollowUp';
+export { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 
 // detachSubagentsOnStop
 export { detachSubagentsOnStop } from './detachSubagentsOnStop';

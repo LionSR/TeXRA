@@ -5,16 +5,13 @@
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
-import {
-  ExecutionLeaseActiveError,
-  getExecutionStore,
-  readExecutionStreamIndex,
-} from '@agent/storage';
+import { ExecutionLeaseActiveError, getExecutionStore } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
   describeFollowUpFailure,
   detachSubagentsOnStop,
+  lookupStreamExecutionId,
   resumeRun,
   runAgent,
   type AgentConfig,
@@ -514,6 +511,8 @@ export function createChatSessionController(
     }
 
     const supersededRecovery = supersedeInterruptedRecovery();
+    let recovery: FollowUpRecoveryLease | undefined;
+    let recoveryHandedOff = false;
     try {
       // The durable record names the stream (FK stamped at registration) and
       // the config the TUI adopts before the run. Workflow runs resume
@@ -533,6 +532,15 @@ export function createChatSessionController(
       if (failure || !config || !streamId) {
         restoreInterruptedRecovery(supersededRecovery);
         appendLocalErrorTranscript(failure ?? `Execution not found: ${id}`);
+        session.markRunCompleted();
+        resolveRunPromise();
+        return;
+      }
+
+      recovery = runtimeSession.followUps.claimRecovery(streamId, true);
+      if (!recovery) {
+        restoreInterruptedRecovery(supersededRecovery);
+        appendLocalErrorTranscript(describeFollowUpFailure('not_resumable'));
         session.markRunCompleted();
         resolveRunPromise();
         return;
@@ -584,6 +592,8 @@ export function createChatSessionController(
       // matching `tryResumeStream()`'s stop-check after its own preparatory
       // awaits — instead of starting an agent the user already cancelled.
       if (session.stopRequested) {
+        runtimeSession.followUps.release(recovery, 'recoverable');
+        recovery = undefined;
         restoreInterruptedRecovery(supersededRecovery);
         finalize();
         resolveRunPromise();
@@ -599,9 +609,11 @@ export function createChatSessionController(
       // interruption are lost unless both go back where they came from.
       let followUpQueueReady = false;
       const runChain = setCliHelperModel(config.model)
-        .then(() =>
-          resumeRun(id, {
+        .then(() => {
+          recoveryHandedOff = true;
+          return resumeRun(id, {
             ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
+            recovery,
             extraFollowUps: supersededRecovery?.followUps,
             onFollowUpQueueReady: () => {
               followUpQueueReady = true;
@@ -610,8 +622,8 @@ export function createChatSessionController(
             onResult: (result) => {
               resumedOutcome = result.outcome;
             },
-          }),
-        )
+          });
+        })
         .then((result) => {
           if ('started' in result) {
             settleResumedTurn(resumedOutcome);
@@ -624,6 +636,13 @@ export function createChatSessionController(
         })
         .catch(reportRunFailure)
         .finally(() => {
+          if (
+            recovery &&
+            !recoveryHandedOff &&
+            runtimeSession.followUps.useRecovery(recovery)
+          ) {
+            runtimeSession.followUps.release(recovery, 'recoverable');
+          }
           if (!followUpQueueReady) {
             restoreInterruptedRecovery(supersededRecovery);
           }
@@ -638,6 +657,13 @@ export function createChatSessionController(
       // interface contract.
       runChain.then(resolveRunPromise, rejectRunPromise);
     } catch (error: unknown) {
+      if (
+        recovery &&
+        !recoveryHandedOff &&
+        runtimeSession.followUps.useRecovery(recovery)
+      ) {
+        runtimeSession.followUps.release(recovery, 'recoverable');
+      }
       restoreInterruptedRecovery(supersededRecovery);
       reportRunFailure(error);
       session.markRunCompleted();
@@ -690,6 +716,11 @@ export function createChatSessionController(
 
     const runResume = async (): Promise<boolean> => {
       let finalize = (): void => session.markRunCompleted();
+      const recovery = options.recovery
+        ? runtimeSession.followUps.useRecovery(options.recovery)
+        : runtimeSession.followUps.claimRecovery(streamId, true);
+      if (!recovery) return false;
+      let recoveryHandedOff = false;
       try {
         await snapshotStore.preload([streamId]);
         // Invalidate the memo immediately after the direct seed, before the
@@ -698,7 +729,7 @@ export function createChatSessionController(
         const runMetadata = snapshotStore.getRunMetadata(streamId);
         const executionId =
           runMetadata.executionId ??
-          (await readExecutionStreamIndex()).byStream.get(streamId);
+          (await lookupStreamExecutionId(streamId, runtimeSession));
         if (!executionId) return false;
 
         const config =
@@ -730,10 +761,11 @@ export function createChatSessionController(
         session.runExitCode = CliExitCode.Success;
 
         let resumedOutcome: TurnOutcome = RUN_OUTCOME.COMPLETED;
-        const result = await setCliHelperModel(config.model).then(() =>
-          resumeRun(executionId, {
+        const result = await setCliHelperModel(config.model).then(() => {
+          recoveryHandedOff = true;
+          return resumeRun(executionId, {
             ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
-            recovery: options.recovery,
+            recovery,
             extraFollowUps: options.extraFollowUps,
             onFollowUpQueueReady: (lease) => {
               if (options.onFollowUpQueueReady) {
@@ -758,8 +790,8 @@ export function createChatSessionController(
             onResult: (result) => {
               resumedOutcome = result.outcome;
             },
-          }),
-        );
+          });
+        });
 
         if ('started' in result && result.delivered) {
           settleResumedTurn(resumedOutcome);
@@ -773,6 +805,12 @@ export function createChatSessionController(
         reportRunFailure(error);
         return false;
       } finally {
+        if (
+          !recoveryHandedOff &&
+          runtimeSession.followUps.useRecovery(recovery)
+        ) {
+          runtimeSession.followUps.release(recovery, 'recoverable');
+        }
         finalize();
         if (activeAutoResumeCancellation === attemptCancellation) {
           activeAutoResumeCancellation = undefined;

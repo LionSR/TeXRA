@@ -2,8 +2,7 @@ import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
   describeFollowUpFailure,
-  lookupStreamExecutionId,
-  resumeRun,
+  resumeStream,
   trackTerminalResultPresentation,
   type SessionHandle,
 } from '@agent/runtime';
@@ -76,23 +75,20 @@ async function resumeDesktopStream(
     (event) => event.streamId === streamId,
   );
   try {
-    const executionId = await lookupStreamExecutionId(streamId, session);
-    const result = executionId
-      ? await resumeRun(executionId, {
-          session,
-          recovery,
-          runtimeUnavailableTools: (
-            await import('@tools/registry')
-          ).getDefaultUnavailableToolNames('desktop'),
-          isCancellationRequested,
-          executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
-            launchDesktopAgent(
-              { kind: 'resume', config, executionId: id },
-              { session },
-              { modelHandlerCompatibilityKey, suppressErrorNotification: true },
-            ),
-        })
-      : { failed: 'not_resumable' as const };
+    const result = await resumeStream(streamId, {
+      session,
+      recovery,
+      runtimeUnavailableTools: (
+        await import('@tools/registry')
+      ).getDefaultUnavailableToolNames('desktop'),
+      isCancellationRequested,
+      executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
+        launchDesktopAgent(
+          { kind: 'resume', config, executionId: id },
+          { session },
+          { modelHandlerCompatibilityKey, suppressErrorNotification: true },
+        ),
+    });
     if ('started' in result) return result.delivered;
     if (!isCancellationRequested()) {
       await session.interactions.showInfoMessage(

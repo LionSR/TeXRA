@@ -1,7 +1,6 @@
 // Local imports
 import {
   initializeBundledPrompts,
-  settleLiveSessionExecutions,
   teardownDefaultSession,
   tryDefaultSession,
 } from '@agent/runtime';
@@ -10,7 +9,6 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
@@ -23,7 +21,7 @@ import {
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
-import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
+import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -334,24 +332,13 @@ export async function initCliPlatform(
     // this drain they are orphaned. Registered before the usage-log flush
     // below so the kills (all synchronous) land first, matching the other
     // hosts' ordering.
-    registerAgentShutdownHandlers(lifecycle);
-
-    // Same session teardown the extension and desktop hosts run: drain the
-    // session's durable writers once the agent kills above have landed, then
-    // dispose the session last so pending host interactions settle after
-    // persistence. `tryDefaultSession` because the session is installed later,
-    // by whichever entry point opens transcripts.
-    lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-      tryDefaultSession()?.flushArtifacts(),
-    );
-    // First ON handler, as on the other two hosts: `runExecution`'s own
-    // shutdown handler settles the headless run it owns during BEFORE, so this
-    // drain only reaches what that left — notably a TUI flow parked at its
-    // WAIT node — and still runs before `teardownDefaultSession()` disposes it.
-    lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
-      settleLiveSessionExecutions(signal),
-    );
-    lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => teardownDefaultSession());
+    registerRuntimeShutdownHandlers(lifecycle, {
+      // The default session is installed later by whichever entry point opens
+      // transcripts, so its shutdown lookup remains lazy.
+      flushArtifacts: () => tryDefaultSession()?.flushArtifacts(),
+      afterFlushArtifacts: [() => UsageLogService.dispose()],
+      afterExecutionSettlement: [() => teardownDefaultSession()],
+    });
 
     // Attribute agent-authored commits to the TeXRA identity by default;
     // configurable via `.texra/config.json` `texra.git.markCommits`.
@@ -363,9 +350,6 @@ export async function initCliPlatform(
     // runs on normal exit (bin/texra.ts finally) and on signals, both of
     // which call lifecycle.runShutdown().
     UsageLogService.initialize({}, context.version, 'cli');
-    lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-      UsageLogService.dispose(),
-    );
   }
 
   if (!supabaseAuthInitialized) {
