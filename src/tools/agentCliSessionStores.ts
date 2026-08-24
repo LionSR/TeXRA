@@ -8,6 +8,13 @@ import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 
+/**
+ * Owns the two session-keyed stores (`codexThreadsFor`, `claudeAgentSessionsFor`)
+ * that hold each session's live agent-CLI registries, plus the host shutdown
+ * wiring that interrupts them at teardown — kept together because the shutdown
+ * handlers close over the same `WeakMap`s the accessors read.
+ */
+
 // Session-keyed (the childRunBudget WeakMap model): each session owns its own
 // codex/claude registry, so per-session teardown interrupts exactly its own
 // agent-CLI children and a registry dies with its session instead of living

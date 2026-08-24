@@ -9,7 +9,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { createSessionStores } from '@controllers/session/sessionStores';
+import { createSessionStores } from '@controllers/session/createSessionStores';
 import { createLog } from '@logger/logUtils';
 import {
   type ActiveChildInfo,
