@@ -58,7 +58,7 @@ export class GitHubSubscriptionHandlers {
       this.ctx,
       'Failed to save GitHub token',
       async () => {
-        const stored = await storeCredential({
+        const stored = await storeCredential(platform().secrets, {
           secretName: GITHUB_TOKEN_STORAGE_KEY,
           value: token,
           kind: 'github',
