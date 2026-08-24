@@ -141,7 +141,7 @@ frozen deep-import lists, not another lint rule.
     - `utils/core/keyedMutex.ts` - `KeyedMutex` for independently serialized asynchronous work by key
     - `utils/core/pathCore.ts` - sibling Node-only path module
   - `utils/files/` - Filesystem utilities, rules, and vars
-  - `utils/config/` - Settings helpers (`getConfig`, `updateConfig`, `watchConfig`)
+  - `utils/config/` - Settings helpers: raw path reads (`getConfig`, `getValidatedConfig` in `src/utils/config/configUtils.ts`) and catalog-modeled settings (`readPlatformSetting`, `writePlatformSetting` in `src/utils/config/platformSettings.ts`)
   - `utils/system/` - Shell command execution (`execUtils`)
   - `utils/text/` - Text, string, and XML processing utilities — the single home for generic string helpers (validation, truncation, duration/token/percent formatting)
   - `src/utils/prompt.ts` - Prompt builder utilities
@@ -464,7 +464,7 @@ For good separation of concerns and platform independence, core business logic s
 
 **Configuration, storage, and workspace files**
 
-- Use `getConfig`, `updateConfig`, and `watchConfig` from `@utils/config/configUtils` to read and react to settings changes.
+- For a raw config path, read with `getConfig`/`getValidatedConfig` from `src/utils/config/configUtils.ts` and write with `platform().config.update(...)` (the `ConfigProvider.update` port) — there is no standalone `updateConfig`/`watchConfig` helper, and no change-notification API today. Nearly every `texra.*` config path is also modeled in the Zod catalog (`src/shared/schemas/coreSettings.ts` / `stateSettings.ts`), and for most catalog-modeled settings `readPlatformSetting`/`writePlatformSetting` from `src/utils/config/platformSettings.ts` is preferable — host-neutral code (`src/model/`, `src/latex/`, `src/agent/`, `src/tools/`) already calls them directly, not just VS Code-allowed code, and they route through the shared validation/`onWrite` path. Exception: the handful of `configTarget: 'global'` rows (the five Models-tab provider toggles, `texra.telemetry.enabled`) read global scope only through `readPlatformSetting`, while `getConfig`/`platform().config` deliberately merge workspace over global for those — keep using `getConfig` for their reads. Both platform-setting helpers also default to the `'vscode'` storage slot; the CLI's git-author keys (`GIT_MARK_COMMITS`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_WORKTREE_SUPPORT`) diverge by host and go through the CLI's own `readGitAuthorSettingsFromState` instead. For a write reachable from a settings UI (extension/desktop `UPDATE_STATE_SETTING`, CLI `/config`), call `applyStateSettingUpdate` (`src/shared/settingsView/handlers/stateSettingWrite.ts`) rather than `writePlatformSetting` directly — it adds the open-workspace guard and the approval-policy side effect that a bare catalog write skips.
 - Interact with the filesystem through `@utils/files` helpers (`WorkspaceFS`, `RelativeFS`, `StorageFS`, `GlobalStorageFS`, `AbsoluteFS`). They resolve workspace paths, manage global storage, and expose cleanup helpers like `RelativeFS.cleanupOldFiles`.
 - Generate and identify pasted-image filenames with
   `@utils/files/pastedImageName`. Resolve, validate, and persist their paths
