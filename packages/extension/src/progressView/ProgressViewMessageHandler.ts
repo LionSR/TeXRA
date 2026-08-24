@@ -539,13 +539,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
                 stream,
                 accepted,
               }),
-            ).catch((error: unknown) => {
-              this.logger.debug(
-                this.channel,
-                'Follow-up result target is no longer attached',
-                { data: error },
-              );
-            });
+            ).then(
+              (delivered) => {
+                if (!delivered) {
+                  this.logger.debug(
+                    this.channel,
+                    'Follow-up result target did not accept the message',
+                  );
+                }
+              },
+              (error: unknown) => {
+                this.logger.debug(
+                  this.channel,
+                  'Follow-up result target is no longer attached',
+                  { data: error },
+                );
+              },
+            );
           };
         },
         reportImageSaveError: (_image, error) => {
