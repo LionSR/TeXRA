@@ -94,9 +94,9 @@ const writeQueues = new Map<string, PQueue>();
  * another process, or another instance on the same file — persisted in the
  * meantime. Flushes for a given file path are serialized through
  * {@link writeQueues} for in-process ordering, then guarded by a filesystem
- * lock for cross-process exclusion. Reads (`get`, `has`, `snapshot`) still
- * serve this instance's view: open-time contents plus its own mutations; they
- * don't observe other writers' changes.
+ * lock for cross-process exclusion. Reads (`get`, `has`, `snapshot`, `keys`)
+ * still serve this instance's view: open-time contents plus its own
+ * mutations; they don't observe other writers' changes.
  */
 export class JsonStore implements StateStore {
   private constructor(
@@ -144,6 +144,10 @@ export class JsonStore implements StateStore {
 
   snapshot(): JsonRecord {
     return { ...this.data };
+  }
+
+  keys(): string[] {
+    return Object.keys(this.data);
   }
 
   /**

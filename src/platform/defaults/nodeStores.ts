@@ -77,7 +77,7 @@ export async function openTexraWorkspaceConfigStore(
     try {
       const projectStore = await JsonStore.open(projectConfigPath);
       if (
-        Object.keys(projectStore.snapshot()).length > 0 ||
+        projectStore.keys().length > 0 ||
         (await canCreateOrWrite(projectConfigPath))
       ) {
         return projectStore;

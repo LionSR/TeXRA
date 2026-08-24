@@ -9,8 +9,7 @@ import { createPlatformAgentDirectories } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { setOutputChannelFactory } from '@logger/logUtils';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
+import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
@@ -299,27 +298,10 @@ export async function initCliPlatform(
     // lives in shared `~/.texra` state. Preferred defaults reconcile when
     // MODEL_LIST_VERSION changes; retired entries are swept on every startup.
     try {
-      const { added, removed, reordered, routePreferencesCleared } =
-        await refreshModelListStateIfNeeded(stateStores.globalState);
-      const changed = added.length > 0 || removed.length > 0 || reordered;
-      const clearedRoutes = routePreferencesCleared.length > 0;
-      if (changed || clearedRoutes) {
-        invalidateModelOptionsCache();
-        if (changed) {
-          logAt(
-            'info',
-            'cli.models',
-            `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
-          );
-        }
-        if (clearedRoutes) {
-          logAt(
-            'info',
-            'cli.models',
-            `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
-          );
-        }
-      }
+      const { messages } = await refreshModelListAndLog(
+        stateStores.globalState,
+      );
+      for (const message of messages) logAt('info', 'cli.models', message);
     } catch (error) {
       logAt(
         'error',
