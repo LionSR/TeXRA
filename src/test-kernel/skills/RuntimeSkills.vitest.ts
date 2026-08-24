@@ -17,11 +17,11 @@ import {
 } from '@skills/runtimeSkills';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { writeSkill } from '@test/support/skillFixtures';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
-const tempRoots: string[] = [];
+const tempRoots = useTempDirs();
 
 async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-runtime-skills-', tempRoots);
@@ -35,7 +35,6 @@ setupPlatform({ workspacePath: '/workspace' });
 
 afterEach(async () => {
   setRuntimeSkillSources([]);
-  await cleanupTempDirs(tempRoots);
 });
 
 describe('runtime skills', () => {

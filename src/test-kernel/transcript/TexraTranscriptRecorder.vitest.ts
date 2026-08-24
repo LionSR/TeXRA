@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter, type StatusEvent } from '@agent/trace';
 import {
@@ -14,8 +14,8 @@ import {
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { StreamLogStore } from '@transcript/StreamLogStore';
@@ -785,12 +785,8 @@ describe('attachTranscriptRecorder spill artifacts', () => {
 });
 
 describe('attachTranscriptRecorder active skills', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
   setupPlatform(() => createTempDirPlatform('texra-recorder-', tempDirs));
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
 
   it('persists only sanitized summaries and lets the latest empty snapshot clear state', () => {
     const { trace, rows } = attachRecorder();

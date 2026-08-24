@@ -1,6 +1,5 @@
 // Node imports
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { access, mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -20,13 +19,16 @@ import {
   workflowOutputCopyStem,
 } from '@shared/constants/workflowOutput';
 import { installPlatform } from '@test/support/setupPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 describe('filename-era workflow output grammar', () => {
+  const tempDirs = useTempDirs();
   let workspacePath: string;
 
   beforeEach(async () => {
-    workspacePath = await mkdtemp(
-      path.join(tmpdir(), 'texra-legacy-workflow-output-'),
+    workspacePath = await makeTempDir(
+      'texra-legacy-workflow-output-',
+      tempDirs,
     );
     await installPlatform(
       {
@@ -39,7 +41,6 @@ describe('filename-era workflow output grammar', () => {
 
   afterEach(async () => {
     await installPlatform();
-    await rm(workspacePath, { recursive: true, force: true });
   });
 
   it.each([

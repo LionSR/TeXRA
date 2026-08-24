@@ -29,8 +29,8 @@ import type {
   WorkPlanSnapshot,
 } from '@shared/schemas';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
@@ -43,7 +43,7 @@ import {
 } from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files/storageFS';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 const STREAM = 'polish@gpt#abc123def' as StreamTabId;
 const OTHER_STREAM = 'review@gpt#fed321cba' as StreamTabId;
@@ -189,7 +189,6 @@ describe('StreamSnapshotStore', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('persists todos/plan/usage from direct mutators and reassembles them on a fresh store', async () => {
@@ -2818,7 +2817,6 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   function unseededWarnings(warnSpy: {

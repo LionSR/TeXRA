@@ -8,15 +8,14 @@ import {
   resolveArxivPaperDirectoryRelative,
 } from '@latex/arxivProcessor';
 import * as logger from '@logger/logUtils';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 const SOURCE_URL = 'https://arxiv.org/src/2404.12175';
 
 afterEach(async () => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  await cleanupTempDirs(tempDirs);
 });
 
 async function tempSourceBase(): Promise<string> {

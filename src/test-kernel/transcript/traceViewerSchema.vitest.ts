@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
@@ -16,8 +16,8 @@ import {
 } from '@shared/schemas';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
@@ -27,7 +27,7 @@ import {
   TraceDataSchema,
 } from '../../../packages/trace-viewer/src/traceDataSchema';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return AgentConfigSchema.parse({
@@ -62,10 +62,6 @@ function expectTraceRejected(payload: unknown): void {
 
 describe('trace-viewer TraceDataSchema', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-viewer-', tempDirs));
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
 
   it('accepts a real trace document produced by assembleTrace', async () => {
     const executionId = 'abc12345' as ExecutionId;

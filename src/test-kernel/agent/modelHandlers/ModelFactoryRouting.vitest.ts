@@ -45,7 +45,7 @@ import {
 } from '@platform/languageModel';
 import { installPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 // This file calls vi.resetModules(), which desyncs the statically-imported
 // factory from a freshly-imported @platform copy. Blocks that must agree with
@@ -104,11 +104,7 @@ function signedInCodexSession(): CodexSession {
   };
 }
 
-const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await cleanupTempDirs(tempDirs);
-});
+const tempDirs = useTempDirs();
 
 describe('Copilot model handler routing', () => {
   const copilotConfig = modelConfig(ModelProvider.COPILOT, {

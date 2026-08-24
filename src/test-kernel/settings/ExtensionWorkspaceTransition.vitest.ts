@@ -1,6 +1,5 @@
 // Node imports
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
@@ -9,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Type imports
 import type { WorkspaceStorageTransitionHooks } from '@agent/runtime/SessionHandle';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import type * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
@@ -205,6 +205,7 @@ async function expectConfigContains(
 describe.skipIf(process.platform === 'win32')(
   'extension workspace transition integration',
   () => {
+    const tempDirs = useTempDirs();
     let tempDir: string;
     let workspaceRoot: string | undefined;
     let provider: InstanceType<typeof ProgressViewProvider> | undefined;
@@ -214,13 +215,12 @@ describe.skipIf(process.platform === 'win32')(
       mocks.showErrorMessage.mockReset();
       mocks.workspaceListeners.length = 0;
       mocks.setApprovalPolicy.mockReset();
-      tempDir = await mkdtemp(join(tmpdir(), 'texra-workspace-transition-'));
+      tempDir = await makeTempDir('texra-workspace-transition-', tempDirs);
     });
 
     afterEach(async () => {
       provider?.dispose();
       provider = undefined;
-      await rm(tempDir, { recursive: true, force: true });
     });
 
     /** Wire storage + config + the progress view provider over `tempDir`. */

@@ -1,25 +1,16 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { build } from 'esbuild';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { REPO_ROOT } from '@test/support/repoScan';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const execFileAsync = promisify(execFile);
 const sandboxPath = path.join(REPO_ROOT, 'src/agent/workflowScript/sandbox.ts');
-const temporaryDirectories: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories
-      .splice(0)
-      .map((directory) => rm(directory, { recursive: true, force: true })),
-  );
-});
+const temporaryDirectories = useTempDirs();
 
 describe('workflow sandbox host bundles', () => {
   it.each([
@@ -28,10 +19,10 @@ describe('workflow sandbox host bundles', () => {
   ] as const)(
     'instantiates embedded QuickJS from the $host bundle shape',
     async ({ format, extension }) => {
-      const directory = await mkdtemp(
-        path.join(tmpdir(), 'texra-workflow-sandbox-'),
+      const directory = await makeTempDir(
+        'texra-workflow-sandbox-',
+        temporaryDirectories,
       );
-      temporaryDirectories.push(directory);
       const outfile = path.join(directory, `smoke.${extension}`);
 
       await build({
