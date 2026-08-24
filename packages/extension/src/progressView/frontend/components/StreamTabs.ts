@@ -38,7 +38,7 @@ import {
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import './WorktreeChip';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { type TeXRAIconName } from '@shared/wa/iconNames';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';

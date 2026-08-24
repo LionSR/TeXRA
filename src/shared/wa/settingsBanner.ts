@@ -3,7 +3,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - Web Awesome
 import { renderBannerFrame } from './bannerFrame';
-import { waIcon } from './webAwesomeIcons';
+import { waIcon } from './waIcon';
 import type { TeXRAIconName } from './iconNames';
 
 export interface SettingsBannerOptions {

@@ -38,7 +38,7 @@ import {
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 // Side-effect imports - register WA icon component and <tool-timer>
 import '@progressView/frontend/components/ToolTimer';

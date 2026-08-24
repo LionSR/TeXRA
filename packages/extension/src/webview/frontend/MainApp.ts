@@ -43,10 +43,8 @@ import {
   type TeamChangeDetail,
   type WorkingDirectoryChangeDetail,
 } from '@shared/schemas';
-import {
-  registerTeXRAWebAwesomeIcons,
-  waIcon,
-} from '@shared/wa/webAwesomeIcons';
+import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { renderViewHeader } from '@shared/wa/viewHeader';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 import '@shared/wa/tabs';

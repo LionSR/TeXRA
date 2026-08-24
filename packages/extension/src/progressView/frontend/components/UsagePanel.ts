@@ -20,7 +20,7 @@ import { usageCostLabel, usageRouteBadge } from '@shared/copy/modelAccess';
 
 // Local imports - shared icons and utils
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { clamp, formatCompactTokenCount } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
 

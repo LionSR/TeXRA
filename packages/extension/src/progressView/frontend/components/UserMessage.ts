@@ -27,7 +27,7 @@ import { CopyButtonController } from '@shared/litControllers/CopyButtonControlle
 import { buttonStyles, focusRingStyles } from '@shared/styles/controlStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 // Local imports - formatter helpers
 import { processMarkdownContent } from '../formatters/markdownRenderer';

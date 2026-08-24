@@ -32,7 +32,7 @@ import {
   type LabeledActionButtonOptions,
 } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { getBasename } from '@utils/core';
 

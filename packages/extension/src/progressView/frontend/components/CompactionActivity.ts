@@ -9,7 +9,7 @@ import {
 } from '@shared/streams/compactionActivityProjection';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { stopSpinnerMotion } from '@shared/wa/spinner';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 const ACTIVITY_ICON: Record<
   Exclude<CompactionActivityStatus, 'running'>,

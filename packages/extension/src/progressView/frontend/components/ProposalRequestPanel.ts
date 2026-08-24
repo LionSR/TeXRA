@@ -42,7 +42,7 @@ import {
 // Local imports - shared utilities
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { getBasename } from '@utils/core';
 
 // Local imports - base class

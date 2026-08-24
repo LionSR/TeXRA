@@ -18,7 +18,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 // Local imports - shared schemas
 import { toolStatusLabel } from '@shared/tools/toolStatusLabels';

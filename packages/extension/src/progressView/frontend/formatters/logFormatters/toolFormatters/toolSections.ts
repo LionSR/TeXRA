@@ -37,7 +37,7 @@ import type {
   ToolFileSection,
   ToolSection,
 } from '@shared/transcript';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { assertNever } from '@utils/core';
 
 import { buildToolSection } from './helpers';

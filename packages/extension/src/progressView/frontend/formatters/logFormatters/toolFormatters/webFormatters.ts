@@ -15,7 +15,7 @@ import {
 import type { FormatResult } from '@progressView/frontend/formatters/baseLogFormatter';
 import type { WebFetchRow, WebSearchRow } from '@shared/transcript';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { buildToolUseDetails } from './helpers';
 
 // Web search status-based wa-icon names; SPINNER_ICON_NAME triggers a spinner.

@@ -25,7 +25,7 @@ import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_MODE_PRESETS } from '@shared/schemas';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 interface StartupPanelController {
   isVisible(): boolean;

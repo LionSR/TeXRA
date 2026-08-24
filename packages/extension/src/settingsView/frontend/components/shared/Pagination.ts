@@ -11,7 +11,7 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles and utilities
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { createEvent } from '@shared/utils/events';
 import { clamp } from '@utils/core';
 

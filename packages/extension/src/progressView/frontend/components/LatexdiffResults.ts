@@ -16,7 +16,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 // Local imports - progress view events
 import { ProgressEvents } from '../events';

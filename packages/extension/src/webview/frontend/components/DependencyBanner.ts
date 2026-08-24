@@ -6,7 +6,7 @@ import { when } from 'lit/directives/when.js';
 
 import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
 import type { DependencyBannerState } from '@shared/schemas';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { renderWarningBanner } from '@shared/wa/bannerFrame';
 import { StateVisibleBanner } from './StateVisibleBanner';
 import { MainViewEvents } from '../events';

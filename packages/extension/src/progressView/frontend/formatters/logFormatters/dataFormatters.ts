@@ -27,7 +27,7 @@ import type {
   StatisticsRow,
 } from '@shared/transcript';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { getBasename } from '@utils/core';
 
 // Local imports - formatter helpers

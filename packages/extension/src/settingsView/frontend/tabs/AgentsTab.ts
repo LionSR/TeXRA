@@ -42,7 +42,7 @@ import {
   renderSettingsSectionHeading,
 } from '@shared/wa/settingsSection';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { pluralize } from '@utils/text/stringUtils';
 import { postStateSetting } from '../components/shared/stateSettingRows';
 

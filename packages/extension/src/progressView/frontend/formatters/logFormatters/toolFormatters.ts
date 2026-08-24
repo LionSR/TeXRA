@@ -25,7 +25,7 @@ import {
   DELEGATION_TOOL_CATEGORY,
 } from '@shared/constants/delegationTools';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import {
   isMcpToolName,

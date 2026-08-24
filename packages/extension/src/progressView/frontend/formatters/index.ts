@@ -13,7 +13,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared transcript model
 import type { TranscriptRow, TranscriptRowKind } from '@shared/transcript';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - formatter helpers

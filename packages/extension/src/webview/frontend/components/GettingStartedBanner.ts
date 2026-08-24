@@ -8,7 +8,7 @@ import {
   GETTING_STARTED_ACTION_PRESENTATION,
   type GettingStartedAction,
 } from '@shared/schemas';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { MainViewEvents } from '../events';

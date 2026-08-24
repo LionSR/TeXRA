@@ -6,7 +6,7 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { renderLoadingState } from '@shared/wa/loadingState';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { formatTimestamp, truncateSummary } from '@utils/text/stringUtils';
 import { DESKTOP_LOCAL_COMMANDS } from '../shared/desktopCommandSurface';
 import {

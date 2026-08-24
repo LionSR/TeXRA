@@ -8,7 +8,7 @@ import { customElement, property, query, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 // Local imports - shared events
 import { createEvent } from '@shared/utils/events';

@@ -13,7 +13,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 // Local imports - progress view helpers
 import { buildDetailsSummary } from '../formatters/htmlBuilders';

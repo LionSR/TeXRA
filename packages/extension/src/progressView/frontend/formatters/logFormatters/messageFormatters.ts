@@ -31,7 +31,7 @@ import type {
   ProgressStatusRow,
   UserRow,
 } from '@shared/transcript';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';

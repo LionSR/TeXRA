@@ -3,7 +3,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { MainViewEvents } from '../events';

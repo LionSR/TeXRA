@@ -25,7 +25,7 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 // Local imports - shared schemas
 import { WorkspaceStateKey } from '@shared/state/stateKeys';

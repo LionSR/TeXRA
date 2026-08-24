@@ -9,7 +9,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - progress view constants

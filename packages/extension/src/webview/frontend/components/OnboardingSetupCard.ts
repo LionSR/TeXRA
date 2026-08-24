@@ -7,7 +7,7 @@ import { customElement } from 'lit/decorators.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { GETTING_STARTED_ACTION_PRESENTATION } from '@shared/schemas';
 import { ONBOARDING_SETUP_HANDOFF } from '@shared/copy/onboarding';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 import { MainViewEvents } from '../events';
 

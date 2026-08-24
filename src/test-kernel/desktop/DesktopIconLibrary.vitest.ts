@@ -4,7 +4,7 @@ import { getIconLibrary } from '@awesome.me/webawesome/dist/components/icon/libr
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { TEXRA_ICON_CANONICAL_NAMES } from '@shared/wa/iconNames';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/waIcon';
 
 import { desktopSourcePath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';

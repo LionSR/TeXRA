@@ -9,7 +9,7 @@ import { formatGoalTime, isGoalInFlight, goalElapsedMs } from '@shared/schemas';
 import type { Goal } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import type { MetaPart } from '@shared/wa/metaStrip';
 import { capitalize } from '@utils/text/stringUtils';

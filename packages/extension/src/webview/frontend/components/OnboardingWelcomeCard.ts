@@ -6,7 +6,7 @@ import { customElement } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { GETTING_STARTED_ACTION_PRESENTATION } from '@shared/schemas';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import {
   ONBOARDING_CARD_TITLE,
   ONBOARDING_CHOICE_API_KEY,

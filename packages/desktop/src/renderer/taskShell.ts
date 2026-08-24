@@ -13,7 +13,7 @@ import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 import {
   WORKBENCH_KIND_META,

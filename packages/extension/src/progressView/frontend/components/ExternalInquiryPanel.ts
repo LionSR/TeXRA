@@ -40,7 +40,7 @@ import {
 } from '@shared/styles';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createFlushableDebounce, tryParseUrl } from '@utils/core';
 

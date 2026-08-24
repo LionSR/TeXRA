@@ -68,7 +68,7 @@ import {
   renderLabeledActionButton,
 } from '@shared/wa/actionButtons';
 import { renderEmptyState } from '@shared/wa/emptyState';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';

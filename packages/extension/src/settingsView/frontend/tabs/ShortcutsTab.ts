@@ -24,7 +24,7 @@ import {
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 @customElement('shortcuts-tab')
 export class ShortcutsTab extends LitElement {

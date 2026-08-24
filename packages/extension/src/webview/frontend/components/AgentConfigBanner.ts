@@ -4,7 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
 import type { AgentConfigBannerState } from '@shared/schemas';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { renderWarningBanner } from '@shared/wa/bannerFrame';
 import { StateVisibleBanner } from './StateVisibleBanner';
 import { MainViewEvents } from '../events';

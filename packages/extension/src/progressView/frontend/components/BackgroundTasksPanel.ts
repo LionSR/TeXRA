@@ -46,7 +46,7 @@ import {
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { formatDuration } from '@utils/core';
 import { ProgressEvents } from '../events';
 

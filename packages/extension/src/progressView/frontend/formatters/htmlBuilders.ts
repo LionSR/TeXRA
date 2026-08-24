@@ -24,7 +24,7 @@ import { hljs } from '@shared/highlighting/hljs';
 // Local imports - shared utilities
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { stopSpinnerMotion } from '@shared/wa/spinner';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { copyWithFeedback } from '@shared/utils/clipboard';
 import { getBasename } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';

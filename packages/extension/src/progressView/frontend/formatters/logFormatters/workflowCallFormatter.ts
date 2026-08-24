@@ -7,7 +7,7 @@ import { ProgressEvents } from '@progressView/frontend/events';
 // Local imports - shared contracts
 import type { WorkflowCallProgress } from '@shared/schemas';
 import type { WorkflowTaskRow } from '@shared/transcript';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { assertNever } from '@utils/core';
 

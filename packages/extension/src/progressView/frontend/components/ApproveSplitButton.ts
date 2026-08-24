@@ -16,7 +16,7 @@ import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import { createEvent } from '@shared/utils/events';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderSplitButtonMenuParts } from '@shared/wa/splitButton';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 /** Internal dropdown-item value for the edit/bash session-bypass entry. */
 const YOLO_VALUE = 'approve-session';

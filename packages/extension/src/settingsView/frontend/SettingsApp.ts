@@ -23,10 +23,8 @@ import {
   type SettingsTabPanelName,
 } from '@shared/schemas';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
-import {
-  registerTeXRAWebAwesomeIcons,
-  waIcon,
-} from '@shared/wa/webAwesomeIcons';
+import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { utcMonthStart } from '@utils/core';
 
 // Local imports - settings view

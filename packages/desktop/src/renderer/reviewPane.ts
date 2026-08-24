@@ -6,7 +6,7 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 
 import { DESKTOP_THEME_KIND, type DesktopThemeKind } from '@shared/schemas';
 import { renderEmptyState } from '@shared/wa/emptyState';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 import { buildEditorTree, type EditorTreeNode } from './editorTree';
 import type { DesktopShowDiffMessage } from '../shared/desktopDiffMessages';

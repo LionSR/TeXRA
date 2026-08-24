@@ -4,7 +4,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
 import type { ApiKeyBannerState } from '@shared/schemas';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { renderWarningBanner } from '@shared/wa/bannerFrame';
 import { capitalize } from '@utils/text/stringUtils';
 import { StateVisibleBanner } from './StateVisibleBanner';

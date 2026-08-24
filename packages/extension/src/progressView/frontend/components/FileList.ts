@@ -32,7 +32,7 @@ import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { getBasename, normalizeFilePath } from '@utils/core';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';

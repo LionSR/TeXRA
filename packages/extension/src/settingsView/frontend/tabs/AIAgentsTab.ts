@@ -26,7 +26,7 @@ import {
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
 } from '@shared/schemas';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderLoadingState } from '@shared/wa/loadingState';
 

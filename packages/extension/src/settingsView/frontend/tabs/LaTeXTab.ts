@@ -37,7 +37,7 @@ import {
   renderSetStatusIcon,
   statusCheckIconStyles,
 } from '@shared/wa/statusIcons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 // Web Awesome button + icon bundles (side-effect imports)
 import '@awesome.me/webawesome/dist/components/button/button.js';

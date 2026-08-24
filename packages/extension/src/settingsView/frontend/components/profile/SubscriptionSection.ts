@@ -29,7 +29,7 @@ import {
   renderSettingsSectionHeading,
   renderSettingsToggleRow,
 } from '@shared/wa/settingsSection';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/button/button.js';

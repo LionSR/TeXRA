@@ -17,7 +17,7 @@ import type { LaunchTarget } from '@shared/schemas';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens, selectStyles } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 // Local imports - shared utils
 import {

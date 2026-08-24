@@ -10,7 +10,7 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import { clampOptional } from '@utils/core';
 
 // Local imports - Web Awesome
-import { waIcon } from './webAwesomeIcons';
+import { waIcon } from './waIcon';
 import type { TeXRAIconName } from './iconNames';
 
 // Web Awesome input element type (kept after local imports per import/order)

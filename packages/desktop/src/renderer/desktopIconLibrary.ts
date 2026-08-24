@@ -13,7 +13,7 @@ import {
 } from '@awesome.me/webawesome/dist/components/icon/library.js';
 import iconNodes from 'lucide-static/icon-nodes.json';
 
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/waIcon';
 
 /**
  * Our icon name -> Lucide icon name.

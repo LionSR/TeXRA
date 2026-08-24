@@ -26,7 +26,7 @@ import {
   renderSettingsNumberRow,
   renderSettingsSectionHeading,
 } from '@shared/wa/settingsSection';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 // Local imports - catalog-driven settings rows
 import {

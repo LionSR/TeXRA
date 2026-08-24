@@ -11,7 +11,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { TODO_STATUS, STATUS_ICONS, type TodoItem } from '@shared/schemas';
 import { stopSpinnerMotion } from '@shared/wa/spinner';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 
 import { ELEMENT_IDS } from '../constants';
 

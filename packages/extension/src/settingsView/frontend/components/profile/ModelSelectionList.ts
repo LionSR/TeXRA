@@ -13,7 +13,7 @@ import {
   type ModelSelectionItem,
   type ProviderKeyStatus,
 } from '@shared/schemas';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import {
   renderKeyStatusIcon,
   statusCheckIconStyles,

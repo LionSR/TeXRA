@@ -47,7 +47,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - progress view helpers
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { groupBy } from '@utils/core';
 import { isTextInput, selectExternalInquiryKey } from './RequestPanelsState';
 import { getPermissionKey } from '../permissionState';

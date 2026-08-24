@@ -7,7 +7,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - Web Awesome
 import { stopSpinnerMotion } from './spinner';
-import { waIcon } from './webAwesomeIcons';
+import { waIcon } from './waIcon';
 import type { TeXRAIconName } from './iconNames';
 
 type ActionButtonAppearance = 'accent' | 'filled' | 'outlined' | 'plain';

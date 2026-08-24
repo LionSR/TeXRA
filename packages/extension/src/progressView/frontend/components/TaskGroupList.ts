@@ -38,7 +38,7 @@ import {
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom, vsCodeScrollExtent } from '@shared/utils/dom';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { formatDuration } from '@utils/core';

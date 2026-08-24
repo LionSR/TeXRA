@@ -1,5 +1,5 @@
 import { render } from 'lit';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 
 /**

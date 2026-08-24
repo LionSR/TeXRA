@@ -10,7 +10,7 @@ import {
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { getBasename } from '@utils/core';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';

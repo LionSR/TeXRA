@@ -4,7 +4,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import { waIcon } from './webAwesomeIcons';
+import { waIcon } from './waIcon';
 import type { TeXRAIconName } from './iconNames';
 import type { WaTabShowEvent } from './tabs';
 import './tabs';

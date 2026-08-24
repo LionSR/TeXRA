@@ -10,7 +10,7 @@ import type { ProviderKeyStatus, ProviderSetting } from '@shared/schemas';
 import { DEFAULT_GLOBAL_STREAMING } from '@shared/schemas';
 import { PROVIDER_STATE_ENTRIES } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import {
   renderSettingsSectionHeading,

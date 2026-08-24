@@ -21,7 +21,7 @@ import type { DesktopThemeKind } from '@shared/schemas';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderLoadingState } from '@shared/wa/loadingState';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/waIcon';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import {
   loadMonaco,
