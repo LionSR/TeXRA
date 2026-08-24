@@ -9,8 +9,7 @@ import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
-import { detachSubagentsOnStop, type ToolUseResumeData } from '@agent/runtime';
-import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
+import { detachSubagentsOnStop, type AgentConfig } from '@agent/runtime';
 import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import {
@@ -21,6 +20,7 @@ import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
   initInteractiveCliPlatform,
+  setCliAgentResumeHandler,
   setCliHelperModel,
 } from '@cli/runtime/initPlatform';
 import {
@@ -131,10 +131,10 @@ interface RunChatInit {
   /** Multi-agent preset id when chat was launched from a team preset. */
   readonly cliMultiAgentPresetId?: string;
   readonly delegationAgentScope?: AgentDelegationScope;
-  /** Pre-resolved startup resume from `texra resume <id>`. */
+  /** Startup resume from `texra resume <id>`, with the run's persisted config. */
   readonly initialResume?: {
     readonly id: ExecutionId;
-    readonly resolution: ToolUseResumeData;
+    readonly config: AgentConfig;
   };
 }
 
@@ -201,8 +201,7 @@ export async function runChat(
   // through the same override slot resolveChatDefaults already honors, and
   // only when the user didn't pin an agent (--agent, resume, or env) — an
   // explicit choice always wins.
-  const explicitAgent =
-    initialResume?.resolution.agentConfig.agent ?? init.agentOverride;
+  const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
   const setupAgentOverride = firstRunSetupAgentOverride({
     onboardingConfigured: onboarding.configured,
     firstRunDone: getFirstRunDone(platform().globalState),
@@ -213,8 +212,7 @@ export async function runChat(
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
     agentOverride: explicitAgent ?? setupAgentOverride,
-    modelOverride:
-      initialResume?.resolution.agentConfig.model ?? init.modelOverride,
+    modelOverride: initialResume?.config.model ?? init.modelOverride,
     envAgent: context.envAgent,
     envModel: context.envModel,
     visibleToolUseAgents,
@@ -276,7 +274,7 @@ export async function runChat(
     resumeExecution: chatController.resume,
   });
   const initialPresetId = initialResume
-    ? (initialResume.resolution.agentConfig.cliMultiAgentPresetId ?? undefined)
+    ? (initialResume.config.cliMultiAgentPresetId ?? undefined)
     : init.cliMultiAgentPresetId;
   sessionMetaSignal.set({
     agent,
@@ -292,7 +290,7 @@ export async function runChat(
       : (init.teamName ?? readCliMultiAgentPresetName(initialPresetId)),
     cliMultiAgentPresetId: initialPresetId,
     delegationAgentScope: initialResume
-      ? (initialResume.resolution.agentConfig.delegationAgentScope ?? undefined)
+      ? (initialResume.config.delegationAgentScope ?? undefined)
       : init.delegationAgentScope,
     version,
   });
@@ -395,11 +393,7 @@ export async function runChat(
     followUpQueue,
     snapshotStore: runtimeSession.snapshots,
   });
-  disposables.add(
-    setCliAgentResumeHandler({
-      tryResumeStream: chatController.tryResumeStream,
-    }),
-  );
+  disposables.add(setCliAgentResumeHandler(chatController.tryResumeStream));
 
   // Session-command engine: slash-command dispatch, follow-up admission, the
   // stream-id poll loop, queued-follow-up emission, and skill-activation
@@ -592,7 +586,7 @@ export async function runChat(
   // session.runPromise, and the normal first-input path stays available so the
   // user can keep chatting (follow-ups target session.streamId as usual).
   if (initialResume) {
-    void chatController.resume(initialResume.id, initialResume.resolution);
+    void chatController.resume(initialResume.id);
   }
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly

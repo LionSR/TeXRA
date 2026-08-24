@@ -1009,45 +1009,6 @@ describe('StreamSnapshotStore', () => {
     expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
   });
 
-  it('treats corrupt-present ownership metadata as unreadable, not missing', async () => {
-    await StorageFS.ensureDir(streamDataDir(STREAM));
-    await StorageFS.write(
-      path.join(streamDataDir(STREAM), 'meta.json'),
-      '{bad json',
-    );
-
-    const store = new StreamSnapshotStore();
-    await expect(store.readPersistedExecutionId(STREAM)).rejects.toBeInstanceOf(
-      SyntaxError,
-    );
-  });
-
-  it('rejects valid-JSON ownership metadata with an invalid execution FK', async () => {
-    await StorageFS.ensureDir(streamDataDir(STREAM));
-    await StorageFS.write(
-      path.join(streamDataDir(STREAM), 'meta.json'),
-      JSON.stringify({ schemaVersion: 1, executionId: 42 }),
-    );
-
-    const store = new StreamSnapshotStore();
-    await expect(store.readPersistedExecutionId(STREAM)).rejects.toThrow(
-      'Invalid persisted stream metadata ownership',
-    );
-  });
-
-  it('rejects non-object ownership metadata instead of treating it as missing', async () => {
-    await StorageFS.ensureDir(streamDataDir(STREAM));
-    await StorageFS.write(
-      path.join(streamDataDir(STREAM), 'meta.json'),
-      JSON.stringify(['not', 'a', 'meta']),
-    );
-
-    const store = new StreamSnapshotStore();
-    await expect(store.readPersistedExecutionId(STREAM)).rejects.toThrow(
-      'Invalid persisted stream metadata ownership',
-    );
-  });
-
   it('usage-only preload supplies usage without warning and preserves live deltas', async () => {
     await writeStreamFile(STREAM, 'usageStats.json', {
       [RUN]: usage(1, 2, 0.1),
@@ -1147,7 +1108,6 @@ describe('StreamSnapshotStore', () => {
     });
 
     const store = new StreamSnapshotStore();
-    expect(await store.readPersistedExecutionId(STREAM)).toBeUndefined();
     await store.load([STREAM]);
 
     expect(store.getRunMetadata(STREAM).executionId).toBeUndefined();

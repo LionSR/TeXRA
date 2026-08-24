@@ -1,7 +1,7 @@
 import { registerExecution } from '@agent/storage';
 import {
   clearTerminalExecutionState,
-  finalizeExecution,
+  finalizeRun,
 } from '@agent/storage/executionLifecycle';
 import { acquireResumedExecutionLease } from '@agent/storage/executionLease';
 
@@ -194,12 +194,12 @@ export async function runAgent(
             ? RUN_OUTCOME.FAILED
             : previousTerminalOutcome;
           if (!lifecycleStarted && restoredOutcome !== undefined) {
-            const finalization = await finalizeExecution({
+            const finalization = await finalizeRun({
               executionId,
               outcome: restoredOutcome,
               flowRecord: shouldRegister ? 'delete' : 'preserve',
             });
-            if (finalization.status === 'failed') {
+            if (!finalization.ok) {
               runFailure = {
                 error: new AggregateError(
                   [error, finalization.error],

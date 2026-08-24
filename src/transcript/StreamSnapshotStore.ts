@@ -82,7 +82,6 @@ import {
   EMPTY_WORK_PLAN,
   emptyStreamData,
   readMeta,
-  readMetaForOwnership,
   readStreamData,
   readUsageData,
   type StreamData,
@@ -1468,28 +1467,6 @@ export class StreamSnapshotStore {
   /** Streams left in reversible staging by an interrupted deletion. */
   async listStagedDeletions(): Promise<StreamTabId[]> {
     return this.listStreamsUnder(STREAM_DATA_DELETION_DIR);
-  }
-
-  /**
-   * Execution id recorded in a stream sidecar's `meta.json`, without seeding
-   * memory or reading the stream's other sidecar files. Callers that scan
-   * every persisted stream (bulk admin sweeps in `SessionStores`) only ever
-   * need this one field, so this reads just `meta.json` rather than the full
-   * 6-file `readStreamData()`.
-   */
-  async readPersistedExecutionId(
-    stream: StreamTabId,
-  ): Promise<ExecutionId | undefined> {
-    // Resolve the KV handle directly rather than through `kv()`, which would
-    // mint an in-memory record for a stream this caller only needs one disk
-    // field from. The bounded-startup invariant (#9947) keeps cold historical
-    // streams record-free until a caller actually seeds or mutates them.
-    //
-    // Use the strict ownership read: corrupt-present metadata must surface as
-    // an unreadable sidecar (and skip the stream) rather than masquerade as a
-    // legacy stream with no persisted FK.
-    return (await readMetaForOwnership(this.kvHandles.get(stream)))
-      ?.executionId;
   }
 
   /**

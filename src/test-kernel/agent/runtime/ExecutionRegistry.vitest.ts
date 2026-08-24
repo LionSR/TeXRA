@@ -41,14 +41,14 @@ import {
 } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
-  finalizeExecution: vi.fn(),
+  finalizeRun: vi.fn(),
 }));
 
 const channelTraceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
-// terminalPersistence deep-imports finalizeExecution from executionLifecycle
+// The registry deep-imports finalizeRun from executionLifecycle
 // (not the `@agent/storage` barrel), so the spy lives on that leaf module.
 // Mocking both the barrel and the leaf with the same `vi.fn` whose
 // implementation points at `importOriginal`'s barrel export recurses through
@@ -56,17 +56,17 @@ const channelTraceMocks = vi.hoisted(() => ({
 vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
-  storageMocks.finalizeExecution.mockImplementation(actual.finalizeExecution);
+  storageMocks.finalizeRun.mockImplementation(actual.finalizeRun);
   return {
     ...actual,
-    finalizeExecution: storageMocks.finalizeExecution,
+    finalizeRun: storageMocks.finalizeRun,
   };
 });
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
   return {
     ...actual,
-    finalizeExecution: storageMocks.finalizeExecution,
+    finalizeRun: storageMocks.finalizeRun,
   };
 });
 
@@ -548,7 +548,7 @@ describe('executionRegistry', () => {
   });
 
   it('hands a waiting stop to a successor tracked during cleanup', async () => {
-    storageMocks.finalizeExecution.mockClear();
+    storageMocks.finalizeRun.mockClear();
     const publishResult = vi.fn();
     const { streamStatus, registry } = createRegistry({ publishResult });
     const executionId = 'exec-waiting-stop-handoff' as ExecutionId;
@@ -585,7 +585,7 @@ describe('executionRegistry', () => {
 
       expect(registry.getHandle(executionId)).toBe(successor);
       expect(publishResult).not.toHaveBeenCalled();
-      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
+      expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
     } finally {
       registry.dispose();
@@ -628,9 +628,8 @@ describe('executionRegistry', () => {
       'parent-waiting-kill-metadata-failure' as StreamTabId;
     const childStreamId = 'child-waiting-kill-metadata-failure' as StreamTabId;
     const durabilityError = new Error('metadata disk write failed');
-    storageMocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
-      stage: 'terminal-status',
+    storageMocks.finalizeRun.mockResolvedValueOnce({
+      ok: false,
       outcomePersisted: false,
       error: durabilityError,
     });
@@ -658,7 +657,6 @@ describe('executionRegistry', () => {
           {
             data: {
               executionId,
-              stage: 'terminal-status',
               outcomePersisted: false,
               error: durabilityError,
             },
@@ -675,11 +673,7 @@ describe('executionRegistry', () => {
     const executionId = 'exec-waiting-cleanup-failure' as ExecutionId;
     const childStreamId = 'child-waiting-cleanup-failure' as StreamTabId;
     const cleanupError = new Error('transcript reload failed');
-    storageMocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'durable',
-      outcomePersisted: true,
-      flowRecord: 'deleted',
-    });
+    storageMocks.finalizeRun.mockResolvedValueOnce({ ok: true });
     channelTraceMocks.warn.mockClear();
 
     try {
@@ -693,7 +687,7 @@ describe('executionRegistry', () => {
       expect(registry.kill(executionId)).toBe(true);
 
       await vi.waitFor(() => {
-        expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
+        expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
           executionId,
           outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'delete',
@@ -714,9 +708,8 @@ describe('executionRegistry', () => {
     const childStreamId =
       'child-waiting-kill-flow-delete-failure' as StreamTabId;
     const cleanupError = new Error('flow delete failed');
-    storageMocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
-      stage: 'flow-record-delete',
+    storageMocks.finalizeRun.mockResolvedValueOnce({
+      ok: false,
       outcomePersisted: true,
       error: cleanupError,
     });
@@ -733,7 +726,7 @@ describe('executionRegistry', () => {
       expect(registry.kill(executionId)).toBe(true);
 
       await vi.waitFor(() => {
-        expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
+        expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
           executionId,
           outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'delete',
@@ -744,7 +737,6 @@ describe('executionRegistry', () => {
         {
           data: {
             executionId,
-            stage: 'flow-record-delete',
             outcomePersisted: true,
             error: cleanupError,
           },
@@ -815,17 +807,12 @@ describe('executionRegistry', () => {
     const executionId = 'exec-waiting-stop-after-claim' as ExecutionId;
     const childStreamId = 'child-waiting-stop-after-claim' as StreamTabId;
     const teardown = vi.fn();
-    storageMocks.finalizeExecution.mockClear();
+    storageMocks.finalizeRun.mockClear();
     let releasePersist: (() => void) | undefined;
-    storageMocks.finalizeExecution.mockImplementationOnce(
+    storageMocks.finalizeRun.mockImplementationOnce(
       async () =>
         new Promise((resolve) => {
-          releasePersist = () =>
-            resolve({
-              status: 'durable',
-              outcomePersisted: true,
-              flowRecord: 'deleted',
-            });
+          releasePersist = () => resolve({ ok: true });
         }),
     );
 
@@ -855,7 +842,7 @@ describe('executionRegistry', () => {
       await expect(handle.result).resolves.toMatchObject({
         outcome: RUN_OUTCOME.COMPLETED,
       });
-      expect(storageMocks.finalizeExecution).toHaveBeenCalledExactlyOnceWith({
+      expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith({
         executionId,
         outcome: RUN_OUTCOME.COMPLETED,
         flowRecord: 'delete',

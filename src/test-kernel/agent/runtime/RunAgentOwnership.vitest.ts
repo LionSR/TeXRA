@@ -5,13 +5,13 @@ const mocks = vi.hoisted(() => ({
   acquireResumedExecutionLease: vi.fn(),
   clearTerminalExecutionState: vi.fn(),
   executeAgent: vi.fn(),
-  finalizeExecution: vi.fn(),
+  finalizeRun: vi.fn(),
   registerExecution: vi.fn(),
   releaseOwnedExecutionLease: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
-  finalizeExecution: mocks.finalizeExecution,
+  finalizeRun: mocks.finalizeRun,
   registerExecution: mocks.registerExecution,
 }));
 
@@ -23,7 +23,7 @@ vi.mock('@agent/storage/executionLease', () => ({
 
 vi.mock('@agent/storage/executionLifecycle', () => ({
   clearTerminalExecutionState: mocks.clearTerminalExecutionState,
-  finalizeExecution: mocks.finalizeExecution,
+  finalizeRun: mocks.finalizeRun,
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
@@ -74,11 +74,7 @@ const EXECUTE_RESULT = {
   streamId: EXECUTION_ID,
   outcome: 'COMPLETED',
 };
-const FINALIZE_RESULT = {
-  status: 'durable',
-  terminalStatusPersisted: true,
-  flowRecord: 'deleted',
-};
+const FINALIZE_RESULT = { ok: true };
 
 type RunOptions = Omit<Parameters<typeof runAgent>[1], 'session'> & {
   readonly kind?: 'fresh' | 'resume';
@@ -106,7 +102,7 @@ describe('runAgent execution ownership', () => {
     mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
     mocks.validateOwnedExecutionLease.mockResolvedValue(undefined);
     flushArtifacts.mockResolvedValue(undefined);
-    mocks.finalizeExecution.mockResolvedValue(FINALIZE_RESULT);
+    mocks.finalizeRun.mockResolvedValue(FINALIZE_RESULT);
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
   });
 
@@ -164,7 +160,7 @@ describe('runAgent execution ownership', () => {
 
   // A workflow resume reuses the execution record, so the previous run's
   // terminal outcome is still on disk and would be projected onto every result
-  // envelope this run writes (`applyExecutionOutcome`) until it finalizes.
+  // envelope this run writes (`readResultMeta`) until it finalizes.
   it('clears the previous run terminal facts before a resumed run executes', async () => {
     const order: string[] = [];
     mocks.clearTerminalExecutionState.mockImplementationOnce(async () => {
@@ -204,7 +200,7 @@ describe('runAgent execution ownership', () => {
     const order: string[] = [];
     const launchError = new Error('launch failed');
     mocks.executeAgent.mockRejectedValueOnce(launchError);
-    mocks.finalizeExecution.mockImplementationOnce(async () => {
+    mocks.finalizeRun.mockImplementationOnce(async () => {
       order.push('finalize');
       return FINALIZE_RESULT;
     });
@@ -214,7 +210,7 @@ describe('runAgent execution ownership', () => {
     await expect(launch({ kind: 'fresh' })).rejects.toBe(launchError);
 
     expect(order).toEqual(['finalize', 'release']);
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+    expect(mocks.finalizeRun).toHaveBeenCalledWith({
       executionId: EXECUTION_ID,
       outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
@@ -230,7 +226,7 @@ describe('runAgent execution ownership', () => {
 
     await expect(launch({ kind: 'fresh' })).rejects.toBe(launchError);
 
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.finalizeRun).not.toHaveBeenCalled();
     expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(EXECUTION_ID);
   });
 
@@ -244,7 +240,7 @@ describe('runAgent execution ownership', () => {
 
     await expect(launch()).rejects.toBe(launchError);
 
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+    expect(mocks.finalizeRun).toHaveBeenCalledWith({
       executionId: EXECUTION_ID,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',

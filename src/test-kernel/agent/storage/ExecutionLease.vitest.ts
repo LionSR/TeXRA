@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   clearStoreCache,
-  finalizeExecution,
+  finalizeRun,
   getExecutionStore,
 } from '@agent/storage';
 import {
@@ -569,7 +569,7 @@ describe('cross-process execution leases', () => {
     await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
       status: 'owned',
     });
-    await finalizeExecution({
+    await finalizeRun({
       executionId,
       outcome: RUN_OUTCOME.COMPLETED,
       flowRecord: 'preserve',

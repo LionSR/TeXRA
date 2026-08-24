@@ -178,7 +178,7 @@ export async function registerExecution(
 /**
  * Drop the previous run's terminal facts as a persisted execution is admitted
  * for resumption. `meta.outcome` owns "how did this run end" and every reader
- * projects it onto the turn-owned result envelope (`applyExecutionOutcome`), so
+ * projects it onto the turn-owned result envelope (`readResultMeta`), so
  * an execution that resumes while still carrying its interrupted predecessor's
  * outcome relabels every turn the resumed run writes until its next terminal
  * finalize.
@@ -215,35 +215,46 @@ export interface FinalizeExecutionInput {
    * the same locked cycle, so "already settled" cannot go stale between them.
    */
   readonly keepExistingOutcome?: boolean;
+  /**
+   * Where a persistence failure is reported, wrapped in one worded Error.
+   * `finalizeRun` never throws; a caller with its own logging reads the
+   * result instead.
+   */
+  readonly report?: (error: Error) => void;
 }
 
 export type FinalizeExecutionResult =
+  | { readonly ok: true }
   | {
-      readonly status: 'durable';
-      readonly outcomePersisted: true;
-      readonly flowRecord: 'preserved' | 'deleted';
-    }
-  | {
-      readonly status: 'failed';
+      readonly ok: false;
       readonly error: unknown;
-      readonly stage:
-        'terminal-status' | 'terminal-status-and-flow-record-delete';
-      readonly outcomePersisted: false;
-    }
-  | {
-      readonly status: 'failed';
-      readonly error: unknown;
-      readonly stage: 'flow-record-delete';
-      readonly outcomePersisted: true;
+      readonly outcomePersisted: boolean;
     };
 
-/** Persist terminal metadata, then apply the requested flow-record policy. */
-export async function finalizeExecution({
-  executionId,
-  outcome,
-  flowRecord,
-  keepExistingOutcome,
-}: FinalizeExecutionInput): Promise<FinalizeExecutionResult> {
+/**
+ * The one terminal-persistence tail: persist the run's terminal outcome,
+ * then apply the requested flow-record policy. Never throws — every
+ * persistence failure comes back as an `ok: false` result (and through
+ * `report`, when given).
+ */
+export async function finalizeRun(
+  input: FinalizeExecutionInput,
+): Promise<FinalizeExecutionResult> {
+  const { executionId, outcome, flowRecord, keepExistingOutcome } = input;
+  const failed = (
+    error: unknown,
+    outcomePersisted: boolean,
+  ): FinalizeExecutionResult => {
+    input.report?.(
+      new Error(
+        outcomePersisted
+          ? `Persisted ${outcome} status for execution ${executionId}, but failed to delete its flow record: ${toErrorMessage(error)}`
+          : `Failed to persist ${outcome} terminal state for execution ${executionId}: ${toErrorMessage(error)}`,
+        { cause: error },
+      ),
+    );
+    return { ok: false, error, outcomePersisted };
+  };
   try {
     // Persist the canonical terminal outcome — the one terminal write.
     await enqueueMetaUpdate(executionId, (existing) =>
@@ -253,54 +264,31 @@ export async function finalizeExecution({
     );
   } catch (error) {
     // The caller's disposition stands even when the outcome write failed: a
-    // checkpoint is deleted only on request, never to fail closed. A failed
-    // metadata write with a preserved record is reported loudly below.
+    // checkpoint is deleted only on request, never to fail closed.
     if (flowRecord === 'delete') {
       try {
         await getExecutionStore(executionId).delete(flowKey(executionId));
       } catch (deleteError) {
-        return {
-          status: 'failed',
-          error: new AggregateError(
+        return failed(
+          new AggregateError(
             [error, deleteError],
             `Terminal metadata and flow deletion failed for ${executionId}`,
           ),
-          stage: 'terminal-status-and-flow-record-delete',
-          outcomePersisted: false,
-        };
+          false,
+        );
       }
     }
-    return {
-      status: 'failed',
-      error,
-      stage: 'terminal-status',
-      outcomePersisted: false,
-    };
+    return failed(error, false);
   }
 
-  if (flowRecord === 'preserve') {
-    return {
-      status: 'durable',
-      outcomePersisted: true,
-      flowRecord: 'preserved',
-    };
+  if (flowRecord === 'delete') {
+    try {
+      await getExecutionStore(executionId).delete(flowKey(executionId));
+    } catch (error) {
+      return failed(error, true);
+    }
   }
-
-  try {
-    await getExecutionStore(executionId).delete(flowKey(executionId));
-    return {
-      status: 'durable',
-      outcomePersisted: true,
-      flowRecord: 'deleted',
-    };
-  } catch (error) {
-    return {
-      status: 'failed',
-      error,
-      stage: 'flow-record-delete',
-      outcomePersisted: true,
-    };
-  }
+  return { ok: true };
 }
 
 /** Persist an AI-generated session description on an existing execution's metadata. */

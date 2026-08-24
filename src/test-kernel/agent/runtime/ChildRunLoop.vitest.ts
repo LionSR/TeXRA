@@ -13,7 +13,7 @@ import pDefer, { type DeferredPromise } from 'p-defer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  finalizeExecution: vi.fn(),
+  finalizeRun: vi.fn(),
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
@@ -27,14 +27,14 @@ const mocks = vi.hoisted(() => ({
 // the loop writes it best-effort and no assertion here depends on it.
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
-  finalizeExecution: mocks.finalizeExecution,
+  finalizeRun: mocks.finalizeRun,
 }));
-// terminalPersistence deep-imports finalizeExecution from executionLifecycle.
+// The registry deep-imports finalizeRun from executionLifecycle.
 vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('@agent/storage/executionLifecycle')
   >()),
-  finalizeExecution: mocks.finalizeExecution,
+  finalizeRun: mocks.finalizeRun,
 }));
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
@@ -263,11 +263,7 @@ beforeEach(() => {
   vi.spyOn(session, 'releaseExecutionLease').mockImplementation((executionId) =>
     mocks.releaseExecutionLeaseAfterArtifacts(session, executionId),
   );
-  mocks.finalizeExecution.mockResolvedValue({
-    status: 'durable',
-    terminalStatusPersisted: true,
-    flowRecord: 'deleted',
-  });
+  mocks.finalizeRun.mockResolvedValue({ ok: true });
   mocks.persistChildRunReport.mockImplementation(async (_id, msg: string) => {
     return { kind: 'persisted' as const, msg };
   });
@@ -535,7 +531,7 @@ describe('childRunLoop E2E fixtures', () => {
         delivery.expectedGenerationId,
       );
       admissions.push(admission.kind);
-      return admission.kind === 'duplicate' || admission.kind === 'unavailable'
+      return admission.kind === 'duplicate' || admission.kind === 'refused'
         ? { kind: 'dropped' as const }
         : { kind: 'delivered' as const };
     });
@@ -547,7 +543,7 @@ describe('childRunLoop E2E fixtures', () => {
       await expect(
         startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
       ).resolves.toBeUndefined();
-      expect(admissions).toEqual(['live_flow', 'live_flow']);
+      expect(admissions).toEqual(['delivered_live', 'delivered_live']);
       const delivered = session.followUps.queue(parentLease).drainItems();
       expect(delivered.map((item) => item.text)).toEqual([
         'delivered:done',
@@ -653,7 +649,7 @@ describe('childRunLoop E2E fixtures', () => {
         { text: 'keep going', origin: 'user' },
         'live_owner',
       ),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
     expect(callCount()).toBe(1);
 
     deliveryCompleted.resolve({ kind: 'delivered' });
@@ -743,11 +739,10 @@ describe('childRunLoop E2E fixtures', () => {
     // resumable-looking — would never settle or untrack.
     const { childStreamId, executionId } = loopIds('ghost-handle-stop');
     const { strategy, resolveTurn } = createFakeStrategy();
-    mocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
+    mocks.finalizeRun.mockResolvedValueOnce({
+      ok: false,
       error: new Error('metadata disk full'),
-      stage: 'terminal-status',
-      terminalStatusPersisted: false,
+      outcomePersisted: false,
     });
 
     startLoop({ childStreamId, executionId }, strategy);
@@ -785,7 +780,7 @@ describe('childRunLoop E2E fixtures', () => {
     // The loop routes the cancellation through the durable outcome's only
     // writer; the interim result envelope is left exactly as its turn wrote
     // it, and reads project the durable outcome onto it.
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+    expect(mocks.finalizeRun).toHaveBeenCalledWith({
       executionId,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
@@ -882,7 +877,7 @@ describe('childRunLoop E2E fixtures', () => {
         { text: 'resume please', origin: 'user' },
         'live_owner',
       ),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
 
     const resumeFailure = new Error('resume storage unreadable');
     await rejectTurn(2, resumeFailure);
@@ -983,7 +978,7 @@ describe('childRunLoop E2E fixtures', () => {
         message: expect.stringContaining('turn blew up'),
       }),
     });
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith(
+    expect(mocks.finalizeRun).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: RUN_OUTCOME.FAILED }),
     );
   });
@@ -1073,7 +1068,7 @@ describe('childRunLoop E2E fixtures', () => {
         { text: 'go on', origin: 'user' },
         'live_owner',
       ),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
     // Waits for the loop to have actually invoked runTurn (calls increments
     // synchronously inside it) — not for the queue to read empty, which can
     // happen before the loop's own continuation runs (see the "delegate →

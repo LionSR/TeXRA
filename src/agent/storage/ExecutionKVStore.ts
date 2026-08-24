@@ -21,6 +21,7 @@ import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   ExecutionMetaCoreSchema,
   ExecutionMetaSchema,
+  RUN_OUTCOME,
   WorkflowExecutionSnapshotSchema,
   type ExecutionId,
   type ExecutionMeta,
@@ -28,11 +29,7 @@ import {
 import { byString, filterNotNull, normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  applyExecutionOutcome,
-  ResultMetaSchema,
-  type ResultMeta,
-} from './resultMeta';
+import { ResultMetaSchema, type ResultMeta } from './resultMeta';
 import { runWithExecutionLeaseWriteFence } from './executionLease';
 
 // ============================================================================
@@ -330,12 +327,35 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     return entries.filter(filterNotNull);
   }
 
+  /**
+   * The persisted result record with the execution's durable terminal outcome
+   * projected onto it. `meta.outcome` is the only writer of "how did this run
+   * end": the result record is an interim envelope rewritten by every turn,
+   * and a run can end after its last turn wrote one (interrupted between
+   * turns, stopped while suspended, failed by restart repair). A durable
+   * `completed` is never projected: it only ever agrees with the envelope,
+   * whose producer may already have downgraded a nominally completed flow that
+   * reported an application-level error (`buildSubagentFailureResultMeta`).
+   */
   async readResultMeta(): Promise<ResultMeta | null> {
     const [record, meta] = await Promise.all([
       this.readValidated(KEYS.RESULT_META, ResultMetaSchema),
       this.readMeta(),
     ]);
-    return record ? applyExecutionOutcome(record, meta?.outcome) : null;
+    if (!record) return null;
+    const outcome = meta?.outcome;
+    if (
+      record.producer === 'backgroundBash' ||
+      outcome === undefined ||
+      outcome === RUN_OUTCOME.COMPLETED ||
+      record.result.outcome === outcome
+    ) {
+      return record;
+    }
+    return ResultMetaSchema.parse({
+      ...record,
+      result: { ...record.result, outcome },
+    });
   }
 
   async readTurnState(): Promise<ChildTurnState | null> {

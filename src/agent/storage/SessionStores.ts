@@ -8,6 +8,7 @@ import {
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
   type ExecutionStreamReferenceListing,
+  readExecutionStreamIndex,
 } from '@agent/storage/executionListing';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -437,24 +438,34 @@ export class SessionStores {
   }
 
   /**
-   * The stream→execution reverse edge. Live deletion paths resolve the current
-   * execution from the resident snapshot record first: `run.start` updates the
-   * in-memory record and the summary mirror synchronously, while the persisted
-   * sidecar FK is written asynchronously and may still name the previous
-   * execution until the run-end flush. For streams with no resident record the
-   * persisted sidecar FK is authoritative (settled streams, #10518), then the
-   * always-resident summary mirror for legacy streams without a persisted FK.
-   * A stream with neither has no owned execution — name resemblance is never
-   * ownership, so no suffix derivation exists.
+   * The stream→execution edge. Live deletion paths resolve the current
+   * execution from the resident snapshot record first: `run.start` updates
+   * the in-memory record synchronously. A stream with no resident record
+   * resolves through the authored `meta.streamId` index; one with neither has
+   * no owned execution — name resemblance is never ownership, so no suffix
+   * derivation exists.
+   *
+   * Absence from the index is proof of that only while every row was
+   * readable. An unreadable execution still holds a `meta.streamId` that may
+   * name this stream, so ownership is unknown and this fails closed: the
+   * caller retains the stream instead of deleting it without its lane.
    */
   private async executionIdForStream(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
-    return (
-      this.snapshots.getRunMetadata(stream, { quiet: true }).executionId ??
-      (await this.snapshots.readPersistedExecutionId(stream)) ??
-      this.streamLogs.getSummaryMeta(stream)?.executionId
-    );
+    const resident = this.snapshots.getRunMetadata(stream, {
+      quiet: true,
+    }).executionId;
+    if (resident) return resident;
+    const { byStream, unreadable } = await readExecutionStreamIndex();
+    const indexed = byStream.get(stream);
+    if (indexed) return indexed;
+    if (unreadable.size > 0) {
+      throw new Error(
+        `${unreadable.size} execution record(s) could not be read, so nothing proves stream ${stream} unowned`,
+      );
+    }
+    return undefined;
   }
 
   private async reconcileStagedDeletions(
@@ -502,33 +513,32 @@ export class SessionStores {
     const canonicalStreams = new Set(this.streamLogs.keys());
     const streamIds = unique([...snapshotStreams, ...canonicalStreams]);
     const executionIdsByStream = new Map(this.snapshots.getExecutionIdMap());
-    const failed = new Set<StreamTabId>();
-    const retainUnreadable = (stream: StreamTabId, error: unknown): void => {
-      // Per-stream isolation: one unreadable ownership record retains that
-      // stream instead of failing the whole bulk deletion before it starts.
-      log.warn(
-        `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
-        { data: error },
-      );
-      failed.add(stream);
-    };
+    const { byStream, unreadable } = await readExecutionStreamIndex();
     for (const stream of snapshotStreams) {
       if (executionIdsByStream.has(stream)) continue;
-      try {
-        const executionId =
-          await this.snapshots.readPersistedExecutionId(stream);
-        if (executionId) executionIdsByStream.set(stream, executionId);
-      } catch (error) {
-        retainUnreadable(stream, error);
-      }
+      const executionId = byStream.get(stream);
+      if (executionId) executionIdsByStream.set(stream, executionId);
     }
 
+    const active = new Set<StreamTabId>();
+    const deleted = new Set<StreamTabId>();
+    const failed = new Set<StreamTabId>();
     const streamsByExecution = new Map<ExecutionId, StreamTabId[]>();
     const streamsWithoutExecution: StreamTabId[] = [];
     for (const stream of streamIds) {
-      if (failed.has(stream)) continue;
       const executionId = executionIdsByStream.get(stream);
       if (!executionId) {
+        if (unreadable.size > 0) {
+          // Per-stream isolation: one unreadable ownership record retains that
+          // stream instead of failing the whole bulk deletion. Its
+          // `meta.streamId` may name this stream, so deleting the sidecars
+          // would orphan an execution directory nothing points at any more.
+          log.warn(
+            `Stream ${stream} was retained because ${unreadable.size} execution record(s) could not be read, so nothing proves it unowned`,
+          );
+          failed.add(stream);
+          continue;
+        }
         streamsWithoutExecution.push(stream);
         continue;
       }
@@ -536,8 +546,6 @@ export class SessionStores {
       streams.push(stream);
       streamsByExecution.set(executionId, streams);
     }
-    const active = new Set<StreamTabId>();
-    const deleted = new Set<StreamTabId>();
     await Promise.all(
       streamsWithoutExecution.map(async (stream) => {
         const shouldDelete = shouldDeleteStream
@@ -766,11 +774,11 @@ export class SessionStores {
     const sweptStreams: StreamTabId[] = [];
     const sweptExecutionIds: ExecutionId[] = [];
 
+    const { byStream, unreadable } = await readExecutionStreamIndex();
     await Promise.all(
       orphanedStreams.map(async (stream) => {
         try {
-          const executionId =
-            await this.snapshots.readPersistedExecutionId(stream);
+          const executionId = byStream.get(stream);
           if (executionId) {
             const outcome = await this.deleteExecutionWithStreamState(
               executionId,
@@ -797,6 +805,16 @@ export class SessionStores {
               sweptExecutionIds.push(executionId);
             }
           } else {
+            if (unreadable.size > 0) {
+              // Absence from the index proves this stream unowned only when
+              // every execution was readable. One unreadable record makes it
+              // unknown state, and unknown state is never swept, matching
+              // `sweepOrphanedExecutions`.
+              log.warn(
+                `Retaining orphaned stream ${stream}: ${unreadable.size} execution record(s) could not be read, so its ownership is unknown.`,
+              );
+              return;
+            }
             await this.deleteStreamSidecars(stream);
           }
           sweptStreams.push(stream);

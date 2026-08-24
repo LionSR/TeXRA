@@ -9,8 +9,7 @@
  * - Workflow: agentConfig + executionId + transcript-format key
  */
 
-import { deriveResumability, type ResumabilityDecision } from '@agent/storage';
-import { RESUMABILITY_CAUSE } from '@agent/storage/resumability';
+import { deriveResumability } from '@agent/storage';
 import type { FlowRecord } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
@@ -50,30 +49,6 @@ interface SessionResumeRetrievalOptions {
   readonly parentStreamId?: StreamTabId | undefined;
 }
 
-function throwIfResumeStorageUnreadable(
-  resumability: ResumabilityDecision,
-): void {
-  if (resumability.resumable) return;
-  switch (resumability.cause) {
-    case RESUMABILITY_CAUSE.UNREADABLE_FLOW:
-    case RESUMABILITY_CAUSE.UNREADABLE_META:
-    case RESUMABILITY_CAUSE.INVALID_META:
-      throw new Error(`Unable to read resume storage: ${resumability.cause}`);
-    // A present-but-malformed checkpoint is corruption, not an absent run:
-    // say so rather than reporting "nothing to resume".
-    case RESUMABILITY_CAUSE.INVALID_FLOW:
-      throw new Error(
-        `The checkpoint could not be read: ${resumability.cause}`,
-      );
-    // Nothing to resume, but the storage itself read fine.
-    case RESUMABILITY_CAUSE.MISSING_FLOW:
-      return;
-    default:
-      resumability satisfies never;
-      return;
-  }
-}
-
 /** Agent-type label used in resume-retrieval warnings and error messages. */
 type ResumeAgentLabel = 'tool-use' | 'workflow';
 
@@ -87,14 +62,16 @@ async function probeResumableFlowRecord(
   agentType: ResumeAgentLabel,
 ): Promise<FlowRecord | null> {
   const resumability = await deriveResumability(executionId);
-  if (!resumability.resumable) {
-    throwIfResumeStorageUnreadable(resumability);
-    logger.warn('Execution is not resumable', {
-      data: { agentType, executionId, cause: resumability.cause },
-    });
-    return null;
+  if (resumability.kind === 'checkpoint') return resumability.flowRecord;
+  // Unreadable storage is a failure to report, never "nothing to resume":
+  // the caller's catch re-wraps it so hosts can word the difference.
+  if (resumability.kind === 'unreadable') {
+    throw new Error(`Unable to read resume storage: ${resumability.cause}`);
   }
-  return resumability.flowRecord;
+  logger.warn('Execution is not resumable', {
+    data: { agentType, executionId },
+  });
+  return null;
 }
 
 /**
