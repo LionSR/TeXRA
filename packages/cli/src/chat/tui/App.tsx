@@ -517,6 +517,11 @@ export function App(props: AppProps): React.JSX.Element {
         return (
           <WorkPlanReader
             availableRows={availableRows}
+            authority={
+              foregroundReader.loading === true
+                ? undefined
+                : foregroundReader.authority
+            }
             loading={foregroundReader.loading === true}
             onClose={closeForegroundReader}
             streamId={foregroundReader.streamId}

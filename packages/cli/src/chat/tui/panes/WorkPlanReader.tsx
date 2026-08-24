@@ -22,6 +22,7 @@ import {
   type TodoItem,
   type TodoStatus,
 } from '@shared/schemas';
+import type { StreamArtifactAuthority } from '@transcript';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
@@ -45,6 +46,7 @@ function wrappedRows(text: string, width: number): number {
   return wrapAnsiToWidth(text, Math.max(1, width)).split('\n').length;
 }
 
+/** Compute a frame that fits the terminal. `bodyRows` may be zero. */
 export function workPlanReaderLayout({
   availableRows,
   contentWidth,
@@ -63,7 +65,7 @@ export function workPlanReaderLayout({
 } {
   const rows = Math.max(1, Math.floor(availableRows));
   const width = Math.max(1, Math.floor(contentWidth));
-  if (rows < 3) {
+  if (rows < 4) {
     return {
       bodyRows: rows - 1,
       showBorder: false,
@@ -97,25 +99,36 @@ export function workPlanReaderTitle(label: string | undefined): string {
 export function formatWorkPlanReaderText(
   plan: Plan | null,
   todos: readonly TodoItem[],
+  authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>,
 ): string {
-  const objective = plan?.objective ?? '(no objective)';
-  const todoLines = todos.length
-    ? todos.map(
-        (todo, index) =>
-          `${index + 1}. [${TODO_STATUS_LABELS[todo.status]}] ${todo.content}`,
-      )
-    : ['(no todos)'];
+  const objective =
+    authority?.plan === false
+      ? '(objective unavailable)'
+      : (plan?.objective ?? '(no objective)');
+  let todoLines: string[];
+  if (authority?.todos === false) {
+    todoLines = ['(todos unavailable)'];
+  } else if (todos.length === 0) {
+    todoLines = ['(no todos)'];
+  } else {
+    todoLines = todos.map(
+      (todo, index) =>
+        `${index + 1}. [${TODO_STATUS_LABELS[todo.status]}] ${todo.content}`,
+    );
+  }
   return ['Objective', objective, '', 'Todos', ...todoLines].join('\n');
 }
 
 export function WorkPlanReader({
   availableRows,
+  authority,
   loading = false,
   onClose,
   streamId,
   title,
 }: {
   readonly availableRows: number;
+  readonly authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>;
   readonly loading?: boolean;
   readonly onClose: () => void;
   readonly streamId: StreamTabId;
@@ -137,7 +150,11 @@ export function WorkPlanReader({
   });
   const text = loading
     ? WORK_PLAN_LOADING_TEXT
-    : formatWorkPlanReaderText(workPlan?.plan ?? null, workPlan?.todos ?? []);
+    : formatWorkPlanReaderText(
+        workPlan?.plan ?? null,
+        workPlan?.todos ?? [],
+        authority,
+      );
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) onClose();

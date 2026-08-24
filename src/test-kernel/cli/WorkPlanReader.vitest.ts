@@ -50,7 +50,7 @@ describe('WorkPlanReader display model', () => {
     );
   });
 
-  it('keeps plan-only and todo-only readers explicit', () => {
+  it('distinguishes absent work-plan fields from fields that were not loaded', () => {
     expect(formatWorkPlanReaderText({ objective: 'Plan only.' }, [])).toContain(
       '(no todos)',
     );
@@ -63,6 +63,15 @@ describe('WorkPlanReader display model', () => {
         },
       ]),
     ).toContain('(no objective)');
+    expect(
+      formatWorkPlanReaderText({ objective: 'Plan only.' }, [], {
+        plan: true,
+        todos: false,
+      }),
+    ).toContain('(todos unavailable)');
+    expect(
+      formatWorkPlanReaderText(null, [], { plan: false, todos: true }),
+    ).toContain('(objective unavailable)');
   });
 
   it('uses a concise title in narrow or unlabeled contexts', () => {
@@ -103,6 +112,7 @@ describe('WorkPlanReader display model', () => {
   it.each([
     { availableRows: 1, bodyRows: 0 },
     { availableRows: 2, bodyRows: 1 },
+    { availableRows: 3, bodyRows: 2 },
   ])(
     'uses a borderless title and $bodyRows body rows in a $availableRows-row viewport',
     ({ availableRows, bodyRows }) => {

@@ -2569,43 +2569,65 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('reports and retains authoritative work-plan state after preload fails', async () => {
+    const previous = await storeWithPersistedPlan();
+    previous.evictAll();
+    const readError = new Error('snapshot disk is unreadable');
+    const read = StorageFS.read.bind(StorageFS);
+    const readStarted = pDefer<void>();
+    const failRead = pDefer<void>();
+    let shouldFailRead = true;
+    const readSpy = vi
+      .spyOn(StorageFS, 'read')
+      .mockImplementation(async (...args) => {
+        if (shouldFailRead && args[0].startsWith(streamDataDir(STREAM))) {
+          shouldFailRead = false;
+          readStarted.resolve();
+          await failRead.promise;
+          throw readError;
+        }
+        return read(...args);
+      });
     const store = new StreamSnapshotStore();
-    await store.load([]);
-    const writeSpy = vi
-      .spyOn(StorageFS, 'writeAtomic')
-      .mockRejectedValue(new Error('snapshot disk is full'));
+    const output = outputFile('accepted-live.tex', 1);
 
-    snapshotFacts(store).setPlan(STREAM, PLAN);
-    await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
     const refresh = store.preload([STREAM], {
       reportArtifactAuthority: true,
     });
+    await readStarted.promise;
+    snapshotFacts(store).setPlan(STREAM, PLAN);
     snapshotFacts(store).setTodos(STREAM, [TODO]);
+    snapshotFacts(store).addOutputFiles(STREAM, { 1: [output] });
     expect(store.getWorkPlan(STREAM)).toMatchObject({
       plan: PLAN,
       todos: [TODO],
     });
+    failRead.resolve();
     const error = await refresh.catch((cause) => cause);
     expect(error).toBeInstanceOf(StreamSnapshotPreloadError);
     expect(error).toMatchObject({
-      message: expect.stringContaining('Sidecar writes remain dirty'),
+      message: expect.stringContaining('snapshot disk is unreadable'),
       streamId: STREAM,
       authoritativeFields: {
-        outputFiles: true,
-        missingOutputs: true,
-        compileFailures: true,
-        usage: true,
+        outputFiles: false,
+        missingOutputs: false,
+        compileFailures: false,
+        usage: false,
         todos: true,
         plan: true,
       },
     });
 
-    writeSpy.mockRestore();
+    readSpy.mockRestore();
     await store.flush();
 
     expect(await reloadWorkPlan()).toMatchObject({
       plan: PLAN,
       todos: [TODO],
+    });
+    expect(
+      (await readStreamFile(STREAM, 'outputFiles.json')) as object,
+    ).toEqual({
+      1: [output],
     });
   });
 

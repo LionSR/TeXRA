@@ -556,7 +556,11 @@ describe('handleTuiSlashCommand', () => {
       );
       await dispatched;
 
-      expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
+      expect(foregroundReader.get()).toEqual({
+        kind: 'workPlan',
+        streamId,
+        authority: { plan: authority.plan, todos: authority.todos },
+      });
       expect(transientNotice.get()).toBeUndefined();
     },
   );

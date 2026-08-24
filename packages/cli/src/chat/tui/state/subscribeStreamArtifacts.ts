@@ -159,12 +159,7 @@ function streamCanReceiveArtifacts(
   );
 }
 
-/**
- * Preload one stream from the canonical artifact accumulator and invalidate
- * the artifact projection. Callers own request currentness: focus hydration
- * invalidates on a focus change, while `/plan` keeps the stream id it
- * captured before awaiting.
- */
+/** Complete, partially authoritative, and unusable preload outcomes. */
 type StreamArtifactHydrationOutcome =
   | { readonly kind: 'complete' }
   | {
@@ -174,6 +169,12 @@ type StreamArtifactHydrationOutcome =
     }
   | { readonly kind: 'failed'; readonly error: unknown };
 
+/**
+ * Preload one stream from the canonical artifact accumulator and invalidate
+ * the artifact projection. Callers own request currentness and error
+ * presentation. `undefined` means the request was superseded; a partial
+ * outcome is usable only for fields selected by `authoritativeFields`.
+ */
 export async function hydrateStreamArtifacts(
   store: StreamArtifactReader,
   streamId: StreamTabId,

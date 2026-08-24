@@ -348,10 +348,12 @@ function artifactAuthorityAfterPreloadFailure(
 ): StreamArtifactAuthority {
   if (baseline !== 'unknown') return ALL_STREAM_ARTIFACTS_AUTHORITATIVE;
   return {
-    outputFiles: overlays.outputFiles !== undefined,
-    missingOutputs: overlays.missingOutputs !== undefined,
-    compileFailures: overlays.compileFailures !== undefined,
-    usage: overlays.usage !== undefined,
+    // These four overlays are deltas over an unread disk baseline, so they do
+    // not establish the complete field value. Plan and todos are replacements.
+    outputFiles: false,
+    missingOutputs: false,
+    compileFailures: false,
+    usage: false,
     todos: overlays.workPlan?.todos !== undefined,
     plan: overlays.workPlan?.plan !== undefined,
   };
@@ -1891,12 +1893,7 @@ export class StreamSnapshotStore {
       });
       return;
     }
-    await pMap(
-      streamIds,
-      (streamId) =>
-        this.refreshSeed(streamId, options?.reportArtifactAuthority),
-      { concurrency: SEED_IO_CONCURRENCY },
-    );
+    await this.seedStreams(streamIds, options?.reportArtifactAuthority);
   }
 
   private async seedUsageOnly(streamId: StreamTabId): Promise<void> {
@@ -1926,10 +1923,15 @@ export class StreamSnapshotStore {
     current.usageProvenance = true;
   }
 
-  private async seedStreams(streamIds: readonly StreamTabId[]): Promise<void> {
-    await pMap(streamIds, (streamId) => this.refreshSeed(streamId), {
-      concurrency: SEED_IO_CONCURRENCY,
-    });
+  private async seedStreams(
+    streamIds: readonly StreamTabId[],
+    reportArtifactAuthority = false,
+  ): Promise<void> {
+    await pMap(
+      streamIds,
+      (streamId) => this.refreshSeed(streamId, reportArtifactAuthority),
+      { concurrency: SEED_IO_CONCURRENCY },
+    );
   }
 
   private evictStreamsExcept(keep: ReadonlySet<StreamTabId>): void {
@@ -1967,17 +1969,18 @@ export class StreamSnapshotStore {
           }
         },
         (error: unknown) => {
-          const authoritativeFields = reportArtifactAuthority
-            ? artifactAuthorityAfterPreloadFailure(
-                refreshBaseline,
-                record.overlays,
-              )
-            : undefined;
           const current = this.records.get(stream);
+          let authoritativeFields: StreamArtifactAuthority | undefined;
           if (
             current?.seedRefreshGeneration === refreshGeneration &&
             this.streamVersion(stream) === version
           ) {
+            if (reportArtifactAuthority) {
+              authoritativeFields = artifactAuthorityAfterPreloadFailure(
+                refreshBaseline,
+                current.overlays,
+              );
+            }
             current.diskState = refreshBaseline;
             current.seedRefreshBaseline = undefined;
             if (refreshBaseline !== 'unknown') {

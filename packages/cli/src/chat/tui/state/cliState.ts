@@ -24,6 +24,7 @@ import type {
   CompactionActivityBlock,
   CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
+import type { StreamArtifactAuthority } from '@transcript';
 import { isChildStreamRemoved } from './childExecutions';
 
 // ---------------------------------------------------------------------------
@@ -518,6 +519,7 @@ type ForegroundReaderTarget =
       readonly kind: 'workPlan';
       readonly streamId: StreamTabId;
       readonly loading?: false;
+      readonly authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>;
     }
   | {
       readonly kind: 'workPlan';
@@ -565,9 +567,14 @@ export function workPlanReaderRequestIsCurrent(
 /** Resolve the loading reader without allowing an older request to replace it. */
 export function finishWorkPlanReaderRequest(
   request: WorkPlanReaderRequest,
+  authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>,
 ): boolean {
   if (!workPlanReaderRequestIsCurrent(request)) return false;
-  FOREGROUND_READER.set({ kind: 'workPlan', streamId: request.streamId });
+  FOREGROUND_READER.set({
+    kind: 'workPlan',
+    streamId: request.streamId,
+    ...(authority ? { authority } : {}),
+  });
   return true;
 }
 

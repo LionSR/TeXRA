@@ -79,26 +79,26 @@ export async function showCliWorkPlan(
     return;
   }
   const workPlan = snapshots.getWorkPlan(streamId);
-  if (outcome.kind === 'complete') {
-    if (workPlan.plan !== null || workPlan.todos.length > 0) {
-      finishWorkPlanReaderRequest(request);
-      return;
-    }
-    if (!cancelWorkPlanReaderRequest(request)) return;
-    setTransientNotice('The focused session has no work plan.');
-    return;
-  }
-  const { plan: planIsAuthoritative, todos: todosAreAuthoritative } =
-    outcome.authoritativeFields;
+  const authority = {
+    plan: outcome.kind === 'complete' || outcome.authoritativeFields.plan,
+    todos: outcome.kind === 'complete' || outcome.authoritativeFields.todos,
+  };
+  const { plan: planIsAuthoritative, todos: todosAreAuthoritative } = authority;
   if (
     (planIsAuthoritative && workPlan.plan !== null) ||
     (todosAreAuthoritative && workPlan.todos.length > 0)
   ) {
-    finishWorkPlanReaderRequest(request);
+    finishWorkPlanReaderRequest(
+      request,
+      outcome.kind === 'partial' ? authority : undefined,
+    );
     return;
   }
   if (!cancelWorkPlanReaderRequest(request)) return;
-  if (planIsAuthoritative && todosAreAuthoritative) {
+  if (
+    outcome.kind === 'complete' ||
+    (planIsAuthoritative && todosAreAuthoritative)
+  ) {
     setTransientNotice('The focused session has no work plan.');
     return;
   }
