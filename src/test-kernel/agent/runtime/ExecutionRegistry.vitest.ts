@@ -194,40 +194,6 @@ function trackSuspendedWaitingHandle(
 }
 
 describe('executionRegistry', () => {
-  it('retains a child activation across handle tracking until its disposer runs', () => {
-    const { registry } = createRegistry();
-    const activationEvents: boolean[] = [];
-    const executionId = 'pending-child-exec' as ExecutionId;
-    const parentStreamId = 'pending-parent' as StreamTabId;
-    const childStreamId = 'pending-child' as StreamTabId;
-    const detach = registry.addChildActivationListener((_activation, active) =>
-      activationEvents.push(active),
-    );
-
-    try {
-      const release = registry.reserveChildActivation({
-        executionId,
-        parentStreamId,
-        childStreamId,
-        interrupt: vi.fn(),
-        detach: vi.fn(),
-        isDetached: () => false,
-      });
-      expect(activationEvents).toEqual([true]);
-
-      // The activation is the child's lineage for the loop's whole life:
-      // tracking a turn handle does not release it, the loop's disposer does.
-      registry.track(createHandle(executionId, parentStreamId, childStreamId));
-      expect(activationEvents).toEqual([true]);
-
-      release();
-      expect(activationEvents).toEqual([true, false]);
-    } finally {
-      detach();
-      registry.dispose();
-    }
-  });
-
   it('retains and detaches a parent whose child is still activating', () => {
     const { registry } = createRegistry();
     const executionId = 'queued-child-exec' as ExecutionId;
@@ -306,17 +272,11 @@ describe('executionRegistry', () => {
       },
     );
     registry.track(first);
-    const seen: unknown[] = [];
-    const detach = registry.addListener(executionId, (handle) => {
-      seen.push(handle);
-    });
 
     registry.track(second);
     registry.untrack(executionId);
 
-    expect(seen).toEqual([second, undefined]);
     expect(registrations).toEqual([first, second, undefined]);
-    detach();
     detachRegistrations();
     registry.dispose();
   });

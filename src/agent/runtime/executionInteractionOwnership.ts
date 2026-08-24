@@ -9,6 +9,13 @@
  * decided from registry facts (handle registration, child-activation
  * reservation, parent/child stream lineage), so it lives here rather than in
  * each host. Design note: `docs/design/2026-08-01-execution-interaction-ownership.md`.
+ *
+ * The two registry facts arrive by different routes, and deliberately so.
+ * Handle registration is a genuine multi-consumer registry channel (the
+ * desktop window title reads it too), so scopes subscribe to it. Child
+ * activation has exactly one consumer — this index — so the registry calls
+ * {@link ExecutionInteractionOwnership.observeChildActivation} directly rather
+ * than maintaining a listener set for a single subscriber.
  */
 
 import { DisposableStore } from '@platform/disposable';
@@ -20,9 +27,9 @@ import type {
 } from './executionRegistry';
 
 /**
- * One owner generation. The scope object is its own owner token, so
- * {@link ExecutionInteractionOwnership.ownerOf} can answer with the scope
- * itself instead of a parallel identity.
+ * One owner generation. The scope object is its own owner token, so the
+ * ownership maps below key on the scope itself rather than on a parallel
+ * identity.
  */
 interface ExecutionInteractionScope {
   /**
@@ -63,11 +70,42 @@ export class ExecutionInteractionOwnership {
     ExecutionInteractionScope
   >();
 
+  /** One per open scope, added on open and dropped on release. */
+  private readonly activationObservers = new Set<
+    (activation: ChildExecutionActivation, active: boolean) => void
+  >();
+
   constructor(private readonly registry: ExecutionRegistry) {}
 
-  /** The generation owning `executionId`, or undefined when it is unclaimed. */
-  ownerOf(executionId: string): ExecutionInteractionScope | undefined {
-    return this.executionOwners.get(executionId);
+  /**
+   * Apply one child-activation reservation or release to every open scope.
+   * Called by {@link ExecutionRegistry} as it reserves, releases, and (on
+   * disposal) drops activations.
+   */
+  observeChildActivation(
+    activation: ChildExecutionActivation,
+    active: boolean,
+  ): void {
+    for (const observe of [...this.activationObservers]) {
+      observe(activation, active);
+    }
+  }
+
+  /**
+   * Drop every open scope's activation observer, so none survives the
+   * registry's disposal. The registry calls this beside the `clear()` of its
+   * own listener channels, which is where that invariant used to be readable
+   * for this one before the registry stopped holding it.
+   *
+   * The owner maps need no clear: both routes that read them are severed here
+   * (the registration listeners are cleared by the same `dispose()`, and
+   * `claim()` resolves through a `handles` map that is already empty), and
+   * they die with the registry that owns this index. Scopes stay releasable
+   * on purpose — a later `release()` still fires its `onRelease`, which is how
+   * a host detaches the interaction surfaces it attached.
+   */
+  dispose(): void {
+    this.activationObservers.clear();
   }
 
   /** Start an owner generation. `onRelease` fires exactly once, at release. */
@@ -164,9 +202,8 @@ export class ExecutionInteractionOwnership {
     };
 
     disposables.add(this.registry.addRegistrationListener(observeRegistration));
-    disposables.add(
-      this.registry.addChildActivationListener(observeActivation),
-    );
+    this.activationObservers.add(observeActivation);
+    disposables.add(() => this.activationObservers.delete(observeActivation));
     return scope;
   }
 }
