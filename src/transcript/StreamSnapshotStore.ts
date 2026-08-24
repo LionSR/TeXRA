@@ -1974,7 +1974,9 @@ export class StreamSnapshotStore {
           const authoritativeFields =
             reportArtifactAuthority && current && versionIsCurrent
               ? artifactAuthorityAfterPreloadFailure(
-                  refreshBaseline,
+                  refreshBaseline === 'unknown'
+                    ? current.diskState
+                    : refreshBaseline,
                   current.overlays,
                 )
               : undefined;
