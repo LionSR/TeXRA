@@ -40,7 +40,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 
 ## 4. Configuration, storage, files
 
-- **Inline config strings** sprinkled across modules → use the typed accessors (`platform().config` in agnostic code; `getConfig`/`getValidatedConfig` from `@utils/config/configUtils`, or `readPlatformSetting`/`writePlatformSetting` from `@utils/config/platformSettings` for catalog-modeled settings, in VS Code-allowed code). Verify keys exist in `package.json`'s `contributes.configuration`.
+- **Inline config strings** sprinkled across modules → use the typed accessors: `platform().config`/`getConfig`/`getValidatedConfig` (from `@utils/config/configUtils`) for a raw path, or `readPlatformSetting`/`writePlatformSetting` (from `@utils/config/platformSettings`) for a setting modeled in the Zod catalog — the catalog helpers are used directly from host-neutral code too, not only VS Code-allowed code. Verify a catalog key exists via `settingByKey` against `coreSettings.ts`/`stateSettings.ts`, not `package.json`'s `contributes.configuration` — the extension manifest intentionally contributes no configuration block (see CLAUDE.md's "Layout" section and `scripts/sync-package-contributes.mjs`).
 - **Manual workspace path joining** → `WorkspaceFS.getPath()` and the helpers in `@utils/files`.
 - **Pasted-image paths** generated/resolved manually → `pastedImageUtils`.
 - **Long-running writers without retention** → `RelativeFS.cleanupOldFiles` (or equivalent).
