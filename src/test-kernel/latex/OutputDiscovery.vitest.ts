@@ -10,7 +10,7 @@ import type {
 import * as logger from '@logger/logUtils';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { installPlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 // `discoverLatestExecutionOutputs` matches a run by agent/model/input and then
 // reads its per-round outputs. Headless `texra run` executions persist those
@@ -73,7 +73,7 @@ const MATCHING_QUERY = {
 } as const;
 
 describe('discoverLatestExecutionOutputs', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -83,7 +83,6 @@ describe('discoverLatestExecutionOutputs', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('falls back to an on-disk run-dir scan when the stream-tab snapshot is empty', async () => {
@@ -154,7 +153,7 @@ describe('discoverLatestExecutionOutputs', () => {
 });
 
 describe('outputDiscovery logger seam', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -166,7 +165,6 @@ describe('outputDiscovery logger seam', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   // #10634: a failed persisted-state read degrades the invocation to the

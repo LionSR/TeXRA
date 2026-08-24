@@ -3,15 +3,15 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
 import { scanDirectory } from '@agent/index/agentYamlScanner';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { installPlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 /** Create a temp agent directory holding the given YAML files, given as lines. */
 async function createAgentDir(
@@ -36,10 +36,6 @@ function toolUseAgent(name: string, systemPrompt: string): string[] {
 
 describe('agent YAML scanner', () => {
   beforeAll(() => installPlatform({}, { fs: nodeFilesystem }));
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
 
   it('derives workflow round counts from inherited settings and prompts', async () => {
     const agentDir = await createAgentDir({

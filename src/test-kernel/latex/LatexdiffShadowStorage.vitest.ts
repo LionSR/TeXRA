@@ -10,7 +10,7 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -32,7 +32,7 @@ vi.mock('@utils/config/configUtils', () => ({
 }));
 
 describe('LaTeXdiffService shadow output', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
 
   function installNodeBackedPlatform(
     workspaceDir: string,
@@ -93,7 +93,6 @@ describe('LaTeXdiffService shadow output', () => {
 
   afterEach(async () => {
     vi.clearAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('writes generated diff sources to the requested output directory', async () => {

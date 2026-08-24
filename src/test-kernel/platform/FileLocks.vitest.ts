@@ -2,19 +2,15 @@ import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setImmediate, setTimeout as sleep } from 'node:timers/promises';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   createNodeFileLocks,
   nodeFileLocks,
 } from '@platform/defaults/fileLocks';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
-const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await cleanupTempDirs(tempDirs);
-});
+const tempDirs = useTempDirs();
 
 describe('nodeFileLocks', () => {
   it('refreshes a lock while a long critical section is still held', async () => {

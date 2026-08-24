@@ -1,23 +1,16 @@
 // Node imports
-import {
-  access,
-  mkdtemp,
-  mkdir,
-  readFile,
-  rm,
-  writeFile,
-} from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - extension
 import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 
 // Local imports - platform
 import type { StorageProvider } from '@platform/interfaces';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 function createStorage(
   workspaceStorage: string,
@@ -30,19 +23,15 @@ function createStorage(
 }
 
 describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
+  const tempDirs = useTempDirs();
   let tempDir: string | undefined;
-
-  afterEach(async () => {
-    if (tempDir) await rm(tempDir, { recursive: true, force: true });
-    tempDir = undefined;
-  });
 
   async function createTempLayout(): Promise<{
     workspace: string;
     internalStorage: string;
     globalStorage: string;
   }> {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-extension-config-'));
+    tempDir = await makeTempDir('texra-extension-config-', tempDirs);
     const workspace = join(tempDir, 'project');
     const internalStorage = join(tempDir, 'internal');
     const globalStorage = join(tempDir, 'global');
@@ -94,7 +83,7 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
   });
 
   it('rebinds reads and writes when the workspace folder changes', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-extension-config-'));
+    tempDir = await makeTempDir('texra-extension-config-', tempDirs);
     const firstWorkspace = join(tempDir, 'first');
     const secondWorkspace = join(tempDir, 'second');
     const firstConfig = join(firstWorkspace, '.texra', 'config.json');

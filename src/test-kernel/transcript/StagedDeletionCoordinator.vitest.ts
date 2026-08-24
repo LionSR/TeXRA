@@ -2,13 +2,13 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { StreamTabId } from '@shared/schemas';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -29,7 +29,7 @@ import { StorageFS } from '@utils/files/storageFS';
  * StreamSnapshotStore.vitest.ts; these cases pin the port itself.
  */
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 const STREAM = 'polish@gpt#abc123def' as StreamTabId;
 const PLAN_KEY = 'workPlan';
 
@@ -103,10 +103,6 @@ describe('StagedDeletionCoordinator', () => {
   setupPlatform(() =>
     createTempDirPlatform('texra-staged-deletion-', tempDirs),
   );
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
 
   it('cancels and invalidates queued writes before the staging rename', async () => {
     const { calls, coordinator } = setupCoordinator();

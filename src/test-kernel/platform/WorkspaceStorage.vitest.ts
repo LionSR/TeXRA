@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - platform
 import { WORKSPACE_SIDECAR_FILE } from '@common/storage/storageLayout';
@@ -21,7 +21,7 @@ import {
   workspaceStorageId,
 } from '@platform/defaults/workspaceStorage';
 import { pathExists } from '@test/support/fsTestUtils';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 async function readWorkspaceMarker(
   storagePath: string,
@@ -34,15 +34,11 @@ async function readWorkspaceMarker(
 }
 
 describe('workspace storage defaults', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
 
   function makeStorageRoot(): Promise<string> {
     return makeTempDir('texra-workspace-storage-', tempDirs);
   }
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
 
   it('computes a stable workspace storage identity', () => {
     expect(workspaceStorageId('/workspace/a')).toMatch(/^a-[0-9a-f]{8}$/);

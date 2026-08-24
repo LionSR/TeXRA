@@ -7,13 +7,13 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 // Third-party imports
-import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 // Local imports
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { executeCommand, executeCommandSync } from '@utils/system/execUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 import { BinaryResolverService } from '@utils/system/binaryResolver';
@@ -67,15 +67,11 @@ type ExecuteCommandOptions = NonNullable<Parameters<typeof executeCommand>[1]>;
 const SLEEPER_SCRIPT = 'sleep 60 & echo $! > "$PID_FILE"; wait';
 
 describe('executeCommand', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
 
   // executeCommand resolves its cwd from the workspace; point the fake
   // platform at a directory that exists on disk so spawning succeeds.
   setupPlatform({ workspacePath: process.cwd() });
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
 
   it('exposes only text encodings and non-transform output modes', () => {
     expectTypeOf<ExecuteCommandOptions['encoding']>().toEqualTypeOf<
@@ -338,7 +334,7 @@ describe('executeCommand', () => {
 // ---------------------------------------------------------------------------
 
 describe('executeCommandSync', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
 
   setupPlatform(async () => {
     const storageRoot = await makeTempDir('texra-exec-utils-', tempDirs);
@@ -350,10 +346,6 @@ describe('executeCommandSync', () => {
       },
       { fs: nodeFilesystem },
     );
-  });
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
   });
 
   it('returns normalized stdout for successful commands', () => {
@@ -394,11 +386,7 @@ describe('executeCommandSync', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildWorkspaceInfoBlock', () => {
-  const tempDirs: string[] = [];
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
+  const tempDirs = useTempDirs();
 
   it('tells agents when the workspace is not a git repository', async () => {
     const workspace = await makeTempDir('texra-workspace-info-', tempDirs);
