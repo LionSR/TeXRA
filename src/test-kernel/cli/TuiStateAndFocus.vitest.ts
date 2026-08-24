@@ -45,7 +45,6 @@ import {
   isChildStreamRemoved,
   parentStream,
   queuedFollowUpsFor,
-  retainedChildStreamsFor,
   sessionStateRevision,
   streamMetadataFor,
   streamStateFor,
@@ -149,7 +148,7 @@ function activeRows(parent: StreamTabId): readonly ActiveChildInfo[] {
 }
 
 function retainedRows(parent: StreamTabId): readonly ActiveChildInfo[] {
-  return retainedChildStreamsFor(parent, childRosters.get());
+  return visibleRows(parent).filter((child) => child.finishedAt !== undefined);
 }
 
 function visibleRows(parent: StreamTabId): readonly ActiveChildInfo[] {

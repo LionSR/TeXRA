@@ -31,7 +31,6 @@ import {
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
-  expandWorkflowInputSpecs,
   hasMixedStdinWorkflowInputSpecs,
   isMaterializedStdinWorkflowInputPath,
   workflowInputGlobOptions,
@@ -134,6 +133,31 @@ function trackedStdinMaterializer(
     },
   });
   return { stdinInputFile, readCount: () => reads };
+}
+
+/**
+ * Single-list expansion for one flag, over the public `expandRunInputs` entry
+ * point. `--context` expansion allows an empty `--input` list so a
+ * context-only case reaches the context stage.
+ */
+async function expandSpecs(
+  specs: readonly string[],
+  cwd: string,
+  flagLabel: '--input' | '--context' = '--input',
+  options: {
+    readonly requireWorkspaceFiles?: boolean;
+    readonly stdinInputFile?: () => Promise<string>;
+  } = {},
+): Promise<string[]> {
+  if (flagLabel === '--context') {
+    const { contextFiles } = await expandRunInputs([], specs, cwd, {
+      ...options,
+      allowEmptyInput: true,
+    });
+    return contextFiles;
+  }
+  const { inputFiles } = await expandRunInputs(specs, [], cwd, options);
+  return inputFiles;
 }
 
 describe('CLI root argument routing', () => {
@@ -519,15 +543,16 @@ describe('CLI root argument routing', () => {
       );
       await fs.writeFile(path.join(root, 'paper', 'notes.md'), 'notes');
 
-      await expect(expandWorkflowInputSpecs(['paper'], root)).resolves.toEqual([
+      await expect(expandSpecs(['paper'], root)).resolves.toEqual([
+        'paper/Draft0.tex',
+        'paper/sections/appendix.tex',
+      ]);
+      await expect(expandSpecs(['paper/**/*.tex'], root)).resolves.toEqual([
         'paper/Draft0.tex',
         'paper/sections/appendix.tex',
       ]);
       await expect(
-        expandWorkflowInputSpecs(['paper/**/*.tex'], root),
-      ).resolves.toEqual(['paper/Draft0.tex', 'paper/sections/appendix.tex']);
-      await expect(
-        expandWorkflowInputSpecs(
+        expandSpecs(
           [path.join(root, 'paper', 'sections', 'appendix.tex')],
           root,
         ),
@@ -540,7 +565,7 @@ describe('CLI root argument routing', () => {
       const missing = path.join(root, 'no-such.tex');
       // A pure path (no glob magic, not a directory) is validated here rather
       // than handed to the workflow to fail on later with a raw ENOENT.
-      await expect(expandWorkflowInputSpecs([missing], root)).rejects.toThrow(
+      await expect(expandSpecs([missing], root)).rejects.toThrow(
         /--input: file not found/,
       );
     });
@@ -553,14 +578,9 @@ describe('CLI root argument routing', () => {
         '\\documentclass{article}\n\\begin{document}Hi\\end{document}\n',
       );
 
-      const expanded = await expandWorkflowInputSpecs(
-        ['-', '-'],
-        root,
-        '--input',
-        {
-          stdinInputFile,
-        },
-      );
+      const expanded = await expandSpecs(['-', '-'], root, '--input', {
+        stdinInputFile,
+      });
 
       expect(expanded).toHaveLength(1);
       expect(readCount()).toBe(1);
@@ -582,14 +602,9 @@ describe('CLI root argument routing', () => {
       await fs.writeFile(path.join(root, 'paper.tex'), 'paper');
       const { stdinInputFile } = trackedStdinMaterializer(root);
 
-      const expanded = await expandWorkflowInputSpecs(
-        ['-', 'paper.tex'],
-        root,
-        '--input',
-        {
-          stdinInputFile,
-        },
-      );
+      const expanded = await expandSpecs(['-', 'paper.tex'], root, '--input', {
+        stdinInputFile,
+      });
 
       expect(path.basename(expanded[0])).toBe('stdin.tex');
       expect(isMaterializedStdinWorkflowInputPath(expanded[0])).toBe(true);
@@ -602,7 +617,7 @@ describe('CLI root argument routing', () => {
       const { stdinInputFile } = trackedStdinMaterializer(root, ' \n\t ');
 
       await expect(
-        expandWorkflowInputSpecs(['-'], root, '--input', { stdinInputFile }),
+        expandSpecs(['-'], root, '--input', { stdinInputFile }),
       ).rejects.toThrow(/stdin: no data on stdin/);
     });
   });
@@ -631,7 +646,7 @@ describe('CLI root argument routing', () => {
       const { stdinInputFile, readCount } = trackedStdinMaterializer(root);
 
       await expect(
-        expandWorkflowInputSpecs(['-', 'missing.tex'], root, '--input', {
+        expandSpecs(['-', 'missing.tex'], root, '--input', {
           stdinInputFile,
         }),
       ).rejects.toThrow(/--input: file not found: missing\.tex/);
@@ -710,7 +725,7 @@ describe('CLI root argument routing', () => {
       await fs.writeFile(external, 'outside');
 
       await expect(
-        expandWorkflowInputSpecs(['-'], root, '--context', {
+        expandSpecs(['-'], root, '--context', {
           requireWorkspaceFiles: true,
           stdinInputFile: async () => external,
         }),
@@ -724,21 +739,21 @@ describe('CLI root argument routing', () => {
     // the user actually passed, not always say --input.
     await withTempDir('texra-cli-flag-', async (root) => {
       const missing = path.join(root, 'no-such-context.tex');
-      await expect(
-        expandWorkflowInputSpecs([missing], root, '--context'),
-      ).rejects.toThrow(/--context: file not found/);
+      await expect(expandSpecs([missing], root, '--context')).rejects.toThrow(
+        /--context: file not found/,
+      );
     });
   });
 
   it('expands a glob --context spec the same way --input does', async () => {
-    // `texra run -c '<glob>'` routes through expandWorkflowInputSpecs, so it
+    // `texra run -c '<glob>'` routes through the same expansion helper, so it
     // has the same expansion semantics as `--input` and surfaces missing-path
     // errors as Usage (exit 2) instead of a late raw ENOENT.
     await withTempDir('texra-cli-ctx-', async (root) => {
       await fs.writeFile(path.join(root, 'a.bib'), 'a');
       await fs.writeFile(path.join(root, 'b.bib'), 'b');
       await expect(
-        expandWorkflowInputSpecs([path.join(root, '*.bib')], root, '--context'),
+        expandSpecs([path.join(root, '*.bib')], root, '--context'),
       ).resolves.toEqual(['a.bib', 'b.bib']);
     });
   });
@@ -757,7 +772,7 @@ describe('CLI root argument routing', () => {
       await fs.writeFile(path.join(root, 'refs', 'a.bib'), 'glob match');
 
       await expect(
-        expandWorkflowInputSpecs([path.join('refs', '[ab].bib')], root),
+        expandSpecs([path.join('refs', '[ab].bib')], root),
       ).resolves.toEqual(['refs/[ab].bib']);
     });
   });
@@ -788,9 +803,9 @@ describe('CLI root argument routing', () => {
         const pattern = path.join(root, 'refs', '*.bib');
 
         expect(pattern).toMatch(/^[A-Za-z]:\\/);
-        await expect(
-          expandWorkflowInputSpecs([pattern], root),
-        ).resolves.toEqual(['refs/paper.bib']);
+        await expect(expandSpecs([pattern], root)).resolves.toEqual([
+          'refs/paper.bib',
+        ]);
       });
     },
   );
@@ -804,7 +819,7 @@ describe('CLI root argument routing', () => {
         await fs.writeFile(path.join(root, 'refs', 'a-one.bib'), 'class match');
 
         await expect(
-          expandWorkflowInputSpecs([String.raw`refs/\[ab]-*.bib`], root),
+          expandSpecs([String.raw`refs/\[ab]-*.bib`], root),
         ).resolves.toEqual(['refs/[ab]-one.bib']);
       });
     },
@@ -817,7 +832,7 @@ describe('CLI root argument routing', () => {
       await fs.writeFile(path.join(root, 'refs', 'alpha.bib'), 'alpha');
 
       await expect(
-        expandWorkflowInputSpecs(['refs/{alpha,beta}.bib'], root),
+        expandSpecs(['refs/{alpha,beta}.bib'], root),
       ).resolves.toEqual(['refs/alpha.bib', 'refs/beta.bib']);
     });
   });
@@ -826,11 +841,11 @@ describe('CLI root argument routing', () => {
     await withTempDir('texra-cli-unmatched-glob-', async (root) => {
       const pattern = path.join('missing refs', '*.bib');
 
+      await expect(expandSpecs([`  ${pattern}  `], root)).rejects.toThrow(
+        `--input: no files matched: ${pattern}`,
+      );
       await expect(
-        expandWorkflowInputSpecs([`  ${pattern}  `], root),
-      ).rejects.toThrow(`--input: no files matched: ${pattern}`);
-      await expect(
-        expandWorkflowInputSpecs([`  ${pattern}  `], root, '--context'),
+        expandSpecs([`  ${pattern}  `], root, '--context'),
       ).rejects.toThrow(`--context: no files matched: ${pattern}`);
     });
   });

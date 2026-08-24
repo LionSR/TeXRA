@@ -171,21 +171,6 @@ export function activeSubagentsFor(
   return roster.filter((child) => child.finishedAt === undefined);
 }
 
-/**
- * Finished children the shared roster retains for display under a parent
- * (`finishedAt` set), ascending `finishedAt`, capped by the applier. A new
- * run on the parent drops the previous run's retained rows (shared
- * `resetPerRunChildState` policy — all hosts agree).
- */
-export function retainedChildStreamsFor(
-  parentStreamId: StreamTabId,
-  rosters: ChildRosters,
-): readonly ActiveChildInfo[] {
-  const roster = rosters.get(parentStreamId);
-  if (!roster) return [];
-  return roster.filter((child) => child.finishedAt !== undefined);
-}
-
 /** Display rows for a parent: the shared roster verbatim (live rows first,
  *  then retained history) — the same order the webview renders. */
 export function visibleSubagentRows(

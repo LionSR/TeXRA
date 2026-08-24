@@ -54,10 +54,7 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
 
 import type { WorkflowJournalEntry } from '@agent/workflowScript';
 import { getExecutionStore } from '@agent/storage';
-import {
-  childRunBudgetFor,
-  DEFAULT_CHILD_RUN_BUDGET,
-} from '@agent/runtime/childRunBudget';
+import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
 import {
   startChildRunLoop,
   type ChildRunLoopHandle,
@@ -78,6 +75,7 @@ import {
   type StreamPhase,
   type StreamTabId,
   AgentCategory,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
@@ -1020,7 +1018,10 @@ describe('childRunLoop E2E fixtures', () => {
       await waitForLoopEnd(second.childStreamId);
       expect(started).toEqual(['first', 'second']);
     } finally {
-      childRunBudgetFor(session, DEFAULT_CHILD_RUN_BUDGET);
+      childRunBudgetFor(
+        session,
+        CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
+      );
     }
   });
 

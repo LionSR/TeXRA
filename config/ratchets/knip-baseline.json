@@ -578,12 +578,6 @@
       "name": "TuiRepaintOptions"
     },
     {
-      "file": "packages/cli/src/chat/tui/state/childExecutions.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "retainedChildStreamsFor"
-    },
-    {
       "file": "packages/cli/src/chat/tui/state/cliState.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -947,12 +941,6 @@
       "file": "packages/cli/src/runtime/tools.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "cliToolIds"
-    },
-    {
-      "file": "packages/cli/src/runtime/tools.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "findCliToolDef"
     },
     {
@@ -1037,12 +1025,6 @@
       "file": "packages/cli/src/runtime/workflowInputs.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "expandWorkflowInputSpecs"
-    },
-    {
-      "file": "packages/cli/src/runtime/workflowInputs.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "workflowInputGlobOptions"
     },
     {
@@ -1050,12 +1032,6 @@
       "category": "production-dead",
       "kind": "types",
       "name": "StdinWorkflowInputMaterializer"
-    },
-    {
-      "file": "packages/cli/src/runtime/workflowInputs.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "WorkflowInputExpansionOptions"
     },
     {
       "file": "packages/cli/src/runtime/workflowOutput.ts",
@@ -1427,12 +1403,6 @@
       "file": "src/agent/index/agentRegistry.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "getAgentsBySource"
-    },
-    {
-      "file": "src/agent/index/agentRegistry.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "getCategoryAgent"
     },
     {
@@ -1524,12 +1494,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "getAgentPath"
-    },
-    {
-      "file": "src/agent/runtime/childRunBudget.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DEFAULT_CHILD_RUN_BUDGET"
     },
     {
       "file": "src/agent/runtime/HostInteractions.ts",

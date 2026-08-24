@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { formatToolDescriptionForTui } from '@cli/chat/tui/forms/ToolsListForm';
 import {
-  cliToolIds,
   findCliToolDef,
   formatCliBoolean,
   formatCliToolList,
@@ -46,14 +45,11 @@ function record(
 }
 
 describe('CLI tools runtime', () => {
-  it('exposes external tool definition ids', () => {
-    expect(cliToolIds()).toEqual(
-      expect.arrayContaining(['codex', 'claude-agent']),
-    );
+  it('exposes external tool definitions the CLI supports', () => {
+    expect(findCliToolDef('codex')?.id).toBe('codex');
+    expect(findCliToolDef('claude-agent')?.id).toBe('claude-agent');
     // External inquiry is a VS Code / desktop feature; the CLI hides it.
-    expect(cliToolIds()).not.toContain('external-inquiry');
     expect(findCliToolDef('external-inquiry')).toBeUndefined();
-    expect(cliToolIds()).not.toContain('texra-cli');
     expect(findCliToolDef('texra-cli')).toBeUndefined();
   });
 

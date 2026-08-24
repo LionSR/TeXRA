@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   createStdinWorkflowInputMaterializer,
-  expandWorkflowInputSpecs,
+  expandRunInputs,
   withExpandedRunInputs,
 } from '@cli/runtime/workflowInputs';
 import { createFakePlatform } from '@test/support/FakePlatform';
@@ -39,7 +39,7 @@ describe('CLI workflow input lifecycle', () => {
       readStdinText: async () => 'body from stdin',
     });
 
-    const expanded = await expandWorkflowInputSpecs(['-'], root, '--input', {
+    const { inputFiles: expanded } = await expandRunInputs(['-'], [], root, {
       stdinInputFile,
     });
 

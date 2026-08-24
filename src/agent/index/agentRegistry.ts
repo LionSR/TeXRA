@@ -308,11 +308,6 @@ export function getAgentsByCategory(category: AgentCategory): AgentEntry[] {
   );
 }
 
-/** Get agents by source. */
-export function getAgentsBySource(source: AgentSource): AgentEntry[] {
-  return [...cache.values()].filter((e) => e.source === source);
-}
-
 /**
  * Custom-directory YAML files the last published load skipped, with the
  * reason. Empty until a load publishes a catalog.
