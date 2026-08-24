@@ -77,7 +77,12 @@ describe('WorkPlanReader display model', () => {
         contentWidth: 16,
         title: 'Work plan: proof',
       }),
-    ).toEqual({ bodyRows: 5, showFooter: true, showTitle: true });
+    ).toEqual({
+      bodyRows: 5,
+      showBorder: true,
+      showFooter: true,
+      showTitle: true,
+    });
   });
 
   it('drops chrome before exceeding a very short row budget', () => {
@@ -87,6 +92,32 @@ describe('WorkPlanReader display model', () => {
         contentWidth: 1,
         title: 'Work plan',
       }),
-    ).toEqual({ bodyRows: 2, showFooter: false, showTitle: false });
+    ).toEqual({
+      bodyRows: 2,
+      showBorder: true,
+      showFooter: false,
+      showTitle: false,
+    });
   });
+
+  it.each([
+    { availableRows: 1, bodyRows: 0 },
+    { availableRows: 2, bodyRows: 1 },
+  ])(
+    'uses a borderless title and $bodyRows body rows in a $availableRows-row viewport',
+    ({ availableRows, bodyRows }) => {
+      expect(
+        workPlanReaderLayout({
+          availableRows,
+          contentWidth: 1,
+          title: 'Work plan: a narrow stream',
+        }),
+      ).toEqual({
+        bodyRows,
+        showBorder: false,
+        showFooter: false,
+        showTitle: true,
+      });
+    },
+  );
 });

@@ -29,7 +29,11 @@ export {
   SPILL_ARTIFACT_DELETED_MESSAGE,
 } from './spillArtifacts';
 export { streamDataDir } from './streamDataPaths';
-export { StreamSnapshotStore } from './StreamSnapshotStore';
+export {
+  StreamSnapshotPreloadError,
+  StreamSnapshotStore,
+  type StreamArtifactAuthority,
+} from './StreamSnapshotStore';
 export { assembleTrace, type AssembleTraceResult } from './traceAssembler';
 export type { TraceDocument } from './traceDocumentSchema';
 export {

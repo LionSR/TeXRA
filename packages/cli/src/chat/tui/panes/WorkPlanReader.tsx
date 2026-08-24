@@ -1,6 +1,6 @@
 // Scrollable, read-only view of one stream's canonical plan and todos.
 
-import { useInput, useWindowSize } from 'ink';
+import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isEscapeInput } from '@cli/tui/inputKeys';
@@ -59,11 +59,20 @@ export function workPlanReaderLayout({
   readonly title: string;
 }): {
   readonly bodyRows: number;
+  readonly showBorder: boolean;
   readonly showFooter: boolean;
   readonly showTitle: boolean;
 } {
   const rows = Math.max(1, Math.floor(availableRows));
   const width = Math.max(1, Math.floor(contentWidth));
+  if (rows < 3) {
+    return {
+      bodyRows: rows - 1,
+      showBorder: false,
+      showFooter: false,
+      showTitle: true,
+    };
+  }
   const footerRows = wrappedRows(
     hints.map(keyHintText).join(KEY_HINT_SEPARATOR),
     width,
@@ -77,6 +86,7 @@ export function workPlanReaderLayout({
       1,
       rows - BORDER_ROWS - footerFixedRows - (showTitle ? titleRows : 0),
     ),
+    showBorder: true,
     showFooter,
     showTitle,
   };
@@ -133,6 +143,36 @@ export function WorkPlanReader({
     if (isEscapeInput(input, key)) onClose();
   });
 
+  const body =
+    layout.bodyRows > 0 ? (
+      <ScrollableModalText
+        hiddenNoun="work plan rows"
+        marginWhenSpacious={false}
+        maxRows={layout.bodyRows}
+        minContentWidth={1}
+        resetKey={streamId}
+        scrollHint="scroll work plan"
+        showScrollHints={false}
+        text={text}
+        width={layout.showBorder ? width : frameWidth}
+      />
+    ) : null;
+
+  if (!layout.showBorder) {
+    return (
+      <Box
+        flexDirection="column"
+        height={Math.max(1, Math.floor(availableRows))}
+        width={frameWidth}
+      >
+        <Text bold color={COLOR_HINT} wrap="truncate-end">
+          {title}
+        </Text>
+        {body}
+      </Box>
+    );
+  }
+
   return (
     <BorderedPanel
       color={COLOR_HINT}
@@ -144,17 +184,7 @@ export function WorkPlanReader({
         ) : undefined
       }
     >
-      <ScrollableModalText
-        hiddenNoun="work plan rows"
-        marginWhenSpacious={false}
-        maxRows={layout.bodyRows}
-        minContentWidth={1}
-        resetKey={streamId}
-        scrollHint="scroll work plan"
-        showScrollHints={false}
-        text={text}
-        width={width}
-      />
+      {body}
     </BorderedPanel>
   );
 }

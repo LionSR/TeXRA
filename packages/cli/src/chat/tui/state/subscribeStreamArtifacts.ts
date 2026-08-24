@@ -20,6 +20,10 @@ import {
 } from '@controllers/session/StreamArtifactProjection';
 import { type StreamTabId, type TokenUsageStats } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
+import {
+  StreamSnapshotPreloadError,
+  type StreamArtifactAuthority,
+} from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -161,35 +165,49 @@ function streamCanReceiveArtifacts(
  * invalidates on a focus change, while `/plan` keeps the stream id it
  * captured before awaiting.
  */
+type StreamArtifactHydrationOutcome =
+  | { readonly kind: 'complete' }
+  | {
+      readonly kind: 'partial';
+      readonly authoritativeFields: StreamArtifactAuthority;
+      readonly error: unknown;
+    }
+  | { readonly kind: 'failed'; readonly error: unknown };
+
 export async function hydrateStreamArtifacts(
   store: StreamArtifactReader,
   streamId: StreamTabId,
   requestIsCurrent: () => boolean = () => true,
-  onError?: (error: unknown) => void,
-): Promise<boolean> {
+): Promise<StreamArtifactHydrationOutcome | undefined> {
   const generation = getCliStateGeneration();
   try {
     // `preload` warms only this stream. `load([streamId])` would incorrectly
     // claim an authoritative complete stream set and evict sibling state.
-    await store.preload([streamId]);
+    await store.preload([streamId], { reportArtifactAuthority: true });
   } catch (error) {
     if (!streamCanReceiveArtifacts(streamId, generation, requestIsCurrent)) {
-      return false;
+      return undefined;
     }
-    if (onError) {
-      onError(error);
-    } else {
-      setTransientNotice(
-        `Could not load workflow artifacts: ${toErrorMessage(error)}`,
-      );
+    if (
+      error instanceof StreamSnapshotPreloadError &&
+      error.streamId === streamId
+    ) {
+      if (Object.values(error.authoritativeFields).some(Boolean)) {
+        markArtifactStreamHydrated(streamId);
+      }
+      return {
+        kind: 'partial',
+        authoritativeFields: error.authoritativeFields,
+        error,
+      };
     }
-    return false;
+    return { kind: 'failed', error };
   }
   if (!streamCanReceiveArtifacts(streamId, generation, requestIsCurrent)) {
-    return false;
+    return undefined;
   }
   markArtifactStreamHydrated(streamId);
-  return true;
+  return { kind: 'complete' };
 }
 
 /**
@@ -210,7 +228,12 @@ export function subscribeStreamArtifacts(
       store,
       streamId,
       () => focusRevision === revision && activeStreamId.get() === streamId,
-    );
+    ).then((outcome) => {
+      if (!outcome || outcome.kind === 'complete') return;
+      setTransientNotice(
+        `Could not load workflow artifacts: ${toErrorMessage(outcome.error)}`,
+      );
+    });
   };
   if (previous) hydrate(previous);
 

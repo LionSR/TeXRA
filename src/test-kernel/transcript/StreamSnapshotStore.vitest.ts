@@ -34,7 +34,11 @@ import {
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
-import { StreamSnapshotStore, streamDataDir } from '@transcript';
+import {
+  StreamSnapshotPreloadError,
+  StreamSnapshotStore,
+  streamDataDir,
+} from '@transcript';
 import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
 import {
   stagedStreamDataDir,
@@ -2564,7 +2568,7 @@ describe('StreamSnapshotStore', () => {
     expect((await reloadWorkPlan()).plan).toEqual(revisedPlan);
   });
 
-  it('retains a mutation queued during a failed refresh', async () => {
+  it('reports and retains authoritative work-plan state after preload fails', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
     const writeSpy = vi
@@ -2573,9 +2577,28 @@ describe('StreamSnapshotStore', () => {
 
     snapshotFacts(store).setPlan(STREAM, PLAN);
     await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
-    const refresh = store.load([STREAM]);
+    const refresh = store.preload([STREAM], {
+      reportArtifactAuthority: true,
+    });
     snapshotFacts(store).setTodos(STREAM, [TODO]);
-    await expect(refresh).rejects.toThrow('Sidecar writes remain dirty');
+    expect(store.getWorkPlan(STREAM)).toMatchObject({
+      plan: PLAN,
+      todos: [TODO],
+    });
+    const error = await refresh.catch((cause) => cause);
+    expect(error).toBeInstanceOf(StreamSnapshotPreloadError);
+    expect(error).toMatchObject({
+      message: expect.stringContaining('Sidecar writes remain dirty'),
+      streamId: STREAM,
+      authoritativeFields: {
+        outputFiles: true,
+        missingOutputs: true,
+        compileFailures: true,
+        usage: true,
+        todos: true,
+        plan: true,
+      },
+    });
 
     writeSpy.mockRestore();
     await store.flush();

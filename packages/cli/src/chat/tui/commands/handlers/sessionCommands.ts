@@ -30,10 +30,7 @@ import { hydrateStreamArtifacts } from '@cli/chat/tui/state/subscribeStreamArtif
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { activeStreamParentOrSelfId } from '@cli/chat/tui/state/streamViews';
-import {
-  projectStreamArtifacts,
-  type StreamArtifactReader,
-} from '@controllers/session/StreamArtifactProjection';
+import type { StreamArtifactReader } from '@controllers/session/StreamArtifactProjection';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { formatTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -70,25 +67,44 @@ export async function showCliWorkPlan(
   }
   clearTransientNotice();
   const request = beginWorkPlanReaderRequest(streamId);
-  const hydrated = await hydrateStreamArtifacts(
-    snapshots,
-    streamId,
-    () => workPlanReaderRequestIsCurrent(request),
-    (error) => {
-      if (!cancelWorkPlanReaderRequest(request)) return;
-      setTransientNotice(
-        `Could not load workflow artifacts: ${toErrorMessage(error)}`,
-      );
-    },
+  const outcome = await hydrateStreamArtifacts(snapshots, streamId, () =>
+    workPlanReaderRequestIsCurrent(request),
   );
-  if (!hydrated || !workPlanReaderRequestIsCurrent(request)) return;
-  const projection = projectStreamArtifacts(snapshots, streamId);
-  if (projection.plan === null && projection.todos.length === 0) {
+  if (!outcome || !workPlanReaderRequestIsCurrent(request)) return;
+  if (outcome.kind === 'failed') {
+    if (!cancelWorkPlanReaderRequest(request)) return;
+    setTransientNotice(
+      `Could not load workflow artifacts: ${toErrorMessage(outcome.error)}`,
+    );
+    return;
+  }
+  const workPlan = snapshots.getWorkPlan(streamId);
+  if (outcome.kind === 'complete') {
+    if (workPlan.plan !== null || workPlan.todos.length > 0) {
+      finishWorkPlanReaderRequest(request);
+      return;
+    }
     if (!cancelWorkPlanReaderRequest(request)) return;
     setTransientNotice('The focused session has no work plan.');
     return;
   }
-  finishWorkPlanReaderRequest(request);
+  const { plan: planIsAuthoritative, todos: todosAreAuthoritative } =
+    outcome.authoritativeFields;
+  if (
+    (planIsAuthoritative && workPlan.plan !== null) ||
+    (todosAreAuthoritative && workPlan.todos.length > 0)
+  ) {
+    finishWorkPlanReaderRequest(request);
+    return;
+  }
+  if (!cancelWorkPlanReaderRequest(request)) return;
+  if (planIsAuthoritative && todosAreAuthoritative) {
+    setTransientNotice('The focused session has no work plan.');
+    return;
+  }
+  setTransientNotice(
+    `Could not load workflow artifacts: ${toErrorMessage(outcome.error)}`,
+  );
 }
 
 /**
