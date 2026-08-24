@@ -34,14 +34,12 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import { detectStatusCode } from '@common/errors/sdkError/errorInspection';
-import {
-  attachManualRetryOnlyError,
-  attachPartialText,
-} from '@common/errors/sdkError/errorMetadata';
+import { attachManualRetryOnlyError } from '@common/errors/sdkError/errorMetadata';
 import {
   PARTIAL_TEXT_TAIL_MAX,
   takeTail,
 } from '@common/errors/sdkError/errorPatterns';
+import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import { composeLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import {
   type FileLocation,
@@ -1705,13 +1703,12 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         this.chainState.invalidateChain();
         return this.createResponseImpl(options);
       }
-      if (aggregatedText) {
-        attachPartialText(
-          error,
-          takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX),
-        );
-      }
-      throw error;
+      return handleStreamingFailure(error, {
+        // No `finalizeOnError` hook: a streaming call's own `finally` already
+        // finalized the progress streams before this outer catch ever runs.
+        partialTail: () =>
+          aggregatedText ? takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX) : '',
+      });
     }
   }
 
