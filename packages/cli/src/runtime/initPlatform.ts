@@ -298,9 +298,10 @@ export async function initCliPlatform(
     // lives in shared `~/.texra` state. Preferred defaults reconcile when
     // MODEL_LIST_VERSION changes; retired entries are swept on every startup.
     try {
-      await refreshModelListAndLog(stateStores.globalState, (message) =>
-        logAt('info', 'cli.models', message),
+      const { messages } = await refreshModelListAndLog(
+        stateStores.globalState,
       );
+      for (const message of messages) logAt('info', 'cli.models', message);
     } catch (error) {
       logAt(
         'error',

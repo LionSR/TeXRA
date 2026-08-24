@@ -438,10 +438,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
     })(),
     (async () => {
       try {
-        const { currentVersion, previousVersion, skipped } =
-          await refreshModelListAndLog(context.globalState, (message) =>
-            log.info(message),
-          );
+        const { currentVersion, previousVersion, skipped, messages } =
+          await refreshModelListAndLog(context.globalState);
         if (!skipped) {
           if (previousVersion !== currentVersion) {
             log.info(
@@ -450,6 +448,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
           }
           log.info('Model list refresh completed successfully');
         }
+        for (const message of messages) log.info(message);
       } catch (err) {
         log.error(`Failed to refresh model list: ${toErrorMessage(err)}`);
       }
