@@ -2,6 +2,7 @@
 
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
+import { tryDefaultSession } from '@agent/runtime';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
@@ -24,10 +25,7 @@ import {
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
-import {
-  readStreamArtifacts,
-  streamArtifactRevision,
-} from '../state/subscribeStreamArtifacts';
+import { streamArtifactRevision } from '../state/subscribeStreamArtifacts';
 import { useSignal } from '../state/useSignal';
 
 const TODO_STATUS_LABELS: Record<TodoStatus, string> = {
@@ -125,7 +123,9 @@ export function WorkPlanReader({
 }): React.JSX.Element {
   const { columns } = useWindowSize();
   useSignal(streamArtifactRevision);
-  const artifacts = readStreamArtifacts(streamId);
+  const workPlan = loading
+    ? undefined
+    : tryDefaultSession()?.snapshots.getWorkPlan(streamId);
   const frameWidth = formFrameWidth(columns);
   const width = Math.max(1, frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION);
   const hints = loading ? WORK_PLAN_LOADING_HINTS : READER_SCROLL_HINTS;
@@ -137,7 +137,7 @@ export function WorkPlanReader({
   });
   const text = loading
     ? WORK_PLAN_LOADING_TEXT
-    : formatWorkPlanReaderText(artifacts?.plan ?? null, artifacts?.todos ?? []);
+    : formatWorkPlanReaderText(workPlan?.plan ?? null, workPlan?.todos ?? []);
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) onClose();

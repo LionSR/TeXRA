@@ -192,7 +192,7 @@ export async function hydrateStreamArtifacts(
       error instanceof StreamSnapshotPreloadError &&
       error.streamId === streamId
     ) {
-      if (Object.values(error.authoritativeFields).some(Boolean)) {
+      if (Object.values(error.authoritativeFields).every(Boolean)) {
         markArtifactStreamHydrated(streamId);
       }
       return {
