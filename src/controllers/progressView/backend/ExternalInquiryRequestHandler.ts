@@ -15,7 +15,7 @@ import { ApprovalRequestHandler } from './ApprovalRequestHandler';
 
 const MAX_INQUIRY_THREADS = 100;
 
-export interface ExternalInquiryRequestHandlerOptions {
+interface ExternalInquiryRequestHandlerOptions {
   show: (permission: ExternalInquiryPermission) => void;
   dismiss: (requestId: string) => void;
   syncThreads: (threads: InquiryThreadUpdatedEvent[]) => void;

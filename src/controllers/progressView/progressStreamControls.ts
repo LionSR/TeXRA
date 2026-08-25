@@ -18,7 +18,7 @@ interface ProgressStreamBypassControls {
   superYoloBypass: boolean;
 }
 
-export type ProgressStreamControls = ProgressStreamBypassControls &
+type ProgressStreamControls = ProgressStreamBypassControls &
   (
     | { goalActive: false }
     | { goalActive: true; goalStatus: GoalStatus; goalObjective: string }

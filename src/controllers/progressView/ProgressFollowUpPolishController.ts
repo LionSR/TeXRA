@@ -13,7 +13,7 @@ type UpdateFollowUpTextMessage = Extract<
   { command: typeof PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT }
 >;
 
-export interface ProgressFollowUpPolishInput {
+interface ProgressFollowUpPolishInput {
   readonly stream: StreamTabId;
   readonly text: string;
   /** The run's config, which the command handler resolves before dispatching:
@@ -32,7 +32,7 @@ type ProgressFollowUpPolishText = (
   fileContext?: FileContext,
 ) => Promise<ProgressFollowUpPolishTextResult>;
 
-export interface ProgressFollowUpPolishControllerDeps {
+interface ProgressFollowUpPolishControllerDeps {
   readonly polishText: ProgressFollowUpPolishText;
 }
 

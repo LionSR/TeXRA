@@ -29,7 +29,7 @@ interface ProgressFollowUpWorkspace {
   exists(relativePath: string): Promise<boolean>;
 }
 
-export interface ProgressFollowUpControllerDeps {
+interface ProgressFollowUpControllerDeps {
   loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
   state: ProgressFollowUpState;
   workspace: ProgressFollowUpWorkspace;
@@ -56,7 +56,7 @@ export type ProgressFollowUpPlan =
   // producer would inherit it (gate the swap more narrowly if that isn't wanted).
   | { kind: 'execute'; request: ExecutionRequest };
 
-export interface CompileFixerInput {
+interface CompileFixerInput {
   streamId: StreamTabId;
   runConfig: AgentConfig | undefined;
   compileFailures: CompileFailure[];

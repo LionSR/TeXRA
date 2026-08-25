@@ -22,10 +22,8 @@ import {
   formatChatAsMarkdown,
   formatChatAsLatex,
   generateExportFilename,
-  type ChatExportInput,
 } from '@agent/export/chatExportFormatter';
-
-export type { ChatExportInput };
+import type { ChatExportInput } from '@agent/export/schemas';
 
 import { compileLatex2Pdf } from '@latex/texTools';
 import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
