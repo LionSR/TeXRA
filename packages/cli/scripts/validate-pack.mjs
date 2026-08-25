@@ -10,6 +10,19 @@ const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const packageName = '@texra-ai/cli';
 const packageDir = 'package/';
 
+// Templates only the VS Code extension and the desktop app read. The CLI
+// resolves agent creation through resources/docs/agent-creation, so none of
+// these belongs in the published tarball. `templates/instructionPolish.yaml`
+// is deliberately absent from this list: bundledPrompts.ts keeps a polish row
+// registered for the CLI, so shipping that one later is legitimate.
+const EXTENSION_ONLY_TEMPLATES = new Set([
+  'dist/resources/templates/agentCreatorToolUse.yaml',
+  'dist/resources/templates/agentCreatorWorkflow.yaml',
+  'dist/resources/templates/agentTemplate-toolUse.yaml',
+  'dist/resources/templates/agentTemplate-workflowSingle.yaml',
+  'dist/resources/templates/chatExport.tex',
+]);
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd ?? cliRoot,
@@ -50,8 +63,7 @@ function assertNoForbiddenTarballEntries(entries) {
       relative.startsWith('dist/resources/walkthroughs/') ||
       relative.startsWith('dist/resources/examples/') ||
       relative.startsWith('dist/resources/logo-') ||
-      // The chat-export template is extension-only.
-      relative === 'dist/resources/templates/chatExport.tex'
+      EXTENSION_ONLY_TEMPLATES.has(relative)
     );
   });
 
