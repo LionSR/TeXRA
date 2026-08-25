@@ -117,12 +117,14 @@ type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
 
 /**
  * The one schema-validated read path for the persisted `StreamLogSummary`
- * shape — every reader of the summary cache (the in-class loader and the
- * standalone `clearPersistedSummaryParentStream` patch below) goes through
- * this instead of trusting a raw `KVStore.read()` cast. Does not apply the
- * loader's registration-evidence gate (see {@link parsePersistedSummary}):
- * a metadata-only summary persisted before a stream's first append (see
- * `recordSummaryMeta`) has no timestamps but is still a valid, live entry.
+ * shape — every reader of the summary cache (the in-class loader's
+ * `readSummary` and the standalone `clearPersistedSummaryParentStream` patch
+ * below) goes through this instead of trusting a raw `KVStore.read()` cast.
+ * Does not apply the loader's own registration-evidence gate (see
+ * `readSummary`): a metadata-only summary persisted before a stream's first
+ * append (see `recordSummaryMeta`) has no timestamps but is still a valid,
+ * live entry, so only the loader — which has a log-rebuild fallback for a
+ * timestamp-less entry — additionally filters on that.
  */
 function parseSummaryShape(value: unknown): StreamLogSummary | undefined {
   // A missing cache file (KVStore's quiet-missing `undefined`) is an
@@ -130,34 +132,19 @@ function parseSummaryShape(value: unknown): StreamLogSummary | undefined {
   if (value === undefined) return undefined;
   const result = StreamLogSummarySchema.safeParse(value);
   if (!result.success) {
-    // Derived tier (#9434): discard the stale-shaped cache loudly instead of
-    // migrating it in place.
+    // Derived tier (#9434): ignore the stale-shaped cache loudly instead of
+    // migrating it in place. Worded for both callers — the loader then
+    // rebuilds from the authoritative stream log, while the standalone
+    // parent-edge patch below just skips its write — neither "discards"
+    // anything from storage on this path.
     log.warn(
-      `Discarding a stale-shaped summary cache entry: ${result.error.issues
+      `Ignoring a stale-shaped summary cache entry: ${result.error.issues
         .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
         .join('; ')}`,
     );
     return undefined;
   }
   return result.data;
-}
-
-/**
- * {@link parseSummaryShape}, plus the loader's registration-evidence gate:
- * empty transcripts have no timestamps, so a timestamp-less summary cache
- * entry isn't evidence the stream is registered — the loader falls back to
- * rebuilding from the authoritative stream log for that case.
- */
-function parsePersistedSummary(value: unknown): StreamLogSummary | undefined {
-  const summary = parseSummaryShape(value);
-  if (!summary) return undefined;
-  if (
-    summary.firstTimestamp === undefined &&
-    summary.lastTimestamp === undefined
-  ) {
-    return undefined;
-  }
-  return summary;
 }
 
 interface StreamLoadResult {
@@ -1467,8 +1454,17 @@ export class StreamLogStore {
   ): Promise<StreamLogSummary | undefined> {
     try {
       const persisted = await this.summaryKv().read<unknown>(streamId);
-      const summary = parsePersistedSummary(persisted);
+      const summary = parseSummaryShape(persisted);
       if (!summary) return undefined;
+      // Empty transcripts have no timestamps, so a timestamp-less summary
+      // cache entry isn't evidence the stream is registered — rebuild from
+      // the authoritative stream log for that case instead of trusting it.
+      if (
+        summary.firstTimestamp === undefined &&
+        summary.lastTimestamp === undefined
+      ) {
+        return undefined;
+      }
 
       const [summaryMtime, logMtime] = await Promise.all([
         this.summaryKv().modifiedAt(streamId),

@@ -6,7 +6,10 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { listExecutions } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
+import {
+  __resetUserConfigWarningDedupeForTests,
+  resolveChatDefaults,
+} from '@cli/runtime/chatDefaults';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
   loadWorkspaceCliConfig,
@@ -96,6 +99,7 @@ beforeEach(() => {
   mockedReadJson.mockReset();
   // A missing user config (the common case) mirrors a real ENOENT rejection.
   mockedReadJson.mockRejectedValue(enoentError());
+  __resetUserConfigWarningDedupeForTests();
 });
 
 const tempDirs = useTempDirs();
@@ -585,6 +589,42 @@ describe('CLI chat defaults', () => {
     );
 
     expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('reprints a warning once an intervening valid read clears the dedup state', async () => {
+    // The warning text carries only the field name, not the invalid value,
+    // so a field a user fixes and later breaks again the same way must
+    // still warn — deduping must not be "seen this message ever," only
+    // "seen this message on the immediately preceding read."
+    const invalidModel = {
+      'texra.agent': 'assistant',
+      'texra.model': 'not-a-real-model-xyz',
+    };
+    const validModel = { 'texra.agent': 'assistant', 'texra.model': 'gpt55' };
+    const warnSpy = vi
+      .spyOn(logSinks, 'writeTextStderr')
+      .mockImplementation(() => {});
+
+    mockedReadJson.mockResolvedValueOnce(invalidModel);
+    await resolveChatDefaults({ cwd: NO_WORKSPACE });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+
+    // Same invalid config again: deduped against the previous read.
+    mockedReadJson.mockResolvedValueOnce(invalidModel);
+    await resolveChatDefaults({ cwd: NO_WORKSPACE });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+
+    // Fixed: no warning, and the dedup state no longer carries the old one.
+    mockedReadJson.mockResolvedValueOnce(validModel);
+    await resolveChatDefaults({ cwd: NO_WORKSPACE });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+
+    // Broken again: warns again, since the previous read had no warnings.
+    mockedReadJson.mockResolvedValueOnce(invalidModel);
+    await resolveChatDefaults({ cwd: NO_WORKSPACE });
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+
     warnSpy.mockRestore();
   });
 });

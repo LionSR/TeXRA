@@ -294,18 +294,13 @@ function pickConfigValues(
 export function parseCliConfigValues(
   value: unknown,
   filePath: string,
-  {
-    reportUnknownKeys = true,
-    sections,
-    topLevelFields,
-  }: Partial<PickConfigOptions> = {},
+  options: Partial<PickConfigOptions> = {},
 ): { readonly values: CliConfigValues; readonly warnings: readonly string[] } {
   const warnings: string[] = [];
   const values = isObject(value)
     ? pickConfigValues(value, warnings, filePath, {
-        reportUnknownKeys,
-        sections,
-        topLevelFields,
+        ...options,
+        reportUnknownKeys: options.reportUnknownKeys ?? true,
       })
     : {};
   return { values, warnings };

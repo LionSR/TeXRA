@@ -806,6 +806,12 @@
       "name": "BrowserLaunchCommand"
     },
     {
+      "file": "packages/cli/src/runtime/chatDefaults.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "__resetUserConfigWarningDedupeForTests"
+    },
+    {
       "file": "packages/cli/src/runtime/cliContext.ts",
       "category": "production-dead",
       "kind": "exports",

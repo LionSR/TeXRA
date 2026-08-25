@@ -70,6 +70,30 @@ function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
   };
 }
 
+/** Labels `loadUserDefaults`' warnings distinctly from the workspace file's
+ *  (both are literally named `config.json`, just in different directories),
+ *  matching the wording the read-failure branch already used. */
+const USER_CONFIG_LABEL = `user config (${TEXRA_CONFIG_FILE_NAME})`;
+
+/** `orchestrate`'s `launcher: while (true)` loop re-resolves chat defaults
+ *  on every return to the launcher, so an in-scope invalid field (a typo'd
+ *  texra.agent/texra.model/texra.chat.*) would otherwise reprint its warning
+ *  once per loop pass for as long as the session stays open. Deduped against
+ *  only the *previous* call's warnings (not every warning ever seen this
+ *  process): the message text carries just the field name, not the invalid
+ *  value, so a field a user fixes and later breaks again the same way would
+ *  otherwise never warn again if this stayed a monotonically-growing set. */
+let previousUserConfigWarnings = new Set<string>();
+
+/** Test-only: this module-level dedup state otherwise leaks across `it()`
+ *  blocks in the same file (Vitest doesn't reset module state between tests
+ *  by default), which would make one test's warnings spuriously suppress
+ *  another's. Call from a `beforeEach` in any suite that asserts on
+ *  `loadUserDefaults`/`resolveChatDefaults` warnings. */
+export function __resetUserConfigWarningDedupeForTests(): void {
+  previousUserConfigWarnings = new Set();
+}
+
 async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
   // A missing user config means no user defaults (parseCliConfigValues maps
   // the undefined fallback to {}). A read failure — corrupt JSON, a
@@ -83,41 +107,39 @@ async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
   // other config warning is gated by contextFromArgs on context.quietLogs
   // before this function ever runs, so these warnings honor the same flag
   // instead of always printing.
+  const thisCallsWarnings = new Set<string>();
   const warn = (message: string): void => {
-    if (!quiet) writeTextStderr(`WARN ${message}`);
+    thisCallsWarnings.add(message);
+    if (quiet) return;
+    if (previousUserConfigWarnings.has(message)) return;
+    writeTextStderr(`WARN ${message}`);
   };
   let raw: unknown;
   try {
     raw = await GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME);
   } catch (error: unknown) {
     if (!isFileNotFoundError(error)) {
-      warn(
-        `Could not read user config (${TEXRA_CONFIG_FILE_NAME}): ${toErrorMessage(error)}`,
-      );
+      warn(`Could not read ${USER_CONFIG_LABEL}: ${toErrorMessage(error)}`);
     }
     raw = undefined;
   }
   if (raw !== undefined && !isObject(raw)) {
-    warn(`Ignoring ${TEXRA_CONFIG_FILE_NAME}; expected a JSON object.`);
+    warn(`Ignoring ${USER_CONFIG_LABEL}; expected a JSON object.`);
     raw = undefined;
   }
-  const { values, warnings } = parseCliConfigValues(
-    raw,
-    TEXRA_CONFIG_FILE_NAME,
-    {
-      reportUnknownKeys: false,
-      // defaultsFromConfigValues only reads agent/model (top-level and
-      // chat.*) — scoping to just those fields avoids re-validating
-      // approvalPolicy (already warned about by loadUserApprovalPolicy) and
-      // outputFormat/run.* (unused here), and matters more than it would for
-      // a one-shot read: orchestrate's launcher loop calls resolveChatDefaults
-      // on every iteration, so an unrelated invalid field would otherwise
-      // re-print its warning every time through the loop.
-      topLevelFields: new Set(['agent', 'model']),
-      sections: new Set(['chat']),
-    },
-  );
+  const { values, warnings } = parseCliConfigValues(raw, USER_CONFIG_LABEL, {
+    reportUnknownKeys: false,
+    // defaultsFromConfigValues only reads agent/model (top-level and
+    // chat.*) — scoping to just those fields avoids re-validating
+    // approvalPolicy (already warned about by loadUserApprovalPolicy) and
+    // outputFormat/run.* (unused here). Scoping alone doesn't stop an
+    // in-scope invalid field from reprinting every launcher-loop pass —
+    // that's what `previousUserConfigWarnings` is for, above.
+    topLevelFields: new Set(['agent', 'model']),
+    sections: new Set(['chat']),
+  });
   for (const warning of warnings) warn(warning);
+  previousUserConfigWarnings = thisCallsWarnings;
   return defaultsFromConfigValues(values);
 }
 
