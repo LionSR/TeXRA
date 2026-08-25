@@ -3,7 +3,11 @@
 import type { StreamTabInfo } from '@shared/schemas';
 
 /**
- * The single accessor for a stream's user-facing display label.
+ * The single accessor for a stream's user-facing display label within the
+ * extension and desktop progress-view frontends. Distinct from the CLI's
+ * `streamLabelForId` (`packages/cli/src/chat/tui/state/streamViews.ts`),
+ * which resolves a stream id through the CLI's parent-edge state; this one
+ * is a plain field read on an already-resolved `StreamTabInfo`.
  * `buildStreamTabInfo()` normally supplies the cleaned identity name, and may
  * deliberately use the stream's opaque id while identity is unresolved. The
  * schema still permits an empty string, for example from a custom identity
