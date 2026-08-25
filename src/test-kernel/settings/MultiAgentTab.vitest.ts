@@ -102,4 +102,29 @@ describe('multi-agent-tab preset card keyboard activation', () => {
 
     expect(appliedPresetIds()).toHaveLength(0);
   });
+
+  /**
+   * The card previously flipped a local `@state()` on click, so a team the
+   * roster never adopted (cancelled sign-in, unavailable members) still read
+   * as active, and a freshly opened Settings badged nothing at all.
+   */
+  it('badges the team the roster reports, not the one last clicked', async () => {
+    const active = AGENT_MODE_PRESETS[1]!;
+    const element = await mount({ activePresetId: active.id });
+
+    const activeCards = element.shadowRoot?.querySelectorAll(
+      '.preset-card.active',
+    );
+    expect(activeCards?.length).toBe(1);
+    expect(activeCards?.[0]?.textContent).toContain(active.name);
+
+    const otherCard = element.shadowRoot?.querySelector('.preset-card');
+    (otherCard as HTMLElement).click();
+    await element.updateComplete;
+
+    expect(appliedPresetIds()).toEqual([AGENT_MODE_PRESETS[0]!.id]);
+    expect(
+      element.shadowRoot?.querySelector('.preset-card.active')?.textContent,
+    ).toContain(active.name);
+  });
 });

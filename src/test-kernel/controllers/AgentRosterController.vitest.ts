@@ -6,7 +6,11 @@ import {
   type AgentRosterEntry,
 } from '@agent/roster/AgentRosterController';
 import type { StateStore } from '@platform/interfaces';
-import type { AgentCategory, AgentModePreset } from '@shared/schemas';
+import {
+  agentMatchesIdentifier,
+  type AgentCategory,
+  type AgentModePreset,
+} from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
@@ -36,11 +40,17 @@ function controller(
   workspaceState: StateStore,
   overrides: Partial<AgentRosterControllerDeps> = {},
 ): AgentRosterController {
+  const getAgents =
+    overrides.getAgents ?? ((category: AgentCategory) => agents[category]);
   return new AgentRosterController({
     workspaceState,
     globalState: new FakeStateStore(),
-    getAgents: (category) => agents[category],
+    getAgents,
     getPresets: () => [preset],
+    resolveAgent: (category, identifier) =>
+      getAgents(category).find((entry) =>
+        agentMatchesIdentifier(entry, identifier),
+      ),
     ...overrides,
   });
 }
@@ -101,7 +111,7 @@ describe('AgentRosterController', () => {
     });
   });
 
-  it('repairs the hybrid pair-shaped roster that carries a stray kind field in place', () => {
+  it('repairs the hybrid pair-shaped roster that carries a stray kind field in place', async () => {
     // An intermediate version wrote `{kind: 'custom', workflowAgentKeys,
     // toolUseAgentKeys}` under AGENT_ROSTER_SELECTION. Neither the canonical
     // schema (missing `agentKeys`) nor the strict legacy schema (rejects
@@ -126,14 +136,18 @@ describe('AgentRosterController', () => {
       },
     });
     expect(warn).not.toHaveBeenCalled();
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({
-      kind: 'custom',
-      agentKeys: {
-        workflow: ['builtInWorkflow:write'],
-        toolUse: ['builtInToolUse:lead'],
-      },
+    // The repair runs behind the same write mutex the mutations use, so it
+    // lands a tick after the read rather than during it.
+    await vi.waitFor(() => {
+      expect(
+        workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+      ).toEqual({
+        kind: 'custom',
+        agentKeys: {
+          workflow: ['builtInWorkflow:write'],
+          toolUse: ['builtInToolUse:lead'],
+        },
+      });
     });
   });
 

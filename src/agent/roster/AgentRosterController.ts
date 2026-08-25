@@ -25,6 +25,7 @@ import {
 } from '@shared/state/onboardingState';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { KeyedMutex, unique } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export interface AgentRosterEntry {
   readonly name: string;
@@ -42,7 +43,7 @@ export interface AgentRosterControllerDeps<
   readonly getAgents: (category: AgentCategory) => Entry[];
   readonly getPresets?: () => readonly AgentModePreset[];
   /** Resolve one stored identifier without collapsing exact source identity. */
-  readonly resolveAgent?: (
+  readonly resolveAgent: (
     category: AgentCategory,
     identifier: string,
   ) => Entry | undefined;
@@ -82,8 +83,11 @@ function allPresets(
  * Read the canonical workspace selection. A value that does not parse is
  * tried against the legacy pair-shaped format (`{workflowAgentKeys,
  * toolUseAgentKeys}`, with or without a stray `kind` field) via the existing
- * AgentDelegationScopeLegacySchema. On a match the stored value is
- * immediately repaired so the warning is a one-time event per workspace.
+ * AgentDelegationScopeLegacySchema. On a match the stored value is repaired in
+ * place so the legacy shape is normalized once per workspace. That repair is
+ * the one write this module issues outside an awaited mutation, so it goes
+ * through the same write mutex: an unserialized update here can interleave
+ * with a mutation already in flight and leave the roster half-written.
  */
 function readAgentRosterSelection(
   workspaceState: StateStore,
@@ -96,10 +100,18 @@ function readAgentRosterSelection(
   if (parsed.success) return parsed.data;
   const repaired = repairLegacySelection(raw);
   if (repaired) {
-    void workspaceState.update(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-      repaired,
-    );
+    void serializeWorkspaceWrite(workspaceState, async () => {
+      await workspaceState.update(
+        WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+        repaired,
+      );
+    }).catch((error: unknown) => {
+      console.warn(
+        `[agentRoster] Could not normalize the legacy roster selection; it ` +
+          `still reads correctly and the repair retries on the next read: ` +
+          toErrorMessage(error),
+      );
+    });
     return repaired;
   }
   console.warn(
@@ -178,6 +190,12 @@ export class AgentRosterController<
     return this.resolveEffectiveSelection(selection);
   }
 
+  /** The team this workspace effectively runs, or null when it runs no team. */
+  getActiveTeamId(): string | null {
+    const effective = this.getEffectiveSelection();
+    return effective.kind === 'team' ? effective.teamId : null;
+  }
+
   getVisibleAgents(category: AgentCategory): Entry[] {
     const effective = this.getEffectiveSelection();
     const identifiers = selectedIdentifiers(
@@ -188,7 +206,7 @@ export class AgentRosterController<
     if (identifiers === undefined) return this.deps.getAgents(category);
 
     const resolved = identifiers
-      .map((identifier) => this.resolveEntry(category, identifier))
+      .map((identifier) => this.deps.resolveAgent(category, identifier))
       .filter((entry): entry is Entry => entry !== undefined);
     return [
       ...new Map(resolved.map((entry) => [agentKeyOf(entry), entry])).values(),
@@ -212,7 +230,7 @@ export class AgentRosterController<
       );
       if (identifiers === undefined) return [];
       return identifiers
-        .filter((identifier) => !this.resolveEntry(category, identifier))
+        .filter((identifier) => !this.deps.resolveAgent(category, identifier))
         .map(agentName);
     });
     return {
@@ -239,23 +257,10 @@ export class AgentRosterController<
     return unique(
       identifiers.map((identifier) => {
         if (selection.kind === 'custom') return identifier;
-        const entry = this.resolveEntry(category, identifier);
+        const entry = this.deps.resolveAgent(category, identifier);
         return entry ? agentKeyOf(entry) : identifier;
       }),
     );
-  }
-
-  private resolveEntry(
-    category: AgentCategory,
-    identifier: string,
-  ): Entry | undefined {
-    const resolved = this.deps.resolveAgent?.(category, identifier);
-    if (resolved) {
-      return resolved.category === category ? resolved : undefined;
-    }
-    return this.deps
-      .getAgents(category)
-      .find((entry) => agentMatchesIdentifier(entry, identifier));
   }
 
   /** Team identity a selection resolves to, following inherit to the default. */
@@ -315,7 +320,7 @@ export class AgentRosterController<
     );
   }
 
-  async setSelection(selection: AgentRosterSelection): Promise<void> {
+  private async setSelection(selection: AgentRosterSelection): Promise<void> {
     await serializeWorkspaceWrite(this.deps.workspaceState, () =>
       this.writeSelection(selection),
     );
@@ -425,9 +430,6 @@ export class AgentRosterController<
       );
     }
     await setDefaultTeamId(this.deps.globalState, teamId);
-    if (this.getSelection().kind === 'inherit') {
-      await this.setSelection(INHERITED_AGENT_ROSTER);
-    }
   }
 
   async clearDefaultTeam(): Promise<void> {
@@ -435,8 +437,5 @@ export class AgentRosterController<
       GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID,
       undefined,
     );
-    if (this.getSelection().kind === 'inherit') {
-      await this.setSelection(INHERITED_AGENT_ROSTER);
-    }
   }
 }

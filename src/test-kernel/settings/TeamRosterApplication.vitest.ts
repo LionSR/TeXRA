@@ -52,7 +52,7 @@ function makeDeps(
   return {
     catalog: {
       resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
-      commitPresetResolution: vi.fn(),
+      commitPreset: vi.fn(),
       ...catalog,
     },
     loadLocalCatalog: async () => {},
@@ -68,7 +68,7 @@ describe('team roster application', () => {
   it('signs in, forces one refresh, and commits exactly once', async () => {
     const calls: string[] = [];
     let refreshed = false;
-    const commitPresetResolution = vi.fn(async () => {
+    const commitPreset = vi.fn(async () => {
       calls.push('commit');
     });
 
@@ -81,7 +81,7 @@ describe('team roster application', () => {
             preset,
             resolution: refreshed ? resolved : unresolved,
           }),
-          commitPresetResolution,
+          commitPreset,
         },
         loadLocalCatalog: async () => {
           calls.push('local-load');
@@ -113,19 +113,19 @@ describe('team roster application', () => {
       'forced-refresh',
       'commit',
     ]);
-    expect(commitPresetResolution).toHaveBeenCalledOnce();
-    expect(commitPresetResolution).toHaveBeenCalledWith(preset, resolved);
+    expect(commitPreset).toHaveBeenCalledOnce();
+    expect(commitPreset).toHaveBeenCalledWith(preset);
   });
 
   it('cancels before refresh or roster writes', async () => {
-    const commitPresetResolution = vi.fn();
+    const commitPreset = vi.fn();
     const forceRefreshRemoteCatalog = vi.fn();
     const signIn = vi.fn();
 
     const result = await applyTeamRosterWithPreflight(
       'research',
       makeDeps({
-        catalog: { commitPresetResolution },
+        catalog: { commitPreset },
         signIn,
         forceRefreshRemoteCatalog,
       }),
@@ -134,7 +134,7 @@ describe('team roster application', () => {
     expect(result).toEqual({ status: 'cancelled', preset });
     expect(signIn).not.toHaveBeenCalled();
     expect(forceRefreshRemoteCatalog).not.toHaveBeenCalled();
-    expect(commitPresetResolution).not.toHaveBeenCalled();
+    expect(commitPreset).not.toHaveBeenCalled();
   });
 
   it('preflights an arbitrary unresolved member in a legacy custom team', async () => {
@@ -151,7 +151,7 @@ describe('team roster application', () => {
     const choose = vi.fn(
       async (_names: readonly string[]) => 'cancel' as const,
     );
-    const commitPresetResolution = vi.fn();
+    const commitPreset = vi.fn();
 
     const result = await applyTeamRosterWithPreflight(
       'legacy',
@@ -172,7 +172,7 @@ describe('team roster application', () => {
               unresolvedNames: ['remoteSpecialist'],
             },
           }),
-          commitPresetResolution,
+          commitPreset,
         },
         choose: async (_preset, names) => choose(names),
       }),
@@ -180,7 +180,7 @@ describe('team roster application', () => {
 
     expect(result.status).toBe('cancelled');
     expect(choose).toHaveBeenCalledWith(['remoteSpecialist']);
-    expect(commitPresetResolution).not.toHaveBeenCalled();
+    expect(commitPreset).not.toHaveBeenCalled();
   });
 
   it('preflights recognized and arbitrary unresolved members in a mixed legacy team', async () => {
@@ -233,7 +233,7 @@ describe('team roster application', () => {
     await applySettingsTeamRoster('research', {
       catalog: {
         resolvePreset: () => ({ ok: true, preset, resolution: resolved }),
-        commitPresetResolution: async () => {
+        commitPreset: async () => {
           calls.push('apply');
         },
         getPresetToolUseRoot,
@@ -272,7 +272,7 @@ describe('team roster application', () => {
     await applySettingsTeamRoster('research', {
       catalog: {
         resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
-        commitPresetResolution: vi.fn(),
+        commitPreset: vi.fn(),
         getPresetToolUseRoot: vi.fn(),
       },
       loadLocalCatalog: async () => {},
@@ -313,12 +313,12 @@ describe('team roster application', () => {
   it('proceeds on a provided "continue" choice without prompting or signing in', async () => {
     const choose = vi.fn();
     const signIn = vi.fn();
-    const commitPresetResolution = vi.fn();
+    const commitPreset = vi.fn();
 
     const result = await applyTeamRosterWithPreflight(
       'research',
       makeDeps({
-        catalog: { commitPresetResolution },
+        catalog: { commitPreset },
         providedChoice: 'continue',
         choose,
         signIn,
@@ -332,6 +332,6 @@ describe('team roster application', () => {
     });
     expect(choose).not.toHaveBeenCalled();
     expect(signIn).not.toHaveBeenCalled();
-    expect(commitPresetResolution).toHaveBeenCalledWith(preset, unresolved);
+    expect(commitPreset).toHaveBeenCalledWith(preset);
   });
 });

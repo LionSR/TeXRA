@@ -290,6 +290,7 @@ export class AgentHandlers {
         getCustomPresets: () => this.catalogController.getCustomPresets(),
         getOrchestratorAgentNames: () =>
           this.catalogController.getOrchestratorAgentNames(),
+        getActiveTeamId: () => this.roster.getActiveTeamId(),
       }),
     );
   }
@@ -331,8 +332,12 @@ export class AgentHandlers {
                 return Promise.resolve();
               },
             },
-            refreshAfterApply: (selectedToolUseAgent) =>
-              this.refreshAfterAgentMutation(selectedToolUseAgent, true),
+            refreshAfterApply: async (selectedToolUseAgent) => {
+              await Promise.all([
+                this.refreshAfterAgentMutation(selectedToolUseAgent, true),
+                this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
+              ]);
+            },
           }),
         );
       },
