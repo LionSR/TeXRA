@@ -42,24 +42,26 @@ const getCodexReasoningEffort = createEnumStateGetter(
 );
 
 /**
- * Codex CLI's Rust-side config deserializer only accepts a subset of the
- * reasoning effort tiers TeXRA exposes. TeXRA's 'xhigh' tier is a UI-only
- * extension used by providers like Anthropic Opus 'max'; cap it to 'high'
- * before handing the value to the Codex SDK.
+ * Older Codex CLI runtimes reject `xhigh` even though it is present in the SDK
+ * type. Preserve the requested level only after the resolved binary has been
+ * checked; otherwise cap it to `high`.
  */
 export type CodexCliReasoningEffort = Extract<
   ModelReasoningEffort,
-  'low' | 'medium' | 'high'
+  'low' | 'medium' | 'high' | 'xhigh'
 >;
 
 export function toCodexCliReasoningEffort(
   effort: CodexReasoningEffort,
+  supportsXhigh = false,
 ): CodexCliReasoningEffort {
-  return effort === 'xhigh' ? 'high' : effort;
+  return effort === 'xhigh' && !supportsXhigh ? 'high' : effort;
 }
 
-export function getCodexCliReasoningEffort(): CodexCliReasoningEffort {
-  return toCodexCliReasoningEffort(getCodexReasoningEffort());
+export function getCodexCliReasoningEffort(
+  supportsXhigh = false,
+): CodexCliReasoningEffort {
+  return toCodexCliReasoningEffort(getCodexReasoningEffort(), supportsXhigh);
 }
 
 // ============================================================================

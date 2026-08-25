@@ -93,6 +93,7 @@ vi.mock('@tools/codexConfig', () => ({
 }));
 
 vi.mock('@tools/codexImport', () => ({
+  codexBinarySupportsXhigh: async () => false,
   importCodexClass: mocks.importCodexClass,
   findCodexBinaryPath: mocks.findCodexBinaryPath,
 }));
