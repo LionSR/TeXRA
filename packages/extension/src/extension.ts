@@ -482,7 +482,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
           await vscode.commands
             .executeCommand('texra.auth.signIn')
             .then(undefined, (err: unknown) =>
-              authLog.error(`Failed to trigger sign-in: ${toErrorMessage(err)}`),
+              authLog.error(
+                `Failed to trigger sign-in: ${toErrorMessage(err)}`,
+              ),
             );
         }
       },
