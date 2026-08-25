@@ -332,12 +332,8 @@ export class AgentHandlers {
                 return Promise.resolve();
               },
             },
-            refreshAfterApply: async (selectedToolUseAgent) => {
-              await Promise.all([
-                this.refreshAfterAgentMutation(selectedToolUseAgent, true),
-                this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
-              ]);
-            },
+            refreshAfterApply: (selectedToolUseAgent) =>
+              this.refreshAfterAgentMutation(selectedToolUseAgent, true),
           }),
         );
       },
@@ -362,10 +358,7 @@ export class AgentHandlers {
 
         await this.catalogController.saveCurrentPreset(name);
 
-        await Promise.all([
-          this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
-          this.refreshAfterAgentMutation(undefined, true),
-        ]);
+        await this.refreshAfterAgentMutation(undefined, true);
 
         void vscode.window.showInformationMessage(
           `Saved team "${name.trim()}"`,
@@ -392,10 +385,7 @@ export class AgentHandlers {
 
         await this.catalogController.deleteCustomPreset(data.presetId);
 
-        await Promise.all([
-          this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
-          this.refreshAfterAgentMutation(undefined, true),
-        ]);
+        await this.refreshAfterAgentMutation(undefined, true);
       },
     );
   }

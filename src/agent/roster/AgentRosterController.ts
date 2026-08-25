@@ -25,7 +25,6 @@ import {
 } from '@shared/state/onboardingState';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { KeyedMutex, unique } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export interface AgentRosterEntry {
   readonly name: string;
@@ -83,11 +82,12 @@ function allPresets(
  * Read the canonical workspace selection. A value that does not parse is
  * tried against the legacy pair-shaped format (`{workflowAgentKeys,
  * toolUseAgentKeys}`, with or without a stray `kind` field) via the existing
- * AgentDelegationScopeLegacySchema. On a match the stored value is repaired in
- * place so the legacy shape is normalized once per workspace. That repair is
- * the one write this module issues outside an awaited mutation, so it goes
- * through the same write mutex: an unserialized update here can interleave
- * with a mutation already in flight and leave the roster half-written.
+ * AgentDelegationScopeLegacySchema. The reader is deliberately pure. It used to
+ * repair the stored value in place, but every mutation below reads the
+ * selection while already holding the write mutex, so a repair issued from
+ * here either races that mutation or, if serialized behind it, overwrites the
+ * selection the mutation just committed. The mutations own every durable
+ * write; a legacy value normalizes the next time one of them runs.
  */
 function readAgentRosterSelection(
   workspaceState: StateStore,
@@ -98,22 +98,8 @@ function readAgentRosterSelection(
   if (raw === undefined) return INHERITED_AGENT_ROSTER;
   const parsed = AgentRosterSelectionSchema.safeParse(raw);
   if (parsed.success) return parsed.data;
-  const repaired = repairLegacySelection(raw);
-  if (repaired) {
-    void serializeWorkspaceWrite(workspaceState, async () => {
-      await workspaceState.update(
-        WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-        repaired,
-      );
-    }).catch((error: unknown) => {
-      console.warn(
-        `[agentRoster] Could not normalize the legacy roster selection; it ` +
-          `still reads correctly and the repair retries on the next read: ` +
-          toErrorMessage(error),
-      );
-    });
-    return repaired;
-  }
+  const legacy = parseLegacySelection(raw);
+  if (legacy) return legacy;
   console.warn(
     `[agentRoster] Ignoring malformed roster selection; falling back to ` +
       `the inherited roster: ${parsed.error.message}`,
@@ -121,13 +107,13 @@ function readAgentRosterSelection(
   return INHERITED_AGENT_ROSTER;
 }
 
-function repairLegacySelection(raw: unknown): AgentRosterSelection | undefined {
+function parseLegacySelection(raw: unknown): AgentRosterSelection | undefined {
   // The legacy pair-shaped value may carry a stray `kind` field: an
   // intermediate version wrote `{kind: 'custom', workflowAgentKeys,
   // toolUseAgentKeys}` under AGENT_ROSTER_SELECTION, which neither the
   // canonical schema (missing `agentKeys`) nor the strict legacy schema
   // (rejects `kind`) accepts. Drop the discriminant before parsing so both
-  // the pure and hybrid legacy shapes repair to the same canonical value.
+  // the pure and hybrid legacy shapes normalize to the same canonical value.
   let candidate: unknown = raw;
   if (raw !== null && typeof raw === 'object' && 'kind' in raw) {
     const { kind: _ignored, ...rest } = raw as Record<string, unknown>;

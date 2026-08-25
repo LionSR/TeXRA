@@ -111,12 +111,14 @@ describe('AgentRosterController', () => {
     });
   });
 
-  it('repairs the hybrid pair-shaped roster that carries a stray kind field in place', async () => {
+  it('normalizes the hybrid pair-shaped roster on read without writing', async () => {
     // An intermediate version wrote `{kind: 'custom', workflowAgentKeys,
     // toolUseAgentKeys}` under AGENT_ROSTER_SELECTION. Neither the canonical
     // schema (missing `agentKeys`) nor the strict legacy schema (rejects
     // `kind`) accepts it, so it must be normalized to the canonical custom
-    // selection without warning.
+    // selection without warning. The read must not persist that
+    // normalization: the mutations read the selection while holding the write
+    // mutex, so a write from here would overwrite what they just committed.
     const warn = stubWarn();
     const hybrid = {
       kind: 'custom',
@@ -136,19 +138,15 @@ describe('AgentRosterController', () => {
       },
     });
     expect(warn).not.toHaveBeenCalled();
-    // The repair runs behind the same write mutex the mutations use, so it
-    // lands a tick after the read rather than during it.
-    await vi.waitFor(() => {
-      expect(
-        workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-      ).toEqual({
-        kind: 'custom',
-        agentKeys: {
-          workflow: ['builtInWorkflow:write'],
-          toolUse: ['builtInToolUse:lead'],
-        },
-      });
-    });
+    expect(workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION)).toBe(
+      hybrid,
+    );
+
+    // The next mutation is what normalizes the stored value.
+    await roster.setTeam('test-team');
+    expect(
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+    ).toEqual({ kind: 'team', teamId: 'test-team' });
   });
 
   it('uses the user default only for inherited workspaces', () => {

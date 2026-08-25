@@ -719,7 +719,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     ]);
   }
 
-  /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
+  /**
+   * Refresh settings-view agent list and main-view dropdown after agent
+   * mutations. The team presets ride along because every roster mutation can
+   * move the effective team: enabling one agent rewrites the selection as
+   * `custom`, which retires whatever team was applied.
+   */
   private async refreshAfterAgentMutation(
     selectedToolUseAgent?: string,
     agentCatalogAlreadyFresh = false,
@@ -728,6 +733,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.withActiveWebview((w) =>
         this.agentHandlers.sendAgentSelectionData(w),
       ),
+      this.withActiveWebview((w) => this.agentHandlers.sendAgentModePresets(w)),
       safeExecuteCommand(
         'texra.refreshAllOptions',
         selectedToolUseAgent || agentCatalogAlreadyFresh
