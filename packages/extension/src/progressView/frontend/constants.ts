@@ -1,4 +1,6 @@
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import { APPROVAL_BYPASS_BADGE } from '@shared/copy/approvalBypass';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 
@@ -7,6 +9,8 @@ export interface ProgressToolbarButton {
   icon: TeXRAIconName;
   /** Backend command. Omitted exactly when `localAction` is set. */
   command?: string;
+  /** Which per-stream bypass this toggle reflects and dispatches. */
+  bypassKind?: ApprovalBypassKind;
   /**
    * Frontend-only action the header carries out itself instead of posting to
    * the backend. A clipboard write has no backend leg, so such a button
@@ -23,7 +27,6 @@ export interface ProgressToolbarButton {
   label?: string;
   className?: string;
   disabled?: boolean;
-  isToggle?: boolean;
 }
 
 /**
@@ -63,8 +66,9 @@ export const ELEMENT_IDS = {
   QUEUED_FOLLOW_UPS_LIST: 'queuedFollowUpsList',
   RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
   COMPACT_RESPONSE_BTN: 'compactResponseBtn',
-  YOLO_TOGGLE_BTN: 'yoloToggleBtn',
-  SUPER_YOLO_TOGGLE_BTN: 'superYoloToggleBtn',
+  TOOL_EDIT_TOGGLE_BTN: 'toolEditToggleBtn',
+  BASH_TOGGLE_BTN: 'bashToggleBtn',
+  AUTO_TASK_TOGGLE_BTN: 'autoTaskToggleBtn',
   POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
   SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
 };
@@ -170,28 +174,40 @@ const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
   },
 ];
 
-const YOLO_TOGGLE_BUTTON = Object.freeze({
-  id: ELEMENT_IDS.YOLO_TOGGLE_BTN,
-  icon: 'shield',
+const TOOL_EDIT_TOGGLE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.TOOL_EDIT_TOGGLE_BTN,
+  icon: 'pencil',
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
-  label: 'Auto-approve edits and commands',
-  title: 'Auto-approve both file edits and shell commands in this run',
+  bypassKind: 'toolEdit',
+  label: APPROVAL_BYPASS_BADGE.toolEdit,
+  title: `${APPROVAL_BYPASS_BADGE.toolEdit}: Auto-approve file edits in this run`,
   titleActive:
-    'File edits and shell commands are being auto-approved. Click to resume approval prompts for both.',
-  className: 'yolo-toggle-button',
-  isToggle: true,
+    'File edits are being auto-approved. Click to resume approval prompts.',
+  className: 'bypass-toggle-button',
 });
 
-const DELEGATED_WORK_APPROVAL_TOGGLE_BUTTON = Object.freeze({
-  id: ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
+const BASH_TOGGLE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.BASH_TOGGLE_BTN,
+  icon: 'terminal',
+  command: PROGRESS_VIEW_COMMANDS.TOGGLE_BASH_APPROVAL_BYPASS,
+  bypassKind: 'bash',
+  label: APPROVAL_BYPASS_BADGE.bash,
+  title: `${APPROVAL_BYPASS_BADGE.bash}: Auto-approve shell commands in this run`,
+  titleActive:
+    'Shell commands are being auto-approved. Click to resume approval prompts.',
+  className: 'bypass-toggle-button',
+});
+
+const AUTO_TASK_TOGGLE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.AUTO_TASK_TOGGLE_BTN,
   icon: 'rocket',
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
-  label: 'Auto-approve agent work',
+  bypassKind: 'superYolo',
+  label: APPROVAL_BYPASS_BADGE.superYolo,
   title: DELEGATION_APPROVAL_COPY.progressViewToggle,
   titleActive:
     'Agent tasks, file edits, and shell commands are being auto-approved — click to resume prompts',
-  className: 'super-yolo-toggle-button',
-  isToggle: true,
+  className: 'bypass-toggle-button bypass-toggle-button--task',
 });
 
 const COMPACT_RESPONSE_BUTTON = Object.freeze({
@@ -206,8 +222,9 @@ const COMPACT_RESPONSE_BUTTON = Object.freeze({
 
 const TOOL_USE_TOOLBAR: readonly ProgressToolbarButton[] = [
   STOP_STREAM_BUTTON,
-  YOLO_TOGGLE_BUTTON,
-  DELEGATED_WORK_APPROVAL_TOGGLE_BUTTON,
+  TOOL_EDIT_TOGGLE_BUTTON,
+  BASH_TOGGLE_BUTTON,
+  AUTO_TASK_TOGGLE_BUTTON,
   COMPACT_RESPONSE_BUTTON,
   RESTORE_STATE_BUTTON,
   OPEN_TASK_STORAGE_BUTTON,

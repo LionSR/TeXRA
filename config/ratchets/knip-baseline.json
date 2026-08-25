@@ -2042,36 +2042,6 @@
       "name": "REGEX_CATEGORIES"
     },
     {
-      "file": "src/shared/approvalPolicy.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TEXRA_APPROVAL_POLICY_DENIED_MESSAGE"
-    },
-    {
-      "file": "src/shared/approvalPolicy.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TEXRA_APPROVAL_POLICY_DISPLAY_ORDER"
-    },
-    {
-      "file": "src/shared/approvalPolicy.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE"
-    },
-    {
-      "file": "src/shared/approvalPolicy.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE"
-    },
-    {
-      "file": "src/shared/approvalPolicy.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TEXRA_APPROVAL_YOLO_RETRY_MESSAGE"
-    },
-    {
       "file": "src/shared/commands/catalog.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -2244,24 +2214,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "publishAgentCliStreamUsage"
-    },
-    {
-      "file": "src/tools/approval/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "cleanupApprovalsForStream"
-    },
-    {
-      "file": "src/tools/approval/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "ToolEditApprovalRequest"
-    },
-    {
-      "file": "src/tools/approval/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "ToolEditApprovalResult"
     },
     {
       "file": "src/tools/support/rateLimiter.ts",

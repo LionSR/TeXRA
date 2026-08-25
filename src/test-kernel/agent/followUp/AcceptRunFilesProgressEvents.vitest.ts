@@ -18,11 +18,11 @@ import { appSignals } from '@eventBus/AppSignals';
 import { FileType, type FileStat } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
+import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
-} from '@tools/approval';
-import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
+} from '@tools/approval/toolEditApproval';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';

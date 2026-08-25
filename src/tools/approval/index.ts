@@ -67,7 +67,7 @@ export function configureDelegatedChildApprovals(
  * Clean up all approval state for a deleted stream in the owning session.
  * Cancels pending host interactions and clears stream-scoped bypass state.
  */
-export function cleanupApprovalsForStream(
+function cleanupApprovalsForStream(
   streamId: StreamTabId,
   session: SessionHandle = defaultSession(),
 ): void {
@@ -133,6 +133,4 @@ export {
   // Tool edit approval
   setToolEditApprovalSessionBypass,
   isApprovalBypassedForStream,
-  type ToolEditApprovalRequest,
-  type ToolEditApprovalResult,
 } from './toolEditApproval';

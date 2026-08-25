@@ -15,6 +15,15 @@ All notable changes to this project will be documented in this file.
   current Codex installation layout, honors Extra high reasoning when that
   runtime accepts it, and retains the High fallback for older installs.
 
+### Extension (VS Code) and Desktop
+
+#### Features
+
+- **Separate AUTO-EDIT, AUTO-BASH, and AUTO-TASK run controls** — the
+  extension and desktop run toolbar now matches the CLI: file edits and
+  shell commands each have their own auto-approve toggle, and AUTO-TASK
+  remains the complete grant for delegated agent work.
+
 ## [0.40.4] - 2026-08-23
 
 ### Shared (all surfaces)

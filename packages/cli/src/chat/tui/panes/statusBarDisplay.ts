@@ -27,6 +27,7 @@ import {
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
+import { APPROVAL_BYPASS_BADGE } from '@shared/copy/approvalBypass';
 import {
   FOREGROUND_OWNERSHIP,
   RUNNING_SESSION,
@@ -894,9 +895,21 @@ const BYPASS_BADGES: ReadonlyArray<{
   readonly text: string;
   readonly badgeColor: typeof COLOR_ERROR | typeof COLOR_WARNING;
 }> = [
-  { field: 'superYolo', text: 'AUTO-TASK', badgeColor: COLOR_ERROR },
-  { field: 'bash', text: 'AUTO-BASH', badgeColor: COLOR_WARNING },
-  { field: 'toolEdit', text: 'AUTO-EDIT', badgeColor: COLOR_WARNING },
+  {
+    field: 'superYolo',
+    text: APPROVAL_BYPASS_BADGE.superYolo,
+    badgeColor: COLOR_ERROR,
+  },
+  {
+    field: 'bash',
+    text: APPROVAL_BYPASS_BADGE.bash,
+    badgeColor: COLOR_WARNING,
+  },
+  {
+    field: 'toolEdit',
+    text: APPROVAL_BYPASS_BADGE.toolEdit,
+    badgeColor: COLOR_WARNING,
+  },
 ];
 
 // Which text occupies the bindings row is a priority order, not a single

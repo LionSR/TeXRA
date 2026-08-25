@@ -19,9 +19,8 @@ export const TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT: TexraApprovalPolicy =
   'never';
 /** Canonical persisted spelling in `.texra/config.json` for every host. */
 export const TEXRA_APPROVAL_POLICY_CONFIG_KEY = 'texra.approvalPolicy';
-export const TEXRA_APPROVAL_POLICY_DENIED_MESSAGE =
-  'Denied by TeXRA approval policy.';
-export const TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE =
+const TEXRA_APPROVAL_POLICY_DENIED_MESSAGE = 'Denied by TeXRA approval policy.';
+const TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE =
   'Interactive approval requires a prompt; this run cannot present one.';
 
 const TEXRA_APPROVAL_POLICY_COPY = {
@@ -46,7 +45,7 @@ const TEXRA_APPROVAL_POLICY_COPY = {
 >;
 
 /** Display order for selectors; must stay a permutation of `TEXRA_APPROVAL_POLICIES`. */
-export const TEXRA_APPROVAL_POLICY_DISPLAY_ORDER = [
+const TEXRA_APPROVAL_POLICY_DISPLAY_ORDER = [
   'ask',
   'never',
   'yolo',
@@ -131,11 +130,11 @@ export function decideTexraApproval(input: {
   return input.canPresent ? 'present' : 'deny-unpresentable';
 }
 
-export const TEXRA_APPROVAL_YOLO_RETRY_MESSAGE =
+const TEXRA_APPROVAL_YOLO_RETRY_MESSAGE =
   'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.';
 const TEXRA_APPROVAL_CREDENTIAL_RETRY_MESSAGE =
   'Retry skipped: credential exhausted or unauthorized.';
-export const TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE =
+const TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE =
   'User question requires human input; yolo mode cannot synthesize an answer.';
 
 export type TexraRetryApprovalDecision =

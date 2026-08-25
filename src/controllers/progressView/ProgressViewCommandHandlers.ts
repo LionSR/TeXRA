@@ -21,6 +21,7 @@ import { AgentCategory, isPlainAgentIdentity } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   isApprovalBypassedForStream,
+  isBashApprovalBypassedForStream,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
@@ -303,6 +304,19 @@ export function createProgressViewCommandHandlers(
     );
   };
 
+  // AUTO-TASK is the complete grant. Revoking one per-kind constituent must
+  // drop only the composite flag so the other kind stays granted.
+  const dropCompleteGrantIfRevokingKind = (
+    stream: StreamTabId,
+    enabled: boolean,
+  ): void => {
+    if (enabled) return;
+    const { approvals } = session ?? currentSession();
+    if (approvals.proposal.isBypassed(stream)) {
+      approvals.proposal.setBypass(stream, false);
+    }
+  };
+
   return {
     [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
       lifecycle.setActiveStream(data.stream, data.requestId),
@@ -357,23 +371,33 @@ export function createProgressViewCommandHandlers(
       });
     },
 
-    // The shield is the explicit both-kinds preset: one click sets file edits
-    // and shell commands together, and its label says so. Its on/off reading
-    // comes from the tool-edit state.
+    // Header AUTO-EDIT / AUTO-BASH toggles are independent: flipping one
+    // kind must not take the other with it. AUTO-TASK is the complete-grant
+    // control below.
     [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: async (data) => {
       const enabled = !isApprovalBypassedForStream(data.stream, session);
       setToolEditApprovalSessionBypass(data.stream, enabled, { session });
-      setBashApprovalSessionBypass(data.stream, enabled, { session });
+      dropCompleteGrantIfRevokingKind(data.stream, enabled);
       await showInfo(
         enabled
-          ? 'File edits and shell commands will be auto-approved for this run.'
-          : 'File edits and shell commands will require approval for this run.',
+          ? 'File edits will be auto-approved for this run.'
+          : 'File edits will require approval for this run.',
+      );
+    },
+    [PROGRESS_VIEW_COMMANDS.TOGGLE_BASH_APPROVAL_BYPASS]: async (data) => {
+      const enabled = !isBashApprovalBypassedForStream(data.stream, session);
+      setBashApprovalSessionBypass(data.stream, enabled, { session });
+      dropCompleteGrantIfRevokingKind(data.stream, enabled);
+      await showInfo(
+        enabled
+          ? 'Shell commands will be auto-approved for this run.'
+          : 'Shell commands will require approval for this run.',
       );
     },
     // Inline prompt button: force the prompt's own kind ON and nothing else.
     // Approving always from an edit prompt leaves shell commands gated, and
     // vice versa. Set-on (not toggle) keeps it from inverting a grant the
-    // shield or an inherited delegated child already made.
+    // header toggle or an inherited delegated child already made.
     [PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS]: async (data) => {
       if (data.kind === PERMISSION_KIND.TOOL_EDIT) {
         setToolEditApprovalSessionBypass(data.stream, true, { session });
