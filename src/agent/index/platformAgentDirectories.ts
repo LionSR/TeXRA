@@ -3,10 +3,7 @@ import * as path from 'node:path';
 import pRetry from 'p-retry';
 import { z } from 'zod';
 
-import {
-  isFileNotFoundError,
-  isNotADirectoryError,
-} from '@common/errors/errorPredicates';
+import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -37,35 +34,11 @@ export function createPlatformAgentDirectories(
 ): AgentDirectoryService {
   const log = createLog(options.channel);
   return new AgentDirectoryService({
-    storage: {
-      ensureDir: (relativePath) => GlobalStorageFS.ensureDir(relativePath),
-      fullPath: (relativePath) => GlobalStorageFS.fullPath(relativePath),
-    },
+    channel: options.channel,
     customDirectoryStore: options.customDirectoryStore,
-    absoluteDirectories: {
-      exists: async (target) => {
-        try {
-          await platform().fs.stat(target);
-          return true;
-        } catch (error) {
-          // Match AbsoluteFS/BaseFS.statIfExists: an ancestor path component
-          // that turned out to be a file (ENOTDIR) means "does not exist"
-          // here too, not an error to propagate.
-          if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
-            return false;
-          }
-          throw error;
-        }
-      },
-      ensureDir: (target) => platform().fs.createDirectory(target),
-    },
     issueReporter: options.issueReporter ?? {
       report: async (message, docsId) =>
         log.warn(`${message}. See documentation: ${docsId}`),
-    },
-    logger: {
-      debug: (message, data) => log.debug(message, { data }),
-      error: (message, data) => log.error(message, { data }),
     },
   });
 }

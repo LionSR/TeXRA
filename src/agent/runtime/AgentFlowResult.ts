@@ -78,13 +78,10 @@ export type WaitingToolUseFlowResult = z.infer<
 export type AgentRuntimeFlowResult = AgentFlowResult | WaitingToolUseFlowResult;
 
 export function isWaitingFlowResult(
-  result: unknown,
+  result: AgentRuntimeFlowResult,
 ): result is WaitingToolUseFlowResult {
-  if (!result || typeof result !== 'object') return false;
-  const candidate = result as { category?: unknown; outcome?: unknown };
   return (
-    candidate.category === 'toolUse' &&
-    candidate.outcome === STREAM_PHASE.WAITING
+    result.category === 'toolUse' && result.outcome === STREAM_PHASE.WAITING
   );
 }
 

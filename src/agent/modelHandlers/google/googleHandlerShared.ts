@@ -1,13 +1,9 @@
 import { Buffer } from 'node:buffer';
 import { basename } from 'node:path';
 
-import { GoogleGenAI, type File } from '@google/genai';
+import type { File, GoogleGenAI } from '@google/genai';
 
 import type { AgentTrace } from '@agent/trace';
-import type {
-  ModelCredentialRoute,
-  ResolvedClientCredential,
-} from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { isNonEmptyString } from '@utils/core';
@@ -15,78 +11,10 @@ import { isNonEmptyString } from '@utils/core';
 import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
 
 /**
- * Client setup and the media-attachment pipeline for `ModelHandlerGoogleInteractions`,
- * shared out of the handler file so it stays readable alongside the
- * Interactions-specific wire logic.
+ * Media-attachment pipeline for `ModelHandlerGoogleInteractions`, kept out of
+ * the handler file so it stays readable alongside the Interactions-specific
+ * wire logic.
  */
-
-export interface GoogleClientCache {
-  readonly client: GoogleGenAI;
-  readonly credential: ResolvedClientCredential;
-}
-
-interface ResolveGoogleClientParams {
-  /** SDK surface label used in debug logs, e.g. `'Interactions'`. */
-  sdkLabel: string;
-  credential: ResolvedClientCredential;
-  logger: AgentTrace;
-  /** Current cached client (server-side keys bypass the cache). */
-  cached: GoogleClientCache | null;
-  /** Stores a freshly-created client for reuse with personal API keys. */
-  setCached: (cache: GoogleClientCache) => void;
-  rememberRoute: (
-    client: GoogleGenAI,
-    route: ModelCredentialRoute,
-    credentialSecret: string,
-  ) => GoogleGenAI;
-}
-
-/**
- * Resolve a `GoogleGenAI` client, cached per credential.
- *
- * The client is built without `retryOptions` so that only the flow-level retry
- * loop (`RetryState`'s `getNodeMaxRetries`/`RETRY_BACKOFF_MS`) governs the
- * user's retry budget; see
- * the note in `createClient` for why passing any value there is worse than
- * passing none.
- */
-export async function resolveGoogleClient(
-  params: ResolveGoogleClientParams,
-): Promise<GoogleGenAI> {
-  const { sdkLabel, credential, logger, cached, setCached, rememberRoute } =
-    params;
-
-  const createClient = (): GoogleGenAI => {
-    logger.debug(
-      `Using Google GenAI ${sdkLabel} SDK. Base URL: ${credential.baseUrl}`,
-    );
-    // No `retryOptions`: absent, the SDK's apiCall does a single plain fetch
-    // (zero SDK retries — the node loop owns retries) and failures surface as
-    // structured ApiError WITH `status`. Any retryOptions value — including
-    // `{ attempts: 1 }` — switches apiCall into a pRetry wrapper that converts
-    // non-ok responses into bare Errors with no status field, blinding the
-    // route gate's 429/5xx classification for Google.
-    const client = new GoogleGenAI({
-      apiKey: credential.apiKey,
-      httpOptions: {
-        baseUrl: credential.baseUrl ?? undefined,
-      },
-    });
-    return rememberRoute(client, credential.route, credential.apiKey);
-  };
-
-  if (
-    cached?.credential.apiKey === credential.apiKey &&
-    cached.credential.baseUrl === credential.baseUrl &&
-    cached.credential.route === credential.route
-  ) {
-    return cached.client;
-  }
-
-  const client = createClient();
-  setCached({ client, credential });
-  return client;
-}
 
 /** Where a media block's bytes come from: inline base64 or a File API uri. */
 export type GoogleMediaSource = { data: string } | { uri: string };

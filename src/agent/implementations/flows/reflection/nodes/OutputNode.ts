@@ -264,7 +264,6 @@ export class OutputNode<C = unknown> extends BaseNode<
     if (endTurn) {
       await tryOperation(async () => {
         const validationResult = await checkExpectedOutputs(
-          outputState,
           this.services,
           outputLocation,
           currentRound,

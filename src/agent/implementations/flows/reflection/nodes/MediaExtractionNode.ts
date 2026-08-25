@@ -4,7 +4,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 
-import { getFilesForRound, workspaceFromSnapshot } from '../helpers';
+import { getFilesForRound } from '../helpers';
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionServices } from '../ReflectionServices';
 
@@ -24,7 +24,9 @@ export class MediaExtractionNode<C = unknown> extends BaseNode<
     const modelHandler = this.services.modelCell.handler;
     const { currentRound, roundOutputs } = shared;
 
-    const workspaceState = workspaceFromSnapshot(shared.workspaceSnapshot);
+    const workspaceState = AgentWorkspaceState.fromSnapshot(
+      shared.workspaceSnapshot,
+    );
 
     const extraMediaFiles: FileLocation[] = [];
     if (currentRound === 0 && modelHandler.capabilities.supportsVision) {

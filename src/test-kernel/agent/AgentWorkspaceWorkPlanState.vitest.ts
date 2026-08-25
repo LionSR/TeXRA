@@ -44,7 +44,7 @@ describe('agent workspace file-interaction state', () => {
       { path: 'notes.md', added: 2, removed: 5 },
     ]);
 
-    const rehydrated = AgentWorkspaceState.fromCanonicalSnapshot(snapshot);
+    const rehydrated = AgentWorkspaceState.fromSnapshot(snapshot);
     expect(rehydrated.interactions.editedFilePaths).toEqual([
       'paper.tex',
       'notes.md',

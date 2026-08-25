@@ -15,7 +15,6 @@ import {
   createResponseCycleFlow,
   type ResponseCycleShared,
 } from '../ResponseCycleFlow';
-import { workspaceFromSnapshot } from '../helpers';
 import type {
   ReflectionFlowShared,
   RoundContext,
@@ -48,7 +47,9 @@ export class ResponseCycleNode<C = unknown> extends BaseNode<
       );
     }
 
-    const workspace = workspaceFromSnapshot(shared.workspaceSnapshot);
+    const workspace = AgentWorkspaceState.fromSnapshot(
+      shared.workspaceSnapshot,
+    );
     const run = shared.runStateSnapshot;
     const round = context.stateRoundSnapshot;
 

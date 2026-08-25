@@ -2,7 +2,7 @@
  * State management for output processing.
  *
  * Manages mutable state for output files across rounds, including
- * round data, storage keys, and workspace preparation.
+ * round data and workspace preparation.
  *
  * `OutputState.rounds` is the canonical live collection, keyed by round
  * index (`Map<number, RoundOutput>`). The reflection flow hydrates it from
@@ -30,7 +30,6 @@ import { TaskRunFileService } from '@utils/files/taskRunStorage';
 export interface OutputState {
   rounds: Map<number, RoundOutput>;
   openedOutputs: Set<string>;
-  storageKey: StorageKey | null;
   runPreparation: Promise<void> | null;
 }
 
@@ -41,6 +40,7 @@ export interface OutputState {
  */
 export interface OutputDependencies {
   readonly setting: AgentWorkflowSetting;
+  readonly storageKey: StorageKey;
   readonly config: AgentConfig;
   readonly baseFiles: FileLocation[];
   readonly logger: AgentTrace;
@@ -54,7 +54,6 @@ export function createOutputState(
   return {
     rounds,
     openedOutputs: new Set(),
-    storageKey: null,
     runPreparation: null,
   };
 }
@@ -96,15 +95,6 @@ export async function withOutputStage<T>(
     skip: true,
   });
   return stage.run(() => fn(stage));
-}
-
-export function getStorageKey(state: OutputState): StorageKey {
-  if (state.storageKey == null) {
-    throw new Error(
-      'OutputState.storageKey is unset: setActiveRun() must run before output processing reads the storage key',
-    );
-  }
-  return state.storageKey;
 }
 
 export function ensureRoundData(
@@ -164,22 +154,11 @@ function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
   return [...extras.values()];
 }
 
-export function setActiveRun(
+export function startRunWorkspacePreparation(
   state: OutputState,
   deps: OutputDependencies,
-  storageKey: StorageKey,
 ): void {
-  if (storageKey === state.storageKey) return;
-
-  // Clear reference to old preparation - allows GC even if it's still running
-  // The old operation will complete but its result is discarded
-  state.runPreparation = null;
-
-  state.storageKey = storageKey;
-  state.openedOutputs.clear();
-
-  const supportFiles = collectRunSupportFiles(deps.config);
   state.runPreparation = deps.fileService.prepareRunWorkspace(deps.baseFiles, {
-    linkFiles: supportFiles,
+    linkFiles: collectRunSupportFiles(deps.config),
   });
 }

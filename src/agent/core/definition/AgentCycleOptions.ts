@@ -105,13 +105,15 @@ export type TemplateVars = Partial<UserVars> & Record<string, unknown>;
 export type BuiltUserVars = UserVars & Record<string, unknown>;
 
 /**
- * Runtime validators for the fixed {@link UserVars} keys. Known keys are
- * optional here because persisted checkpoints may have dropped variables; the
+ * Runtime validators for the fixed {@link UserVars} keys, and the runtime
+ * view of the vocabulary itself: `@agent/prompt/userVars` derives its
+ * passthrough token list from these keys. Known keys are optional in the
+ * persisted record because checkpoints may have dropped variables; the
  * `satisfies` clause keeps this map in lockstep with the vocabulary. Custom
  * `requiredFilesInternal` keys are not in this map and pass through as
  * unknown values via the loose record below.
  */
-const UserVariableValueSchemas = {
+export const UserVariableValueSchemas = {
   MODEL: z.string(),
   INSTRUCTION: z.string(),
   IS_OPENAI_MODEL: z.boolean(),

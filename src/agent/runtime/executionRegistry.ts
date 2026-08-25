@@ -635,26 +635,8 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Wait for the next change on an execution — see {@link addListener} for the
-   * full wake set. Pass an AbortSignal for timeout cleanup.
-   */
-  waitForChange(executionId: string, signal?: AbortSignal): Promise<void> {
-    return new Promise<void>((resolve) => {
-      let detachAbort: () => void = () => {};
-      const detachListener = this.addListener(executionId, () => {
-        detachAbort();
-        detachListener();
-        resolve();
-      });
-      detachAbort = onAbort(signal, () => {
-        detachListener();
-        resolve();
-      });
-    });
-  }
-
-  /**
-   * Wait for any of the given executions to change.
+   * Wait for any of the given executions to change — see {@link addListener}
+   * for the full wake set. Pass an AbortSignal for timeout cleanup.
    * Resolves with the execution id that changed first (or '' on abort).
    */
   waitForAnyChange(
@@ -804,9 +786,9 @@ export class ExecutionRegistry {
    *   reached;
    * - {@link dispose}, for every execution still tracked at session teardown.
    *
-   * Private: the only callers are {@link waitForChange} and
-   * {@link waitForAnyChange}, which each detach inside the callback, so
-   * nothing observes a second wake through the same callback.
+   * Private: the only caller is {@link waitForAnyChange}, which detaches
+   * inside the callback, so nothing observes a second wake through the same
+   * callback.
    *
    * The callback receives the current handle, or `undefined` once the
    * execution has been untracked (terminal event) or the session disposed.

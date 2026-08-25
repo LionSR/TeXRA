@@ -63,7 +63,7 @@ interface ReviewDiff {
   truncated: boolean;
 }
 
-export type CollectReviewDiffResult =
+type CollectReviewDiffResult =
   { ok: true; value: ReviewDiff } | { ok: false; reason: string };
 
 function makeGit(cwd: string): SimpleGit {
@@ -181,7 +181,7 @@ async function resolveBaseBranch(
 }
 
 /** A branch offered by the "Diff Against…" picker. */
-export interface BaseBranchCandidate {
+interface BaseBranchCandidate {
   /** Ref usable as a diff base: a local branch name or `origin/<name>`. */
   ref: string;
   /** True when this is the currently checked-out branch. */

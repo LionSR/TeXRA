@@ -30,6 +30,7 @@ import type {
   ExtractResponseResult,
   GoogleToolCall,
   ModelCredentialSelection,
+  ResolvedClientCredential,
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/types/mediaTypes';
@@ -55,9 +56,7 @@ import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import {
-  resolveGoogleClient,
   uploadGoogleMediaEntries,
-  type GoogleClientCache,
   type GoogleMediaSource,
 } from './googleHandlerShared';
 import { tagGoogleSdkError } from './googleSdkError';
@@ -573,7 +572,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    */
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
 
-  private googleClient: GoogleClientCache | null = null;
+  private googleClient: {
+    readonly client: GoogleGenAI;
+    readonly credential: ResolvedClientCredential;
+  } | null = null;
 
   /** Whether the model can accept file attachments (image/video or native audio). */
   protected supportsFileUploads(): boolean {
@@ -591,21 +593,48 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return ModelHandlerGoogleInteractions.INLINE_MEDIA_LIMIT_BYTES;
   }
 
+  /**
+   * Resolve a `GoogleGenAI` client, cached per credential.
+   *
+   * The client is built without `retryOptions` so that only the flow-level
+   * retry loop (`RetryState`'s `getNodeMaxRetries`/`RETRY_BACKOFF_MS`) governs
+   * the user's retry budget; see the note below for why passing any value
+   * there is worse than passing none.
+   */
   async getClient(
     selection: ModelCredentialSelection = 'configured',
   ): Promise<GoogleGenAI> {
     const credential = await this.resolveClientCredential(selection);
-    return resolveGoogleClient({
-      sdkLabel: 'Interactions',
-      credential,
-      logger: this.logger,
-      cached: this.googleClient,
-      setCached: (cache) => {
-        this.googleClient = cache;
-      },
-      rememberRoute: (client, route, credentialSecret) =>
-        this.rememberClientCredentialRoute(client, route, credentialSecret),
-    });
+    const cached = this.googleClient;
+    if (
+      cached?.credential.apiKey === credential.apiKey &&
+      cached.credential.baseUrl === credential.baseUrl &&
+      cached.credential.route === credential.route
+    ) {
+      return cached.client;
+    }
+
+    this.logger.debug(
+      `Using Google GenAI Interactions SDK. Base URL: ${credential.baseUrl}`,
+    );
+    // No `retryOptions`: absent, the SDK's apiCall does a single plain fetch
+    // (zero SDK retries — the node loop owns retries) and failures surface as
+    // structured ApiError WITH `status`. Any retryOptions value — including
+    // `{ attempts: 1 }` — switches apiCall into a pRetry wrapper that converts
+    // non-ok responses into bare Errors with no status field, blinding the
+    // route gate's 429/5xx classification for Google.
+    const client = this.rememberClientCredentialRoute(
+      new GoogleGenAI({
+        apiKey: credential.apiKey,
+        httpOptions: {
+          baseUrl: credential.baseUrl ?? undefined,
+        },
+      }),
+      credential.route,
+      credential.apiKey,
+    );
+    this.googleClient = { client, credential };
+    return client;
   }
 
   override async refreshClient(

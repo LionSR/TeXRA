@@ -34,7 +34,7 @@ interface FollowUpQueueItem extends Omit<FollowUpQueueInput, 'origin'> {
 export type FollowUpQueueBatchItem = FollowUpQueueItem;
 
 /** A single visible follow-up drained for resume replay. */
-export type DrainedFollowUpItem = FollowUpQueueItem & {
+type DrainedFollowUpItem = FollowUpQueueItem & {
   readonly origin: VisibleFollowUpQueueItemOrigin;
 };
 

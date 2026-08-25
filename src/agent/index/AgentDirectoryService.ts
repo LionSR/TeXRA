@@ -3,25 +3,18 @@ import * as path from 'node:path';
 
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
+import { createLog } from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { GlobalStorageFS } from '@utils/files/storageFS';
 
 import {
   BUILTIN_WORKFLOW_AGENTS_DIR,
   BUILTIN_TOOL_USE_AGENTS_DIR,
 } from './BundledAgentDirectories';
 
-export interface AgentDirectoryPathStorage {
-  ensureDir(relativePath: string): Promise<void>;
-  fullPath(relativePath: string): string;
-}
-
 interface CustomAgentDirectoryStore {
   get(): string | undefined;
-}
-
-export interface AbsoluteDirectoryAccess {
-  exists(absolutePath: string): Promise<boolean>;
-  ensureDir(absolutePath: string): Promise<void>;
 }
 
 type AgentDirectoryDocsId = 'custom-agents';
@@ -36,21 +29,18 @@ export interface AgentDirectoryIssueReporter {
   report(message: string, docsId: AgentDirectoryDocsId): Promise<void>;
 }
 
-export interface AgentDirectoryServiceLogger {
-  debug(message: string, data?: unknown): void;
-  error(message: string, data?: unknown): void;
-}
-
 export interface AgentDirectoryServiceOptions {
-  storage: AgentDirectoryPathStorage;
+  channel: string;
   customDirectoryStore: CustomAgentDirectoryStore;
-  absoluteDirectories: AbsoluteDirectoryAccess;
   issueReporter: AgentDirectoryIssueReporter;
-  logger: AgentDirectoryServiceLogger;
 }
 
 export class AgentDirectoryService {
-  constructor(private readonly options: AgentDirectoryServiceOptions) {}
+  private readonly log: ReturnType<typeof createLog>;
+
+  constructor(private readonly options: AgentDirectoryServiceOptions) {
+    this.log = createLog(options.channel);
+  }
 
   async builtIn(): Promise<string> {
     return this.ensureBuiltInDir(BUILTIN_WORKFLOW_AGENTS_DIR);
@@ -100,33 +90,26 @@ export class AgentDirectoryService {
   }
 
   private async ensureBuiltInDir(dirName: string): Promise<string> {
-    await this.options.storage.ensureDir(dirName);
-    const basePath = this.options.storage.fullPath(dirName);
-    this.options.logger.debug(
-      `Using built-in ${dirName} directory: ${basePath}`,
-    );
+    await GlobalStorageFS.ensureDir(dirName);
+    const basePath = GlobalStorageFS.fullPath(dirName);
+    this.log.debug(`Using built-in ${dirName} directory: ${basePath}`);
     return basePath;
   }
 
   private async ensureDefaultCustomDir(): Promise<string> {
     try {
-      await this.options.storage.ensureDir(CUSTOM_AGENTS_STORAGE_DIR);
+      await GlobalStorageFS.ensureDir(CUSTOM_AGENTS_STORAGE_DIR);
     } catch (error) {
-      this.options.logger.error(
-        'Failed to create default custom agents directory',
-        error,
-      );
+      this.log.error('Failed to create default custom agents directory', {
+        data: error,
+      });
       throw new Error(
         'Unable to create custom agents directory. Please check permissions.',
       );
     }
 
-    const defaultPath = this.options.storage.fullPath(
-      CUSTOM_AGENTS_STORAGE_DIR,
-    );
-    this.options.logger.debug(
-      `Using default custom agents directory: ${defaultPath}`,
-    );
+    const defaultPath = GlobalStorageFS.fullPath(CUSTOM_AGENTS_STORAGE_DIR);
+    this.log.debug(`Using default custom agents directory: ${defaultPath}`);
     return defaultPath;
   }
 
@@ -138,7 +121,7 @@ export class AgentDirectoryService {
     }
 
     if (!path.isAbsolute(configuredPath)) {
-      this.options.logger.error(
+      this.log.error(
         `Custom agents directory must be an absolute path: ${configuredPath}`,
       );
       await this.options.issueReporter.report(
@@ -149,10 +132,8 @@ export class AgentDirectoryService {
     }
 
     const parentDir = path.dirname(configuredPath);
-    const parentExists =
-      await this.options.absoluteDirectories.exists(parentDir);
-    if (!parentExists) {
-      this.options.logger.error(
+    if (!(await AbsoluteFS.exists(parentDir))) {
+      this.log.error(
         `Parent directory does not exist for custom agents directory: ${parentDir}`,
       );
       await this.options.issueReporter.report(
@@ -162,8 +143,8 @@ export class AgentDirectoryService {
       return undefined;
     }
 
-    await this.options.absoluteDirectories.ensureDir(configuredPath);
-    this.options.logger.debug(
+    await AbsoluteFS.ensureDir(configuredPath);
+    this.log.debug(
       `Using custom agents directory from setting: ${configuredPath}`,
     );
     return configuredPath;

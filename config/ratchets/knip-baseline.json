@@ -1358,12 +1358,6 @@
       "name": "TaskStateSchema"
     },
     {
-      "file": "src/agent/implementations/flows/reflection/output/outputFileExtraction.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "processMultipleOutputs"
-    },
-    {
       "file": "src/agent/implementations/flows/reflection/ResponseCycleFlow.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -1374,24 +1368,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "computeRoundStageTotal"
-    },
-    {
-      "file": "src/agent/index/AgentDirectoryService.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "AbsoluteDirectoryAccess"
-    },
-    {
-      "file": "src/agent/index/AgentDirectoryService.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "AgentDirectoryPathStorage"
-    },
-    {
-      "file": "src/agent/index/AgentDirectoryService.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "AgentDirectoryServiceLogger"
     },
     {
       "file": "src/agent/index/agentRegistry.ts",
@@ -1536,12 +1512,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "terminalResultToast"
-    },
-    {
-      "file": "src/agent/runtime/textConnection.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "bestConnectionMethod"
     },
     {
       "file": "src/agent/storage/conversationFormat.ts",

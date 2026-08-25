@@ -573,7 +573,6 @@ describe('retrieveSessionResumeData', () => {
         continuationGenerationId,
         structured: { title: 'Durable result' },
       }),
-      changed: false,
     });
   });
 
@@ -585,7 +584,7 @@ describe('retrieveSessionResumeData', () => {
       stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
     });
 
-    expect(result).toMatchObject({ success: true, changed: false });
+    expect(result).toMatchObject({ success: true });
     if (!result.success) return;
     expect(result.data).not.toHaveProperty('modelId');
   });
@@ -603,7 +602,6 @@ describe('retrieveSessionResumeData', () => {
     expect(result).toMatchObject({
       success: true,
       data: { continuationGenerationId, modelId: 'gpt55' },
-      changed: false,
     });
   });
 

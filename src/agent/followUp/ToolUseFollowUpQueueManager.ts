@@ -10,7 +10,7 @@ import { FollowUpQueue, type FollowUpQueueInput } from './FollowUpQueue';
 
 const logger = createLog('ToolUseFollowUpQueue');
 
-export type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';
+type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';
 
 interface QueueEntry {
   readonly queue: FollowUpQueue;
@@ -52,7 +52,7 @@ export interface FollowUpRecoveryLease
  * entry to join, or a boundary that cannot accept input at all (disposed
  * session, terminalized stream).
  */
-export type FollowUpSubmission =
+type FollowUpSubmission =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'delivered_live' }
   | { readonly kind: 'queued'; readonly lease?: FollowUpRecoveryLease }

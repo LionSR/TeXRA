@@ -284,7 +284,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     await this.waitWithTimeout(
       timeout,
       (signal) =>
-        currentSession().executions.waitForChange(executionId, signal),
+        currentSession().executions.waitForAnyChange([executionId], signal),
       () => shouldSkipWait(executionId),
     );
   }
