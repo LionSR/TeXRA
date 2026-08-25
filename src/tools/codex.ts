@@ -460,14 +460,20 @@ async function createCodexThread(
     workingDir || !input.thread_id
       ? buildAgentWorkspaceOptions(workingDir)
       : {};
+  // Probe Extra High support only when that tier is selected so other
+  // efforts do not wait on a slow or hung Codex binary.
+  const requestedEffort = config.getCodexCliReasoningEffort(true);
   const threadOptions: ThreadOptions = {
     ...workspace,
     sandboxMode,
     approvalPolicy: config.getCodexApprovalPolicy(),
     model: config.CODEX_CLI_MODEL,
-    modelReasoningEffort: config.getCodexCliReasoningEffort(
-      await codexBinarySupportsXhigh(codexPath),
-    ),
+    modelReasoningEffort:
+      requestedEffort === 'xhigh'
+        ? config.getCodexCliReasoningEffort(
+            await codexBinarySupportsXhigh(codexPath),
+          )
+        : requestedEffort,
     skipGitRepoCheck: true as const,
   };
   return input.thread_id
