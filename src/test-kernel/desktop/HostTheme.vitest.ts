@@ -42,14 +42,12 @@ describe('applyHostBodyTheme', () => {
     restoreDom();
   });
 
-  it('replaces stale vscode-* / texra-* body classes', () => {
+  it('replaces stale vscode-* body classes', () => {
     const body = globalThis.document.body;
-    body.classList.add('vscode-light', 'texra-light', 'unrelated-class');
+    body.classList.add('vscode-light', 'unrelated-class');
     applyHostBodyTheme('dark');
     expect(body.classList.contains('vscode-dark')).toBe(true);
-    expect(body.classList.contains('texra-dark')).toBe(true);
     expect(body.classList.contains('vscode-light')).toBe(false);
-    expect(body.classList.contains('texra-light')).toBe(false);
     // Caller-set classes that aren't theme-related must not be touched.
     expect(body.classList.contains('unrelated-class')).toBe(true);
     expect(body.dataset.vscodeThemeKind).toBe('dark');

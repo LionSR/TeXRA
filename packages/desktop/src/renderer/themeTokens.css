@@ -51,13 +51,11 @@
   --desktop-color-background: light-dark(#ffffff, #212121);
   --desktop-color-foreground: light-dark(#0d0d0d, #ececec);
   --desktop-color-muted: light-dark(#5d5d5d, #b4b4b4);
-  --desktop-color-soft: light-dark(#8f8f8f, #8e8e8e);
 
   /* Surface ladder. Opaque neutral steps keep nested panels legible without
      translucent blue layers compounding into unrelated colors. */
   --desktop-color-sidebar: light-dark(#f9f9f9, #171717);
   --desktop-color-sidebar-header: light-dark(#f4f4f4, #2f2f2f);
-  --desktop-color-surface-3: light-dark(#ececec, #424242);
 
   /* Seams are intentionally quiet: enough contrast to explain containment,
      but never strong enough to make every region look like a card. */
@@ -82,12 +80,6 @@
   --desktop-color-accent-hover: light-dark(#2f2f2f, #ffffff);
   --desktop-color-accent-subtle: light-dark(#ececec, #3a3a3a);
   --desktop-color-focus: light-dark(#0d0d0d, #ffffff);
-  /* Kept as a background-image-compatible value for existing consumers, but
-     intentionally flat: the old blue-to-purple gradient dominated the shell. */
-  --desktop-gradient-brand: light-dark(
-    linear-gradient(#0d0d0d, #0d0d0d),
-    linear-gradient(#f4f4f4, #f4f4f4)
-  );
 
   --desktop-color-button-secondary: light-dark(#f4f4f4, #2f2f2f);
   --desktop-color-button-secondary-hover: light-dark(#e7e7e7, #424242);
@@ -104,10 +96,6 @@
     0 1px 2px rgb(0 0 0 / 6%),
     0 1px 2px rgb(0 0 0 / 24%)
   );
-  --desktop-shadow-md: light-dark(
-    0 4px 12px rgb(0 0 0 / 8%),
-    0 6px 18px rgb(0 0 0 / 28%)
-  );
   --desktop-shadow-lg: light-dark(
     0 18px 48px rgb(0 0 0 / 14%),
     0 24px 64px rgb(0 0 0 / 38%)
@@ -122,7 +110,6 @@
     rgb(255 207 92 / 13%)
   );
   --desktop-color-info: light-dark(#087ea4, #74c7ec);
-  --desktop-color-info-background: light-dark(#e7f5fa, rgb(116 199 236 / 14%));
   --desktop-color-success: light-dark(#0a7a54, #56e0a0);
   --desktop-color-success-background: light-dark(
     #e3f7ee,
@@ -132,7 +119,6 @@
   --desktop-color-orange: light-dark(#c2410c, #ff9d54);
   --desktop-color-yellow: light-dark(#a16207, #ffcf5c);
   --desktop-color-purple: light-dark(#7c3aed, #b183ff);
-  --desktop-color-cyan: light-dark(#0e8ba1, #5fd9e8);
   --desktop-color-terminal-selection: light-dark(
     #e7e7e7,
     rgb(255 255 255 / 18%)
@@ -358,7 +344,6 @@
   /* Seams. Only where a border is load-bearing; large regions separate by a
      background step. */
   --border-hairline: light-dark(rgb(0 0 0 / 10%), rgb(255 255 255 / 10%));
-  --border-hairline-soft: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
   --border-hairline-strong: light-dark(
     rgb(0 0 0 / 15%),
     rgb(255 255 255 / 20%)
@@ -371,9 +356,7 @@
   --control-padding-inline: 6px;
   --control-fill: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
   --control-fill-hover: light-dark(rgb(0 0 0 / 8%), rgb(255 255 255 / 9%));
-  --opacity-faint: 0.35;
   --opacity-disabled: 0.5;
-  --opacity-muted: 0.6;
   --row-height: 36px;
   --row-radius: var(--wa-border-radius-m);
   --row-padding: 6px 10px;
@@ -381,7 +364,6 @@
   --focus-ring-offset: 2px;
   --textarea-h-s: 2.75rem;
   --textarea-h-m: 6rem;
-  --textarea-h-l: 6.625rem;
 
   /* Two typographic regimes: 13px chrome (this hosts a code editor and a
      terminal, where 16px chrome would cost real content width) and 16px prose
@@ -411,14 +393,12 @@
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --letter-spacing-tight: -0.005em;
-  --width-content-max: 1000px;
 
-  /* Motion. One easing, three durations; only background-color, opacity, and
+  /* Motion. One easing, two durations; only background-color, opacity, and
      box-shadow are ever transitioned. */
   --transition-ease: cubic-bezier(0.2, 0, 0, 1);
   --transition-fast: 120ms var(--transition-ease);
   --transition-normal: 180ms var(--transition-ease);
-  --transition-relaxed: 300ms ease;
 
   /* Buttons — niche tokens consumers still need. */
   --wa-color-button-hover: var(--desktop-color-accent-hover);
@@ -559,28 +539,24 @@
 /* The host's explicit theme choice pins `color-scheme`, which is what resolves
    every `light-dark()` pair above. Both themes are first-class: light is a
    paper-white skin with neutral shadows, dark is the deep blue-black canvas. */
-body.vscode-light,
-body.texra-light {
+body.vscode-light {
   color-scheme: light;
   --desktop-canvas-wash: var(--desktop-canvas-wash-light);
 }
 
-body.vscode-dark,
-body.texra-dark {
+body.vscode-dark {
   color-scheme: dark;
   --desktop-canvas-wash: var(--desktop-canvas-wash-dark);
 }
 
 body.vscode-high-contrast,
-body.vscode-high-contrast-light,
-body.texra-high-contrast {
+body.vscode-high-contrast-light {
   color-scheme: light dark;
   --desktop-color-background: Canvas;
   --desktop-color-foreground: CanvasText;
   --desktop-color-muted: GrayText;
   --desktop-color-sidebar: Canvas;
   --desktop-color-sidebar-header: Canvas;
-  --desktop-color-surface-3: Canvas;
   --desktop-color-border: CanvasText;
   --desktop-color-widget-border: CanvasText;
   --desktop-edge-highlight: none;
@@ -592,7 +568,6 @@ body.texra-high-contrast {
   --desktop-color-accent-hover: Highlight;
   --desktop-color-accent-subtle: Canvas;
   --desktop-color-focus: Highlight;
-  --desktop-gradient-brand: linear-gradient(Highlight, Highlight);
   --desktop-color-button-secondary: ButtonFace;
   --desktop-color-button-secondary-hover: ButtonFace;
   --desktop-color-toolbar-active: Highlight;
@@ -602,7 +577,6 @@ body.texra-high-contrast {
   --desktop-color-menu-border: CanvasText;
   --desktop-color-shadow: transparent;
   --desktop-shadow-sm: none;
-  --desktop-shadow-md: none;
   --desktop-shadow-lg: none;
   --desktop-canvas-wash: none;
   /* Error/warning FOREGROUNDS stay CanvasText: Mark is a background keyword
@@ -676,7 +650,6 @@ body.texra-high-contrast {
     --wa-transition-fast: 0ms;
     --transition-fast: 0ms;
     --transition-normal: 0ms;
-    --transition-relaxed: 0ms;
   }
 }
 
