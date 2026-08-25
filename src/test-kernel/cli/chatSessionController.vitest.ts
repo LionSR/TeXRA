@@ -313,8 +313,10 @@ function installSession(overrides: Record<string, unknown> = {}): void {
   };
   mocks.defaultSession.mockReturnValue({
     approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
-    useHostInteractions: vi.fn(() => mocks.detachHostInteractions),
-    interactions: { cancel: mocks.cancelInteractions },
+    interactions: {
+      use: vi.fn(() => mocks.detachHostInteractions),
+      cancel: mocks.cancelInteractions,
+    },
     events: { emit: mocks.sessionEventEmit },
     followUps: {
       claimRecovery: vi.fn((streamId: StreamTabId) => ({
@@ -360,8 +362,6 @@ function installOwnerSession(): {
   });
   const interactions = new SessionHostInteractions();
   installSession({
-    useHostInteractions: (adapter: Parameters<typeof interactions.use>[0]) =>
-      interactions.use(adapter),
     interactions,
     events,
     status,

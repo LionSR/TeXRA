@@ -1215,7 +1215,7 @@ describe('ModelInvocationNode retry', () => {
     const streamId = 'retry-state-session-bridge' as StreamTabId;
     const session = createTestSession();
     const recording = createRecordingHost();
-    session.useHostInteractions(recording.interactions);
+    session.interactions.use(recording.interactions);
     const { node } = createRetryNode(streamId, undefined, undefined, session);
     const streamStatus = session.status;
 

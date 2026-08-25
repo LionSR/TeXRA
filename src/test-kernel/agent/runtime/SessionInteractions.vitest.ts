@@ -147,7 +147,7 @@ function createPortSession(): {
     getApprovalHandlers: () => handlers,
     getToolEditApprovals: () => toolEditApprovals,
   });
-  session.useHostInteractions(interactions);
+  session.interactions.use(interactions);
   return {
     session,
     uiEvents,
@@ -277,7 +277,7 @@ describe('session.interactions immediate capabilities', () => {
       accepted: true,
       resolvedPath: criticism.absolutePath,
     }));
-    session.useHostInteractions({
+    session.interactions.use({
       readDiagnostics,
       addCriticism,
       cancel: vi.fn(),
@@ -301,7 +301,7 @@ describe('session.interactions immediate capabilities', () => {
 
   it('does not expose or replay immediate capabilities while detached', () => {
     const session = createTestSession();
-    const detach = session.useHostInteractions({
+    const detach = session.interactions.use({
       readDiagnostics: vi.fn(async () => [diagnostic]),
       addCriticism: vi.fn(() => ({
         accepted: true,
@@ -319,7 +319,7 @@ describe('session.interactions immediate capabilities', () => {
       accepted: true,
       resolvedPath: criticism.absolutePath,
     }));
-    session.useHostInteractions({
+    session.interactions.use({
       readDiagnostics,
       addCriticism,
       cancel: vi.fn(),
@@ -334,7 +334,7 @@ describe('session.interactions immediate capabilities', () => {
     const session = createTestSession();
     const firstInfo = vi.fn();
     const firstEmit = vi.fn();
-    const detach = session.useHostInteractions({
+    const detach = session.interactions.use({
       emit: firstEmit,
       showInfoMessage: firstInfo,
       cancel: vi.fn(),
@@ -356,7 +356,7 @@ describe('session.interactions immediate capabilities', () => {
 
     const secondInfo = vi.fn();
     const secondEmit = vi.fn();
-    const detachSecond = session.useHostInteractions({
+    const detachSecond = session.interactions.use({
       emit: secondEmit,
       showInfoMessage: secondInfo,
       cancel: vi.fn(),
@@ -376,7 +376,7 @@ describe('session.interactions immediate capabilities', () => {
     detachSecond();
     const thirdInfo = vi.fn();
     const thirdEmit = vi.fn();
-    session.useHostInteractions({
+    session.interactions.use({
       emit: thirdEmit,
       showInfoMessage: thirdInfo,
       cancel: vi.fn(),
@@ -401,7 +401,7 @@ describe('session.interactions immediate capabilities', () => {
 
     const firstInfo = vi.fn();
     let detachFirst = (): void => undefined;
-    detachFirst = session.useHostInteractions({
+    detachFirst = session.interactions.use({
       showInfoMessage: (message) => {
         firstInfo(message);
         detachFirst();
@@ -414,7 +414,7 @@ describe('session.interactions immediate capabilities', () => {
     expect(firstInfo).toHaveBeenCalledWith('first');
 
     const secondInfo = vi.fn();
-    session.useHostInteractions({
+    session.interactions.use({
       showInfoMessage: secondInfo,
       cancel: vi.fn(),
     });
@@ -434,7 +434,7 @@ describe('session.interactions immediate capabilities', () => {
     // (a desktop renderer post during teardown) must read as not delivered,
     // not escape as an arbitrary host exception (#10466).
     const session = createTestSession();
-    session.useHostInteractions({
+    session.interactions.use({
       emit: () => {
         throw new Error('renderer torn down mid-post');
       },
@@ -476,7 +476,7 @@ describe('session.interactions immediate capabilities', () => {
       },
       cancel: vi.fn(),
     };
-    session.useHostInteractions(throwingHost);
+    session.interactions.use(throwingHost);
     await Promise.resolve();
     await Promise.resolve();
 
@@ -490,7 +490,7 @@ describe('session.interactions immediate capabilities', () => {
     const session = createTestSession();
     const firstInfo = vi.fn();
     const firstEmit = vi.fn();
-    const detach = session.useHostInteractions({
+    const detach = session.interactions.use({
       emit: firstEmit,
       showInfoMessage: firstInfo,
       cancel: vi.fn(),
@@ -510,7 +510,7 @@ describe('session.interactions immediate capabilities', () => {
     detach();
     const secondInfo = vi.fn();
     const secondEmit = vi.fn();
-    session.useHostInteractions({
+    session.interactions.use({
       emit: secondEmit,
       showInfoMessage: secondInfo,
       cancel: vi.fn(),
@@ -530,7 +530,7 @@ describe('session.interactions immediate capabilities', () => {
     }
 
     const messages: string[] = [];
-    session.useHostInteractions({
+    session.interactions.use({
       showInfoMessage: (message) => {
         messages.push(message);
       },
@@ -550,7 +550,7 @@ describe('session.interactions request bookkeeping', () => {
     const session = createTestSession();
     const adapter = createControllablePlanAdapter();
     session.interactions.dispose();
-    session.useHostInteractions(adapter.interactions);
+    session.interactions.use(adapter.interactions);
 
     expect(adapter.dispose).toHaveBeenCalledOnce();
     session.dispose();
@@ -580,7 +580,7 @@ describe('session.interactions request bookkeeping', () => {
   it('disposes attachments even when cancellation throws', () => {
     const session = createTestSession();
     const dispose = vi.fn();
-    session.useHostInteractions({
+    session.interactions.use({
       cancel: () => {
         throw new Error('cancel failed');
       },
@@ -608,7 +608,7 @@ describe('session.interactions request bookkeeping', () => {
 
       // Parking stays load-bearing: a host attaching later still replays the
       // request exactly once (this is how a webview reload recovers a prompt).
-      session.useHostInteractions(adapter.interactions);
+      session.interactions.use(adapter.interactions);
       expect(adapter.requests).toHaveLength(1);
       expect(
         adapter.submit('approval:parked-warning', { action: 'approve' }),
@@ -636,7 +636,7 @@ describe('session.interactions request bookkeeping', () => {
       );
 
       expect(session.interactions.pendingCount).toBe(1);
-      session.useHostInteractions(adapter.interactions);
+      session.interactions.use(adapter.interactions);
       expect(adapter.requests).toHaveLength(1);
       expect(
         adapter.submit('approval:throwing-warning', { action: 'approve' }),
@@ -654,7 +654,7 @@ describe('session.interactions request bookkeeping', () => {
 
   it('settles against the documented minimal `{ cancel }` host', async () => {
     const session = createTestSession();
-    session.useHostInteractions({ cancel: vi.fn() });
+    session.interactions.use({ cancel: vi.fn() });
     try {
       await expect(
         requestPlan(session, 'approval:minimal-host'),
@@ -672,7 +672,7 @@ describe('session.interactions request bookkeeping', () => {
       const pending = requestPlan(session, 'approval:unattached');
       expect(adapter.requests).toEqual([]);
 
-      session.useHostInteractions(adapter.interactions);
+      session.interactions.use(adapter.interactions);
       expect(adapter.requests).toHaveLength(1);
       expect(adapter.submit('approval:unattached', { action: 'approve' })).toBe(
         true,
@@ -693,7 +693,7 @@ describe('session.interactions request bookkeeping', () => {
       pendingCounts.push(count),
     );
     try {
-      const detach = session.useHostInteractions(first.interactions);
+      const detach = session.interactions.use(first.interactions);
       const pending = requestPlan(session, 'approval:reattach');
       detach();
       await Promise.resolve();
@@ -705,7 +705,7 @@ describe('session.interactions request bookkeeping', () => {
         ),
       ).toHaveLength(1);
 
-      session.useHostInteractions(second.interactions);
+      session.interactions.use(second.interactions);
       expect(second.requests).toHaveLength(1);
       expect(second.submit('approval:reattach', { action: 'approve' })).toBe(
         true,
@@ -786,7 +786,7 @@ describe('session.interactions request bookkeeping', () => {
         agentName: 'proofreader',
       });
 
-      session.useHostInteractions({ emit, cancel: vi.fn() });
+      session.interactions.use({ emit, cancel: vi.fn() });
       await Promise.resolve();
       expect(emit).not.toHaveBeenCalled();
     } finally {
@@ -814,9 +814,9 @@ describe('session.interactions request bookkeeping', () => {
     const first = createControllablePlanAdapter();
     const second = createControllablePlanAdapter();
     try {
-      session.useHostInteractions(first.interactions);
+      session.interactions.use(first.interactions);
       const pending = requestPlan(session, 'approval:handoff');
-      const detachSecond = session.useHostInteractions(second.interactions);
+      const detachSecond = session.interactions.use(second.interactions);
 
       expect(first.submit('approval:handoff', { action: 'reject' })).toBe(
         false,
@@ -896,7 +896,7 @@ describe('session.interactions request bookkeeping', () => {
     session.interactions.onPendingCountChange((count) =>
       pendingCounts.push(count),
     );
-    session.useHostInteractions(adapter.interactions);
+    session.interactions.use(adapter.interactions);
     const pending = requestPlan(session, 'approval:dispose-attached');
 
     session.dispose();

@@ -39,7 +39,7 @@ describe('OpenPdfTool', () => {
     const openPdf = vi.fn<(request: OpenPdfRequest) => Promise<void>>();
     openPdf.mockResolvedValue(undefined);
     detachHostInteractions();
-    detachHostInteractions = defaultSession().useHostInteractions({
+    detachHostInteractions = defaultSession().interactions.use({
       openPdf,
       cancel: () => undefined,
     });

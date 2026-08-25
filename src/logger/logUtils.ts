@@ -46,7 +46,7 @@ interface OutputSink {
 
 type OutputChannelFactory = (name: string) => OutputSink;
 
-export interface OutputChannelFactoryOptions {
+interface OutputChannelFactoryOptions {
   /** Preserve raw output only for a local operator-controlled terminal. */
   readonly trusted?: boolean;
 }

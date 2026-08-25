@@ -374,7 +374,7 @@ export function createChatSessionController(
     readonly finalize: () => void;
   } => {
     const presentationHost = createCliRuntimeHost(sessionContext);
-    const detachHostInteractions = runtimeSession.useHostInteractions(
+    const detachHostInteractions = runtimeSession.interactions.use(
       createTuiHostInteractions(presentationHost, sessionContext),
     );
     const detachResultToast = attachTerminalResultToast(

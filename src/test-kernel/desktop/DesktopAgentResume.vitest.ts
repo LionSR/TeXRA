@@ -133,7 +133,7 @@ function attachResultPresenter(session: SessionHandle): {
   const emit = vi.fn();
   return {
     emit,
-    detach: session.useHostInteractions({ emit, cancel: vi.fn() }),
+    detach: session.interactions.use({ emit, cancel: vi.fn() }),
   };
 }
 

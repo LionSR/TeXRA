@@ -436,7 +436,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     const stream = 'stream:edit-bypass';
     const session = createTestSession();
     const setApprovalBypassState = vi.fn();
-    session.useHostInteractions({
+    session.interactions.use({
       setApprovalBypassState,
       cancel: vi.fn(),
     });
@@ -562,7 +562,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     const stream = 'stream:proposal-bypass';
     const session = createTestSession();
     const setApprovalBypassState = vi.fn();
-    session.useHostInteractions({
+    session.interactions.use({
       setApprovalBypassState,
       cancel: vi.fn(),
     });

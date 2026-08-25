@@ -70,12 +70,10 @@ vi.mock('@agent/trace', () => ({
 }));
 vi.mock('@agent/runtime/SessionHandle', () => ({
   defaultSession: () => ({
-    interactions: {},
-    useHostInteractions: () => () => {},
+    interactions: { use: () => () => {} },
   }),
   tryDefaultSession: () => ({
-    interactions: {},
-    useHostInteractions: () => () => {},
+    interactions: { use: () => () => {} },
   }),
 }));
 vi.mock('@agent/runtime/terminalResultToast', () => ({

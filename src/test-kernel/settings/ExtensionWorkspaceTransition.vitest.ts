@@ -83,13 +83,11 @@ vi.mock('@agent/trace', () => ({
 vi.mock('@agent/runtime/SessionHandle', () => ({
   StorageRootChangeRefusedError: class extends Error {},
   defaultSession: () => ({
-    interactions: {},
-    useHostInteractions: () => () => {},
+    interactions: { use: () => () => {} },
     setApprovalPolicy: mocks.setApprovalPolicy,
   }),
   tryDefaultSession: () => ({
-    interactions: {},
-    useHostInteractions: () => () => {},
+    interactions: { use: () => () => {} },
     setApprovalPolicy: mocks.setApprovalPolicy,
   }),
 }));

@@ -37,7 +37,7 @@ let detachHostInteractions = (): void => {};
 function installTestPlatform(): Promise<void> {
   return installPlatform({}).then(() => {
     detachHostInteractions();
-    detachHostInteractions = defaultSession().useHostInteractions({
+    detachHostInteractions = defaultSession().interactions.use({
       requestToolEditApproval: (request) => {
         const handler = testApprovalHandler;
         if (!handler) {
@@ -57,7 +57,7 @@ async function inToolContext<T>(
   streamId: StreamTabId,
   run: () => T,
 ): Promise<Awaited<T>> {
-  const detach = defaultSession().useHostInteractions(interactions);
+  const detach = defaultSession().interactions.use(interactions);
   try {
     return await withRunContext(
       createRunContext({
@@ -221,9 +221,7 @@ describe('human prompt progress events', () => {
     ({ kind, setBypass }) => {
       const explicit = createRecordingHost();
       const streamId = `stream:${kind}-bypass` as StreamTabId;
-      const detach = defaultSession().useHostInteractions(
-        explicit.interactions,
-      );
+      const detach = defaultSession().interactions.use(explicit.interactions);
 
       try {
         setBypass(streamId, true);

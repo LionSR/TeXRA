@@ -153,7 +153,7 @@ describe('extension presentation-event emit port (#9251 replay gate)', () => {
           >,
         setApprovalBypassState: vi.fn(),
       });
-      const detach = session.useHostInteractions(interactions);
+      const detach = session.interactions.use(interactions);
       try {
         // The replay runs on a microtask queued by `use()`.
         await Promise.resolve();

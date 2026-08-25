@@ -20,6 +20,12 @@
 > is to record shovel-ready findings, not push into the green tree unbidden.
 > Every claim below carries a `file:line`, config path, or count checked at
 > `51c04c6`.
+>
+> **Update (follow-up, same branch):** at the maintainer's request ("refactor for
+> all the things agreed already") both removals §4a and §4b were subsequently
+> landed — see §8 for the diff and validation, mirroring `-08-22 §8`. The
+> design-gated items in §5 were explicitly left untouched, being open decisions
+> rather than agreed mechanical moves.
 
 ## 0. Verdict
 
@@ -44,16 +50,16 @@ package's 7-specifier floor nor the three entry files' exports changed.
 
 ## 1. Every `-08-22` tracked fact re-verifies at `51c04c6`
 
-| Item                              | `-08-22` state (`d455149`)                          | `51c04c6` state                                                                                                                                     |
-| --------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **§4a/§4b removals**              | landed this session (§8)                             | **still gone.** `grep` for `createToolUseFollowUpMessages` / `createAssistantMessageForPrefillText` in `modelHandlers/` returns no base definition. |
-| **L-3** (dead redaction branch)   | closed; `redactSecrets` single-arg                  | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                          |
-| **L-2** (process-global log sink) | module-singleton, deliberate; no platform port      | **unchanged.** `logUtils.ts` 256 LoC; sole host seam is `setOutputChannelFactory` (2 callers), `console` fallback when absent.                      |
-| **§7 Tier-1 doors**               | 4 of 8 landed (`export`/`review`/`templates` + rt.) | **present & stable.** `src/agent/{export,review,templates,followUp}/index.ts` all exist; `@agent/index` re-exports hold.                            |
+| Item                               | `-08-22` state (`d455149`)                          | `51c04c6` state                                                                                                                                     |
+| ---------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **§4a/§4b removals**               | landed this session (§8)                            | **still gone.** `grep` for `createToolUseFollowUpMessages` / `createAssistantMessageForPrefillText` in `modelHandlers/` returns no base definition. |
+| **L-3** (dead redaction branch)    | closed; `redactSecrets` single-arg                  | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                          |
+| **L-2** (process-global log sink)  | module-singleton, deliberate; no platform port      | **unchanged.** `logUtils.ts` 256 LoC; sole host seam is `setOutputChannelFactory` (2 callers), `console` fallback when absent.                      |
+| **§7 Tier-1 doors**                | 4 of 8 landed (`export`/`review`/`templates` + rt.) | **present & stable.** `src/agent/{export,review,templates,followUp}/index.ts` all exist; `@agent/index` re-exports hold.                            |
 | **M-3** `ModelHandler.ts` god-base | 2,069 LoC                                           | **2,043 LoC** (`wc -l`); −26, the `-08-22 §8` inlining. Genuinely shared behavior, no per-provider copy-paste (README's "shared, not duplicated").  |
-| **Provider-type-leak floor**      | `M`/`T` leak all four provider SDKs                 | **unchanged.** `ProviderMessage.ts:4-8` still imports message types from `@anthropic-ai/sdk`, `@google/genai`, `openai`, `@openrouter/sdk`.         |
-| **Node flow engine**              | 159 LoC, `BaseNode`/`Flow` only                     | **159 LoC** (`src/agent/node/index.ts`); still exactly `BaseNode` + `Flow` (single `export` `:159`). Matches CLAUDE.md.                             |
-| **Version**                       | 0.40.4 (short of the v0.41 `runFact.` gate)         | **0.40.5.** Advanced one patch; still short of the v0.41 retirement gate. Retirement not yet due.                                                   |
+| **Provider-type-leak floor**       | `M`/`T` leak all four provider SDKs                 | **unchanged.** `ProviderMessage.ts:4-8` still imports message types from `@anthropic-ai/sdk`, `@google/genai`, `openai`, `@openrouter/sdk`.         |
+| **Node flow engine**               | 159 LoC, `BaseNode`/`Flow` only                     | **159 LoC** (`src/agent/node/index.ts`); still exactly `BaseNode` + `Flow` (single `export` `:159`). Matches CLAUDE.md.                             |
+| **Version**                        | 0.40.4 (short of the v0.41 `runFact.` gate)         | **0.40.5.** Advanced one patch; still short of the v0.41 retirement gate. Retirement not yet due.                                                   |
 
 ## 2. Frozen host deep-import width — shrank on two hosts, held on the floor
 
@@ -169,7 +175,7 @@ mechanical retarget to `session.interactions.use(...)` (already public).
 
 1. **Model-handler port shape (forward-looking).** The public `IModelHandler` port
    is a hand-maintained 45-member `Pick<ModelHandler<…>>` (`src/agent/types/IModelHandler.ts`).
-   Internally the derivation is the correct anti-drift choice; but a *public* SDK
+   Internally the derivation is the correct anti-drift choice; but a _public_ SDK
    would want the port defined **intrinsically** rather than derived from the
    concrete base class. Not a defect and not mechanical — a manifest-design note.
 2. **Provider-SDK type leak (`M`/`T`) is the floor on `agent`'s 7 specifiers**
@@ -192,7 +198,7 @@ mechanical retarget to `session.interactions.use(...)` (already public).
 4. **Two open Tier-1 doors remain** (four of eight landed): fronting
    `agentCreatorFlow` (its deepest specifier; blocked on the interactive
    `AgentCreatorUI` design, §3), and a `core/state` door (blocked because a
-   *dynamic* `import()` the ratchet counts would leave the leaf live for zero
+   _dynamic_ `import()` the ratchet counts would leave the leaf live for zero
    ratchet gain).
 5. **`HostInteractions` required/optional (north-star TD-2a)** — open maintainer
    contract decision, not a mechanical cleanup. The public shape stays deliberately
@@ -201,7 +207,7 @@ mechanical retarget to `session.interactions.use(...)` (already public).
    shapes — `AgentFlowResult` (discriminated `workflow | toolUse`),
    `AgentFinalResult` (adds `diffs`/normalized `cost`), and the non-terminal
    `WAITING` state. The transforms are real (not delete candidates); documenting
-   *why* `WAITING` exists and *why* `cost`/`diffs` land only on the final is the
+   _why_ `WAITING` exists and _why_ `cost`/`diffs` land only on the final is the
    single largest "which result do I get?" clarification the surface needs.
 7. **Publication** remains gated on the named-external-consumer hold; the legal side
    cleared in the prior window (Apache-2.0 relicense, PocketFlow NOTICE, ToS
@@ -245,5 +251,64 @@ injectable logger/usage ports, the manifest decision on `IModelHandler` (its `M`
 leak and whether it can be a public export), and result-taxonomy documentation.
 Nothing found is a defect; nothing warrants a speculative edit into the green tree
 absent a maintainer request. Consistent with the routine's cadence — and unlike
-`-08-22 §8`, which landed at explicit request — this pass records §4a and §4b as
-shovel-ready and leaves the land decision to the maintainer.
+`-08-22 §8`, which landed at explicit request — this pass's scheduled run recorded
+§4a and §4b as shovel-ready and left the land decision to the maintainer; §8 below
+records both landed in the follow-up that decision authorized.
+
+## 8. Landed refactor — the two agreed removals (follow-up)
+
+At the maintainer's request ("refactor for all the things agreed already"), the two
+behavior-preserving removals §4a and §4b were executed rather than only recorded.
+Both are mechanical and independently verified zero-behavior-change; the
+design-gated items in §5 (the provider-type leak, the two open Tier-1 doors, the
+injectable logger/usage ports, the `IModelHandler` manifest decision) were left
+untouched, being open decisions rather than agreed moves.
+
+### 8a. Narrowed `OutputChannelFactoryOptions` off the logger's public surface
+
+Dropped the `export` keyword on `OutputChannelFactoryOptions` (`src/logger/logUtils.ts:49`),
+keeping it a local `interface` — it was only ever used as the internal parameter
+annotation on `setOutputChannelFactory` (`logUtils.ts:191`). −1 public export, one
+file, zero behavior change. The knip ratchet is unaffected (the type was internally
+used, not dead).
+
+### 8b. Removed `SessionHandle.useHostInteractions` (PT-2), re-routed every caller
+
+Deleted the one-line pass-through method (was `SessionHandle.ts:685-687`) and the
+now-unused `type HostInteractions` import it required. The class's header —
+"it re-exposes no per-concern methods" — is now literally true with no exception.
+**Re-routed all 69 call sites** across 30 files from `session.useHostInteractions(x)`
+to `session.interactions.use(x)` (the direct owner-addressing form the class already
+mandates; `SessionHostInteractions.use`, `HostInteractions.ts:429`, has the identical
+signature): 6 production callers (`packages/agent/src/index.ts`,
+`packages/desktop/.../desktopAgentExecution.ts`, `packages/cli/.../runExecution.ts`,
+`packages/cli/.../chatSessionController.ts`, `packages/cli/scripts/tui-harness.tsx`,
+`packages/extension/.../ProgressViewProvider.ts`) plus the test call sites. **Reshaped
+six test doubles** that faked or spied the removed method to instead target
+`interactions.use`: two fake sessions (`ProgressThemeSync.vitest.ts`,
+`ExtensionWorkspaceTransition.vitest.ts` — `interactions: {}` → `interactions: { use }`),
+two `vi.spyOn` sites (`DesktopAgentExecutionFactory.vitest.ts`,
+`DesktopAgentExecution.vitest.ts` — spy `session.interactions.use`, the latter now
+matching its sibling `session.events.subscribe` spy idiom), and two full mocks
+(`AgentPackage.vitest.ts` mock `@agent/runtime` SessionHandle now exposes
+`interactions.use`; `chatSessionController.vitest.ts` — one mock moved `use` onto
+`interactions`, one dropped a redundant shim since it already passed a real
+`SessionHostInteractions`). Also refreshed the stale
+`desktopAgentExecution.ts:392` comment.
+
+### 8c. Validation
+
+`npm run typecheck` — clean across all six stages (`workspace`, `test-kernel`,
+`agent` — the `@texra-ai/agent` SDK build, "Validated 725 declarations and 70
+external packages", the same count as `-08-22 §8c`, confirming the SDK declaration
+surface is unchanged and the provider-leak guard still passes — `cli`,
+`trace-viewer`, `desktop`). `npx eslint` on all touched `.ts`/`.tsx` — clean.
+`prettier --check` on every touched file — clean (two files reflowed by
+`--write` where the shorter call text let a wrapped line collapse). `npm run
+check:dead-code-ratchet` — "no new findings" (419 combined, matching the
+pre-change baseline exactly; the removed method was live and the narrowed export
+was internally used, so the ratchet is unaffected by design). All 29 changed
+vitest suites — **556/556 passed**. The `src/test-kernel/architecture/` suite —
+**106/106 passed**. Net diff: **37 files changed, ~89 insertions(+), ~98
+deletions(-)** — one facade method and one dead `export` removed, zero behavior
+change.

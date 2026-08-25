@@ -18,7 +18,7 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
   it('surfaces a rejected openExternalInquiry() as a tool error instead of an unhandled rejection', async () => {
     const session = createTestSession();
     const parentLease = session.followUps.claimLive(STREAM, 'flow')!;
-    session.useHostInteractions({
+    session.interactions.use({
       cancel: () => {},
       openExternalInquiry: () =>
         Promise.reject(new Error('external inquiry panel unavailable')),

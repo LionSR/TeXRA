@@ -2019,7 +2019,7 @@ if (SHOW_RETRY_APPROVAL) {
   await saveProviderApiKey('openai', 'sk-harness-openai-key');
   harnessRetryRuntimeHost = createCliRuntimeHost(HARNESS_CLI_CONTEXT);
   HARNESS_DISPOSERS.push(
-    defaultSession().useHostInteractions(
+    defaultSession().interactions.use(
       createTuiHostInteractions(harnessRetryRuntimeHost, HARNESS_CLI_CONTEXT),
     ),
   );
