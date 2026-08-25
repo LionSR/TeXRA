@@ -6,7 +6,10 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import { finalizeRun } from '@agent/storage/executionLifecycle';
+import {
+  finalizeRun,
+  retainFlowRecordUnlessCompleted,
+} from '@agent/storage/executionLifecycle';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -540,10 +543,7 @@ export async function runFlowWithLifecycle(
         // private lifecycle control. Other flows retain the historical
         // policy, read against the outcome finalization resolves rather
         // than this arm's report.
-        flowRecord:
-          flowRecordDisposition ??
-          ((resolved) =>
-            resolved === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve'),
+        flowRecord: flowRecordDisposition ?? retainFlowRecordUnlessCompleted,
       },
       ...arm,
     });

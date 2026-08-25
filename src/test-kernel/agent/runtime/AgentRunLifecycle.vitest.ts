@@ -956,7 +956,9 @@ describe('runFlowWithLifecycle', () => {
         expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
           executionId,
           outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'delete',
+          // Killing a WAITING subagent leaves the checkpoint that makes it
+          // resumable (#11315).
+          flowRecord: 'preserve',
         }),
       );
       // The kill path never resumes, so the per-suspension parent stage must

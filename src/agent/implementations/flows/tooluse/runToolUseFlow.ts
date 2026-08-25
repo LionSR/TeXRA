@@ -578,6 +578,15 @@ export async function runToolUseFlow<C = unknown>(
       outcome === RUN_OUTCOME.COMPLETED &&
       shared.structured === undefined
     ) {
+      // Rewind before throwing. The outcome was COMPLETED, so the rewind above
+      // was skipped and the cursor still points past the terminal step; the
+      // `catch` below then preserves the record. Preserving an un-rewound
+      // cursor produces a file no reader accepts -- `ResumableFlowRecordSchema`
+      // rejects `nextNodeId !== null`, so it is unresumable and only
+      // `history delete` can clear it (#11314). Rewinding makes the preserved
+      // record mean what preservation is for: a resume gets another model turn
+      // to call `submit_output`.
+      await activePersistedFlow?.prepareForFollowUp(shared);
       throw new Error(
         'Structured-output run completed without calling submit_output.',
       );
@@ -604,6 +613,15 @@ export async function runToolUseFlow<C = unknown>(
     } else if (shared.userCancelledRetry) {
       preservationReason =
         'Flow record preserved for resume after retry cancellation';
+    } else if (primaryFailure !== undefined) {
+      // Setup can fail before `persistenceRecoveryPending` is armed --
+      // `liveAttachment.attach()` and `takePendingFollowUps()` both run ahead
+      // of the existing-record guard. A non-resume launch reusing an
+      // executionId that already has a checkpoint would otherwise fall through
+      // to `'delete'` and destroy a record this run never owned (#11313).
+      // Preserving is safe in the ordinary case too: a genuinely fresh launch
+      // has no record, so this is a no-op rather than a leak.
+      preservationReason = 'Flow record preserved after setup failure';
     } else if (flowRunStarted || input.resume) {
       // A checkpoint can exist once the flow ran or a resume snapshot was
       // handed in. Only a genuinely completed run reports `'delete'`; a

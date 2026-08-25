@@ -9,7 +9,10 @@ import PQueue from 'p-queue';
 
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import { ExecutionLeaseLostError } from '@agent/storage/executionLease';
-import { finalizeRun } from '@agent/storage/executionLifecycle';
+import {
+  finalizeRun,
+  retainFlowRecordUnlessCompleted,
+} from '@agent/storage/executionLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -1071,7 +1074,9 @@ export class ExecutionRegistry {
       const finalization = await finalizeRun({
         executionId: handle.executionId,
         outcome: RUN_OUTCOME.CANCELLED,
-        flowRecord: 'delete',
+        // A stopped WAITING run is exactly what a user resumes. Deleting its
+        // checkpoint here was the #11304 invariant's first violation (#11315).
+        flowRecord: retainFlowRecordUnlessCompleted(RUN_OUTCOME.CANCELLED),
       });
       if (!finalization.ok) {
         logger.warn('Failed to finalize stopped waiting execution', {

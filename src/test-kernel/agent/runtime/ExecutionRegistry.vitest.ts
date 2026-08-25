@@ -650,7 +650,9 @@ describe('executionRegistry', () => {
         expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
           executionId,
           outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'delete',
+          // A stopped WAITING run keeps its checkpoint: this is precisely the
+          // run a user resumes (#11315).
+          flowRecord: 'preserve',
         });
       });
       expect(channelTraceMocks.warn).toHaveBeenCalledWith(
@@ -662,12 +664,12 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('persists a waiting stop when only flow-record deletion fails', async () => {
+  it('persists a waiting stop when only flow-record retention fails', async () => {
     const { streamStatus, registry } = createRegistry();
-    const executionId = 'exec-waiting-kill-flow-delete-failure' as ExecutionId;
+    const executionId = 'exec-waiting-kill-flow-retain-failure' as ExecutionId;
     const childStreamId =
-      'child-waiting-kill-flow-delete-failure' as StreamTabId;
-    const cleanupError = new Error('flow delete failed');
+      'child-waiting-kill-flow-retain-failure' as StreamTabId;
+    const cleanupError = new Error('flow retention failed');
     storageMocks.finalizeRun.mockResolvedValueOnce({
       ok: false,
       outcomePersisted: true,
@@ -689,7 +691,9 @@ describe('executionRegistry', () => {
         expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
           executionId,
           outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'delete',
+          // A stopped WAITING run keeps its checkpoint: this is precisely the
+          // run a user resumes (#11315).
+          flowRecord: 'preserve',
         });
       });
       expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
