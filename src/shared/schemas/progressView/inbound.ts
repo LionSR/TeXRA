@@ -87,8 +87,9 @@ const EnableDelegatedWorkApprovalMessageSchema = StreamScopedBaseSchema.extend({
 });
 
 /**
- * Set-on (idempotent) bypass enable, distinct from the shield's toggle: the
- * inline "approve always" prompt button means "enable", never "flip".
+ * Set-on (idempotent) bypass enable, distinct from the header's per-kind
+ * toggles: the inline "approve always" prompt button means "enable", never
+ * "flip".
  */
 const EnableApprovalBypassMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS),
@@ -281,6 +282,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     streamScopedCommand(
       PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
     ),
+    streamScopedCommand(PROGRESS_VIEW_COMMANDS.TOGGLE_BASH_APPROVAL_BYPASS),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS),
     EnableDelegatedWorkApprovalMessageSchema,
     EnableApprovalBypassMessageSchema,

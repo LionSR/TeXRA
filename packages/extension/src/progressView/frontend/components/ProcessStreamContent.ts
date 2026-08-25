@@ -81,7 +81,8 @@ export class ProcessStreamContent extends LitElement {
     if (!streamInfo || !streamState) return nothing;
 
     // Bash streams register as tool-use kind, so renderStreamHeader reflects
-    // their active YOLO / Super YOLO state from the shared tool-use fields.
+    // their AUTO-EDIT / AUTO-BASH / AUTO-TASK state from the shared tool-use
+    // fields.
     const command = (streamInfo.command ?? streamInfo.description ?? '').trim();
 
     return html`

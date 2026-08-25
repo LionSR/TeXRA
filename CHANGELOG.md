@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### Features
+
+- **Separate AUTO-EDIT, AUTO-BASH, and AUTO-TASK run controls** — the
+  extension and desktop run toolbar now matches the CLI: file edits and
+  shell commands each have their own auto-approve toggle, and AUTO-TASK
+  remains the complete grant for delegated agent work.
+
 #### Bug Fixes
 
 - **Google background responses are off by default** — Gemini workflow

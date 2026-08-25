@@ -67,7 +67,7 @@ The header provides a summary and actions for the selected stream:
 <p class="hero-caption">The status dot: green while running, blue while waiting for input, grey once finished, red on error.</p>
 
 - **Token and cost summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
-- **Stream header actions**: A toolbar of icon buttons acting on the selected stream. Workflow streams get Stop, Run New, Resume, Restore, Open in task storage, Export, Copy run context, Diff, Clean, and Pack; tool-use streams get Stop, Auto-approve edits and commands, Auto-approve agent work, Compact, Restore, Open in task storage, and Export. Export saves the conversation as Markdown, HTML, or PDF.
+- **Stream header actions**: A toolbar of icon buttons acting on the selected stream. Workflow streams get Stop, Run New, Resume, Restore, Open in task storage, Export, Copy run context, Diff, Clean, and Pack; tool-use streams get Stop, AUTO-EDIT, AUTO-BASH, AUTO-TASK, Compact, Restore, Open in task storage, and Export. Export saves the conversation as Markdown, HTML, or PDF.
 
 <StreamHeaderActions />
 
@@ -96,7 +96,7 @@ an **Accept** action that copies the edited version into your workspace.
 
 ### Auto-approve toggles
 
-The **Auto-approve edits and commands** toggle (shield icon) in the header lets tool-use agents edit files and run commands for this run without stopping to ask; a second **Auto-approve agent work** toggle (rocket icon) also auto-approves delegated agent tasks. Use it for tasks you trust; turn it off when you want to review each step.
+The header has three auto-approve toggles for the current run, matching the CLI status-bar badges. **AUTO-EDIT** (pencil) auto-approves file edits; **AUTO-BASH** (terminal) auto-approves shell commands — those two are independent, so turning one on does not take the other with it. **AUTO-TASK** (rocket) auto-approves delegated agent tasks and also later edits and commands. Use them for work you trust; turn them off when you want to review each step.
 
 ### Context utilization
 

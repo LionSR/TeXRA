@@ -76,6 +76,7 @@ import {
 const ACTIVE_STATE_BUTTONS = [
   ELEMENT_IDS.STOP_STREAM_BTN,
   ELEMENT_IDS.YOLO_TOGGLE_BTN,
+  ELEMENT_IDS.BASH_TOGGLE_BTN,
   ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
   ELEMENT_IDS.COMPACT_RESPONSE_BTN,
   ELEMENT_IDS.RESTORE_STATE_BTN,
@@ -417,8 +418,11 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
     const stage = state?.stage;
     // Tool-use-only bypass/goal indicators; workflow/process states report off.
     const toolUse = state && isToolUseState(state) ? state : null;
-    const yoloActive = Boolean(toolUse?.toolEditBypass);
-    const superYoloActive = Boolean(toolUse?.superYoloBypass);
+    const bypassActive = {
+      bash: Boolean(toolUse?.bashBypass),
+      superYolo: Boolean(toolUse?.superYoloBypass),
+      toolEdit: Boolean(toolUse?.toolEditBypass),
+    };
     const goalActive = Boolean(toolUse?.goalActive);
     const goalStatus = toolUse?.goalStatus;
     const goalObjective = toolUse?.goalObjective ?? '';
@@ -468,12 +472,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         this.archived ||
         computedDisabled ||
         (isCopyRunContext && runContext === '');
-      const isActive = Boolean(
-        btn.isToggle &&
-        (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
-          ? superYoloActive
-          : yoloActive),
-      );
+      const isActive = Boolean(btn.bypassKind && bypassActive[btn.bypassKind]);
       // A tooltip only shows on hover, so the copy confirmation also swaps the
       // icon — same pairing as the external-inquiry copy button.
       const copied = isCopyRunContext && this.copyRunContext.state.copied;

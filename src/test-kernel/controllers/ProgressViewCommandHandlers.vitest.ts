@@ -432,7 +432,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   });
 
-  it('sets tool-edit and bash together from the shield preset', async () => {
+  it('toggles file-edit and bash bypass independently', async () => {
     const stream = 'stream:edit-bypass';
     const session = createTestSession();
     const setApprovalBypassState = vi.fn();
@@ -457,14 +457,34 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     await Promise.resolve();
 
     expect(isApprovalBypassedForStream(stream, session)).toBe(true);
-    expect(isBashApprovalBypassedForStream(stream, session)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream, session)).toBe(false);
     expect(setApprovalBypassState).toHaveBeenCalledWith({
       streamId: stream,
       kind: 'toolEdit',
       bypassActive: true,
     });
     expect(showInfo).toHaveBeenCalledWith(
-      'File edits and shell commands will be auto-approved for this run.',
+      'File edits will be auto-approved for this run.',
+    );
+
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.TOGGLE_BASH_APPROVAL_BYPASS,
+        stream,
+      },
+      handlers,
+    );
+    await Promise.resolve();
+
+    expect(isApprovalBypassedForStream(stream, session)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream, session)).toBe(true);
+    expect(setApprovalBypassState).toHaveBeenCalledWith({
+      streamId: stream,
+      kind: 'bash',
+      bypassActive: true,
+    });
+    expect(showInfo).toHaveBeenCalledWith(
+      'Shell commands will be auto-approved for this run.',
     );
 
     expectDispatched(
@@ -477,7 +497,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     await Promise.resolve();
 
     expect(isApprovalBypassedForStream(stream, session)).toBe(false);
-    expect(isBashApprovalBypassedForStream(stream, session)).toBe(false);
+    expect(isBashApprovalBypassedForStream(stream, session)).toBe(true);
     expect(setApprovalBypassState).toHaveBeenCalledWith({
       streamId: stream,
       kind: 'toolEdit',
@@ -535,8 +555,8 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
   });
 
   it('leaves an existing grant of its own kind untouched', async () => {
-    // Set-on, never toggle: the shield or delegated inheritance can already
-    // have granted edit bypass while this prompt was open.
+    // Set-on, never toggle: the header toggle or delegated inheritance can
+    // already have granted edit bypass while this prompt was open.
     const stream = 'stream:yolo-enable';
     const handlers = createProgressViewCommandHandlers(
       createActions({ bypass: { showInfo: vi.fn() } }),
