@@ -51,7 +51,6 @@ import type {
   TokenValidationResult,
 } from '@agent/types/ModelHandlerContracts';
 import { createNeutralResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
-import { supportsReasoningLevel } from '@agent/modelHandlers/support/reasoningEffort';
 import type { ServerToolExtractionResult } from '@agent/types/ServerTools';
 import {
   attachContextWindowError,
@@ -70,6 +69,7 @@ import {
   type ResolvedModelConfig,
 } from '@model/openRouterRouting';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
+import { supportsReasoningLevel } from '@model/reasoningLevel';
 import { platform } from '@platform/platform';
 import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type {

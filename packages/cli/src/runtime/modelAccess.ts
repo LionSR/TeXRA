@@ -1,12 +1,22 @@
 // Local imports
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { resolveReasoningLevel } from '@model/reasoningLevel';
 import {
   decideRunModel,
   type RunModelCandidate,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
+import {
+  copilotRouteForModel,
+  getRuntimeModelConfig,
+} from '@model/runtimeModelRegistry';
+import { platform } from '@platform/platform';
 import type { ModelOptionData } from '@shared/schemas';
-import { isModelOptionAvailable } from '@shared/schemas';
+import {
+  isModelOptionAvailable,
+  REASONING_LEVEL_LABELS,
+} from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNever, unique } from '@utils/core';
 import { getGLMCodingPlan } from '@utils/config/providerConfig';
 
@@ -18,6 +28,8 @@ export interface CliModelAccess {
   /** Runnable with the currently configured credentials. */
   readonly available: boolean;
   readonly status: string;
+  /** Display-only reasoning summary for the interactive model picker. */
+  readonly reasoning?: string;
 }
 
 export interface CliModelPickerItem {
@@ -151,7 +163,9 @@ export function modelSelectItemsForCli(
 ): readonly CliModelPickerItem[] {
   return runnableCliModelAccessEntries(models).map((model) => {
     const disabledReason = getModelSwitchDisabledReason?.(model.model.value);
-    const status = formatModelStatusForCli(model);
+    const status = [formatModelStatusForCli(model), model.reasoning]
+      .filter((part) => part !== undefined)
+      .join(' · ');
     return {
       value: model.model.value,
       label: model.model.label || model.model.value,
@@ -171,19 +185,61 @@ export function emptyModelListMessage(
   return formatCliNoRunnableModelsMessage(options);
 }
 
-function toCliModelAccess(model: ModelOptionData): CliModelAccess {
+function reasoningDisplayForCli(
+  model: ModelOptionData,
+  override: string | undefined,
+): string | undefined {
+  if (model.availability === 'copilot-access') {
+    const effectiveConfig = copilotRouteForModel(model.value)?.effectiveConfig;
+    return effectiveConfig?.capabilities.supportsReasoning
+      ? 'reasoning: Default (provider managed)'
+      : undefined;
+  }
+
+  const config = getRuntimeModelConfig(model.value);
+  if (!config) return undefined;
+
+  const resolved = resolveReasoningLevel(config, override);
+  if (resolved?.kind === 'fixed') {
+    return `reasoning: ${REASONING_LEVEL_LABELS[resolved.level]} (fixed)`;
+  }
+  if (resolved?.kind !== 'configurable') return undefined;
+
+  if (resolved.overrideLevel !== undefined) {
+    return `reasoning: ${REASONING_LEVEL_LABELS[resolved.overrideLevel]}`;
+  }
+  const defaultLabel =
+    resolved.defaultLevel === undefined
+      ? ''
+      : ` (${REASONING_LEVEL_LABELS[resolved.defaultLevel]})`;
+  return `reasoning: Default${defaultLabel}`;
+}
+
+function toCliModelAccess(
+  model: ModelOptionData,
+  reasoningOverrides: Readonly<Record<string, string>>,
+): CliModelAccess {
   return {
     model,
     available: isModelOptionAvailable(model),
     status: formatModelAccessStatus(model),
+    reasoning: reasoningDisplayForCli(model, reasoningOverrides[model.value]),
   };
+}
+
+function getReasoningLevelOverrides(): Record<string, string> {
+  return platform().globalState.get<Record<string, string>>(
+    GlobalStateKey.REASONING_LEVELS,
+    {},
+  );
 }
 
 export async function getCliModelAccessList(
   options: CliModelAccessListOptions = {},
 ): Promise<CliModelAccess[]> {
+  const reasoningOverrides = getReasoningLevelOverrides();
   const models = await computeModelOptionsData(options.models);
-  return models.map((model) => toCliModelAccess(model));
+  return models.map((model) => toCliModelAccess(model, reasoningOverrides));
 }
 
 export function findCliModelAccessEntry(
@@ -312,7 +368,7 @@ export async function loadCliModelAccessEntry(
     );
   }
 
-  return toCliModelAccess(hiddenModelOption);
+  return toCliModelAccess(hiddenModelOption, getReasoningLevelOverrides());
 }
 
 type CliAvailableModelsMessageOptions = Pick<

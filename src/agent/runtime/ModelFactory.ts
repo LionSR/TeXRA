@@ -2,7 +2,6 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import { LEVEL_TO_EFFORT } from '@agent/modelHandlers/support/reasoningEffort';
 import {
   internalValidationModelHandlerEnvName,
   shouldUseInternalValidationModelHandler,
@@ -31,6 +30,7 @@ import {
   shouldRouteModelThroughOpenRouter,
   type ResolvedModelConfig,
 } from '@model/openRouterRouting';
+import { LEVEL_TO_EFFORT } from '@model/reasoningLevel';
 import {
   copilotRouteForModel,
   resolveRuntimeModelConfig,

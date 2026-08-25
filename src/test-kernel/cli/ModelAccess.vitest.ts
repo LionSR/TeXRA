@@ -1,3 +1,4 @@
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -16,9 +17,12 @@ import {
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { platform } from '@platform/platform';
 import type { ModelOptionData } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const getGLMCodingPlanMock = vi.hoisted(() => vi.fn());
+const copilotRouteForModelMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@model/computeModelOptions', () => ({
   computeModelOptionsData: vi.fn(),
@@ -28,14 +32,28 @@ vi.mock('@utils/config/providerConfig', () => ({
   getGLMCodingPlan: getGLMCodingPlanMock,
 }));
 
+vi.mock('@model/runtimeModelRegistry', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@model/runtimeModelRegistry')>();
+  return {
+    ...actual,
+    copilotRouteForModel: copilotRouteForModelMock,
+  };
+});
+
 vi.mock('llm-zoo', async (importOriginal) => {
   const actual = await importOriginal<typeof import('llm-zoo')>();
   return {
     ...actual,
     MODEL_CONFIGS: {
       ...actual.MODEL_CONFIGS,
-      hiddenFixtureModel: {},
+      hiddenFixtureModel: {
+        ...actual.MODEL_CONFIGS.haiku45,
+        name: 'hiddenFixtureModel',
+      },
       userFacingFixture: {
+        ...actual.MODEL_CONFIGS.haiku45,
+        name: 'userFacingFixture',
         fullName: 'user-facing-fixture',
         label: 'User Facing Fixture',
       },
@@ -125,8 +143,10 @@ function expectModelOptionsRequested(models: string[]): void {
 }
 
 describe('CLI model access resolution', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     computeModelOptionsDataMock.mockReset();
+    copilotRouteForModelMock.mockReset();
+    await platform().globalState.update(GlobalStateKey.REASONING_LEVELS, {});
   });
 
   it('keeps the requested model when it is currently runnable', async () => {
@@ -341,6 +361,96 @@ describe('CLI model access resolution', () => {
     ]);
   });
 
+  it('displays configurable, default, fixed, and non-reasoning levels', async () => {
+    await platform().globalState.update(GlobalStateKey.REASONING_LEVELS, {
+      gpt55: 'xhigh',
+      gpt56: 'stale',
+      kimi3: 'low',
+      glm45: 'low',
+      glm53: 'low',
+      haiku45: 'high',
+    });
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('gpt55', {
+        availability: 'subscription-access',
+        availabilityLabel: 'ChatGPT subscription',
+      }),
+      modelOption('gpt56', {
+        availability: 'subscription-access',
+        availabilityLabel: 'ChatGPT subscription',
+      }),
+      modelOption('kimi3', {
+        availability: 'provider-key',
+        availabilityLabel: 'API key set',
+      }),
+      modelOption('glm45', {
+        availability: 'provider-key',
+        availabilityLabel: 'API key set',
+      }),
+      modelOption('glm53', {
+        availability: 'provider-key',
+        availabilityLabel: 'API key set',
+      }),
+      modelOption('haiku45', {
+        availability: 'provider-key',
+        availabilityLabel: 'API key set',
+      }),
+    ]);
+    const getStateSpy = vi.spyOn(platform().globalState, 'get');
+
+    const entries = await getCliModelAccessList();
+    const reasoningStateReads = getStateSpy.mock.calls.filter(
+      ([key]) => key === GlobalStateKey.REASONING_LEVELS,
+    );
+    getStateSpy.mockRestore();
+
+    expect(reasoningStateReads).toEqual([
+      [GlobalStateKey.REASONING_LEVELS, {}],
+    ]);
+    expect(
+      modelSelectItemsForCli(entries).map((row) => row.description),
+    ).toEqual([
+      'api: chatgpt subscription · reasoning: Extra High',
+      'api: chatgpt subscription · reasoning: Default (Medium)',
+      'api: api key set · reasoning: Max (fixed)',
+      'api: api key set · reasoning: High (fixed)',
+      'api: api key set · reasoning: Low',
+      'api: api key set',
+    ]);
+    expect(entries[0]?.reasoning).not.toContain('xhigh');
+  });
+
+  it('uses provider-managed reasoning for an effective Copilot route', async () => {
+    await platform().globalState.update(GlobalStateKey.REASONING_LEVELS, {
+      sonnet46T: 'low',
+    });
+    copilotRouteForModelMock.mockReturnValue({
+      access: 'allowed',
+      reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
+      effectiveConfig: {
+        ...MODEL_CONFIGS.sonnet46T,
+        capabilities: {
+          ...MODEL_CONFIGS.sonnet46T.capabilities,
+          supportsReasoningEffort: false,
+          maxReasoningEffort: undefined,
+          supportedReasoningEfforts: undefined,
+        },
+      },
+    });
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('sonnet46T', {
+        availability: 'copilot-access',
+        availabilityLabel: 'GitHub Copilot',
+      }),
+    ]);
+
+    const entries = await getCliModelAccessList();
+
+    expect(modelSelectItemsForCli(entries)[0]?.description).toBe(
+      'api: github copilot · reasoning: Default (provider managed)',
+    );
+  });
+
   it('marks runnable model picker rows disabled when a live chat cannot switch formats', () => {
     expect(
       modelSelectItemsForCli(
@@ -351,6 +461,7 @@ describe('CLI model access resolution', () => {
               availability: 'provider-key',
             }),
             status: 'api key set',
+            reasoning: 'reasoning: Default (High)',
           }),
           model('gpt55', {
             model: modelOption('gpt55', {
@@ -370,7 +481,7 @@ describe('CLI model access resolution', () => {
         value: 'sonnet46T',
         label: 'Sonnet',
         description:
-          'different conversation format; start new chat; api: api key set',
+          'different conversation format; start new chat; api: api key set · reasoning: Default (High)',
         disabled: true,
       },
       {

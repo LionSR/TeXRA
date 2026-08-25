@@ -1,10 +1,7 @@
-import { ModelProvider, type ModelConfig, ReasoningEffort } from 'llm-zoo';
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import {
-  LEVEL_TO_EFFORT,
-  supportsReasoningLevel,
-} from '@agent/modelHandlers/support/reasoningEffort';
 import { preferredCopilotRouteModels } from '@model/copilotRouting';
+import { resolveReasoningLevel } from '@model/reasoningLevel';
 import { resolveModelSource } from '@model/openRouterRouting';
 import {
   discoveredCopilotRoutes,
@@ -26,7 +23,6 @@ import {
   type ModelSelectionItem,
   type ReasoningLevel,
   type UpdateModelSelectionMessage,
-  ReasoningLevelSchema,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
@@ -56,12 +52,6 @@ interface SettingsModelSelectionData {
   preferShortModelNames: boolean;
   copilotModels: CopilotRouteInfo[];
 }
-
-const EFFORT_TO_LEVEL = new Map<ReasoningEffort, ReasoningLevel>(
-  Object.entries(LEVEL_TO_EFFORT).map(
-    ([level, effort]) => [effort, level as ReasoningLevel] as const,
-  ),
-);
 
 /** Membership form of the order the Models tab groups by. */
 const MODEL_SELECTION_SOURCES = new Set<string>(MODEL_SOURCE_ORDER);
@@ -240,19 +230,15 @@ export class SettingsModelSelectionController {
     config: ModelConfig,
     override: string | undefined,
   ): void {
-    if (!supportsReasoningLevel(config)) return;
+    const resolved = resolveReasoningLevel(config, override);
+    if (resolved?.kind !== 'configurable') return;
 
     item.supportsReasoningLevel = true;
-    const defaultLevel = EFFORT_TO_LEVEL.get(
-      config.capabilities.reasoningEffort,
-    );
-    if (defaultLevel) {
-      item.defaultReasoningLevel = defaultLevel;
+    if (resolved.defaultLevel !== undefined) {
+      item.defaultReasoningLevel = resolved.defaultLevel;
     }
-
-    const parsed = ReasoningLevelSchema.safeParse(override);
-    if (parsed.success) {
-      item.reasoningLevel = parsed.data;
+    if (resolved.overrideLevel !== undefined) {
+      item.reasoningLevel = resolved.overrideLevel;
     }
   }
 }
