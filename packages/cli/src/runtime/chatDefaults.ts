@@ -74,10 +74,10 @@ async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
   // A missing user config means no user defaults (parseCliConfigValues maps
   // the undefined fallback to {}). A read failure — corrupt JSON, a
   // permission error — a top-level shape that isn't an object, and an
-  // invalid individual field are all surfaced as warnings instead of
-  // silently dropping the user's chat defaults, mirroring
-  // loadWorkspaceCliConfig's handling of the same failure classes for the
-  // workspace config. Unknown-key warnings are suppressed: this file is
+  // invalid individual field still drop the affected default(s), but now
+  // with a warning instead of silence, mirroring loadWorkspaceCliConfig's
+  // handling of the same failure classes for the workspace config. Unknown-
+  // key warnings are suppressed: this file is
   // shared by all three hosts and holds rows the CLI does not honor (same
   // reasoning as loadUserApprovalPolicy). `quiet` mirrors --quiet: every
   // other config warning is gated by contextFromArgs on context.quietLogs
