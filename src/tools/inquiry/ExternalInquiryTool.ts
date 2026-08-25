@@ -44,7 +44,6 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 import { collectKnownSessionLinks } from './externalInquiryResultFormatter';
 import {
-  ensureExternalInquiryThreadMirror,
   getThreadSummary,
   getOpenTurnDraft,
   listThreadsByStatus,
@@ -148,25 +147,6 @@ export type InquiryInput = z.infer<typeof InquiryInputSchema>;
 // ============================================================================
 // Read / list subcommand outputs
 // ============================================================================
-
-/**
- * Mirror a thread to the execution so the agent can read prior turns via the
- * executions tool. Best-effort: a mirroring failure must not fail the tool
- * call, but it is logged rather than swallowed.
- */
-async function mirrorThreadBestEffort(
-  executionId: ExecutionId,
-  threadId: string,
-): Promise<void> {
-  try {
-    await ensureExternalInquiryThreadMirror({ executionId, threadId });
-  } catch (err) {
-    logger.warn(
-      `Failed to mirror inquiry thread ${threadId} to execution ${executionId}`,
-      { data: err },
-    );
-  }
-}
 
 function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
   const lines = [
@@ -275,7 +255,7 @@ export class ExternalInquiryTool extends defineTool({
         });
       }
       case 'read':
-        return this.executeRead({ input, executionId });
+        return this.executeRead(input);
       case 'list':
         return this.executeList({ input, streamId });
     }
@@ -316,10 +296,6 @@ export class ExternalInquiryTool extends defineTool({
     // a re-read would only reintroduce the write/read race the continuation
     // injectors already avoid via writer snapshots.
     const manifest = persisted.manifest;
-
-    if (executionId) {
-      await mirrorThreadBestEffort(executionId, persisted.threadId);
-    }
 
     // Register the asking stream without switching the active view: hosts
     // own presentation focus (the extension/desktop progress views badge the
@@ -394,18 +370,14 @@ export class ExternalInquiryTool extends defineTool({
     );
   }
 
-  private async executeRead(args: {
-    input: Extract<InquiryInput, { command: 'read' }>;
-    executionId?: ExecutionId;
-  }): Promise<ToolResult> {
-    const manifest = await readExternalInquiryThread(args.input.thread_id);
+  private async executeRead(
+    input: Extract<InquiryInput, { command: 'read' }>,
+  ): Promise<ToolResult> {
+    const manifest = await readExternalInquiryThread(input.thread_id);
     if (!manifest) {
       throw new ToolError(
-        `External inquiry thread not found: ${args.input.thread_id}`,
+        `External inquiry thread not found: ${input.thread_id}`,
       );
-    }
-    if (args.executionId) {
-      await mirrorThreadBestEffort(args.executionId, manifest.threadId);
     }
     return buildReadOutput(manifest);
   }

@@ -11,19 +11,10 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { createLog } from '@logger/logUtils';
-import {
-  TODO_STATUS,
-  STATUS_DISPLAY,
-  TodoItemSchema,
-  countByStatus,
-  type TodoItem,
-} from '@shared/schemas';
-import { type ToolResult } from '@shared/schemas';
+import { TodoItemSchema, countByStatus } from '@shared/schemas';
+import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
-
-const logger = createLog('TodoWriteTool');
 
 /**
  * Schema for the todo_write tool input.
@@ -51,18 +42,9 @@ Keep the list current as you work; one task in_progress at a time.`,
     const context = getCurrentToolCallContext();
 
     if (!context?.workPlanState) {
-      // No context available - log warning and still format output
-      logger.warn(
-        'todo_write called without workPlanState in context - todos will not persist or display in UI',
+      throw new ToolError(
+        'todo_write requires an active agent tool-use turn: there is no work plan to update.',
       );
-      return {
-        status: 'executed',
-        summary: 'Updated todo list (no active session)',
-        output: formatTodoList(input.todos),
-        diagnostics: {
-          warning: 'No active todo context - todos may not persist',
-        },
-      };
     }
 
     // Update the todos in workspace state
@@ -77,23 +59,4 @@ Keep the list current as you work; one task in_progress at a time.`,
       `Todo list updated: ${completed} completed, ${inProgress} in progress, ${pending} pending`,
     );
   }
-}
-
-/** Format the todo list for display in the tool output. */
-function formatTodoList(todos: TodoItem[]): string {
-  if (todos.length === 0) {
-    return 'Todo list is empty.';
-  }
-
-  const lines: string[] = ['Current todo list:', ''];
-
-  for (const [i, todo] of todos.entries()) {
-    const { icon, label } = STATUS_DISPLAY[todo.status];
-    lines.push(`${i + 1}. ${icon} [${label}] ${todo.content}`);
-    if (todo.status === TODO_STATUS.IN_PROGRESS) {
-      lines.push(`   → ${todo.activeForm}...`);
-    }
-  }
-
-  return lines.join('\n');
 }

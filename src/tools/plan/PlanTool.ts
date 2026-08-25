@@ -33,7 +33,12 @@ import {
 } from '@agent/followUp/ToolFileInteractionContext';
 import { createLog } from '@logger/logUtils';
 import type { Goal, Plan, ToolResult } from '@shared/schemas';
-import { formatGoalTime, goalElapsedMs, isGoalInFlight } from '@shared/schemas';
+import {
+  formatGoalTime,
+  goalElapsedMs,
+  isGoalInFlight,
+  ToolError,
+} from '@shared/schemas';
 import { requireStreamId } from '@tools/contextHelpers';
 import {
   GoalStore,
@@ -133,17 +138,9 @@ pause/complete only affect autonomous goals; with no goal running they return gu
     const runContext = contexts?.runContext;
 
     if (!callContext?.workPlanState) {
-      logger.warn(
-        'plan called without workPlanState in context: plan will not persist or display in UI',
+      throw new ToolError(
+        'plan(update) requires an active agent tool-use turn: there is no work plan to update.',
       );
-      return {
-        status: 'executed',
-        summary: 'Created plan (no active session)',
-        output: `Plan objective:\n${plan.objective}`,
-        diagnostics: {
-          warning: 'No active plan context: plan may not persist',
-        },
-      };
     }
 
     callContext.workPlanState.updatePlan(plan);

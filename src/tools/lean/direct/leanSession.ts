@@ -264,8 +264,6 @@ export class LeanSession {
       info(LOG_CHANNEL, `[${root}] ${JSON.stringify(params)}`);
     });
 
-    updateLeanServer(this.id, { pid: child.pid });
-
     try {
       await pTimeout(
         Promise.race([

@@ -2180,18 +2180,6 @@
       "name": "runStreamedTurn"
     },
     {
-      "file": "src/tools/comment/InlineCommentTool.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "InlineCommentInputSchema"
-    },
-    {
-      "file": "src/tools/delegation/delegationAvailability.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "replaceDelegationDescriptionBlock"
-    },
-    {
       "file": "src/tools/delegation/inBandSubagentExecution.ts",
       "category": "production-dead",
       "kind": "exports",

@@ -246,26 +246,6 @@ describe('createDirectLspLeanAdapter', () => {
     },
   );
 
-  fakeLakeIt(
-    'evicts the least-recent workspace when the session cap is reached',
-    async () => {
-      const second = makeLakeProject(tempRoot, 'project-b');
-      const adapter = createDirectLspLeanAdapter({
-        lakeCommand: fakeLakePath,
-        maxSessions: 1,
-        idleTimeoutMs: 0,
-      });
-      try {
-        await adapter.fetchDiagnosticsForFile(filePath);
-        await adapter.fetchDiagnosticsForFile(second.filePath);
-        expect(await countStarts()).toBe(2);
-        expect(activeServerRoots()).toEqual([second.projectRoot]);
-      } finally {
-        await adapter.dispose();
-      }
-    },
-  );
-
   fakeLakeIt('keeps more than two active workspaces by default', async () => {
     const second = makeLakeProject(tempRoot, 'project-b');
     const third = makeLakeProject(tempRoot, 'project-c');
@@ -293,7 +273,6 @@ describe('createDirectLspLeanAdapter', () => {
     let clock = 0;
     const adapter = createDirectLspLeanAdapter({
       lakeCommand: fakeLakePath,
-      maxSessions: 2,
       idleTimeoutMs: 1_000,
       now: () => clock,
     });
@@ -334,31 +313,6 @@ describe('createDirectLspLeanAdapter', () => {
     },
   );
 
-  fakeLakeIt(
-    'does not evict a workspace that still has an in-flight request',
-    async () => {
-      vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
-      const second = makeLakeProject(tempRoot, 'project-b');
-      const adapter = createDirectLspLeanAdapter({
-        lakeCommand: fakeLakePath,
-        maxSessions: 1,
-        idleTimeoutMs: 0,
-      });
-      const pendingFirst = adapter.fetchDiagnosticsForFile(filePath);
-      try {
-        await delay(100);
-        const pendingSecond = adapter.fetchDiagnosticsForFile(second.filePath);
-        await delay(100);
-        expect(activeServerRoots()).toEqual([projectRoot]);
-        await adapter.dispose();
-        await Promise.allSettled([pendingFirst, pendingSecond]);
-      } finally {
-        await adapter.dispose();
-        await Promise.allSettled([pendingFirst]);
-      }
-    },
-  );
-
   fakeLakeIt('does not start queued servers after dispose', async () => {
     const second = makeLakeProject(tempRoot, 'project-b');
     const third = makeLakeProject(tempRoot, 'project-c');
@@ -378,42 +332,6 @@ describe('createDirectLspLeanAdapter', () => {
     await delay(100);
     expect(await countStarts()).toBe(starts);
   });
-
-  fakeLakeIt(
-    'settles a start that was already queued when dispose runs',
-    async () => {
-      vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
-      const second = makeLakeProject(tempRoot, 'project-b');
-      const adapter = createDirectLspLeanAdapter({
-        lakeCommand: fakeLakePath,
-        maxSessions: 1,
-        idleTimeoutMs: 0,
-      });
-      const first = adapter.fetchDiagnosticsForFile(filePath);
-      try {
-        await delay(150);
-        expect(activeServerRoots()).toEqual([projectRoot]);
-        const queued = adapter.fetchDiagnosticsForFile(second.filePath);
-        await delay(50);
-        const disposed = adapter.dispose();
-        await expect(
-          Promise.race([
-            queued,
-            delay(1_000).then(() => {
-              throw new Error('queued start did not settle after dispose');
-            }),
-          ]),
-        ).resolves.toMatchObject({
-          ok: false,
-          kind: 'toolchain_unavailable',
-        });
-        await disposed;
-      } finally {
-        await adapter.dispose();
-        await Promise.allSettled([first]);
-      }
-    },
-  );
 
   fakeLakeIt(
     'does not SIGKILL a live server two seconds after spawn',
@@ -468,7 +386,6 @@ describe('createDirectLspLeanAdapter', () => {
       const second = makeLakeProject(tempRoot, 'project-b');
       const adapter = createDirectLspLeanAdapter({
         lakeCommand: fakeLakePath,
-        maxSessions: 1,
         idleTimeoutMs: 40,
       });
       try {
@@ -636,7 +553,6 @@ describe('createDirectLspLeanAdapter', () => {
     let clock = 0;
     const adapter = createDirectLspLeanAdapter({
       lakeCommand: fakeLakePath,
-      maxSessions: 2,
       idleTimeoutMs: 1_000,
       now: () => clock,
     });

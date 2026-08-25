@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { isFileNotFoundError } from '@common/errors';
 import { EXTERNAL_INQUIRY_THREADS_DIR } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   ExecutionIdSchema,
@@ -28,11 +27,10 @@ import {
   hexId12,
   normalizeFilePath,
 } from '@utils/core';
-import { GlobalStorageFS, StorageFS } from '@utils/files/storageFS';
-import { isDirectory, isFile } from '@utils/files/fsEntryType';
+import { GlobalStorageFS } from '@utils/files/storageFS';
+import { isDirectory } from '@utils/files/fsEntryType';
 
 const THREADS_DIR = EXTERNAL_INQUIRY_THREADS_DIR;
-const EXEC_DIR = 'ei';
 const QUESTION_PREVIEW_CHARS = 200;
 const logger = createLog('ExternalInquiryStorage');
 
@@ -209,43 +207,6 @@ async function writeThreadManifest(
   await GlobalStorageFS.writeAtomic(
     threadManifestPath(manifest.threadId),
     JSON.stringify(manifest, null, 2),
-  );
-}
-
-// ============================================================================
-// Execution mirroring
-// ============================================================================
-
-async function copyGlobalDirectoryToExecution(
-  sourceDir: string,
-  targetDir: string,
-): Promise<void> {
-  await StorageFS.ensureDir(targetDir);
-  const entries = await GlobalStorageFS.readDir(sourceDir);
-
-  for (const [name, type] of entries) {
-    const sourcePath = path.join(sourceDir, name);
-    const targetPath = path.join(targetDir, name);
-
-    if (isDirectory(type)) {
-      await copyGlobalDirectoryToExecution(sourcePath, targetPath);
-      continue;
-    }
-
-    if (isFile(type)) {
-      const bytes = await GlobalStorageFS.readBytes(sourcePath);
-      await StorageFS.write(targetPath, bytes);
-    }
-  }
-}
-
-export async function ensureExternalInquiryThreadMirror(params: {
-  executionId: ExecutionId;
-  threadId: InquiryThreadId;
-}): Promise<void> {
-  await copyGlobalDirectoryToExecution(
-    threadDir(params.threadId),
-    `${RUNS_STORAGE_DIR}/${params.executionId}/${EXEC_DIR}/${params.threadId}`,
   );
 }
 

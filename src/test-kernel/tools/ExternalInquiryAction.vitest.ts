@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 
 const storageMocks = vi.hoisted(() => ({
-  ensureExternalInquiryThreadMirror: vi.fn(),
   getOpenTurnDraft: vi.fn(),
   getThreadSummary: vi.fn(),
   listThreadsByStatus: vi.fn(),
