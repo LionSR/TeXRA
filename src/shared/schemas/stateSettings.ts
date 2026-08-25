@@ -118,6 +118,7 @@ export type SettingsViewSnapshot =
   | 'approval'
   | 'git-author'
   | 'latex'
+  | 'memory'
   | 'models'
   | 'multi-agent'
   | 'profile'
@@ -1074,6 +1075,20 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       DETACH_SUBAGENTS_RUNTIME_REACHABILITY,
     ),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
+  }),
+
+  // --- Memory ---------------------------------------------------------------
+  // Every host's runtime honors the key through `registerAgentFeatures()`, but
+  // only the settings view renders it; the CLI has no `/config` row for it.
+  surfacedSetting({
+    key: GlobalStateKey.MEMORY_ENABLED,
+    schema: z.boolean().prefault(true),
+    title: 'Memory for chat agents',
+    description: 'Remember useful details across chat sessions.',
+    category: 'tools',
+    slots: sameSlot('globalState'),
+    honoredBy: everyHost('src/agent/features.ts'),
+    surfaces: { settingsView: 'memory' },
   }),
 
   // --- External coding agent controls ---------------------------------------

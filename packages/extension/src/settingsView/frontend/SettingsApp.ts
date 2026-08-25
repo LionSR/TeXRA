@@ -91,12 +91,10 @@ import {
   helperModel,
   inlineCriticismEnabled,
   latexConfigValues,
-  latexConfigValuesLoaded,
   latexSettingsLoaded,
   latexSettingsStatus,
   memoryEnabled,
   memoryItems,
-  memoryToggleDisabled,
   modelRetryMaxAttempts,
   modelSelectionItems,
   orchestratorAgents,
@@ -448,7 +446,6 @@ export class SettingsApp extends SettingsAppBase {
             .settings=${latexSettingsStatus.get()}
             .loaded=${latexSettingsLoaded.get()}
             .configValues=${latexConfigValues.get()}
-            .configLoaded=${latexConfigValuesLoaded.get()}
             .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
             .desktopHost=${desktopHost}
             .inlineCriticismSupported=${!isKnownUnsupported(
@@ -483,7 +480,6 @@ export class SettingsApp extends SettingsAppBase {
           <memory-tab
             .items=${memoryItems.get()}
             .enabled=${memoryEnabled.get()}
-            .toggleDisabled=${memoryToggleDisabled.get()}
           ></memory-tab>
         `;
     }

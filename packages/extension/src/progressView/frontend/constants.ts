@@ -26,7 +26,6 @@ export interface ProgressToolbarButton {
    */
   label?: string;
   className?: string;
-  disabled?: boolean;
 }
 
 /**
@@ -86,7 +85,6 @@ const STOP_STREAM_BUTTON = Object.freeze({
   title:
     'Request task interruption (current API call will be aborted if supported)',
   className: 'stop-button',
-  disabled: true,
 });
 
 const RESTORE_STATE_BUTTON = Object.freeze({
@@ -95,7 +93,6 @@ const RESTORE_STATE_BUTTON = Object.freeze({
   command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
   title: 'Setup this configuration in the main view',
   className: 'restore-button',
-  disabled: true,
 });
 
 const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
@@ -104,7 +101,6 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   command: PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE,
   title: 'Open in task storage: reveal this run folder and generated files',
   className: 'storage-button',
-  disabled: true,
 });
 
 const EXPORT_TRANSCRIPT_BUTTON = Object.freeze({
@@ -113,7 +109,6 @@ const EXPORT_TRANSCRIPT_BUTTON = Object.freeze({
   command: PROGRESS_VIEW_COMMANDS.EXPORT_TRANSCRIPT,
   title: 'Export this conversation as Markdown, HTML, or PDF',
   className: 'export-button',
-  disabled: true,
 });
 
 const COPY_RUN_CONTEXT_BUTTON = Object.freeze({
@@ -123,7 +118,6 @@ const COPY_RUN_CONTEXT_BUTTON = Object.freeze({
   title:
     'Copy run context: this run and its output paths, as text to paste into a new chat',
   className: 'copy-run-context-button',
-  disabled: true,
 } satisfies ProgressToolbarButton);
 
 const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
@@ -134,7 +128,6 @@ const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
     command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
     title: 'Start a fresh run (discards previous outputs)',
     className: 'run-button run-new-button',
-    disabled: true,
   },
   {
     id: ELEMENT_IDS.RESUME_BTN,
@@ -142,7 +135,6 @@ const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
     command: PROGRESS_VIEW_COMMANDS.RESUME,
     title: 'Resume from saved outputs (continues where it left off)',
     className: 'run-button resume-button',
-    disabled: true,
   },
   RESTORE_STATE_BUTTON,
   OPEN_TASK_STORAGE_BUTTON,
@@ -154,7 +146,6 @@ const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
     command: PROGRESS_VIEW_COMMANDS.DIFF_STREAM,
     title: 'Run latexdiff on existing tex files',
     className: 'diff-button',
-    disabled: true,
   },
   {
     id: ELEMENT_IDS.CLEAN_STREAM_BTN,
@@ -162,7 +153,6 @@ const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
     command: PROGRESS_VIEW_COMMANDS.CLEAN_STREAM,
     title: 'Clean: Delete generated output files from this run',
     className: 'clean-button',
-    disabled: true,
   },
   {
     id: ELEMENT_IDS.PACK_STREAM_BTN,
@@ -170,7 +160,6 @@ const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
     command: PROGRESS_VIEW_COMMANDS.PACK_STREAM,
     title: 'Pack: Archive output files into a timestamped History folder',
     className: 'pack-button',
-    disabled: true,
   },
 ];
 
@@ -217,7 +206,6 @@ const COMPACT_RESPONSE_BUTTON = Object.freeze({
   title:
     'Compact conversation context (summarize history to reduce token usage)',
   className: 'compact-button',
-  disabled: true,
 });
 
 const TOOL_USE_TOOLBAR: readonly ProgressToolbarButton[] = [

@@ -14,20 +14,17 @@ import {
   apiKeyBanner$,
   dependencyBanner$,
   gettingStartedVisible$,
-  getModelOptionsForSession,
   loginBannerVisible$,
   model$,
+  modelOptions$,
   sessionHintDismissed$,
-  sessionType$,
 } from '../mainViewState';
 
 function shouldForceApiKeyBanner(): boolean {
   if (apiKeyBanner$.get().requiresKey) {
     return true;
   }
-  const option = getModelOptionsForSession(sessionType$.get()).find(
-    (item) => item.value === model$.get(),
-  );
+  const option = modelOptions$.get().find((o) => o.value === model$.get());
   return option?.requiresKey ?? false;
 }
 

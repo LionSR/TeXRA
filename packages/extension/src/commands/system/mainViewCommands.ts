@@ -5,14 +5,12 @@ import * as vscode from 'vscode';
 import { computeAgentOptionsData, refresh } from '@agent/index';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
-import {
-  loadMainViewModelOptions,
-  type MainViewModelOptionsByCategory,
-} from '@frontend/agents/optionsLoader';
 import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import type { ModelOptionData } from '@shared/schemas';
 
 const CHANNEL = 'mainViewCommands';
 
@@ -24,11 +22,11 @@ interface RefreshAllOptionsArgs {
 
 function postModelOptions(
   webview: vscode.WebviewView,
-  optionsDataByCategory: MainViewModelOptionsByCategory,
+  optionsData: ModelOptionData[],
 ): void {
   webview.webview.postMessage({
     command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-    optionsDataByCategory,
+    optionsData,
   });
 }
 
@@ -80,11 +78,11 @@ export function registerMainViewCommands(
       handler: (args?: RefreshAllOptionsArgs) =>
         runRefresh('options', async (webview) => {
           if (!args?.agentCatalogAlreadyFresh) await refresh();
-          const [modelOptionsByCategory, agentOptionsData] = await Promise.all([
-            loadMainViewModelOptions(),
+          const [modelOptions, agentOptionsData] = await Promise.all([
+            computeModelOptionsData(),
             computeAgentOptionsData(),
           ]);
-          postModelOptions(webview, modelOptionsByCategory);
+          postModelOptions(webview, modelOptions);
           postAgentOptions(
             webview,
             agentOptionsData,

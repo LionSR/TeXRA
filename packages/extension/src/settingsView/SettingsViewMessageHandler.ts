@@ -266,8 +266,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       openMemoryFolder: () => this.memoryHandlers.handleOpenMemoryFolder(),
       deleteMemory: (message) =>
         this.memoryHandlers.handleDeleteMemory(message),
-      setMemoryEnabled: (message) =>
-        this.memoryHandlers.handleSetMemoryEnabled(message),
       pinMemory: (message) =>
         this.memoryHandlers.setMemoryPinned(message.storagePath, true),
       unpinMemory: (message) =>
@@ -450,7 +448,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     await Promise.all([
       this.memoryHandlers.sendMemoryData(webview),
-      this.memoryHandlers.sendMemoryEnabled(webview),
+      this.sendSettingsSnapshot(webview, 'memory'),
       this.agentHandlers.sendAgentSelectionData(webview),
       this.agentHandlers.sendCustomAgentDir(webview),
       this.sendSettingsSnapshot(webview, 'multi-agent'),
@@ -464,7 +462,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendSettingsSnapshot(webview, 'agent-skills'),
       this.sendSettingsSnapshot(webview, 'telemetry'),
       this.latexHandlers.sendLatexSettingsStatus(webview),
-      this.latexHandlers.sendLatexConfigValues(webview),
+      this.sendSettingsSnapshot(webview, 'latex'),
       this.sendInlineCriticismEnabled(webview),
       this.sendGoalList(webview),
     ]);
@@ -595,10 +593,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         applyGitAuthorConfig();
         return this.rebroadcastSnapshot('git-author');
       },
-      latex: () =>
-        this.withActiveWebview((w) =>
-          this.latexHandlers.sendLatexConfigValues(w),
-        ),
+      latex: () => this.rebroadcastSnapshot('latex'),
+      memory: () => this.rebroadcastSnapshot('memory'),
       models: () =>
         this.withActiveWebview((w) => this.sendModelSelectionData(w)),
       'multi-agent': () => this.rebroadcastSnapshot('multi-agent'),

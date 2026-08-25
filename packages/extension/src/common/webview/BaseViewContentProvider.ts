@@ -32,7 +32,7 @@ function buildWebviewHtml(
 }
 
 /** Where a view's Vite-built assets land and the template keys they fill. */
-export interface ViewBundle {
+interface ViewBundle {
   /** Directory under `dist/` holding the view's `bundle.js` / `index.css`. */
   dist: string;
   /** Template variable for the JS bundle URI. */

@@ -28,7 +28,7 @@ function createModelSelectionController(globalState: FakeStateStore) {
 }
 
 describe('SettingsViewHost', () => {
-  it('posts memory and model-selection messages through shared host wiring', async () => {
+  it('posts model-selection messages through shared host wiring', async () => {
     const globalState = new FakeStateStore({
       [GlobalStateKey.ENABLED_MODELS]: ['gpt55', 'sonnet46T'],
       [GlobalStateKey.HELPER_MODEL]: 'gpt55',
@@ -52,28 +52,16 @@ describe('SettingsViewHost', () => {
       },
     });
 
-    await host.sendMemoryEnabled();
-    await host.setMemoryEnabled(false);
     await host.sendModelSelectionData();
     await host.setModelEnabled({ modelName: 'gpt55', enabled: false });
 
     expect(host).not.toHaveProperty('sendProfileData');
-    expect(messages.at(0)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-      enabled: true,
-    });
-    expect(messages.at(1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-      enabled: false,
-    });
-    expect(globalState.get(GlobalStateKey.MEMORY_ENABLED)).toBe(false);
-
-    expect(messages.at(2)).toMatchObject({
+    expect(messages.at(0)).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       helperModel: 'gpt55',
       preferShortModelNames: false,
     });
-    expect(messages.at(3)).toMatchObject({
+    expect(messages.at(1)).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       helperModel: DEFAULT_HELPER_MODEL,
     });

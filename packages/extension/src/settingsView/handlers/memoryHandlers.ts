@@ -2,8 +2,8 @@
  * Memory-settings domain handlers.
  *
  * Handles listing memory files, opening them (markdown in preview mode),
- * previewing a single entry, deleting, enabling, and pinning workspace
- * memory from the Settings view.
+ * previewing a single entry, deleting, and pinning workspace memory from the
+ * Settings view.
  */
 import * as vscode from 'vscode';
 
@@ -28,12 +28,6 @@ export class MemoryHandlers {
 
   async sendMemoryData(webview: vscode.Webview): Promise<void> {
     await this.settingsHost.sendMemoryData((message) =>
-      webview.postMessage(message),
-    );
-  }
-
-  async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
-    await this.settingsHost.sendMemoryEnabled((message) =>
       webview.postMessage(message),
     );
   }
@@ -117,14 +111,6 @@ export class MemoryHandlers {
       );
       await this.ctx.withActiveWebview((w) => this.sendMemoryData(w));
     }
-  }
-
-  async handleSetMemoryEnabled(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_MEMORY_ENABLED>,
-  ): Promise<void> {
-    await this.settingsHost.setMemoryEnabled(data.enabled, (message) =>
-      this.postMessageToActiveWebview(message),
-    );
   }
 
   async setMemoryPinned(storagePath: string, pinned: boolean): Promise<void> {

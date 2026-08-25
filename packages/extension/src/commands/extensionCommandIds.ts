@@ -17,4 +17,5 @@ export const EXTENSION_COMMANDS = {
   CREATE_SAMPLE_PROJECT: 'texra.createSampleProject',
   RUN_SETUP_ASSISTANT: 'texra.runSetupAssistant',
   OPEN_GETTING_STARTED: 'texra.openGettingStarted',
+  SET_API_KEY: 'texra.setApiKey',
 } as const satisfies Record<string, CommandId>;

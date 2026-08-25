@@ -10,7 +10,7 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'dialogs';
 
-export interface FileDialogOptions {
+interface FileDialogOptions {
   /** Whether multiple files can be selected */
   allowMany?: boolean;
   /** Label for the open button */
@@ -79,7 +79,7 @@ export async function selectFiles(
   return fileUris.map((uri) => WorkspaceFS.relativePath(uri.fsPath));
 }
 
-export interface FolderDialogOptions {
+interface FolderDialogOptions {
   /** Label for the open button */
   openLabel: string;
   /** Optional dialog title */

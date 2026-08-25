@@ -12,8 +12,6 @@ import { StorageFS } from '@utils/files/storageFS';
 
 interface SettingsMemoryControllerDeps {
   prompt: Pick<PromptHost, 'confirm' | 'warning'>;
-  isMemoryEnabled(): boolean;
-  setMemoryEnabled(enabled: boolean): Promise<void>;
 }
 
 type SettingsMemoryMessage =
@@ -24,10 +22,6 @@ type SettingsMemoryMessage =
   | {
       command: typeof SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW;
       preview: MemoryPreview;
-    }
-  | {
-      command: typeof SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED;
-      enabled: boolean;
     };
 
 export class SettingsMemoryController {
@@ -60,13 +54,6 @@ export class SettingsMemoryController {
     };
   }
 
-  getMemoryEnabledMessage(): SettingsMemoryMessage {
-    return {
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-      enabled: this.deps.isMemoryEnabled(),
-    };
-  }
-
   async deleteMemory(input: {
     storagePath: string;
     displayPath: string;
@@ -84,11 +71,6 @@ export class SettingsMemoryController {
       recursive: true,
     });
     return this.getMemoryDataMessage();
-  }
-
-  async setMemoryEnabled(enabled: boolean): Promise<SettingsMemoryMessage> {
-    await this.deps.setMemoryEnabled(enabled);
-    return this.getMemoryEnabledMessage();
   }
 
   async setMemoryPinned(

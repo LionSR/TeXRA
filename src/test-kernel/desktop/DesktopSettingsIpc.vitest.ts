@@ -984,28 +984,6 @@ describe('desktop settings IPC', () => {
     expect(agentSettingsController.refreshCatalogData).toHaveBeenCalledOnce();
   });
 
-  it('handles desktop memory toggle messages', async () => {
-    const globalState = new FakeStateStore();
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      globalState,
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED,
-        enabled: false,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(globalState.get(GlobalStateKey.MEMORY_ENABLED)).toBe(false);
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-      enabled: false,
-    });
-  });
-
   it('requires UI confirmation before deleting memory', async () => {
     const confirmAction = vi.fn(async () => false);
     const { settings, posted } = createCapturedSettingsFixture({

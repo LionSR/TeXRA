@@ -29,8 +29,8 @@ import {
   runAfterAgentCatalogAuthRefresh,
 } from '@frontend/auth/agentCatalogRefreshScope';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
-import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   CommonViewMessageSchema,
@@ -282,10 +282,9 @@ export class MainViewProvider
     const view = this.getMainModeView();
     if (!view) return;
 
-    const optionsDataByCategory = await loadMainViewModelOptions();
     this.postToWebview(view, {
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsDataByCategory,
+      optionsData: await computeModelOptionsData(),
     });
   }
 

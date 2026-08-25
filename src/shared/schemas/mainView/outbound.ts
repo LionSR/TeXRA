@@ -16,7 +16,6 @@ import {
 } from '../fileTypes';
 import { commandOnly, withFilesArray } from '../messageFactories';
 import { OnboardingFunnelStateSchema } from '../onboarding';
-import { AgentCategory } from '../agent';
 import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,
@@ -28,10 +27,7 @@ const FileListSchema = z.array(z.string());
 
 const SetModelOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
-  optionsDataByCategory: z.object({
-    [AgentCategory.Workflow]: z.array(ModelOptionDataSchema),
-    [AgentCategory.ToolUse]: z.array(ModelOptionDataSchema),
-  }),
+  optionsData: z.array(ModelOptionDataSchema),
 });
 
 const SetAgentOptionsMessageSchema = z.object({

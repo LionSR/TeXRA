@@ -149,8 +149,9 @@ export const selectedPanel = trackedSignal<SettingsTabPanelName>(
 // Memory state
 // ---------------------------------------------------------------------------
 export const memoryItems = trackedSignal<MemoryViewItem[]>(() => []);
-export const memoryEnabled = trackedSignal(() => false);
-export const memoryToggleDisabled = trackedSignal(() => true);
+export const memoryEnabled = settingSignal<boolean>(
+  GlobalStateKey.MEMORY_ENABLED,
+);
 
 // ---------------------------------------------------------------------------
 // Profile state
@@ -312,7 +313,6 @@ export const latexSettingsStatus = trackedSignal(() => ({
 }));
 export const latexSettingsLoaded = trackedSignal(() => false);
 export const latexConfigValues = trackedSignal<LatexConfigValues>(() => ({}));
-export const latexConfigValuesLoaded = trackedSignal(() => false);
 export const inlineCriticismEnabled = trackedSignal(() => false);
 
 // ---------------------------------------------------------------------------

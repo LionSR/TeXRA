@@ -14,7 +14,7 @@ import * as vscode from 'vscode';
 import { listBaseBranchCandidates } from '@agent/review';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 
-export interface ReviewOptions {
+interface ReviewOptions {
   /** Free-text focus for the reviewer; omitted when left blank. */
   userInstructions?: string;
   /** Branch to diff against; omitted to auto-detect the main branch. */

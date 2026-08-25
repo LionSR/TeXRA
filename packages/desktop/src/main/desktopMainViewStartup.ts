@@ -43,14 +43,7 @@ export function createDesktopMainViewStartup({
         loadTeamOptions(createTeamCatalogPorts()),
         computeModelOptionsData(),
       ]);
-      return {
-        agentOptions,
-        teamOptions,
-        modelOptionsByCategory: {
-          workflow: modelOptions,
-          toolUse: modelOptions,
-        },
-      };
+      return { agentOptions, teamOptions, modelOptions };
     },
     getAuthStatus: getAuthStatus ?? defaultGetAuthStatus,
     globalState,

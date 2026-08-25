@@ -4,7 +4,6 @@ import type {
   SettingsRespond,
   SettingsStatePorts,
 } from '@shared/settingsView/types';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { SettingsMemoryController } from './SettingsMemoryController';
 import { SettingsModelSelectionController } from './SettingsModelSelectionController';
@@ -47,17 +46,6 @@ export class SettingsViewHost {
   constructor(private readonly options: SettingsViewHostOptions) {
     this.memoryController = new SettingsMemoryController({
       prompt: options.memoryPrompt,
-      isMemoryEnabled: () =>
-        options.state.globalState.get<boolean>(
-          GlobalStateKey.MEMORY_ENABLED,
-          true,
-        ),
-      setMemoryEnabled: async (enabled) => {
-        await options.state.globalState.update(
-          GlobalStateKey.MEMORY_ENABLED,
-          enabled,
-        );
-      },
     });
     this.modelSelectionController =
       options.controllers?.modelSelection ??
@@ -94,26 +82,12 @@ export class SettingsViewHost {
     }
   }
 
-  async sendMemoryEnabled(respond?: SettingsRespond): Promise<void> {
-    await this.post(this.memoryController.getMemoryEnabledMessage(), respond);
-  }
-
   async deleteMemory(
     data: Pick<MemoryDeleteMessage, 'displayPath' | 'storagePath'>,
     respond?: SettingsRespond,
   ): Promise<void> {
     await this.postMaybe(
       await this.memoryController.deleteMemory(data),
-      respond,
-    );
-  }
-
-  async setMemoryEnabled(
-    enabled: boolean,
-    respond?: SettingsRespond,
-  ): Promise<void> {
-    await this.post(
-      await this.memoryController.setMemoryEnabled(enabled),
       respond,
     );
   }

@@ -8,7 +8,7 @@ import {
 import { emitClearMissingOutputs } from './streamEventUtils';
 
 /** Fields the toolbar/config-driven file-operation commands share. */
-export interface FileOpConfig {
+interface FileOpConfig {
   readonly agent: string;
   readonly model: string;
   readonly inputFile: string;
@@ -19,7 +19,7 @@ export interface FileOpConfig {
 }
 
 /** The per-operation primitives a file operation (clean or pack) supplies. */
-export interface FileOpActions {
+interface FileOpActions {
   readonly runSingle: (
     model: string,
     inputFile: string,
