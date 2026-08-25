@@ -78,7 +78,21 @@ export interface RuntimeShutdownHooks {
   readonly afterExecutionSettlement?: readonly ShutdownHandler[];
 }
 
-/** Register the cross-host runtime shutdown order with named host hooks. */
+/**
+ * Register the cross-host runtime shutdown order with named host hooks.
+ *
+ * The ordering is load-bearing, not stylistic: `settleLiveSessionExecutions`
+ * must be the first `ON`-phase handler. A quit has to leave a durable
+ * `CANCELLED` outcome and a released follow-up lease before host teardown
+ * (`teardownDefaultSession()` / `processResources.dispose()`) tears the session
+ * out from under it. Work placed ahead of settlement -- including anything
+ * added to `afterExecutionSettlement`, which runs after it by construction --
+ * can leave a live execution's outcome un-persisted at shutdown, which surfaces
+ * later as a run stuck in RUNNING with no owner.
+ *
+ * Each host used to carry this rationale in its own inline comment; the three
+ * copies were consolidated here by #11355.
+ */
 export function registerRuntimeShutdownHandlers(
   lifecycle: LifecycleHost,
   hooks: RuntimeShutdownHooks,

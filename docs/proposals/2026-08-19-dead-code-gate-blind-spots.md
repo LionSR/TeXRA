@@ -71,6 +71,31 @@ under src/") is closed, and its fix — `"project": ["src/**/*.ts",
 the `.ts` being _shadowed_, so the failure mode it was closed against still
 reproduces.
 
+### 4. A type reachable only from an exported signature is invisible
+
+_(Added 2026-08-25, from #11392.)_
+
+A type referenced only positionally through an exported function or interface
+signature is not reported, while a type in the same file referenced only from an
+interface member **is**. One file demonstrates both sides —
+`src/controllers/mainView/MainViewDroppedFilesController.ts`:
+
+- `MainViewAllowedDropExtensions` (`:16`), referenced only from an interface
+  member, **is** baselined as `production-dead / types`.
+- `MainViewDroppedFileAttachmentPlan` (`:20`) and
+  `MainViewDroppedFileAttachmentInput` (`:28`), referenced directly in the
+  exported `planMainViewDroppedFileAttachments` signature, **never appear in the
+  baseline at all**.
+
+`knip.json` sets no `ignoreExportsUsedInFile`, so the documented default would
+have reported both. #11392 un-exported twelve such types across
+`src/controllers/**`, none of which the gate had ever flagged, and the ratchet
+stayed green before and after.
+
+This is distinct from §1: those types have no test consumer either. A
+contributor asking "why did the gate not flag this un-export?" now has a section
+to point at.
+
 ## Related hazard: the global gitignore hides tracked source
 
 Not a gate defect, but it invalidates the manual greps the gate is supposed to
