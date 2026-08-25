@@ -219,6 +219,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         }),
       },
       {
+        // `apply_team` writes the roster straight from the setup agent, so
+        // the open view is showing agents and a team it just replaced.
+        dispose: appSignals.on('agentRosterChanged', () => {
+          void this.refreshAfterAgentMutation();
+        }),
+      },
+      {
         dispose: appSignals.on('languageModelsChanged', () => {
           void this.withActiveWebview((webview) =>
             this.sendModelSelectionData(webview),

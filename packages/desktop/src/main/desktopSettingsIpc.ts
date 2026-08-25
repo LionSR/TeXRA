@@ -361,6 +361,11 @@ export function createDesktopSettingsIpc(
     appSignals.on('githubSubscriptionsChanged', () =>
       runAsync(postGitHubSubscriptions()),
     ),
+    // `apply_team` writes the roster straight from the setup agent, so the
+    // open view is showing agents and a team it just replaced.
+    appSignals.on('agentRosterChanged', () =>
+      runAsync(options.agentSettingsController.refreshCatalogData()),
+    ),
     // Outside VS Code a rejected token left the pollers failing in silence.
     // The dialog is the whole fix: `resolveGitHubTokenSource` reports only
     // which store holds a token, and rejection leaves the secret in place, so

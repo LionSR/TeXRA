@@ -49,6 +49,21 @@ export interface AppSignalPayloads {
   toolAvailabilityChanged: undefined;
 
   /**
+   * The workspace agent roster changed outside a settings round-trip. Keyless
+   * on purpose: every listener re-reads the roster, so which team or agent
+   * moved carries no information.
+   *
+   * Emitted by `apply_team`, which the setup agent runs mid-conversation and
+   * which writes the roster and the user default directly. Settings-originated
+   * changes repaint through their own handler and do not emit.
+   *
+   * Consumed by: extension and desktop settings views, both re-reading the
+   * agent list and team presets. Not the CLI: it reads the roster per command
+   * and has no persistent panel that could go stale.
+   */
+  agentRosterChanged: undefined;
+
+  /**
    * The editor's language-model catalogue or access permissions changed.
    *
    * Extension-only by construction: the sole emitter is VS Code's

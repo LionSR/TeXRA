@@ -27,6 +27,7 @@ import {
   type TeamRosterCatalog,
 } from '@common/teams/TeamRoster';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
+import { appSignals } from '@eventBus/AppSignals';
 import type { ToolResult } from '@shared/schemas';
 import {
   AGENT_MODE_PRESETS,
@@ -105,6 +106,9 @@ ${describeTeams()}`,
       commitPreset: async (preset) => {
         await roster.setTeam(preset.id);
         await roster.setDefaultTeam(preset.id);
+        // The setup agent runs this mid-conversation, so an open settings
+        // view is showing a roster this call just replaced.
+        appSignals.emit('agentRosterChanged', undefined);
       },
     };
 
