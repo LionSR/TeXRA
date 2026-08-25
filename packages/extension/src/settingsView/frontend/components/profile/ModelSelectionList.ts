@@ -38,6 +38,7 @@ import {
 // Local imports - profile view styles and events
 import { readSelectValue } from '@shared/utils/selectTemplates';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { groupBy } from '@utils/core';
 import { postStateSetting } from '../shared/stateSettingRows';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';
@@ -77,12 +78,7 @@ export class ModelSelectionList extends LitElement {
   @state() private expandedDeprecated: Set<string> = new Set();
 
   private getProviderGroups(): ProviderGroup[] {
-    const byProvider = new Map<string, ModelSelectionItem[]>();
-    for (const model of this.models) {
-      const list = byProvider.get(model.provider) ?? [];
-      list.push(model);
-      byProvider.set(model.provider, list);
-    }
+    const byProvider = groupBy(this.models, (model) => model.provider);
 
     return MODEL_SOURCE_ORDER.filter((p) => byProvider.has(p)).map(
       (provider) => {

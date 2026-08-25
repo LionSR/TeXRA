@@ -15,6 +15,7 @@ import {
   normalizeMetafilePath,
   resolveMetafileImportPath,
 } from './desktop-package-metafile-paths.mjs';
+import { walkFiles } from './walkFiles.mjs';
 
 const require = createRequire(import.meta.url);
 const { extractFile, listPackage, statFile } = require('@electron/asar');
@@ -102,18 +103,10 @@ async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
 }
 
-async function collectFiles(dir) {
-  const entries = await readdir(dir, { withFileTypes: true });
-  const files = [];
-  for (const entry of entries) {
-    const entryPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await collectFiles(entryPath)));
-    } else if (entry.isFile()) {
-      files.push(entryPath);
-    }
-  }
-  return files.sort();
+function collectFiles(dir) {
+  return walkFiles(dir)
+    .map((entry) => entry.absolutePath)
+    .sort();
 }
 
 async function findPackagedApp() {
@@ -471,7 +464,7 @@ async function checkDesktopStartupBundles(app, failures) {
 async function checkDesktopSourceBoundaries(failures) {
   for (const dir of desktopSourceBoundaryDirs) {
     if (!(await exists(dir))) continue;
-    for (const filePath of await collectFiles(dir)) {
+    for (const filePath of collectFiles(dir)) {
       if (!/\.[cm]?tsx?$/.test(filePath)) continue;
       const source = await readFile(filePath, 'utf8');
       if (
