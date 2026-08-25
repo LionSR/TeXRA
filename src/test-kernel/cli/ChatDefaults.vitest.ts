@@ -460,4 +460,51 @@ describe('CLI chat defaults', () => {
     );
     warnSpy.mockRestore();
   });
+
+  it('warns instead of silently dropping defaults when the user config is not an object', async () => {
+    // Valid JSON, wrong top-level shape (e.g. hand-edited to an array) —
+    // distinct from the corrupt-JSON case above, and from a missing file.
+    mockedReadJson.mockResolvedValueOnce([]);
+    const warnSpy = vi
+      .spyOn(logSinks, 'writeTextStderr')
+      .mockImplementation(() => {});
+
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        model: 'deepseekproT',
+        source: 'builtin',
+      },
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('expected a JSON object'),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn about unknown top-level keys in the shared user config', async () => {
+    // config.json is shared by all three hosts; a setting only the
+    // extension or desktop honors is not "unknown" from the user's
+    // perspective just because the CLI doesn't read it.
+    mockedReadJson.mockResolvedValueOnce({
+      'agentReview.runOnCommit': true,
+      'texra.agent': 'assistant',
+    });
+    const warnSpy = vi
+      .spyOn(logSinks, 'writeTextStderr')
+      .mockImplementation(() => {});
+
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        agentSource: 'user-config',
+      },
+    );
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
 });

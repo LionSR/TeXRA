@@ -201,6 +201,7 @@ function pickCommandSection(
   section: (typeof COMMAND_SECTIONS)[number],
   warnings: string[],
   filePath: string,
+  reportUnknownKeys: boolean,
 ): CliCommandConfig | undefined {
   const sectionKey = canonicalConfigKey(section);
   if (!Object.hasOwn(record, sectionKey)) return undefined;
@@ -210,7 +211,9 @@ function pickCommandSection(
     return undefined;
   }
   const prefix = `${sectionKey}.`;
-  warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
+  if (reportUnknownKeys) {
+    warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
+  }
   return pickFields<CliRequiredCommandConfig>(
     sectionValue,
     COMMAND_FIELD_SCHEMAS,
@@ -225,10 +228,25 @@ function pickConfigValues(
   record: Record<string, unknown>,
   warnings: string[],
   filePath: string,
+  reportUnknownKeys: boolean,
 ): CliConfigValues {
-  warnUnknownKeys(warnings, filePath, record, TOP_LEVEL_KEYS);
-  const chat = pickCommandSection(record, 'chat', warnings, filePath);
-  const run = pickCommandSection(record, 'run', warnings, filePath);
+  if (reportUnknownKeys) {
+    warnUnknownKeys(warnings, filePath, record, TOP_LEVEL_KEYS);
+  }
+  const chat = pickCommandSection(
+    record,
+    'chat',
+    warnings,
+    filePath,
+    reportUnknownKeys,
+  );
+  const run = pickCommandSection(
+    record,
+    'run',
+    warnings,
+    filePath,
+    reportUnknownKeys,
+  );
   return {
     ...pickFields<CliScalarFields>(
       record,
@@ -246,14 +264,19 @@ function pickConfigValues(
  *  single source of truth for both is {@link TOP_LEVEL_FIELD_SCHEMAS} /
  *  {@link COMMAND_FIELD_SCHEMAS}, read once per field. `filePath` is only
  *  used to word warning messages; pass the caller's best label for `value`'s
- *  origin (a real path, or a description) when there isn't one on disk. */
+ *  origin (a real path, or a description) when there isn't one on disk.
+ *  `reportUnknownKeys` (default `true`) should be `false` for the shared
+ *  user-level config file: it holds rows the other hosts honor and the CLI
+ *  doesn't, so flagging them as "unknown" would be a false positive — the
+ *  same reasoning {@link loadUserApprovalPolicy} documents for that file. */
 export function parseCliConfigValues(
   value: unknown,
   filePath: string,
+  { reportUnknownKeys = true }: { readonly reportUnknownKeys?: boolean } = {},
 ): { readonly values: CliConfigValues; readonly warnings: readonly string[] } {
   const warnings: string[] = [];
   const values = isObject(value)
-    ? pickConfigValues(value, warnings, filePath)
+    ? pickConfigValues(value, warnings, filePath, reportUnknownKeys)
     : {};
   return { values, warnings };
 }

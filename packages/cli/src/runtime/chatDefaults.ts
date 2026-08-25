@@ -11,7 +11,7 @@ import {
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
 import { isImplicitDefaultEligible } from '@shared/constants/agents';
-import { toNewestFirstByTimestamp } from '@utils/core';
+import { isObject, toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
@@ -73,10 +73,13 @@ function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
 async function loadUserDefaults(): Promise<PartialDefaults> {
   // A missing user config means no user defaults (parseCliConfigValues maps
   // the undefined fallback to {}). A read failure — corrupt JSON, a
-  // permission error — and an invalid individual field are both surfaced as
-  // warnings instead of silently dropping the user's chat defaults,
-  // mirroring loadWorkspaceCliConfig's handling of the same failure classes
-  // for the workspace config.
+  // permission error — a top-level shape that isn't an object, and an
+  // invalid individual field are all surfaced as warnings instead of
+  // silently dropping the user's chat defaults, mirroring
+  // loadWorkspaceCliConfig's handling of the same failure classes for the
+  // workspace config. Unknown-key warnings are suppressed: this file is
+  // shared by all three hosts and holds rows the CLI does not honor (same
+  // reasoning as loadUserApprovalPolicy).
   let raw: unknown;
   try {
     raw = await GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME);
@@ -88,9 +91,16 @@ async function loadUserDefaults(): Promise<PartialDefaults> {
     }
     raw = undefined;
   }
+  if (raw !== undefined && !isObject(raw)) {
+    writeTextStderr(
+      `WARN Ignoring ${TEXRA_CONFIG_FILE_NAME}; expected a JSON object.`,
+    );
+    raw = undefined;
+  }
   const { values, warnings } = parseCliConfigValues(
     raw,
     TEXRA_CONFIG_FILE_NAME,
+    { reportUnknownKeys: false },
   );
   for (const warning of warnings) {
     writeTextStderr(`WARN ${warning}`);
