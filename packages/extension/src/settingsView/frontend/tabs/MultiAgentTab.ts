@@ -2,7 +2,7 @@
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
@@ -197,10 +197,14 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
   /** Agent names that carry delegation tools, computed backend-side from the registry. */
   @property({ attribute: false }) orchestratorAgents: string[] = [];
-  @state() private activePresetId: string | null = null;
+  /**
+   * The applied team, from the backend roster. Deliberately not local state:
+   * an apply can be cancelled or blocked by unavailable members, and an
+   * optimistic flip would badge a team the roster never adopted.
+   */
+  @property({ attribute: false }) activePresetId: string | null = null;
 
   private handlePresetClick(preset: AgentModePreset): void {
-    this.activePresetId = preset.id;
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET, {
       presetId: preset.id,
     });

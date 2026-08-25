@@ -231,6 +231,10 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   async refreshCatalogData(): Promise<void> {
+    // Presets ride along because every roster mutation can move the effective
+    // team: enabling one agent rewrites the selection as `custom`, which
+    // retires whatever team was applied.
+    this.postAgentModePresets();
     await Promise.all([
       this.postAgentSelectionData(),
       this.postMainAgentAndTeamOptionsData(),
@@ -295,6 +299,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         getCustomPresets: () => this.catalogController.getCustomPresets(),
         getOrchestratorAgentNames: () =>
           this.catalogController.getOrchestratorAgentNames(),
+        getActiveTeamId: () => this.roster.getActiveTeamId(),
       }),
     );
   }
@@ -457,6 +462,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         showErrorMessage: this.notifications.showErrorMessage,
       },
       refreshAfterApply: async (selectedToolUseAgent) => {
+        this.postAgentModePresets();
         await Promise.all([
           this.postAgentSelectionData(),
           this.postMainAgentAndTeamOptionsData(selectedToolUseAgent),

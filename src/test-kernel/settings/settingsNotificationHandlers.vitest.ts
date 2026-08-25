@@ -85,16 +85,18 @@ describe('settingsView notification message builders', () => {
     });
   });
 
-  it('buildAgentModePresetsMessage wraps presets and orchestrator names', () => {
+  it('buildAgentModePresetsMessage wraps presets, orchestrators and the active team', () => {
     const message = buildAgentModePresetsMessage({
       getCustomPresets: () => [],
       getOrchestratorAgentNames: () => ['orchestrator-agent'],
+      getActiveTeamId: () => 'research',
     });
 
     expect(message).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
       customPresets: [],
       orchestratorAgents: ['orchestrator-agent'],
+      activePresetId: 'research',
     });
   });
 
