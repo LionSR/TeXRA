@@ -9,11 +9,7 @@ import { createLog } from '@logger/logUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { SUPABASE_GOTRUE_STORAGE_KEY } from './config';
 import type { SessionSecretStore } from './oauth/sessionAccess';
-import type {
-  AuthTokenProvider,
-  SessionTokens,
-  StoredSessionState,
-} from './TokenProvider';
+import type { AuthTokenProvider, StoredSessionState } from './TokenProvider';
 
 const log = createLog('SupabaseClient');
 
@@ -242,23 +238,6 @@ export class SupabaseClient {
       return await this.authProvider.ensureFreshToken(forceRefresh);
     } catch (error) {
       log.error(`Error getting access token: ${toErrorMessage(error)}`);
-      return null;
-    }
-  }
-
-  /**
-   * Get access and refresh tokens from secure storage.
-   * Ensures tokens are fresh before returning.
-   */
-  static async getSessionTokens(): Promise<SessionTokens | null> {
-    if (!this.authProvider) {
-      return null;
-    }
-
-    try {
-      return await this.authProvider.getSessionTokens();
-    } catch (error) {
-      log.error(`Error getting session tokens: ${toErrorMessage(error)}`);
       return null;
     }
   }

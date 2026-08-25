@@ -667,10 +667,6 @@ if (HARNESS_AUTHENTICATED === '1' || HARNESS_AUTHENTICATED === '0') {
   SupabaseClient.setAuthProvider({
     whenReady: async () => {},
     ensureFreshToken: async () => accessToken,
-    getSessionTokens: async () =>
-      accessToken
-        ? { accessToken, refreshToken: 'harness-refresh-token' }
-        : null,
     getStoredSessionState: async () =>
       accessToken === null ? 'none' : 'authenticated',
     getStoredAccountLabel: async () => null,
