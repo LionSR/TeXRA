@@ -139,6 +139,36 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       this.executeValidated(request, { preferHelperModel: true }),
   };
 
+  /**
+   * One adapter over the snapshot store for every progress-view port that
+   * wants one. The store cannot be passed raw -- `preload` takes a list and
+   * the workspace-only path read has a different name -- and each controller
+   * asks for a different subset, so this is the superset. Passed by reference,
+   * excess-property checking does not apply and each port's type still narrows
+   * it to the members that port declares.
+   *
+   * The two spread sites are the exception: `{ ...this.snapshotPort, ... }`
+   * copies every member in at runtime, so those objects carry accessors their
+   * port type does not declare. Harmless today -- nothing enumerates or
+   * serializes them -- but do not add a member here whose mere presence would
+   * change a consumer's behavior.
+   */
+  private readonly snapshotPort = {
+    getActiveStream: () => this.provider.backend.presentation.activeStream,
+    getRunMetadata: (stream: StreamTabId) =>
+      this.provider.state.snapshots.getRunMetadata(stream),
+    getOutputFiles: (stream: StreamTabId) =>
+      this.provider.state.snapshots.getOutputFiles(stream),
+    getCompileFailures: (stream: StreamTabId) =>
+      this.provider.state.snapshots.getCompileFailures(stream),
+    getKnownWorkspaceOutputPaths: (stream: StreamTabId) =>
+      this.provider.state.snapshots.getKnownFilePaths(stream, {
+        workspaceOnly: true,
+      }),
+    preload: (stream: StreamTabId) =>
+      this.provider.state.snapshots.preload([stream]),
+  };
+
   constructor(
     private readonly provider: ProgressViewProvider,
     private readonly host: PromptHost,
@@ -215,9 +245,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     let polishProgress: vscode.Progress<{ message?: string }> | undefined;
 
     const secondTierActions: ProgressViewSecondTierActions = {
-      getRunMetadata: (stream) =>
-        this.provider.state.snapshots.getRunMetadata(stream),
-      preload: (stream) => this.provider.state.snapshots.preload([stream]),
+      ...this.snapshotPort,
       workflowActions: this.workflowActionsController,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
@@ -407,14 +435,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   private createWorkflowFileActionsController(): ProgressWorkflowFileActionsController {
     return new ProgressWorkflowFileActionsController({
-      state: {
-        getActiveStream: () => this.provider.backend.presentation.activeStream,
-        getRunMetadata: (stream) =>
-          this.provider.state.snapshots.getRunMetadata(stream),
-        getOutputFiles: (stream) =>
-          this.provider.state.snapshots.getOutputFiles(stream),
-        preload: (stream) => this.provider.state.snapshots.preload([stream]),
-      },
+      state: this.snapshotPort,
       host: {
         compareFiles: (baseFile, editedFile) =>
           this.runViewCommand('texra.compare', [
@@ -511,11 +532,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   > {
     return createProgressViewCommandHandlers({
       run: {
-        state: {
-          getRunMetadata: (stream) =>
-            this.provider.state.snapshots.getRunMetadata(stream),
-          preload: (stream) => this.provider.state.snapshots.preload([stream]),
-        },
+        state: this.snapshotPort,
         // Workflow actions intentionally wait for the run to finish.
         runExecutionRequest: (request) => this.executeValidated(request),
       },
@@ -657,17 +674,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   private createWorkflowActionsController(): ProgressWorkflowActionsController {
     return new ProgressWorkflowActionsController({
-      state: {
-        getRunMetadata: (stream) =>
-          this.provider.state.snapshots.getRunMetadata(stream),
-        getOutputFiles: (stream) =>
-          this.provider.state.snapshots.getOutputFiles(stream),
-        getKnownWorkspaceOutputPaths: (stream) =>
-          this.provider.state.snapshots.getKnownFilePaths(stream, {
-            workspaceOnly: true,
-          }),
-        preload: (stream) => this.provider.state.snapshots.preload([stream]),
-      },
+      state: this.snapshotPort,
       runDiff: async (request) => {
         await this.runViewCommand('texra.runLatexdiff', [request]);
       },
@@ -699,15 +706,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         const { modelOptionsByCategory } = await loadOptions();
         return modelOptionsByCategory.workflow;
       },
-      state: {
-        getRunMetadata: (stream) =>
-          this.provider.state.snapshots.getRunMetadata(stream),
-        getOutputFiles: (stream) =>
-          this.provider.state.snapshots.getOutputFiles(stream),
-        getCompileFailures: (stream) =>
-          this.provider.state.snapshots.getCompileFailures(stream),
-        preload: (stream) => this.provider.state.snapshots.preload([stream]),
-      },
+      state: this.snapshotPort,
       workspace: {
         locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
         exists: (relativePath) => WorkspaceFS.exists(relativePath),
