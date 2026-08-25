@@ -70,7 +70,7 @@ function knownGlobalFlagTokenCount(
   }
 
   const inline = arg.includes('=');
-  const baseFlag = inline ? inlineFlagBase(arg) : arg;
+  const baseFlag = inlineFlagBase(arg);
   if (GLOBAL_BOOL_FLAGS.has(baseFlag)) {
     return 1;
   }
