@@ -94,8 +94,7 @@ describe('summarizeLeanServers', () => {
   it('renders a running server with uptime', () => {
     const summary = summarizeLeanServers([makeServer({})], NOW);
     expect(summary).toBe(
-      '1 Lean server registered:\n' +
-        '• /work/proj (direct LSP): uptime 1m 5s',
+      '1 Lean server registered:\n' + '• /work/proj (direct LSP): uptime 1m 5s',
     );
   });
 

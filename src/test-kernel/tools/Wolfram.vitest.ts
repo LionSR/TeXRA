@@ -45,15 +45,13 @@ describe('WolframTool approval', () => {
 
   it('requests bash-style approval before executing wolframscript', async () => {
     const streamId = 'stream:wolfram-approval' as StreamTabId;
-    const execute = vi
-      .spyOn(toolUtils, 'runToolWithCheck')
-      .mockResolvedValue({
-        success: true,
-        stdout: '2',
-        stderr: '',
-        timedOut: false,
-        exitCode: 0,
-      });
+    const execute = vi.spyOn(toolUtils, 'runToolWithCheck').mockResolvedValue({
+      success: true,
+      stdout: '2',
+      stderr: '',
+      timedOut: false,
+      exitCode: 0,
+    });
 
     const { explicit, result, show } = await dispatchWolfram(streamId, '1+1');
     expect(show.payload).toMatchObject({
