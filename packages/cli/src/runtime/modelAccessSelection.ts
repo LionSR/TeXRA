@@ -27,7 +27,7 @@ import {
 } from './modelAccessRoute';
 import type { CliContext } from './cliContext';
 
-export interface CliModelAccessSelectionResult {
+interface CliModelAccessSelectionResult {
   readonly message: string;
 }
 

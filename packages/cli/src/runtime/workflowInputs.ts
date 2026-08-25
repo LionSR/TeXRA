@@ -313,7 +313,7 @@ async function finishWorkflowInputExpansion(
   return deduped;
 }
 
-export interface ExpandedRunInputs {
+interface ExpandedRunInputs {
   readonly inputFiles: string[];
   readonly contextFiles: string[];
   /** True only when this invocation expanded the literal `-` stdin token. */

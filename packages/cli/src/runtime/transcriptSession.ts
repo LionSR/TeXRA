@@ -12,14 +12,14 @@ const responseTextProcessing = createTexraResponseTextProcessing(
   agentResponseTextConnector,
 );
 
-export type InteractiveTranscriptPolicy =
+type InteractiveTranscriptPolicy =
   | { readonly onPersistentOpenFailure: 'fail' }
   | {
       readonly onPersistentOpenFailure: 'use-ephemeral';
       readonly showPersistentWarning: (message: string) => void;
     };
 
-export interface CliTranscriptSession {
+interface CliTranscriptSession {
   readonly session: SessionHandle;
   readonly canResume: boolean;
   readonly warning?: string;

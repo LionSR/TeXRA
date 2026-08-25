@@ -11,7 +11,7 @@ import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
 
 /** Browser-based provider sign-in, or the device-code flow for remote shells. */
-export type LoginPickerChoice = OAuthProvider | 'device';
+type LoginPickerChoice = OAuthProvider | 'device';
 
 const LOGIN_PICKER_ITEMS: readonly SelectItem<LoginPickerChoice>[] = [
   ...CLI_OAUTH_PROVIDER_ITEMS,

@@ -4,7 +4,7 @@ import {
   type OAuthProvider,
 } from '@auth/config';
 
-export interface CliOAuthProviderItem {
+interface CliOAuthProviderItem {
   readonly value: OAuthProvider;
   readonly label: string;
 }

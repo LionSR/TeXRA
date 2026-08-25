@@ -24,12 +24,12 @@ interface MultiAgentRunPlanInit {
   readonly agent?: string;
 }
 
-export interface MultiAgentRunPlanLoadResult {
+interface MultiAgentRunPlanLoadResult {
   readonly plan: CliMultiAgentPresetRunPlan;
   readonly remoteCatalogRefreshAttempted: boolean;
 }
 
-export interface MultiAgentPresetPlansLoadResult {
+interface MultiAgentPresetPlansLoadResult {
   readonly plans: readonly CliMultiAgentPresetRunPlan[];
   readonly remoteCatalogRefreshAttempted: boolean;
 }

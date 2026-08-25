@@ -30,7 +30,7 @@ export interface SelectItem<T> {
   readonly disabled?: boolean;
 }
 
-export interface SelectProps<T> {
+interface SelectProps<T> {
   readonly items: ReadonlyArray<SelectItem<T>>;
   /** Value currently active in the system (rendered with a tick). */
   readonly activeValue?: T;

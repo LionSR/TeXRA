@@ -740,12 +740,6 @@
       "name": "initWizardModelSelectItems"
     },
     {
-      "file": "packages/cli/src/init/runInitWizard.tsx",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "InitWizardAgentOption"
-    },
-    {
       "file": "packages/cli/src/onboarding/onboardingState.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -965,12 +959,6 @@
       "file": "packages/cli/src/runtime/updateChecker.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "checkCliUpdateAvailable"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "detectInstallMethod"
     },
     {
@@ -1002,12 +990,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "resetCliUpdateNotifyLatchForTests"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "CheckCliUpdateAvailableOptions"
     },
     {
       "file": "packages/cli/src/runtime/updateChecker.ts",

@@ -11,7 +11,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const execFileAsync = promisify(execFile);
 
-export type ClipboardTextWriteResult =
+type ClipboardTextWriteResult =
   { readonly ok: true } | { readonly ok: false; readonly reason: string };
 
 const CLIPBOARD_WRITE_TIMEOUT_MS = 5_000;

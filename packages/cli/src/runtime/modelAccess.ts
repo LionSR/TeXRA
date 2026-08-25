@@ -49,7 +49,7 @@ const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
   'access-list-default': 'silent',
 } satisfies Record<RunModelDecisionReason, CliModelFallbackMode>;
 
-export interface CliModelAccessListOptions {
+interface CliModelAccessListOptions {
   readonly models?: readonly string[];
 }
 
@@ -59,12 +59,12 @@ export interface CliModelAccessListOptions {
  * so a `models` filter passed here would be silently dropped. Keeping the
  * field off the type makes that unrepresentable rather than ignored.
  */
-export interface CliModelAccessEntryOptions {
+interface CliModelAccessEntryOptions {
   /** Optional preloaded list, used by commands that already fetched access. */
   readonly accessList?: readonly CliModelAccess[];
 }
 
-export interface CliRunnableModelOptions extends Pick<
+interface CliRunnableModelOptions extends Pick<
   CliModelAccessEntryOptions,
   'accessList'
 > {
