@@ -161,6 +161,29 @@ export class DesktopProgressBridge {
   private readonly logger: AgentTrace;
   private readonly backend: ProgressBackend;
   private readonly state: ProgressBackend['state'];
+
+  /**
+   * One adapter over the snapshot store for every progress-view port that
+   * wants one. The store cannot be passed raw -- `preload` takes a list and
+   * the workspace-only path read has a different name -- and each controller
+   * asks for a different subset, so this is the superset. Passing it by
+   * reference (never as an object literal) keeps excess-property checking out
+   * of the way while each port still sees only the members it declares.
+   *
+   * `getRunMetadata` is deliberately this class's override, not the store's:
+   * it falls back to the summary mirror for the execution id.
+   */
+  private readonly snapshotPort = {
+    getActiveStream: () => this.backend.presentation.activeStream,
+    getRunMetadata: (stream: StreamTabId) => this.getRunMetadata(stream),
+    getOutputFiles: (stream: StreamTabId) =>
+      this.state.snapshots.getOutputFiles(stream),
+    getCompileFailures: (stream: StreamTabId) =>
+      this.state.snapshots.getCompileFailures(stream),
+    getKnownWorkspaceOutputPaths: (stream: StreamTabId) =>
+      this.state.snapshots.getKnownFilePaths(stream, { workspaceOnly: true }),
+    preload: (stream: StreamTabId) => this.state.snapshots.preload([stream]),
+  };
   private readonly streamLogs: ProgressBackend['state']['streamLogs'];
   private agentProposalController!: ProgressAgentProposalController;
   private workflowFileActions!: ProgressWorkflowFileActionsController;
@@ -440,15 +463,7 @@ export class DesktopProgressBridge {
    */
   private createWorkflowActionsController(): ProgressWorkflowActionsController {
     return new ProgressWorkflowActionsController({
-      state: {
-        getRunMetadata: (stream) => this.getRunMetadata(stream),
-        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
-        getKnownWorkspaceOutputPaths: (stream) =>
-          this.state.snapshots.getKnownFilePaths(stream, {
-            workspaceOnly: true,
-          }),
-        preload: (stream) => this.state.snapshots.preload([stream]),
-      },
+      state: this.snapshotPort,
       runDiff: (request) => this.runWorkflowDiff(request),
       runFileOperation: (operation, request) =>
         this.runWorkflowFileOperation(operation, request),
@@ -492,13 +507,7 @@ export class DesktopProgressBridge {
   private createFollowUpController(): ProgressFollowUpController {
     return new ProgressFollowUpController({
       loadModelOptions: () => computeModelOptionsData(),
-      state: {
-        getRunMetadata: (stream) => this.getRunMetadata(stream),
-        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
-        getCompileFailures: (stream) =>
-          this.state.snapshots.getCompileFailures(stream),
-        preload: (stream) => this.state.snapshots.preload([stream]),
-      },
+      state: this.snapshotPort,
       workspace: {
         locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
         exists: (relativePath) => WorkspaceFS.exists(relativePath),
@@ -648,12 +657,7 @@ export class DesktopProgressBridge {
 
   private createWorkflowFileActionsController(): ProgressWorkflowFileActionsController {
     return new ProgressWorkflowFileActionsController({
-      state: {
-        getActiveStream: () => this.backend.presentation.activeStream,
-        getRunMetadata: (stream) => this.getRunMetadata(stream),
-        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
-        preload: (stream) => this.state.snapshots.preload([stream]),
-      },
+      state: this.snapshotPort,
       host: {
         compareFiles: (baseFile, editedFile) =>
           this.fileActions.compareFiles(baseFile, editedFile),
@@ -732,10 +736,7 @@ export class DesktopProgressBridge {
   > {
     return createProgressViewCommandHandlers({
       run: {
-        state: {
-          getRunMetadata: (stream) => this.getRunMetadata(stream),
-          preload: (stream) => this.state.snapshots.preload([stream]),
-        },
+        state: this.snapshotPort,
         runExecutionRequest: (request) =>
           this.runValidatedExecutionRequest(request),
       },
@@ -842,8 +843,7 @@ export class DesktopProgressBridge {
 
   private createProgressViewInboundHandlers(): DesktopProgressInboundHandlerRegistry {
     const secondTierActions: ProgressViewSecondTierActions = {
-      getRunMetadata: (stream) => this.getRunMetadata(stream),
-      preload: (stream) => this.state.snapshots.preload([stream]),
+      ...this.snapshotPort,
       workflowActions: this.workflowActions,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
