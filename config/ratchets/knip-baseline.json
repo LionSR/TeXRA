@@ -740,12 +740,6 @@
       "name": "initWizardModelSelectItems"
     },
     {
-      "file": "packages/cli/src/init/runInitWizard.tsx",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "InitWizardAgentOption"
-    },
-    {
       "file": "packages/cli/src/onboarding/onboardingState.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -965,12 +959,6 @@
       "file": "packages/cli/src/runtime/updateChecker.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "checkCliUpdateAvailable"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "detectInstallMethod"
     },
     {
@@ -1002,12 +990,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "resetCliUpdateNotifyLatchForTests"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "CheckCliUpdateAvailableOptions"
     },
     {
       "file": "packages/cli/src/runtime/updateChecker.ts",
@@ -1874,12 +1856,6 @@
       "name": "SettingsAgentDirectoryEntry"
     },
     {
-      "file": "src/controllers/settingsView/SettingsTeamRosterController.ts",
-      "category": "unused",
-      "kind": "types",
-      "name": "SettingsTeamRosterPresentation"
-    },
-    {
       "file": "src/eventBus/AppSignals.ts",
       "category": "production-dead",
       "kind": "types",
@@ -1956,24 +1932,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "activeCodingPlanForModel"
-    },
-    {
-      "file": "src/model/kimiCodeSubscriptionRouting.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "kimiCodeRuntimeConfig"
-    },
-    {
-      "file": "src/model/kimiCodeSubscriptionRouting.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "kimiCodeWireModelId"
-    },
-    {
-      "file": "src/model/kimiCodeSubscriptionRouting.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolveKimiCodeRoute"
     },
     {
       "file": "src/model/modelOptionsBasic.ts",
@@ -2180,18 +2138,6 @@
       "name": "isUnsupported"
     },
     {
-      "file": "src/skills/loadSkills.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "discoverSkills"
-    },
-    {
-      "file": "src/skills/loadSkills.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "DiscoverSkillsResult"
-    },
-    {
       "file": "src/telemetry/UsageLogService.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -2232,18 +2178,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "runStreamedTurn"
-    },
-    {
-      "file": "src/tools/comment/InlineCommentTool.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "InlineCommentInputSchema"
-    },
-    {
-      "file": "src/tools/delegation/delegationAvailability.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "replaceDelegationDescriptionBlock"
     },
     {
       "file": "src/tools/delegation/inBandSubagentExecution.ts",

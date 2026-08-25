@@ -53,7 +53,7 @@ export interface CliAuthProfile {
   note?: string;
 }
 
-export interface CliLoginOptions {
+interface CliLoginOptions {
   provider?: OAuthProvider;
   openBrowser?: boolean;
   selectAccount?: boolean;
@@ -160,7 +160,7 @@ function buildOAuthQueryParams(
   return Object.keys(queryParams).length > 0 ? queryParams : undefined;
 }
 
-export interface CliDeviceLoginOptions {
+interface CliDeviceLoginOptions {
   /** Called once with the code and verification URL the user must open. */
   onDeviceCode?: (authorization: DeviceAuthorization) => void;
   signal?: AbortSignal;

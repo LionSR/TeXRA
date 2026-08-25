@@ -45,22 +45,3 @@ export function decodeJwtClaimsWithSchema<T>(
   const parsed = schema.safeParse(raw);
   return parsed.success ? parsed.data : empty;
 }
-
-/**
- * Decode id_token then access_token; each listed field prefers the id_token
- * value when present (`??` coalesce, field-by-field).
- */
-export function claimsPreferringIdToken<T extends object>(
-  idToken: string | undefined,
-  accessToken: string | undefined,
-  decode: (token: string) => T,
-  fields: readonly (keyof T & string)[],
-): Pick<T, (typeof fields)[number]> {
-  const id = idToken ? decode(idToken) : undefined;
-  const access = accessToken ? decode(accessToken) : undefined;
-  const out = {} as Pick<T, (typeof fields)[number]>;
-  for (const field of fields) {
-    out[field] = (id?.[field] ?? access?.[field]) as T[typeof field];
-  }
-  return out;
-}

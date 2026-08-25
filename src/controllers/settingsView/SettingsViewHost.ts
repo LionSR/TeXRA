@@ -31,13 +31,11 @@ interface SettingsViewHostOptions {
   readonly memoryPrompt: MemoryControllerOptions['prompt'];
   readonly respond?: SettingsRespond;
   readonly controllers?: {
-    readonly memory?: SettingsMemoryController;
     readonly modelSelection?: SettingsModelSelectionController;
   };
 }
 
 interface SettingsViewHostMutationOptions {
-  readonly afterUpdate?: () => Awaitable<void>;
   readonly afterPost?: () => Awaitable<void>;
 }
 
@@ -46,9 +44,9 @@ export class SettingsViewHost {
   readonly modelSelectionController: SettingsModelSelectionController;
 
   constructor(private readonly options: SettingsViewHostOptions) {
-    this.memoryController =
-      options.controllers?.memory ??
-      new SettingsMemoryController({ prompt: options.memoryPrompt });
+    this.memoryController = new SettingsMemoryController({
+      prompt: options.memoryPrompt,
+    });
     this.modelSelectionController =
       options.controllers?.modelSelection ??
       new SettingsModelSelectionController({
@@ -131,7 +129,6 @@ export class SettingsViewHost {
   private async postModelSelectionMutation(
     options?: SettingsViewHostMutationOptions & { respond?: SettingsRespond },
   ): Promise<void> {
-    await options?.afterUpdate?.();
     await this.sendModelSelectionData(options?.respond);
     await options?.afterPost?.();
   }

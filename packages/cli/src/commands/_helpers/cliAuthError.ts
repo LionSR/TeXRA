@@ -6,7 +6,7 @@ import { writeErrorStderr } from '@cli/runtime/logSinks';
  * value, `ok: false` means the thunk threw and the error was already written
  * to stderr.
  */
-export type CliAuthResult<T> =
+type CliAuthResult<T> =
   { readonly ok: true; readonly value: T } | { readonly ok: false };
 
 /**

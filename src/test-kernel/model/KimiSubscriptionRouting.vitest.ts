@@ -2,9 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
 import {
-  kimiCodeRuntimeConfig,
-  kimiCodeWireModelId,
-  resolveKimiCodeRoute,
+  isKimiCodeRoute,
+  kimiCodeEffectiveConfig,
 } from '@model/kimiCodeSubscriptionRouting';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import {
@@ -49,47 +48,42 @@ describe('isKimiCodeExclusiveModel', () => {
   });
 });
 
-describe('kimiCodeWireModelId', () => {
-  it('rewrites kimi-k3 to k3 and passes plan aliases through', () => {
-    expect(kimiCodeWireModelId({ fullName: 'kimi-k3' })).toBe('k3');
-    expect(kimiCodeWireModelId({ fullName: 'kimi-for-coding' })).toBe(
-      'kimi-for-coding',
-    );
-  });
-});
+const facts = (
+  useOpenRouter: boolean,
+  keySet: boolean,
+  preferKimiCode: boolean,
+) => ({ useOpenRouter, keySet, preferKimiCode });
 
-describe('resolveKimiCodeRoute', () => {
+describe('isKimiCodeRoute', () => {
   it('never routes an ineligible model', () => {
     expect(
-      resolveKimiCodeRoute(
+      isKimiCodeRoute(
         { provider: ModelProvider.MOONSHOT },
-        false,
-        true,
-        true,
+        facts(false, true, true),
       ),
-    ).toBeNull();
+    ).toBe(false);
   });
 
   it('routes exclusive models whenever a key is set, ignoring the toggles', () => {
     // key + prefer off + openRouter on: still routes (no other backend exists
     // for coding-only models).
-    expect(resolveKimiCodeRoute(exclusive, true, true, false)).toBe('kimiCode');
+    expect(isKimiCodeRoute(exclusive, facts(true, true, false))).toBe(true);
     // no key: cannot route.
-    expect(resolveKimiCodeRoute(exclusive, false, false, true)).toBeNull();
+    expect(isKimiCodeRoute(exclusive, facts(false, false, true))).toBe(false);
   });
 
   it('routes dual-backend only with prefer on, a key set, and OpenRouter off', () => {
-    expect(resolveKimiCodeRoute(dual, false, true, true)).toBe('kimiCode');
+    expect(isKimiCodeRoute(dual, facts(false, true, true))).toBe(true);
     // prefer off → open platform.
-    expect(resolveKimiCodeRoute(dual, false, true, false)).toBeNull();
+    expect(isKimiCodeRoute(dual, facts(false, true, false))).toBe(false);
     // no key → open platform.
-    expect(resolveKimiCodeRoute(dual, false, false, true)).toBeNull();
+    expect(isKimiCodeRoute(dual, facts(false, false, true))).toBe(false);
     // OpenRouter on → open-router path wins.
-    expect(resolveKimiCodeRoute(dual, true, true, true)).toBeNull();
+    expect(isKimiCodeRoute(dual, facts(true, true, true))).toBe(false);
   });
 });
 
-describe('kimiCodeRuntimeConfig', () => {
+describe('kimiCodeEffectiveConfig', () => {
   it('pins the coding base URL and swaps in the coding wire id', () => {
     const config = {
       provider: ModelProvider.MOONSHOT,
@@ -98,7 +92,7 @@ describe('kimiCodeRuntimeConfig', () => {
       shortName: 'kimi-k3',
       contextWindow: 262_144,
     } as unknown as ModelConfig;
-    const runtime = kimiCodeRuntimeConfig(config);
+    const runtime = kimiCodeEffectiveConfig(config, facts(false, true, true));
     expect(runtime.fullName).toBe('k3');
     expect(runtime.shortName).toBe('k3');
     expect(runtime.baseUrl).toBe(KIMI_CODE_BASE_URL);

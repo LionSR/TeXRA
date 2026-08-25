@@ -709,7 +709,6 @@ export function registerBuiltinSlashCommands(options?: {
           // confirmation that the change reached the running session and not
           // just the config file.
           onApprovalPolicyChanged={options?.onApprovalPolicySelect}
-          openExternalForm={(formName) => openCliSlashCommandForm(formName, '')}
           onClose={() => props.onDone(undefined)}
           onError={async (error) => {
             props.onPersist?.();

@@ -15,26 +15,25 @@ import type { Theme } from '@shared/schemas';
  * mid-session (e.g. user toggles VS Code light/dark).
  *
  * This module is the single owner of the theme-kind vocabulary: the
- * kind→darkness mapping (`themeIsDark`) and the derived `vscode-*` / `texra-*`
+ * kind→darkness mapping (`themeIsDark`) and the derived `vscode-*`
  * body-class list (`THEME_CLASSES`) live here, and `hostTheme.ts` imports them
  * rather than re-encoding a parallel copy.
  */
 
-/** The host theme kinds we recognize. Single source for the `vscode-*` /
- *  `texra-*` class names and the kind→darkness mapping. */
+/** The host theme kinds we recognize. Single source for the `vscode-*`
+ *  class names and the kind→darkness mapping. */
 const THEME_KINDS = [
   'light',
   'dark',
   'high-contrast',
 ] as const satisfies readonly Theme[];
 
-/** Every `vscode-<kind>` / `texra-<kind>` body class, derived from THEME_KINDS.
+/** Every `vscode-<kind>` body class, derived from THEME_KINDS.
  *  `applyHostBodyTheme` strips these on re-apply and `isDarkTheme` below
  *  classifies body classes against this same list. */
-export const THEME_CLASSES: readonly string[] = THEME_KINDS.flatMap((kind) => [
-  `vscode-${kind}`,
-  `texra-${kind}`,
-]);
+export const THEME_CLASSES: readonly string[] = THEME_KINDS.map(
+  (kind) => `vscode-${kind}`,
+);
 
 /**
  * Convert a `Theme` kind to whether it should render as dark.
@@ -46,12 +45,12 @@ export function themeIsDark(theme: Theme): boolean {
 }
 
 const DARK_BODY_CLASSES: readonly string[] = THEME_KINDS.flatMap((kind) =>
-  themeIsDark(kind) ? [`vscode-${kind}`, `texra-${kind}`] : [],
+  themeIsDark(kind) ? [`vscode-${kind}`] : [],
 );
 
 const LIGHT_BODY_CLASSES: readonly string[] = [
   ...THEME_KINDS.flatMap((kind) =>
-    themeIsDark(kind) ? [] : [`vscode-${kind}`, `texra-${kind}`],
+    themeIsDark(kind) ? [] : [`vscode-${kind}`],
   ),
   // VS Code's special light high-contrast class, not derivable from
   // THEME_KINDS (it is a theme variant, not a kind).

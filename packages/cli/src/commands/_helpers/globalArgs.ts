@@ -164,7 +164,6 @@ export const INTERACTIVE_COMMAND_NAMES: readonly string[] = [
   'chat',
   'orchestrate',
   'setup',
-  'resume',
 ];
 
 // The long flag plus any single-character alias for a routable global flag.

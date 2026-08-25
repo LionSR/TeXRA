@@ -15,7 +15,7 @@
  *  - **dual-backend** models (`kimi3`) also exist on the Moonshot open
  *    platform; rerouting them through the coding endpoint is opt-in via the
  *    "Prefer Kimi Code" switch and requires a stored key, and their wire ID
- *    differs (`kimi-k3` → `k3`, see {@link kimiCodeWireModelId}).
+ *    differs (`kimi-k3` → `k3`, see {@link KIMI_CODE_WIRE_MODEL_IDS}).
  */
 
 import { type ModelConfig } from 'llm-zoo';
@@ -40,40 +40,6 @@ const KIMI_CODE_WIRE_MODEL_IDS: Readonly<Record<string, string>> = {
   'kimi-k3': 'k3',
 };
 
-/** The model id the Kimi Code backend keys on. */
-export function kimiCodeWireModelId(config: {
-  readonly fullName: string;
-}): string {
-  return KIMI_CODE_WIRE_MODEL_IDS[config.fullName] ?? config.fullName;
-}
-
-/**
- * Decide whether this model routes through the Kimi Code endpoint. Returns
- * `'kimiCode'` to route there (with the `kimiCode` credential), or `null` to
- * use the normal provider ladder.
- *
- *  - not eligible → `null`
- *  - exclusive → `'kimiCode'` when a key is set, else `null` (no other backend)
- *  - dual-backend → `'kimiCode'` only when the OpenRouter toggle is off, the
- *    "Prefer Kimi Code" switch is on, and a key is set; otherwise `null`
- *    (falls back to the Moonshot open platform).
- */
-export function resolveKimiCodeRoute(
-  config: KimiSubscriptionModelFields,
-  useOpenRouter: boolean,
-  keySet: boolean,
-  preferKimiCode: boolean,
-): 'kimiCode' | null {
-  if (!isKimiSubscriptionEligible(config)) return null;
-  if (isKimiCodeExclusiveModel(config)) {
-    return keySet ? 'kimiCode' : null;
-  }
-  if (useOpenRouter || !preferKimiCode || !keySet) {
-    return null;
-  }
-  return 'kimiCode';
-}
-
 /**
  * The host facts the Kimi Code route decision depends on, assembled once by
  * {@link resolveKimiCodeRoutingFacts} and threaded through the decision and
@@ -92,22 +58,23 @@ export interface KimiCodeRoutingFacts {
 }
 
 /**
- * Whether the shared route resolver picks the Kimi Code endpoint under the
- * given host facts. Single home of the `resolveKimiCodeRoute(...) ===
- * 'kimiCode'` comparison so the predicate's meaning is written once.
+ * Whether this model routes through the Kimi Code endpoint under the given
+ * host facts. Single home of the decision so the dispatch and availability
+ * paths cannot drift.
+ *
+ *  - not eligible → false
+ *  - exclusive → routes whenever a key is set (no other backend exists)
+ *  - dual-backend → routes only when the OpenRouter toggle is off, the
+ *    "Prefer Kimi Code" switch is on, and a key is set; otherwise it stays on
+ *    the Moonshot open platform.
  */
 export function isKimiCodeRoute(
   config: KimiSubscriptionModelFields,
   facts: KimiCodeRoutingFacts,
 ): boolean {
-  return (
-    resolveKimiCodeRoute(
-      config,
-      facts.useOpenRouter,
-      facts.keySet,
-      facts.preferKimiCode,
-    ) === 'kimiCode'
-  );
+  if (!isKimiSubscriptionEligible(config)) return false;
+  if (isKimiCodeExclusiveModel(config)) return facts.keySet;
+  return !facts.useOpenRouter && facts.preferKimiCode && facts.keySet;
 }
 
 /**
@@ -136,17 +103,25 @@ export async function resolveKimiCodeRoutingFacts(
 const KIMI_CODE_SUBSCRIPTION_CONTEXT_WINDOW = 262_144;
 
 /**
- * Synthesize the runtime config for a dual-backend model routed through the
- * coding endpoint: pin the coding `baseUrl`, swap the display `fullName`/
- * `shortName` for the coding wire id, and align pricing/context with the
- * membership endpoint — usage is covered by the membership (zero per-token
- * price), and the context budget is the conservative tier cap rather than the
- * open platform's advertised 1M. Exclusive models already carry the pinned
- * `baseUrl`, zero price, and 256K window from the registry, so this is only
- * applied to dual-backend routes in practice.
+ * The config a Kimi-subscription-eligible model actually runs with under the
+ * given routing facts. When the route lands on the Kimi Code endpoint for a
+ * dual-backend model, synthesize the runtime config: pin the coding `baseUrl`,
+ * swap the display `fullName`/`shortName` for the coding wire id, and align
+ * pricing/context with the membership endpoint — usage is covered by the
+ * membership (zero per-token price), and the context budget is the
+ * conservative tier cap rather than the open platform's advertised 1M.
+ * Exclusive models already carry the pinned `baseUrl`, zero price and 256K
+ * window from the registry, so they keep `config` untouched. Shared by the
+ * dispatch path (ModelFactory) and the availability path
+ * (computeModelOptions) so both apply the identical post-route synthesis.
  */
-export function kimiCodeRuntimeConfig(config: ModelConfig): ModelConfig {
-  const wireId = kimiCodeWireModelId(config);
+export function kimiCodeEffectiveConfig(
+  config: ModelConfig,
+  facts: KimiCodeRoutingFacts,
+): ModelConfig {
+  if (!isKimiCodeRoute(config, facts)) return config;
+  if (isKimiCodeExclusiveModel(config)) return config;
+  const wireId = KIMI_CODE_WIRE_MODEL_IDS[config.fullName] ?? config.fullName;
   return {
     ...config,
     fullName: wireId,
@@ -156,23 +131,4 @@ export function kimiCodeRuntimeConfig(config: ModelConfig): ModelConfig {
       Math.min(KIMI_CODE_SUBSCRIPTION_CONTEXT_WINDOW, config.contextWindow),
     ),
   };
-}
-
-/**
- * The config a Kimi-subscription-eligible model actually runs with under the
- * given routing facts: when the route resolver picks the Kimi Code endpoint
- * for a dual-backend model, swap in the synthesized runtime config (coding
- * base URL + wire id); exclusive models already carry the pinned config, so
- * they keep `config` untouched. Shared by the dispatch path (ModelFactory) and
- * the availability path (computeModelOptions) so both apply the identical
- * post-route synthesis.
- */
-export function kimiCodeEffectiveConfig(
-  config: ModelConfig,
-  facts: KimiCodeRoutingFacts,
-): ModelConfig {
-  if (!isKimiCodeRoute(config, facts)) return config;
-  return isKimiCodeExclusiveModel(config)
-    ? config
-    : kimiCodeRuntimeConfig(config);
 }

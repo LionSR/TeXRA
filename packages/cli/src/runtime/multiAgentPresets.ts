@@ -42,7 +42,7 @@ type CliMultiAgentPresetAvailability = TeamAvailability;
  * loads the agent registry and emits the resolved run plan as
  * `multi-agent-preset-inspection`.)
  */
-export interface CliMultiAgentPresetListRecord extends CliMultiAgentPreset {
+interface CliMultiAgentPresetListRecord extends CliMultiAgentPreset {
   readonly availability: CliMultiAgentPresetAvailability;
 }
 

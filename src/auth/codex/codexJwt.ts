@@ -22,7 +22,6 @@ import { z } from 'zod';
 
 import {
   NonEmptyJwtClaim,
-  claimsPreferringIdToken,
   decodeJwtClaimsWithSchema,
 } from '../oauth/jwtDecode';
 import { CODEX_JWT_AUTH_CLAIM } from './codexConstants';
@@ -65,11 +64,12 @@ export function extractCodexClaims(
   idToken: string | undefined,
   accessToken: string | undefined,
 ): CodexJwtClaims {
-  return claimsPreferringIdToken(
-    idToken,
-    accessToken,
-    (token) =>
-      decodeJwtClaimsWithSchema(token, CodexJwtClaimsSchema, EMPTY_CLAIMS),
-    ['accountId', 'email'],
-  );
+  const decode = (token: string): CodexJwtClaims =>
+    decodeJwtClaimsWithSchema(token, CodexJwtClaimsSchema, EMPTY_CLAIMS);
+  const id = idToken ? decode(idToken) : undefined;
+  const access = accessToken ? decode(accessToken) : undefined;
+  return {
+    accountId: id?.accountId ?? access?.accountId,
+    email: id?.email ?? access?.email,
+  };
 }

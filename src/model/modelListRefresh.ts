@@ -24,7 +24,7 @@ interface CopilotRouteReconciliation {
   cleared: string[];
 }
 
-export interface ModelListRefreshResult {
+interface ModelListRefreshResult {
   skipped: boolean;
   previousVersion: number | undefined;
   currentVersion: number;

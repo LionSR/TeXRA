@@ -25,7 +25,7 @@ import { createTexraTempDir } from '@utils/files/tempDir';
 const execFileAsync = promisify(execFile);
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 
-export type ClipboardAttachResult =
+type ClipboardAttachResult =
   | {
       readonly ok: true;
       /** Absolute path to the saved image under the shared `pasted/` dir. */

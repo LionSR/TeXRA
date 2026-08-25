@@ -4,7 +4,6 @@ import { execa } from 'execa';
 import { z } from 'zod';
 
 import { parseJsonWith } from '@common/parsing/safeParseJson';
-import type { StateStore } from '@platform/interfaces';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
@@ -247,52 +246,6 @@ async function runCliUpdate(method: InstallMethod): Promise<boolean> {
   return !result.failed;
 }
 
-export interface CheckCliUpdateAvailableOptions {
-  currentVersion: string;
-  globalState: StateStore;
-  /** Fetch the latest published version plus whether the source was live. */
-  fetchLatest: () => Promise<UpdateCheckFetchResult>;
-  /**
-   * Present a newer version to the user (notice + prompt). Called only when a
-   * strictly newer version was fetched, and always before the daily stamp is
-   * persisted — a throw (e.g. stdin closing mid-prompt) aborts the attempt
-   * un-stamped so the next launch re-checks instead of going silent for the
-   * full throttle window.
-   */
-  notify: (latest: string) => Promise<void>;
-  now?: () => number;
-}
-
-/**
- * At most once per day (persisted in global state), fetch the latest
- * published version and report it when newer than `currentVersion`. The shared
- * daily-check state machine writes the stamp only after the source was
- * genuinely consulted (`refreshed`, not a stale brew cache behind a failed tap
- * refresh) and, when an update was available, `notify` resolved. Any other
- * outcome (offline, registry hiccup, failed tap refresh, killed prompt) leaves
- * the stamp unwritten so the next launch retries. CLI stamp persistence is
- * best-effort: a failed write means an early re-check, not a failed update.
- */
-export async function checkCliUpdateAvailable({
-  currentVersion,
-  globalState,
-  fetchLatest,
-  notify,
-  now = Date.now,
-}: CheckCliUpdateAvailableOptions): Promise<string | undefined> {
-  return runDailyUpdateCheck({
-    currentVersion,
-    state: globalState,
-    lastCheckedAtKey: GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
-    fetchLatest,
-    notify,
-    now,
-    // A readable-but-unwritable global state file must not cancel an update
-    // the user already accepted; the next launch merely checks again early.
-    stampFailure: 'ignore',
-  });
-}
-
 /** Once-per-process latch for {@link notifyCliUpdate}. */
 let updateNotifyStarted = false;
 
@@ -304,11 +257,11 @@ export function resetCliUpdateNotifyLatchForTests(): void {
 
 /**
  * Once per process: check the package source for a newer release (at most
- * once per day — see {@link checkCliUpdateAvailable}) and, in an interactive
- * terminal, offer to run the matching global install. npm-like installs read
- * the npm registry; Homebrew installs refresh local tap metadata before
- * reading the formula version. Failures are silent so a flaky network never
- * gets between the user and their session.
+ * once per day, throttled through a stamp persisted in global state) and, in
+ * an interactive terminal, offer to run the matching global install. npm-like
+ * installs read the npm registry; Homebrew installs refresh local tap metadata
+ * before reading the formula version. Failures are silent so a flaky network
+ * never gets between the user and their session.
  *
  * Disable entirely with `TEXRA_NO_UPDATE_CHECK=1`.
  */
@@ -345,9 +298,10 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
     const globalState = await openCliGlobalStateStore(
       createNodeStorageProvider(),
     );
-    latest = await checkCliUpdateAvailable({
+    latest = await runDailyUpdateCheck({
       currentVersion: context.version,
-      globalState,
+      state: globalState,
+      lastCheckedAtKey: GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
       fetchLatest: async () => {
         if (method === 'brew') {
           return fetchLatestHomebrewFormulaVersion({ cwd: context.cwd });
@@ -366,6 +320,9 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
         confirmed =
           normalized === '' || normalized === 'y' || normalized === 'yes';
       },
+      // A readable-but-unwritable global state file must not cancel an update
+      // the user already accepted; the next launch merely checks again early.
+      stampFailure: 'ignore',
     });
   } catch {
     return;

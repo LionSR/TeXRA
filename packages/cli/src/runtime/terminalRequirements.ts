@@ -1,4 +1,4 @@
-export type InteractiveTerminalFailureReason = 'headless' | 'dumb-terminal';
+type InteractiveTerminalFailureReason = 'headless' | 'dumb-terminal';
 
 interface InteractiveTerminalContext {
   readonly mode: 'headless' | 'interactive';

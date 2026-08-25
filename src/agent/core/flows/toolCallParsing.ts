@@ -127,7 +127,6 @@ export function normalizeToolCallError(
     message: `${toolName}: Invalid parameters provided`,
     diagnostics: {
       type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-      issues: error.issues,
       formatted: formatZodIssuesForDiagnostics(error.issues),
     },
   };

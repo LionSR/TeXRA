@@ -16,10 +16,6 @@ const runtimeResourceEntries = [
   'docs/agent-creation',
   'goal',
   'shared',
-  'templates/agentCreatorToolUse.yaml',
-  'templates/agentCreatorWorkflow.yaml',
-  'templates/agentTemplate-toolUse.yaml',
-  'templates/agentTemplate-workflowSingle.yaml',
   'tool_use_agents',
 ];
 

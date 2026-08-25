@@ -83,18 +83,22 @@ export function requireWorkflowOrToolUseAgent(
   name: string,
   scope?: AgentDelegationScope,
 ): { agent: AgentEntry; category: AgentCategory } {
-  let firstError: unknown;
-  for (const category of [
-    AgentCategory.Workflow,
-    AgentCategory.ToolUse,
-  ] as const) {
-    try {
-      return { agent: requireVisibleAgent(category, name, scope), category };
-    } catch (error) {
-      firstError ??= error;
-    }
+  const searched = [AgentCategory.Workflow, AgentCategory.ToolUse] as const;
+  for (const category of searched) {
+    const agent = getDelegationAgent(category, name, scope);
+    if (agent) return { agent, category };
   }
-  throw firstError;
+  // Both rosters were searched, so both belong in the message: rethrowing the
+  // workflow-only error would advertise half the candidates the caller had.
+  const available = searched
+    .map((category) => {
+      const names = getDelegationAgents(category, scope).map((a) => a.name);
+      return `${category}: ${names.join(', ') || 'none'}`;
+    })
+    .join('; ');
+  throw new Error(
+    `Unknown workflow or toolUse agent '${name}'. Available: ${available}`,
+  );
 }
 
 /** Build a concise summary of proposal parameters for rejection echo. */

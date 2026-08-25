@@ -10,16 +10,18 @@ import {
   requestBashApproval,
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
+import { runToolWithCheck } from '@utils/system/toolUtils';
 import {
   splitContentLines,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
 
-// Local file imports
-import {
-  WOLFRAM_CODE_TIMEOUT_MS,
-  executeWolframCode,
-} from './wolframScriptUtils';
+const WOLFRAM_CODE_TIMEOUT_MS = 30_000; // 30 s
+
+const WOLFRAM_NOT_INSTALLED_ERROR =
+  '"wolframscript" is not installed or not in your PATH. ' +
+  'Having Mathematica installed is not enough: install the free ' +
+  'Wolfram Engine (https://www.wolfram.com/engine/) which includes WolframScript.';
 
 /**
  * Build a content-bearing summary for a wolfram run so concurrent calls render
@@ -69,11 +71,21 @@ export class WolframTool extends defineTool({
     getCurrentToolContexts()?.callContext?.hooks?.onExecutionReady?.();
 
     const effectiveTimeout = input.timeout ?? WOLFRAM_CODE_TIMEOUT_MS;
-    const result = await executeWolframCode(input.code, {
-      timeout: effectiveTimeout,
-    });
+    const result = await runToolWithCheck(
+      'wolframscript',
+      ['-code', input.code],
+      {
+        showError: false,
+        truncate: false,
+        timeout: effectiveTimeout,
+        channel: 'WolframTool',
+      },
+    );
+    if (!result) {
+      throw new ToolError(WOLFRAM_NOT_INSTALLED_ERROR);
+    }
     if (result.success) {
-      return executed(result.output ?? '', wolframRunSummary(input.code));
+      return executed(result.stdout, wolframRunSummary(input.code));
     }
 
     const parts: string[] = [];
@@ -83,11 +95,11 @@ export class WolframTool extends defineTool({
           `To fix: increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }`,
       );
     }
-    if (result.exitCode !== null && result.exitCode !== 0) {
+    if (result.exitCode !== 0) {
       parts.push(`exit code ${result.exitCode}`);
     }
-    if (result.error) parts.push(`<stderr>${result.error}</stderr>`);
-    if (result.output) parts.push(`<stdout>${result.output}</stdout>`);
+    if (result.stderr) parts.push(`<stderr>${result.stderr}</stderr>`);
+    if (result.stdout) parts.push(`<stdout>${result.stdout}</stdout>`);
 
     const details = parts.join('\n') || 'No error details available';
     throw new ToolError(`Wolfram execution failed: ${details}`);

@@ -39,7 +39,7 @@ export const DeviceAuthorizationSchema = z.object({
 });
 export type DeviceAuthorization = z.infer<typeof DeviceAuthorizationSchema>;
 
-export interface DeviceAuthPollHooks {
+interface DeviceAuthPollHooks {
   /** Injectable for tests; defaults to global fetch. */
   readonly fetchImpl?: typeof fetch;
   /** Injectable for tests; defaults to the device auth edge function URL. */

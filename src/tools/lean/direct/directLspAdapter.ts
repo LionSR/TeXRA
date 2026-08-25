@@ -63,14 +63,9 @@ const LAKE_PROJECT_ARGS = {
 export interface DirectLspLeanAdapterOptions {
   /** Path or name of the `lake` binary (defaults to `lake` on PATH). */
   lakeCommand?: string;
-  /**
-   * Optional cap on simultaneous `lean --server` processes. Unset means no
-   * capacity eviction — parallel worktrees stay up until they go idle.
-   */
-  maxSessions?: number;
   /** Stop a session after this much idle time. `0` disables idle eviction. */
   idleTimeoutMs?: number;
-  /** Clock for idle/LRU decisions (tests). */
+  /** Clock for idle decisions (tests). */
   now?: () => number;
 }
 
@@ -97,13 +92,10 @@ export function createDirectLspLeanAdapter(
   options: DirectLspLeanAdapterOptions = {},
 ): LeanLanguageServices & { dispose(): Promise<void> } {
   const lakeCommand = options.lakeCommand ?? 'lake';
-  const maxSessions =
-    options.maxSessions == null ? undefined : Math.max(1, options.maxSessions);
   const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_LEAN_IDLE_TIMEOUT_MS;
   const now = options.now ?? Date.now;
   const sessions = new Map<string, TrackedLeanSession>();
   const startQueue = new PQueue({ concurrency: 1 });
-  const sessionFreedWaiters = new Set<() => void>();
   const startsIdleWaiters = new Set<() => void>();
   let startsInFlight = 0;
   let startGeneration = 0;
@@ -129,17 +121,6 @@ export function createDirectLspLeanAdapter(
     if (startGeneration !== generation) {
       throw new Error(ADAPTER_STOPPED_MESSAGE);
     }
-  }
-
-  function notifySessionFreed(): void {
-    for (const resolve of sessionFreedWaiters) resolve();
-    sessionFreedWaiters.clear();
-  }
-
-  function waitForSessionFreed(): Promise<void> {
-    return new Promise((resolve) => {
-      sessionFreedWaiters.add(resolve);
-    });
   }
 
   function notifyStartsIdle(): void {
@@ -185,7 +166,6 @@ export function createDirectLspLeanAdapter(
       return;
     }
     armIdleTimer(root, tracked);
-    notifySessionFreed();
   }
 
   function registerSessionOwner(
@@ -251,13 +231,11 @@ export function createDirectLspLeanAdapter(
     if (session && tracked.session !== session) return;
     if (tracked.idleTimer) clearTimeout(tracked.idleTimer);
     sessions.delete(root);
-    notifySessionFreed();
   }
 
   async function disposeSession(
     root: string,
-    reason:
-      'idle' | 'capacity' | 'exhausted' | 'restart' | 'run-end' | 'shutdown',
+    reason: 'idle' | 'exhausted' | 'restart' | 'run-end' | 'shutdown',
   ): Promise<void> {
     const tracked = sessions.get(root);
     if (!tracked) return;
@@ -319,38 +297,6 @@ export function createDirectLspLeanAdapter(
     await Promise.all(idleRoots.map((root) => disposeSession(root, 'idle')));
   }
 
-  function lruRootExcept(exceptRoot: string): string | undefined {
-    let oldestRoot: string | undefined;
-    let oldestAt = Number.POSITIVE_INFINITY;
-    for (const [root, tracked] of sessions) {
-      if (root === exceptRoot || tracked.disposing || tracked.inFlight > 0) {
-        continue;
-      }
-      if (tracked.lastUsedAt < oldestAt) {
-        oldestAt = tracked.lastUsedAt;
-        oldestRoot = root;
-      }
-    }
-    return oldestRoot;
-  }
-
-  async function evictForNewSession(
-    newRoot: string,
-    generation: number,
-  ): Promise<void> {
-    await evictIdleSessions();
-    if (maxSessions == null) return;
-    while (sessions.size >= maxSessions) {
-      throwIfStopped(generation);
-      const victim = lruRootExcept(newRoot);
-      if (victim) {
-        await disposeSession(victim, 'capacity');
-        continue;
-      }
-      await waitForSessionFreed();
-    }
-  }
-
   /**
    * Stop currently-idle other workspaces after EMFILE/ENFILE, then return so
    * the caller can retry the spawn. Await sessions already shutting down so
@@ -385,7 +331,6 @@ export function createDirectLspLeanAdapter(
     // without settling, leaving Lean tool calls pending forever.
     startAbort.abort(new Error(ADAPTER_STOPPED_MESSAGE));
     startAbort = new AbortController();
-    notifySessionFreed();
     await Promise.all(
       [...sessions.keys()].map((root) => disposeSession(root, 'shutdown')),
     );
@@ -429,7 +374,7 @@ export function createDirectLspLeanAdapter(
       registerSessionOwner(existing, runId);
       return leaseSession(root, existing.session);
     }
-    await evictForNewSession(root, generation);
+    await evictIdleSessions();
     throwIfStopped(generation);
     try {
       return await startAndLease(root, generation, runId);
@@ -496,7 +441,7 @@ export function createDirectLspLeanAdapter(
       throwIfStopped(generation);
       await disposeSession(root, 'restart');
       throwIfStopped(generation);
-      await evictForNewSession(root, generation);
+      await evictIdleSessions();
       throwIfStopped(generation);
       await startFreshSession(root, generation, runId);
       const tracked = sessions.get(root);

@@ -129,10 +129,6 @@ export class SettingsModelSelectionController {
     });
   }
 
-  async setHelperModel(modelName: string): Promise<void> {
-    await this.deps.globalState.update(GlobalStateKey.HELPER_MODEL, modelName);
-  }
-
   async setReasoningLevel(input: {
     modelName: string;
     level: ReasoningLevel | null;

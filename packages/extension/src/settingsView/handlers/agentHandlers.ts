@@ -290,6 +290,7 @@ export class AgentHandlers {
         getCustomPresets: () => this.catalogController.getCustomPresets(),
         getOrchestratorAgentNames: () =>
           this.catalogController.getOrchestratorAgentNames(),
+        getActiveTeamId: () => this.roster.getActiveTeamId(),
       }),
     );
   }
@@ -357,10 +358,7 @@ export class AgentHandlers {
 
         await this.catalogController.saveCurrentPreset(name);
 
-        await Promise.all([
-          this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
-          this.refreshAfterAgentMutation(undefined, true),
-        ]);
+        await this.refreshAfterAgentMutation(undefined, true);
 
         void vscode.window.showInformationMessage(
           `Saved team "${name.trim()}"`,
@@ -387,10 +385,7 @@ export class AgentHandlers {
 
         await this.catalogController.deleteCustomPreset(data.presetId);
 
-        await Promise.all([
-          this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
-          this.refreshAfterAgentMutation(undefined, true),
-        ]);
+        await this.refreshAfterAgentMutation(undefined, true);
       },
     );
   }

@@ -9,6 +9,7 @@ import { postMessage } from '@shared/hostBridge';
 import {
   CommonViewMessageSchema,
   type StateRestoreMessage,
+  type Theme,
 } from '@shared/schemas';
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 
@@ -17,7 +18,7 @@ import { setWaColorScheme, themeIsDark } from '@shared/wa/waColorScheme';
 import type { ZodError } from 'zod';
 
 interface CommonMessageContext {
-  setTheme: (theme: string) => void;
+  setTheme: (theme: Theme) => void;
   setDebugMode: (enabled: boolean) => void;
   restoreState: (message: StateRestoreMessage) => void;
   onSchemaError?: (context: string, error: ZodError) => void;
@@ -55,7 +56,7 @@ function handleCommonMessage(
   }
 }
 
-export const themeContext = createContext<string>('shared-theme');
+export const themeContext = createContext<Theme>('shared-theme');
 
 /**
  * Base class for Lit-powered webview apps.
@@ -69,7 +70,7 @@ export const themeContext = createContext<string>('shared-theme');
 export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
   @provide({ context: themeContext })
   @state()
-  protected theme = '';
+  protected theme: Theme = 'dark';
 
   protected debugMode = false;
 
@@ -148,23 +149,14 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
    * Awesome's color-scheme classes activate (per WA's native theming model).
    * Also keeps the legacy `body.<theme>` class for downstream rules.
    */
-  protected onThemeChange(theme: string): void {
+  protected onThemeChange(theme: Theme): void {
     this.theme = theme;
     document.body.className = theme;
-    // 'high-contrast' renders against the active OS color-scheme — pick dark
-    // unless the body class explicitly signals light HC. Defer the actual
-    // class swap to the shared helper so the class set + ordering stays in
-    // one place across hosts. Reuse `themeIsDark()` for the typed ('dark' /
-    // 'high-contrast') case so the dark-detection rule lives next to the
+    // Defer the class swap to the shared helper so the class set + ordering
+    // stays in one place across hosts, and reuse `themeIsDark()` so the
+    // dark-detection rule ('high-contrast' renders dark) lives next to the
     // desktop renderer's path in @shared/wa/hostTheme.
-    const isTypedDark =
-      (theme === 'dark' || theme === 'light' || theme === 'high-contrast') &&
-      themeIsDark(theme);
-    const wantsDark =
-      isTypedDark ||
-      document.body.classList.contains('vscode-dark') ||
-      document.body.classList.contains('vscode-high-contrast');
-    setWaColorScheme(wantsDark);
+    setWaColorScheme(themeIsDark(theme));
   }
 
   /**

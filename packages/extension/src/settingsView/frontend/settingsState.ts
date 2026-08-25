@@ -197,6 +197,8 @@ export const agentSubTab = trackedSignal<AgentCategory | undefined>(
 // ---------------------------------------------------------------------------
 export const customPresets = trackedSignal<AgentModePreset[]>(() => []);
 export const orchestratorAgents = trackedSignal<string[]>(() => []);
+/** Team the workspace roster resolves to; null when the roster runs no team. */
+export const activePresetId = trackedSignal<string | null>(() => null);
 
 // ---------------------------------------------------------------------------
 // Multi-agent coordination state

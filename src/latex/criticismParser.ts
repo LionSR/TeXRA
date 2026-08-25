@@ -11,7 +11,7 @@
 
 import { findBraceBalancedMacroCalls } from '@utils/text/braceBalancedMacro';
 
-export interface CriticismAnnotation {
+interface CriticismAnnotation {
   message: string;
   severity: number;
   confidence: number;

@@ -15,7 +15,7 @@ type CliCommandRunContext<A extends ArgsDef> = Parameters<
   NonNullable<CommandDef<A>['run']>
 >[0];
 
-export interface DefineCliCommandOptions<A extends ArgsDef> {
+interface DefineCliCommandOptions<A extends ArgsDef> {
   readonly meta: CommandDef<A>['meta'];
   readonly args?: A;
   /**
