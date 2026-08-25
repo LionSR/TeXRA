@@ -52,9 +52,11 @@ export const streamArtifactRevision = signal<number>(0);
 const hydratedArtifactStreams = new Set<StreamTabId>();
 
 /** Per-stream projection memo, invalidated on `streamArtifactRevision`. The
- *  four renderers share one read-only clone per revision instead of re-cloning
- *  every round-indexed map and re-summing usage on each streaming repaint
- *  (#10731). */
+ *  four renderers share one projection per revision instead of re-summing usage
+ *  on each streaming repaint (#10731). The store's round-indexed reads are live
+ *  readonly views now, so the memo no longer amortizes a clone — clearing it on
+ *  every artifact write is what keeps a cached projection from spanning a
+ *  mutation. */
 const artifactProjectionMemo = new Map<StreamTabId, StreamArtifactProjection>();
 
 registerCliStateResetHook(() => {

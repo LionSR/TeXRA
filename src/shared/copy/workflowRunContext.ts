@@ -3,7 +3,7 @@ import {
   roundIndexedEntries,
   type CompileFailure,
   type OutputFileInfo,
-  type RoundIndexed,
+  type ReadonlyRoundIndexed,
   type StreamTabInfo,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
@@ -11,8 +11,8 @@ import { filterNotNullish } from '@utils/core';
 
 export interface WorkflowRunContextInput {
   stream: StreamTabInfo;
-  files: RoundIndexed<OutputFileInfo>;
-  compileFailures: RoundIndexed<CompileFailure>;
+  files: ReadonlyRoundIndexed<OutputFileInfo>;
+  compileFailures: ReadonlyRoundIndexed<CompileFailure>;
 }
 
 /**

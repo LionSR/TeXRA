@@ -3,7 +3,7 @@ import {
   type CompileFailure,
   type OutputFileInfo,
   type Plan,
-  type RoundIndexed,
+  type ReadonlyRoundIndexed,
   type StreamTabId,
   type TodoItem,
   type TokenUsageStats,
@@ -28,9 +28,9 @@ export type StreamArtifactReader = Pick<
 
 /** Canonical per-stream artifact/usage projection read from the store. */
 export interface StreamArtifactProjection {
-  readonly outputFilesByRound: RoundIndexed<OutputFileInfo>;
-  readonly missingOutputsByRound: RoundIndexed<string>;
-  readonly compileFailuresByRound: RoundIndexed<CompileFailure>;
+  readonly outputFilesByRound: ReadonlyRoundIndexed<OutputFileInfo>;
+  readonly missingOutputsByRound: ReadonlyRoundIndexed<string>;
+  readonly compileFailuresByRound: ReadonlyRoundIndexed<CompileFailure>;
   readonly cumulativeUsage: TokenUsageStats | undefined;
   readonly todos: readonly TodoItem[];
   readonly plan: Plan | null;

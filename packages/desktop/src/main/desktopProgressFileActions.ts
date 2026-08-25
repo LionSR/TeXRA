@@ -18,7 +18,7 @@ import type {
   DiffRunOutcome,
   DiffRunResult,
 } from '@latex/latexdiff/types';
-import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
+import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
@@ -59,7 +59,7 @@ export interface DesktopLatexdiffWorkspaceScan {
 }
 
 export interface DesktopLatexdiffRunContext {
-  outputsByRound: RoundIndexed<OutputFileInfo>;
+  outputsByRound: ReadonlyRoundIndexed<OutputFileInfo>;
   executionId?: string;
   workspaceScan?: DesktopLatexdiffWorkspaceScan;
 }

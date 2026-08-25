@@ -8,7 +8,7 @@ import {
   fileLocationAddressPath,
   type CompileFailure,
   type OutputFileInfo,
-  type RoundIndexed,
+  type ReadonlyRoundIndexed,
   type StreamTabId,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
@@ -36,7 +36,7 @@ interface ProgressFollowUpControllerDeps {
 }
 
 export interface ProgressFollowUpState extends StreamOutputsSource {
-  getCompileFailures(stream: StreamTabId): RoundIndexed<CompileFailure>;
+  getCompileFailures(stream: StreamTabId): ReadonlyRoundIndexed<CompileFailure>;
 }
 
 interface CompileFixerTarget {
@@ -60,7 +60,7 @@ interface CompileFixerInput {
   streamId: StreamTabId;
   runConfig: AgentConfig | undefined;
   compileFailures: CompileFailure[];
-  runOutputs: RoundIndexed<OutputFileInfo>;
+  runOutputs: ReadonlyRoundIndexed<OutputFileInfo>;
   modelOptions: readonly ProgressFollowUpModelOption[];
   executionId?: string;
 }
@@ -261,7 +261,7 @@ export class ProgressFollowUpController {
   private async compileFixerTargets(
     originalConfig: AgentConfig,
     compileFailures: CompileFailure[],
-    runOutputs: RoundIndexed<OutputFileInfo>,
+    runOutputs: ReadonlyRoundIndexed<OutputFileInfo>,
   ): Promise<CompileFixerTarget[]> {
     const preferred = this.compileFixerInputCandidates(
       originalConfig,
@@ -335,7 +335,7 @@ export class ProgressFollowUpController {
   private compileFixerInputCandidates(
     originalConfig: AgentConfig,
     compileFailures: CompileFailure[],
-    runOutputs: RoundIndexed<OutputFileInfo>,
+    runOutputs: ReadonlyRoundIndexed<OutputFileInfo>,
   ): string[] {
     const outputByPath = new Map<string, OutputFileInfo>();
     for (const output of Object.values(runOutputs).flat()) {

@@ -2,10 +2,10 @@
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   OutputFileInfo,
-  RoundIndexed,
+  ReadonlyRoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, cloneRoundIndexed } from '@shared/schemas';
 import { unique } from '@utils/core';
 import type { StreamOutputsSource } from './streamOutputs';
 
@@ -17,7 +17,7 @@ export interface WorkflowDiffRequest {
   outputFilesActive: boolean;
   streamId: StreamTabId;
   runId?: string;
-  outputsByRound?: RoundIndexed<OutputFileInfo>;
+  outputsByRound?: ReadonlyRoundIndexed<OutputFileInfo>;
 }
 
 export type WorkflowFileOperation = 'pack' | 'clean';
@@ -56,9 +56,14 @@ export class ProgressWorkflowActionsController {
       // already enumerates ascending per the ES2015+ integer-key spec rule;
       // runLatexdiffForExecution consumes `outputsByRound` in that order
       // without needing an explicit sort here.
+      // Frozen at click time. `getOutputFiles` returns the store's live
+      // record, and this request crosses an interactive quick pick
+      // (`promptForLatexdiffMathMarkup`, `ignoreFocusOut`) before
+      // `handleRunLatexdiff` reads `outputsByRound`, so a run finishing a round
+      // mid-prompt would otherwise widen the diff scope under the user.
       const runOutputs = this.deps.state.getOutputFiles(stream);
       const outputsByRound = Object.keys(runOutputs).length
-        ? runOutputs
+        ? cloneRoundIndexed(runOutputs)
         : undefined;
 
       await this.deps.runDiff({

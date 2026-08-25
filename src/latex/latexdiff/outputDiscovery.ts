@@ -15,6 +15,7 @@ import {
   type ExecutionId,
   type FileLocation,
   type OutputFileInfo,
+  type ReadonlyRoundIndexed,
   type RoundIndexed,
 } from '@shared/schemas';
 import {
@@ -209,7 +210,7 @@ export async function discoverLatestExecutionOutputs(
   channel: string,
 ): Promise<{
   executionId: ExecutionId;
-  rounds: RoundIndexed<OutputFileInfo>;
+  rounds: ReadonlyRoundIndexed<OutputFileInfo>;
 } | null> {
   const log = createLog(channel);
   try {

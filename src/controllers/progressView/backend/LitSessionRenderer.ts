@@ -13,6 +13,7 @@ import type {
 import type { SessionState } from '@controllers/session/SessionState';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { cloneRoundIndexed } from '@shared/schemas';
 import type {
   ConversationProgress,
   GoalStatus,
@@ -22,6 +23,7 @@ import type {
   ProgressPermissionKind,
   ProgressViewOutboundMessage,
   ProgressViewPlacement,
+  ReadonlyRoundIndexed,
   RoundIndexed,
   StreamContentRenderPayload,
   StreamMetadata,
@@ -353,11 +355,16 @@ export class LitSessionRenderer implements SessionRendererPort {
         stage: executionState.stage ?? null,
         badges: { subagents: executionState.subagents },
       },
+      // Wire boundary: this payload is serialized to the webview, so it takes
+      // a snapshot. Lazy via the getter, so a payload that never reads outputs
+      // never pays for one.
       get outputs() {
         return {
-          files: state.snapshots.getOutputFiles(stream),
-          missing: state.snapshots.getMissingOutputs(stream),
-          compileFailures: state.snapshots.getCompileFailures(stream),
+          files: cloneRoundIndexed(state.snapshots.getOutputFiles(stream)),
+          missing: cloneRoundIndexed(state.snapshots.getMissingOutputs(stream)),
+          compileFailures: cloneRoundIndexed(
+            state.snapshots.getCompileFailures(stream),
+          ),
         };
       },
       get workPlan() {
@@ -565,8 +572,10 @@ export class LitSessionRenderer implements SessionRendererPort {
 }
 
 /** Omit empty round records so the frontend keeps its "no data" placeholder. */
+// The wire boundary: an outbound message is a snapshot by nature, so this is
+// where the copy belongs — once per message, rather than on every store read.
 function nonEmptyRounds<T>(
-  rounds: RoundIndexed<T>,
+  rounds: ReadonlyRoundIndexed<T>,
 ): RoundIndexed<T> | undefined {
-  return Object.keys(rounds).length ? rounds : undefined;
+  return Object.keys(rounds).length ? cloneRoundIndexed(rounds) : undefined;
 }
