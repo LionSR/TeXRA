@@ -82,17 +82,6 @@ export function isOAuthProvider(
 }
 
 /**
- * Check if Supabase is configured.
- * Returns false if using placeholder values.
- */
-export function isSupabaseConfigured(): boolean {
-  return (
-    !SUPABASE_CONFIG.url.includes('placeholder') &&
-    SUPABASE_CONFIG.publicKey !== 'placeholder-public-key'
-  );
-}
-
-/**
  * Default OAuth provider to use.
  * Users can choose during sign-in if multiple are configured in Supabase.
  */

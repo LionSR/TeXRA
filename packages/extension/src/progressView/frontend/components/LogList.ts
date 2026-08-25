@@ -188,7 +188,7 @@ export class LogList extends LitElement {
       // Re-sticky so future content updates auto-scroll.
       // Must wait for child TaskGroupList to finish rendering (updateComplete)
       // and then for a layout pass (requestAnimationFrame) so the log container
-      // has an accurate scrollMax before we scroll.
+      // has an accurate scrollHeight before we scroll.
       this.shouldScrollToBottom = false;
       void activeEl?.updateComplete.then(() => {
         requestAnimationFrame(() => {

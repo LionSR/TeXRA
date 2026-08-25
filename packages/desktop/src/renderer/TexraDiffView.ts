@@ -86,10 +86,7 @@ export class TexraDiffView extends LitElement {
 
   @consume({ context: themeContext, subscribe: true })
   @property({ attribute: false })
-  // Kept `string` because themeContext carries a plain string; the value is
-  // always one of DESKTOP_THEME_KIND at runtime, asserted at the Monaco
-  // boundary below.
-  hostTheme: string = DESKTOP_THEME_KIND.DARK;
+  hostTheme: Theme = DESKTOP_THEME_KIND.DARK;
   @state() private loading = false;
   @state() private errorMessage = '';
 
@@ -208,11 +205,7 @@ export class TexraDiffView extends LitElement {
   }
 
   private applyTheme(): void {
-    // themeContext is typed `string` but only ever carries DESKTOP_THEME_KIND
-    // values, so the boundary cast is the invariant we trust here.
-    this.monaco?.editor.setTheme(
-      monacoThemeForHostTheme(this.hostTheme as Theme),
-    );
+    this.monaco?.editor.setTheme(monacoThemeForHostTheme(this.hostTheme));
   }
 
   private disposeMonacoObjects(): void {

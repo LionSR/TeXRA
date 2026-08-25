@@ -6,7 +6,7 @@ import { readPlatformSetting } from '@utils/config/platformSettings';
 import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';
 import { TEXFMT_CONFIG_KEY, runTexFmt } from './texfmt';
 
-export interface LatexFormatter {
+interface LatexFormatter {
   /** Setting value that selects this formatter. */
   id: string;
   /** Config key holding this formatter's optional config-file path. */

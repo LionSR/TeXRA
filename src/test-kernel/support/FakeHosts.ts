@@ -1,8 +1,5 @@
 // Local imports - hosts
 import type {
-  DiffSession,
-  DiffSource,
-  DiffViewHost,
   ExternalOpener,
   PromptConfirmOptions,
   PromptHost,
@@ -27,22 +24,10 @@ export interface PromptInputEvent {
   options: PromptInputOptions;
 }
 
-interface DiffOpenEvent {
-  original: DiffSource;
-  proposed: DiffSource;
-  title: string;
-}
-
-interface DiffRevealEvent {
-  session: DiffSession;
-  line: number;
-}
-
 export interface FakeUIHostsOptions {
   promptResponses?: readonly string[];
   confirmResponses?: readonly boolean[];
   inputResponses?: readonly (string | undefined)[];
-  proposedDiffContent?: Record<string, string>;
 }
 
 export class FakePromptHost implements PromptHost {
@@ -121,68 +106,14 @@ class FakeExternalOpener implements ExternalOpener {
   }
 }
 
-class FakeDiffViewHost implements DiffViewHost {
-  readonly opened: DiffOpenEvent[] = [];
-
-  readonly closed: DiffSession[] = [];
-
-  readonly revealed: DiffRevealEvent[] = [];
-
-  private readonly proposedContent = new Map<string, string>();
-
-  constructor(proposedContent: Record<string, string> = {}) {
-    for (const [filePath, content] of Object.entries(proposedContent)) {
-      this.proposedContent.set(filePath, content);
-    }
-  }
-
-  async openDiff(
-    original: DiffSource,
-    proposed: DiffSource,
-    title: string,
-  ): Promise<DiffSession> {
-    this.opened.push({ original, proposed, title });
-    return { original, proposed, title };
-  }
-
-  async closeDiff(session: DiffSession): Promise<void> {
-    this.closed.push(session);
-  }
-
-  async revealFirstChange(session: DiffSession, line: number): Promise<void> {
-    this.revealed.push({ session, line });
-  }
-
-  async readProposedContent(session: DiffSession): Promise<string> {
-    const content = this.proposedContent.get(session.proposed.filePath);
-    if (content === undefined) {
-      throw new Error(
-        `No proposed diff content for ${session.proposed.filePath}.`,
-      );
-    }
-    return content;
-  }
-
-  setProposedContent(filePath: string, content: string): void {
-    this.proposedContent.set(filePath, content);
-  }
-}
-
 /**
- * The three UI ports a host wires together. Production hosts (VS Code,
- * desktop) inject each port individually; this aggregate exists only so
- * test support can assemble and pass them as a single bundle.
+ * The UI ports a host wires together. Production hosts (VS Code, desktop)
+ * inject each port individually; this aggregate exists only so test support
+ * can assemble and pass them as a single bundle.
  */
-interface UIHosts {
-  readonly prompt: PromptHost;
-  readonly externalOpener: ExternalOpener;
-  readonly diff: DiffViewHost;
-}
-
-export interface FakeUIHosts extends UIHosts {
+export interface FakeUIHosts {
   readonly prompt: FakePromptHost;
   readonly externalOpener: FakeExternalOpener;
-  readonly diff: FakeDiffViewHost;
 }
 
 export function createFakeUIHosts(
@@ -191,6 +122,5 @@ export function createFakeUIHosts(
   return {
     prompt: new FakePromptHost(options),
     externalOpener: new FakeExternalOpener(),
-    diff: new FakeDiffViewHost(options.proposedDiffContent),
   };
 }

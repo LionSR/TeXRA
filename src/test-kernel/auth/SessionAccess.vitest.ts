@@ -11,8 +11,6 @@ function coordinator(
 ): SessionAccessCoordinator {
   return {
     getStatus: async () => ({ signedIn: false }),
-    getFreshAccessToken: async () => 'access-token',
-    loadSession: async () => null,
     ...overrides,
   };
 }
