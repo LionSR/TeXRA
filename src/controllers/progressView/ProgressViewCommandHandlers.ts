@@ -359,8 +359,8 @@ export function createProgressViewCommandHandlers(
     },
 
     // Header AUTO-EDIT / AUTO-BASH toggles are independent: flipping one
-    // kind must not take the other with it. AUTO-TASK (super-YOLO) is the
-    // complete-grant control below.
+    // kind must not take the other with it. AUTO-TASK is the complete-grant
+    // control below.
     [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: async (data) => {
       const enabled = !isApprovalBypassedForStream(data.stream, session);
       setToolEditApprovalSessionBypass(data.stream, enabled, { session });

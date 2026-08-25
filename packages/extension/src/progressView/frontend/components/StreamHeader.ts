@@ -75,9 +75,9 @@ import {
  */
 const ACTIVE_STATE_BUTTONS = [
   ELEMENT_IDS.STOP_STREAM_BTN,
-  ELEMENT_IDS.YOLO_TOGGLE_BTN,
+  ELEMENT_IDS.TOOL_EDIT_TOGGLE_BTN,
   ELEMENT_IDS.BASH_TOGGLE_BTN,
-  ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
+  ELEMENT_IDS.AUTO_TASK_TOGGLE_BTN,
   ELEMENT_IDS.COMPACT_RESPONSE_BTN,
   ELEMENT_IDS.RESTORE_STATE_BTN,
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
@@ -496,10 +496,9 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         className,
         size: 'm',
         disabled,
-        // Toggle state gates auto-approval of edits/shell — expose it as
-        // aria-pressed (toggles only; plain actions must not read as
-        // toggle buttons).
-        pressed: btn.isToggle ? isActive : undefined,
+        // Bypass toggles expose grant state as aria-pressed; plain actions
+        // must not read as toggle buttons.
+        pressed: btn.bypassKind === undefined ? undefined : isActive,
         ariaHidden: hidden,
         onClick: () => {
           if (disabled) return;
