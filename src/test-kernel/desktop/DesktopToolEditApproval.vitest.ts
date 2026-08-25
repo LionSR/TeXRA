@@ -228,7 +228,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
 
   const [
     { requestToolEditApproval },
-    { cleanupApprovalsForStream },
+    { releaseStreamResources },
     controllerModule,
     desktopModule,
   ] = await Promise.all([
@@ -240,7 +240,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   return {
     activeApproval,
     requestToolEditApproval,
-    cleanupApprovalsForStream,
+    releaseStreamResources,
     controllerModule,
     desktopModule,
   };
@@ -810,7 +810,7 @@ describe('desktop tool edit approval', () => {
     'cleans pending entries and temp files when stream cleanup rejects a request',
     async () => {
       const {
-        cleanupApprovalsForStream,
+        releaseStreamResources,
         controller,
         interactions,
         session,
@@ -836,7 +836,7 @@ describe('desktop tool edit approval', () => {
       await vi.waitFor(() => expect(shown).toHaveLength(1));
 
       // Pending interactions are session-owned: sweep the owning session.
-      cleanupApprovalsForStream('stream-cleanup', session);
+      releaseStreamResources('stream-cleanup', session);
 
       await expect(resultPromise).resolves.toMatchObject({
         action: 'reject',

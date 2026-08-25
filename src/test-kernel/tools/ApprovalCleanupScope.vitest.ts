@@ -8,10 +8,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
-  cleanupApprovalsForStream,
   cleanupUnscopedApprovals,
   isBashApprovalBypassedForStream,
   proposalApprovals,
+  releaseStreamResources,
   setBashApprovalSessionBypass,
 } from '@tools/approval';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -49,11 +49,11 @@ describe('approval cleanup scope', () => {
       // A desktop window deleting its own stream `a` scopes the sweep to `a`
       // (this is what `deleteAllStreams` loops), so a sibling stream `b`
       // keeps its bypass state.
-      cleanupApprovalsForStream(a);
+      releaseStreamResources(a);
       expect(isBashApprovalBypassedForStream(a)).toBe(false);
       expect(isBashApprovalBypassedForStream(b)).toBe(true);
     } finally {
-      cleanupApprovalsForStream(b);
+      releaseStreamResources(b);
     }
   });
 
@@ -70,7 +70,7 @@ describe('approval cleanup scope', () => {
     );
 
     try {
-      cleanupApprovalsForStream(streamId, session);
+      releaseStreamResources(streamId, session);
       await expect(pending).resolves.toEqual({
         action: 'reject',
         cause: 'Stream resources released.',
@@ -175,7 +175,7 @@ describe('session-owned approval state (#8144)', () => {
       );
       expect(sessionB.approvals.bash.bypass.isBypassed(streamId)).toBe(false);
 
-      cleanupApprovalsForStream(streamId, sessionA);
+      releaseStreamResources(streamId, sessionA);
       expect(proposalApprovals(sessionA).isBypassed(streamId)).toBe(false);
       expect(proposalApprovals(sessionB).isBypassed(streamId)).toBe(false);
     } finally {

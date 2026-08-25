@@ -14,12 +14,12 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { WriteFileTool } from '@tools/WriteTool';
+import { setToolEditApprovalSessionBypass } from '@tools/approval';
 import {
-  setToolEditApprovalSessionBypass,
+  requestToolEditApproval,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
-} from '@tools/approval';
-import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
+} from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 // Test stream ID for the per-stream approval-bypass cases

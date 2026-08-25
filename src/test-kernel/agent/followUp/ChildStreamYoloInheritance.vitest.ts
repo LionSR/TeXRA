@@ -8,11 +8,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { currentSession, defaultSession } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import {
-  cleanupApprovalsForStream,
   configureDelegatedChildApprovals,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
   proposalApprovals,
+  releaseStreamResources,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
@@ -205,7 +205,7 @@ describe('child subagent stream approval inheritance', () => {
     configureDelegatedChildApprovals(child, parent);
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
 
-    cleanupApprovalsForStream(parent);
+    releaseStreamResources(parent);
 
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
     setBashApprovalSessionBypass(parent, false, { silent: true });
@@ -234,7 +234,7 @@ describe('child subagent stream approval inheritance', () => {
       'bash',
     ]);
 
-    cleanupApprovalsForStream(editParent);
+    releaseStreamResources(editParent);
     setBashApprovalSessionBypass(bashParent, false, { silent: true });
 
     expect(isApprovalBypassedForStream(child)).toBe(true);

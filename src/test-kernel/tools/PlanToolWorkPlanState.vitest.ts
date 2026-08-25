@@ -18,10 +18,10 @@ import { installPlatform as installFakePlatform } from '@test/support/setupPlatf
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore } from '@tools/goal';
 import {
-  cleanupApprovalsForStream,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
   proposalApprovals,
+  releaseStreamResources,
 } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
 
@@ -151,7 +151,7 @@ describe('PlanTool — update (plan approval)', () => {
         summary: 'Plan approved: proceed with implementation',
       });
     } finally {
-      cleanupApprovalsForStream(streamId, session);
+      releaseStreamResources(streamId, session);
     }
   });
 
@@ -230,7 +230,7 @@ describe('PlanTool — update (plan approval)', () => {
       expect(isApprovalBypassedForStream(streamId, session)).toBe(false);
     } finally {
       await GoalStore.forget(streamId);
-      cleanupApprovalsForStream(streamId, session);
+      releaseStreamResources(streamId, session);
     }
   });
 
@@ -265,7 +265,7 @@ describe('PlanTool — update (plan approval)', () => {
       expect(isApprovalBypassedForStream(streamId, session)).toBe(false);
     } finally {
       await GoalStore.forget(streamId);
-      cleanupApprovalsForStream(streamId, session);
+      releaseStreamResources(streamId, session);
     }
   });
 

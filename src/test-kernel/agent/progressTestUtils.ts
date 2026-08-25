@@ -432,6 +432,7 @@ export function sessionWithInteractions(
     modelRetries: new ModelRetryGate(),
     status,
     transcripts: { ensureLoaded: async () => {} },
+    followUps: { terminalize: () => false },
   } as unknown as SessionHandle;
 }
 

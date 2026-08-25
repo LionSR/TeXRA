@@ -49,7 +49,7 @@ import {
 } from '@cli/runtime/approval/approvalSummaries';
 import {
   decideRetryApproval,
-  TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+  texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -212,7 +212,7 @@ describe('human input approval policy', () => {
     expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
       action: 'drop',
       threadId: 'ei_test',
-      reason: TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+      reason: texraApprovalDenialMessage('deny-policy'),
     });
   });
 

@@ -30,7 +30,7 @@ import {
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
-import { cleanupApprovalsForStream } from '@tools/approval';
+import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 
 import {
@@ -455,7 +455,7 @@ describe('ToolUseWaitNode', () => {
       detachTrace();
       recorded.detach();
       await GoalStore.forget(streamId);
-      cleanupApprovalsForStream(streamId);
+      releaseStreamResources(streamId);
     }
   });
 
@@ -902,7 +902,7 @@ describe('ToolUseWaitNode', () => {
       expect(setApprovalBypassState).not.toHaveBeenCalled();
     } finally {
       await GoalStore.forget(streamId);
-      cleanupApprovalsForStream(streamId);
+      releaseStreamResources(streamId);
     }
   });
 
@@ -953,7 +953,7 @@ describe('ToolUseWaitNode', () => {
       });
     } finally {
       await GoalStore.forget(streamId);
-      cleanupApprovalsForStream(streamId);
+      releaseStreamResources(streamId);
     }
   });
 
