@@ -531,6 +531,33 @@ describe('CLI chat defaults', () => {
     warnSpy.mockRestore();
   });
 
+  it('still warns about an unknown key inside the CLI-exclusive chat section', async () => {
+    // Unlike the shared top level, texra.chat.* is CLI-only structure in
+    // every host — nothing else reads or writes it — so a typo here (e.g.
+    // "modle" for "model") is always worth a warning, not suppressed by the
+    // same reportUnknownKeys: false that guards the shared top-level rows.
+    mockedReadJson.mockResolvedValueOnce({
+      'texra.agent': 'assistant',
+      'texra.chat': { modle: 'deepseekT' },
+    });
+    const warnSpy = vi
+      .spyOn(logSinks, 'writeTextStderr')
+      .mockImplementation(() => {});
+
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        agentSource: 'user-config',
+      },
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('texra.chat.modle'),
+    );
+    warnSpy.mockRestore();
+  });
+
   it('does not warn about fields this tier does not resolve', async () => {
     // agent/model (top-level and chat.*) are the only fields
     // defaultsFromConfigValues reads here. approvalPolicy is already

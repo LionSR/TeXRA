@@ -197,6 +197,14 @@ function pickFields<T extends object>(
 }
 
 interface PickConfigOptions {
+  /** Gates only the *top-level* unknown-key check — the shared user config
+   *  holds rows the other hosts honor and the CLI doesn't (see
+   *  {@link parseCliConfigValues}). The `chat`/`run` sections underneath a
+   *  known top-level key are CLI-exclusive structure in every host (nothing
+   *  else reads or writes `texra.chat.*`/`texra.run.*`), so an unknown key
+   *  nested inside one of them always warns regardless of this flag — a
+   *  typo like `texra.chat.modle` is a bug report worth surfacing even when
+   *  the file's other top-level rows are being read leniently. */
   readonly reportUnknownKeys: boolean;
   /** Restricts which command sections get read (and thus warned about) —
    *  `undefined` means all of {@link COMMAND_SECTIONS}. A caller that only
@@ -215,7 +223,6 @@ function pickCommandSection(
   section: (typeof COMMAND_SECTIONS)[number],
   warnings: string[],
   filePath: string,
-  options: PickConfigOptions,
 ): CliCommandConfig | undefined {
   const sectionKey = canonicalConfigKey(section);
   if (!Object.hasOwn(record, sectionKey)) return undefined;
@@ -225,9 +232,9 @@ function pickCommandSection(
     return undefined;
   }
   const prefix = `${sectionKey}.`;
-  if (options.reportUnknownKeys) {
-    warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
-  }
+  // Always checked: chat.*/run.* are CLI-exclusive structure, so a typo'd
+  // key here is never a false positive the way a shared top-level row is.
+  warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
   return pickFields<CliRequiredCommandConfig>(
     sectionValue,
     COMMAND_FIELD_SCHEMAS,
@@ -250,10 +257,10 @@ function pickConfigValues(
   const wantsSection = (section: (typeof COMMAND_SECTIONS)[number]): boolean =>
     options.sections?.has(section) ?? true;
   const chat = wantsSection('chat')
-    ? pickCommandSection(record, 'chat', warnings, filePath, options)
+    ? pickCommandSection(record, 'chat', warnings, filePath)
     : undefined;
   const run = wantsSection('run')
-    ? pickCommandSection(record, 'run', warnings, filePath, options)
+    ? pickCommandSection(record, 'run', warnings, filePath)
     : undefined;
   const topLevelFields = options.topLevelFields
     ? TOP_LEVEL_FIELD_SCHEMAS.filter(([key]) =>
