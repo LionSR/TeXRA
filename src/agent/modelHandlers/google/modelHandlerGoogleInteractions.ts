@@ -501,7 +501,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       !this.backgroundUnsupported &&
       stateful &&
       this.isWorkflowMode() &&
-      getConfig<boolean>('texra.model.useBackgroundResponses', true)
+      getConfig<boolean>('texra.model.useGoogleBackgroundResponses', false)
     );
   }
 

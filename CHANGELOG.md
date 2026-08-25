@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Shared (all surfaces)
+
+#### Bug Fixes
+
+- **Google background responses are off by default** — Gemini workflow
+  generations stay on the live request unless you turn them on in the Google
+  provider settings. OpenAI's background setting is unchanged.
+
 ## [0.40.4] - 2026-08-23
 
 ### Shared (all surfaces)

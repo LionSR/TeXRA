@@ -102,6 +102,7 @@ export const DEFAULT_CORE_SETTINGS = {
   model: {
     useOpenAIResponsesAPI: true,
     useGoogleInteractionsServerState: true,
+    useGoogleBackgroundResponses: false,
     useBackgroundResponses: true,
     openaiParallelToolCalls: true,
     compactionThresholdPercent: MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue,
@@ -252,6 +253,10 @@ export const CoreSettingsShape = {
       useGoogleInteractionsServerState: boolField(
         DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsServerState,
         "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
+      ),
+      useGoogleBackgroundResponses: boolField(
+        DEFAULT_CORE_SETTINGS.model.useGoogleBackgroundResponses,
+        'Run long-running Google workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
       ),
       useBackgroundResponses: boolField(
         DEFAULT_CORE_SETTINGS.model.useBackgroundResponses,
@@ -485,6 +490,7 @@ export const CORE_SETTING_PATHS = [
   'model.gpt5ReasoningSummary',
   'model.useOpenAIResponsesAPI',
   'model.useGoogleInteractionsServerState',
+  'model.useGoogleBackgroundResponses',
   'model.useBackgroundResponses',
   'model.openaiParallelToolCalls',
   'model.compactionThresholdPercent',
