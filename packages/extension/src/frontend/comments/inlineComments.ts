@@ -94,8 +94,6 @@ function toView(
 }
 
 const provider: InlineCommentProvider = {
-  available: () => controller !== undefined,
-
   add: ({ absolutePath, line, endLine, body }) => {
     if (!controller) return null;
     const uri = vscode.Uri.file(absolutePath);

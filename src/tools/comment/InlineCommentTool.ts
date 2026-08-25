@@ -39,15 +39,13 @@ export interface InlineCommentThreadView {
 
 /**
  * Host-implemented provider for inline comment threads, injected by the
- * extension host and backed by the VS Code CommentController. Absent on hosts
- * without one (CLI / headless), where `available()` is false and the tool
- * reports the no-op back to the agent.
+ * extension host and backed by the VS Code CommentController. Hosts without
+ * one (CLI / desktop) never reach the tool: its `hosts:` block drops
+ * `inline_comment` from their agent rosters.
  *
  * Methods are synchronous because the underlying VS Code API is synchronous.
  */
 export interface InlineCommentProvider {
-  /** True when a CommentController is registered (feature available). */
-  available(): boolean;
   add(input: {
     absolutePath: string;
     line: number;
@@ -61,21 +59,29 @@ export interface InlineCommentProvider {
   list(input: { absolutePath?: string }): InlineCommentThreadView[];
 }
 
-const UNAVAILABLE: InlineCommentProvider = {
-  available: () => false,
-  add: () => null,
-  reply: () => false,
-  setResolved: () => false,
-  list: () => [],
-};
-
-let provider: InlineCommentProvider = UNAVAILABLE;
+let provider: InlineCommentProvider | undefined;
 
 export function setInlineCommentProvider(next: InlineCommentProvider): void {
   provider = next;
 }
 
-export const InlineCommentInputSchema = z.strictObject({
+/**
+ * Resolve the host-injected provider, throwing when none was wired. The throw
+ * is intentional: the `hosts:` block already keeps `inline_comment` out of the
+ * CLI and desktop rosters, so reaching the tool with no provider means a host
+ * skipped the registration — a startup bug that must name itself rather than
+ * report a plausible no-op back to the agent.
+ */
+function requireProvider(): InlineCommentProvider {
+  if (!provider) {
+    throw new ToolError(
+      'Inline comments are unavailable: no host called setInlineCommentProvider() during startup. Only the VS Code extension host wires this tool.',
+    );
+  }
+  return provider;
+}
+
+const InlineCommentInputSchema = z.strictObject({
   command: z
     .enum(['add', 'reply', 'resolve', 'unresolve', 'list'])
     .describe(
@@ -143,12 +149,6 @@ export class InlineCommentTool extends defineTool({
   schema: InlineCommentInputSchema,
 }) {
   protected async execute(input: InlineCommentInput): Promise<ToolResult> {
-    if (!provider.available()) {
-      return executed(
-        'Inline comments require the VS Code extension host and are not available in this environment.',
-        'Inline comments unavailable',
-      );
-    }
     switch (input.command) {
       case 'add':
         return this.addThread(input);
@@ -175,7 +175,7 @@ export class InlineCommentTool extends defineTool({
       const workingDirectory =
         getRunContextWorkingDirectory(tryUseRunContext());
       const resolved = resolveWorkspaceRelativePath(path, workingDirectory);
-      const result = provider.add({
+      const result = requireProvider().add({
         absolutePath: resolved.absolute,
         line,
         endLine: endLine ?? line,
@@ -203,7 +203,7 @@ export class InlineCommentTool extends defineTool({
     if (threadId == null || body == null) {
       throw new ToolError('The "reply" command requires threadId and body.');
     }
-    if (!provider.reply({ threadId, body })) {
+    if (!requireProvider().reply({ threadId, body })) {
       return this.threadNotFound(threadId);
     }
     const summary = `Replied to comment thread ${threadId}`;
@@ -220,7 +220,7 @@ export class InlineCommentTool extends defineTool({
         `The "${resolved ? 'resolve' : 'unresolve'}" command requires threadId.`,
       );
     }
-    if (!provider.setResolved({ threadId, resolved })) {
+    if (!requireProvider().setResolved({ threadId, resolved })) {
       return this.threadNotFound(threadId);
     }
     const summary = `${resolved ? 'Resolved' : 'Reopened'} comment thread ${threadId}`;
@@ -237,7 +237,7 @@ export class InlineCommentTool extends defineTool({
         workingDirectory,
       ).absolute;
     }
-    const threads = provider.list({ absolutePath });
+    const threads = requireProvider().list({ absolutePath });
     if (threads.length === 0) {
       return executed(
         input.path
