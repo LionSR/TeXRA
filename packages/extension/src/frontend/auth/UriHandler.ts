@@ -13,12 +13,13 @@ export class SupabaseUriHandler implements vscode.UriHandler {
    * Handle incoming URIs from OAuth callbacks.
    * This is called when the user is redirected back from the OAuth provider.
    *
-   * Accepts both paths in `AUTH_CALLBACK_PATHS`. Only `/auth-callback` is
-   * produced today: the resolver builds every redirect from
-   * `getAuthCallbackUri`, which hardcodes that path, and `asExternalUri` only
-   * appends VS Code's `?state=` routing token. `/extension-auth-callback` is
-   * retained tolerance for a web/Codespaces shape this repo no longer emits;
-   * narrowing it needs a Codespaces sign-in check, not a grep.
+   * Accepts both paths in `AUTH_CALLBACK_PATHS`. Every redirect this repo
+   * builds goes through `getAuthCallbackUri`, which hardcodes `/auth-callback`.
+   * What `asExternalUri` does to that URI in a web/Codespaces workbench is VS
+   * Code's business, not something this repo can assert — which is exactly why
+   * `/extension-auth-callback` is still accepted. Do NOT narrow
+   * `AUTH_CALLBACK_PATHS` on the strength of a grep; it needs a real Codespaces
+   * sign-in check.
    */
   handleUri(uri: vscode.Uri): vscode.ProviderResult<void> {
     // The routed-back URI carries VS Code's ?state= token on the path, so the

@@ -175,8 +175,9 @@ export function setExternalAuthCallbackResolver(
  * Uses the host-provided adapter to handle different environments:
  * - Desktop VS Code: returns vscode://texra-ai.texra/auth-callback
  * - Cursor: returns cursor://texra-ai.texra/auth-callback
- * - Codespaces: returns the workbench URL asExternalUri() routes back, with
- *   VS Code's ?state= token appended to the same /auth-callback path
+ * - Codespaces: returns whatever asExternalUri() maps the vscode:// URI to,
+ *   carrying VS Code's ?state= routing token (the exact shape is VS Code's,
+ *   not ours — see UriHandler for why both callback paths stay accepted)
  * - Remote SSH: handles port forwarding automatically
  *
  * In Codespaces, VS Code generates a state parameter that MUST be preserved

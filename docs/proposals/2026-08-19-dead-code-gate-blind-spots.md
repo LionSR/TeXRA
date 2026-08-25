@@ -71,30 +71,35 @@ under src/") is closed, and its fix — `"project": ["src/**/*.ts",
 the `.ts` being _shadowed_, so the failure mode it was closed against still
 reproduces.
 
-### 4. A type reachable only from an exported signature is invisible
+### 4. Un-exporting a type is never flagged — mechanism unconfirmed
 
-_(Added 2026-08-25, from #11392.)_
+_(Added 2026-08-25, from #11392. **Open question, not an established gap.**)_
 
-A type referenced only positionally through an exported function or interface
-signature is not reported, while a type in the same file referenced only from an
-interface member **is**. One file demonstrates both sides —
-`src/controllers/mainView/MainViewDroppedFilesController.ts`:
+#11392 removed the `export` keyword from twelve types across
+`src/controllers/**` that had no cross-file reference of any kind. The gate had
+flagged none of them, and `check:dead-code-ratchet` stayed green both before and
+after — so twelve genuinely dead export keywords were invisible to it.
 
-- `MainViewAllowedDropExtensions` (`:16`), referenced only from an interface
-  member, **is** baselined as `production-dead / types`.
-- `MainViewDroppedFileAttachmentPlan` (`:20`) and
-  `MainViewDroppedFileAttachmentInput` (`:28`), referenced directly in the
-  exported `planMainViewDroppedFileAttachments` signature, **never appear in the
-  baseline at all**.
+The **mechanism is not established**, and an earlier draft of this section got it
+wrong. That draft claimed the distinguishing factor was reachability from an
+exported signature, citing
+`src/controllers/mainView/MainViewDroppedFilesController.ts` as a file showing
+both sides. It does not:
 
-`knip.json` sets no `ignoreExportsUsedInFile`, so the documented default would
-have reported both. #11392 un-exported twelve such types across
-`src/controllers/**`, none of which the gate had ever flagged, and the ratchet
-stayed green before and after.
+- `MainViewAllowedDropExtensions` (`:16`) is baselined, but via **§1** — its only
+  non-file-local reference is a vitest import
+  (`src/test-kernel/controllers/MainViewDroppedFilesController.vitest.ts:6`). It
+  is also referenced at `:30`, `:85`, and `:125`, not "only from an interface
+  member".
+- The two types offered as the negative side were un-exported by #11392 itself,
+  so knip cannot report them at HEAD and the comparison is unreproducible against
+  the tree it cites.
 
-This is distinct from §1: those types have no test consumer either. A
-contributor asking "why did the gate not flag this un-export?" now has a section
-to point at.
+What is needed before this is written up as a distinct blind spot: a specimen
+that is exported, has **no** test consumer, has no cross-file production
+consumer, and is still absent from the baseline. Until someone produces one,
+treat the twelve as unexplained rather than as evidence for a fourth
+mechanism.
 
 ## Related hazard: the global gitignore hides tracked source
 
