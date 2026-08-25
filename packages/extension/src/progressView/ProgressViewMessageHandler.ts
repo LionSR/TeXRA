@@ -143,9 +143,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    * One adapter over the snapshot store for every progress-view port that
    * wants one. The store cannot be passed raw -- `preload` takes a list and
    * the workspace-only path read has a different name -- and each controller
-   * asks for a different subset, so this is the superset. Passing it by
-   * reference (never as an object literal) keeps excess-property checking out
-   * of the way while each port still sees only the members it declares.
+   * asks for a different subset, so this is the superset. Passed by reference,
+   * excess-property checking does not apply and each port's type still narrows
+   * it to the members that port declares.
+   *
+   * The two spread sites are the exception: `{ ...this.snapshotPort, ... }`
+   * copies every member in at runtime, so those objects carry accessors their
+   * port type does not declare. Harmless today -- nothing enumerates or
+   * serializes them -- but do not add a member here whose mere presence would
+   * change a consumer's behavior.
    */
   private readonly snapshotPort = {
     getActiveStream: () => this.provider.backend.presentation.activeStream,
