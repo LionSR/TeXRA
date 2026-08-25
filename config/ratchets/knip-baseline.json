@@ -1448,12 +1448,6 @@
       "name": "resolveOutputFiles"
     },
     {
-      "file": "src/agent/prompt/userVars.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "USER_VAR_RUNTIME_TOKENS"
-    },
-    {
       "file": "src/agent/runtime/AgentLaunchContext.ts",
       "category": "production-dead",
       "kind": "exports",

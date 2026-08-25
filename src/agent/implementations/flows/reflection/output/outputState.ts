@@ -137,7 +137,9 @@ export function setCompileFailures(
   ensureRoundData(state, round).compileFailures = failures;
 }
 
-function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
+export function collectRunSupportFiles(
+  agentConfig: AgentConfig,
+): FileLocation[] {
   const allPaths = [
     ...agentConfig.contextFiles,
     ...agentConfig.mediaFiles,
@@ -152,13 +154,4 @@ function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
   }
 
   return [...extras.values()];
-}
-
-export function startRunWorkspacePreparation(
-  state: OutputState,
-  deps: OutputDependencies,
-): void {
-  state.runPreparation = deps.fileService.prepareRunWorkspace(deps.baseFiles, {
-    linkFiles: collectRunSupportFiles(deps.config),
-  });
 }

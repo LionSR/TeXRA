@@ -32,7 +32,7 @@ import { LatexDiffManager } from './output/LatexDiffManager';
 import { XmlOutputManager } from './output/XmlOutputManager';
 import {
   createOutputState,
-  startRunWorkspacePreparation,
+  collectRunSupportFiles,
   getOutputFilesByRound,
   roundsFromPersisted,
 } from './output/outputState';
@@ -170,7 +170,9 @@ export async function runReflectionFlow<C = unknown>(
   };
 
   // Kick off run-workspace preparation (awaited lazily by extractFilesFromXml).
-  startRunWorkspacePreparation(outputState, services);
+  outputState.runPreparation = fileService.prepareRunWorkspace(baseFiles, {
+    linkFiles: collectRunSupportFiles(services.config),
+  });
 
   const kv = getExecutionStore(executionId);
 

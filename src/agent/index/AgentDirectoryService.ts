@@ -143,7 +143,9 @@ export class AgentDirectoryService {
       return undefined;
     }
 
-    await AbsoluteFS.ensureDir(configuredPath);
+    // createDir, not ensureDir: a regular file at the configured path must
+    // still reject here rather than be handed back as a directory.
+    await AbsoluteFS.createDir(configuredPath);
     this.log.debug(
       `Using custom agents directory from setting: ${configuredPath}`,
     );

@@ -113,7 +113,7 @@ export type BuiltUserVars = UserVars & Record<string, unknown>;
  * `requiredFilesInternal` keys are not in this map and pass through as
  * unknown values via the loose record below.
  */
-export const UserVariableValueSchemas = {
+const UserVariableValueSchemas = {
   MODEL: z.string(),
   INSTRUCTION: z.string(),
   IS_OPENAI_MODEL: z.boolean(),
@@ -168,6 +168,16 @@ function optionalizeUserVariableSchemas<T extends Record<string, z.ZodTypeAny>>(
     Object.entries(schemas).map(([key, schema]) => [key, schema.optional()]),
   ) as { [K in keyof T]: z.ZodOptional<T[K]> };
 }
+
+/**
+ * The fixed vocabulary as a frozen runtime list, derived from its single owner
+ * so a new fixed variable only has to be declared once. The schema map itself
+ * stays file-local: it backs checkpoint validation process-wide, so handing it
+ * out would let a consumer replace or drop validators. Order is irrelevant,
+ * both consumers build a map or a set from it.
+ */
+export const USER_VAR_RUNTIME_TOKENS: ReadonlyArray<keyof UserVars> =
+  Object.freeze(Object.keys(UserVariableValueSchemas) as (keyof UserVars)[]);
 
 /**
  * The persisted channel shape stays a loose record — checkpoints written by

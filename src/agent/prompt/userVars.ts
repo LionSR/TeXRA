@@ -9,7 +9,7 @@ import {
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import { shouldSaveModelIO } from '@agent/debug/debugMessageSaver';
 import {
-  UserVariableValueSchemas,
+  USER_VAR_RUNTIME_TOKENS,
   type BuiltUserVars,
   type UserVars,
 } from '@agent/core/definition/AgentCycleOptions';
@@ -63,15 +63,6 @@ const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
 export const USER_VAR_MODEL = 'MODEL';
 /** Transient user-variable key carrying the current user instruction. */
 export const USER_VAR_INSTRUCTION = 'INSTRUCTION';
-
-/**
- * The fixed vocabulary as a runtime list, derived from its single owner so a
- * new fixed variable only has to be declared once. Order is irrelevant: both
- * consumers build a map or a set from it.
- */
-export const USER_VAR_RUNTIME_TOKENS = Object.keys(
-  UserVariableValueSchemas,
-) as ReadonlyArray<keyof UserVars>;
 
 /** Runtime view of the fixed vocabulary for the required-file collision guard. */
 const FIXED_USER_VAR_KEYS: ReadonlySet<string> = new Set(
