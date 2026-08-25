@@ -12,10 +12,11 @@ import type { StreamSnapshotStore } from '@transcript';
 
 /**
  * The store surface needed to preload and read the accumulated
- * round-artifact/usage projection. The TUI is the only consumer: the
- * progress-view renderer reads `StreamSnapshotStore` directly instead
- * (`LitSessionRenderer.getOutputFiles`/`getRunUsage`), so this projection is
- * CLI presentation, not shared state.
+ * round-artifact/usage projection. No host-neutral module imports this
+ * projection: the progress-view renderer reads the store directly
+ * (`state.snapshots.getOutputFiles`/`getRunUsage`), and the progress-view
+ * controllers reach those same accessors through their own narrower
+ * `StreamOutputsSource` port. So this is CLI presentation, not shared state.
  */
 export type StreamArtifactReader = Pick<
   StreamSnapshotStore,
