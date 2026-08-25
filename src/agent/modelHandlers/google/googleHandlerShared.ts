@@ -1,14 +1,13 @@
 import { Buffer } from 'node:buffer';
 import { basename } from 'node:path';
 
-import type { File, GoogleGenAI } from '@google/genai';
-
 import type { AgentTrace } from '@agent/trace';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { isNonEmptyString } from '@utils/core';
 
 import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
+import type { File, GoogleGenAI } from '@google/genai';
 
 /**
  * Media-attachment pipeline for `ModelHandlerGoogleInteractions`, kept out of
