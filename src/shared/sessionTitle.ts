@@ -14,17 +14,23 @@ export interface SessionTitleStyle {
   readonly marker: Record<SessionTitleState, string | undefined>;
 }
 
-export const TERMINAL_TAB_TITLE: SessionTitleStyle = {
+// Deep-frozen: both styles cross a module boundary, and `readonly` alone is
+// compile-time only — a mutated `marker` here would retitle both hosts.
+export const TERMINAL_TAB_TITLE: SessionTitleStyle = Object.freeze({
   brand: '{T}',
   separator: '·',
-  marker: { idle: undefined, running: '⠋', approval: '⚠' },
-};
+  marker: Object.freeze({ idle: undefined, running: '⠋', approval: '⚠' }),
+});
 
-export const NATIVE_WINDOW_TITLE: SessionTitleStyle = {
+export const NATIVE_WINDOW_TITLE: SessionTitleStyle = Object.freeze({
   brand: 'TeXRA',
   separator: ' · ',
-  marker: { idle: undefined, running: 'Running', approval: 'Approval needed' },
-};
+  marker: Object.freeze({
+    idle: undefined,
+    running: 'Running',
+    approval: 'Approval needed',
+  }),
+});
 
 export interface SessionTitleOptions {
   /** Live activity, e.g. a spinner frame; REPLACES the running marker. */
