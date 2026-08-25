@@ -77,7 +77,7 @@ describe('findCodexBinaryPath', () => {
       ...platformPackage.pkg.split('/'),
       'vendor',
       platformPackage.triple,
-      'codex',
+      'bin',
       platformPackage.binaryName,
     );
     fs.mkdirSync(path.dirname(binaryPath), { recursive: true });

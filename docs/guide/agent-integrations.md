@@ -59,11 +59,11 @@ TeXRA spawns each CLI binary directly in the same environment as the extension h
 
 ### Settings
 
-| Setting              | Options                                                                     | Default           | What it controls                                                           |
-| -------------------- | --------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------- |
-| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                        | `workspace-write` | File-system access. Agents may override per call via `sandbox_mode`.       |
-| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                            | `high`            | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
-| **Approval policy**  | `auto approve`, `ask when requested`, `ask for untrusted`, `ask on failure` | `auto approve`    | When the Codex child process may stop to ask before running commands.      |
+| Setting              | Options                                                                     | Default           | What it controls                                                                                                          |
+| -------------------- | --------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                        | `workspace-write` | File-system access. Agents may override per call via `sandbox_mode`.                                                      |
+| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                            | `high`            | How deeply Codex deliberates. Extra high is used when the installed runtime accepts it; older installs fall back to High. |
+| **Approval policy**  | `auto approve`, `ask when requested`, `ask for untrusted`, `ask on failure` | `auto approve`    | When the Codex child process may stop to ask before running commands.                                                     |
 
 TeXRA pins Codex to the `gpt-5.5` model. Providers, MCP servers, and custom instructions come from Codex's own `~/.codex/config.toml`.
 

@@ -51,7 +51,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
-import { importCodexClass, findCodexBinaryPath } from './codexImport';
+import {
+  codexBinarySupportsXhigh,
+  importCodexClass,
+  findCodexBinaryPath,
+} from './codexImport';
 import { type ChildStream } from './delegation/childStream';
 import { codexThreadsFor } from './agentCliSessionStores';
 import {
@@ -446,8 +450,9 @@ async function createCodexThread(
   workingDir?: string,
 ): Promise<Thread> {
   const CodexClass = await importCodexClass();
+  const codexPath = await findCodexBinaryPath();
   const codex = new CodexClass({
-    codexPathOverride: await findCodexBinaryPath(),
+    codexPathOverride: codexPath,
   });
   const config = await getCodexConfig();
   // Resumed threads keep their stored workspace unless explicitly overridden.
@@ -460,7 +465,9 @@ async function createCodexThread(
     sandboxMode,
     approvalPolicy: config.getCodexApprovalPolicy(),
     model: config.CODEX_CLI_MODEL,
-    modelReasoningEffort: config.getCodexCliReasoningEffort(),
+    modelReasoningEffort: config.getCodexCliReasoningEffort(
+      await codexBinarySupportsXhigh(codexPath),
+    ),
     skipGitRepoCheck: true as const,
   };
   return input.thread_id

@@ -106,7 +106,8 @@ export interface ResolveBinaryConfig {
   /**
    * Locate the binary inside a resolved platform-package directory, returning
    * its path if present or `undefined`. Codex nests the binary under
-   * `vendor/<triple>/codex/`; Claude places it directly in the package dir.
+   * `vendor/<triple>/bin/` (older packages: `vendor/<triple>/codex/`); Claude
+   * places it directly in the package dir.
    */
   binaryInPlatformPackage(platformPkgDir: string): Promise<string | undefined>;
   /**
