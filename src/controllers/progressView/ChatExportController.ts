@@ -25,8 +25,6 @@ import {
   type ChatExportInput,
 } from '@agent/export/chatExportFormatter';
 
-export type { ChatExportInput };
-
 import { compileLatex2Pdf } from '@latex/texTools';
 import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import type { ExecutionId } from '@shared/schemas';

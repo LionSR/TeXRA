@@ -36,7 +36,7 @@ interface ProgressWorkflowActionsState extends StreamOutputsSource {
   getKnownWorkspaceOutputPaths(stream: StreamTabId): Set<string>;
 }
 
-export interface ProgressWorkflowActionsControllerDeps {
+interface ProgressWorkflowActionsControllerDeps {
   state: ProgressWorkflowActionsState;
   runDiff(request: WorkflowDiffRequest): Promise<void>;
   runFileOperation(

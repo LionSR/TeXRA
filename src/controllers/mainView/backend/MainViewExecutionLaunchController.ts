@@ -31,7 +31,7 @@ export interface MainViewExecutionLaunchHost {
 }
 
 /** Host-neutral result of resolving the launch sequence. */
-export type MainViewExecutionLaunchResult =
+type MainViewExecutionLaunchResult =
   | {
       status: 'prepared';
       preparation: MainViewExecutionPreparationResult;

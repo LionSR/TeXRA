@@ -17,7 +17,7 @@ export type MainViewAllowedDropExtensions = Readonly<
   Record<MainViewAttachableDropCategory, readonly string[]>
 >;
 
-export interface MainViewDroppedFileAttachmentPlan {
+interface MainViewDroppedFileAttachmentPlan {
   readonly filesByCategory: Readonly<
     Record<MainViewAttachableDropCategory, readonly string[]>
   >;
@@ -25,7 +25,7 @@ export interface MainViewDroppedFileAttachmentPlan {
   readonly rejectedCount: number;
 }
 
-export interface MainViewDroppedFileAttachmentInput {
+interface MainViewDroppedFileAttachmentInput {
   readonly paths: readonly (string | null)[];
   readonly allowedExtensions: MainViewAllowedDropExtensions;
   readonly target?: MultipleDocumentFileType;
