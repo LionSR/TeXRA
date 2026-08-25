@@ -130,10 +130,13 @@ function parseSummaryShape(value: unknown): StreamLogSummary | undefined {
   if (value === undefined) return undefined;
   const result = StreamLogSummarySchema.safeParse(value);
   if (!result.success) {
-    // Derived tier (#9434): discard the stale-shaped cache loudly instead of
-    // migrating it in place.
+    // Derived tier (#9434): ignore the stale-shaped cache loudly instead of
+    // migrating it in place. Worded for both callers — the loader then
+    // rebuilds from the authoritative stream log, while the standalone
+    // parent-edge patch below just skips its write — neither "discards"
+    // anything from storage on this path.
     log.warn(
-      `Discarding a stale-shaped summary cache entry: ${result.error.issues
+      `Ignoring a stale-shaped summary cache entry: ${result.error.issues
         .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
         .join('; ')}`,
     );
