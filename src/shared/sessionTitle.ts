@@ -1,32 +1,54 @@
 export type SessionTitleState = 'idle' | 'running' | 'approval';
 
-const ACTIVITY_LABEL: Record<SessionTitleState, string | undefined> = {
-  idle: undefined,
-  running: 'Running',
-  approval: 'Approval needed',
+/**
+ * Host-specific vocabulary and density for one title surface. A terminal tab
+ * is a few characters wide and competes with sibling tabs, so it gets the
+ * brand mark and glyph markers; a native window title has room for words.
+ */
+export interface SessionTitleStyle {
+  /** Product name as rendered: compact mark or spelled-out name. */
+  readonly brand: string;
+  /** Placed between the brand and the project name. */
+  readonly separator: string;
+  /** State marker, or `undefined` to leave that state unmarked. */
+  readonly marker: Record<SessionTitleState, string | undefined>;
+}
+
+export const TERMINAL_TAB_TITLE: SessionTitleStyle = {
+  brand: '{T}',
+  separator: '·',
+  marker: { idle: undefined, running: '⠋', approval: '⚠' },
 };
 
+export const NATIVE_WINDOW_TITLE: SessionTitleStyle = {
+  brand: 'TeXRA',
+  separator: ' · ',
+  marker: { idle: undefined, running: 'Running', approval: 'Approval needed' },
+};
+
+export interface SessionTitleOptions {
+  /** Live activity, e.g. a spinner frame; REPLACES the running marker. */
+  readonly detail?: string;
+  readonly style: SessionTitleStyle;
+}
+
 /**
- * Format the product title shared by native windows and terminal tabs.
- * Optional `activityDetail` (e.g. a live spinner frame) REPLACES the state
- * label for the running state — an animated frame already says "running",
- * so `TeXRA — ⠋ — proj` instead of `TeXRA — Running ⠋ — proj`; the label
- * stays when there is no live detail to carry it.
+ * Format the product title shared by native windows and terminal tabs:
+ * `⠋ {T}·proj`. The state marker leads so it survives tab truncation, and a
+ * live `detail` frame stands in for the running marker — an animated frame
+ * already says "running", so no redundant word beside it.
  */
 export function formatSessionTitle(
   project: string | undefined,
   state: SessionTitleState,
-  activityDetail?: string,
+  options: SessionTitleOptions,
 ): string {
-  const label = ACTIVITY_LABEL[state];
-  let activity = label;
-  if (state === 'running' && activityDetail) {
-    // A live spinner frame already says "running"; no redundant word.
-    activity = activityDetail;
-  } else if (label != null && activityDetail) {
-    activity = `${label} ${activityDetail}`;
-  }
-  return ['TeXRA', activity, project]
-    .filter((segment): segment is string => Boolean(segment))
-    .join(' — ');
+  const { detail, style } = options;
+  // A live frame stands in for the running marker; other states keep theirs.
+  const marker =
+    state === 'running'
+      ? (detail ?? style.marker.running)
+      : style.marker[state];
+  const head = marker ? `${marker} ${style.brand}` : style.brand;
+  return project ? `${head}${style.separator}${project}` : head;
 }

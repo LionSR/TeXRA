@@ -65,27 +65,27 @@ function queueTitleApproval(streamId: string): void {
 describe('terminalTitleText', () => {
   it('names the tab after the project folder', () => {
     expect(terminalTitleText('/Users/ray/projects/coauthor')).toBe(
-      'TeXRA — coauthor',
+      '{T}·coauthor',
     );
   });
 
   it('falls back to the bare brand name at the filesystem root', () => {
-    expect(terminalTitleText('/')).toBe('TeXRA');
+    expect(terminalTitleText('/')).toBe('{T}');
   });
 
-  it('adds running and approval labels before the project name', () => {
+  it('leads with running and approval labels ahead of the brand name', () => {
     expect(terminalTitleText('/Users/ray/projects/coauthor', 'running')).toBe(
-      'TeXRA — Running — coauthor',
+      '⠋ {T}·coauthor',
     );
     expect(terminalTitleText('/Users/ray/projects/coauthor', 'approval')).toBe(
-      'TeXRA — Approval needed — coauthor',
+      '⚠ {T}·coauthor',
     );
-    expect(terminalTitleText('/', 'running')).toBe('TeXRA — Running');
+    expect(terminalTitleText('/', 'running')).toBe('⠋ {T}');
   });
 
   it('strips control characters out of a hostile folder name', () => {
     expect(terminalTitleText('/tmp/evil\x07\x1b]0;pwned\x07')).toBe(
-      'TeXRA — evil]0;pwned',
+      '{T}·evil]0;pwned',
     );
   });
 });
@@ -119,7 +119,7 @@ describe('installTerminalTitleUpdates', () => {
 
     await flushTitleUpdate();
 
-    expectLastTitle('TeXRA — | — coauthor');
+    expectLastTitle('⠋ {T}·coauthor');
     updates.dispose();
   });
 
@@ -132,7 +132,7 @@ describe('installTerminalTitleUpdates', () => {
 
     const updates = installTerminalTitleUpdates('/work/coauthor');
 
-    expectLastTitle('TeXRA — | — coauthor');
+    expectLastTitle('⠋ {T}·coauthor');
     updates.dispose();
   });
 
@@ -152,22 +152,22 @@ describe('installTerminalTitleUpdates', () => {
       status: STREAM_PHASE.RUNNING,
     });
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — | — coauthor');
+    expectLastTitle('⠋ {T}·coauthor');
 
     queueTitleApproval('title-transition');
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — Approval needed — coauthor');
+    expectLastTitle('⚠ {T}·coauthor');
 
     clearApprovals();
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — | — coauthor');
+    expectLastTitle('⠋ {T}·coauthor');
 
     setStreamStatusInCliState({
       streamId: 'transition-child',
       status: STREAM_PHASE.WAITING,
     });
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — coauthor');
+    expectLastTitle('{T}·coauthor');
     updates.dispose();
   });
 
@@ -182,36 +182,37 @@ describe('installTerminalTitleUpdates', () => {
     });
     await flushTitleUpdate();
 
-    // Frame comes from `loadingFrameAt(Date.now())` on the shared 1 Hz tick
-    // (see LOADING_FRAMES in LoadingIndicator.tsx), not a private timer, so
+    // Frame comes from `loadingFrameAt(Date.now(), TITLE_FRAMES)` on the
+    // shared 1 Hz tick (braille dots, not the TUI's ASCII spin cycle: a bare
+    // `-` reads as punctuation in a tab), not a private timer, so
     // each check advances a full second and the frame is whatever wall time
     // projects to — not reset to index 0 on each animation restart.
-    expectLastTitle('TeXRA — | — coauthor');
+    expectLastTitle('⠋ {T}·coauthor');
     vi.advanceTimersByTime(1000);
-    expectLastTitle('TeXRA — / — coauthor');
+    expectLastTitle('⠹ {T}·coauthor');
     vi.advanceTimersByTime(1000);
-    expectLastTitle('TeXRA — - — coauthor');
+    expectLastTitle('⠴ {T}·coauthor');
 
     queueTitleApproval('animated-root');
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — Approval needed — coauthor');
+    expectLastTitle('⚠ {T}·coauthor');
     expectNoTitleWrites();
 
     clearApprovals();
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — \\ — coauthor');
+    expectLastTitle('⠦ {T}·coauthor');
     updates.suspend();
-    expectLastTitle('TeXRA — coauthor');
+    expectLastTitle('{T}·coauthor');
     expectNoTitleWrites();
 
     updates.resume();
-    expectLastTitle('TeXRA — / — coauthor');
+    expectLastTitle('⠹ {T}·coauthor');
     setStreamStatusInCliState({
       streamId: 'animated-root',
       status: STREAM_PHASE.WAITING,
     });
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — coauthor');
+    expectLastTitle('{T}·coauthor');
     expectNoTitleWrites();
 
     setStreamStatusInCliState({
@@ -219,7 +220,7 @@ describe('installTerminalTitleUpdates', () => {
       status: STREAM_PHASE.RUNNING,
     });
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — - — coauthor');
+    expectLastTitle('⠴ {T}·coauthor');
     updates.dispose();
     expectNoTitleWrites();
   });
@@ -244,7 +245,7 @@ describe('installTerminalTitleUpdates', () => {
     expect(writeSync).toHaveBeenCalledTimes(2);
     updates.dispose();
     expect(writeSync).toHaveBeenCalledTimes(3);
-    expectLastTitle('TeXRA — coauthor');
+    expectLastTitle('{T}·coauthor');
     expect(off).toHaveBeenCalledWith('exit', exitListener);
   });
 
@@ -263,7 +264,7 @@ describe('installTerminalTitleUpdates', () => {
 
     exitListener?.(0);
 
-    expectLastTitle('TeXRA — coauthor');
+    expectLastTitle('{T}·coauthor');
     expect(writeSync).toHaveBeenCalledTimes(3);
     updates.dispose();
     expect(writeSync).toHaveBeenCalledTimes(3);
@@ -279,13 +280,13 @@ describe('installTerminalTitleUpdates', () => {
     await flushTitleUpdate();
 
     updates.suspend();
-    expectLastTitle('TeXRA — coauthor');
+    expectLastTitle('{T}·coauthor');
     queueTitleApproval('title-suspend');
     await flushTitleUpdate();
     expect(writeSync).toHaveBeenCalledTimes(3);
 
     updates.resume();
-    expectLastTitle('TeXRA — Approval needed — coauthor');
+    expectLastTitle('⚠ {T}·coauthor');
     updates.dispose();
   });
 
@@ -304,7 +305,7 @@ describe('installTerminalTitleUpdates', () => {
     );
     rootRunPending.set(false);
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — evil]0;pwned');
+    expectLastTitle('{T}·evil]0;pwned');
     capableUpdates.dispose();
   });
 });

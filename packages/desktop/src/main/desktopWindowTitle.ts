@@ -4,6 +4,7 @@ import type { SessionHandle } from '@agent/runtime';
 import { STREAM_PHASE } from '@shared/schemas';
 import {
   formatSessionTitle,
+  NATIVE_WINDOW_TITLE,
   type SessionTitleState,
 } from '@shared/sessionTitle';
 
@@ -37,7 +38,9 @@ export function getDesktopWindowTitle(
   workspacePath: string | undefined,
 ): string {
   const workspaceName = workspacePath ? basename(workspacePath) : undefined;
-  return formatSessionTitle(workspaceName, getDesktopSessionActivity(session));
+  return formatSessionTitle(workspaceName, getDesktopSessionActivity(session), {
+    style: NATIVE_WINDOW_TITLE,
+  });
 }
 
 /**

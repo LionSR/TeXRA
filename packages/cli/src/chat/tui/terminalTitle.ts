@@ -5,6 +5,7 @@ import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { subscribeToSharedTick } from '@cli/tui/useLiveNowMs';
 import {
   formatSessionTitle,
+  TERMINAL_TAB_TITLE,
   type SessionTitleState,
 } from '@shared/sessionTitle';
 import { subscribeToSignalChanges } from '@shared/signals';
@@ -24,6 +25,12 @@ import { terminalCapabilities } from './state/terminalCapabilities';
 // eslint-disable-next-line no-control-regex -- stripping C0/C1 controls
 const TITLE_INVALID_CHARS = /[\x00-\x1f\x7f-\x9f]/g;
 
+// The TUI's ASCII spin cycle reads as stray punctuation once a frame stands
+// alone in a tab title (a `-` is indistinguishable from a separator), so the
+// title spins through braille dots instead. Quarter-turn steps, because the
+// shared clock ticks at 1 Hz and a ten-frame cycle would crawl.
+const TITLE_FRAMES = ['⠋', '⠹', '⠴', '⠦'] as const;
+
 /** Project-aware terminal title, optionally annotated with live TUI state. */
 export function terminalTitleText(
   cwd: string,
@@ -34,7 +41,10 @@ export function terminalTitleText(
     invalidCharPattern: TITLE_INVALID_CHARS,
     replacement: '',
   });
-  return formatSessionTitle(project, state, activityDetail);
+  return formatSessionTitle(project, state, {
+    detail: activityDetail,
+    style: TERMINAL_TAB_TITLE,
+  });
 }
 
 /** Write the title only when terminal capability discovery admitted OSC. */
@@ -91,7 +101,7 @@ export function installTerminalTitleUpdates(
   // rotation `LoadingIndicator` and the status bar use, so the tab title
   // joins the shared clock instead of running its own interval.
   const runningTitle = (): string =>
-    terminalTitleText(cwd, 'running', loadingFrameAt(Date.now()));
+    terminalTitleText(cwd, 'running', loadingFrameAt(Date.now(), TITLE_FRAMES));
   const startRunningAnimation = (): void => {
     if (stopSharedTick !== undefined) return;
     if (!terminalCapabilities.get().oscColorReports) return;

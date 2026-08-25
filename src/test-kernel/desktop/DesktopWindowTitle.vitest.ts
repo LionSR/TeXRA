@@ -9,7 +9,7 @@ import {
   installDesktopWindowTitle,
 } from '@desktop/main/desktopWindowTitle';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
-import { formatSessionTitle } from '@shared/sessionTitle';
+import { formatSessionTitle, NATIVE_WINDOW_TITLE } from '@shared/sessionTitle';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -70,14 +70,17 @@ function installTitle(
 
 describe('desktop process-session window title', () => {
   it('formats exact copy for absent and hostile workspace names', () => {
-    expect(formatSessionTitle(undefined, 'idle')).toBe('TeXRA');
-    expect(formatSessionTitle(undefined, 'running')).toBe('TeXRA — Running');
-    expect(formatSessionTitle(undefined, 'approval')).toBe(
-      'TeXRA — Approval needed',
+    const style = { style: NATIVE_WINDOW_TITLE };
+    expect(formatSessionTitle(undefined, 'idle', style)).toBe('TeXRA');
+    expect(formatSessionTitle(undefined, 'running', style)).toBe(
+      'Running TeXRA',
     );
-    expect(formatSessionTitle('draft — Running <script>.tex', 'approval')).toBe(
-      'TeXRA — Approval needed — draft — Running <script>.tex',
+    expect(formatSessionTitle(undefined, 'approval', style)).toBe(
+      'Approval needed TeXRA',
     );
+    expect(
+      formatSessionTitle('draft — Running <script>.tex', 'approval', style),
+    ).toBe('Approval needed TeXRA · draft — Running <script>.tex');
   });
 
   it('requires a registered agent with canonical RUNNING status', () => {
@@ -166,7 +169,7 @@ describe('desktop process-session window title', () => {
 
   it('prevents renderer replacement, deduplicates writes, and disposes', () => {
     const session = createTestSession();
-    const view = createWindow('TeXRA — geometry');
+    const view = createWindow('TeXRA · geometry');
     const dispose = installTitle(view.window, session);
     try {
       expect(view.setTitle).not.toHaveBeenCalled();
@@ -198,7 +201,7 @@ describe('desktop process-session window title', () => {
 
   it('does not write the native title after window destruction', () => {
     const session = createTestSession();
-    const view = createWindow('TeXRA — geometry');
+    const view = createWindow('TeXRA · geometry');
     const dispose = installTitle(view.window, session);
     try {
       view.destroy();
@@ -227,10 +230,10 @@ describe('desktop process-session window title', () => {
       });
 
       expect(getDesktopWindowTitle(firstSession, '/work/geometry')).toBe(
-        'TeXRA — Approval needed — geometry',
+        'Approval needed TeXRA · geometry',
       );
       expect(getDesktopWindowTitle(secondSession, '/work/algebra')).toBe(
-        'TeXRA — algebra',
+        'TeXRA · algebra',
       );
 
       const reopened = createWindow(
