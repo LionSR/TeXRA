@@ -396,7 +396,7 @@ const UpdateAgentModePresetsMessageSchema = z.object({
    * no team. Owned by the roster so a preset card reports the applied team
    * rather than the last one the user clicked.
    */
-  activePresetId: z.string().nullable(),
+  activePresetId: z.string().nullable().prefault(null),
 });
 export type UpdateAgentModePresetsMessage = z.infer<
   typeof UpdateAgentModePresetsMessageSchema

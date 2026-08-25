@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { createWorkspaceAgentRosterController } from '@agent/index';
+import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas';
 
@@ -37,6 +38,9 @@ export async function promptToAddAgentToConfig(
       name: agentName,
       enabled: true,
     });
+    // This rewrites the selection as `custom`, retiring any applied team, so
+    // an open settings view needs the same notice `apply_team` sends.
+    appSignals.emit('agentRosterChanged', undefined);
     await vscode.commands.executeCommand('texra.refreshAllOptions');
     vscode.window.showInformationMessage(`Agent "${agentName}" is now visible`);
   }

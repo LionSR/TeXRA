@@ -53,9 +53,11 @@ export interface AppSignalPayloads {
    * on purpose: every listener re-reads the roster, so which team or agent
    * moved carries no information.
    *
-   * Emitted by `apply_team`, which the setup agent runs mid-conversation and
-   * which writes the roster and the user default directly. Settings-originated
-   * changes repaint through their own handler and do not emit.
+   * Emitted by the in-process roster writers that bypass the settings
+   * round-trip: `apply_team`, which the setup agent runs mid-conversation,
+   * and the agent-creator prompt that adds a new agent to the dropdown.
+   * Settings-originated changes repaint through their own handler and do not
+   * emit.
    *
    * Consumed by: extension and desktop settings views, both re-reading the
    * agent list and team presets. Not the CLI: it reads the roster per command
