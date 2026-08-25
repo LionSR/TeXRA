@@ -21,9 +21,10 @@ export interface TeamRosterResolution {
   readonly keys: ByCategory<string[]>;
   /**
    * Roster member names that did not resolve to a catalog entry at resolve
-   * time, per category. These persist alongside `keys` as name-matched slots,
-   * so an agent activates the moment it appears in the catalog (sign-in,
-   * install) — never silently dropped.
+   * time, per category. Nothing persists these: the roster stores the team
+   * reference and re-resolves `preset.agents` on read, so a member activates
+   * the moment it appears in the catalog (sign-in, install) without a stored
+   * slot. They exist to feed `unresolvedNames` for the availability preflight.
    */
   readonly nameSlots: ByCategory<string[]>;
   /** Unresolved member names across all categories, in canonical order. */

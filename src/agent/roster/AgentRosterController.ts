@@ -83,7 +83,8 @@ function allPresets(
  * tried against the legacy pair-shaped format (`{workflowAgentKeys,
  * toolUseAgentKeys}`, with or without a stray `kind` field) via the existing
  * AgentDelegationScopeLegacySchema. The reader is deliberately pure. It used to
- * repair the stored value in place, but every mutation below reads the
+ * repair the stored value in place, but the read-modify-write mutations
+ * (`setEnabledAgentKeys`, `setAgentEnabled`, `removeTeamPreset`) read the
  * selection while already holding the write mutex, so a repair issued from
  * here either races that mutation or, if serialized behind it, overwrites the
  * selection the mutation just committed. The mutations own every durable
