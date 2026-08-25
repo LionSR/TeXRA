@@ -92,7 +92,7 @@ import {
   moveLocalTranscriptToStream,
   resolveLocalTranscriptStreamId,
 } from '@cli/chat/tui/state/transcript';
-import { projectStreamArtifacts } from '@controllers/session/StreamArtifactProjection';
+import { projectStreamArtifacts } from '@cli/chat/tui/state/streamArtifactProjection';
 import { SessionState } from '@controllers/session/SessionState';
 import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 import {
