@@ -22,7 +22,7 @@ let detachHostInteractions = (): void => {};
 /** Attach a review sink the way a host does: as a session capability. */
 function useReviewSink(sink: ReportReviewIssueSink): void {
   detachHostInteractions();
-  detachHostInteractions = defaultSession().useHostInteractions({
+  detachHostInteractions = defaultSession().interactions.use({
     reportReviewIssue: sink,
     cancel: () => undefined,
   });

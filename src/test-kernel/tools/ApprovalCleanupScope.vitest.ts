@@ -61,7 +61,7 @@ describe('approval cleanup scope', () => {
     const session = createTestSession();
     const streamId = sid('s:cause-swallow');
     const cancel = vi.fn();
-    session.useHostInteractions({
+    session.interactions.use({
       requestToolEditApproval: pendingApproval,
       cancel,
     });
@@ -89,12 +89,12 @@ describe('approval cleanup scope', () => {
     const sessionB = createTestSession();
     const cancelA = vi.fn();
     const cancelB = vi.fn();
-    sessionA.useHostInteractions({
+    sessionA.interactions.use({
       requestToolEditApproval: pendingApproval,
       requestBashApproval: pendingApproval,
       cancel: cancelA,
     });
-    sessionB.useHostInteractions({
+    sessionB.interactions.use({
       requestToolEditApproval: pendingApproval,
       requestBashApproval: pendingApproval,
       cancel: cancelB,
@@ -231,7 +231,7 @@ describe('session-owned approval state (#8144)', () => {
   it('session disposal rejects its remaining pending approvals and clears bypass state', async () => {
     const session = createTestSession();
     const streamId = sid('s:appr-dispose');
-    session.useHostInteractions({
+    session.interactions.use({
       requestToolEditApproval: pendingApproval,
       cancel: vi.fn(),
     });

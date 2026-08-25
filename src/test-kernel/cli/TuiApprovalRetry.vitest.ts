@@ -165,7 +165,7 @@ function tui(
         ...options,
       }),
   };
-  const detachInteractions = defaultSession().useHostInteractions(interactions);
+  const detachInteractions = defaultSession().interactions.use(interactions);
   onTestFinished(detachInteractions);
   return {
     presentationHost,

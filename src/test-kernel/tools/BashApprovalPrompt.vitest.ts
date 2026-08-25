@@ -77,7 +77,7 @@ describe('requestBashApproval queueing', () => {
     let prompts = 0;
     session.setApprovalPolicy('never');
     setBashApprovalSessionBypass(streamId, true, { silent: true, session });
-    session.useHostInteractions({
+    session.interactions.use({
       requestBashApproval: async () => {
         prompts += 1;
         return { action: 'approve' };
@@ -115,7 +115,7 @@ describe('requestBashApproval queueing', () => {
     const firstAnswer = pDefer<BashSettlement>();
     let prompts = 0;
 
-    session.useHostInteractions({
+    session.interactions.use({
       requestBashApproval: () => {
         prompts += 1;
         firstPrompted.resolve();

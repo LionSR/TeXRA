@@ -84,7 +84,7 @@ function useCliHostInteractions(
 ): void {
   detachHostInteractions();
   defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
-  detachHostInteractions = defaultSession().useHostInteractions(
+  detachHostInteractions = defaultSession().interactions.use(
     createHeadlessCliHostInteractions(cliContext, hooks),
   );
 }

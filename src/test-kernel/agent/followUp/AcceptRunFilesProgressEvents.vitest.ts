@@ -47,7 +47,7 @@ function installTestPlatform(): Promise<void> {
     globalStoragePath: '/global/.texra/storage',
   }).then(() => {
     detachHostInteractions();
-    detachHostInteractions = defaultSession().useHostInteractions({
+    detachHostInteractions = defaultSession().interactions.use({
       requestToolEditApproval: (request) => {
         const handler = testApprovalHandler;
         if (!handler) {

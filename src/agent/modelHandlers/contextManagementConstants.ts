@@ -43,8 +43,9 @@ export const CLIENT_COMPACTION_SUMMARY_MAX_TOKENS = 2000;
 
 /**
  * Prefix prepended to a client-side compaction summary when it is folded back
- * into the conversation as a synthetic user message. Shared across every
- * provider handler so the resumed-conversation marker stays identical.
+ * into the conversation as a synthetic user message. Read once in the base
+ * compaction method every provider handler inherits, so the resumed-conversation
+ * marker stays identical across providers.
  */
 export const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
 

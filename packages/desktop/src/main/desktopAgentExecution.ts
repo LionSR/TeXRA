@@ -385,11 +385,11 @@ export class DesktopProgressBridge {
     // Canonical state and restart repair are complete before any window-owned
     // adapter can receive a replay. Subscribe first because attachment
     // synchronously redispatches pending approvals and their visibility facts.
-    const detachHostInteractions = this.session.useHostInteractions(
+    const detachHostInteractions = this.session.interactions.use(
       this.hostInteractions,
     );
     // Attachment synchronously replays pending requests. That replay can close
-    // the window before useHostInteractions returns its disposer.
+    // the window before interactions.use returns its disposer.
     if (this.disposed) {
       detachHostInteractions();
       return;

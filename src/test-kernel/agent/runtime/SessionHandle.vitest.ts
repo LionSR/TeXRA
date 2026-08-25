@@ -260,8 +260,8 @@ describe('SessionHandle', () => {
     const hostA = createRecordingHost();
     const hostB = createRecordingHost();
     const streamId = 'stream:cleanup-scope' as StreamTabId;
-    a.useHostInteractions(hostA.interactions);
-    b.useHostInteractions(hostB.interactions);
+    a.interactions.use(hostA.interactions);
+    b.interactions.use(hostB.interactions);
 
     try {
       const planA = a.interactions.requestPlanApproval({

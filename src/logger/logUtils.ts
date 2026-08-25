@@ -46,7 +46,7 @@ interface OutputSink {
 
 type OutputChannelFactory = (name: string) => OutputSink;
 
-export interface OutputChannelFactoryOptions {
+interface OutputChannelFactoryOptions {
   /** Preserve raw output only for a local operator-controlled terminal. */
   readonly trusted?: boolean;
 }
@@ -154,7 +154,7 @@ export type ChannelWriter = (
 ) => void;
 
 /**
- * Create a protocol-neutral writer for one shared or agent channel.
+ * Create a level-tagged line writer bound to one shared or agent channel.
  * Channel creation is eager so the returned writer owns a ready sink.
  */
 export function createChannelWriter(

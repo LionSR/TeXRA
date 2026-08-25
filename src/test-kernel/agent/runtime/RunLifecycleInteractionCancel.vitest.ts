@@ -211,7 +211,7 @@ describe('run lifecycle host-interaction cancel', () => {
 
   it('keeps the published outcome when a host adapter throws on cancel', async () => {
     const { session, ctx, executionId, streamId } = lifecycleCase();
-    const detach = session.useHostInteractions({
+    const detach = session.interactions.use({
       cancel: () => {
         throw new Error('host cancel boom');
       },

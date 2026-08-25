@@ -117,7 +117,7 @@ describe('child subagent stream approval inheritance', () => {
 
   it('announces inherited edit-bypass changes for visible descendants', () => {
     const { events, interactions } = createRecordingHost();
-    const detach = currentSession().useHostInteractions(interactions);
+    const detach = currentSession().interactions.use(interactions);
     const { parent, child } = streamPair('visible');
     const grandchild = 'stream:visible-grandchild' as StreamTabId;
     const pinnedChild = 'stream:pinned-child' as StreamTabId;

@@ -260,7 +260,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
         reason: 'Interactive retries are unavailable in the agent package.',
       }),
     };
-    const detachInteractions = session.useHostInteractions(interactions);
+    const detachInteractions = session.interactions.use(interactions);
     try {
       await loadAgents({ includeRemote: false });
       const resolved = resolveAgent(input.agent);

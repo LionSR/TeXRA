@@ -1824,8 +1824,8 @@ describe('DesktopProgressBridge', () => {
           ),
         );
 
-        const attach = session.useHostInteractions.bind(session);
-        vi.spyOn(session, 'useHostInteractions').mockImplementation(
+        const attach = session.interactions.use.bind(session.interactions);
+        vi.spyOn(session.interactions, 'use').mockImplementation(
           (interactions) => {
             expect(interactions.requestPlanApproval).toEqual(
               expect.any(Function),

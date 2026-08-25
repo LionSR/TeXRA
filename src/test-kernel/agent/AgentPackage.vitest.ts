@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => ({
     mocks.eventListener = listener;
     return mocks.detachEvents;
   }),
-  useHostInteractions: vi.fn(() => mocks.detachInteractions),
+  useInteractions: vi.fn(() => mocks.detachInteractions),
   warn: vi.fn(),
 }));
 
@@ -73,7 +73,7 @@ vi.mock('@agent/runtime', () => ({
       killBackgroundProcesses: mocks.killBackgroundProcesses,
     };
 
-    useHostInteractions = mocks.useHostInteractions;
+    readonly interactions = { use: mocks.useInteractions };
     dispose = mocks.disposeSession;
   },
   runAgent: mocks.runValidatedAgent,

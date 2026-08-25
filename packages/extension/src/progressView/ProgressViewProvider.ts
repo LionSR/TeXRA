@@ -178,8 +178,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       interactions,
     );
     this.backend.setupEventListeners();
-    this.detachHostInteractions =
-      runtimeSession.useHostInteractions(interactions);
+    this.detachHostInteractions = runtimeSession.interactions.use(interactions);
     // Terminal-error toasts come from the run's `result` event (the lifecycle
     // no longer emits them directly). This re-emits `requestShow*` through
     // the session's interactions, reaching the presentation dispatch above

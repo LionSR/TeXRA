@@ -71,10 +71,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getRunContextSession, tryUseRunContext } from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
 import { StreamStatusMachine } from './StreamStatusService';
-import {
-  SessionHostInteractions,
-  type HostInteractions,
-} from './HostInteractions';
+import { SessionHostInteractions } from './HostInteractions';
 import { SessionEventHub } from './SessionEventHub';
 import { ModelRetryGate } from './ModelRetryGate';
 import {
@@ -680,10 +677,6 @@ export class SessionHandle {
       logger,
       signal: this.restartRepairAbort.signal,
     });
-  }
-
-  useHostInteractions(interactions: HostInteractions): () => void {
-    return this.interactions.use(interactions);
   }
 
   /** Drain one execution's pending trace, or every trace during shutdown. */

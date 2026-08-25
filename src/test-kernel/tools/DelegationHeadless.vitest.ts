@@ -171,7 +171,7 @@ function callDelegateReview() {
 async function delegateWithProposalDecision(decision: ProposalResult) {
   mocks.isProposalBypassed.mockReturnValue(false);
   const session = createTestSession();
-  session.useHostInteractions({
+  session.interactions.use({
     cancel: vi.fn(),
     requestAgentProposal: vi.fn().mockResolvedValue(decision),
   } satisfies HostInteractions);
@@ -1382,7 +1382,7 @@ describe('headless delegation', () => {
     mocks.isProposalBypassed.mockReturnValue(false);
     const session = createTestSession();
     const requestAgentProposal = vi.fn();
-    session.useHostInteractions({
+    session.interactions.use({
       cancel: vi.fn(),
       requestAgentProposal,
     } satisfies HostInteractions);

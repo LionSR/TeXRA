@@ -816,7 +816,7 @@ describe('desktop tool edit approval', () => {
         session,
         tempRoot,
       } = await createApprovalFixture();
-      session.useHostInteractions({
+      session.interactions.use({
         requestToolEditApproval: (request) =>
           controller.requestApproval(request),
         cancel: (selector) => controller.cancel(selector),
