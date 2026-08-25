@@ -33,6 +33,7 @@ import {
   type RunTerminalPersistence,
 } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
+import { retainFlowRecordUnlessCompleted } from '@agent/storage/executionLifecycle';
 import type {
   AgentExecutionHandle,
   ExecutionInterruptHandler,
@@ -1122,7 +1123,12 @@ export function startChildRunLoop<TTurn>(
           await childStream.finalize({
             outcome: loopOutcome,
             stage: sessionStage,
-            persistence: { kind: 'finalize', flowRecord: 'delete' },
+            // loopOutcome can be failed or cancelled here; only a completed
+            // child has a consumed cursor worth deleting (#11315).
+            persistence: {
+              kind: 'finalize',
+              flowRecord: retainFlowRecordUnlessCompleted,
+            },
             ...(strategy.autoCloseChildStream === true && { autoClose: true }),
           });
         } else {
@@ -1167,10 +1173,10 @@ export function startChildRunLoop<TTurn>(
               persistence: {
                 kind: 'finalize',
                 // Keyed on the outcome the finalizer resolves, not this loop's
-                // report: only a genuinely interrupted run leaves state worth
-                // resuming, and the phase is what decides which run that is.
-                flowRecord: (resolved) =>
-                  resolved === RUN_OUTCOME.CANCELLED ? 'preserve' : 'delete',
+                // report: the phase is what decides which run that is. This
+                // used to preserve only CANCELLED, so a failed child lost the
+                // checkpoint it had just rewound (#11315).
+                flowRecord: retainFlowRecordUnlessCompleted,
               },
             });
           }

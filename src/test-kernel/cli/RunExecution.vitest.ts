@@ -736,7 +736,7 @@ describe('executeCliRequest', () => {
       expect.objectContaining({
         executionId: 'exec-1',
         outcome: RUN_OUTCOME.FAILED,
-        flowRecord: 'delete',
+        flowRecord: 'preserve',
       }),
     );
     expect(mocks.close).toHaveBeenCalledTimes(1);
@@ -1427,7 +1427,9 @@ describe('executeCliConfig', () => {
       expect.objectContaining({
         executionId: expect.any(String),
         outcome: RUN_OUTCOME.FAILED,
-        flowRecord: 'delete',
+        // A category mismatch reports FAILED, so the run's checkpoint
+        // survives and stays resumable (#11315).
+        flowRecord: 'preserve',
       }),
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith('wrong category');

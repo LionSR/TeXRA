@@ -11,6 +11,7 @@ import {
   ExecutionLeaseLostError,
   type ResumabilityDecision,
   finalizeRun,
+  retainFlowRecordUnlessCompleted,
 } from '@agent/storage';
 import { validateExecutionRequest } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
@@ -156,7 +157,9 @@ export async function executeCliConfig<
     await finalizeRun({
       executionId,
       outcome: RUN_OUTCOME.FAILED,
-      flowRecord: 'delete',
+      // Reported FAILED, so the run's own checkpoint outlives the mismatch
+      // and stays resumable (#11315).
+      flowRecord: retainFlowRecordUnlessCompleted(RUN_OUTCOME.FAILED),
       report: (finalizationError) =>
         writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
     });

@@ -1283,6 +1283,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     ).rejects.toThrow(
       'Structured-output run completed without calling submit_output.',
     );
+
+    // #11314: this exit preserves the record, so the cursor must have been
+    // rewound before the throw. A preserved record still sitting on the
+    // terminal cursor fails `ResumableFlowRecordSchema`'s `nextNodeId !== null`
+    // refinement, which makes it unresumable garbage only `history delete` can
+    // clear -- strictly worse than not keeping it at all.
+    const persisted = await readFlowRecord(executionId);
+    expect(persisted?.cursor.nextNodeId).not.toBeNull();
   });
 
   it.each([

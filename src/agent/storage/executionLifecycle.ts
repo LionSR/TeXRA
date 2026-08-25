@@ -203,6 +203,30 @@ export async function clearTerminalExecutionState(
   };
 }
 
+/**
+ * The one rule for whether a run's resume checkpoint (`flow_<id>.json`)
+ * survives finalization: **delete only on a genuinely COMPLETED run; keep it
+ * otherwise.** A cancelled or failed run is the case a user resumes, so
+ * destroying its checkpoint is data loss they cannot undo.
+ *
+ * Call sites should pass this rather than a literal. A hardcoded `'delete'`
+ * is only correct when the caller can show the record is unresumable — see
+ * the caveat below — and every such site should say why in a comment.
+ *
+ * Caveat, learned from #11314: preserving is not free. A record whose cursor
+ * was never rewound (`cursor.nextNodeId !== null`) fails
+ * `ResumableFlowRecordSchema`'s refinement, so every reader classifies it
+ * `invalid-flow` and only `history delete` can remove it. Keeping such a
+ * record is strictly worse than deleting it. So a caller that ends COMPLETED
+ * *without* consuming its cursor must still report `'delete'`; this policy
+ * covers the ordinary case where the outcome and the cursor agree.
+ */
+export function retainFlowRecordUnlessCompleted(
+  resolved: RunOutcome,
+): 'preserve' | 'delete' {
+  return resolved === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve';
+}
+
 export interface FinalizeExecutionInput {
   readonly executionId: ExecutionId;
   readonly outcome: RunOutcome;
