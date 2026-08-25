@@ -26,6 +26,26 @@ import { formatZodIssuesMessage } from './toolResult';
 export type RoundIndexed<T> = { [round: number]: T[] };
 
 /**
+ * A caller-visible view of a {@link RoundIndexed} record: the same shape, with
+ * mutation closed off at the type level.
+ *
+ * Store accessors hand this back instead of a defensive copy. Every reader
+ * only enumerates, filters, or forwards these records, so the copy bought
+ * nothing at runtime while allocating a fresh object and a fresh array per
+ * round on every call — on each render pass, for every host. The write path
+ * still snapshots with {@link cloneRoundIndexed}, where the isolation is real:
+ * writes are queued, so the record must be frozen at call time.
+ */
+export type ReadonlyRoundIndexed<T> = {
+  readonly [round: number]: readonly T[];
+};
+
+/** Shared empty view for a stream with no rounds recorded yet. */
+export const EMPTY_ROUND_INDEXED: ReadonlyRoundIndexed<never> = Object.freeze(
+  {},
+);
+
+/**
  * Coerces and validates round keys from string record keys: non-negative
  * safe integers only. Rounds never go negative (round 0 is the first), and
  * every consumer that reads a `RoundIndexed<T>` record via plain
@@ -89,10 +109,10 @@ export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
  * handling a record that was not necessarily schema-validated.
  */
 export function roundIndexedEntries<T>(
-  rounds: RoundIndexed<T>,
-): [number, T[]][] {
+  rounds: ReadonlyRoundIndexed<T>,
+): [number, readonly T[]][] {
   return Object.entries(rounds)
-    .map(([round, items]): [number, T[]] => [Number(round), items])
+    .map(([round, items]): [number, readonly T[]] => [Number(round), items])
     .sort((a, b) => a[0] - b[0]);
 }
 
@@ -105,7 +125,7 @@ export function roundIndexedEntries<T>(
  * schema-derived type in this codebase.
  */
 export function cloneRoundIndexed<T>(
-  rounds: RoundIndexed<T> | undefined,
+  rounds: ReadonlyRoundIndexed<T> | undefined,
 ): RoundIndexed<T> {
   const clone: RoundIndexed<T> = {};
   if (!rounds) return clone;

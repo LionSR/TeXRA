@@ -31,6 +31,7 @@ import { createLog } from '@logger/logUtils';
 import {
   CompileFailureSchema,
   cloneRoundIndexed,
+  EMPTY_ROUND_INDEXED,
   emptyUsageStats,
   isEmptyUsage,
   OutputFileInfoListSchema,
@@ -47,6 +48,7 @@ import {
   type OutputFileInfo,
   type RunIdentity,
   type Plan,
+  type ReadonlyRoundIndexed,
   type RoundIndexed,
   type StorageKey,
   type StreamSnapshot,
@@ -90,6 +92,9 @@ import type PQueue from 'p-queue';
 import type { StreamSummaryMeta } from './StreamLogStore';
 
 const log = createLog('StreamSnapshotStore');
+
+/** Shared empty view for a stream with no per-run usage recorded yet. */
+const EMPTY_RUN_USAGE: ReadonlyMap<string, TokenUsageStats> = new Map();
 
 /** Bounded fan-out for seeding many streams' sidecars, so startup does not
  *  open a file handle per tab. */
@@ -1101,27 +1106,37 @@ export class StreamSnapshotStore {
   // mutates the returned value — including pushing into a returned round's
   // array — can never corrupt these in-memory accumulators. A shallow
   // `{ ...map }` spread would share the per-round arrays by reference.
-  getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo> {
+  // These four hand back the live record as a readonly view rather than a
+  // defensive copy. Every reader enumerates, filters, or forwards the result;
+  // none mutates it, so the copy bought nothing at runtime while allocating a
+  // fresh object and a fresh array per round on every call — on each render
+  // pass, in every host. Aliasing is safe because reads are synchronous with
+  // respect to writes: renders compose in one tick, and the CLI's projection
+  // memo is cleared on every artifact write. The write path still snapshots
+  // (`getSnapshotForWrite`), where the isolation is load-bearing.
+  getOutputFiles(stream: StreamTabId): ReadonlyRoundIndexed<OutputFileInfo> {
     this.warnIfUnseeded('getOutputFiles', stream);
-    return cloneRoundIndexed(this.records.get(stream)?.outputFiles);
+    return this.records.get(stream)?.outputFiles ?? EMPTY_ROUND_INDEXED;
   }
 
-  getMissingOutputs(stream: StreamTabId): RoundIndexed<string> {
+  getMissingOutputs(stream: StreamTabId): ReadonlyRoundIndexed<string> {
     this.warnIfUnseeded('getMissingOutputs', stream);
-    return cloneRoundIndexed(this.records.get(stream)?.missingOutputs);
+    return this.records.get(stream)?.missingOutputs ?? EMPTY_ROUND_INDEXED;
   }
 
-  getCompileFailures(stream: StreamTabId): RoundIndexed<CompileFailure> {
+  getCompileFailures(
+    stream: StreamTabId,
+  ): ReadonlyRoundIndexed<CompileFailure> {
     this.warnIfUnseeded('getCompileFailures', stream);
-    return cloneRoundIndexed(this.records.get(stream)?.compileFailures);
+    return this.records.get(stream)?.compileFailures ?? EMPTY_ROUND_INDEXED;
   }
 
-  getRunUsage(stream: StreamTabId): Map<string, TokenUsageStats> {
+  getRunUsage(stream: StreamTabId): ReadonlyMap<string, TokenUsageStats> {
     const record = this.records.get(stream);
     if (!record?.usageProvenance) {
       this.warnIfUnseeded('getRunUsage', stream);
     }
-    return new Map(record?.usage ?? []);
+    return record?.usage ?? EMPTY_RUN_USAGE;
   }
 
   /** Flattened set of known output-file paths for a stream. */
@@ -1845,7 +1860,7 @@ export class StreamSnapshotStore {
    */
   async readOutputFiles(
     streamId: StreamTabId,
-  ): Promise<RoundIndexed<OutputFileInfo>> {
+  ): Promise<ReadonlyRoundIndexed<OutputFileInfo>> {
     if (await this.awaitSeeded(streamId)) {
       return this.getOutputFiles(streamId);
     }

@@ -713,8 +713,6 @@ describe('StreamSnapshotStore', () => {
     await store.preload([STREAM]);
 
     snapshotFacts(store).addOutputFiles(OTHER_STREAM, { 1: [next] });
-    const returned = store.getOutputFiles(OTHER_STREAM);
-    returned[1]?.push(outputFile('injected.tex', 1));
     expect(store.getOutputFiles(OTHER_STREAM)[1]).toEqual([next]);
     await store.flush();
 

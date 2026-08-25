@@ -30,6 +30,7 @@ import {
   roundIndexedEntries,
   type CompileFailure,
   type OutputFileInfo,
+  type ReadonlyRoundIndexed,
   type RoundIndexed,
   type TaskGroup,
   type TaskGroupStatus,
@@ -52,9 +53,9 @@ export interface WorkflowRunDetailLine {
 
 type WorkflowRunFacts = {
   readonly taskGroups: readonly TaskGroup[];
-  readonly outputFilesByRound: RoundIndexed<OutputFileInfo>;
-  readonly missingOutputsByRound: RoundIndexed<string>;
-  readonly compileFailuresByRound: RoundIndexed<CompileFailure>;
+  readonly outputFilesByRound: ReadonlyRoundIndexed<OutputFileInfo>;
+  readonly missingOutputsByRound: ReadonlyRoundIndexed<string>;
+  readonly compileFailuresByRound: ReadonlyRoundIndexed<CompileFailure>;
 };
 
 interface WorkflowRunDetailGroup {

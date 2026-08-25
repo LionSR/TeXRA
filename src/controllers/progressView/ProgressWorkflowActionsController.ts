@@ -2,6 +2,7 @@
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   OutputFileInfo,
+  ReadonlyRoundIndexed,
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
@@ -17,7 +18,7 @@ export interface WorkflowDiffRequest {
   outputFilesActive: boolean;
   streamId: StreamTabId;
   runId?: string;
-  outputsByRound?: RoundIndexed<OutputFileInfo>;
+  outputsByRound?: ReadonlyRoundIndexed<OutputFileInfo>;
 }
 
 export type WorkflowFileOperation = 'pack' | 'clean';

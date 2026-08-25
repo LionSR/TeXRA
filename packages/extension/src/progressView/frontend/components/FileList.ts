@@ -128,7 +128,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
 
   // Flattened from failuresByRound to avoid O(rounds) scan per file item in render.
   private failureByPath = new Map<string, CompileFailure>();
-  private sortedRounds: [number, OutputFileInfo[]][] = [];
+  private sortedRounds: [number, readonly OutputFileInfo[]][] = [];
 
   protected override willUpdate(changedProperties: PropertyValues): void {
     if (changedProperties.has('filesByRound')) {
@@ -225,7 +225,10 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
     this.storageHintDismissed = true;
   };
 
-  private renderRound(round: number, files: OutputFileInfo[]): TemplateResult {
+  private renderRound(
+    round: number,
+    files: readonly OutputFileInfo[],
+  ): TemplateResult {
     const rows = repeat(
       files,
       (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
