@@ -15,7 +15,7 @@ import type { StreamSnapshotStore } from '@transcript';
  * round-artifact/usage projection. No host-neutral module imports this
  * projection: the progress-view renderer reads the store directly
  * (`state.snapshots.getOutputFiles`/`getRunUsage`), and the progress-view
- * controllers reach those same accessors through their own narrower
+ * controllers reach `getOutputFiles`/`preload` through their own narrower
  * `StreamOutputsSource` port. So this is CLI presentation, not shared state.
  */
 export type StreamArtifactReader = Pick<
