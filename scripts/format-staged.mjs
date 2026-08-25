@@ -40,19 +40,10 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  parse,
-  relative,
-  resolve,
-} from 'node:path';
+import { basename, dirname, join, parse, relative, resolve } from 'node:path';
 
 import ignore from 'ignore';
 import prettier from 'prettier';
@@ -61,9 +52,6 @@ import { parse as parseYaml } from 'yaml';
 const NOTICE = '[format-staged]';
 
 const CRLF = Buffer.from('\r\n');
-
-const CJS_FILE_EXTENSIONS = ['.js', '.json', '.node'];
-const CJS_INDEX_EXTENSIONS = ['index.js', 'index.json', 'index.node'];
 
 /** Intentional skip: logged loudly as a notice and never treated as a crash. */
 class SkipError extends Error {}
@@ -179,11 +167,6 @@ function relToCwd(path) {
   return rel;
 }
 
-/** True for `.js`, `.cjs`, and `.mjs` Prettier config files. */
-function isJsConfig(path) {
-  return /\.(?:c?js|mjs)$/.test(path);
-}
-
 /** Normalize Windows-style separator backslashes in a config specifier to
  * forward slashes, so `./x`/`../x` and `.\x`/`..\x` classify the same way and
  * POSIX path resolution treats them identically. */
@@ -197,144 +180,11 @@ function isRelativeSpecifier(spec) {
   return normalized.startsWith('./') || normalized.startsWith('../');
 }
 
-/** True for filesystem paths Prettier accepts as a package.json `prettier`
- * pointer (`./x`, `../x`, or an absolute path), as opposed to a shareable
- * config package name resolved from node_modules. */
-function isConfigPointerPath(spec) {
-  return isRelativeSpecifier(spec) || isAbsolute(spec);
-}
-
-/** Stat `path` the way Node's module loader probes candidates: any
- * filesystem error (ELOOP, ENOTDIR, EACCES, ...) is a non-match, not an
- * exception, so a bad probe never aborts resolution of the later candidates
- * Node would still try. Returns undefined when the probe fails. */
-function statProbe(path) {
-  try {
-    return statSync(path);
-  } catch {
-    return undefined;
-  }
-}
-
-/** True when `path` is a regular file in the working tree. Node's
- * LOAD_AS_FILE/tryExtensions classify with stat, so a symlink to a file
- * counts: admitting the link as a candidate makes an untracked one a loud
- * "not staged" skip instead of a silent fall-through to a fallback Node
- * would never load. */
-function isWorktreeFile(path) {
-  return statProbe(path)?.isFile() === true;
-}
-
-/** Return the `main` entry of a dependency directory's package.json. The
- * manifest itself must be tracked and equal to its index blob before its
- * redirect is trusted; otherwise an untracked or unstaged `main` edit could
- * route Prettier to uncommitted rules. Throws when the manifest is present in
- * only one of the index/worktree or differs between them. */
-function readPackageMain(dir) {
-  const pkgPath = join(dir, 'package.json');
-  const pkgRel = relToCwd(pkgPath);
-  if (!pkgRel) return null;
-  const stagedPkg = readIndexFile(pkgRel);
-  if (!stagedPkg) {
-    if (existsSync(pkgPath)) {
-      throw new SkipError(
-        `${pkgRel} is not staged but the config depends on it; skipped ` +
-          'auto-staging so its uncommitted manifest stays out of the commit.',
-      );
-    }
-    return null;
-  }
-  if (!existsSync(pkgPath)) {
-    throw new SkipError(
-      `${pkgRel} vanished from the working tree; skipped auto-staging.`,
-    );
-  }
-  if (!normalizedEquals(readFileSync(pkgPath), stagedPkg)) {
-    throw new SkipError(
-      `${pkgRel} has unstaged edits while the config depends on it; ` +
-        'skipped auto-staging so the uncommitted manifest stays out of the commit.',
-    );
-  }
-  try {
-    const main = JSON.parse(stripBom(stagedPkg.toString('utf8'))).main;
-    return typeof main === 'string' ? main : null;
-  } catch {
-    return null;
-  }
-}
-
-/** True when `path` is tracked in the index. */
-function isIndexTracked(path) {
-  const rel = relToCwd(path);
-  return rel !== null && readIndexFile(rel) !== null;
-}
-
-/** Resolve a relative config dependency specifier to the tracked file
- * Node/Prettier would load, without executing any config. `kind` is `cjs`
- * for `require()`/CommonJS resolution; every other kind (ESM `import`,
- * `export ... from`, dynamic `import()`, and Prettier plugin paths) is exact
- * and gets no extension or directory-index fallback, matching the loaders. */
-function resolveConfigDepPath(configDir, spec, kind) {
-  const normalized = normalizeSpecifier(spec);
-  const base = resolve(configDir, normalized);
-  if (kind !== 'cjs' || parse(normalized).ext !== '') return base;
-
-  // Node's CommonJS LOAD_AS_FILE order: exact path, then .js, .json, .node.
-  // LOAD_AS_DIRECTORY follows with package.json `main` (index-sourced only),
-  // then index.js/index.json/index.node. First present candidate wins; the
-  // subsequent verifyConfigDep check reports it as untracked/diverged if the
-  // winning candidate is not the committed dependency.
-  const candidates = [];
-  const push = (candidate) => {
-    if (isWorktreeFile(candidate) || isIndexTracked(candidate)) {
-      candidates.push(candidate);
-    }
-  };
-
-  push(base);
-  for (const ext of CJS_FILE_EXTENSIONS) push(`${base}${ext}`);
-
-  // Node applies LOAD_AS_DIRECTORY only when LOAD_AS_FILE found no file:
-  // an admitted file candidate wins outright and the directory's package
-  // main/index.* are never inspected, so an irrelevant directory beside the
-  // winner (for example an untracked symlinked package) must not force a
-  // skip either. stat, not lstat: Node's LOAD_AS_DIRECTORY follows a
-  // symlinked dependency directory too. Candidates reached through the link
-  // traverse a worktree symlink, which verifyConfigDep rejects loudly, so
-  // following the link here can never verify the wrong file.
-  if (candidates.length === 0 && statProbe(base)?.isDirectory()) {
-    const main = readPackageMain(base);
-    if (main) {
-      const mainTarget = resolve(base, normalizeSpecifier(main));
-      // Node applies LOAD_AS_FILE / LOAD_INDEX to the package main target
-      // too, so an extensionless main (`"main": "main"` -> main.js) or a
-      // directory main (`"main": "dist"` -> dist/index.js) resolves to the
-      // real file. Verify that target before the package-level index.*
-      // fallback below; otherwise the hook would check the wrong file and let
-      // an unstaged edit to the real main drive Prettier.
-      push(mainTarget);
-      for (const ext of CJS_FILE_EXTENSIONS) push(`${mainTarget}${ext}`);
-      // stat, not lstat: Node's LOAD_AS_DIRECTORY follows symlinks, so a
-      // main target that links to a directory resolves to its index.*.
-      // Classifying the link itself would skip those candidates and verify
-      // the package-level index.* fallback Node never loads (#10602).
-      if (statProbe(mainTarget)?.isDirectory()) {
-        for (const indexName of CJS_INDEX_EXTENSIONS) {
-          push(join(mainTarget, indexName));
-        }
-      }
-    }
-    for (const indexName of CJS_INDEX_EXTENSIONS) {
-      push(join(base, indexName));
-    }
-  }
-
-  return candidates[0] ?? base;
-}
-
-/** Verify one relative config dependency against its index blob. */
-function verifyConfigDep(configDir, spec, kind = 'exact') {
-  const depPath = resolveConfigDepPath(configDir, spec, kind);
+/** Verify one relative config dependency against its index blob. Prettier
+ * plugin paths and `extends` targets are exact loads, so the specifier gets
+ * no extension or directory-index fallback. */
+function verifyConfigDep(configDir, spec) {
+  const depPath = resolve(configDir, normalizeSpecifier(spec));
   const depRel = relToCwd(depPath);
   if (!depRel) {
     throw new SkipError(
@@ -404,53 +254,6 @@ function verifyDepSpecs(config, configDir) {
     deps.add(config.extends);
   }
   for (const dep of deps) verifyConfigDep(configDir, dep);
-}
-
-/** Collect relative JS config specifiers with the loader that consumes them.
- * `cjs` means Node's CommonJS `require()` resolution; `esm` and `plugin` are
- * exact path loads (Prettier plugins and Node ESM do not append extensions). */
-function collectJsRelativeDeps(source) {
-  const deps = new Map();
-  const addSpec = (spec, kind) => {
-    if (!isRelativeSpecifier(spec)) return;
-    if (!deps.has(spec)) deps.set(spec, new Set());
-    deps.get(spec).add(kind);
-  };
-
-  const esmPatterns = [
-    /\bimport\s+[\s\S]*?\s+from\s*['"]([^'"]+)['"]/g,
-    /\bimport\s+['"]([^'"]+)['"]/g,
-    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-    /\bexport\s+[\s\S]*?\s+from\s*['"]([^'"]+)['"]/g,
-  ];
-  for (const pattern of esmPatterns) {
-    let match;
-    while ((match = pattern.exec(source))) addSpec(match[1], 'esm');
-  }
-
-  const requirePattern = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-  let requireMatch;
-  while ((requireMatch = requirePattern.exec(source))) {
-    addSpec(requireMatch[1], 'cjs');
-  }
-
-  const pluginsPattern = /\bplugins\s*:\s*\[([^\]]*)\]/g;
-  let block;
-  while ((block = pluginsPattern.exec(source))) {
-    const stringPattern = /['"]([^'"]+)['"]/g;
-    let match;
-    while ((match = stringPattern.exec(block[1]))) addSpec(match[1], 'plugin');
-  }
-  return deps;
-}
-
-/** Verify a JavaScript config's statically-visible relative dependencies. */
-function verifyJsConfigDeps(configPath, configBlob) {
-  const source = stripBom(configBlob.toString('utf8'));
-  const configDir = dirname(configPath);
-  for (const [dep, kinds] of collectJsRelativeDeps(source)) {
-    verifyConfigDep(configDir, dep, kinds.has('cjs') ? 'cjs' : 'exact');
-  }
 }
 
 /** Verify relative dependencies of a full config blob. `strict` controls
@@ -584,22 +387,13 @@ function mergeWorktree(path, stagedBlob, formatted) {
  * exclusively so a stale snapshot from a crashed run is never overwritten or
  * deleted. */
 function writeConfigSnapshot(worktreeConfigPath, stagedConfig) {
-  const base = basename(worktreeConfigPath);
-  // package.json contributes only its `prettier` key, so the snapshot holds
-  // just that key; every other config file is its own config.
-  const content =
-    base === 'package.json'
-      ? JSON.stringify(
-          JSON.parse(stripBom(stagedConfig.toString('utf8'))).prettier ?? null,
-        )
-      : stagedConfig;
-  const { name, ext } = parse(base);
+  const { name, ext } = parse(basename(worktreeConfigPath));
   const snapshotPath = join(
     dirname(worktreeConfigPath),
     `${name}-format-staged-${process.pid}${ext}`,
   );
   try {
-    writeFileSync(snapshotPath, content, { flag: 'wx' });
+    writeFileSync(snapshotPath, stagedConfig, { flag: 'wx' });
   } catch (error) {
     if (error.code === 'EEXIST') {
       throw new SkipError(
@@ -617,180 +411,33 @@ function writeConfigSnapshot(worktreeConfigPath, stagedConfig) {
  * usual") plus the scratch snapshot path that must be cleaned up. Throws when
  * the config cannot be sourced from the index, which the per-file catch turns
  * into a loud skip. */
-function configSnapshotFor(worktreeConfigPath, stagedConfig, depth = 0) {
-  if (depth > 8) {
+function configSnapshotFor(worktreeConfigPath, stagedConfig) {
+  const base = basename(worktreeConfigPath);
+  // Only a standalone config file (`.prettierrc` and its JSON/YAML variants)
+  // is supported. A `prettier` key in package.json or package.yaml, a
+  // JavaScript config, and a pointer to another config file or a shareable
+  // config package each need their own index-sourcing rules; none of those
+  // forms exists in this repository, so they skip loudly rather than carry
+  // resolution code nothing exercises. Adopting one means adding its branch.
+  if (
+    base === 'package.json' ||
+    base === 'package.yaml' ||
+    /\.(?:c?js|mjs)$/.test(base)
+  ) {
     throw new SkipError(
-      'circular prettier config pointer; skipped auto-staging.',
+      `${relToCwd(worktreeConfigPath)} is an unsupported prettier config ` +
+        'form; skipped auto-staging so its rules cannot shape the staged blob.',
     );
   }
-  const configRel = relToCwd(worktreeConfigPath);
-  const base = basename(worktreeConfigPath);
-  const worktreeConfig = readFileSync(worktreeConfigPath);
-  const configEqualsIndex = normalizedEquals(worktreeConfig, stagedConfig);
 
   // Provenance policy for config dependencies: verify relative
-  // plugins/extends/imports only when this function is about to hand Prettier
-  // a config path it derived from index content — a snapshot, or a pointer
-  // target resolved from a staged package.json/package.yaml. Clean configs
-  // returned as `null` are deliberately left to Prettier's own working-tree
-  // loader (#10504), except package.yaml object configs, which can never be
-  // snapshotted and are verified before being returned as `null`.
-
-  if (base === 'package.json') {
-    const stagedValue =
-      JSON.parse(stripBom(stagedConfig.toString('utf8'))).prettier ?? null;
-
-    if (typeof stagedValue === 'string') {
-      if (!isConfigPointerPath(stagedValue)) {
-        // `"prettier": "@company/prettier-config"` names a shareable config
-        // package resolved from node_modules, not a file in this repository.
-        // When package.json is clean Prettier resolves it exactly as before;
-        // when the manifest diverges there is no index snapshot to hand
-        // Prettier, so skip loudly instead of guessing a resolution.
-        if (!configEqualsIndex) {
-          throw new SkipError(
-            `package.json's prettier key names the shareable config ` +
-              `"${stagedValue}" but package.json has unstaged edits; skipped ` +
-              'auto-staging so the uncommitted pointer stays out of the commit.',
-          );
-        }
-        return { config: null, snapshotPath: null };
-      }
-
-      // `"prettier": "<path>"` points at another config file. Follow the
-      // pointer with the same index-snapshot rules instead of letting
-      // Prettier load the worktree copy of the pointed-to file. Normalize
-      // Windows-style backslash separators before resolution.
-      const targetPath = resolve(
-        dirname(worktreeConfigPath),
-        normalizeSpecifier(stagedValue),
-      );
-      const targetRel = relToCwd(targetPath);
-      if (!targetRel) {
-        throw new SkipError(
-          `package.json's prettier key points outside the repository ` +
-            `(${stagedValue}); skipped auto-staging.`,
-        );
-      }
-      const stagedTarget = readIndexFile(targetRel);
-      if (!stagedTarget) {
-        throw new SkipError(
-          `${targetRel} is not staged but package.json's prettier key ` +
-            'points to it; skipped auto-staging so its uncommitted rules ' +
-            'stay out of the commit. Stage or remove it and retry.',
-        );
-      }
-      if (!existsSync(targetPath)) {
-        throw new SkipError(
-          `${targetRel} vanished from the working tree; skipped auto-staging.`,
-        );
-      }
-      if (!normalizedEquals(readFileSync(targetPath), stagedTarget)) {
-        return configSnapshotFor(targetPath, stagedTarget, depth + 1);
-      }
-      if (isJsConfig(targetPath)) {
-        verifyJsConfigDeps(targetPath, stagedTarget);
-      } else {
-        verifyConfigDeps(targetPath, stagedTarget, false);
-      }
-      return { config: targetPath, snapshotPath: null };
-    }
-
-    if (configEqualsIndex) return { config: null, snapshotPath: null };
-    verifyDepSpecs(stagedValue, dirname(worktreeConfigPath));
-    const snapshotPath = writeConfigSnapshot(worktreeConfigPath, stagedConfig);
-    return { config: snapshotPath, snapshotPath };
-  }
-
-  if (base === 'package.yaml') {
-    let stagedValue = null;
-    try {
-      stagedValue =
-        parseYaml(stripBom(stagedConfig.toString('utf8')))?.prettier ?? null;
-    } catch {
-      if (!configEqualsIndex) {
-        throw new SkipError(
-          `staged ${configRel} differs from the worktree copy and package.yaml ` +
-            'configs cannot be snapshotted; skipped auto-staging.',
-        );
-      }
-      // Prettier will report the YAML error when it loads the clean file.
-      return { config: null, snapshotPath: null };
-    }
-
-    if (typeof stagedValue === 'string') {
-      if (!isConfigPointerPath(stagedValue)) {
-        // Bare package name (e.g. `@company/prettier-config`): Prettier
-        // resolves it from node_modules. A clean manifest is left alone; a
-        // diverged manifest cannot be snapshotted, so skip loudly.
-        if (!configEqualsIndex) {
-          throw new SkipError(
-            `package.yaml's prettier key names the shareable config ` +
-              `"${stagedValue}" but package.yaml has unstaged edits; skipped ` +
-              'auto-staging so the uncommitted pointer stays out of the commit.',
-          );
-        }
-        return { config: null, snapshotPath: null };
-      }
-
-      // Mirror the package.json string-pointer path: resolve the pointer
-      // against the staged package.yaml, then source the pointed-to config
-      // from the index (snapshotting it when it diverges).
-      const targetPath = resolve(
-        dirname(worktreeConfigPath),
-        normalizeSpecifier(stagedValue),
-      );
-      const targetRel = relToCwd(targetPath);
-      if (!targetRel) {
-        throw new SkipError(
-          `package.yaml's prettier key points outside the repository ` +
-            `(${stagedValue}); skipped auto-staging.`,
-        );
-      }
-      const stagedTarget = readIndexFile(targetRel);
-      if (!stagedTarget) {
-        throw new SkipError(
-          `${targetRel} is not staged but package.yaml's prettier key ` +
-            'points to it; skipped auto-staging so its uncommitted rules ' +
-            'stay out of the commit. Stage or remove it and retry.',
-        );
-      }
-      if (!existsSync(targetPath)) {
-        throw new SkipError(
-          `${targetRel} vanished from the working tree; skipped auto-staging.`,
-        );
-      }
-      if (!normalizedEquals(readFileSync(targetPath), stagedTarget)) {
-        return configSnapshotFor(targetPath, stagedTarget, depth + 1);
-      }
-      if (isJsConfig(targetPath)) {
-        verifyJsConfigDeps(targetPath, stagedTarget);
-      } else {
-        verifyConfigDeps(targetPath, stagedTarget, false);
-      }
-      return { config: targetPath, snapshotPath: null };
-    }
-
-    if (!configEqualsIndex) {
-      throw new SkipError(
-        `staged ${configRel} differs from the worktree copy and package.yaml ` +
-          'configs cannot be snapshotted; skipped auto-staging.',
-      );
-    }
-    // Object-valued package.yaml has no snapshot path, so verify its relative
-    // dependencies before handing the working-tree copy back to Prettier.
-    verifyDepSpecs(stagedValue, dirname(worktreeConfigPath));
+  // plugins/extends only when this function is about to hand Prettier a
+  // config path it derived from index content. A clean config is returned as
+  // `null` and deliberately left to Prettier's own working-tree loader
+  // (#10504).
+  if (normalizedEquals(readFileSync(worktreeConfigPath), stagedConfig)) {
     return { config: null, snapshotPath: null };
   }
-
-  if (isJsConfig(worktreeConfigPath)) {
-    if (configEqualsIndex) return { config: null, snapshotPath: null };
-    verifyJsConfigDeps(worktreeConfigPath, stagedConfig);
-    const snapshotPath = writeConfigSnapshot(worktreeConfigPath, stagedConfig);
-    return { config: snapshotPath, snapshotPath };
-  }
-
-  if (configEqualsIndex) return { config: null, snapshotPath: null };
   verifyConfigDeps(worktreeConfigPath, stagedConfig, true);
   const snapshotPath = writeConfigSnapshot(worktreeConfigPath, stagedConfig);
   return { config: snapshotPath, snapshotPath };
