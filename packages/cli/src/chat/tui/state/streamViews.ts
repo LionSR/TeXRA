@@ -130,12 +130,14 @@ function streamTabInfoFor(init: {
 }
 
 /**
- * Distinct from the extension/desktop `streamDisplayLabel` (a plain
- * `StreamTabInfo.label` accessor in `progressView/frontend/utils.ts`): this
- * one walks the CLI's parent tree to resolve a stream id into a label,
- * applying the root-session fallback along the way.
+ * Resolves a stream id against the CLI's parent-edge state: a parentless
+ * stream is the session itself (`ROOT_STREAM_LABEL`), otherwise the shared
+ * `buildStreamTabInfo` label, with the raw stream id as the last resort.
+ * Distinct from the extension/desktop `streamDisplayLabel`
+ * (`progressView/frontend/utils.ts`), which is a plain `StreamTabInfo.label`
+ * field read and takes the info object, not an id.
  */
-export function streamTreeDisplayLabel(init: {
+export function streamLabelForId(init: {
   readonly childRosters: ChildRosters;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
@@ -157,10 +159,10 @@ export function streamViewForId(init: {
   return {
     id: init.streamId,
     info: streamTabInfoFor(init),
-    label: streamTreeDisplayLabel(init),
+    label: streamLabelForId(init),
     parentId,
     parentLabel: parentId
-      ? streamTreeDisplayLabel({
+      ? streamLabelForId({
           childRosters: init.childRosters,
           parentStream: init.parentStream,
           streamId: parentId,
