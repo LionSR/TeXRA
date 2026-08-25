@@ -220,8 +220,7 @@ async function probeSdkBinaryAvailable(
 
 /** Resolved status of an SDK-backed CLI integration for the dashboard. */
 type SdkBinaryStatus =
-  | { ok: false; message: string }
-  | { ok: true; binaryPath: string };
+  { ok: false; message: string } | { ok: true; binaryPath: string };
 
 /**
  * Human-readable probe shared by the SDK-backed CLI integrations (Codex,
@@ -252,7 +251,10 @@ async function probeSdkBinaryStatus(config: {
 
   const binaryPath = await config.findBinary();
   if (!binaryPath) {
-    return { ok: false, message: config.binaryNotFoundMessage + wslInstallHint() };
+    return {
+      ok: false,
+      message: config.binaryNotFoundMessage + wslInstallHint(),
+    };
   }
   return { ok: true, binaryPath };
 }
