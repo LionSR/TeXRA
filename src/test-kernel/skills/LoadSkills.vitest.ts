@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { discoverSkills, discoverSkillSources } from '@skills/loadSkills';
+import { discoverSkillSources } from '@skills/loadSkills';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -30,7 +30,7 @@ function expectReportedIssue(
   expect(result.errors).toContainEqual(expect.objectContaining(issue));
 }
 
-describe('discoverSkills', () => {
+describe('discoverSkillSources over one root', () => {
   it('loads valid SKILL.md packages', async () => {
     const root = await createTempRoot();
     await writeSkill(
@@ -44,7 +44,9 @@ describe('discoverSkills', () => {
       'Read the paper and report substantial mathematical issues.',
     );
 
-    const result = await discoverSkills(root);
+    const result = await discoverSkillSources([
+      { scope: 'project', path: root },
+    ]);
 
     expect(result.errors).toEqual([]);
     expect(result.skills).toHaveLength(1);
@@ -62,7 +64,9 @@ describe('discoverSkills', () => {
       name: 'missing-description',
     });
 
-    const result = await discoverSkills(root);
+    const result = await discoverSkillSources([
+      { scope: 'project', path: root },
+    ]);
 
     expect(result.skills).toEqual([]);
     expectReportedIssue(result, {
@@ -78,7 +82,9 @@ describe('discoverSkills', () => {
       description: 'A skill whose declared name differs from its directory.',
     });
 
-    const result = await discoverSkills(root);
+    const result = await discoverSkillSources([
+      { scope: 'project', path: root },
+    ]);
 
     expect(skillNames(result)).toEqual(['frontmatter-name']);
     expectReportedIssue(result, {
@@ -101,7 +107,9 @@ describe('discoverSkills', () => {
       `---\nname: : bad\n---\n\nBody\n`,
     );
 
-    const result = await discoverSkills(root);
+    const result = await discoverSkillSources([
+      { scope: 'project', path: root },
+    ]);
 
     expect(skillNames(result)).toEqual(['valid-skill']);
     expectReportedIssue(result, {
@@ -122,7 +130,9 @@ describe('discoverSkills', () => {
       'dir',
     );
 
-    const result = await discoverSkills(root);
+    const result = await discoverSkillSources([
+      { scope: 'project', path: root },
+    ]);
 
     expect(skillNames(result)).toEqual(['actual-skill']);
     expectReportedIssue(result, {
@@ -142,7 +152,9 @@ describe('discoverSkills', () => {
       description: 'The second skill with this name.',
     });
 
-    const result = await discoverSkills(root);
+    const result = await discoverSkillSources([
+      { scope: 'project', path: root },
+    ]);
 
     expect(result.skills.map(({ skill }) => skill.description)).toEqual([
       'The first skill with this name.',

@@ -164,7 +164,6 @@ export function boundedExternalInquiryQuestionLines({
   if (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS) {
     const visibleCount = Math.max(1, maxDisplayLines - 1);
     const maxOffset = compactAwareMaxScrollOffset({
-      compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
       maxDisplayLines,
       totalLines: wrappedLines.length,
     });
@@ -185,7 +184,6 @@ export function boundedExternalInquiryQuestionLines({
   }
 
   const { hiddenAfter, hiddenBefore, visibleRows } = scrollBoundedRows({
-    compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     maxDisplayLines,
     rows: wrappedLines,
     scrollOffset,
@@ -224,7 +222,6 @@ export function ExternalInquiry(
     [contentWidth, props.payload.question],
   );
   const maxQuestionOffset = compactAwareMaxScrollOffset({
-    compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     maxDisplayLines: questionRows,
     totalLines: questionLines.length,
   });

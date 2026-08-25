@@ -56,7 +56,7 @@ export function estimateLiveTranscriptEntryRows(
   return estimateEntryRows(entry, 'live', width, executionLabels);
 }
 
-export interface TranscriptEntrySelection {
+interface TranscriptEntrySelection {
   readonly entries: readonly TranscriptRow[];
   readonly rowLimits: ReadonlyMap<string, number>;
   readonly usedRows: number;

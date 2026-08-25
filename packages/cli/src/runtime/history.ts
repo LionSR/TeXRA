@@ -88,7 +88,7 @@ export interface CliHistoryEntry {
   readonly parentExecutionId?: ExecutionId;
 }
 
-export interface CliHistoryDetails {
+interface CliHistoryDetails {
   readonly id: ExecutionId;
   readonly status: HistoryRunStatus;
   readonly meta: ExecutionMeta | null;
@@ -240,7 +240,7 @@ export async function readCliHistoryDetails(
 }
 
 /** Outcome of loading a stored execution's export input (see {@link readCliHistoryExportInput}). */
-export type CliHistoryExportInputResult =
+type CliHistoryExportInputResult =
   | { readonly status: 'ok'; readonly exportInput: ChatExportInput }
   /** No trace of this execution at all — matches `history show`'s notion of "not found". */
   | { readonly status: 'not_found' }
@@ -385,7 +385,7 @@ export async function deleteCliHistory(options: {
  * refuse and quote the count back to the user; otherwise it can pass `count`
  * into the confirmation message before deletion.
  */
-export interface CliHistoryDeleteAllPreflight {
+interface CliHistoryDeleteAllPreflight {
   readonly proceed: boolean;
   readonly count: number;
 }

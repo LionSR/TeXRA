@@ -28,7 +28,7 @@ type NormalizedRunModelCandidate = RunModelCandidate & {
   readonly model: string;
 };
 
-export interface RunModelDecision {
+interface RunModelDecision {
   readonly model: string;
   readonly reason: RunModelDecisionReason;
   readonly unavailable?: true;

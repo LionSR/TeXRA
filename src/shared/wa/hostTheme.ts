@@ -14,8 +14,8 @@ import { setWaColorScheme, THEME_CLASSES, themeIsDark } from './waColorScheme';
 
 /**
  * Apply Electron-renderer-style host theme classes:
- *   - removes any prior `vscode-*` / `texra-*` body classes
- *   - adds `vscode-<kind>` AND `texra-<kind>`
+ *   - removes any prior `vscode-*` body classes
+ *   - adds `vscode-<kind>`
  *   - sets `body.dataset.vscodeThemeKind`
  *   - swaps the `wa-light`/`wa-dark` class on <html> via setWaColorScheme()
  *
@@ -27,7 +27,7 @@ export function applyHostBodyTheme(theme: Theme): void {
   const body = document.body;
   if (!body) return;
   body.classList.remove(...THEME_CLASSES);
-  body.classList.add(`vscode-${theme}`, `texra-${theme}`);
+  body.classList.add(`vscode-${theme}`);
   body.dataset.vscodeThemeKind = theme;
   setWaColorScheme(themeIsDark(theme));
 }

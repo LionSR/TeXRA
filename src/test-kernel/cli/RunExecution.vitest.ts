@@ -614,10 +614,8 @@ describe('executeCliRequest', () => {
       cost: 0.5,
     });
     expect(snapshot.executionId).toBe(executionId);
-    // Current records read the description via ExecutionMeta (#9590 Stage 6);
-    // the snapshot field is the legacy sidecar mirror and stays unwritten.
+    // Current records read the description via ExecutionMeta (#9590 Stage 6).
     expect(reader.getRunMetadata(streamId).description).toBe('chat / gpt54');
-    expect(snapshot.description).toBeUndefined();
     const { getExecutionStore } = await import('@agent/storage');
     expect((await getExecutionStore(executionId).readMeta())?.description).toBe(
       'chat / gpt54',

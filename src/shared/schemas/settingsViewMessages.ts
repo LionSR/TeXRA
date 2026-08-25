@@ -391,6 +391,12 @@ const UpdateAgentModePresetsMessageSchema = z.object({
    * instead of guessing from the agent's name.
    */
   orchestratorAgents: z.array(z.string()).prefault([]),
+  /**
+   * The team the workspace roster currently resolves to, or null when it runs
+   * no team. Owned by the roster so a preset card reports the applied team
+   * rather than the last one the user clicked.
+   */
+  activePresetId: z.string().nullable().prefault(null),
 });
 export type UpdateAgentModePresetsMessage = z.infer<
   typeof UpdateAgentModePresetsMessageSchema

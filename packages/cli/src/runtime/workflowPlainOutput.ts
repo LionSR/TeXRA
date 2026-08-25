@@ -21,7 +21,7 @@ const WORKFLOW_PLAIN_EVENT_TYPES = [
   'result',
 ] as const satisfies readonly AgentEvent['type'][];
 
-export interface WorkflowPlainOutputOptions {
+interface WorkflowPlainOutputOptions {
   readonly writeLine: (line: string) => void;
   readonly beforeWrite?: () => void;
 }

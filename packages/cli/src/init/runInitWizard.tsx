@@ -22,17 +22,17 @@ import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import type { InitAnswers } from '../runtime/initConfig';
 import type { CliModelAccess } from '../runtime/modelAccess';
 
-export interface InitWizardAgentOption {
+interface InitWizardAgentOption {
   readonly name: string;
 }
 
-export interface InitWizardOptions {
+interface InitWizardOptions {
   readonly agents: readonly InitWizardAgentOption[];
   readonly models: readonly CliModelAccess[];
   readonly colorEnabled?: boolean;
 }
 
-export interface InitWizardResult {
+interface InitWizardResult {
   readonly answers: InitAnswers;
   readonly gitignore: boolean;
 }

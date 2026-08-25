@@ -15,9 +15,9 @@ import { listRuntimeSkillSources } from '@skills/runtimeSkills';
 // Local imports - CLI runtime
 import type { CliContext } from './cliContext';
 
-export type CliSkillDiscoveryOptions = SkillSourceOptions;
+type CliSkillDiscoveryOptions = SkillSourceOptions;
 
-export interface CliSkillRecord {
+interface CliSkillRecord {
   readonly name: string;
   readonly description: string;
   readonly scope: SkillSource['scope'];

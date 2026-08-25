@@ -307,10 +307,9 @@ function createBackgroundBashStrategy(params: {
         ...(params.cwd !== undefined && { cwd: params.cwd }),
         timeout: params.timeoutMs,
         buffer: false,
-        // String form + explicit shell teardown: abort/timeout signal the
-        // whole process group so backgrounded jobs and piped children are
+        // The string command form gets shell teardown: abort/timeout signal
+        // the whole process group so backgrounded jobs and piped children are
         // torn down rather than left running.
-        mode: 'shell',
         signal: abortController.signal,
         onStdout: (chunk) => {
           stdout.append(chunk);
@@ -444,9 +443,9 @@ export class BashTool extends defineTool({
       cwd,
       buffer: false,
       timeout: timeoutMs,
-      // String form + explicit shell teardown: abort/timeout signal the whole
-      // process group so piped children and backgrounded jobs are torn down.
-      mode: 'shell',
+      // The string command form gets shell teardown: abort/timeout signal the
+      // whole process group so piped children and backgrounded jobs are torn
+      // down.
       onStdout: (chunk) => {
         stdout.append(chunk);
         ctx?.hooks?.onToolOutput?.(chunk);

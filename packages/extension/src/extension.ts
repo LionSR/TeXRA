@@ -20,7 +20,6 @@ import {
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import {
   getAuthCallbackUri,
-  isSupabaseConfigured,
   setExternalAuthCallbackResolver,
   setRuntimeExtensionId,
 } from '@auth/config';
@@ -467,49 +466,43 @@ async function activateExtension(context: vscode.ExtensionContext) {
       return { fullUrl: externalUri.toString(true) };
     });
 
-    if (!isSupabaseConfigured()) {
-      log.warn(
-        'Supabase authentication is enabled but credentials are not configured. Please configure credentials in src/auth/config.ts before building.',
-      );
-    } else {
-      const authProvider = new SupabaseAuthProvider({
-        showError: (msg) => void vscode.window.showErrorMessage(msg),
-        showInfo: (msg) => void vscode.window.showInformationMessage(msg),
-        showSignInPrompt: async (reason) => {
-          const message =
-            reason === 'expired'
-              ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
-              : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
-          const action = await vscode.window.showWarningMessage(
-            message,
-            'Sign In',
-          );
-          if (action === 'Sign In') {
-            await vscode.commands
-              .executeCommand('texra.auth.signIn')
-              .then(undefined, (err: unknown) =>
-                authLog.error(
-                  `Failed to trigger sign-in: ${toErrorMessage(err)}`,
-                ),
-              );
-          }
-        },
-      });
-      context.subscriptions.push(
-        vscode.authentication.registerAuthenticationProvider(
-          AUTH_PROVIDER_ID,
-          'TeXRA Account',
-          authProvider,
-          { supportsMultipleAccounts: false },
-        ),
-      );
+    const authProvider = new SupabaseAuthProvider({
+      showError: (msg) => void vscode.window.showErrorMessage(msg),
+      showInfo: (msg) => void vscode.window.showInformationMessage(msg),
+      showSignInPrompt: async (reason) => {
+        const message =
+          reason === 'expired'
+            ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
+            : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
+        const action = await vscode.window.showWarningMessage(
+          message,
+          'Sign In',
+        );
+        if (action === 'Sign In') {
+          await vscode.commands
+            .executeCommand('texra.auth.signIn')
+            .then(undefined, (err: unknown) =>
+              authLog.error(
+                `Failed to trigger sign-in: ${toErrorMessage(err)}`,
+              ),
+            );
+        }
+      },
+    });
+    context.subscriptions.push(
+      vscode.authentication.registerAuthenticationProvider(
+        AUTH_PROVIDER_ID,
+        'TeXRA Account',
+        authProvider,
+        { supportsMultipleAccounts: false },
+      ),
+    );
 
-      const uriHandler = new SupabaseUriHandler();
-      context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
-      authProvider.setUriHandler(uriHandler);
+    const uriHandler = new SupabaseUriHandler();
+    context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
+    authProvider.setUriHandler(uriHandler);
 
-      log.info('Supabase authentication provider registered');
-    }
+    log.info('Supabase authentication provider registered');
   } catch (error) {
     SupabaseClient.setInitError(ensureError(error));
     log.error(

@@ -1,4 +1,4 @@
-import { defineCommand, showUsage } from 'citty';
+import { defineCommand } from 'citty';
 
 import { getVisibleAgents } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -67,7 +67,7 @@ import {
 import { getCliAuthProfile, signOutCliSupabase } from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
-import { withUsageSections } from './_helpers/dispatch';
+import { showUsage, withUsageSections } from './_helpers/dispatch';
 import { setExitCode } from './_helpers/exitCode';
 import { loginInitFromArgs, runLoginCommand } from './auth';
 import {

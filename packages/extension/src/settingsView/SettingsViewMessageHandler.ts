@@ -219,6 +219,17 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         }),
       },
       {
+        // `apply_team` writes the roster straight from the setup agent, so
+        // the open view is showing agents and a team it just replaced. The
+        // catalog is already fresh: a team change moves no agent files, and
+        // the agent-creator reloads before it emits. Without that flag this
+        // listener would rescan the YAML and re-fetch the remote catalog on
+        // every roster write.
+        dispose: appSignals.on('agentRosterChanged', () => {
+          void this.refreshAfterAgentMutation(undefined, true);
+        }),
+      },
+      {
         dispose: appSignals.on('languageModelsChanged', () => {
           void this.withActiveWebview((webview) =>
             this.sendModelSelectionData(webview),
@@ -719,7 +730,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     ]);
   }
 
-  /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
+  /**
+   * Refresh settings-view agent list and main-view dropdown after agent
+   * mutations. The team presets ride along because every roster mutation can
+   * move the effective team: enabling one agent rewrites the selection as
+   * `custom`, which retires whatever team was applied.
+   */
   private async refreshAfterAgentMutation(
     selectedToolUseAgent?: string,
     agentCatalogAlreadyFresh = false,
@@ -728,6 +744,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.withActiveWebview((w) =>
         this.agentHandlers.sendAgentSelectionData(w),
       ),
+      this.withActiveWebview((w) => this.agentHandlers.sendAgentModePresets(w)),
       safeExecuteCommand(
         'texra.refreshAllOptions',
         selectedToolUseAgent || agentCatalogAlreadyFresh

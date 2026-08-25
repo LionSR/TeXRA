@@ -19,7 +19,7 @@ type SettingsTeamRosterCatalog = TeamRosterApplicationDeps['catalog'] & {
   ): string | undefined;
 };
 
-export interface SettingsTeamRosterPresentation {
+interface SettingsTeamRosterPresentation {
   chooseTeamAvailability(
     prompt: TeamAvailabilityPrompt,
   ): Promise<TeamAvailabilityChoice | undefined>;

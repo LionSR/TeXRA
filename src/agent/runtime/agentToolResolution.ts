@@ -34,11 +34,8 @@ import {
   getUnavailableToolNamesCached,
 } from '@tools/toolAvailability';
 import {
+  annotateDelegationAvailability,
   availableModelNamesFromOptions,
-  visibleDelegationAgentsBlock,
-  withDelegationAgentAvailability,
-  withDelegationModelAvailability,
-  withDelegationWorktreeAvailability,
 } from '@tools/delegation/delegationAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -160,38 +157,7 @@ export async function resolveAgentTools({
     await availableDelegationModelNamesForTools(resolved);
   return {
     tools: resolved.map((tool) =>
-      annotateDelegationTool(tool, availableModelNames),
+      annotateDelegationAvailability(tool, availableModelNames),
     ),
   };
-}
-
-/**
- * Refresh a delegation tool's "Available models:", "Available agents:", and
- * "Git worktree support:" lines from current state. A tool declaring no
- * `availabilityCategory` returns untouched at the early guard.
- * `availableModelNames` is `undefined` only when the resolved list held no
- * delegation tool at all, so in that case every tool reaching this function is a
- * non-delegation tool that returns early — `category` and `availableModelNames`
- * are independent (one keys off the tool name, the other off the whole list),
- * not causally linked.
- */
-function annotateDelegationTool(
-  tool: ToolDefinition,
-  availableModelNames: readonly string[] | null | undefined,
-): ToolDefinition {
-  const category = tool.availabilityCategory;
-  if (!category) return tool;
-  const withModels =
-    availableModelNames === undefined
-      ? tool
-      : withDelegationModelAvailability(tool, availableModelNames);
-  // The annotators no-op without a description, and resolving the roster /
-  // worktree state reaches platform state — skip those lookups when there is
-  // nothing to annotate (e.g. a tool config that carries only a name).
-  if (!withModels.description) return withModels;
-  const withAgents = withDelegationAgentAvailability(
-    withModels,
-    visibleDelegationAgentsBlock(category),
-  );
-  return withDelegationWorktreeAvailability(withAgents);
 }

@@ -26,7 +26,7 @@ export function infoPaneRequiredRows(
   return INFO_PANE_FIXED_CHROME_ROWS + titleRows + rendered.split('\n').length;
 }
 
-export interface InfoPaneProps {
+interface InfoPaneProps {
   readonly title: string;
   readonly lines: readonly string[];
   readonly availableRows: number;

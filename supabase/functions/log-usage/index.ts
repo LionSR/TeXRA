@@ -142,7 +142,6 @@ function toDbRows(
     provider: entry.provider,
     agent_name: entry.agentName ?? null,
     agent_category: entry.agentCategory ?? null,
-    is_multiple_output: entry.isMultipleOutput ?? null,
     input_tokens: entry.inputTokens,
     output_tokens: entry.outputTokens,
     cost: entry.cost,

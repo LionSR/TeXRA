@@ -408,8 +408,7 @@ describe('StreamSnapshotStore', () => {
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     });
     // Every seed (bulk load included) hydrates the description from the one
-    // authority, ExecutionMeta — it rides the same read as identity. Nothing
-    // writes a sidecar copy, so the assembled snapshot carries none.
+    // authority, ExecutionMeta — it rides the same read as identity.
     expect(reader.getRunMetadata(STREAM)).toMatchObject({
       config: runConfig,
       description: 'session-search / kimi26T',
@@ -419,7 +418,6 @@ describe('StreamSnapshotStore', () => {
       },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     });
-    expect(snap.description).toBeUndefined();
     expect(snap.parentStreamId).toBe(OTHER_STREAM);
 
     const goalPausedOnly = await new StreamSnapshotStore().read(OTHER_STREAM);
@@ -1148,7 +1146,6 @@ describe('StreamSnapshotStore', () => {
 
     expect(snapshot.executionId).toBeUndefined();
     expect(snapshot.parentStreamId).toBeUndefined();
-    expect(snapshot.description).toBeUndefined();
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamSnapshotStore',
       expect.stringContaining('unreadable persisted stream metadata'),
@@ -2850,7 +2847,6 @@ describe('StreamSnapshotStore', () => {
     });
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.executionId).toBeUndefined();
-    expect(snap.description).toBeUndefined();
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamSnapshotStore',
       expect.stringContaining('malformed execution FK'),

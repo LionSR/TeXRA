@@ -44,7 +44,7 @@ export interface CliConfigValues extends CliCommandConfig {
   readonly run?: CliCommandConfig;
 }
 
-export interface LoadedCliConfig {
+interface LoadedCliConfig {
   readonly path?: string;
   readonly values: CliConfigValues;
   readonly warnings: readonly string[];

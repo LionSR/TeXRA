@@ -32,7 +32,7 @@ export interface ProviderCapabilityProfile {
   readonly openAIResponses?: OpenAIResponseProviderCapabilities;
 }
 
-export interface ProviderCapabilityKey {
+interface ProviderCapabilityKey {
   readonly model: ModelConfig;
   readonly useOpenRouter: boolean;
 }

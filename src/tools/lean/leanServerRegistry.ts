@@ -28,8 +28,6 @@ export interface LeanServerInfo {
   readonly mode: LeanServerMode;
   readonly status: LeanServerStatus;
   readonly startedAt: number;
-  readonly toolchain?: string;
-  readonly pid?: number;
   readonly errorMessage?: string;
 }
 
@@ -50,8 +48,6 @@ export interface RegisterLeanServerInit {
   readonly workspaceRoot: string;
   readonly mode: LeanServerMode;
   readonly status?: LeanServerStatus;
-  readonly toolchain?: string;
-  readonly pid?: number;
 }
 
 export function registerLeanServer(init: RegisterLeanServerInit): void {
@@ -61,15 +57,11 @@ export function registerLeanServer(init: RegisterLeanServerInit): void {
     mode: init.mode,
     status: init.status ?? 'starting',
     startedAt: Date.now(),
-    toolchain: init.toolchain,
-    pid: init.pid,
   });
 }
 
 export interface UpdateLeanServerPatch {
   readonly status?: LeanServerStatus;
-  readonly toolchain?: string;
-  readonly pid?: number;
   readonly errorMessage?: string;
 }
 
@@ -82,8 +74,6 @@ export function updateLeanServer(
   servers.set(id, {
     ...existing,
     status: patch.status ?? existing.status,
-    toolchain: patch.toolchain ?? existing.toolchain,
-    pid: patch.pid ?? existing.pid,
     errorMessage:
       patch.status && patch.status !== 'error'
         ? undefined
@@ -115,8 +105,7 @@ export function summarizeLeanServers(
   if (list.length === 0) return 'No Lean servers registered.';
   const lines = list.map((info) => {
     const modeLabel = LEAN_SERVER_MODE_LABELS[info.mode];
-    const toolchain = info.toolchain ? `, ${info.toolchain}` : '';
-    return `• ${info.workspaceRoot} (${modeLabel}${toolchain})${statusTail(info, now)}`;
+    return `• ${info.workspaceRoot} (${modeLabel})${statusTail(info, now)}`;
   });
   const header = `${formatResultCount(list.length, 'Lean server')} registered:`;
   return [header, ...lines].join('\n');

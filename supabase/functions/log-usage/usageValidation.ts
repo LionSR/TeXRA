@@ -31,7 +31,6 @@ const UsageLogEntryInputSchema = z.object({
   cost: z.number().nonnegative(),
   agentName: optionalString,
   agentCategory: optional(z.enum(['workflow', 'toolUse'])),
-  isMultipleOutput: optionalBoolean,
   responseTimeMs: optionalNonnegativeInt,
   cachedInputTokens: optionalNonnegativeInt,
   reasoningTokens: optionalNonnegativeInt,
@@ -41,9 +40,6 @@ const UsageLogEntryInputSchema = z.object({
     .boolean()
     .nullish()
     .transform((value) => value ?? false),
-  // The destination mapper supplies `chatgpt` for legacy subscription entries
-  // that predate an explicit source.
-  subscriptionSource: optionalString,
   streamId: optionalString,
   extensionVersion: optionalString,
   editorType: optionalString,
@@ -67,18 +63,18 @@ export type UsageLogEntry = z.infer<typeof UsageLogEntrySchema>;
 
 /** Return the subscription product for subscription-backed usage. */
 export function subscriptionSourceForUsage(
-  entry: Pick<UsageLogEntry, 'usageRoute' | 'subscriptionSource'>,
+  entry: Pick<UsageLogEntry, 'usageRoute'>,
 ): string | undefined {
   switch (entry.usageRoute) {
     case 'chatgpt-subscription':
-      return entry.subscriptionSource ?? 'chatgpt';
+      return 'chatgpt';
     case 'kimi-code-subscription':
-      return entry.subscriptionSource ?? 'kimi';
+      return 'kimi';
     case 'glm-coding-plan-subscription':
-      return entry.subscriptionSource ?? 'glm';
+      return 'glm';
     case 'xai-subscription':
       // Product name, matching chatgpt/kimi/glm — not the provider id `xai`.
-      return entry.subscriptionSource ?? 'grok';
+      return 'grok';
     default:
       return undefined;
   }

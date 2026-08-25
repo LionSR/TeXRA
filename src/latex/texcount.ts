@@ -42,7 +42,7 @@ export interface TexcountOptions {
   channel?: string;
 }
 
-export interface TexcountResult {
+interface TexcountResult {
   output: string | null;
   errors: string[];
 }

@@ -5,13 +5,13 @@ import { JsonStore } from '@platform/defaults/jsonStore';
 import { openNodeWorkspaceStateStore } from '@platform/defaults/nodeStores';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 
-export interface CliStateStores {
+interface CliStateStores {
   readonly storage: StorageProvider;
   readonly globalState: StateStore;
   readonly workspaceState: StateStore;
 }
 
-export interface CliStateStoresInit {
+interface CliStateStoresInit {
   readonly storageRoot?: string;
   readonly workspacePath: string | (() => string | undefined);
 }
