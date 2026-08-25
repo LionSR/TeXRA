@@ -94,9 +94,8 @@ describe('desktop theme tokens', () => {
 
   it('keeps light and dark palettes in one semantic token layer', () => {
     const css = readThemeTokens();
-    const darkBlock = css.match(
-      /body\.vscode-dark\s*{(?<body>[^}]*)}/,
-    )?.groups?.body;
+    const darkBlock = css.match(/body\.vscode-dark\s*{(?<body>[^}]*)}/)?.groups
+      ?.body;
 
     expect(css).toContain('light-dark(');
     expect(darkBlock).toContain('color-scheme: dark;');
