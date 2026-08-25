@@ -80,6 +80,7 @@ import type {
   SettingsTabPanelName,
   StreamTabId,
 } from '@shared/schemas';
+import { cloneRoundIndexed } from '@shared/schemas';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   formatActiveStreamRetention,
@@ -1142,7 +1143,15 @@ export class DesktopProgressBridge {
     // (and opened) in order, matching the VS Code command, with no separate
     // sort needed. A defensive re-sort would only mask a schema regression,
     // not add safety.
-    const outputsByRound = this.state.snapshots.getOutputFiles(stream);
+    // Frozen here, not read here. `getOutputFiles` returns the store's live
+    // record (#11402), and this context is carried across several more awaits
+    // -- runLatexdiffFile -> diffAcceptedFilePair -> runSharedLatexdiff ->
+    // runLatexdiffForExecution -- before anything enumerates it. A workflow
+    // still producing output would otherwise change the diff scope after the
+    // user began the action. Mirrors ProgressWorkflowActionsController.diffStream.
+    const outputsByRound = cloneRoundIndexed(
+      this.state.snapshots.getOutputFiles(stream),
+    );
     const { config, executionId } = this.getRunMetadata(stream);
     const workspaceScan = config
       ? this.getLatexdiffWorkspaceScan(config, editedFile)
