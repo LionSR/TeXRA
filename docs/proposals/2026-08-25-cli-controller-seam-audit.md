@@ -159,13 +159,24 @@ lands clean.
 
 ## 3. Bounded leftovers
 
-Filed as `tech-debt` issues rather than carried here:
+Filed as `tech-debt` issues rather than carried here (all five now have PRs;
+see the status column):
 
 - #11386 — un-export 12 controller types with zero cross-file references
 - #11387 — delete the never-produced `activeStream` option on the metadata push
 - #11388 — `StreamArtifactProjection` sits in the shared layer with only CLI consumers
 - #11389 — delete `SupabaseClient.getSessionTokens` (0 consumers, raw refresh token)
-- #11390 — CLI re-derives the tool dashboard; the `ToolHost` `'cli'` arm has no caller
+- #11390 — CLI re-derives the tool dashboard; the `ToolHost` `'cli'` arm has no caller.
+  **Partially rejected on cost** (#11397 takes the verified half): the stated
+  blocking precondition does not exist — `runProbes` maps over every
+  `EXTERNAL_TOOL_DEFS` entry, so no def is ever dropped — and the fold would
+  change external-tool host exclusion for extension _and_ desktop, need
+  feature-decision fields on `ToolDashboardItem`, and add four host-conditional
+  branches, to delete ~40 lines of per-def mapping. Left open for a ruling on
+  the unused `'cli'` arm itself.
+- #11399 — delete the `activeStream` wire field (follow-up to #11387; the
+  surviving frontend branch is an unguarded selection back-channel that
+  bypasses `assertKnownActiveStreamId`)
 
 Listed below for the record with their evidence anchors. The remaining rows
 (snapshot-port re-projections, `fetchWithTimeout`, the Codespaces doc comments)
@@ -222,9 +233,31 @@ not even to a test. Each was re-verified individually:
 | `progressView/backend/ExternalInquiryRequestHandler.ts:18` | `ExternalInquiryRequestHandlerOptions`  |
 | `progressView/progressStreamControls.ts:21`                | `ProgressStreamControls`                |
 
-A further 16 have test-kernel-only consumers and are **not** baselined — the
-species documented in `2026-08-19-dead-code-gate-blind-spots.md` §1 ("a test is
-a consumer"). Those need the per-symbol judgement that document prescribes, not
+### A fourth, unrecorded gate gap
+
+`2026-08-19-dead-code-gate-blind-spots.md` records three gaps. The twelve
+symbols above are a **fourth** it does not name, and the demonstration sits
+inside one file:
+
+- `MainViewAllowedDropExtensions` (`MainViewDroppedFilesController.ts:16`) is
+  referenced only from an interface member, and it **is** baselined as
+  `production-dead / types`.
+- `MainViewDroppedFileAttachmentPlan` and `...Input` (`:20`, `:28`) are
+  referenced directly in the exported `planMainViewDroppedFileAttachments`
+  signature, and they appear in the baseline **not at all**.
+
+`knip.json` sets no `ignoreExportsUsedInFile`, so the documented default would
+have reported them. The distinguishing factor is reachability from an exported
+signature: one level of nesting makes a type invisible to the gate. This
+belongs in the blind-spots register beside §1-§3; it is recorded here because
+this audit is where it surfaced.
+
+(Credit: caught in review on #11392, which correctly rejected that PR's
+original attribution of this mechanism to §1.)
+
+A further 16 exports have test-kernel-only consumers and are **not** baselined —
+that one _is_ the species documented in `2026-08-19-dead-code-gate-blind-spots.md`
+§1 ("a test is a consumer"). Those need the per-symbol judgement that document prescribes, not
 a blanket un-export, so they are not proposed here.
 
 Two re-export lines are also redundant: `onboardingFunnel.ts:20`
