@@ -104,7 +104,18 @@ async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
   const { values, warnings } = parseCliConfigValues(
     raw,
     TEXRA_CONFIG_FILE_NAME,
-    { reportUnknownKeys: false },
+    {
+      reportUnknownKeys: false,
+      // defaultsFromConfigValues only reads agent/model (top-level and
+      // chat.*) — scoping to just those fields avoids re-validating
+      // approvalPolicy (already warned about by loadUserApprovalPolicy) and
+      // outputFormat/run.* (unused here), and matters more than it would for
+      // a one-shot read: orchestrate's launcher loop calls resolveChatDefaults
+      // on every iteration, so an unrelated invalid field would otherwise
+      // re-print its warning every time through the loop.
+      topLevelFields: new Set(['agent', 'model']),
+      sections: new Set(['chat']),
+    },
   );
   for (const warning of warnings) warn(warning);
   return defaultsFromConfigValues(values);

@@ -196,12 +196,26 @@ function pickFields<T extends object>(
   return picked;
 }
 
+interface PickConfigOptions {
+  readonly reportUnknownKeys: boolean;
+  /** Restricts which command sections get read (and thus warned about) —
+   *  `undefined` means all of {@link COMMAND_SECTIONS}. A caller that only
+   *  resolves `chat` values has no use warning about a `run.*` typo, and
+   *  every extra field read is a field a caller invoked on every loop
+   *  iteration (e.g. `resolveChatDefaults` from `orchestrate`'s launcher
+   *  loop) can print the same warning again on the next pass. */
+  readonly sections?: ReadonlySet<(typeof COMMAND_SECTIONS)[number]>;
+  /** Restricts which top-level scalar fields get read — same rationale as
+   *  `sections`, one level up. */
+  readonly topLevelFields?: ReadonlySet<keyof CliScalarFields>;
+}
+
 function pickCommandSection(
   record: Record<string, unknown>,
   section: (typeof COMMAND_SECTIONS)[number],
   warnings: string[],
   filePath: string,
-  reportUnknownKeys: boolean,
+  options: PickConfigOptions,
 ): CliCommandConfig | undefined {
   const sectionKey = canonicalConfigKey(section);
   if (!Object.hasOwn(record, sectionKey)) return undefined;
@@ -211,7 +225,7 @@ function pickCommandSection(
     return undefined;
   }
   const prefix = `${sectionKey}.`;
-  if (reportUnknownKeys) {
+  if (options.reportUnknownKeys) {
     warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
   }
   return pickFields<CliRequiredCommandConfig>(
@@ -228,29 +242,28 @@ function pickConfigValues(
   record: Record<string, unknown>,
   warnings: string[],
   filePath: string,
-  reportUnknownKeys: boolean,
+  options: PickConfigOptions,
 ): CliConfigValues {
-  if (reportUnknownKeys) {
+  if (options.reportUnknownKeys) {
     warnUnknownKeys(warnings, filePath, record, TOP_LEVEL_KEYS);
   }
-  const chat = pickCommandSection(
-    record,
-    'chat',
-    warnings,
-    filePath,
-    reportUnknownKeys,
-  );
-  const run = pickCommandSection(
-    record,
-    'run',
-    warnings,
-    filePath,
-    reportUnknownKeys,
-  );
+  const wantsSection = (section: (typeof COMMAND_SECTIONS)[number]): boolean =>
+    options.sections?.has(section) ?? true;
+  const chat = wantsSection('chat')
+    ? pickCommandSection(record, 'chat', warnings, filePath, options)
+    : undefined;
+  const run = wantsSection('run')
+    ? pickCommandSection(record, 'run', warnings, filePath, options)
+    : undefined;
+  const topLevelFields = options.topLevelFields
+    ? TOP_LEVEL_FIELD_SCHEMAS.filter(([key]) =>
+        options.topLevelFields?.has(key),
+      )
+    : TOP_LEVEL_FIELD_SCHEMAS;
   return {
     ...pickFields<CliScalarFields>(
       record,
-      TOP_LEVEL_FIELD_SCHEMAS,
+      topLevelFields,
       canonicalConfigKey,
       warnings,
       filePath,
@@ -268,15 +281,25 @@ function pickConfigValues(
  *  `reportUnknownKeys` (default `true`) should be `false` for the shared
  *  user-level config file: it holds rows the other hosts honor and the CLI
  *  doesn't, so flagging them as "unknown" would be a false positive — the
- *  same reasoning {@link loadUserApprovalPolicy} documents for that file. */
+ *  same reasoning {@link loadUserApprovalPolicy} documents for that file.
+ *  `topLevelFields`/`sections` scope which fields get read at all — use
+ *  them when a caller only consumes a subset (see {@link PickConfigOptions}). */
 export function parseCliConfigValues(
   value: unknown,
   filePath: string,
-  { reportUnknownKeys = true }: { readonly reportUnknownKeys?: boolean } = {},
+  {
+    reportUnknownKeys = true,
+    sections,
+    topLevelFields,
+  }: Partial<PickConfigOptions> = {},
 ): { readonly values: CliConfigValues; readonly warnings: readonly string[] } {
   const warnings: string[] = [];
   const values = isObject(value)
-    ? pickConfigValues(value, warnings, filePath, reportUnknownKeys)
+    ? pickConfigValues(value, warnings, filePath, {
+        reportUnknownKeys,
+        sections,
+        topLevelFields,
+      })
     : {};
   return { values, warnings };
 }

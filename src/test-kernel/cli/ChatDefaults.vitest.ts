@@ -530,4 +530,34 @@ describe('CLI chat defaults', () => {
     expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
+
+  it('does not warn about fields this tier does not resolve', async () => {
+    // agent/model (top-level and chat.*) are the only fields
+    // defaultsFromConfigValues reads here. approvalPolicy is already
+    // validated and warned about separately by loadUserApprovalPolicy;
+    // outputFormat and run.* are never consumed by chat defaults at all.
+    // Warning about them here would duplicate that other warning and, since
+    // orchestrate's launcher loop calls resolveChatDefaults on every
+    // iteration, would reprint on every pass through the loop.
+    mockedReadJson.mockResolvedValueOnce({
+      'texra.agent': 'assistant',
+      'texra.approvalPolicy': 'not-a-real-policy',
+      'texra.outputFormat': 'not-a-real-format',
+      'texra.run': { model: 42 },
+    });
+    const warnSpy = vi
+      .spyOn(logSinks, 'writeTextStderr')
+      .mockImplementation(() => {});
+
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        agentSource: 'user-config',
+      },
+    );
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
 });
