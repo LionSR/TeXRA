@@ -6,18 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### Bug Fixes
+
+- **Google background responses are off by default** — Gemini workflow
+  generations stay on the live request unless you turn them on in the Google
+  provider settings. OpenAI's background setting is unchanged.
+
+### Extension (VS Code) and Desktop
+
 #### Features
 
 - **Separate AUTO-EDIT, AUTO-BASH, and AUTO-TASK run controls** — the
   extension and desktop run toolbar now matches the CLI: file edits and
   shell commands each have their own auto-approve toggle, and AUTO-TASK
   remains the complete grant for delegated agent work.
-
-#### Bug Fixes
-
-- **Google background responses are off by default** — Gemini workflow
-  generations stay on the live request unless you turn them on in the Google
-  provider settings. OpenAI's background setting is unchanged.
 
 ## [0.40.4] - 2026-08-23
 

@@ -96,7 +96,7 @@ an **Accept** action that copies the edited version into your workspace.
 
 ### Auto-approve toggles
 
-The header has three auto-approve toggles for the current run, matching the CLI status-bar badges. **AUTO-EDIT** (pencil) auto-approves file edits; **AUTO-BASH** (terminal) auto-approves shell commands — those two are independent, so turning one on does not take the other with it. **AUTO-TASK** (rocket) auto-approves delegated agent tasks and also later edits and commands. Use them for work you trust; turn them off when you want to review each step.
+The header has three auto-approve toggles for the current run, matching the CLI status-bar badges. **AUTO-EDIT** (pencil) auto-approves file edits; **AUTO-BASH** (terminal) auto-approves shell commands — those two are independent, so turning one on does not take the other with it. **AUTO-TASK** (rocket) auto-approves delegated agent tasks and also later edits and commands — turning AUTO-TASK off returns all three to asking, including an AUTO-EDIT or AUTO-BASH grant you made on its own. Use them for work you trust; turn them off when you want to review each step.
 
 ### Context utilization
 

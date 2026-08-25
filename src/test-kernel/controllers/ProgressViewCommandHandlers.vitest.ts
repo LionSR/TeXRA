@@ -656,6 +656,49 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     );
     session.dispose();
   });
+
+  it.each([
+    {
+      label: 'AUTO-BASH',
+      command: PROGRESS_VIEW_COMMANDS.TOGGLE_BASH_APPROVAL_BYPASS,
+      expectEdit: true,
+      expectBash: false,
+    },
+    {
+      label: 'AUTO-EDIT',
+      command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
+      expectEdit: false,
+      expectBash: true,
+    },
+  ])(
+    'drops AUTO-TASK without revoking the other grant when $label is turned off',
+    async ({ command, expectEdit, expectBash }) => {
+      const stream = `stream:revoke-${expectBash ? 'bash' : 'edit'}`;
+      const session = createTestSession();
+      const handlers = createProgressViewCommandHandlers(
+        createActions({
+          bypass: { session, showInfo: vi.fn() },
+        }),
+      );
+
+      expectDispatched(
+        {
+          command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
+          stream,
+        },
+        handlers,
+      );
+      await Promise.resolve();
+
+      expectDispatched({ command, stream }, handlers);
+      await Promise.resolve();
+
+      expect(proposalApprovals(session).isBypassed(stream)).toBe(false);
+      expect(isApprovalBypassedForStream(stream, session)).toBe(expectEdit);
+      expect(isBashApprovalBypassedForStream(stream, session)).toBe(expectBash);
+      session.dispose();
+    },
+  );
 });
 
 describe('createProgressViewCommandHandlers - approvals', () => {

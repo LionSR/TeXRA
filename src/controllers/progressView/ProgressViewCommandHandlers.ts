@@ -304,6 +304,19 @@ export function createProgressViewCommandHandlers(
     );
   };
 
+  // AUTO-TASK is the complete grant. Revoking one per-kind constituent must
+  // drop only the composite flag so the other kind stays granted.
+  const dropCompleteGrantIfRevokingKind = (
+    stream: StreamTabId,
+    enabled: boolean,
+  ): void => {
+    if (enabled) return;
+    const { approvals } = session ?? currentSession();
+    if (approvals.proposal.isBypassed(stream)) {
+      approvals.proposal.setBypass(stream, false);
+    }
+  };
+
   return {
     [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
       lifecycle.setActiveStream(data.stream, data.requestId),
@@ -364,6 +377,7 @@ export function createProgressViewCommandHandlers(
     [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: async (data) => {
       const enabled = !isApprovalBypassedForStream(data.stream, session);
       setToolEditApprovalSessionBypass(data.stream, enabled, { session });
+      dropCompleteGrantIfRevokingKind(data.stream, enabled);
       await showInfo(
         enabled
           ? 'File edits will be auto-approved for this run.'
@@ -373,6 +387,7 @@ export function createProgressViewCommandHandlers(
     [PROGRESS_VIEW_COMMANDS.TOGGLE_BASH_APPROVAL_BYPASS]: async (data) => {
       const enabled = !isBashApprovalBypassedForStream(data.stream, session);
       setBashApprovalSessionBypass(data.stream, enabled, { session });
+      dropCompleteGrantIfRevokingKind(data.stream, enabled);
       await showInfo(
         enabled
           ? 'Shell commands will be auto-approved for this run.'

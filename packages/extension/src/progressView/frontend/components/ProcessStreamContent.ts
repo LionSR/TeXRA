@@ -80,9 +80,9 @@ export class ProcessStreamContent extends LitElement {
     const streamState = this.streamContext.streamState;
     if (!streamInfo || !streamState) return nothing;
 
-    // Bash streams register as tool-use kind, so renderStreamHeader reflects
-    // their AUTO-EDIT / AUTO-BASH / AUTO-TASK state from the shared tool-use
-    // fields.
+    // Bash streams carry tool-use stream state, so <stream-header> can read
+    // the shared tool-use fields; the toolbar itself stays neutral for a
+    // process identity.
     const command = (streamInfo.command ?? streamInfo.description ?? '').trim();
 
     return html`
