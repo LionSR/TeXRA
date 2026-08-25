@@ -10,7 +10,7 @@
 import * as path from 'node:path';
 
 // Local imports
-import type { ChatExportInput } from '@agent/export';
+import type { ChatExportInput } from '@agent/export/schemas';
 import {
   ChatExportController,
   type ExportInputStatus,
