@@ -22,7 +22,7 @@ import { defineCliCommand } from './defineCliCommand';
 import { booleanArg, GLOBAL_ARGS } from './globalArgs';
 import { cliProgressWriter, emitCliResult } from './output';
 
-export interface DefineSubscriptionAuthCommandOptions {
+interface DefineSubscriptionAuthCommandOptions {
   readonly providerId: SubscriptionProviderId;
   readonly rootDescription: string;
   readonly loginDescription: string;

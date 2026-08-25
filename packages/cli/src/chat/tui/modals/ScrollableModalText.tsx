@@ -111,7 +111,6 @@ export function modalTextMaxScrollOffset({
   readonly totalLines: number;
 }): number {
   return compactAwareMaxScrollOffset({
-    compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     maxDisplayLines: maxRows,
     totalLines,
   });
@@ -131,7 +130,6 @@ export function boundedModalTextLines({
   readonly width: number;
 }): ModalTextDisplayLine[] {
   return boundedScrollableLines({
-    compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     hiddenNoun,
     lines,
     maxDisplayLines: maxRows,
@@ -226,7 +224,6 @@ export function ScrollableModalText(
     maxScrollOffset,
     resetKey: resetKey ?? text,
     pageRows: scrollPageRows({
-      compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
       maxDisplayLines: maxRows,
     }),
   });

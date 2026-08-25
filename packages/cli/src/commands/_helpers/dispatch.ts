@@ -125,7 +125,7 @@ function firstPositionalIndex(rawArgs: readonly string[]): number | undefined {
 // `showUsage` accept either width via cast at the call site.
 export type AnyCommand = CommandDef<any>;
 
-export interface ResolvedCliCommand {
+interface ResolvedCliCommand {
   readonly command: AnyCommand;
   readonly parent?: AnyCommand;
   readonly commandPath: readonly string[];
@@ -249,7 +249,7 @@ export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
   return [...rawArgs.slice(restIndex), ...leadingGlobals];
 }
 
-export interface NestedGlobalFlagGroup {
+interface NestedGlobalFlagGroup {
   readonly command: string;
   readonly subCommands: readonly string[];
 }
@@ -323,7 +323,7 @@ export function normalizeRootShortcuts(rawArgs: readonly string[]): string[] {
 // unknownCommand
 // ---------------------------------------------------------------------------
 
-export interface UnknownCliCommand {
+interface UnknownCliCommand {
   readonly typedCommand: string;
   readonly helpCommand: string;
   readonly suggestedCommand?: string;
@@ -419,7 +419,7 @@ export function formatUnknownCliCommand(command: UnknownCliCommand): string {
 // unknownFlag
 // ---------------------------------------------------------------------------
 
-export interface UnknownCliFlag {
+interface UnknownCliFlag {
   readonly flag: string;
   readonly helpCommand: string;
 }
@@ -575,7 +575,7 @@ export function formatUnknownCliFlag(flag: UnknownCliFlag): string {
 // usage
 // ---------------------------------------------------------------------------
 
-export interface UsageSection {
+interface UsageSection {
   readonly title: string;
   readonly rows: readonly (readonly [label: string, description: string])[];
 }

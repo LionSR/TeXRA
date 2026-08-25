@@ -364,7 +364,7 @@ export interface StaticTranscriptScanCursor {
   readonly status: StreamPhase | undefined;
 }
 
-export interface StaticTranscriptScanResult {
+interface StaticTranscriptScanResult {
   readonly appended: readonly TranscriptRow[];
   readonly cursor: StaticTranscriptScanCursor;
   /** True when the caller must rebuild from scratch instead of using the

@@ -196,7 +196,6 @@ interface RenderedConfigFormProps {
     value: unknown,
   ) => void | Promise<void>;
   resetValue?: (entry: SurfacedSettingEntry) => void | Promise<void>;
-  openForm?: (formName: string) => void;
   onError?: (error: unknown) => void;
   formRenderers?: Readonly<
     Record<string, (onBack: () => void) => React.JSX.Element>
@@ -812,13 +811,6 @@ describe('/config slash command wiring', () => {
     await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
     await props.writeValue?.(preferKimiCode, false);
     expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
-  });
-
-  it('delegates catalog form rows through the slash form registry', () => {
-    const props = openConfigFormProps();
-    props.openForm?.('tools');
-
-    expect(activeForm.get()?.commandName).toBe('tools');
   });
 
   it('provides native linked forms with the shared terminal row budget', () => {

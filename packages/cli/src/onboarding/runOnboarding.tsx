@@ -57,7 +57,7 @@ import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { formatSavedKeySummary } from './onboardingState';
 
-export interface CliOnboardingResult {
+interface CliOnboardingResult {
   /**
    * True only when the picker configured a credential in this process —
    * the signal for the post-picker setup-agent continuation. A launch that

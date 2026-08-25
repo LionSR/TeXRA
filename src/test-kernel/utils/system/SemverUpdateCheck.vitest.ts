@@ -106,11 +106,15 @@ describe('runDailyUpdateCheck', () => {
   it('applies the host policy when the throttle stamp cannot be persisted', async () => {
     const state = new FakeStateStore();
     vi.spyOn(state, 'update').mockRejectedValue(new Error('read-only state'));
-    const options = checkOptions(state);
+    // With `ignore`, a failed stamp write must still hand back the newer
+    // version, so an update the user already accepted is not cancelled.
+    const options = checkOptions(state, {
+      fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
+    });
 
     await expect(
       runDailyUpdateCheck({ ...options, stampFailure: 'ignore' }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe('1.1.0');
     await expect(runDailyUpdateCheck(options)).rejects.toThrow(
       'read-only state',
     );

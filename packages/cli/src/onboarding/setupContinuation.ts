@@ -9,7 +9,7 @@
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { ONBOARDING_SETUP_HANDOFF } from '@shared/copy/onboarding';
 
-export interface FirstRunSetupContinuationInputs {
+interface FirstRunSetupContinuationInputs {
   /** The first-run picker just configured a credential in this process. */
   readonly onboardingConfigured: boolean;
   /** User-scoped flag: a run has completed or the setup agent handed off. */

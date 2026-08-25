@@ -23,12 +23,12 @@ export interface CliAgentListOptions {
   readonly category?: AgentCategory;
 }
 
-export interface CliAgentListResult {
+interface CliAgentListResult {
   readonly agents: readonly AgentEntry[];
   readonly hiddenCount: number;
 }
 
-export type CliAgentLaunchMode = 'chat' | 'run' | 'agentsRun';
+type CliAgentLaunchMode = 'chat' | 'run' | 'agentsRun';
 
 const AGENT_LOOKUP_HINT =
   'Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.';

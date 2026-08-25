@@ -37,7 +37,7 @@ function usableConfiguredAgent(value: string | undefined): string | undefined {
   return trimmed && isImplicitDefaultEligible(trimmed) ? trimmed : undefined;
 }
 
-export interface ChatDefaults {
+interface ChatDefaults {
   readonly agent: string;
   readonly model: string;
   readonly source: ChatDefaultSource;
@@ -215,7 +215,7 @@ function buildChatDefaults(init: {
   };
 }
 
-export interface ResolveChatDefaultsInit {
+interface ResolveChatDefaultsInit {
   readonly cwd: string;
   readonly agentOverride?: string;
   readonly modelOverride?: string;

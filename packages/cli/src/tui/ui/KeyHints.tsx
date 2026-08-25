@@ -13,7 +13,7 @@ export interface KeyHint {
   readonly action: string;
 }
 
-export interface KeyHintsProps {
+interface KeyHintsProps {
   /** Scope-specific keys (rendered first). */
   readonly hints: readonly KeyHint[];
   /** Append the canonical `Enter confirm · Esc cancel` pair when true.

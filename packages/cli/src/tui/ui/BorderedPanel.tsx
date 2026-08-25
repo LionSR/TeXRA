@@ -5,7 +5,7 @@
 
 import { Box, Text, type BoxProps } from 'ink';
 
-export interface BorderedPanelProps {
+interface BorderedPanelProps {
   readonly borderStyle?: BoxProps['borderStyle'];
   readonly color: string;
   /** Omit (or pass a falsy value) to render no title row — callers drop the

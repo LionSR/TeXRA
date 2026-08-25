@@ -27,7 +27,7 @@ export function loadingFrameAt(
   return frames[Math.floor(nowMs / 1000) % frames.length];
 }
 
-export interface LoadingIndicatorProps {
+interface LoadingIndicatorProps {
   readonly label: string;
 }
 

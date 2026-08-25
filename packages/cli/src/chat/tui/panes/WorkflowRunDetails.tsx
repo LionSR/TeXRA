@@ -43,7 +43,7 @@ import { filterNotNullish, formatCompactDuration } from '@utils/core';
 type WorkflowRunDetailTone =
   'neutral' | 'muted' | 'success' | 'warning' | 'error';
 
-export interface WorkflowRunDetailLine {
+interface WorkflowRunDetailLine {
   readonly key: string;
   readonly text: string;
   readonly tone: WorkflowRunDetailTone;

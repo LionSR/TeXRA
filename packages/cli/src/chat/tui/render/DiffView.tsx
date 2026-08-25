@@ -79,7 +79,6 @@ export function maxDiffScrollOffset(
   maxDisplayLines: number,
 ): number {
   return maxScrollableRowOffset({
-    compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     maxDisplayLines,
     totalLines,
   });
@@ -207,7 +206,6 @@ export function scrollBoundedDiffDisplayLines(
   }
 
   const { hiddenAfter, hiddenBefore, visibleRows } = scrollBoundedRows({
-    compactRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     maxDisplayLines,
     rows: lines,
     scrollOffset,

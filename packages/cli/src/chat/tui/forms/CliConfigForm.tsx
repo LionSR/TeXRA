@@ -43,7 +43,6 @@ export interface CliConfigFormProps {
   readonly stores?: SettingsStores;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
-  readonly openExternalForm?: (formName: string) => void;
   /**
    * Applies the approval-policy side effect when that row is written here — the
    * chat TUI's live-session hook, identical to the one `/approval` drives.
@@ -258,7 +257,6 @@ export function createCliConfigFormProps(
         <ToolsListForm availableRows={props.availableRows} onClose={onBack} />
       ),
     },
-    openForm: props.openExternalForm,
     onClose: props.onClose,
     onError: props.onError,
   };

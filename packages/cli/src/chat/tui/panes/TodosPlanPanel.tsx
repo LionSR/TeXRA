@@ -149,7 +149,7 @@ function CompactRow({ row }: { row: CompactTodosPlanRow }): React.JSX.Element {
   }
 }
 
-export interface TodosPlanPanelProps {
+interface TodosPlanPanelProps {
   readonly maxRows: number;
   readonly plan: Plan | null;
   readonly todos: readonly TodoItem[];

@@ -157,7 +157,6 @@ export interface ConfigFormProps {
   ) => void | Promise<void>;
   /** Reset a setting to its default (delete the key). */
   readonly resetValue?: (entry: SurfacedSettingEntry) => void | Promise<void>;
-  readonly openForm?: (formName: string) => void;
   readonly formLinks?: readonly {
     readonly name: string;
     readonly label: string;
@@ -302,13 +301,6 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     }
   });
 
-  // A form-backed setting renders inline when this host supplied a renderer;
-  // otherwise the host opens the standalone form itself.
-  const openNamedForm = (name: string): void => {
-    if (props.formRenderers?.[name]) setMode({ kind: 'linked-form', name });
-    else props.openForm?.(name);
-  };
-
   if (mode.kind === 'linked-form') {
     return (
       props.formRenderers?.[mode.name]?.(() =>
@@ -421,7 +413,10 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
           showOverflow={window.showOverflow}
           onSelect={(category) => {
             if (category.startsWith('form:')) {
-              openNamedForm(category.slice('form:'.length));
+              setMode({
+                kind: 'linked-form',
+                name: category.slice('form:'.length),
+              });
               return;
             }
             setMode({ kind: 'list', category });
@@ -465,7 +460,8 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
         commit(entry, !(effective(entry) as boolean));
         return;
       case 'form':
-        if (entry.openForm) openNamedForm(entry.openForm);
+        if (entry.openForm)
+          setMode({ kind: 'linked-form', name: entry.openForm });
         return;
       case 'enum':
         setMode({ kind: 'enum', entry, category });
