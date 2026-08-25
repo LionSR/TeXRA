@@ -461,6 +461,29 @@ describe('CLI chat defaults', () => {
     warnSpy.mockRestore();
   });
 
+  it('suppresses user-config warnings under --quiet', async () => {
+    // These warnings are printed inside resolveChatDefaults itself, not
+    // through contextFromArgs's gated configWarnings path, so they need
+    // their own --quiet check to avoid always printing regardless of it.
+    const corrupt = new Error('Failed to parse JSON from config.json');
+    mockedReadJson.mockRejectedValueOnce(corrupt);
+    const warnSpy = vi
+      .spyOn(logSinks, 'writeTextStderr')
+      .mockImplementation(() => {});
+
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE, quiet: true },
+      {
+        agent: 'assistant',
+        model: 'deepseekproT',
+        source: 'builtin',
+      },
+    );
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
   it('warns instead of silently dropping defaults when the user config is not an object', async () => {
     // Valid JSON, wrong top-level shape (e.g. hand-edited to an array) —
     // distinct from the corrupt-JSON case above, and from a missing file.

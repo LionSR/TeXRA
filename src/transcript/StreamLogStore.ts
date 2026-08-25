@@ -214,7 +214,11 @@ export async function deletePersistedStreamLog(
  * detach a child in its sidecar while this mirror — what the progress rail
  * actually reads — keeps pointing at the deleted parent. Callers already
  * know the exact child stream ids to patch, so this stays a single-key
- * read-modify-write, not a registry sweep.
+ * read-modify-write, not a registry sweep. The write-back re-serializes the
+ * schema-parsed `StreamLogSummarySchema` shape, so a field a newer build
+ * added to the schema and an older build doesn't know is stripped here —
+ * acceptable for this derived-tier cache under the discard-and-rebuild
+ * contract (#9434), which never promises byte-for-byte forward compat.
  */
 export async function clearPersistedSummaryParentStream(
   streamId: StreamTabId,

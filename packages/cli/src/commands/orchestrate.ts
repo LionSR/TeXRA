@@ -89,6 +89,7 @@ async function canLaunchWithDefaultModel(
     cwd: context.cwd,
     envAgent: context.envAgent,
     envModel: context.envModel,
+    quiet: context.quietLogs,
   });
   try {
     await selectCliRunnableModel(defaults.model, {

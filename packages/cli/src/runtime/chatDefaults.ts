@@ -70,7 +70,7 @@ function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
   };
 }
 
-async function loadUserDefaults(): Promise<PartialDefaults> {
+async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
   // A missing user config means no user defaults (parseCliConfigValues maps
   // the undefined fallback to {}). A read failure — corrupt JSON, a
   // permission error — a top-level shape that isn't an object, and an
@@ -79,22 +79,26 @@ async function loadUserDefaults(): Promise<PartialDefaults> {
   // loadWorkspaceCliConfig's handling of the same failure classes for the
   // workspace config. Unknown-key warnings are suppressed: this file is
   // shared by all three hosts and holds rows the CLI does not honor (same
-  // reasoning as loadUserApprovalPolicy).
+  // reasoning as loadUserApprovalPolicy). `quiet` mirrors --quiet: every
+  // other config warning is gated by contextFromArgs on context.quietLogs
+  // before this function ever runs, so these warnings honor the same flag
+  // instead of always printing.
+  const warn = (message: string): void => {
+    if (!quiet) writeTextStderr(`WARN ${message}`);
+  };
   let raw: unknown;
   try {
     raw = await GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME);
   } catch (error: unknown) {
     if (!isFileNotFoundError(error)) {
-      writeTextStderr(
-        `WARN Could not read user config (${TEXRA_CONFIG_FILE_NAME}): ${toErrorMessage(error)}`,
+      warn(
+        `Could not read user config (${TEXRA_CONFIG_FILE_NAME}): ${toErrorMessage(error)}`,
       );
     }
     raw = undefined;
   }
   if (raw !== undefined && !isObject(raw)) {
-    writeTextStderr(
-      `WARN Ignoring ${TEXRA_CONFIG_FILE_NAME}; expected a JSON object.`,
-    );
+    warn(`Ignoring ${TEXRA_CONFIG_FILE_NAME}; expected a JSON object.`);
     raw = undefined;
   }
   const { values, warnings } = parseCliConfigValues(
@@ -102,9 +106,7 @@ async function loadUserDefaults(): Promise<PartialDefaults> {
     TEXRA_CONFIG_FILE_NAME,
     { reportUnknownKeys: false },
   );
-  for (const warning of warnings) {
-    writeTextStderr(`WARN ${warning}`);
-  }
+  for (const warning of warnings) warn(warning);
   return defaultsFromConfigValues(values);
 }
 
@@ -187,6 +189,11 @@ export interface ResolveChatDefaultsInit {
   readonly envAgent?: string;
   readonly envModel?: string;
   readonly visibleToolUseAgents?: readonly { readonly name: string }[];
+  /** Suppresses the user-config warnings `loadUserDefaults` would otherwise
+   *  print directly — pass `context.quietLogs` so this tier's warnings
+   *  respect `--quiet` the same way `contextFromArgs` gates every other
+   *  config warning. */
+  readonly quiet?: boolean;
 }
 
 /**
@@ -220,7 +227,7 @@ export async function resolveChatDefaults(
       loadWorkspaceCliConfig(init.cwd).then((loaded) =>
         defaultsFromConfigValues(loaded.values),
       ),
-      loadUserDefaults(),
+      loadUserDefaults(init.quiet ?? false),
       loadHistoryDefaults(),
     ]);
     const tiers: ReadonlyArray<

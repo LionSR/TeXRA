@@ -216,6 +216,7 @@ export async function runChat(
     envAgent: context.envAgent,
     envModel: context.envModel,
     visibleToolUseAgents,
+    quiet: context.quietLogs,
   });
   const agentUsageError = chatToolUseAgentUsageError(defaults.agent);
   if (agentUsageError) {
