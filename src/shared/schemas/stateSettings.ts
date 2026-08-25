@@ -396,7 +396,7 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
   'goal.enabled': {
     honoredBy: everyHost('src/tools/goal/goalFeatureFlag.ts'),
   },
-  // The five Models-tab provider toggles below are `configTarget: 'global'`:
+  // The Models-tab provider toggles below are `configTarget: 'global'`:
   // they describe how you talk to a provider, not a property of one project,
   // and that is the scope they were written at before the catalog collapse
   // routed them through the shared write path. The target restores global
@@ -464,6 +464,25 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
       ],
     },
   },
+  'model.useGoogleBackgroundResponses': {
+    configTarget: 'global',
+    title: 'Google background responses',
+    category: 'model',
+    honoredBy: everyHost(
+      'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
+    ),
+    surfaces: {
+      settingsView: 'profile',
+      models: [
+        {
+          provider: 'google',
+          label: 'Background responses',
+          description:
+            'Run long-running workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
+        },
+      ],
+    },
+  },
   'model.useBackgroundResponses': {
     configTarget: 'global',
     title: 'Background responses',
@@ -479,12 +498,6 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
           label: 'Background responses',
           description:
             'Handle long-running generations (>10 min) via polling to prevent timeouts. Adds polling overhead.',
-        },
-        {
-          provider: 'google',
-          label: 'Background responses',
-          description:
-            'Run long-running workflow generations as background Interactions (submit + poll) to avoid timeouts. Requires server-side conversation state; models that do not support it fall back automatically.',
         },
       ],
     },
