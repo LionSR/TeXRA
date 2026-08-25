@@ -39,7 +39,7 @@ import {
   streamStateFor,
   visibleSubagentRows,
 } from '../state/childExecutions';
-import { streamDisplayLabel } from '../state/streamViews';
+import { streamTreeDisplayLabel } from '../state/streamViews';
 import {
   ancestorWorkflowPhaseHeading,
   focusedSessionLocationText,
@@ -302,7 +302,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       label:
         target.displayStreamId === undefined
           ? ''
-          : streamDisplayLabel({
+          : streamTreeDisplayLabel({
               childRosters,
               parentStream,
               streamId: target.displayStreamId,

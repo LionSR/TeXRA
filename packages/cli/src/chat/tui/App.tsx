@@ -104,7 +104,7 @@ import {
   uniqueWorkflowChildStreamId,
   workflowDashboardModel,
 } from './state/workflowDashboardModel';
-import { streamDisplayLabel, streamTreeViews } from './state/streamViews';
+import { streamTreeDisplayLabel, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
 
@@ -489,7 +489,7 @@ export function App(props: AppProps): React.JSX.Element {
       case 'transcriptReader': {
         if (foregroundReader?.kind !== 'transcript') return null;
         const title = transcriptReaderTitle(
-          streamDisplayLabel({
+          streamTreeDisplayLabel({
             childRosters,
             parentStream,
             streamId: foregroundReader.streamId,
@@ -508,7 +508,7 @@ export function App(props: AppProps): React.JSX.Element {
       case 'workPlanReader': {
         if (foregroundReader?.kind !== 'workPlan') return null;
         const title = workPlanReaderTitle(
-          streamDisplayLabel({
+          streamTreeDisplayLabel({
             childRosters,
             parentStream,
             streamId: foregroundReader.streamId,
