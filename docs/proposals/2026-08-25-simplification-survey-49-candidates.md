@@ -37,15 +37,41 @@ Seven disjoint-lane PRs, batched by path ownership so they can be written in
 parallel and merged in any order. Small items are batched into their lane PR
 rather than shipped one at a time.
 
-| Lane           | Scope                                   | Items | Net LoC | Net elements |
-| -------------- | --------------------------------------- | ----- | ------- | ------------ |
-| `L1-cli`       | CLI                                     | 7     | -294    | -67          |
-| `L2-extension` | Extension host and views                | 6     | -209    | -31          |
-| `L3-desktop`   | Desktop renderer                        | 3     | -61     | -45          |
-| `L4-agent`     | Agent runtime, flows, storage, handlers | 10    | -266    | -32          |
-| `L5-tools`     | Tools                                   | 7     | -449    | -33          |
-| `L6-shared`    | Shared, controllers, platform, utils    | 13    | -402    | -44          |
-| `L7-scripts`   | Scripts, config, resources              | 3     | -1112   | -15          |
+| Lane           | Scope                                   | Items | PR     | Estimated net LoC | Measured net LoC |
+| -------------- | --------------------------------------- | ----- | ------ | ----------------- | ---------------- |
+| `L1-cli`       | CLI                                     | 7     | #11416 | -294              | -306             |
+| `L2-extension` | Extension host and views                | 6     | #11417 | -209              | -294             |
+| `L3-desktop`   | Desktop renderer                        | 3     | #11418 | -61               | -57              |
+| `L4-agent`     | Agent runtime, flows, storage, handlers | 10    | #11419 | -266              | -341             |
+| `L5-tools`     | Tools                                   | 7     | #11420 | -449              | -571             |
+| `L6-shared`    | Shared, controllers, platform, utils    | 13    | #11421 | -402              | -439             |
+| `L7-scripts`   | Scripts, config, resources              | 3     | #11422 | -1112             | -1181            |
+
+All seven shipped. Measured total across the 223 changed files: +1236 / -4425,
+net **-3189 LoC**, against a survey estimate of -2793. Forty-seven of the 49
+items landed whole, two landed partially, and nothing was skipped outright.
+
+Validation was central rather than per-lane, because the lane agents worked in
+worktrees without `node_modules` and so had no typechecker. All seven branches
+were merged into one integration branch, which passes `typecheck`, `lint`,
+`test` (10,187 passed, 0 failed), and `check:dead-code-ratchet`. Each branch was
+then re-validated on its own so that no PR depends on another lane's edit in
+order to compile.
+
+The lanes were less disjoint in practice than planned: `L2` edited 18 files
+outside its allowlist and `L6` edited 11. That produced exactly one real merge
+conflict, in `src/controllers/settingsView/SettingsViewHost.ts`, where `L6`
+removed the zero-consumer `controllers.memory` injection seam while `L2` removed
+the bespoke memory callbacks that the catalog row replaces. The resolution keeps
+both deletions:
+
+```ts
+this.memoryController = new SettingsMemoryController({
+  prompt: options.memoryPrompt,
+});
+```
+
+Whichever of #11417 and #11421 merges second will need that resolution again.
 
 Shared-file contention, resolved at merge rather than inside the lanes:
 
