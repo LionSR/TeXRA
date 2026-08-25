@@ -115,6 +115,36 @@ const StreamLogSummarySchema = z.object({
 });
 type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
 
+/**
+ * The one validated read path for the persisted `StreamLogSummary` shape —
+ * every reader of the summary cache (the in-class loader and the standalone
+ * `clearPersistedSummaryParentStream` patch below) goes through this instead
+ * of trusting a raw `KVStore.read()` cast.
+ */
+function parsePersistedSummary(value: unknown): StreamLogSummary | undefined {
+  // A missing cache file (KVStore's quiet-missing `undefined`) is an
+  // ordinary rebuild, not a stale shape — nothing to warn about.
+  if (value === undefined) return undefined;
+  const result = StreamLogSummarySchema.safeParse(value);
+  if (!result.success) {
+    // Derived tier (#9434): discard the stale-shaped cache loudly and
+    // rebuild from the authoritative stream log — never migrate in place.
+    log.warn(
+      `Discarding a stale-shaped summary cache entry; rebuilding from the stream log: ${result.error.issues
+        .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+        .join('; ')}`,
+    );
+    return undefined;
+  }
+  if (
+    result.data.firstTimestamp === undefined &&
+    result.data.lastTimestamp === undefined
+  ) {
+    return undefined;
+  }
+  return result.data;
+}
+
 interface StreamLoadResult {
   streamId: StreamTabId;
   summary: StreamLogSummary;
@@ -177,7 +207,9 @@ export async function clearPersistedSummaryParentStream(
   const summaries = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
     compactJson: true,
   });
-  const summary = await summaries.read<StreamLogSummary>(streamId);
+  const summary = parsePersistedSummary(
+    await summaries.read<unknown>(streamId),
+  );
   if (!summary?.meta?.parentStreamId) return;
   const { parentStreamId: _parentStreamId, ...meta } = summary.meta;
   await summaries.write(streamId, { ...summary, meta });
@@ -1418,7 +1450,7 @@ export class StreamLogStore {
   ): Promise<StreamLogSummary | undefined> {
     try {
       const persisted = await this.summaryKv().read<unknown>(streamId);
-      const summary = this.parsePersistedSummary(persisted);
+      const summary = parsePersistedSummary(persisted);
       if (!summary) return undefined;
 
       const [summaryMtime, logMtime] = await Promise.all([
@@ -1459,32 +1491,6 @@ export class StreamLogStore {
         (entry) => nonterminalWorkflowCall(entry) !== undefined,
       ),
     });
-  }
-
-  private parsePersistedSummary(value: unknown): StreamLogSummary | undefined {
-    // A missing cache file (KVStore's quiet-missing `undefined`) is an
-    // ordinary rebuild, not a stale shape — nothing to warn about.
-    if (value === undefined) return undefined;
-    const result = StreamLogSummarySchema.safeParse(value);
-    if (!result.success) {
-      // Derived tier (#9434): discard the stale-shaped cache loudly and
-      // rebuild from the authoritative stream log — never migrate in place.
-      log.warn(
-        `Discarding a stale-shaped summary cache entry; rebuilding from the stream log: ${result.error.issues
-          .map(
-            (issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`,
-          )
-          .join('; ')}`,
-      );
-      return undefined;
-    }
-    if (
-      result.data.firstTimestamp === undefined &&
-      result.data.lastTimestamp === undefined
-    ) {
-      return undefined;
-    }
-    return result.data;
   }
 
   private async writeStream(

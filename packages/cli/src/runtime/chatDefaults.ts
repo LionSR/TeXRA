@@ -72,10 +72,11 @@ function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
 
 async function loadUserDefaults(): Promise<PartialDefaults> {
   // A missing user config means no user defaults (parseCliConfigValues maps
-  // the undefined fallback to {}). Anything else — corrupt JSON, a permission
-  // error — is surfaced as a warning instead of silently dropping the user's
-  // chat defaults, mirroring loadWorkspaceCliConfig's handling of the same
-  // class of failure for the workspace config.
+  // the undefined fallback to {}). A read failure — corrupt JSON, a
+  // permission error — and an invalid individual field are both surfaced as
+  // warnings instead of silently dropping the user's chat defaults,
+  // mirroring loadWorkspaceCliConfig's handling of the same failure classes
+  // for the workspace config.
   let raw: unknown;
   try {
     raw = await GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME);
@@ -87,7 +88,14 @@ async function loadUserDefaults(): Promise<PartialDefaults> {
     }
     raw = undefined;
   }
-  return defaultsFromConfigValues(parseCliConfigValues(raw));
+  const { values, warnings } = parseCliConfigValues(
+    raw,
+    TEXRA_CONFIG_FILE_NAME,
+  );
+  for (const warning of warnings) {
+    writeTextStderr(`WARN ${warning}`);
+  }
+  return defaultsFromConfigValues(values);
 }
 
 async function loadHistoryDefaults(): Promise<PartialDefaults> {
