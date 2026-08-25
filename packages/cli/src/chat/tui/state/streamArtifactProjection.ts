@@ -11,10 +11,11 @@ import {
 import type { StreamSnapshotStore } from '@transcript';
 
 /**
- * The store surface a host needs to preload and read the accumulated
- * round-artifact/usage projection. The CLI and the shared progress-view
- * controllers project the same fields, so the reader shape lives here rather
- * than on any one host.
+ * The store surface needed to preload and read the accumulated
+ * round-artifact/usage projection. The TUI is the only consumer: the
+ * progress-view renderer reads `StreamSnapshotStore` directly instead
+ * (`LitSessionRenderer.getOutputFiles`/`getRunUsage`), so this projection is
+ * CLI presentation, not shared state.
  */
 export type StreamArtifactReader = Pick<
   StreamSnapshotStore,

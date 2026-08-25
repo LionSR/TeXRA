@@ -13,11 +13,6 @@
 import { signal } from '@lit-labs/signals';
 
 import { tryDefaultSession } from '@agent/runtime';
-import {
-  projectStreamArtifacts,
-  type StreamArtifactProjection,
-  type StreamArtifactReader,
-} from '@controllers/session/StreamArtifactProjection';
 import { type StreamTabId, type TokenUsageStats } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import {
@@ -25,6 +20,11 @@ import {
   type StreamArtifactAuthority,
 } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  projectStreamArtifacts,
+  type StreamArtifactProjection,
+  type StreamArtifactReader,
+} from './streamArtifactProjection';
 
 import {
   activeStreamId,
