@@ -14,7 +14,7 @@ interface AuthCallbackParseError {
   isAuthError?: boolean;
 }
 
-export function getAuthCallbackBasePath(path: string): string {
+function getAuthCallbackBasePath(path: string): string {
   return path.split('?')[0];
 }
 
