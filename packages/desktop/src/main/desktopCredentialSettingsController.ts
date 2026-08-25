@@ -240,10 +240,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     const modelOptions = await computeModelOptionsData(visibleModels);
     this.options.renderer.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsDataByCategory: {
-        workflow: modelOptions,
-        toolUse: modelOptions,
-      },
+      optionsData: modelOptions,
     });
   }
 

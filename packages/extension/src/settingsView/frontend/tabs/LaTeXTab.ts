@@ -220,7 +220,6 @@ export class LaTeXTab extends LitElement {
   @property({ attribute: false })
   configValues: LatexConfigValues = {};
 
-  @property({ type: Boolean, attribute: 'config-loaded' }) configLoaded = false;
   @property({ type: Boolean }) inlineCriticismEnabled = false;
   @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 

@@ -17,7 +17,7 @@
       "Education",
       "Data Science"
     ],
-    "activationEvents": ["onStartupFinished", "onColorTheme"],
+    "activationEvents": ["onStartupFinished"],
     "main": "./dist/extension.js",
     "capabilities": {
       "untrustedWorkspaces": {

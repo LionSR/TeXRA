@@ -7,10 +7,8 @@
 import * as vscode from 'vscode';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
-import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
@@ -196,21 +194,6 @@ export class LatexSettingsHandlers {
   async handleInstallLatexWorkshop(): Promise<void> {
     await this.installExtension(LATEX_WORKSHOP_EXT_ID, (w) =>
       this.sendLatexSettingsStatus(w),
-    );
-  }
-
-  /** Push the catalog-derived LaTeX/compile/diff settings snapshot. */
-  async sendLatexConfigValues(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(
-      buildSettingsSnapshotMessage(
-        'latex',
-        {
-          config: platform().config,
-          workspaceState: platform().workspaceState,
-          globalState: platform().globalState,
-        },
-        'vscode',
-      ),
     );
   }
 

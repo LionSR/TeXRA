@@ -190,15 +190,14 @@ export function createDesktopSettingsIpc(
     postSettingsSnapshot('git-author');
     options.toolingSettingsController.postLatexConfigValues();
     const goalListPosted = postGoalList();
-    const memoryEnabledPosted = settingsHost.sendMemoryEnabled();
     const modelSelectionDataPosted = settingsHost.sendModelSelectionData();
     postSettingsSnapshot('multi-agent');
     postSettingsSnapshot('approval');
     postSettingsSnapshot('agent-skills');
     postSettingsSnapshot('telemetry');
+    postSettingsSnapshot('memory');
     await Promise.all([
       goalListPosted,
-      memoryEnabledPosted,
       settingsHost.sendMemoryData(),
       modelSelectionDataPosted,
       postGitHubTokenStatus(),
@@ -238,6 +237,7 @@ export function createDesktopSettingsIpc(
       postSettingsSnapshot('git-author');
     },
     latex: () => options.toolingSettingsController.postLatexConfigValues(),
+    memory: () => postSettingsSnapshot('memory'),
     models: () => settingsHost.sendModelSelectionData(),
     'multi-agent': () => postSettingsSnapshot('multi-agent'),
     profile: () => options.credentialSettingsController.postProfileData(),
@@ -409,8 +409,6 @@ export function createDesktopSettingsIpc(
     openMemoryFile,
     openMemoryFolder,
     deleteMemory: (message) => settingsHost.deleteMemory(message),
-    setMemoryEnabled: (message) =>
-      settingsHost.setMemoryEnabled(message.enabled),
     pinMemory: (message) =>
       settingsHost.setMemoryPinned(message.storagePath, true),
     unpinMemory: (message) =>

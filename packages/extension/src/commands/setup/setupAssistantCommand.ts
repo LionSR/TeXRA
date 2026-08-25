@@ -6,7 +6,6 @@ import { loadAgents } from '@agent/index';
 import { AgentConfigSchema, defaultSession, runAgent } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import {
   resolveSetupLaunchModel,
   SETUP_INSTRUCTION,
@@ -123,7 +122,7 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
       await signInWithSubscription(CHANNEL, 'chatgpt');
       break;
     case 'apiKey':
-      await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
+      await vscode.commands.executeCommand(EXTENSION_COMMANDS.SET_API_KEY);
       break;
     case 'walkthrough':
       await vscode.commands.executeCommand(
@@ -161,7 +160,7 @@ async function ensureRoutingConfigured(): Promise<boolean> {
   if (choice === 'Open Models tab') {
     await vscode.commands.executeCommand('texra.showModels');
   } else if (choice === 'Add OpenRouter key') {
-    await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
+    await vscode.commands.executeCommand(EXTENSION_COMMANDS.SET_API_KEY);
   } else {
     return false;
   }
@@ -226,7 +225,7 @@ export async function launchSetupAssistant(): Promise<
       if (choice === 'Open Models tab') {
         await vscode.commands.executeCommand('texra.showModels');
       } else if (choice === 'Set API key') {
-        await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
+        await vscode.commands.executeCommand(EXTENSION_COMMANDS.SET_API_KEY);
       }
       return 'not-started';
     }

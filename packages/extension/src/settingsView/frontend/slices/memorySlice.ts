@@ -7,11 +7,7 @@ import { create } from 'mutative';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
-import {
-  memoryEnabled,
-  memoryItems,
-  memoryToggleDisabled,
-} from '../settingsState';
+import { applySettingsSnapshot, memoryItems } from '../settingsState';
 
 export const memoryHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY]: (data) => {
@@ -19,8 +15,7 @@ export const memoryHandlers = {
   },
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED]: (data) => {
-    memoryEnabled.set(data.enabled);
-    memoryToggleDisabled.set(false);
+    applySettingsSnapshot(data.values);
   },
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW]: (data) => {

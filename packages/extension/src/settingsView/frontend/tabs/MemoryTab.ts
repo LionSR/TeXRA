@@ -7,10 +7,12 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { MemoryViewItem } from '@shared/schemas';
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
+import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
+
 // Side-effect: register child components.
-import '../components/memory/MemoryToggle';
 import '../components/memory/MemoryList';
 
 @customElement('memory-tab')
@@ -39,7 +41,6 @@ export class MemoryTab extends LitElement {
 
   @property({ attribute: false }) items: MemoryViewItem[] = [];
   @property({ attribute: false }) enabled = false;
-  @property({ attribute: false }) toggleDisabled = true;
 
   private handleRefresh = (): void => {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA);
@@ -74,10 +75,12 @@ export class MemoryTab extends LitElement {
       <div class="memory-view-container tab-content-container">
         ${this.renderActions()}
 
-        <memory-toggle
-          .enabled=${this.enabled}
-          .disabled=${this.toggleDisabled}
-        ></memory-toggle>
+        ${renderStateSettingToggleRow({
+          key: GlobalStateKey.MEMORY_ENABLED,
+          label: 'Enable memory for chat agents',
+          description: 'Remember useful details across chat sessions.',
+          checked: this.enabled,
+        })}
 
         <memory-list .items=${this.items}></memory-list>
       </div>

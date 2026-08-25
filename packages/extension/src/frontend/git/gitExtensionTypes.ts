@@ -22,7 +22,7 @@ export interface GitRepository {
   readonly state: GitRepositoryState;
 }
 
-export interface GitAPI {
+interface GitAPI {
   readonly repositories: GitRepository[];
   readonly onDidOpenRepository: vscode.Event<GitRepository>;
   getRepository(uri: vscode.Uri): GitRepository | null;

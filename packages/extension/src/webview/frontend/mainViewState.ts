@@ -101,9 +101,6 @@ export const instructionDrafts$ = trackedSignal<ByCategory<string>>(() => ({
 export const instruction$ = new Signal.Computed(
   (): string => instructionDrafts$.get()[sessionType$.get()],
 );
-export const instructionPlaceholder$ = trackedSignal(
-  () => ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],
-);
 
 // ---------------------------------------------------------------------------
 // Document / file state
@@ -135,9 +132,7 @@ export const latexdiffsVisible$ = trackedSignal(
 // Model / agent catalog data
 // ---------------------------------------------------------------------------
 
-export const sessionModelOptions$ = trackedSignal<
-  ByCategory<ModelOptionData[]>
->(() => byCategory(() => []));
+export const modelOptions$ = trackedSignal<ModelOptionData[]>(() => []);
 export const agentOptions$ = trackedSignal<ByCategory<AgentOptionData[]>>(() =>
   byCategory(() => []),
 );
@@ -196,28 +191,37 @@ export const debugMode$ = trackedSignal(() => false);
 // Derived read helpers
 // ---------------------------------------------------------------------------
 
-export function getModelOptionsForSession(
-  sessionType: SessionType,
-): ModelOptionData[] {
-  return sessionModelOptions$.get()[sessionType];
-}
-
 export function primaryInputFile(): string {
   return multiFiles$.get().inputFiles[0] ?? '';
 }
 
 /**
  * Whether the currently selected tool-use agent is an orchestrator. Computed
- * once here so `refreshInstructionPlaceholder` (placeholder copy) and
+ * once here so `instructionPlaceholder$` (placeholder copy) and
  * `InstructionPanel`'s session hint (hint copy) can't derive divergent
  * answers to the same question.
  */
-export const isSelectedAgentOrchestrator$ = new Signal.Computed((): boolean => {
+const isSelectedAgentOrchestrator$ = new Signal.Computed((): boolean => {
   if (sessionType$.get() !== SESSION_TYPES.TOOL_USE) return false;
   const agentId = agent$.get().toolUse;
   const opt = agentOptions$.get().toolUse.find((o) => o.value === agentId);
   return opt?.isOrchestrator ?? false;
 });
+
+/**
+ * Placeholder copy for the instruction box. Derived, not stored, so it can
+ * never go stale against the session type, launcher target, or agent
+ * selection it describes. Team runs share the orchestrator copy: the team
+ * lead plans and delegates, so the steering examples are the same shape.
+ */
+const instructionPlaceholder$ = new Signal.Computed(
+  (): string =>
+    ONBOARDING_PLACEHOLDERS[
+      launchTarget$.get() === 'team' || isSelectedAgentOrchestrator$.get()
+        ? 'orchestrator'
+        : sessionType$.get()
+    ],
+);
 
 // ---------------------------------------------------------------------------
 // Context derivations consumed by MainApp's @provide/@state fields
@@ -242,7 +246,7 @@ export const sessionContext$ = new Signal.Computed((): SessionContextValue => ({
   agent: agent$.get(),
   model: model$.get(),
   agentOptions: agentOptions$.get(),
-  modelOptions: getModelOptionsForSession(sessionType$.get()),
+  modelOptions: modelOptions$.get(),
   teamOptions: teamOptions$.get(),
   workspaceRootOptions: workspaceRootOptions$.get(),
   workingDirectory: workingDirectory$.get(),

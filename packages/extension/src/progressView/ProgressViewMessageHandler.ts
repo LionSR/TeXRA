@@ -6,7 +6,7 @@ import {
   validateExecutionRequest,
   type ExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { apiKeyCommands } from '@commands/api/apiKeyCommands';
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { BaseViewMessageHandler } from '@common/webview';
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
@@ -690,7 +690,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       readKey: (provider) => platform().secrets.get(apiKeySecretName(provider)),
       hasUsableKey: (provider) => SecretManager.hasUsableApiKey(provider),
       promptForApiKey: async (provider) => {
-        await this.runViewCommand(apiKeyCommands.setApiKey, [provider]);
+        await this.runViewCommand(EXTENSION_COMMANDS.SET_API_KEY, [provider]);
       },
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
@@ -703,8 +703,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private createFollowUpController(): ProgressFollowUpController {
     return new ProgressFollowUpController({
       loadModelOptions: async () => {
-        const { modelOptionsByCategory } = await loadOptions();
-        return modelOptionsByCategory.workflow;
+        const { modelOptions } = await loadOptions();
+        return modelOptions;
       },
       state: this.snapshotPort,
       workspace: {

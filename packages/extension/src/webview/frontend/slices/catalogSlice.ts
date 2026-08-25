@@ -16,7 +16,7 @@ import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import {
   agent$,
   agentOptions$,
-  sessionModelOptions$,
+  modelOptions$,
   teamOptions$,
   workingDirectory$,
   workspaceRootOptions$,
@@ -68,10 +68,7 @@ function findAgentSelection(
 // bannerSlice.ts for the rationale.
 export const catalogHandlers = {
   [MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS]: (message) => {
-    sessionModelOptions$.set({
-      workflow: message.optionsDataByCategory.workflow,
-      toolUse: message.optionsDataByCategory.toolUse,
-    });
+    modelOptions$.set(message.optionsData);
     refreshModelSelectionForActiveSession();
   },
 

@@ -78,8 +78,9 @@ vi.mock('@frontend/auth/agentCatalogRefreshScope', () => ({
 vi.mock('@frontend/events/onTexraAuthSessionsChanged', () => ({
   onTexraAuthSessionsChanged: vi.fn(),
 }));
-vi.mock('@frontend/agents/optionsLoader', () => ({
-  loadMainViewModelOptions: vi.fn(),
+vi.mock('@model/computeModelOptions', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  computeModelOptionsData: vi.fn(),
 }));
 vi.mock('@frontend/agents/teamOptionsLoader', () => ({
   loadMainViewTeamOptions: vi.fn(),

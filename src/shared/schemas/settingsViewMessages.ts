@@ -50,9 +50,7 @@ import {
   OpenMemoryFileMessageSchema,
   OpenMemoryFolderMessageSchema,
   PinMemoryMessageSchema,
-  SetMemoryEnabledMessageSchema,
   UnpinMemoryMessageSchema,
-  UpdateMemoryEnabledMessageSchema,
   UpdateMemoryMessageSchema,
   UpdateMemoryPreviewMessageSchema,
 } from './memoryViewMessages';
@@ -201,6 +199,7 @@ export const SETTINGS_SNAPSHOT_COMMANDS = {
   telemetry: SETTINGS_VIEW_COMMANDS.UPDATE_TELEMETRY_SETTINGS,
   'multi-agent': SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
   latex: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+  memory: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
 } as const satisfies Partial<Record<SettingsViewSnapshot, string>>;
 
 /** A snapshot whose whole payload is derived from the settings catalog. */
@@ -481,6 +480,14 @@ const UpdateTelemetrySettingsMessageSchema = snapshotMessage('telemetry');
 
 /** Outbound: backend → frontend git author settings */
 const UpdateGitAuthorSettingsMessageSchema = snapshotMessage('git-author');
+
+/**
+ * Outbound: backend → frontend memory settings.
+ *
+ * The command string predates the snapshot and still names the single row the
+ * snapshot carries.
+ */
+const UpdateMemoryEnabledMessageSchema = snapshotMessage('memory');
 
 /** Outbound: backend → frontend GitHub token status. */
 const UpdateGitHubTokenStatusMessageSchema = z.object({
@@ -955,7 +962,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     OpenMemoryFileMessageSchema,
     OpenMemoryFolderMessageSchema,
     DeleteMemoryMessageSchema,
-    SetMemoryEnabledMessageSchema,
     PinMemoryMessageSchema,
     UnpinMemoryMessageSchema,
     // Profile messages

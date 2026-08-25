@@ -1,7 +1,7 @@
 // Local imports - runtime events
 import type { SessionHandle } from '@agent/runtime';
 
-export interface StatusBarSessionEventOptions {
+interface StatusBarSessionEventOptions {
   session: Pick<SessionHandle, 'events' | 'status'>;
   onStatusChanged: () => void;
   onUsageChanged: () => void;

@@ -9,7 +9,6 @@ import type { MainViewHandlerRegistry } from '@shared/schemas';
 // Local imports - main view
 import { parseSessionType } from '../constants';
 import { agent$, sessionType$ } from '../mainViewState';
-import { refreshInstructionPlaceholder } from '../mainViewActions';
 
 // `satisfies Partial<...>` subset — owns only session commands; see
 // bannerSlice.ts for the rationale.
@@ -22,6 +21,5 @@ export const sessionHandlers = {
     if (message.agentId) {
       agent$.set({ ...agent$.get(), [sessionType$.get()]: message.agentId });
     }
-    refreshInstructionPlaceholder();
   },
 } satisfies Partial<MainViewHandlerRegistry>;

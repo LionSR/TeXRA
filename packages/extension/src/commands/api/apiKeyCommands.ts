@@ -20,10 +20,6 @@ import {
 
 const CHANNEL = 'ApiKeyCommands';
 
-export const apiKeyCommands = {
-  setApiKey: 'texra.setApiKey',
-};
-
 /**
  * Delegates the write/delete/confirm/notify sequence to the same controller
  * settingsView's Profile tab uses, so the two surfaces can't drift apart on

@@ -57,7 +57,7 @@ interface ClaimedAuthCallback {
 }
 
 /** Notification operations injected at construction so tests can stub them. */
-export interface AuthNotifier {
+interface AuthNotifier {
   showError(message: string): void;
   showInfo(message: string): void;
   showSignInPrompt(reason: 'expired' | 'invalid'): Promise<void>;

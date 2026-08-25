@@ -18,10 +18,7 @@ function createStateStore(values: Record<string, unknown> = {}): StateStore {
 }
 
 const STARTUP_OPTIONS: MainViewStartupOptions = {
-  modelOptionsByCategory: {
-    workflow: [{ value: 'gemini', label: 'Gemini' }],
-    toolUse: [{ value: 'gpt', label: 'GPT' }],
-  },
+  modelOptions: [{ value: 'gemini', label: 'Gemini' }],
   agentOptions: {
     workflow: [{ value: 'correct', label: 'Correct' }],
     toolUse: [{ value: 'orchestrator', label: 'Orchestrator' }],
@@ -43,7 +40,7 @@ function createController(
 ): MainViewStartupController {
   return new MainViewStartupController({
     loadOptions: async () => ({
-      modelOptionsByCategory: { workflow: [], toolUse: [] },
+      modelOptions: [],
       agentOptions: {},
       teamOptions: [],
     }),
@@ -84,7 +81,7 @@ describe('MainViewStartupController', () => {
     expect(await controller.getOptionsAndLoginMessages()).toStrictEqual([
       {
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        optionsDataByCategory: STARTUP_OPTIONS.modelOptionsByCategory,
+        optionsData: STARTUP_OPTIONS.modelOptions,
       },
       {
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
