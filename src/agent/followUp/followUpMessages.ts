@@ -75,7 +75,7 @@ export function userFollowUpInstruction(
   return instruction || undefined;
 }
 
-export interface AppendFollowUpResult {
+interface AppendFollowUpResult {
   readonly messages: ProviderMessage[];
   readonly attachmentKinds: MediaAttachmentKind[];
 }

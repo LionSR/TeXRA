@@ -63,9 +63,7 @@ function serializeWorkspaceWrite(
   return workspaceWriteMutex.runExclusive(store, write);
 }
 
-export interface AgentRosterSnapshot<
-  Entry extends AgentRosterEntry = AgentRosterEntry,
-> {
+interface AgentRosterSnapshot {
   readonly selection: AgentRosterSelection;
   readonly effectiveSelection: Exclude<
     AgentRosterSelection,
@@ -74,7 +72,6 @@ export interface AgentRosterSnapshot<
   readonly defaultTeamId?: string;
   /** Persisted team identity that could not be resolved; effective roster is all. */
   readonly missingTeamId?: string;
-  readonly agents: ByCategory<Entry[]>;
   readonly unresolvedNames: string[];
 }
 
@@ -178,7 +175,7 @@ export class AgentRosterController<
     return getDefaultTeamId(this.deps.globalState);
   }
 
-  getEffectiveSelection(): AgentRosterSnapshot<Entry>['effectiveSelection'] {
+  getEffectiveSelection(): AgentRosterSnapshot['effectiveSelection'] {
     const selection = this.getSelection();
     return this.resolveEffectiveSelection(selection);
   }
@@ -211,7 +208,7 @@ export class AgentRosterController<
     return this.selectionKeys(this.getEffectiveSelection(), category);
   }
 
-  snapshot(): AgentRosterSnapshot<Entry> {
+  snapshot(): AgentRosterSnapshot {
     const selection = this.getSelection();
     const effectiveSelection = this.resolveEffectiveSelection(selection);
     const presets = this.extraPresets();
@@ -231,7 +228,6 @@ export class AgentRosterController<
       effectiveSelection,
       defaultTeamId: this.getDefaultTeamId(),
       missingTeamId: this.missingTeamId(selection),
-      agents: byCategory((category) => this.getVisibleAgents(category)),
       unresolvedNames: unique(unresolvedNames),
     };
   }
@@ -272,7 +268,7 @@ export class AgentRosterController<
 
   private resolveEffectiveSelection(
     selection: AgentRosterSelection,
-  ): AgentRosterSnapshot<Entry>['effectiveSelection'] {
+  ): AgentRosterSnapshot['effectiveSelection'] {
     if (selection.kind === 'inherit') {
       const teamId = this.teamIdOf(selection);
       if (!teamId) return { kind: 'all' };

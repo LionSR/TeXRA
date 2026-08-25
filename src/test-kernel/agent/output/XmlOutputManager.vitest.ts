@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { assignByContentSimilarity } from '@agent/implementations/flows/reflection/output/extraction/contentSimilarity';
-import { processMultipleOutputs } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
+import { extractFilesFromXml } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
 import {
   createOutputState,
   ensureRoundData,
@@ -913,7 +913,7 @@ Appendix.
     );
     const manager = createXmlManager();
     const state = createOutputState();
-    await processMultipleOutputs(
+    await extractFilesFromXml(
       state,
       processorDeps({ logger: spiedTrace() }),
       manager,
@@ -1367,7 +1367,7 @@ Appendix.
         diff: null,
       },
     ];
-    await processMultipleOutputs(
+    await extractFilesFromXml(
       state,
       processorDeps({
         logger: spiedTrace(),

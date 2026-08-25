@@ -1,5 +1,3 @@
-import { isDeepStrictEqual } from 'node:util';
-
 import { z } from 'zod';
 
 import {
@@ -124,22 +122,13 @@ export type PreparedShared = ToolUseRunShared & {
   stateSlices: StateSlicesSnapshot;
 };
 
-type ParsedToolUseSharedResult =
-  | { success: true; data: ToolUseRunShared; changed: boolean }
-  | { success: false; error: z.ZodError };
-
 /**
  * Parse persisted shared state once before live flow code sees it. Malformed
  * known fields return `{success: false}` and are handled by the existing
  * resume boundary.
  */
-export function parseToolUseShared(shared: unknown): ParsedToolUseSharedResult {
-  const parsed = ToolUseRunSharedSchema.safeParse(shared);
-  if (!parsed.success) return parsed;
-
-  return {
-    success: true,
-    data: parsed.data,
-    changed: !isDeepStrictEqual(shared, parsed.data),
-  };
+export function parseToolUseShared(
+  shared: unknown,
+): z.ZodSafeParseResult<ToolUseRunShared> {
+  return ToolUseRunSharedSchema.safeParse(shared);
 }

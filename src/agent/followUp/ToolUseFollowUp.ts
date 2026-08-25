@@ -40,10 +40,10 @@ export type SubmitFollowUpResult =
   | { status: 'queued'; wake?: 'failed' }
   | { status: 'failed'; reason: FollowUpFailureReason };
 
-export type FollowUpPresentation =
+type FollowUpPresentation =
   { severity: 'none' } | { severity: 'info' | 'warning'; message: string };
 
-export interface SubmitFollowUpOptions {
+interface SubmitFollowUpOptions {
   readonly session?: SessionHandle;
   readonly resumePort?: Pick<AgentResumePort, 'tryResumeStream'>;
   /**

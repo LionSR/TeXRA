@@ -10,7 +10,7 @@ import {
   createOutputState,
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
-import { processMultipleOutputs } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
+import { extractFilesFromXml } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
 import type { OutputDependencies } from '@agent/implementations/flows/reflection/output/outputState';
 import type { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -326,7 +326,7 @@ describe('output progress events', () => {
     } as unknown as XmlOutputManager;
 
     try {
-      await processMultipleOutputs(
+      await extractFilesFromXml(
         state,
         processorDeps(logger),
         xmlManager,
@@ -367,7 +367,7 @@ describe('output progress events', () => {
         splitScratchpadMultipleOutputXml: async () => [],
       } as unknown as XmlOutputManager;
 
-      await processMultipleOutputs(
+      await extractFilesFromXml(
         createOutputState(),
         processorDeps(logger),
         xmlManager,

@@ -358,37 +358,20 @@ export class AgentWorkspaceState {
   }
 
   /**
-   * Boundary hydration: validates an untrusted persisted snapshot. Call this
-   * exactly once, where a persisted snapshot first hydrates into a session
-   * (session-init resume in `ToolUsePrepareNode`, a reflection flow's resume
-   * read in `runReflectionFlow`, or `runToolUseFlow`'s tool-use resume boundary
+   * Hydration: validates the snapshot, then rebuilds the slices. The one entry
+   * point for every caller, because there is one supported persisted format.
+   *
+   * A persisted snapshot first hydrates into a session at session-init resume
+   * in `ToolUsePrepareNode`, at a reflection flow's resume read in
+   * `runReflectionFlow`, and at `runToolUseFlow`'s tool-use resume boundary
    * normalizing the nested `stateSlices.workspaceSnapshot` it self-heals into
-   * the resumed flow record — needed because a resume whose persisted cursor is
-   * already past `ToolUsePrepareNode` never runs that node's own hydration).
-   * Everywhere else — per-round node prep re-deriving state from `toSnapshot()`
-   * output already produced this run — use `fromCanonicalSnapshot` instead.
+   * the resumed flow record — that last one is needed because a resume whose
+   * persisted cursor is already past `ToolUsePrepareNode` never runs that
+   * node's own hydration. Per-round node prep re-deriving state from
+   * `toSnapshot()` output produced this run runs the same parse.
    */
   static fromSnapshot(snapshot: unknown): AgentWorkspaceState {
     const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
-    return AgentWorkspaceState.fromParsedFields(parsed);
-  }
-
-  /**
-   * Rebuild from a snapshot already known to be canonical (e.g. round-tripped
-   * through this class's own `toSnapshot()`). Validates the canonical shape so
-   * repeated per-round calls (tool-use `ToolUseCycleNode`, reflection
-   * `ResponseCycleNode`/`MediaExtractionNode`) have the same validation path.
-   */
-  static fromCanonicalSnapshot(
-    snapshot: AgentWorkspaceSnapshot,
-  ): AgentWorkspaceState {
-    const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
-    return AgentWorkspaceState.fromParsedFields(parsed);
-  }
-
-  private static fromParsedFields(
-    parsed: AgentWorkspaceSnapshot,
-  ): AgentWorkspaceState {
     return new AgentWorkspaceState(
       parsed.assembly,
       MediaAttachmentState.fromSnapshot(parsed.media),

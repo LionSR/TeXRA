@@ -105,8 +105,10 @@ export type TemplateVars = Partial<UserVars> & Record<string, unknown>;
 export type BuiltUserVars = UserVars & Record<string, unknown>;
 
 /**
- * Runtime validators for the fixed {@link UserVars} keys. Known keys are
- * optional here because persisted checkpoints may have dropped variables; the
+ * Runtime validators for the fixed {@link UserVars} keys, and the runtime
+ * view of the vocabulary itself: `@agent/prompt/userVars` derives its
+ * passthrough token list from these keys. Known keys are optional in the
+ * persisted record because checkpoints may have dropped variables; the
  * `satisfies` clause keeps this map in lockstep with the vocabulary. Custom
  * `requiredFilesInternal` keys are not in this map and pass through as
  * unknown values via the loose record below.
@@ -166,6 +168,16 @@ function optionalizeUserVariableSchemas<T extends Record<string, z.ZodTypeAny>>(
     Object.entries(schemas).map(([key, schema]) => [key, schema.optional()]),
   ) as { [K in keyof T]: z.ZodOptional<T[K]> };
 }
+
+/**
+ * The fixed vocabulary as a frozen runtime list, derived from its single owner
+ * so a new fixed variable only has to be declared once. The schema map itself
+ * stays file-local: it backs checkpoint validation process-wide, so handing it
+ * out would let a consumer replace or drop validators. Order is irrelevant,
+ * both consumers build a map or a set from it.
+ */
+export const USER_VAR_RUNTIME_TOKENS: ReadonlyArray<keyof UserVars> =
+  Object.freeze(Object.keys(UserVariableValueSchemas) as (keyof UserVars)[]);
 
 /**
  * The persisted channel shape stays a loose record — checkpoints written by

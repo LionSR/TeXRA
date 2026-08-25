@@ -6,7 +6,7 @@ import { submitFollowUp, type FollowUpFailureReason } from './ToolUseFollowUp';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 
 /** `wake: 'failed'`: the result is in the parent's queue; only its wake failed. */
-export type ChildRunDeliveryResult =
+type ChildRunDeliveryResult =
   | { kind: 'delivered'; wake?: 'failed' }
   | { kind: 'failed'; reason: FollowUpFailureReason };
 

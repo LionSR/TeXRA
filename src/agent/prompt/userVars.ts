@@ -8,9 +8,10 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import { shouldSaveModelIO } from '@agent/debug/debugMessageSaver';
-import type {
-  BuiltUserVars,
-  UserVars,
+import {
+  USER_VAR_RUNTIME_TOKENS,
+  type BuiltUserVars,
+  type UserVars,
 } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentDelegationScope, FileListEntry } from '@shared/schemas';
@@ -62,58 +63,6 @@ const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
 export const USER_VAR_MODEL = 'MODEL';
 /** Transient user-variable key carrying the current user instruction. */
 export const USER_VAR_INSTRUCTION = 'INSTRUCTION';
-
-export const USER_VAR_RUNTIME_TOKENS = [
-  USER_VAR_MODEL,
-  USER_VAR_INSTRUCTION,
-  'IS_OPENAI_MODEL',
-  'IS_ANTHROPIC_MODEL',
-  'IS_GOOGLE_MODEL',
-  'WORKFLOW_AGENTS',
-  'TOOL_USE_AGENTS',
-  'CWD',
-  'DEFAULT_BIB_PATH',
-  'BUILTIN_WORKFLOW_DIR',
-  'BUILTIN_TOOLUSE_DIR',
-  'CUSTOM_AGENTS_DIR',
-  'AGENT_DOCS_DIR',
-  'INPUT_FILE',
-  'INPUT_CONTENT',
-  'INPUT_FILES',
-  'ALL_INPUTS',
-  'LIST_OF_ALL_INPUTS',
-  'CONTEXT_FILE',
-  'CONTEXT_CONTENT',
-  'CONTEXT_FILES',
-  'ALL_CONTEXTS',
-  'LIST_OF_ALL_CONTEXTS',
-  'EDITED_FILE',
-  'EDITED_CONTENT',
-  'EDITED_FILES',
-  'ALL_EDITEDS',
-  'LIST_OF_ALL_EDITEDS',
-  'MEDIA_FILE',
-  'MEDIA_CONTENT',
-  'OUTPUT_FILES',
-  'AUTO_EXTRACT_FIGURE',
-  'AUTO_EXTRACT_TIKZ_FIGURE',
-  'INCLUDE_TEX_COUNT',
-  'PRINT_INPUT_PROMPT',
-  'AUTO_COMPILE_INPUT_PDF',
-  'CODEX_GUIDANCE',
-  'CLAUDE_CODE_GUIDANCE',
-  'ROUNDS',
-  'LATEX_STYLE_RULES',
-  'ATTACHED_MEMORIES',
-  'ATTACHED_MEMORY_MISSES',
-  'AVAILABLE_SKILLS',
-] as const satisfies readonly (keyof UserVars)[];
-
-type AssertNever<T extends never> = T;
-/** Reverse guard: every fixed variable must stay passthrough-listed. */
-type _UserVarsStayInRuntimeTokens = AssertNever<
-  Exclude<keyof UserVars, (typeof USER_VAR_RUNTIME_TOKENS)[number]>
->;
 
 /** Runtime view of the fixed vocabulary for the required-file collision guard. */
 const FIXED_USER_VAR_KEYS: ReadonlySet<string> = new Set(

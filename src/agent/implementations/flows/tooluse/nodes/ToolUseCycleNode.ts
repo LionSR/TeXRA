@@ -38,10 +38,8 @@ export class ToolUseCycleNode<C> extends BaseNode<
     }
 
     // stateSlices.workspaceSnapshot was produced by this same node's own
-    // toSnapshot() last round (or by ToolUsePrepareNode's one-time
-    // hydration) — never raw persisted/legacy data — so re-deriving it
-    // here uses the canonical-only path (see AgentWorkspaceState.fromCanonicalSnapshot).
-    const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
+    // toSnapshot() last round, or by ToolUsePrepareNode's one-time hydration.
+    const workspaceState = AgentWorkspaceState.fromSnapshot(
       shared.stateSlices.workspaceSnapshot,
     );
     return {

@@ -8,10 +8,8 @@ import {
   DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
   renderAgentTemplateString,
 } from '@agent/templates/agentTemplateRenderer';
-import {
-  buildUserVarPassthrough,
-  USER_VAR_RUNTIME_TOKENS,
-} from '@agent/prompt/userVars';
+import { USER_VAR_RUNTIME_TOKENS } from '@agent/core/definition/AgentCycleOptions';
+import { buildUserVarPassthrough } from '@agent/prompt/userVars';
 
 describe('renderAgentTemplateString', () => {
   it('preserves agent runtime variables for the generated agent', () => {

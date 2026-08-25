@@ -28,7 +28,7 @@ interface TryOperationOptions<T> {
  * `${label}: ${toErrorMessage(err)}` at `level` with the INTERNAL message
  * type, then returns the caller-supplied recovery value. This centralizes the
  * identical error-recovery boilerplate that `LatexDiffManager`,
- * `processMultipleOutputs`, and friends each repeated.
+ * `extractFilesFromXml`, and friends each repeated.
  */
 export async function tryOperation<T>(
   operation: () => Promise<T>,

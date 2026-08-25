@@ -1,7 +1,5 @@
 /** Shared helper functions for ReflectionFlow nodes. */
 
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import type { AgentWorkspaceSnapshot } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { FileLocation, RoundOutput } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files/taskRunStorage';
@@ -30,17 +28,4 @@ export function getFilesForRound(
   }
 
   return [];
-}
-
-/**
- * Rebuild the workspace from a snapshot this flow produced itself —
- * `toSnapshot()` output from the previous round (or the one-time resume
- * hydration in `runReflectionFlow`) — never raw persisted/legacy data. Node
- * prep must always take this canonical-only path so the legacy migration arm
- * of `AgentWorkspaceState.fromSnapshot` is never re-evaluated mid-flow.
- */
-export function workspaceFromSnapshot(
-  snapshot: AgentWorkspaceSnapshot,
-): AgentWorkspaceState {
-  return AgentWorkspaceState.fromCanonicalSnapshot(snapshot);
 }
