@@ -41,7 +41,13 @@ export interface AgentRosterControllerDeps<
   readonly globalState: StateStore;
   readonly getAgents: (category: AgentCategory) => Entry[];
   readonly getPresets?: () => readonly AgentModePreset[];
-  /** Resolve one stored identifier without collapsing exact source identity. */
+  /**
+   * Resolve one stored identifier without collapsing exact source identity.
+   * The controller applies no fallback around this, so an implementation owns
+   * the whole contract: match a bare name against the category's agents, match
+   * a source-qualified key exactly, and return nothing for an entry outside
+   * `category`. `getRosterAgent` is the production implementation.
+   */
   readonly resolveAgent: (
     category: AgentCategory,
     identifier: string,

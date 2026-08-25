@@ -38,10 +38,13 @@ export async function promptToAddAgentToConfig(
       name: agentName,
       enabled: true,
     });
-    // This rewrites the selection as `custom`, retiring any applied team, so
-    // an open settings view needs the same notice `apply_team` sends.
-    appSignals.emit('agentRosterChanged', undefined);
+    // Reload the catalog first: the agent-creator just wrote this YAML, so
+    // the registry still holds a cache without it and a listener that posted
+    // now would render a roster missing the agent it was told about.
     await vscode.commands.executeCommand('texra.refreshAllOptions');
+    // The write above rewrites the selection as `custom`, retiring any applied
+    // team, so an open settings view needs the same notice `apply_team` sends.
+    appSignals.emit('agentRosterChanged', undefined);
     vscode.window.showInformationMessage(`Agent "${agentName}" is now visible`);
   }
 }
