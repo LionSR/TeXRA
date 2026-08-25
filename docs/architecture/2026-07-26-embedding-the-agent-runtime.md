@@ -171,7 +171,7 @@ catalog.
 
 `runAgent` and `executeAgent` obtain presentation and approval behavior from
 the selected session's stable `SessionHostInteractions` object. A host attaches
-its adapter with `session.useHostInteractions(...)` and detaches that adapter
+its adapter with `session.interactions.use(...)` and detaches that adapter
 when the host presentation lifetime ends. An embedder that is certain no
 response-bearing interaction can occur may leave the session unattached.
 Otherwise, a non-interactive embedder must attach an explicit rejection policy;
@@ -219,7 +219,7 @@ await bootstrapNodeAgentDirectories({/* … */}); // Step 3
 const session = initializeDefaultSession({
   transcripts: await StreamLogStore.open(),
 });
-const detachHostInteractions = session.useHostInteractions({
+const detachHostInteractions = session.interactions.use({
   cancel: () => {},
 }); // see §3 — DO NOT SKIP
 await loadAgents({ includeRemote: false });
@@ -368,7 +368,7 @@ documentation.
 
 ## 3. The headless minimum for interactions — the one section to read
 
-**`session.useHostInteractions({ cancel: () => {} })` is safe. Attaching
+**`session.interactions.use({ cancel: () => {} })` is safe. Attaching
 nothing is not.** This is the inverse of what the mostly-optional method
 signatures suggest, and it is the single highest-consequence fact in this
 document.
@@ -418,9 +418,10 @@ continues.
 
 Nothing in the runtime attaches interactions for you. A fresh `SessionHandle`
 constructs an empty `SessionHostInteractions`
-(`src/agent/runtime/SessionHandle.ts:167`), and the only production caller of
-`.use(...)` is `SessionHandle.useHostInteractions`
-(`src/agent/runtime/SessionHandle.ts:181-183`).
+(`src/agent/runtime/SessionHandle.ts:165`), and hosts call `.use(...)` on it
+directly (`SessionHostInteractions.use`,
+`src/agent/runtime/HostInteractions.ts:429`). The former
+`SessionHandle.useHostInteractions` pass-through was deleted in #11380.
 
 ### The affected calls
 
@@ -476,7 +477,7 @@ request methods plus `emit`, `dispose`, `showInfoMessage`, the diagnostics
 readers, and `setApprovalBypassState` — is optional
 (`src/agent/runtime/HostInteractions.ts:293-338`). So the compiler already
 forces you to write `{ cancel: … }` — the trap is not a badly-typed object, it
-is **never calling `useHostInteractions` at all**, which no type can catch.
+is **never calling `interactions.use` at all**, which no type can catch.
 
 ### The headless embedder contract (issue #9256)
 
@@ -526,9 +527,9 @@ whatever is left, or re-parks anything still pending if nothing is
 (`:381-389`, `:603-626`). A permanent default-denier occupying that stack
 would instead settle every live approval the instant the real host detached —
 and desktop attaches and detaches per window, one `DesktopProgressBridge`
-per `BrowserWindow` calling `useHostInteractions` on the one process-owned
+per `BrowserWindow` calling `interactions.use` on the one process-owned
 session and disposing it on close
-(`packages/desktop/src/main/desktopAgentExecution.ts:420-429`;
+(`packages/desktop/src/main/desktopAgentExecution.ts:388`;
 `packages/desktop/src/main/index.ts:583-621`). Closing one window would
 silently deny a pending tool-edit diff. A latch that auto-denies before any
 host has ever attached fares no better: the runtime cannot know whether a

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  getAuthCallbackBasePath,
-  isAuthCallbackPath,
-  parseAuthCallbackCode,
-} from '@auth/authCallback';
+import { isAuthCallbackPath, parseAuthCallbackCode } from '@auth/authCallback';
 
 describe('authCallback', () => {
   it('recognizes desktop and web callback paths', () => {
@@ -14,9 +10,6 @@ describe('authCallback', () => {
       isAuthCallbackPath('/extension-auth-callback?state=vscode-state'),
     ).toBe(true);
     expect(isAuthCallbackPath('/not-auth')).toBe(false);
-    expect(getAuthCallbackBasePath('/extension-auth-callback?state=abc')).toBe(
-      '/extension-auth-callback',
-    );
   });
 
   it('extracts the PKCE code from the query string', () => {
