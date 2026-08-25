@@ -49,6 +49,12 @@ interface LeadingGlobalFlags {
   readonly stoppedOnUnknownFlag: boolean;
 }
 
+/** Strip a trailing `=value` from a flag token, leaving the bare flag. */
+function inlineFlagBase(token: string): string {
+  const equalsIndex = token.indexOf('=');
+  return equalsIndex === -1 ? token : token.slice(0, equalsIndex);
+}
+
 /**
  * How many tokens the known global flag at `index` consumes, or `undefined`
  * when the token is not a recognized global flag. Value flags consume two
@@ -64,7 +70,7 @@ function knownGlobalFlagTokenCount(
   }
 
   const inline = arg.includes('=');
-  const baseFlag = inline ? arg.slice(0, arg.indexOf('=')) : arg;
+  const baseFlag = inlineFlagBase(arg);
   if (GLOBAL_BOOL_FLAGS.has(baseFlag)) {
     return 1;
   }
@@ -495,11 +501,6 @@ async function commandFlagSpecs(
   }
 
   return specs;
-}
-
-function inlineFlagBase(token: string): string {
-  const equalsIndex = token.indexOf('=');
-  return equalsIndex === -1 ? token : token.slice(0, equalsIndex);
 }
 
 interface FlagValidation {
