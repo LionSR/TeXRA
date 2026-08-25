@@ -22,7 +22,6 @@ export function classifyAuthFailureStatus(
 export interface AuthTokenProvider {
   whenReady(): Promise<void>;
   ensureFreshToken(forceRefresh?: boolean): Promise<string | null>;
-  getSessionTokens(): Promise<SessionTokens | null>;
   /** Classify the stored session while guarding against replacement races. */
   getStoredSessionState(): Promise<StoredSessionState>;
   /**
