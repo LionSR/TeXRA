@@ -164,9 +164,13 @@ see the status column):
 
 - #11386 — un-export 12 controller types with zero cross-file references
 - #11387 — delete the never-produced `activeStream` option on the metadata push
-- #11388 — `StreamArtifactProjection` sits in the shared layer with only CLI consumers
+- #11388 — `StreamArtifactProjection` sits in the shared layer with only CLI
+  consumers. **Superseded — see §3.3.** The fix landed as #11400 (remove the
+  store's defensive clones) rather than #11396 (move the module), which is
+  closed.
 - #11389 — delete `SupabaseClient.getSessionTokens` (0 consumers, raw refresh token)
-- #11390 — CLI re-derives the tool dashboard; the `ToolHost` `'cli'` arm has no caller.
+- #11390 — CLI re-derives the tool dashboard. **Closed — see §3.3**; the
+  `'cli'` arm is load-bearing and the fold was rejected on cost.
   **Partially rejected on cost** (#11397 takes the verified half): the stated
   blocking precondition does not exist — `runProbes` maps over every
   `EXTERNAL_TOOL_DEFS` entry, so no def is ever dropped — and the fold would
@@ -302,6 +306,44 @@ otherwise:
   single-flight drain remains at `packages/cli/src/runtime/logSinks.ts:196-292`
   (`NdjsonStdoutSink`), which is stdout-backpressure handling rather than a
   task queue — `p-queue` does not cover it.
+
+## 3.3 Correction: two candidates did not survive implementation
+
+Recorded because the errors are more instructive than the finds.
+
+**`StreamArtifactProjection` — right finding, wrong fix (#11396 closed, superseded by #11400).**
+§3 listed the module as wrong-layer with a false docstring. Both were true. But
+the fix — moving it into the CLI — treats a symptom. The module exists because
+`StreamSnapshotStore` **clones on read**: `getOutputFiles`,
+`getMissingOutputs`, and `getCompileFailures` each return
+`cloneRoundIndexed(...)` (a new object plus a new array per round), and
+`getRunUsage` returns `new Map(...)`. Ink repaints per streaming token, so
+reading the store directly would re-clone every round map and re-sum usage on
+each repaint. `projectStreamArtifacts` + `artifactProjectionMemo` exist to
+amortize that, and the memo's own comment says so (#10731).
+
+Every production caller of those four accessors is read-only — verified by
+grep for `.sort(`/`.push(`/`.splice(`/`.reverse(` on the round maps and
+`.set(`/`.delete(`/`.clear(` on the usage map: zero hits. So the defensive copy
+protects against nothing, and returning readonly views collapses the projection
+entirely while also stopping both GUI hosts cloning per render pass. That is
+#11400.
+
+The audit found the symptom and missed the cause, which was findable at survey
+time. **Generalizable rule: for a "wrong layer" candidate, establish why the
+thing exists before proposing to move it.** A misplaced module is often a
+workaround for something upstream, and relocating it entrenches the workaround
+while looking like progress.
+
+**The `ToolHost` `'cli'` arm is not dead (#11390 closed).**
+The audit reported that `buildToolDashboardItems` is never called with
+`'cli'`. True — but that is the _dashboard builder_, not the type arm. Five
+tools declare a `cli` exclusion that `isDefaultToolUnavailableOnHost` reads
+(`SendToTerminalTool.ts:54`, `InstallVscodeExtensionTool.ts`,
+`InvokeCommandTool.ts`, `InlineCommentTool.ts`,
+`ExternalInquiryTool.ts:249-254`), and the CLI passes `'cli'` at
+`packages/cli/src/runtime/tools.ts:40`. Nothing is removable. The fold was
+separately rejected on cost; #11397 took the only real residue.
 
 ## 4. Rejected, with reasons
 
