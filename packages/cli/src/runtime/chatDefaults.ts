@@ -11,7 +11,7 @@ import {
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
 import { isImplicitDefaultEligible } from '@shared/constants/agents';
-import { toNewestFirstByTimestamp } from '@utils/core';
+import { isObject, toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
@@ -70,24 +70,55 @@ function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
   };
 }
 
-async function loadUserDefaults(): Promise<PartialDefaults> {
+async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
   // A missing user config means no user defaults (parseCliConfigValues maps
-  // the undefined fallback to {}). Anything else — corrupt JSON, a permission
-  // error — is surfaced as a warning instead of silently dropping the user's
-  // chat defaults, mirroring loadWorkspaceCliConfig's handling of the same
-  // class of failure for the workspace config.
+  // the undefined fallback to {}). A read failure — corrupt JSON, a
+  // permission error — a top-level shape that isn't an object, and an
+  // invalid individual field still drop the affected default(s), but now
+  // with a warning instead of silence, mirroring loadWorkspaceCliConfig's
+  // handling of the same failure classes for the workspace config. Unknown-
+  // key warnings are suppressed: this file is
+  // shared by all three hosts and holds rows the CLI does not honor (same
+  // reasoning as loadUserApprovalPolicy). `quiet` mirrors --quiet: every
+  // other config warning is gated by contextFromArgs on context.quietLogs
+  // before this function ever runs, so these warnings honor the same flag
+  // instead of always printing.
+  const warn = (message: string): void => {
+    if (!quiet) writeTextStderr(`WARN ${message}`);
+  };
   let raw: unknown;
   try {
     raw = await GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME);
   } catch (error: unknown) {
     if (!isFileNotFoundError(error)) {
-      writeTextStderr(
-        `WARN Could not read user config (${TEXRA_CONFIG_FILE_NAME}): ${toErrorMessage(error)}`,
+      warn(
+        `Could not read user config (${TEXRA_CONFIG_FILE_NAME}): ${toErrorMessage(error)}`,
       );
     }
     raw = undefined;
   }
-  return defaultsFromConfigValues(parseCliConfigValues(raw));
+  if (raw !== undefined && !isObject(raw)) {
+    warn(`Ignoring ${TEXRA_CONFIG_FILE_NAME}; expected a JSON object.`);
+    raw = undefined;
+  }
+  const { values, warnings } = parseCliConfigValues(
+    raw,
+    TEXRA_CONFIG_FILE_NAME,
+    {
+      reportUnknownKeys: false,
+      // defaultsFromConfigValues only reads agent/model (top-level and
+      // chat.*) — scoping to just those fields avoids re-validating
+      // approvalPolicy (already warned about by loadUserApprovalPolicy) and
+      // outputFormat/run.* (unused here), and matters more than it would for
+      // a one-shot read: orchestrate's launcher loop calls resolveChatDefaults
+      // on every iteration, so an unrelated invalid field would otherwise
+      // re-print its warning every time through the loop.
+      topLevelFields: new Set(['agent', 'model']),
+      sections: new Set(['chat']),
+    },
+  );
+  for (const warning of warnings) warn(warning);
+  return defaultsFromConfigValues(values);
 }
 
 async function loadHistoryDefaults(): Promise<PartialDefaults> {
@@ -169,6 +200,11 @@ export interface ResolveChatDefaultsInit {
   readonly envAgent?: string;
   readonly envModel?: string;
   readonly visibleToolUseAgents?: readonly { readonly name: string }[];
+  /** Suppresses the user-config warnings `loadUserDefaults` would otherwise
+   *  print directly — pass `context.quietLogs` so this tier's warnings
+   *  respect `--quiet` the same way `contextFromArgs` gates every other
+   *  config warning. */
+  readonly quiet?: boolean;
 }
 
 /**
@@ -202,7 +238,7 @@ export async function resolveChatDefaults(
       loadWorkspaceCliConfig(init.cwd).then((loaded) =>
         defaultsFromConfigValues(loaded.values),
       ),
-      loadUserDefaults(),
+      loadUserDefaults(init.quiet ?? false),
       loadHistoryDefaults(),
     ]);
     const tiers: ReadonlyArray<

@@ -115,6 +115,51 @@ const StreamLogSummarySchema = z.object({
 });
 type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
 
+/**
+ * The one schema-validated read path for the persisted `StreamLogSummary`
+ * shape — every reader of the summary cache (the in-class loader and the
+ * standalone `clearPersistedSummaryParentStream` patch below) goes through
+ * this instead of trusting a raw `KVStore.read()` cast. Does not apply the
+ * loader's registration-evidence gate (see {@link parsePersistedSummary}):
+ * a metadata-only summary persisted before a stream's first append (see
+ * `recordSummaryMeta`) has no timestamps but is still a valid, live entry.
+ */
+function parseSummaryShape(value: unknown): StreamLogSummary | undefined {
+  // A missing cache file (KVStore's quiet-missing `undefined`) is an
+  // ordinary rebuild, not a stale shape — nothing to warn about.
+  if (value === undefined) return undefined;
+  const result = StreamLogSummarySchema.safeParse(value);
+  if (!result.success) {
+    // Derived tier (#9434): discard the stale-shaped cache loudly instead of
+    // migrating it in place.
+    log.warn(
+      `Discarding a stale-shaped summary cache entry: ${result.error.issues
+        .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+        .join('; ')}`,
+    );
+    return undefined;
+  }
+  return result.data;
+}
+
+/**
+ * {@link parseSummaryShape}, plus the loader's registration-evidence gate:
+ * empty transcripts have no timestamps, so a timestamp-less summary cache
+ * entry isn't evidence the stream is registered — the loader falls back to
+ * rebuilding from the authoritative stream log for that case.
+ */
+function parsePersistedSummary(value: unknown): StreamLogSummary | undefined {
+  const summary = parseSummaryShape(value);
+  if (!summary) return undefined;
+  if (
+    summary.firstTimestamp === undefined &&
+    summary.lastTimestamp === undefined
+  ) {
+    return undefined;
+  }
+  return summary;
+}
+
 interface StreamLoadResult {
   streamId: StreamTabId;
   summary: StreamLogSummary;
@@ -169,7 +214,11 @@ export async function deletePersistedStreamLog(
  * detach a child in its sidecar while this mirror — what the progress rail
  * actually reads — keeps pointing at the deleted parent. Callers already
  * know the exact child stream ids to patch, so this stays a single-key
- * read-modify-write, not a registry sweep.
+ * read-modify-write, not a registry sweep. The write-back re-serializes the
+ * schema-parsed `StreamLogSummarySchema` shape, so a field a newer build
+ * added to the schema and an older build doesn't know is stripped here —
+ * acceptable for this derived-tier cache under the discard-and-rebuild
+ * contract (#9434), which never promises byte-for-byte forward compat.
  */
 export async function clearPersistedSummaryParentStream(
   streamId: StreamTabId,
@@ -177,7 +226,7 @@ export async function clearPersistedSummaryParentStream(
   const summaries = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
     compactJson: true,
   });
-  const summary = await summaries.read<StreamLogSummary>(streamId);
+  const summary = parseSummaryShape(await summaries.read<unknown>(streamId));
   if (!summary?.meta?.parentStreamId) return;
   const { parentStreamId: _parentStreamId, ...meta } = summary.meta;
   await summaries.write(streamId, { ...summary, meta });
@@ -1418,7 +1467,7 @@ export class StreamLogStore {
   ): Promise<StreamLogSummary | undefined> {
     try {
       const persisted = await this.summaryKv().read<unknown>(streamId);
-      const summary = this.parsePersistedSummary(persisted);
+      const summary = parsePersistedSummary(persisted);
       if (!summary) return undefined;
 
       const [summaryMtime, logMtime] = await Promise.all([
@@ -1459,32 +1508,6 @@ export class StreamLogStore {
         (entry) => nonterminalWorkflowCall(entry) !== undefined,
       ),
     });
-  }
-
-  private parsePersistedSummary(value: unknown): StreamLogSummary | undefined {
-    // A missing cache file (KVStore's quiet-missing `undefined`) is an
-    // ordinary rebuild, not a stale shape — nothing to warn about.
-    if (value === undefined) return undefined;
-    const result = StreamLogSummarySchema.safeParse(value);
-    if (!result.success) {
-      // Derived tier (#9434): discard the stale-shaped cache loudly and
-      // rebuild from the authoritative stream log — never migrate in place.
-      log.warn(
-        `Discarding a stale-shaped summary cache entry; rebuilding from the stream log: ${result.error.issues
-          .map(
-            (issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`,
-          )
-          .join('; ')}`,
-      );
-      return undefined;
-    }
-    if (
-      result.data.firstTimestamp === undefined &&
-      result.data.lastTimestamp === undefined
-    ) {
-      return undefined;
-    }
-    return result.data;
   }
 
   private async writeStream(

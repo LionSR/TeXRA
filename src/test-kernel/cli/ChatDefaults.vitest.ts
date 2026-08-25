@@ -460,4 +460,131 @@ describe('CLI chat defaults', () => {
     );
     warnSpy.mockRestore();
   });
+
+  it('suppresses user-config warnings under --quiet', async () => {
+    // These warnings are printed inside resolveChatDefaults itself, not
+    // through contextFromArgs's gated configWarnings path, so they need
+    // their own --quiet check to avoid always printing regardless of it.
+    const corrupt = new Error('Failed to parse JSON from config.json');
+    mockedReadJson.mockRejectedValueOnce(corrupt);
+    const warnSpy = vi
+      .spyOn(logSinks, 'writeTextStderr')
+      .mockImplementation(() => {});
+
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE, quiet: true },
+      {
+        agent: 'assistant',
+        model: 'deepseekproT',
+        source: 'builtin',
+      },
+    );
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('warns instead of silently dropping defaults when the user config is not an object', async () => {
+    // Valid JSON, wrong top-level shape (e.g. hand-edited to an array) —
+    // distinct from the corrupt-JSON case above, and from a missing file.
+    mockedReadJson.mockResolvedValueOnce([]);
+    const warnSpy = vi
+      .spyOn(logSinks, 'writeTextStderr')
+      .mockImplementation(() => {});
+
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        model: 'deepseekproT',
+        source: 'builtin',
+      },
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('expected a JSON object'),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn about unknown top-level keys in the shared user config', async () => {
+    // config.json is shared by all three hosts; a setting only the
+    // extension or desktop honors is not "unknown" from the user's
+    // perspective just because the CLI doesn't read it.
+    mockedReadJson.mockResolvedValueOnce({
+      'agentReview.runOnCommit': true,
+      'texra.agent': 'assistant',
+    });
+    const warnSpy = vi
+      .spyOn(logSinks, 'writeTextStderr')
+      .mockImplementation(() => {});
+
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        agentSource: 'user-config',
+      },
+    );
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('still warns about an unknown key inside the CLI-exclusive chat section', async () => {
+    // Unlike the shared top level, texra.chat.* is CLI-only structure in
+    // every host — nothing else reads or writes it — so a typo here (e.g.
+    // "modle" for "model") is always worth a warning, not suppressed by the
+    // same reportUnknownKeys: false that guards the shared top-level rows.
+    mockedReadJson.mockResolvedValueOnce({
+      'texra.agent': 'assistant',
+      'texra.chat': { modle: 'deepseekT' },
+    });
+    const warnSpy = vi
+      .spyOn(logSinks, 'writeTextStderr')
+      .mockImplementation(() => {});
+
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        agentSource: 'user-config',
+      },
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('texra.chat.modle'),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn about fields this tier does not resolve', async () => {
+    // agent/model (top-level and chat.*) are the only fields
+    // defaultsFromConfigValues reads here. approvalPolicy is already
+    // validated and warned about separately by loadUserApprovalPolicy;
+    // outputFormat and run.* are never consumed by chat defaults at all.
+    // Warning about them here would duplicate that other warning and, since
+    // orchestrate's launcher loop calls resolveChatDefaults on every
+    // iteration, would reprint on every pass through the loop.
+    mockedReadJson.mockResolvedValueOnce({
+      'texra.agent': 'assistant',
+      'texra.approvalPolicy': 'not-a-real-policy',
+      'texra.outputFormat': 'not-a-real-format',
+      'texra.run': { model: 42 },
+    });
+    const warnSpy = vi
+      .spyOn(logSinks, 'writeTextStderr')
+      .mockImplementation(() => {});
+
+    await expectChatDefaults(
+      { cwd: NO_WORKSPACE },
+      {
+        agent: 'assistant',
+        agentSource: 'user-config',
+      },
+    );
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
 });

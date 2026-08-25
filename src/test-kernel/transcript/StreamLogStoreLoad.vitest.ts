@@ -26,6 +26,7 @@ import {
   STREAM_LOG_SUMMARIES_DIR,
   type StreamLogAppendInput,
 } from '@transcript';
+import { clearPersistedSummaryParentStream } from '@transcript/StreamLogStore';
 import { delay } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
 
@@ -2138,5 +2139,30 @@ describe('StreamLogStore summary metadata mirror', () => {
     expect(store.keys()).toEqual(['gamma']);
     expect(store.getSummaryMeta('gamma')).toEqual(META);
     await store.flush();
+  });
+});
+
+describe('clearPersistedSummaryParentStream', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('clears the parent edge from a metadata-only summary with no timestamps', async () => {
+    // `recordSummaryMeta` can persist metadata before a stream's first
+    // append, so the cache entry has a `meta.parentStreamId` but neither
+    // timestamp. The patch path must not apply the loader's
+    // registration-evidence gate (which would treat this as absent).
+    const storage = mockStorage({
+      logs: {},
+      summaries: { alpha: { meta: { parentStreamId: 'parent-stream' } } },
+    });
+
+    await clearPersistedSummaryParentStream('alpha');
+
+    const persisted = writtenSummary(storage.writes, 'alpha') as Record<
+      string,
+      unknown
+    >;
+    expect(persisted.meta).not.toHaveProperty('parentStreamId');
   });
 });

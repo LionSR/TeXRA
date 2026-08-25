@@ -30,19 +30,23 @@ export type ProviderMessage =
  * This is the correct and intentional use of z.custom() for external type unions.
  *
  * The predicate stops short of full SDK shape validation (the union members
- * don't share one discriminant), but it rejects the values that are never a
- * valid provider message under any provider: null, arrays, and empty objects.
- * Persisted conversation state is parsed through this schema on session
- * resume, so this is the boundary where corrupted data should fail loudly
- * instead of being silently trusted and surfacing as a confusing error deep
- * inside a model handler.
+ * don't share one discriminant), but every member of the union carries a
+ * top-level `role` or `type` string (or, for the legacy Gemini `Content`
+ * shape whose `role` is optional, a `parts` array) — so requiring one of
+ * those rejects arbitrary/corrupted objects while still accepting any real
+ * provider message. Persisted conversation state is parsed through this
+ * schema on session resume, so this is the boundary where corrupted data
+ * should fail loudly instead of being silently trusted and surfacing as a
+ * confusing error deep inside a model handler.
  */
 const ProviderMessageSchema = z.custom<ProviderMessage>(
   (value): value is ProviderMessage =>
     typeof value === 'object' &&
     value !== null &&
     !Array.isArray(value) &&
-    Object.keys(value).length > 0,
+    (typeof (value as { role?: unknown }).role === 'string' ||
+      typeof (value as { type?: unknown }).type === 'string' ||
+      Array.isArray((value as { parts?: unknown }).parts)),
   {
     error: 'messages must contain provider message objects',
   },
