@@ -34,7 +34,7 @@ import {
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
-import { getBasename } from '@utils/core';
+import { getBasename, groupBy } from '@utils/core';
 
 // Local imports - shared schemas and events
 import { pluralize } from '@utils/text/stringUtils';
@@ -110,12 +110,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('agents')) {
-      const groups = new Map<AgentSource, AgentSelectionItem[]>();
-      for (const agent of this.agents) {
-        const list = groups.get(agent.source) ?? [];
-        list.push(agent);
-        groups.set(agent.source, list);
-      }
+      const groups = groupBy(this.agents, (agent) => agent.source);
       this.groupedSources = groups;
       this.displayOrder = AgentSelectionPanel.SOURCE_ORDER.flatMap(
         (source) => groups.get(source) ?? [],

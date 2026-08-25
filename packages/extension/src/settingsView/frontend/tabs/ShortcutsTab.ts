@@ -25,6 +25,7 @@ import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { groupBy } from '@utils/core';
 
 @customElement('shortcuts-tab')
 export class ShortcutsTab extends LitElement {
@@ -232,12 +233,7 @@ export class ShortcutsTab extends LitElement {
 
   override render(): TemplateResult {
     const entries = this.visibleEntries();
-    const groups = new Map<string, DesktopShortcutEntry[]>();
-    for (const entry of entries) {
-      const group = groups.get(entry.category) ?? [];
-      group.push(entry);
-      groups.set(entry.category, group);
-    }
+    const groups = groupBy(entries, (entry) => entry.category);
     return html`
       <div class="tab-content-container">
         ${renderSettingsBanner({

@@ -30,7 +30,7 @@ import {
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
-import { toNewestFirstByTimestamp } from '@utils/core';
+import { groupBy, toNewestFirstByTimestamp } from '@utils/core';
 
 import { setsEqual, streamDisplayLabel } from './utils';
 import { clearFollowUpInputTransientStateStore } from './followUpInputState';
@@ -139,17 +139,12 @@ export const topLevelStreams$ = new Signal.Computed(() =>
  * every status or timestamp update.
  */
 export const childStreamsByParent$ = new Signal.Computed(() => {
-  const grouped = new Map<StreamTabId, StreamTabInfo[]>();
-  for (const stream of streamById$.get().values()) {
-    if (!stream.parentStreamId) continue;
-    const siblings = grouped.get(stream.parentStreamId);
-    if (siblings) {
-      siblings.push(stream);
-    } else {
-      grouped.set(stream.parentStreamId, [stream]);
-    }
-  }
-  return grouped.size > 0 ? grouped : EMPTY_CHILD_MAP;
+  const childStreams = [...streamById$.get().values()].filter(
+    (stream): stream is StreamTabInfo & { parentStreamId: StreamTabId } =>
+      Boolean(stream.parentStreamId),
+  );
+  if (childStreams.length === 0) return EMPTY_CHILD_MAP;
+  return groupBy(childStreams, (stream) => stream.parentStreamId);
 });
 
 /**
