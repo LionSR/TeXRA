@@ -220,9 +220,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       },
       {
         // `apply_team` writes the roster straight from the setup agent, so
-        // the open view is showing agents and a team it just replaced.
+        // the open view is showing agents and a team it just replaced. The
+        // catalog is already fresh: a team change moves no agent files, and
+        // the agent-creator reloads before it emits. Without that flag this
+        // listener would rescan the YAML and re-fetch the remote catalog on
+        // every roster write.
         dispose: appSignals.on('agentRosterChanged', () => {
-          void this.refreshAfterAgentMutation();
+          void this.refreshAfterAgentMutation(undefined, true);
         }),
       },
       {
