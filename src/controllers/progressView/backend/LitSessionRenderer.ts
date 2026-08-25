@@ -107,11 +107,10 @@ export class LitSessionRenderer implements SessionRendererPort {
     streamId: StreamTabId,
     options?: {
       streamStates?: Map<StreamTabId, StreamPhaseState>;
-      activeStream?: PresentedStreamId;
     },
   ): void {
     if (!this.isAvailable()) return;
-    this.updateStreamMetadata(streamId, options?.streamStates, options);
+    this.updateStreamMetadata(streamId, options?.streamStates);
   }
 
   onStreamStatusChanged(
@@ -387,17 +386,16 @@ export class LitSessionRenderer implements SessionRendererPort {
     });
   }
 
-  /** Push one stream's metadata patch, optionally re-asserting the selection. */
+  /** Push one stream's metadata patch. */
   updateStreamMetadata(
     streamId: StreamTabId,
     streamStates?: Map<StreamTabId, StreamPhaseState>,
-    options?: { activeStream?: PresentedStreamId },
   ): void {
     if (!this.isAvailable()) return;
     const streamInfo = buildStreamInfo(
       this.state,
       streamId,
-      options?.activeStream ?? this.getActiveStream(),
+      this.getActiveStream(),
     );
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
@@ -406,7 +404,6 @@ export class LitSessionRenderer implements SessionRendererPort {
         streamInfo,
         streamStates ?? this.state.streamStatus.getAllStreamStates(),
       ),
-      activeStream: options?.activeStream,
     });
   }
 

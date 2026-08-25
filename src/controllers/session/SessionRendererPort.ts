@@ -57,7 +57,6 @@ export interface SessionRendererPort {
     streamId: StreamTabId,
     options?: {
       streamStates?: Map<StreamTabId, StreamPhaseState>;
-      activeStream?: PresentedStreamId;
     },
   ): void;
 
