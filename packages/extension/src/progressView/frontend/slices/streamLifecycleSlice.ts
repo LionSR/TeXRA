@@ -130,7 +130,7 @@ function assertKnownActiveStreamId(
 // messageDispatcher.ts. This slice only owns a subset.
 export const streamLifecycleHandlers = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA]: (data) => {
-    const { streamInfo: rawInfo, streamState, activeStream } = data;
+    const { streamInfo: rawInfo, streamState } = data;
     const previous = appState.get();
     const existingInfo = previous.streamById.get(rawInfo.name);
     const description = rawInfo.description ?? existingInfo?.description;
@@ -148,16 +148,7 @@ export const streamLifecycleHandlers = {
       [streamInfo.name]: streamState,
     });
 
-    appState.set(
-      create(updated, (draft) => {
-        // Metadata registration is followed by bridge replay. LOG_DELTA
-        // settles only after applying that batch, so hydration cannot close
-        // a start before its already-recorded outcome arrives.
-        if (activeStream !== undefined) {
-          draft.activeStreamId = activeStream || null;
-        }
-      }),
-    );
+    appState.set(updated);
   },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]: (data) => {

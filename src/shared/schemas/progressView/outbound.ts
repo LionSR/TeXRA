@@ -67,7 +67,6 @@ const UpdateStreamMetadataMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA),
   streamInfo: StreamTabInfoSchema,
   streamState: StreamMetadataSchema,
-  activeStream: StreamSelectionSchema.optional(),
 });
 
 const SetActiveStreamMessageSchema = z.object({

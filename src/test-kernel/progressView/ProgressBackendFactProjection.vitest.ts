@@ -178,7 +178,6 @@ describe('ProgressBackend', () => {
     expect(messages).toContainEqual(
       expect.objectContaining({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-        activeStream: undefined,
         streamInfo: expect.objectContaining({ name: 'hidden-approval' }),
       }),
     );
@@ -895,7 +894,6 @@ describe('ProgressBackend', () => {
     );
     expect(backend.presentation.activeStream).toBe('tool-stream');
     expect(patch).toMatchObject({
-      activeStream: undefined,
       streamInfo: {
         name: 'unknown-stream',
         // Identity has not resolved, so no category is fabricated.
