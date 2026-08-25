@@ -15,11 +15,7 @@ import {
   roundIndexedEntries,
   RoundKeySchema,
 } from '@shared/schemas';
-import type {
-  OutputFileInfo,
-  ReadonlyRoundIndexed,
-  RoundIndexed,
-} from '@shared/schemas';
+import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import {
   legacyWorkflowOutputRoundRegex,
   midEraWorkflowOutputStem,

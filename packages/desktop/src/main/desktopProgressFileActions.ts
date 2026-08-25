@@ -18,11 +18,7 @@ import type {
   DiffRunOutcome,
   DiffRunResult,
 } from '@latex/latexdiff/types';
-import type {
-  OutputFileInfo,
-  ReadonlyRoundIndexed,
-  RoundIndexed,
-} from '@shared/schemas';
+import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {

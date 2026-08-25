@@ -9,7 +9,6 @@ import {
   type CompileFailure,
   type OutputFileInfo,
   type ReadonlyRoundIndexed,
-  type RoundIndexed,
   type StreamTabId,
 } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';

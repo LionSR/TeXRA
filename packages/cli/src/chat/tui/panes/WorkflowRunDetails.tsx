@@ -31,7 +31,6 @@ import {
   type CompileFailure,
   type OutputFileInfo,
   type ReadonlyRoundIndexed,
-  type RoundIndexed,
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';

@@ -1102,18 +1102,23 @@ export class StreamSnapshotStore {
   // Read accessors over in-memory accumulated state
   // ==========================================================================
 
-  // Deep-enough copies (fresh record, fresh per-round array): a caller that
-  // mutates the returned value — including pushing into a returned round's
-  // array — can never corrupt these in-memory accumulators. A shallow
-  // `{ ...map }` spread would share the per-round arrays by reference.
   // These four hand back the live record as a readonly view rather than a
   // defensive copy. Every reader enumerates, filters, or forwards the result;
   // none mutates it, so the copy bought nothing at runtime while allocating a
   // fresh object and a fresh array per round on every call — on each render
-  // pass, in every host. Aliasing is safe because reads are synchronous with
-  // respect to writes: renders compose in one tick, and the CLI's projection
-  // memo is cleared on every artifact write. The write path still snapshots
-  // (`getSnapshotForWrite`), where the isolation is load-bearing.
+  // pass, in every host.
+  //
+  // The rule this puts on callers: a synchronous read is safe, because renders
+  // compose in one tick and the CLI's projection memo is cleared on every
+  // artifact write. **A caller that carries the result across an `await` must
+  // clone it** — `applyRoundPatch` mutates these records in place, so a live
+  // run can add or drop a round while the caller is suspended. See
+  // `ProgressWorkflowActionsController.diffStream`, which snapshots before the
+  // request crosses an interactive quick pick.
+  //
+  // The write path still snapshots (`snapshotFromMemory`, `writeRoundKeyedField`),
+  // where the isolation is load-bearing: writes are queued, so the record must
+  // be frozen at call time.
   getOutputFiles(stream: StreamTabId): ReadonlyRoundIndexed<OutputFileInfo> {
     this.warnIfUnseeded('getOutputFiles', stream);
     return this.records.get(stream)?.outputFiles ?? EMPTY_ROUND_INDEXED;
@@ -1832,8 +1837,9 @@ export class StreamSnapshotStore {
 
   /**
    * Assemble the snapshot from already-hydrated in-memory accumulators.
-   * Clones the round-indexed records (same as the public getOutputFiles/
-   * getMissingOutputs/getCompileFailures accessors) so a caller reassigning
+   * Clones the round-indexed records — unlike the public getOutputFiles/
+   * getMissingOutputs/getCompileFailures accessors, which return live readonly
+   * views — so a caller reassigning
    * or pushing/splicing a returned per-round array can't corrupt these live
    * accumulators. Per cloneRoundIndexed's own contract, item objects
    * themselves are not cloned — they're treated as immutable value objects,

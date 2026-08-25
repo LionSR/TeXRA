@@ -7,7 +7,6 @@ import type {
   AcceptCopyMeta,
   OutputFileInfo,
   ReadonlyRoundIndexed,
-  RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files/runStorageFs';
