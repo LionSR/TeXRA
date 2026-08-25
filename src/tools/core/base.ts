@@ -74,7 +74,6 @@ export abstract class BaseTool<T> implements ITool {
           error: `Invalid input:\n${z.prettifyError(err)}`,
           diagnostics: {
             type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-            issues: err.issues,
             formatted: formatZodIssuesForDiagnostics(err.issues),
           },
         };

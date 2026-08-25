@@ -2,15 +2,13 @@
  * Shared platform-backed access helpers for subscription OAuth coordinators.
  *
  * The secret-backed storage adapter and singleton coordinator factory live
- * here (with the status + routability probes) so a provider does not re-copy
- * the platform dance.
+ * here (with the status probe) so a provider does not re-copy the platform
+ * dance.
  */
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { SubscriptionOAuthError } from './subscriptionOAuthError';
-import type { ProviderAuthErrorCtor } from './providerAuthBridge';
 import type {
   SubscriptionSessionStatus,
   SubscriptionSessionStorage,
@@ -59,11 +57,9 @@ export function createSecretBackedCoordinator<C>(init: {
   };
 }
 
-/** Minimal coordinator surface used for status / routing probes. */
+/** Minimal coordinator surface used for the status probe. */
 export interface SessionAccessCoordinator {
   getStatus(): Promise<SubscriptionSessionStatus>;
-  getFreshAccessToken(): Promise<string>;
-  loadSession(): Promise<unknown>;
 }
 
 /**
@@ -84,60 +80,5 @@ export async function getSubscriptionSessionStatus(
       `Failed to read ${displayName} session status: ${toErrorMessage(error)}`,
     );
     return { signedIn: false };
-  }
-}
-
-/**
- * Whether subscription routing should use the stored session. See Codex's
- * `isCodexSessionRoutable` for the re-auth / superseded-session rules.
- */
-export async function isSubscriptionSessionRoutable(
-  getCoordinator: () => SessionAccessCoordinator,
-  ErrorType: ProviderAuthErrorCtor,
-  displayName: string,
-): Promise<boolean> {
-  // Preserve the post-init contract even for an injected coordinator that
-  // does not itself read platform secrets.
-  void platform();
-  const coordinator = getCoordinator();
-  try {
-    await coordinator.getFreshAccessToken();
-    return true;
-  } catch (error) {
-    const authError =
-      error instanceof ErrorType || error instanceof SubscriptionOAuthError
-        ? error
-        : null;
-    if (!authError) {
-      throw new ErrorType(
-        `Could not access ${displayName} session: ${toErrorMessage(error)}`,
-        'transient',
-        undefined,
-        { cause: error },
-      );
-    }
-    if (authError.needsReauth) {
-      let storedSession;
-      try {
-        storedSession = await coordinator.loadSession();
-      } catch (readError) {
-        throw new ErrorType(
-          `Could not verify ${displayName} session: ${toErrorMessage(readError)}`,
-          'transient',
-          undefined,
-          { cause: readError },
-        );
-      }
-      if (storedSession) {
-        throw new ErrorType(
-          `${displayName} session changed while refreshing.`,
-          'transient',
-          authError.status,
-          { cause: error },
-        );
-      }
-      return false;
-    }
-    throw error;
   }
 }

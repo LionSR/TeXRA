@@ -4,7 +4,11 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import './TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
-import { DESKTOP_THEME_KIND, type DesktopThemeKind } from '@shared/schemas';
+import {
+  DESKTOP_THEME_KIND,
+  type DesktopThemeKind,
+  type Theme,
+} from '@shared/schemas';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -14,7 +18,7 @@ import './reviewPane.css';
 
 interface DiffViewElement extends HTMLElement {
   fill: boolean;
-  hostTheme: string;
+  hostTheme: Theme;
   language: string;
   originalText: string;
   proposedText: string;
