@@ -141,7 +141,7 @@ export const topLevelStreams$ = new Signal.Computed(() =>
 export const childStreamsByParent$ = new Signal.Computed(() => {
   const childStreams = [...streamById$.get().values()].filter(
     (stream): stream is StreamTabInfo & { parentStreamId: StreamTabId } =>
-      stream.parentStreamId !== undefined,
+      Boolean(stream.parentStreamId),
   );
   if (childStreams.length === 0) return EMPTY_CHILD_MAP;
   return groupBy(childStreams, (stream) => stream.parentStreamId);
