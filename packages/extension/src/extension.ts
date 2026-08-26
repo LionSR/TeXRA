@@ -244,7 +244,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     process.loadEnvFile(path.join(workspaceRoot, '.env'));
   } catch (error) {
     // A workspace without a .env is the normal case; any other failure
-    // (EACCES, EISDIR) stays loud instead of silently dropping the file.
+    // (EACCES, ERR_INVALID_ARG_TYPE) stays loud instead of silently dropping it.
     if (!isFileNotFoundError(error)) throw error;
   }
   setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
