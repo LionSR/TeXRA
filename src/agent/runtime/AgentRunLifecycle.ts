@@ -21,7 +21,6 @@ import {
   attachProviderError,
 } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
-import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
 import { platform } from '@platform/platform';
 import type {
   RetryErrorInfo,
@@ -46,6 +45,7 @@ import {
   setFirstRunDone,
 } from '@shared/state/onboardingState';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
 import {
   buildTerminalFlowResult,
