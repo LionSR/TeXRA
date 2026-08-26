@@ -18,14 +18,16 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type { DocumentFileType, MainViewInboundMessage } from '@shared/schemas';
+import type {
+  DocumentFileType,
+  MainViewInboundMessage,
+  MainViewMessage,
+} from '@shared/schemas';
 import { isMultipleDocumentFileType } from '@shared/schemas';
 import { getFileStem } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
-
-import { BaseWebviewManager } from './BaseWebviewManager';
 
 type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   MainViewInboundMessage,
@@ -55,7 +57,10 @@ type GetCurrentFileMessage = MessageFor<
 const CHANNEL = 'FileManager';
 const log = createLog(CHANNEL);
 
-export class FileManager extends BaseWebviewManager {
+export class FileManager {
+  /** Posts to whichever launcher webview is dispatching right now. */
+  constructor(private readonly post: (message: MainViewMessage) => void) {}
+
   async handleRequestEditedFile(
     message: RequestEditedFileMessage,
   ): Promise<void> {
@@ -65,7 +70,7 @@ export class FileManager extends BaseWebviewManager {
     if (message.notifyWhenEmpty && files.length === 0) {
       log.debug('No edited files were found during refresh.');
     }
-    this.postMessage({ command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE, files });
+    this.post({ command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE, files });
   }
 
   async handleRequestBaseFile(message: RequestBaseFileMessage): Promise<void> {
@@ -95,7 +100,7 @@ export class FileManager extends BaseWebviewManager {
       );
 
       if (selectedFiles) {
-        this.postMessage({
+        this.post({
           command: commands.responseCommand,
           files: selectedFiles,
         });
@@ -169,7 +174,7 @@ export class FileManager extends BaseWebviewManager {
             command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
             preserveBaseFile: true,
           });
-          this.postMessage({
+          this.post({
             command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
             filePath: derivedBaseFile,
             fileType,
@@ -186,7 +191,7 @@ export class FileManager extends BaseWebviewManager {
       }
     }
 
-    this.postMessage({
+    this.post({
       command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
       filePath: currentOpenFile,
       fileType,
@@ -209,7 +214,7 @@ export class FileManager extends BaseWebviewManager {
     );
 
     if (commitLabel) {
-      this.postMessage({
+      this.post({
         command: MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT,
         commitHash,
         commitLabel,
@@ -237,7 +242,7 @@ export class FileManager extends BaseWebviewManager {
           )
         : openedFiles;
 
-    this.postMessage({
+    this.post({
       command: MAIN_VIEW_COMMANDS.SET_OPENED_FILES,
       files: filteredFiles,
       fileType,
@@ -263,7 +268,7 @@ export class FileManager extends BaseWebviewManager {
     for (const fileType of MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES) {
       const droppedFiles = plan.filesByCategory[fileType];
       if (droppedFiles.length === 0) continue;
-      this.postMessage({
+      this.post({
         command: MAIN_VIEW_COMMANDS.SET_OPENED_FILES,
         files: [...droppedFiles],
         fileType,
@@ -280,7 +285,7 @@ export class FileManager extends BaseWebviewManager {
     if (options.notifyWhenEmpty && files.length === 0) {
       log.debug('No base files were found during refresh.');
     }
-    this.postMessage({
+    this.post({
       command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
       files,
       ...(options.preserveBaseFile ? { preserveBaseFile: true } : {}),
@@ -289,7 +294,7 @@ export class FileManager extends BaseWebviewManager {
 
   /** Post show/hide getting started banner. */
   private postGettingStartedBanner(show: boolean): void {
-    this.postMessage({
+    this.post({
       command: MAIN_VIEW_COMMANDS.SET_BANNER,
       banner: 'gettingStarted',
       visible: show,

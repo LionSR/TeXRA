@@ -214,17 +214,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         );
       }),
     );
-    this._disposables.add(
-      vscode.window.onDidChangeActiveColorTheme(({ kind }) => {
-        // The webview only needs the THEME_SET message here (BaseWebviewApp's
-        // onThemeChange swaps the body class); rebuilding metadata for every
-        // persisted stream on a theme flip is pure waste (#9959).
-        if (!this.isViewVisible() || !this.canSendToWebview()) return;
-        this.renderer.setTheme(
-          kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light',
-        );
-      }),
-    );
   }
 
   public async initialize(): Promise<void> {
@@ -291,14 +280,9 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     if (!this.getActiveWebview()) return Promise.resolve();
 
-    const theme =
-      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
-        ? 'dark'
-        : 'light';
-
     this.renderer.setPlacement(target.placement);
 
-    return this.backend.syncRenderedStreams({ syncActiveStream, theme });
+    return this.backend.syncRenderedStreams({ syncActiveStream });
   }
 
   public async markWebviewReady(

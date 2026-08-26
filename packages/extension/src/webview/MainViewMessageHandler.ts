@@ -11,7 +11,10 @@ import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchMainViewInbound,
   MainViewInboundHandlerRegistry,
+  MainViewMessageSchema,
+  type MainViewMessage,
 } from '@shared/schemas';
+import { assertOutboundMessage } from '@shared/utils/dispatcher';
 
 import { DiffManager } from './managers/DiffManager';
 import { FileManager } from './managers/FileManager';
@@ -59,9 +62,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       }),
       progressTitle: 'Transcribing instruction',
     });
-    this.fileManager = new FileManager();
-    this.diffManager = new DiffManager();
-    this.instructionManager = new InstructionManager();
+    const post = (message: MainViewMessage): void =>
+      this.postToManagerTarget(message);
+    this.fileManager = new FileManager(post);
+    this.diffManager = new DiffManager(post);
+    this.instructionManager = new InstructionManager(post);
     this.startupController = new MainViewStartupController({
       loadOptions,
       getAuthStatus,
@@ -80,13 +85,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       dispatchMainViewInbound,
       this.handlerRegistry,
     );
-  }
-
-  /** Attaches the current webview to the sub-managers before dispatch. */
-  protected override onDispatch(webviewView: vscode.WebviewView): void {
-    this.fileManager.attachWebview(webviewView);
-    this.instructionManager.attachWebview(webviewView);
-    this.diffManager.attachWebview(webviewView);
   }
 
   /**
@@ -121,6 +119,21 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       ...createChatHandlers(host),
       ...createOnboardingHandlers(host),
     };
+  }
+
+  /**
+   * The managers' only outbound path. Resolving the view at post time (rather
+   * than holding a reference handed over at dispatch) is what keeps a result
+   * produced across an await — polished instruction text, a transcription —
+   * from landing in a document the sidebar has since swapped away.
+   *
+   * Dev/test-only schema check: managers send MainView outbound messages
+   * exclusively, so a mismatch here is always schema/producer drift, never an
+   * out-of-domain command. See `assertOutboundMessage` for the prod no-op.
+   */
+  private postToManagerTarget(message: MainViewMessage): void {
+    assertOutboundMessage(MainViewMessageSchema, message);
+    this.postToActiveView(message);
   }
 
   private handleThemeRequest(): void {

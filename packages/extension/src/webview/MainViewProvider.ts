@@ -423,6 +423,10 @@ export class MainViewProvider
     this.mainWebviewReady = false;
 
     if (mode === SIDEBAR_VIEWS.PROGRESS) {
+      // The launcher no longer owns this surface. Without this, a result that
+      // finished across an await (polished instruction text, a transcription)
+      // would be posted into the progress document that replaced it.
+      this.messageHandler.clearActiveView();
       const pvp = this._progressViewProvider!;
       webviewView.webview.html = pvp
         .getContentProvider()
