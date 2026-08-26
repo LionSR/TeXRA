@@ -7,8 +7,8 @@ import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import type { ProgressHostInteractionsOptions } from '@controllers/progressView/backend/progressHostInteractions';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
-import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import type { StreamTabId } from '@shared/schemas';
+import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
