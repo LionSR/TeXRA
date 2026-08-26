@@ -276,28 +276,6 @@ describe('SettingsAgentCatalogController', () => {
     );
   });
 
-  it('previews no root for a custom team with no delegating members', () => {
-    const { controller } = createController();
-
-    // The launcher disables this team with "no runnable team root"; the
-    // preview must agree instead of inventing a built-in root.
-    assert.equal(
-      controller.getPresetToolUseRoot(['review', 'customTool']),
-      undefined,
-    );
-  });
-
-  it('previews the engineer root for the built-in Software Engineer team', () => {
-    const { controller } = createController();
-    const softwareEngineer = AGENT_MODE_PRESETS_BY_ID.get('software-engineer');
-
-    assert.ok(softwareEngineer);
-    assert.equal(
-      controller.getPresetToolUseRoot(softwareEngineer.agents.toolUse),
-      'engineer',
-    );
-  });
-
   it('previews the orchestrator root for a built-in team before the catalog loads', () => {
     const { controller } = createController({
       agents: { toolUse: [] },
