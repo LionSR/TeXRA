@@ -95,7 +95,7 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.240",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.241",
     "@anthropic-ai/sdk": "^0.120.0",
     "@awesome.me/webawesome": "^3.12.0",
     "@cantoo/pdf-lib": "^2.9.1",
