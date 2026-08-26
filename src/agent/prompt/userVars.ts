@@ -16,6 +16,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentDelegationScope, FileListEntry } from '@shared/schemas';
 import {
   AGENT_SKILLS_CONFIG_KEY,
+  AGENT_SKILLS_ENABLED_DEFAULT,
   AgentCategory,
   AgentSkillsEnabledSchema,
 } from '@shared/schemas';
@@ -153,7 +154,9 @@ export async function buildUserVars(
     // work for workflow agents. The settings toggle gives users a hard off
     // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
     agentSetting.agentCategory === AgentCategory.ToolUse &&
-    AgentSkillsEnabledSchema.parse(getConfig<unknown>(AGENT_SKILLS_CONFIG_KEY))
+    AgentSkillsEnabledSchema.parse(
+      getConfig<unknown>(AGENT_SKILLS_CONFIG_KEY, AGENT_SKILLS_ENABLED_DEFAULT),
+    )
       ? loadRuntimeSkillCatalog()
       : // A fresh object per call, not a shared constant: `skills` is handed
         // to the snapshot consumer, and a shared array would accumulate.
@@ -232,7 +235,7 @@ function getBasicVars(
   );
 
   // Get default bib path from settings (empty string if not configured)
-  const defaultBibPath = getConfig<string>('texra.bib.defaultPath');
+  const defaultBibPath = getConfig<string>('texra.bib.defaultPath', '');
 
   return {
     MODEL: agentConfig.model,
