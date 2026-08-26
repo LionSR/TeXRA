@@ -16,8 +16,7 @@ what to check by hand for the extension.
 ## Quick automated pass
 
 ```bash
-# Type checking — must be clean ON FILES YOU TOUCHED. Pre-existing errors
-# (e.g. `@openrouter/sdk/models`) are unrelated.
+# Type checking — must be clean.
 npm run typecheck
 
 # Vitest suite — host-neutral logic + Electron-facing helpers.

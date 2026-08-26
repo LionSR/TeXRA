@@ -1,9 +1,9 @@
 # TeXRA CLI — Checkout Workflow
 
 Developer-only notes for running the `texra` CLI from a local repository
-checkout. These instructions assume read access to the TeXRA source tree and
-are not part of the public CLI guide (`docs/guide/texra-cli.md`) because the
-repository is not open source.
+checkout. These instructions are kept out of the public CLI guide
+(`docs/guide/texra-cli.md`) because they concern working from a source
+checkout, not installing the published CLI.
 
 For end-user CLI usage (`texra run`, `texra completion`, workspace defaults,
 history, tools), see the [public CLI guide](../guide/texra-cli.md).
@@ -27,7 +27,8 @@ npm run texra-local:link    # one-time; override the install dir with TEXRA_LOCA
 ```
 
 Run with `texra-local` instead of `texra`. Re-run `texra-local:build` to refresh.
-See also the "Local CLI (`texra-local`)" section of `CLAUDE.md`.
+The scripts live in the root `package.json` (`texra-local:build`,
+`texra-local:link`) and `scripts/link-texra-local.mjs`.
 
 ### Override the published `texra`
 

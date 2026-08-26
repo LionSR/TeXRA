@@ -10,9 +10,11 @@ const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const packageName = '@texra-ai/cli';
 const packageDir = 'package/';
 
-// Templates only the VS Code extension and the desktop app read. The CLI
-// resolves agent creation through resources/docs/agent-creation, so none of
-// these belongs in the published tarball. `templates/instructionPolish.yaml`
+// Templates only the VS Code extension and the desktop app read. Agent
+// creation is not wired up on the CLI (external-root registration lives in
+// VS Code activation), so none of these belongs in the published tarball;
+// nor does resources/docs/agent-creation, which copy-resources.mjs likewise
+// skips for the CLI. `templates/instructionPolish.yaml`
 // is deliberately absent from this list: bundledPrompts.ts keeps a polish row
 // registered for the CLI, so shipping that one later is legitimate.
 const EXTENSION_ONLY_TEMPLATES = new Set([

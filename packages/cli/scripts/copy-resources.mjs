@@ -11,13 +11,11 @@ const targetInput = process.env.TEXRA_CLI_RESOURCES_OUTDIR?.trim();
 const target = targetInput
   ? path.resolve(packageDir, targetInput)
   : path.resolve(packageDir, 'dist/resources');
-const runtimeResourceEntries = [
-  'agents',
-  'docs/agent-creation',
-  'goal',
-  'shared',
-  'tool_use_agents',
-];
+// `docs/agent-creation` is deliberately absent: external-root registration
+// happens only in VS Code activation, so the CLI cannot serve those docs
+// today. Re-add the entry in the same PR that wires external roots
+// host-neutrally.
+const runtimeResourceEntries = ['agents', 'goal', 'shared', 'tool_use_agents'];
 
 // Built (not checked-in) assets: only present once packages/trace-viewer's
 // own build has run (normally guaranteed by this package's own `build`

@@ -25,7 +25,6 @@ const VALID = {
   prompts: {
     systemPrompt: 'You are a system prompt.\n',
     userRequest: 'Generate the thing.\n',
-    retryPrompt: 'Try again: {{ VALIDATION_ERROR }}\n',
   },
 };
 
@@ -47,7 +46,7 @@ describe('bundled agent-creator template schema', () => {
     expect(ParsedCreatorYamlSchema.parse(VALID).prompts).toEqual(VALID.prompts);
   });
 
-  it.each(['systemPrompt', 'userRequest', 'retryPrompt'])(
+  it.each(['systemPrompt', 'userRequest'])(
     'rejects empty or whitespace-only %s',
     (field) => {
       for (const blank of ['', '  \n']) {
@@ -61,13 +60,12 @@ describe('bundled agent-creator template schema', () => {
   );
 
   it('rejects misspelled keys inside prompts instead of stripping them', () => {
-    const { retryPrompt, ...rest } = VALID.prompts;
     const result = ParsedCreatorYamlSchema.safeParse({
       ...VALID,
-      prompts: { ...rest, retryPromt: retryPrompt },
+      prompts: { ...VALID.prompts, userRequst: VALID.prompts.userRequest },
     });
     expect(result.success).toBe(false);
-    expect(JSON.stringify(result.error?.issues)).toContain('retryPromt');
+    expect(JSON.stringify(result.error?.issues)).toContain('userRequst');
   });
 
   it('rejects a missing required prompt field', () => {
