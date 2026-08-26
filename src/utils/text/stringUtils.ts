@@ -1,3 +1,4 @@
+import { intlFormatDistance } from 'date-fns';
 import prettyBytes from 'pretty-bytes';
 import prettyMilliseconds from 'pretty-ms';
 import pluralizeWord from 'pluralize';
@@ -305,30 +306,10 @@ const SHORT_DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit',
 });
 
-const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat(undefined, {
-  numeric: 'auto',
-});
-
-const RELATIVE_TIME_UNITS: readonly [Intl.RelativeTimeFormatUnit, number][] = [
-  ['year', 365 * 24 * 3_600_000],
-  ['month', 30 * 24 * 3_600_000],
-  ['week', 7 * 24 * 3_600_000],
-  ['day', 24 * 3_600_000],
-  ['hour', 3_600_000],
-  ['minute', 60_000],
-];
-
-/** Duration-based "X ago" / "in X" via Intl.RelativeTimeFormat (handles future timestamps too). */
+/** Calendar-aware "X ago" / "in X" via Intl.RelativeTimeFormat (handles future timestamps too). */
 export function formatRelativeTime(timestamp: number): string {
   if (!timestamp) return '';
-  const delta = timestamp - Date.now();
-  const magnitude = Math.abs(delta);
-  for (const [unit, unitMs] of RELATIVE_TIME_UNITS) {
-    if (magnitude >= unitMs) {
-      return RELATIVE_TIME_FORMATTER.format(Math.trunc(delta / unitMs), unit);
-    }
-  }
-  return RELATIVE_TIME_FORMATTER.format(Math.trunc(delta / 1000), 'second');
+  return intlFormatDistance(timestamp, Date.now());
 }
 
 /**

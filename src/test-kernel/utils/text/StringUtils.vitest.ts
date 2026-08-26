@@ -1,9 +1,10 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
   formatTimestamp,
+  formatRelativeTime,
   formatCompactDuration,
   formatCompactTokenCount,
   formatResultCount,
@@ -164,6 +165,72 @@ describe('formatTimestamp', () => {
     expect(formatTimestamp('')).toBe('');
     expect(formatTimestamp('abcTdef')).toBe('abc def');
   });
+});
+
+describe('formatRelativeTime', () => {
+  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  const hour = 3_600_000;
+  const day = 24 * hour;
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it.each([
+    [0, 0, 'second'],
+    [59_000, 59, 'second'],
+    [60_000, 1, 'minute'],
+    [59 * 60_000, 59, 'minute'],
+    [hour, 1, 'hour'],
+    [23 * hour, 23, 'hour'],
+    [day, 1, 'day'],
+    [7 * day, 1, 'week'],
+    [8 * day, 1, 'week'],
+    [30 * day, 4, 'week'],
+    [31 * day, 1, 'month'],
+    [90 * day, 3, 'month'],
+    [92 * day, 1, 'quarter'],
+    [364 * day, 3, 'quarter'],
+  ] as const)(
+    'uses the prior duration ladder for a %i ms future timestamp',
+    (offset, value, unit) => {
+      vi.setSystemTime(new Date(2026, 0, 1, 0, 30));
+      expect(formatRelativeTime(Date.now() + offset)).toBe(
+        formatter.format(value, unit),
+      );
+    },
+  );
+
+  it.each([
+    [-59_000, -59, 'second'],
+    [-60_000, -1, 'minute'],
+    [-hour, -1, 'hour'],
+    [-day, -1, 'day'],
+    [-7 * day, -1, 'week'],
+    [-30 * day, -4, 'week'],
+    [-90 * day, -3, 'month'],
+    [-364 * day, -4, 'quarter'],
+  ] as const)(
+    'uses the prior duration ladder for a %i ms past timestamp',
+    (offset, value, unit) => {
+      vi.setSystemTime(new Date(2026, 0, 1, 23, 30));
+      expect(formatRelativeTime(Date.now() + offset)).toBe(
+        formatter.format(value, unit),
+      );
+    },
+  );
+
+  it.each([
+    [366 * day, 1],
+    [-366 * day, -1],
+  ] as const)(
+    'uses calendar years beyond the quarter threshold (%i ms)',
+    (offset, value) => {
+      vi.setSystemTime(new Date(2026, 6, 1, 12));
+      expect(formatRelativeTime(Date.now() + offset)).toBe(
+        formatter.format(value, 'year'),
+      );
+    },
+  );
 });
 
 // Shared "last touched" timestamp formatter for History and Memory list items.
