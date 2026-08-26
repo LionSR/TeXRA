@@ -6,8 +6,8 @@
 // (ToolRenderers, ConversationTranscript, SubagentListDisplay,
 // StaticBandResize, TuiStateAndFocus) construct them here so the payload and
 // its model can never drift apart in a fixture. The task-group replay below
-// has the same shape as one projection over: entries folded through the
-// production reducer.
+// has the same shape as one projection: entries folded through the production
+// reducer.
 
 import {
   MESSAGE_TYPES,
