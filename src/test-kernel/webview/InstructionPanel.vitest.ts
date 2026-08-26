@@ -1,6 +1,9 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+// Local imports - shared schemas
+import type { SessionContextValue } from '@shared/schemas';
+
 // Local imports - component type
 import type { InstructionPanel } from '@webview/frontend/components/InstructionPanel';
 
@@ -27,6 +30,8 @@ const TEAM_SESSION = makeSession({
     }),
   ],
 });
+
+const SESSION = makeSession({ instruction: 'Polish the abstract.' });
 
 function query<T extends HTMLElement>(
   element: InstructionPanel,
@@ -92,6 +97,18 @@ function expectLauncherLabels(
   expect(query(element, '#model')?.getAttribute('aria-label')).toBe(modelLabel);
 }
 
+let BROWSE_ALL_AGENTS_OPTION_VALUE: string;
+let MANAGE_TEAMS_OPTION_VALUE: string;
+
+useLitComponentTestDom(async () => {
+  // selectTemplates registers wa-option at module scope, so like the panel
+  // modules loaded above it can only be imported after the test DOM globals
+  // are installed (this hook's job).
+  await loadInstructionPanelModules();
+  ({ BROWSE_ALL_AGENTS_OPTION_VALUE, MANAGE_TEAMS_OPTION_VALUE } =
+    await import('@shared/utils/selectTemplates'));
+});
+
 /**
  * Rendering contract for the Agent/Team launcher (Design Concept A): the
  * panel swaps its picker, execute-button label, model-picker label, and
@@ -99,18 +116,6 @@ function expectLauncherLabels(
  * intercept the "Manage teams…" sentinel instead of treating it as a team.
  */
 describe('instruction-panel launcher', () => {
-  let BROWSE_ALL_AGENTS_OPTION_VALUE: string;
-  let MANAGE_TEAMS_OPTION_VALUE: string;
-
-  useLitComponentTestDom(async () => {
-    // selectTemplates registers wa-option at module scope, so like the panel
-    // modules loaded above it can only be imported after the test DOM globals
-    // are installed (this hook's job).
-    await loadInstructionPanelModules();
-    ({ BROWSE_ALL_AGENTS_OPTION_VALUE, MANAGE_TEAMS_OPTION_VALUE } =
-      await import('@shared/utils/selectTemplates'));
-  });
-
   describe('agent launcher', () => {
     it('renders the launch-target toggle bound to the session with the interactive agent picker active', async () => {
       const element = await mountPanel(makeSession());
@@ -412,5 +417,214 @@ describe('instruction-panel launcher', () => {
         )?.textContent?.trim(),
       ).toBe('Team launcher selected.');
     });
+  });
+});
+
+describe('instruction-panel desktop composer', () => {
+  function mountDesktopPanel(
+    desktopHost: boolean,
+    session: SessionContextValue = SESSION,
+  ): Promise<InstructionPanel> {
+    return mountPanel(session, { desktopHost });
+  }
+
+  /** Like `query`, but throws on a missing match so members chain safely. */
+  function requireQuery<T extends HTMLElement>(
+    element: InstructionPanel,
+    selector: string,
+  ): T {
+    const match = element.shadowRoot?.querySelector<T>(selector);
+    if (!match) throw new Error(`Missing ${selector}`);
+    return match;
+  }
+
+  function dispatchEnter(
+    textarea: HTMLElement,
+    overrides: KeyboardEventInit = {},
+  ): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      composed: true,
+      cancelable: true,
+      ...overrides,
+    });
+    textarea.dispatchEvent(event);
+    return event;
+  }
+
+  function countExecutes(element: InstructionPanel): () => number {
+    let count = 0;
+    element.addEventListener('execute', () => {
+      count += 1;
+    });
+    return () => count;
+  }
+
+  it('opts into the desktop layout and controls when desktopHost is set', async () => {
+    const desktop = await mountDesktopPanel(true);
+
+    expect(desktop.hasAttribute('desktop-host')).toBe(true);
+    expect(requireQuery(desktop, '.desktop-drop-affordance')).toBeTruthy();
+    expect(requireQuery(desktop, '.desktop-mode-controls')).toBeTruthy();
+    expect(
+      requireQuery(desktop, '.desktop-mode-controls #desktopLaunchMode'),
+    ).toBeTruthy();
+    expect(
+      desktop.shadowRoot?.querySelector(
+        '.instruction-header #sessionTypeToggle',
+      ),
+    ).toBeNull();
+    expect(desktop.shadowRoot?.querySelector('#sessionTypeToggle')).toBeNull();
+    expect(desktop.shadowRoot?.querySelector('#launchTargetToggle')).toBeNull();
+    expect(
+      requireQuery(desktop, '.desktop-drop-affordance .icon-surface.is-size-m'),
+    ).toBeTruthy();
+  });
+
+  it('uses the compact composer affordances on desktop', async () => {
+    const desktop = await mountDesktopPanel(true);
+
+    expect(requireQuery(desktop, '#instruction').getAttribute('rows')).toBe(
+      '4',
+    );
+    expect(
+      requireQuery(desktop, '#instruction').getAttribute('enterkeyhint'),
+    ).toBe('send');
+    expect(
+      requireQuery(desktop, '#executeButton').getAttribute('aria-label'),
+    ).toBe('Send request');
+    expect(
+      requireQuery(desktop, '#executeButton wa-icon').getAttribute('name'),
+    ).toBe('arrow-up');
+    for (const id of ['#desktopLaunchMode', '#toolUseAgent', '#model']) {
+      expect(requireQuery(desktop, id).getAttribute('size')).toBe('xs');
+    }
+  });
+
+  it('keeps the extension panel on the default treatment when desktopHost is unset', async () => {
+    const extension = await mountDesktopPanel(false);
+
+    expect(extension.hasAttribute('desktop-host')).toBe(false);
+    expect(
+      extension.shadowRoot?.querySelector('.desktop-drop-affordance'),
+    ).toBe(null);
+    expect(requireQuery(extension, '#instruction').getAttribute('rows')).toBe(
+      '10',
+    );
+    expect(
+      requireQuery(extension, '#instruction').hasAttribute('enterkeyhint'),
+    ).toBe(false);
+    expect(
+      requireQuery(extension, '.instruction-header #sessionTypeToggle'),
+    ).toBeTruthy();
+    expect(
+      requireQuery(extension, '#executeButton').getAttribute('aria-label'),
+    ).toBe('Run agent');
+    expect(
+      requireQuery(extension, '#executeButton wa-icon').getAttribute('name'),
+    ).toBe('arrow-up');
+    expect(
+      requireQuery(extension, '#sessionTypeToolUse').getAttribute('appearance'),
+    ).toBe('default');
+  });
+
+  it('maps the unified desktop mode picker to the existing session state', async () => {
+    const element = await mountDesktopPanel(true, {
+      ...SESSION,
+      sessionType: 'workflow',
+      launchTarget: 'agent',
+    });
+    const mode = requireQuery<HTMLElement>(element, '#desktopLaunchMode');
+    const changes = recordEvents(element, [
+      'session-type-change',
+      'launch-target-change',
+    ]);
+
+    changeValue(mode, 'team');
+
+    expect(changes).toEqual([
+      { type: 'session-type-change', detail: { value: 'toolUse' } },
+      { type: 'launch-target-change', detail: { value: 'team' } },
+    ]);
+
+    changes.length = 0;
+    changeValue(mode, 'workflow');
+
+    expect(changes).toEqual([
+      { type: 'session-type-change', detail: { value: 'workflow' } },
+    ]);
+  });
+
+  it('shows and updates the working directory only for multi-root workspaces', async () => {
+    const singleRoot = await mountDesktopPanel(true, {
+      ...SESSION,
+      workspaceRootOptions: [{ label: 'paper', value: '/workspace/paper' }],
+      workingDirectory: '/workspace/paper',
+    });
+    expect(
+      singleRoot.shadowRoot?.querySelector('#workingDirectory'),
+    ).toBeNull();
+
+    const multiRoot = await mountDesktopPanel(true, {
+      ...SESSION,
+      workspaceRootOptions: [
+        { label: 'paper', value: '/workspace/paper' },
+        { label: 'figures', value: '/workspace/figures' },
+      ],
+      workingDirectory: '/workspace/paper',
+    });
+    const picker = requireQuery<HTMLElement>(multiRoot, '#workingDirectory');
+    const changes = recordEvents(multiRoot, ['working-directory-change']);
+
+    expect(picker.getAttribute('aria-label')).toBe('Working directory');
+    expect(
+      multiRoot.shadowRoot?.querySelectorAll('#workingDirectory wa-option'),
+    ).toHaveLength(2);
+
+    changeValue(picker, '/workspace/figures');
+
+    expect(changes).toEqual([
+      {
+        type: 'working-directory-change',
+        detail: { value: '/workspace/figures' },
+      },
+    ]);
+  });
+
+  it('sends on Enter in desktop mode and preserves Shift+Enter for a newline', async () => {
+    const element = await mountDesktopPanel(true);
+    const textarea = requireQuery(element, '#instruction');
+    const executeCount = countExecutes(element);
+
+    const newlineEvent = dispatchEnter(textarea, { shiftKey: true });
+    expect(newlineEvent.defaultPrevented).toBe(false);
+    expect(executeCount()).toBe(0);
+
+    const sendEvent = dispatchEnter(textarea);
+    expect(sendEvent.defaultPrevented).toBe(true);
+    expect(executeCount()).toBe(1);
+  });
+
+  it('leaves plain Enter untouched in the extension panel', async () => {
+    const element = await mountDesktopPanel(false);
+    const executeCount = countExecutes(element);
+
+    const event = dispatchEnter(requireQuery(element, '#instruction'));
+    expect(event.defaultPrevented).toBe(false);
+    expect(executeCount()).toBe(0);
+  });
+
+  it('keeps send disabled until the request and required selections exist', async () => {
+    const element = await mountDesktopPanel(true, {
+      ...SESSION,
+      instruction: '',
+    });
+    const executeButton = requireQuery(element, '#executeButton');
+    const executeCount = countExecutes(element);
+
+    expect(executeButton.hasAttribute('disabled')).toBe(true);
+    dispatchEnter(requireQuery(element, '#instruction'));
+    expect(executeCount()).toBe(0);
   });
 });
