@@ -647,9 +647,9 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     honoredBy: everyHost('src/logger/logUtils.ts'),
   },
   'telemetry.enabled': {
-    title: 'Usage telemetry',
+    title: 'Share usage telemetry',
     description:
-      'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names.',
+      'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names. Turning this off stops reporting for rounds billed to your own API keys; rounds covered by a subscription are still recorded, because they meter your usage against your plan.',
     category: 'account',
     configTarget: 'global',
     honoredBy: everyHost('src/telemetry/UsageLogService.ts'),
@@ -659,7 +659,7 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     honoredBy: everyHost('src/agent/debug/debugMessageSaver.ts'),
   },
   'skills.enabled': {
-    title: 'Agent skills',
+    title: 'Make skills available to tool-use agents',
     description:
       'Discover TeXRA and imported skills and expose them to tool-use agent prompts.',
     category: 'tools',
@@ -1083,7 +1083,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: GlobalStateKey.MEMORY_ENABLED,
     schema: z.boolean().prefault(true),
-    title: 'Memory for chat agents',
+    title: 'Enable memory for chat agents',
     description: 'Remember useful details across chat sessions.',
     category: 'tools',
     slots: sameSlot('globalState'),
@@ -1495,7 +1495,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
     schema: z.boolean().prefault(DEFAULT_TOOL_PATH_PROTECTION_ENABLED),
-    title: 'Restrict tool paths',
+    title: 'Restrict tool paths to the working directory',
     description:
       'Keep file-reading, editing, search, diagnostics, and PDF tools inside the active working directory. Turn this off only when an agent must use arbitrary filesystem paths.',
     category: 'tools',

@@ -145,11 +145,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     this.contentProvider = new BundledViewContentProvider(
       context,
       'ProgressView',
-      {
-        dist: 'progressView',
-        bundleKey: 'progressBundleUri',
-        styleKey: 'progressStyleUri',
-      },
+      'progressView',
     );
     const presentationHost = createAgentPresentationHost(this);
     const storageRoot = context.storageUri ?? context.globalStorageUri;

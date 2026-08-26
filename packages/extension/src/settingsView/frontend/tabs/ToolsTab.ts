@@ -210,16 +210,10 @@ export class ToolsTab extends LitElement {
           </div>
           ${renderStateSettingToggleRow({
             key: TOOL_EDIT_APPROVAL_CONFIG_KEY,
-            label: 'Under Ask: require approval for file edits',
-            description:
-              'When policy is Ask, review a diff before an agent changes files. Inert under Never and Auto-approve.',
             checked: this.editApprovalEnabled,
           })}
           ${renderStateSettingToggleRow({
             key: BASH_APPROVAL_CONFIG_KEY,
-            label: 'Under Ask: require approval for shell commands',
-            description:
-              'When policy is Ask, pause before an agent runs a shell command. Inert under Never and Auto-approve.',
             checked: this.bashApprovalEnabled,
           })}
         </div>
@@ -238,8 +232,6 @@ export class ToolsTab extends LitElement {
         <div class="settings-section">
           ${renderStateSettingToggleRow({
             key: AGENT_SKILLS_CONFIG_KEY,
-            label: 'Make skills available to tool-use agents',
-            description: 'Includes built-in TeXRA skills and imported skills.',
             checked: this.agentSkillsEnabled,
           })}
         </div>
@@ -290,9 +282,6 @@ export class ToolsTab extends LitElement {
                       >
                         ${renderStateSettingToggleRow({
                           key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-                          label: 'Restrict tool paths to the working directory',
-                          description:
-                            'Keep file, search, diagnostics, and PDF tools inside the working directory.',
                           checked: this.toolPathProtectionEnabled,
                         })}
                       </div>

@@ -39,7 +39,6 @@ vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  markOwnedExecutionLeaseUndurable: vi.fn(),
   assertOwnedExecutionLease: mocks.assertOwnedExecutionLease,
 }));
 

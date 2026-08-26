@@ -218,7 +218,7 @@ export const warn = makeLogFn(LOG_LEVELS.WARN);
 export const error = makeLogFn(LOG_LEVELS.ERROR);
 
 /** A channel-bound view of the four level writers. */
-interface Log {
+export interface Log {
   debug(message: string, options?: LogUtilsOptions): void;
   info(message: string, options?: LogUtilsOptions): void;
   warn(message: string, options?: LogUtilsOptions): void;

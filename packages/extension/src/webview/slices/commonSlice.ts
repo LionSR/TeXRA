@@ -18,7 +18,7 @@ export function createCommonHandlers(host: MainViewInboundHost) {
     [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: () => host.handleWebviewReady(),
     [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: (m) => {
       vscode.window.showInformationMessage(m.text);
-      host.logger.debug(host.channel, `Information message: ${m.text}`);
+      host.log.debug(`Information message: ${m.text}`);
     },
     [MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION]: (m) =>
       showInstructionWithSuppress(m.key, m.text),

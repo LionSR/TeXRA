@@ -33,6 +33,31 @@ const truncateTextRule: CSSResult = css`
 `;
 
 /**
+ * Sizing contract for a prose textarea an agent is written to (no selector),
+ * interpolated into the `::part(textarea)` rule of every such box — the
+ * request panels' feedback inputs and the progress composer
+ * (`FollowUpInput.styles.ts`). Each surface still sets its own
+ * `--textarea-min-height` / `--textarea-max-height`, which is the intended
+ * per-surface difference.
+ */
+export const proseTextareaPartRule: CSSResult = css`
+  field-sizing: content;
+  width: 100%;
+  height: auto;
+  min-height: var(--textarea-min-height);
+  max-height: var(--textarea-max-height);
+  padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--wa-font-family-body);
+  font-size: var(--font-size);
+  line-height: var(--line-height-relaxed);
+`;
+
+/**
  * Shared selector groups for :is() consolidation.
  * To add a new request panel type, add an entry to the PANEL_TYPES table below
  * and the shared layout, accent, and icon rules all follow automatically.
@@ -356,8 +381,8 @@ export const requestPanelSharedStyles: CSSResult = css`
      (#9773): rest at two lines, grow with content, keep a vertical drag
      handle. The shared formControlStyles skin is for mono editors (6rem
      floor, 1px block padding, grid-centered), which left empty white
-     bands above/below a short rejection note. Mirror the follow-up
-     textarea rules so the two prose boxes stay in lockstep. */
+     bands above/below a short rejection note. The declarations both prose
+     boxes share live in `proseTextareaPartRule` above. */
   :is(${FEEDBACK_INPUTS}) {
     display: block;
     min-width: 0;
@@ -378,20 +403,7 @@ export const requestPanelSharedStyles: CSSResult = css`
   }
 
   :is(${FEEDBACK_INPUTS})::part(textarea) {
-    field-sizing: content;
-    width: 100%;
-    height: auto;
-    min-height: var(--textarea-min-height);
-    max-height: var(--textarea-max-height);
-    padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
-    box-sizing: border-box;
-    overflow-x: hidden;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    font-family: var(--wa-font-family-body);
-    font-size: var(--font-size);
-    line-height: var(--line-height-relaxed);
+    ${proseTextareaPartRule}
   }
 
   /* Carousel navigation for multiple external inquiries (rendered directly by
