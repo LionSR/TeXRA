@@ -76,8 +76,6 @@ export class MemoryTab extends LitElement {
         ${this.renderActions()}
         ${renderStateSettingToggleRow({
           key: GlobalStateKey.MEMORY_ENABLED,
-          label: 'Enable memory for chat agents',
-          description: 'Remember useful details across chat sessions.',
           checked: this.enabled,
         })}
 

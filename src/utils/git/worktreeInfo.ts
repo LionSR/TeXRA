@@ -2,9 +2,7 @@
  * Resolve git worktree context (branch, dirty status) for a working directory.
  *
  * Host-neutral: shells out via the shared command runner so the same resolver
- * is usable from the VS Code extension host and the Electron desktop main process. PR
- * enrichment is intentionally out of scope for this module — that will layer
- * on top once the chip is in the UI.
+ * is usable from the VS Code extension host and the Electron desktop main process.
  *
  * A tiny per-path cache lets sync render paths (`buildStreamTabInfo`) read
  * the last-known value via `peekWorktreeInfo()` while async resolution is

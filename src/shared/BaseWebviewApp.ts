@@ -89,13 +89,6 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
   };
 
   /**
-   * Override to change or suppress the ready command.
-   */
-  protected get readyCommand(): string | null {
-    return COMMON_COMMANDS.WEBVIEW_READY;
-  }
-
-  /**
    * True when this webview is mounted by the Electron desktop renderer.
    *
    * Why two checks: under normal operation `window.texraDesktop` is wired by
@@ -170,11 +163,13 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
     super.connectedCallback();
     installToolbarTooltips();
     window.addEventListener('message', this.messageListener);
-    const command = this.readyCommand;
-    if (command) {
-      const view = this.getAttribute('data-desktop-view');
-      postMessage(command, view == null ? {} : { view });
-    }
+    this.postReady();
+  }
+
+  /** Tell the host this view is mounted, tagged with the desktop surface. */
+  protected postReady(): void {
+    const view = this.getAttribute('data-desktop-view');
+    postMessage(COMMON_COMMANDS.WEBVIEW_READY, view == null ? {} : { view });
   }
 
   override disconnectedCallback(): void {

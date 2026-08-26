@@ -31,33 +31,23 @@ function buildWebviewHtml(
   return result;
 }
 
-/** Where a view's Vite-built assets land and the template keys they fill. */
-interface ViewBundle {
-  /** Directory under `dist/` holding the view's `bundle.js` / `index.css`. */
-  dist: string;
-  /** Template variable for the JS bundle URI. */
-  bundleKey: string;
-  /** Template variable for the stylesheet URI. */
-  styleKey: string;
-}
-
 /**
  * Content provider for views whose view-specific assets are a Vite bundle and
  * stylesheet under `dist/`. Covers the main, progress, and settings views.
  */
 export class BundledViewContentProvider {
-  private readonly viewPath: string;
   private readonly log: ReturnType<typeof createLog>;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly viewName: string,
-    private readonly bundle: ViewBundle,
-    viewPath?: string,
+    /**
+     * The one folder name a view owns: `src/<viewFolder>/index.html` holds its
+     * template and `dist/<viewFolder>/` its Vite output (see `vite.config.ts`,
+     * which builds both paths from the same list).
+     */
+    private readonly viewFolder: string,
   ) {
-    // Default: convert 'HistoryView' to 'historyView'
-    this.viewPath =
-      viewPath ?? viewName.charAt(0).toLowerCase() + viewName.slice(1);
     this.log = createLog(`${viewName}ContentProvider`);
   }
 
@@ -66,7 +56,7 @@ export class BundledViewContentProvider {
       const htmlPath = vscode.Uri.joinPath(
         this.context.extensionUri,
         'src',
-        this.viewPath,
+        this.viewFolder,
         'index.html',
       );
 
@@ -78,14 +68,14 @@ export class BundledViewContentProvider {
           'common',
           'styles/common.css',
         ]),
-        [this.bundle.bundleKey]: this.buildUri(webview, [
+        bundleUri: this.buildUri(webview, [
           'dist',
-          this.bundle.dist,
+          this.viewFolder,
           'bundle.js',
         ]),
-        [this.bundle.styleKey]: this.buildUri(webview, [
+        styleUri: this.buildUri(webview, [
           'dist',
-          this.bundle.dist,
+          this.viewFolder,
           'index.css',
         ]),
       });

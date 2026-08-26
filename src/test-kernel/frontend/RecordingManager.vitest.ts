@@ -32,7 +32,6 @@ vi.mock('@logger/logUtils', () => ({
     error: vi.fn(),
   }),
   error: vi.fn(),
-  initialize: vi.fn(),
 }));
 
 // Local imports - recording manager

@@ -345,23 +345,14 @@ export class MultiAgentTab extends LitElement {
         <div class="settings-section">
           ${renderStateSettingToggleRow({
             key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-            label: 'Let orchestrator stop agents early',
-            description:
-              'The orchestrator can cancel agents that are stuck or no longer needed. Turn this off if you want every agent to finish.',
             checked: this.allowOrchestratorKill,
           })}
           ${renderStateSettingToggleRow({
             key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-            label: 'Keep agents running after you stop the orchestrator',
-            description:
-              'Let agents that are already mid-task finish independently.',
             checked: this.detachSubagentsOnStop,
           })}
           ${renderStateSettingToggleRow({
             key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-            label: 'Allow agents to work in git worktrees',
-            description:
-              'Delegated agents can use isolated worktrees, with every tool call rooted in that worktree.',
             checked: this.worktreeSupport,
           })}
           ${renderSettingsNumberRow({

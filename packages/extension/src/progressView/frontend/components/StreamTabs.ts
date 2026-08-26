@@ -42,6 +42,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { type TeXRAIconName } from '@shared/wa/iconNames';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
+import { getBasename } from '@utils/core';
 import { formatRelativeTime, formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
 import { streamTabStyles } from './StreamTab.styles';
@@ -83,8 +84,9 @@ function buildTooltip(
     info.identity?.kind === 'agent' && info.model
       ? (info.modelLabel ?? info.model)
       : undefined;
-  const worktreeDisplay = info.worktree
-    ? `Worktree: ${info.worktree.branch}${info.worktree.pr ? ` (#${info.worktree.pr.number})` : ''}`
+  const worktree = info.worktree;
+  const worktreeDisplay = worktree
+    ? `Worktree: ${worktree.branch ?? getBasename(worktree.workingDirectory)}`
     : undefined;
   const mainLine = [
     // `label` already is the identity display name (`buildStreamTabInfo`).

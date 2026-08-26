@@ -13,7 +13,11 @@ import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 import type { SettingEnumChoice, StateSettingValue } from '@shared/schemas';
-import { settingEnumChoices, stateSettingByKey } from '@shared/schemas';
+import {
+  settingEnumChoices,
+  settingsViewSettingByKey,
+  stateSettingByKey,
+} from '@shared/schemas';
 import { renderSettingsToggleRow } from '@shared/wa/settingsSection';
 
 // Third-party imports
@@ -46,24 +50,33 @@ export function catalogEnumChoices<T extends string>(
 }
 
 interface StateSettingToggleRowOptions {
-  /** Canonical `texra.*` catalog key this switch writes. */
+  /** Canonical catalog key this switch writes and takes its copy from. */
   readonly key: string;
-  readonly label: string;
-  readonly description: string;
   readonly checked: boolean;
   readonly disabled?: boolean;
 }
 
 /**
- * The shared switch row, bound to a catalog key: flipping it posts the write
- * itself, so a tab supplies only the key and the copy.
+ * The shared switch row, bound to a catalog key: the label and description are
+ * the catalog row's own — the same copy every other host shows for that key —
+ * and flipping it posts the write itself, so a tab supplies only the key and
+ * the current value.
  */
 export function renderStateSettingToggleRow(
   options: StateSettingToggleRowOptions,
 ): TemplateResult {
+  const entry = settingsViewSettingByKey(options.key);
+  if (!entry) {
+    throw new Error(
+      `No settings-view catalog row for setting "${options.key}"`,
+    );
+  }
+  if (!entry.title) {
+    throw new Error(`Settings-view catalog row "${options.key}" needs a title`);
+  }
   return renderSettingsToggleRow({
-    label: options.label,
-    description: options.description,
+    label: entry.title,
+    description: entry.description,
     checked: options.checked,
     disabled: options.disabled,
     onChange: (event: Event) =>

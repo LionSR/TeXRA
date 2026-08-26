@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   acquireResumedExecutionLease: vi.fn(),
   buildVars: vi.fn(),
   clearTerminalExecutionState: vi.fn(),
-  completeOwnedExecutionLease: vi.fn(),
   createHandler: vi.fn(),
   createTrace: vi.fn(),
   getPersistedUserFollowUpSupport: vi.fn(),
@@ -37,10 +36,8 @@ vi.mock('@agent/storage/executionLifecycle', () => ({
   hasPersistedParent: mocks.hasPersistedParent,
 }));
 vi.mock('@agent/storage/executionLease', () => ({
-  abandonOwnedExecutionLease: vi.fn(),
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
   assertOwnedExecutionLease: vi.fn(),
-  completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
   releaseOwnedExecutionLeaseAfterFailure:
     mocks.releaseOwnedExecutionLeaseAfterFailure,
 }));
@@ -140,7 +137,6 @@ describe('native agent launch activation', () => {
     mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
       async (_executionId: ExecutionId, error: unknown) => error,
     );
-    mocks.completeOwnedExecutionLease.mockResolvedValue({ status: 'released' });
   });
 
   it.each([

@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@shared/hostBridge', () => ({
   postMessage: vi.fn(),
-  getState: () => ({}),
-  setState: () => {},
   hostBridge: {
     postMessage: vi.fn(),
     getState: () => undefined,

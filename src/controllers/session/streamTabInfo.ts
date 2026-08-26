@@ -12,7 +12,7 @@ import {
 interface StreamTabInfoInputs {
   streamId: string;
   metadata: Readonly<SessionStreamMetadata>;
-  /** Pre-resolved worktree context (branch, dirty, PR). Callers that have
+  /** Pre-resolved worktree context (branch, dirty). Callers that have
    *  asynchronously resolved this pass it in so the stream tab can render a
    *  worktree chip without async work in this builder. */
   worktreeInfo?: WorktreeInfo;

@@ -18,8 +18,8 @@ const desktopRequire = createRequire(
 const nonce = 'texra-webview-smoke';
 
 const progressViewReplacements = {
-  progressBundleUri: fileUri('packages/extension/dist/progressView/bundle.js'),
-  progressStyleUri: fileUri('packages/extension/dist/progressView/index.css'),
+  bundleUri: fileUri('packages/extension/dist/progressView/bundle.js'),
+  styleUri: fileUri('packages/extension/dist/progressView/index.css'),
 };
 
 const commonReplacements = {
@@ -37,7 +37,7 @@ const views = [
     tagName: 'main-app',
     templatePath: join(extensionRoot, 'src', 'webview', 'index.html'),
     replacements: {
-      mainViewBundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
+      bundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
     },
     fixtureMessages: [
       {
@@ -291,9 +291,7 @@ const views = [
     tagName: 'settings-app',
     templatePath: join(extensionRoot, 'src', 'settingsView', 'index.html'),
     replacements: {
-      settingsBundleUri: fileUri(
-        'packages/extension/dist/settingsView/bundle.js',
-      ),
+      bundleUri: fileUri('packages/extension/dist/settingsView/bundle.js'),
     },
   },
 ];

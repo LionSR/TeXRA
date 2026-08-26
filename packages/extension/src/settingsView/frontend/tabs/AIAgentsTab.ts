@@ -25,6 +25,7 @@ import {
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
+  settingsViewSettingByKey,
 } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
@@ -113,15 +114,22 @@ export class AIAgentsTab extends LitElement {
     CLAUDE_AGENT_DEFAULT_EFFORT;
 
   /**
-   * One catalog-backed select row: the allowed values and their labels come
-   * from the `stateSettings` entry for `key`, and the change handler writes
-   * that same key.
+   * One catalog-backed select row: the allowed values, their labels, and the
+   * help text all come from the `stateSettings` entry for `key`, and the
+   * change handler writes that same key. Only the row label is passed in —
+   * inside an integration card it reads bare ('Reasoning effort') where the
+   * catalog title has to disambiguate in a flat list ('Codex reasoning
+   * effort').
    */
   private renderSelectRow(
     label: string,
     key: WorkspaceStateKey,
     value: string,
   ): TemplateResult {
+    const entry = settingsViewSettingByKey(key);
+    if (!entry) {
+      throw new Error(`No settings-view catalog row for setting "${key}"`);
+    }
     const options = catalogEnumChoices(key);
     const onChange = (e: Event): void => {
       const selected = readSelectValue(e);
@@ -133,9 +141,7 @@ export class AIAgentsTab extends LitElement {
       <div class="settings-row">
         <div class="settings-row-text">
           <span class="settings-row-label">${label}</span>
-          <span class="settings-row-help">
-            Applied whenever this integration runs.
-          </span>
+          <span class="settings-row-help">${entry.description}</span>
         </div>
         <div class="settings-row-control">
           <wa-select

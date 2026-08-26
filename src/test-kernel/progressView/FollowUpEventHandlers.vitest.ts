@@ -10,10 +10,6 @@ vi.mock('@shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
-vi.mock('@progressView/frontend/components/ExternalInquiryPanel', () => ({
-  clearInquiryDraft: vi.fn(),
-}));
-
 // Local imports
 import {
   handleFollowUpChange,
