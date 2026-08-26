@@ -13,15 +13,15 @@ import {
 } from './progressBackendHarness';
 
 describe('ProgressBackend', () => {
-  it('loads a presentation without reloading its live transcript', async () => {
+  it('loads a presentation by waiting for the live transcript', async () => {
     const session = await createLiveStoreSession();
     const waitUntilReady = vi.spyOn(session, 'waitUntilReady');
-    const reload = vi.spyOn(session.transcripts, 'reload');
     const { backend } = createIsolatedRecordingBackend(session);
 
     await backend.load();
 
+    // The companion `reload` assertion retired with StreamLogStore.reload:
+    // a re-read is no longer expressible, so it cannot be asserted against.
     expect(waitUntilReady).toHaveBeenCalledOnce();
-    expect(reload).not.toHaveBeenCalled();
   });
 });
