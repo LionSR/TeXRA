@@ -169,18 +169,10 @@
     "types": ["node", "vscode"]
   },
   "include": [
-    "src/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "packages/extension/src/**/*.ts",
     "packages/extension/src/**/*.tsx"
   ],
-  "exclude": [
-    "node_modules",
-    "src/test-kernel",
-    "supabase",
-    "packages/desktop",
-    "packages/extension/vite.config.ts",
-    "packages/extension/esbuild.config.mjs"
-  ]
+  "exclude": ["node_modules", "src/test-kernel"]
 }
