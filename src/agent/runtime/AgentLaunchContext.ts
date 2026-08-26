@@ -44,11 +44,7 @@ import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { DisposableStore } from '@platform/disposable';
-import type {
-  AgentSource,
-  ExecutionId,
-  StreamTabId,
-} from '@shared/schemas';
+import type { AgentSource, ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   AgentCategory,
   INSTRUCTION_ACTION,

@@ -21,6 +21,9 @@ function buildServices(
     }) as never,
     fileService: { createLocation: vi.fn() } as never,
     toolRegistry: {} as never,
+    // ToolUseRoundPrepNode reads the round counter off run state now that the
+    // node-local roundIndex mirror is gone.
+    run: { totalResponseTimeMs: 0, usageAccumulator: {}, totalRounds: 0 },
     ...overrides,
   } as ToolUseRoundServices;
 }

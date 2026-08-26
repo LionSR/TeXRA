@@ -65,18 +65,6 @@ const channelTraceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
-const leanMocks = vi.hoisted(() => ({
-  stopLeanServersForEndedRun: vi.fn(async (_runId: ExecutionId) => {}),
-}));
-
-// The run-end Lean stop is called directly by AgentRunLifecycle; stub the leaf
-// so the lifecycle tests observe it without spawning a language server.
-vi.mock('@tools/lean/leanLanguageServices', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tools/lean/leanLanguageServices')>()),
-  stopLeanServersForEndedRun: leanMocks.stopLeanServersForEndedRun,
-}));
-const stopSessionsForRun = leanMocks.stopLeanServersForEndedRun;
-
 // AgentRunLifecycle deep-imports finalizeRun from executionLifecycle
 // (not the `@agent/storage` barrel). Spy only that leaf to avoid re-export
 // recursion through a dual mock.
@@ -104,7 +92,6 @@ vi.mock('@agent/trace', async (importOriginal) => {
 beforeEach(() => {
   storageMocks.finalizeRun.mockClear();
   channelTraceMocks.warn.mockClear();
-  leanMocks.stopLeanServersForEndedRun.mockClear();
 });
 
 async function initLifecycleTestPlatform(firstRunDone: boolean) {
@@ -274,11 +261,13 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-lean-server-stop',
     );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
 
     try {
       const result = await runFlowWithLifecycle(
         ctx,
         async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        { onRunEnd: stopSessionsForRun },
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
@@ -292,6 +281,7 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-lean-server-stop-failed',
     );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
 
     try {
       await expect(
@@ -300,6 +290,7 @@ describe('runFlowWithLifecycle', () => {
           async () => {
             throw new Error('flow exploded');
           },
+          { onRunEnd: stopSessionsForRun },
         ),
       ).rejects.toThrow('flow exploded');
 
@@ -313,11 +304,13 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-lean-server-stop-waiting',
     );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
 
     try {
       const result = await runFlowWithLifecycle(
         ctx,
         async () => waitingResult(executionId, streamId),
+        { onRunEnd: stopSessionsForRun },
       );
 
       // WAITING is a suspension, not a terminal run end: the server must
@@ -335,12 +328,13 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-lean-server-stop-subagent',
     );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
 
     try {
       const result = await runFlowWithLifecycle(
         ctx,
         async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-        { isSubagent: true },
+        { isSubagent: true, onRunEnd: stopSessionsForRun },
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
@@ -995,6 +989,7 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, ctx } = lifecycleFixture(
       'lifecycle-waiting-transcript-failure-run-end',
     );
+    const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
     vi.spyOn(
       ctx.runScope.session.transcripts,
       'loadAndAcquireWriter',
@@ -1004,6 +999,7 @@ describe('runFlowWithLifecycle', () => {
       const result = await runFlowWithLifecycle(
         ctx,
         async () => waitingResult(executionId, streamId),
+        { onRunEnd: stopSessionsForRun },
       );
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
       const waitingHandle = takeWaitingHandle(executionId);

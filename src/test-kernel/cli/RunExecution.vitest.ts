@@ -7,11 +7,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
 import { AgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
-import type {
-  ExecutionId,
-  StreamTabId,
-  TodoItem,
-} from '@shared/schemas';
+import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import {

@@ -38,6 +38,7 @@ import {
   roundOutputsToOutputSummaries,
 } from '@shared/schemas';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
+import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
 import { ensureRunDir } from '@utils/files/runStorageFs';
 
 import {
@@ -224,6 +225,7 @@ function buildLifecycleOptions(
     userFollowUpSupport: options.userFollowUpSupport,
     onError: options.onRunError,
     onRun: options.onRun,
+    onRunEnd: (runId) => stopLeanServersForEndedRun(runId),
   };
 }
 
