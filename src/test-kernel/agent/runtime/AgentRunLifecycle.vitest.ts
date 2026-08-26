@@ -66,7 +66,7 @@ const channelTraceMocks = vi.hoisted(() => ({
 }));
 
 const leanMocks = vi.hoisted(() => ({
-  stopLeanServersForEndedRun: vi.fn(async () => {}),
+  stopLeanServersForEndedRun: vi.fn(async (_runId: ExecutionId) => {}),
 }));
 
 // The run-end Lean stop is called directly by AgentRunLifecycle; stub the leaf
