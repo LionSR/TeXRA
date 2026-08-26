@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentEntry } from '@agent/index/agentEntry';
 import { resetAgentCatalogAuthRefreshScopeForTests } from '@frontend/auth/agentCatalogRefreshScope';
-import type { AgentCategory, AgentSource } from '@shared/schemas';
+import type { AgentCategory } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  physicistCatalog,
+  type AgentCatalog,
+} from '@test/support/agentCatalogFixtures';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
-
-type AgentCatalog = Record<AgentCategory, AgentEntry[]>;
 
 const host = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
@@ -66,30 +67,6 @@ function applyPreset(handlers: Handlers, presetId: string): Promise<void> {
     command: 'applyAgentModePreset',
     presetId,
   });
-}
-
-function physicistCatalog(): AgentCatalog {
-  const workflow = ['correct', 'polish'].map((name): AgentEntry => ({
-    source: 'builtInWorkflow',
-    name,
-    path: `/agents/${name}.yaml`,
-    category: 'workflow',
-  }));
-  const toolUse = [
-    ['orchestrator', 'builtInToolUse'],
-    ['research', 'custom'],
-    ['numerics', 'builtInToolUse'],
-    ['review', 'builtInToolUse'],
-    ['presenter', 'builtInToolUse'],
-    ['latexFixer', 'builtInToolUse'],
-  ].map(([name, source]): AgentEntry => ({
-    source: source as AgentSource,
-    name,
-    path: `/agents/${name}.yaml`,
-    category: 'toolUse',
-    ...(name === 'orchestrator' ? { tools: ['delegate_agent'] } : {}),
-  }));
-  return { workflow, toolUse };
 }
 
 interface HandlerFixtureOptions {

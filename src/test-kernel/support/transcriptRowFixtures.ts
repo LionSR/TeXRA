@@ -1,11 +1,13 @@
-// Test-only builders for a projected CLI transcript row.
+// Test-only builders for stream-log projections the suites replay.
 //
 // The CLI paints `@shared/transcript` rows directly, so a tool row is a
 // normalized payload plus the shared fold over it — exactly what
 // `projectTranscriptRow` hands the painter. Suites that hand-build rows
 // (ToolRenderers, ConversationTranscript, SubagentListDisplay,
 // StaticBandResize, TuiStateAndFocus) construct them here so the payload and
-// its model can never drift apart in a fixture.
+// its model can never drift apart in a fixture. The task-group replay below
+// is the same shape one projection over: entries folded through the
+// production reducer.
 
 import {
   MESSAGE_TYPES,
@@ -13,7 +15,10 @@ import {
   TOOL_USE_STATUS,
   type FileListEntry,
   type NormalizedToolUse,
+  type StreamLogEntry,
+  type TaskGroup,
 } from '@shared/schemas';
+import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import {
   projectTranscriptRow,
   toolRowModel,
@@ -152,4 +157,16 @@ export function fileListRowFixture(
     throw new Error('fileListRowFixture: expected a fileList row');
   }
   return row;
+}
+
+/** Test-local full replay through the production reducer (the resync path). */
+export function projectTaskGroupsFromStreamLog(
+  entries: Iterable<StreamLogEntry>,
+): TaskGroup[] {
+  const taskGroups: TaskGroup[] = [];
+  const taskGroupIndex = new Map<string, number>();
+  for (const entry of entries) {
+    upsertTaskGroupFromStreamLog(taskGroups, taskGroupIndex, entry);
+  }
+  return taskGroups;
 }

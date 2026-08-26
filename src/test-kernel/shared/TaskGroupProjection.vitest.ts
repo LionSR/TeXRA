@@ -7,21 +7,9 @@ import {
   StreamLogEntrySchema,
   STREAM_PHASE,
   type StreamLogEntry,
-  type TaskGroup,
 } from '@shared/schemas';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
-
-/** Test-local full replay through the production reducer (the resync path). */
-function projectTaskGroupsFromStreamLog(
-  entries: Iterable<StreamLogEntry>,
-): TaskGroup[] {
-  const taskGroups: TaskGroup[] = [];
-  const taskGroupIndex = new Map<string, number>();
-  for (const entry of entries) {
-    upsertTaskGroupFromStreamLog(taskGroups, taskGroupIndex, entry);
-  }
-  return taskGroups;
-}
+import { projectTaskGroupsFromStreamLog } from '@test/support/transcriptRowFixtures';
 
 interface GroupEntryOverrides {
   readonly groupId?: string;
