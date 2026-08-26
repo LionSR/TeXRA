@@ -14,7 +14,6 @@ import { SharedToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import {
   AgentCategory,
   type ExecutionId,
-  type StorageKey,
   type StreamTabId,
   type ToolDefinition,
 } from '@shared/schemas';
@@ -107,7 +106,6 @@ async function observeWorkflowTools({
           setting,
           prompt: PROMPT,
           logger,
-          storageKey: executionId as StorageKey,
           parentStage: noopTrace.openStage('Workflow tool resolution test'),
           userVarChannels: {
             input: Object.freeze({ MODEL: CONFIG.model }),
