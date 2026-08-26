@@ -40,7 +40,6 @@ import {
   LanguageModelPortError,
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import {
   isKimiCodeExclusiveModel,
@@ -198,10 +197,7 @@ export function shouldUseResponsesAPI(
       capabilities.supportsFunctionCalling !== false) ||
     config.fullName.startsWith('gpt-oss') ||
     (capabilities.supportsFunctionCalling !== false &&
-      getConfig<boolean>(
-        'texra.model.useOpenAIResponsesAPI',
-        DEFAULT_CORE_SETTINGS.model.useOpenAIResponsesAPI,
-      ))
+      getConfig<boolean>('texra.model.useOpenAIResponsesAPI'))
   );
 }
 

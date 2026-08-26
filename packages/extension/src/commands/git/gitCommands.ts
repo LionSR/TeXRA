@@ -54,7 +54,7 @@ async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
     return null;
   }
 
-  const numberOfCommits = getConfig('texra.git.numberOfCommitsToShow', 20);
+  const numberOfCommits = getConfig('texra.git.numberOfCommitsToShow');
   if (
     typeof numberOfCommits !== 'number' ||
     numberOfCommits <= 0 ||

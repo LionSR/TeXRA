@@ -33,6 +33,13 @@ export interface ConfigInspection<T = unknown> {
  * Platform configuration provider interface.
  */
 export interface ConfigProvider {
+  /**
+   * Resolution order an implementation must honor: stored workspace value,
+   * stored global value, the setting catalog's own default
+   * (`getCoreSettingDefault`), and only then the caller's `defaultValue`.
+   * Callers of a cataloged `texra.*` key therefore omit `defaultValue`; it is
+   * for keys the catalog does not own.
+   */
   get<T>(key: string, defaultValue?: T): T;
   update<T>(key: string, value: T, target?: ConfigTarget): Promise<void>;
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined;

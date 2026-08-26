@@ -39,7 +39,7 @@ import {
 } from '@common/errors/sdkError/providerErrorFormat';
 import type { ResolvedModelConfig } from '@model/openRouterRouting';
 import {
-  DEFAULT_CORE_SETTINGS,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
   STREAM_PHASE,
   toRetryErrorInfo,
@@ -76,7 +76,7 @@ function getNodeMaxRetries(): number {
     getValidatedConfig(
       'texra.model.retry.maxAttempts',
       ModelRetryMaxAttemptsSchema,
-      DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+      MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     )
   );
 }

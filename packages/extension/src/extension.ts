@@ -70,7 +70,7 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
-import { initPlatform, platform } from '@platform/platform';
+import { initPlatform } from '@platform/platform';
 import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
@@ -83,8 +83,9 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import {
   formatTexraApprovalPolicy,
-  readPersistedTexraApprovalPolicy,
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_OPTIONS,
+  type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
@@ -100,6 +101,7 @@ import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { StorageFS } from '@utils/files/storageFS';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -349,9 +351,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   });
   await runtimeSession.waitUntilReady();
   runtimeSession.setApprovalPolicy(
-    readPersistedTexraApprovalPolicy((key, fallback) =>
-      platform().config.get(key, fallback),
-    ),
+    readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
   );
   registerAgentFeatures();
   // The same Node-host skill wiring the CLI and desktop use, so

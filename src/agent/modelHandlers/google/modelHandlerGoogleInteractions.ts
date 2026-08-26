@@ -470,10 +470,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   /** Whether server-side conversation state (store:true chaining) is enabled. */
   private serverStateEnabled(): boolean {
-    return getConfig<boolean>(
-      'texra.model.useGoogleInteractionsServerState',
-      true,
-    );
+    return getConfig<boolean>('texra.model.useGoogleInteractionsServerState');
   }
 
   // ===========================================================================
@@ -497,7 +494,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       !this.backgroundUnsupported &&
       stateful &&
       this.isWorkflowMode() &&
-      getConfig<boolean>('texra.model.useGoogleBackgroundResponses', false)
+      getConfig<boolean>('texra.model.useGoogleBackgroundResponses')
     );
   }
 

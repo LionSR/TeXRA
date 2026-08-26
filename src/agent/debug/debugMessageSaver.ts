@@ -33,7 +33,7 @@ type DebugObjectType = 'messages' | 'response';
  * input prompt.
  */
 function shouldSaveModelIO(): boolean {
-  return getConfig<boolean>('texra.debug.saveModelIO', false);
+  return getConfig<boolean>('texra.debug.saveModelIO');
 }
 
 interface SaveDebugParams {

@@ -94,7 +94,7 @@ export function prepareBashApprovalPrompt(
 export async function requestBashApproval(
   request: BashApprovalRequest,
 ): Promise<BashSettlement> {
-  const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true);
+  const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY);
 
   const context = tryUseRunContext();
   const session = getRunContextSession(context) ?? defaultSession();

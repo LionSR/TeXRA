@@ -32,7 +32,7 @@ const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
  * Used by both Connector API and Better BibTeX JSON-RPC (same port, different paths).
  */
 export function getZoteroPort(): number {
-  return getConfig<number>('texra.bib.zoteroPort', 23119);
+  return getConfig<number>('texra.bib.zoteroPort');
 }
 
 function zoteroUrl(port: number, pathname: string): string {

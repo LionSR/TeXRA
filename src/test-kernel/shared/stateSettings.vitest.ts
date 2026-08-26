@@ -12,7 +12,6 @@ import * as logger from '@logger/logUtils';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import {
   ALL_SETTINGS,
-  CORE_SETTING_PATHS,
   AGENT_SKILLS_CONFIG_KEY,
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_EMAIL,
@@ -21,6 +20,7 @@ import {
   DEFAULT_GIT_WORKTREE_SUPPORT,
   DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
   STATE_SETTINGS,
+  settingByKey,
   settingEnumChoices,
   settingEnumOptions,
   modelsTabSettings,
@@ -59,7 +59,10 @@ import {
   settingDefault,
   writeSetting,
 } from '@shared/config/settingsAccess';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
+import {
+  LATEX_CONFIG_DEFAULTS,
+  LATEX_CONFIG_FIELD_TO_KEY,
+} from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -159,6 +162,12 @@ const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
 describe('state settings catalog', () => {
   it('uses unique canonical keys', () => {
     assert.equal(new Set(STATE_SETTING_KEYS).size, STATE_SETTING_KEYS.length);
+  });
+
+  it('backs every LaTeX config field with a catalog entry', () => {
+    for (const [field, key] of Object.entries(LATEX_CONFIG_FIELD_TO_KEY)) {
+      assert.ok(settingByKey(key), `${field} has no catalog entry: ${key}`);
+    }
   });
 
   it('every honoring host names an existing reader file', () => {
@@ -478,19 +487,6 @@ describe('state settings catalog', () => {
     );
   });
 
-  it('shares no keys with the config-tree catalog', () => {
-    // The two catalogs must stay disjoint: a state-backed key must never reach
-    // the shared config schema via CoreSettingsShape, and a config key must
-    // never be double-registered through the catalog.
-    const coreKeys = new Set(CORE_SETTING_PATHS.map((path) => `texra.${path}`));
-    for (const key of STATE_SETTING_KEYS) {
-      assert.ok(
-        !coreKeys.has(key),
-        `${key} is in both CoreSettingsShape and STATE_SETTINGS`,
-      );
-    }
-  });
-
   it('round-trips each `.prefault()` default to the real getter default', () => {
     for (const entry of STATE_SETTINGS) {
       assert.ok(
@@ -627,19 +623,19 @@ describe('knownKeys derivation', () => {
     );
   });
 
-  it('recognizes exactly the Core paths a CLI reader honors', () => {
+  it('recognizes exactly the config-file keys a CLI reader honors', () => {
     // The derived whitelist replaced two hand-kept path lists; this pins the
-    // whole Core half of it so a mis-filed `honoredBy` cannot silently widen or
-    // narrow what `.texra/config.json` accepts.
-    const honoredCorePaths = CORE_SETTING_PATHS.filter((path) =>
-      KNOWN_TEXRA_KEYS.has(`texra.${path}`),
-    );
+    // whole config-file half of it so a mis-filed `honoredBy` cannot silently
+    // widen or narrow what `.texra/config.json` accepts.
+    const configKeys = ALL_SETTINGS.filter(
+      (entry) => entry.slots.cli === 'config',
+    ).map((entry) => entry.key);
     assert.deepEqual(
-      [...honoredCorePaths].sort(),
-      CORE_SETTING_PATHS.filter(
-        (path) => path !== 'agentReview.runOnCommit',
-      ).toSorted(),
-      'only agentReview.runOnCommit is extension-only',
+      configKeys.filter((key) => KNOWN_TEXRA_KEYS.has(key)).toSorted(),
+      configKeys
+        .filter((key) => key !== 'texra.agentReview.runOnCommit')
+        .toSorted(),
+      'only texra.agentReview.runOnCommit is extension-only',
     );
   });
 });
