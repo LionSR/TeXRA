@@ -1,9 +1,11 @@
 import { z } from 'zod';
 
+import { LineCountSchema } from './lineChanges';
+
 const WorkflowScriptDeliveryFileSchema = z.strictObject({
   path: z.string(),
-  added: z.int().nonnegative().nullable(),
-  removed: z.int().nonnegative().nullable(),
+  added: LineCountSchema.nullable(),
+  removed: LineCountSchema.nullable(),
 });
 
 /** Compact, host-neutral facts used to present a workflow-script delivery. */

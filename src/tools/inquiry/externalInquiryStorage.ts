@@ -11,6 +11,7 @@ import {
   InquiryDraftSchema,
   InquirySessionLinksSchema,
   InquiryThreadIdSchema,
+  InquiryThreadStatusSchema,
   StreamTabIdSchema,
   ToolError,
   type InquiryDraft,
@@ -91,7 +92,7 @@ const ManifestBaseShape = {
    * field existed, which are delivered by stream alone.
    */
   parentExecutionId: ExecutionIdSchema.nullable().default(null),
-  status: z.enum(['open', 'answered', 'dropped']),
+  status: InquiryThreadStatusSchema,
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
   turns: z.array(ExternalInquiryTurnRecordSchema),

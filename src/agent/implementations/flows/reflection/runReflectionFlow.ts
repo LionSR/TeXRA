@@ -204,6 +204,12 @@ export async function runReflectionFlow(
   outputState.runPreparation = fileService.prepareRunWorkspace(baseFiles, {
     linkFiles: collectRunSupportFiles(services.config),
   });
+  // Observe rejections immediately: until extractFilesFromXml awaits the
+  // stored promise (minutes later, after the model call), a rejection would
+  // otherwise be an unhandled promise rejection — which force-quits the
+  // desktop app and crashes the CLI. The failure itself is still observed
+  // and surfaced at warn by prepareRunWorkspaceIfNeeded.
+  void outputState.runPreparation.catch(() => {});
 
   const kv = getExecutionStore(executionId);
 

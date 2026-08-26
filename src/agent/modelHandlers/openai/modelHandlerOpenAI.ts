@@ -419,8 +419,9 @@ export class ModelHandlerOpenAI<
           finalResponse = { ...finalResponse, usage: totalUsage };
         } catch (err) {
           // totalUsage() may fail if stream ended abnormally — leave usage
-          // unset, but log so missing token accounting is traceable.
-          this.logger.debug('totalUsage() fallback failed; usage unavailable', {
+          // unset, but warn so the round's missing token accounting is
+          // traceable in production logs.
+          this.logger.warn('totalUsage() fallback failed; usage unavailable', {
             data: buildErrorLogData(err, { operation: 'totalUsage fallback' }),
           });
         }

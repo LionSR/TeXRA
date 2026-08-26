@@ -17,6 +17,7 @@ import {
   type FileLocation,
 } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 import { replaceInputCommands } from './fileMapping';
@@ -39,10 +40,16 @@ async function prepareRunWorkspaceIfNeeded(
   try {
     await state.runPreparation;
   } catch (error) {
-    deps.logger.debug('Failed to prepare run workspace', {
-      data: error,
-      messageType: MESSAGE_TYPES.INTERNAL,
-    });
+    // Continue without the prepared workspace — extraction can still salvage
+    // the model's output — but warn loudly: without the `original/` snapshot,
+    // in-place workflows diff live-vs-live and report empty 0/0 stats.
+    deps.logger.warn(
+      `Failed to prepare run workspace; in-place diffs may be empty: ${toErrorMessage(error)}`,
+      {
+        data: error,
+        messageType: MESSAGE_TYPES.INTERNAL,
+      },
+    );
   } finally {
     state.runPreparation = null;
   }
