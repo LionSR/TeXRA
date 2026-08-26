@@ -39,10 +39,6 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "build:bundle": "node scripts/bundle.mjs",
-    "build:types": "tsc --checkers 8 -p ../../tsconfig.build.json && node scripts/rewrite-declaration-aliases.mjs",
-    "check:artifacts": "node scripts/validate-artifacts.mjs",
-    "clean": "node scripts/clean.mjs",
     "prepack": "npm run build"
   },
   "dependencies": {
