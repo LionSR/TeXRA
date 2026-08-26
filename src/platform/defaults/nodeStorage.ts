@@ -31,7 +31,7 @@ export function workspaceTexraConfigPath(workspaceRoot: string): string {
 
 interface NodeStorageProviderOptions {
   readonly storageRoot?: string;
-  readonly workspacePath?: string | (() => string | undefined);
+  readonly workspacePath?: string;
 }
 
 export function createNodeStorageProvider({

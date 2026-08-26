@@ -177,8 +177,8 @@ function admitFollowUp(
 /**
  * The execution a stream currently belongs to. Prefer the resident snapshot
  * record for a live session: `run.start` updates it synchronously. A stream
- * whose run metadata is not resident (after a host restart, or evicted by a
- * storage-root change) resolves through the authored `meta.streamId` index.
+ * whose run metadata is not resident (after a host restart, or evicted from
+ * the snapshot store) resolves through the authored `meta.streamId` index.
  */
 export async function lookupStreamExecutionId(
   streamId: StreamTabId,

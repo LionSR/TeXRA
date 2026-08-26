@@ -13,7 +13,7 @@ interface CliStateStores {
 
 interface CliStateStoresInit {
   readonly storageRoot?: string;
-  readonly workspacePath: string | (() => string | undefined);
+  readonly workspacePath: string | undefined;
 }
 
 /** Open the CLI's global `state.json` under the given storage provider. This

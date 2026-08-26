@@ -399,7 +399,7 @@ export class StreamLogStore {
   /**
    * Handles over the two fixed transcript directories. A handle holds only
    * the storage-root-relative directory, and every operation re-resolves the
-   * root, so one handle per directory survives a storage-root reload.
+   * root.
    */
   private readonly logsKv = new KVStore(STREAM_LOGS_DIR, { compactJson: true });
   private readonly summariesKv = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
@@ -408,7 +408,7 @@ export class StreamLogStore {
 
   /**
    * Lightweight summary per stream (first/last timestamp). Populated at open
-   * or reload and refreshed on append/update. Survives eviction so sidebar
+   * and refreshed on append/update. Survives eviction so sidebar
    * metadata stays available for streams whose heavy entries have been evicted.
    */
   private readonly summaries = new Map<StreamTabId, StreamLogSummary>();
@@ -434,7 +434,6 @@ export class StreamLogStore {
   private readonly writeTombstones = new Set<StreamTabId>();
   private clearing = false;
   private stateRevision = 0;
-  private pendingReload: Promise<void> | undefined;
   private summaryCacheMaintenanceEnabled = true;
 
   private constructor(mode: StreamLogStoreMode) {
@@ -638,11 +637,11 @@ export class StreamLogStore {
     if (summary === undefined || isDeepStrictEqual(summary.meta, meta)) return;
     summary.meta = meta;
     this.stateRevision += 1;
-    // Share the transcript queue so flush/reload drains this write before a
-    // storage-root change. Re-read at execution time, and let a dirty
-    // transcript's own write carry the metadata: persisting its newer
-    // log-derived summary fields before the authoritative log would make a
-    // crash-time cache look more durable than it is.
+    // Share the transcript queue so flush() drains this write. Re-read at
+    // execution time, and let a dirty transcript's own write carry the
+    // metadata: persisting its newer log-derived summary fields before the
+    // authoritative log would make a crash-time cache look more durable
+    // than it is.
     void this.writeQueue.add(async () => {
       if (this.dirtyIds.has(streamId)) return;
       const current = this.summaries.get(streamId);
@@ -1206,32 +1205,6 @@ export class StreamLogStore {
   }
 
   /**
-   * Transactionally reload persistent summaries. A failed read leaves the
-   * previously valid in-memory state untouched and rejects to the host.
-   * `discardPendingWrites` is reserved for workspace-root rollback after the
-   * old root was already flushed; it prevents failed new-root repair state
-   * from being written after the provider returns to the old root.
-   */
-  async reload(
-    options: { readonly discardPendingWrites?: boolean } = {},
-  ): Promise<void> {
-    if (this.mode.kind === 'ephemeral') {
-      throw new Error(
-        `Cannot reload an ephemeral transcript store (${this.mode.reason}).`,
-      );
-    }
-    if (this.pendingReload) return this.pendingReload;
-
-    const work = this.executeReload(options.discardPendingWrites ?? false);
-    this.pendingReload = work;
-    try {
-      await work;
-    } finally {
-      if (this.pendingReload === work) this.pendingReload = undefined;
-    }
-  }
-
-  /**
    * Throttled internal persistence trigger; every mutator schedules it.
    * Fire-and-forget by design: only `flush()` is awaitable, and it drains,
    * retries, and throws.
@@ -1331,41 +1304,6 @@ export class StreamLogStore {
     } else {
       this.summaries.set(streamId, toSummary(logInstance));
     }
-  }
-
-  private async executeReload(discardPendingWrites: boolean): Promise<void> {
-    // Sample before the first await: run facts may arrive while pending writes
-    // drain or the replacement adapters prepare, and the reload must not fold
-    // those new-root facts into the state it is about to replace.
-    const revision = this.stateRevision;
-    if (discardPendingWrites) {
-      this.saveThrottle.cancel();
-      // Invalidate and drain any in-flight batch before the adapters
-      // repoint: a write started before a storage-root rollback must not
-      // keep landing streams against the restored root. The generation
-      // bump makes the batch's remaining per-stream writes skip; the
-      // drain keeps a mid-write stream from straddling the repoint.
-      this.writeGeneration += 1;
-      await this.writeQueue.onIdle();
-    } else if (this.mode.kind === 'persistent') {
-      await this.flush();
-    }
-    if (!discardPendingWrites && this.dirtyIds.size > 0) {
-      throw new Error(
-        'Cannot reload transcripts while persistent writes remain unresolved.',
-      );
-    }
-
-    this.summaryCacheMaintenanceEnabled = true;
-    if (this.mode.kind === 'persistent') await this.prepareSummaryCache();
-
-    const summaries = await this.readPersistentSummaries();
-    if (revision !== this.stateRevision || this.pendingLoads().length > 0) {
-      throw new Error(
-        'Transcript state changed during reload; preserving the live state.',
-      );
-    }
-    this.replaceSummaries(summaries);
   }
 
   private async readPersistentSummaries(): Promise<

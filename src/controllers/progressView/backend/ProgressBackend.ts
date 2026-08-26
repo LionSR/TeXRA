@@ -773,8 +773,8 @@ export class ProgressBackend {
   }
 
   /**
-   * Serialize operations whose filesystem work must observe one workspace
-   * root from beginning to end.
+   * Serialize storage operations against each other, so a deletion never
+   * interleaves with a concurrent load or another deletion.
    */
   private enqueueStorageOperation<T>(work: () => Promise<T>): Promise<T> {
     // `add` widens to `T | void` for abort/timeout options; neither is used,

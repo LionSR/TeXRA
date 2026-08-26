@@ -268,7 +268,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
   const storage = createNodeStorageProvider({
-    workspacePath: () => workspace.getWorkspacePath(),
+    workspacePath: workspace.getWorkspacePath(),
   });
   const config = await createExtensionTexraConfig(
     storage,
@@ -726,9 +726,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Paint the policy line immediately; otherwise the tooltip shows the
   // generic "Show TeXRA Tasks" text until the first status/usage event.
   updateStatusBarTooltip();
-  // Workspace transitions and approval-policy setting updates emit on this
-  // signal; the subscription here is what makes the refresh reachable, so a
-  // missed subscribe is a missing behavior rather than a silent no-op.
+  // Approval-policy setting updates emit on this signal; the subscription
+  // here is what makes the refresh reachable, so a missed subscribe is a
+  // missing behavior rather than a silent no-op.
   const disposeApprovalPolicyTooltipRefresh = appSignals.on(
     'approvalPolicyChanged',
     updateStatusBarTooltip,

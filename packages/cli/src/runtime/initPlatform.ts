@@ -239,7 +239,7 @@ export async function initCliPlatform(
   if (!tryPlatform()) {
     const stateStores = await createCliStateStores({
       storageRoot: context.storageRoot,
-      workspacePath: () => cliWorkspaceCwd,
+      workspacePath: context.cwd,
     });
     // The project `.texra/config.json` backs the workspace target and
     // user-level config (`~/.texra/global-storage/config.json`, the same file

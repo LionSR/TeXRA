@@ -25,8 +25,6 @@ const STORAGE_LAYOUT = {
 export const MEMORY_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.memory;
 export const RUNS_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.runs;
 
-type WorkspacePathSource = string | undefined | (() => string | undefined);
-
 function legacyWorkspaceStorageId(workspacePath: string | undefined): string {
   const source = workspacePath?.trim() || 'no-workspace';
   return truncatedHexId(source, 16);
@@ -169,10 +167,9 @@ export class WorkspaceStorageProvider implements StorageProvider {
 
   constructor(
     private readonly storageRoot: string,
-    workspacePath: WorkspacePathSource,
+    workspacePath: string | undefined,
   ) {
-    this.activeWorkspacePath =
-      typeof workspacePath === 'function' ? workspacePath() : workspacePath;
+    this.activeWorkspacePath = workspacePath;
   }
 
   private storagePathFor(workspacePath: string | undefined): string {
