@@ -7,7 +7,6 @@ import {
   AgentPrompt,
 } from '@agent/core/definition/AgentDataclass';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
-import { shouldSaveModelIO } from '@agent/debug/debugMessageSaver';
 import {
   USER_VAR_RUNTIME_TOKENS,
   type BuiltUserVars,
@@ -182,7 +181,7 @@ export async function buildUserVars(
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
     ...resolveOutputFiles(agentConfig, agentSetting),
-    ...getToolFlags(agentConfig, agentSetting, agentPrompt),
+    ...getToolFlags(agentSetting, agentPrompt),
     LATEX_STYLE_RULES: latexStyleRules,
     ATTACHED_MEMORIES: attachedMemories.xml,
     ATTACHED_MEMORY_MISSES: attachedMemories.misses,
@@ -340,8 +339,7 @@ type FileCategoryVars = {
 };
 
 /** File-based variables: readable categories plus the display-only MEDIA slots. */
-type FileVars = FileCategoryVars &
-  Pick<UserVars, 'MEDIA_FILE' | 'MEDIA_CONTENT'>;
+type FileVars = FileCategoryVars & Pick<UserVars, 'MEDIA_FILE'>;
 
 async function getFileVars(
   agentConfig: AgentConfig,
@@ -369,7 +367,6 @@ async function getFileVars(
     LIST_OF_ALL_CONTEXTS: '',
     LIST_OF_ALL_EDITEDS: '',
     MEDIA_FILE: null,
-    MEDIA_CONTENT: null,
   };
 
   for (const prefix of FILE_VAR_CATEGORIES) {
@@ -439,8 +436,8 @@ async function getFileVars(
 /**
  * A required-file variable `X` generates the `X_FILE`/`X_CONTENT` pair, which
  * `buildUserVars` spreads after the fixed variables — so a name like `MEDIA`
- * would silently override the fixed `MEDIA_CONTENT: null`, and the persisted
- * channel schema's `z.null()` validator would then reject checkpoints the
+ * or `INPUT` would silently override a fixed variable, and the persisted
+ * channel schema's per-key validator would then reject checkpoints the
  * application itself produced, making the session impossible to resume. Fail
  * loudly when the variables are built instead.
  */
@@ -560,14 +557,7 @@ export function resolveOutputFiles(
 
 type ToolFlagVars = Pick<
   UserVars,
-  | 'AUTO_EXTRACT_FIGURE'
-  | 'AUTO_EXTRACT_TIKZ_FIGURE'
-  | 'INCLUDE_TEX_COUNT'
-  | 'PRINT_INPUT_PROMPT'
-  | 'AUTO_COMPILE_INPUT_PDF'
-  | 'CODEX_GUIDANCE'
-  | 'CLAUDE_CODE_GUIDANCE'
-  | 'ROUNDS'
+  'CODEX_GUIDANCE' | 'CLAUDE_CODE_GUIDANCE' | 'ROUNDS'
 >;
 
 const TOOL_GUIDANCE = {
@@ -580,7 +570,6 @@ const TOOL_GUIDANCE = {
 } as const;
 
 export function getToolFlags(
-  agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
 ): ToolFlagVars {
@@ -588,11 +577,6 @@ export function getToolFlags(
     agentSetting.tools.some((tool) => tool.name === name);
 
   const flags: ToolFlagVars = {
-    AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
-    AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
-    INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
-    PRINT_INPUT_PROMPT: shouldSaveModelIO(),
-    AUTO_COMPILE_INPUT_PDF: agentConfig.toolConfig.autoCompileInputPdf,
     CODEX_GUIDANCE: hasTool('codex') ? TOOL_GUIDANCE.codex : '',
     CLAUDE_CODE_GUIDANCE: hasTool('claude_code')
       ? TOOL_GUIDANCE.claude_code

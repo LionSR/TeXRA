@@ -21,9 +21,9 @@ interface WaitPrepResult {
   afterError: boolean;
 }
 
-export class ToolUseWaitNode<C> extends BaseNode<
+export class ToolUseWaitNode extends BaseNode<
   ToolUseRunShared,
-  ToolUseServices<C>
+  ToolUseServices
 > {
   constructor(private drainedFollowUps?: readonly FollowUpQueueBatchItem[]) {
     super();

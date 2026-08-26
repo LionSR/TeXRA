@@ -16,9 +16,9 @@ interface PrepInput {
   compileFailureContext?: string;
 }
 
-export class PrepareContextNode<C = unknown> extends BaseNode<
+export class PrepareContextNode extends BaseNode<
   ReflectionFlowShared,
-  ReflectionServices<C>
+  ReflectionServices
 > {
   async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
     return {

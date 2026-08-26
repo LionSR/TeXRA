@@ -157,11 +157,11 @@ class BashMockHandler extends ModelHandlerOpenAIResponse {
  */
 function roundServices(opts: {
   toolName: string;
-  logger: ToolUseRoundServices<OpenAI>['logger'];
+  logger: ToolUseRoundServices['logger'];
   streamId: StreamTabId;
-  toolRegistry: ToolUseRoundServices<OpenAI>['toolRegistry'];
+  toolRegistry: ToolUseRoundServices['toolRegistry'];
   abortSignal?: AbortSignal;
-}): ToolUseRoundServices<OpenAI> {
+}): ToolUseRoundServices {
   return {
     runScope: testRunScope(opts.streamId, { signal: opts.abortSignal }),
     modelCell: testModelCell(new BashMockHandler(testModelConfig)),
@@ -563,7 +563,7 @@ describe('BashTool', () => {
       const messages: ProviderMessage[] = [];
       const shared = freshRoundShared(messages);
 
-      const node = new ToolUseDispatchNode<OpenAI>();
+      const node = new ToolUseDispatchNode();
       node.setServices(options);
       await withTestRunContext(options.runScope, () =>
         node.post(
@@ -962,7 +962,7 @@ describe('BashTool', () => {
       'BashToolAbortTest' as StreamTabId,
     );
 
-    const node = new ToolUseDispatchNode<OpenAI>();
+    const node = new ToolUseDispatchNode();
     const bashTool = new BashTool();
     const options = roundServices({
       toolName: 'bash',

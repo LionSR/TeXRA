@@ -45,9 +45,9 @@ interface OutputExecResult {
   emitCompileFailures: boolean;
 }
 
-export class OutputNode<C = unknown> extends BaseNode<
+export class OutputNode extends BaseNode<
   ReflectionFlowShared,
-  ReflectionServices<C>
+  ReflectionServices
 > {
   async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
     if (!shared.outputLocation) {

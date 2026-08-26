@@ -72,7 +72,7 @@ async function runNodePhases(
 
 async function runContinuationNode(
   shared: ResponseCycleShared,
-  services: ResponseCycleServices<unknown>,
+  services: ResponseCycleServices,
 ) {
   return runNodePhases(getContinuationNode().setServices(services), shared);
 }
@@ -81,7 +81,7 @@ async function runContinuationNode(
 function createProcessServices(
   response: { text: string; stopReason: ProviderStopReason },
   overrides: Record<string, unknown> = {},
-): ResponseCycleServices<unknown> {
+): ResponseCycleServices {
   return {
     round: { responseTimeMs: 0 },
     workspace: AgentWorkspaceState.create(),
@@ -99,7 +99,7 @@ function createProcessServices(
       })),
     }),
     ...overrides,
-  } as unknown as ResponseCycleServices<unknown>;
+  } as unknown as ResponseCycleServices;
 }
 
 async function processEmptyResponse(stopReason: ProviderStopReason) {
@@ -137,7 +137,7 @@ function createServices(interrupted = false, supportsManualCompaction = false) {
       requestCompaction,
       addContinueMessage,
     }),
-  } as unknown as ResponseCycleServices<unknown>;
+  } as unknown as ResponseCycleServices;
 
   return {
     services,

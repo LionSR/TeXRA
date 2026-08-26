@@ -105,9 +105,9 @@ function responseDebugFileOptions(
  * Prepares a response cycle by hydrating prompts, checking interruptions, and
  * establishing debug metadata before invoking the model.
  */
-class ResponsePrepNode<C> extends BaseNode<
+class ResponsePrepNode extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleServices<C>
+  ResponseCycleServices
 > {
   async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
     const { prompt, userVarChannels, runScope } = this.services;
@@ -204,9 +204,9 @@ type ContinuationNodeResult = SkippableNodeResult<{
   contextWindowExceeded: boolean;
 }>;
 
-export function responseCycleToolsForModel<C>(
+export function responseCycleToolsForModel(
   services: Pick<
-    ResponseCycleServices<C>,
+    ResponseCycleServices,
     'modelCell' | 'setting' | 'toolRegistry' | 'toolPolicy'
   >,
 ): ToolDefinition[] | undefined {
@@ -228,9 +228,9 @@ export function responseCycleToolsForModel<C>(
  * Transforms the raw model response into output-ready text, updates usage metrics,
  * and persists incremental tool-state derived from the result.
  */
-class ResponseProcessNode<C> extends BaseNode<
+class ResponseProcessNode extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleServices<C>
+  ResponseCycleServices
 > {
   async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
     const { assembly } = this.services.workspace;
@@ -432,9 +432,9 @@ class ResponseProcessNode<C> extends BaseNode<
  * path routes through this single finalization node, so no guard flag is
  * needed: the graph guarantees one execution.
  */
-class ResponseCycleFinalizeNode<C> extends BaseNode<
+class ResponseCycleFinalizeNode extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleServices<C>
+  ResponseCycleServices
 > {
   /** Finalize the round by recording stats and invoking callback. */
   async exec(): Promise<void> {
@@ -460,9 +460,9 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
  * Evaluates the processed response to decide whether the agent should end the turn,
  * stop entirely, or enqueue a continuation request.
  */
-class ResponseContinuationNode<C> extends BaseNode<
+class ResponseContinuationNode extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleServices<C>
+  ResponseCycleServices
 > {
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
     if (
@@ -609,14 +609,14 @@ class ResponseContinuationNode<C> extends BaseNode<
  * Creates a response cycle flow. The caller injects {@link ResponseCycleServices}
  * through `setServices()`; only mutable state travels in the shared context.
  */
-export function createResponseCycleFlow<C>(): Flow<
+export function createResponseCycleFlow(): Flow<
   ResponseCycleShared,
-  ResponseCycleServices<C>
+  ResponseCycleServices
 > {
-  const prepNode = new ResponsePrepNode<C>();
+  const prepNode = new ResponsePrepNode();
   const invokeNode = new ModelInvocationNode<
     ResponseCycleShared,
-    ResponseCycleServices<C>
+    ResponseCycleServices
   >({
     operationName: 'Model invocation',
     streaming: false,
@@ -631,9 +631,9 @@ export function createResponseCycleFlow<C>(): Flow<
     getDebugFileOptions: (shared, services) =>
       responseDebugFileOptions(shared, services.round.continuationCount),
   });
-  const processNode = new ResponseProcessNode<C>();
-  const continuationNode = new ResponseContinuationNode<C>();
-  const finalizeNode = new ResponseCycleFinalizeNode<C>();
+  const processNode = new ResponseProcessNode();
+  const continuationNode = new ResponseContinuationNode();
+  const finalizeNode = new ResponseCycleFinalizeNode();
 
   prepNode.next(invokeNode);
   invokeNode.next(processNode);

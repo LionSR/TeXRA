@@ -11,8 +11,8 @@ import { testModelCell } from '../modelCellTestUtils';
 import { testRunScope } from '../progressTestUtils';
 
 function buildServices(
-  overrides: Partial<ToolUseServices<unknown>> = {},
-): ToolUseServices<unknown> {
+  overrides: Partial<ToolUseServices> = {},
+): ToolUseServices {
   return {
     config: AgentConfigSchema.parse({ agent: 'chat', model: 'deepseekT' }),
     runScope: testRunScope('test-stream'),
@@ -34,7 +34,7 @@ function buildServices(
     toolRegistry: {} as never,
     userVarChannels: { input: {}, transient: {} },
     ...overrides,
-  } as ToolUseServices<unknown>;
+  } as ToolUseServices;
 }
 
 describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {

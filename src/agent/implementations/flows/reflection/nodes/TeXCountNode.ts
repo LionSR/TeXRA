@@ -7,9 +7,9 @@ import { getFilesForRound } from '../helpers';
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionServices } from '../ReflectionServices';
 
-export class TeXCountNode<C = unknown> extends BaseNode<
+export class TeXCountNode extends BaseNode<
   ReflectionFlowShared,
-  ReflectionServices<C>
+  ReflectionServices
 > {
   async prep(shared: ReflectionFlowShared): Promise<FileLocation[]> {
     const { config, fileService } = this.services;
