@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
 
-import stableStringify from 'fast-json-stable-stringify';
+import stableStringify from 'safe-stable-stringify';
 import PQueue from 'p-queue';
 import pTimeout from 'p-timeout';
 import type {

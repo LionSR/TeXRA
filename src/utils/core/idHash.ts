@@ -2,7 +2,7 @@
 import { createHash, type BinaryLike } from 'node:crypto';
 
 // Third-party imports
-import stableStringify from 'fast-json-stable-stringify';
+import stableStringify from 'safe-stable-stringify';
 
 // Local imports - schemas
 import type { ExecutionId } from '@shared/schemas';

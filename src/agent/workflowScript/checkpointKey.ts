@@ -1,5 +1,5 @@
 // Third-party imports
-import stableStringify from 'fast-json-stable-stringify';
+import stableStringify from 'safe-stable-stringify';
 
 // Local imports
 import { truncatedHexId } from '@utils/core/idHash';
