@@ -91,7 +91,7 @@ The pre-wired slots for a future "show the PR state pill, #NNN + title, +A -D di
 
 **Verifier corrections to the evidence above**
 
-see corrections field content above
+This verifier folded its corrections into the reasoning block below rather than filling the corrections field. Read that block: the numbered corrections it references are stated there.
 
 <details><summary>Verifier reasoning</summary>
 
@@ -1600,7 +1600,7 @@ Codex-specific regression coverage of four shared code paths: the one-shot refus
 
 **Verifier corrections to the evidence above**
 
-See the corrections field content above.
+This verifier folded its corrections into the reasoning block below rather than filling the corrections field. Read that block: the numbered corrections it references are stated there.
 
 <details><summary>Verifier reasoning</summary>
 
@@ -1676,7 +1676,7 @@ Per-host prose stating why a tool is excluded, as typed data. It was never rende
 
 **Verifier corrections to the evidence above**
 
-see above
+This verifier folded its corrections into the reasoning block below rather than filling the corrections field. Read that block: the numbered corrections it references are stated there.
 
 <details><summary>Verifier reasoning</summary>
 
@@ -1876,7 +1876,7 @@ The core claim (KVStoreCache memoizes a provably stateless handle; every invalid
    - ExecutionKVStore's StorageFSKVStore (:183-210) is likewise stateless — it holds only executionId, and resolveRunStoragePath (src/platform/defaults/workspaceStorage.ts:82-84) returns a root-relative posix path — so the kept LRU is pure memoization, not root-latching.
    - src/test-kernel/transcript/StreamLogStoreLoad.vitest.ts:935-951 ("prepares transcript directories again after a storage-root reload") asserts ensureDir-per-write, not handle identity, so it passes unchanged after the invalidateAll deletion. Worth naming in the PR since it looks like a cache test and is not one.
 
-6. Dedupe/ruling checks I re-ran and that came back clean for the CORE claim: not in round1-index.md (95 lines, zero KVStore/StreamSnapshotStore/ExecutionKVStore/StagedDeletion hits); the only survey hit is :2171, a refutation of an unrelated perf claim; `gh issue list --label tech-debt --state all --search "KVStoreCache"` returns only #10345/#10387/#10388/#10443/#10444, all about the `max` guard and its tests, none about the cache's value; no open issue mentions KVStore; KVStoreCache is not exported from packages/agent/src (the dist .d.ts is transitive type emission, not the frozen SDK surface); no architecture ratchet under src/test-kernel/architecture references it; #10335 extracted the class as a dedupe of three hand-rolled lifecycles but никогда ruled that the invalidation itself is load-bearing.
+6. Dedupe/ruling checks I re-ran and that came back clean for the CORE claim: not in round1-index.md (95 lines, zero KVStore/StreamSnapshotStore/ExecutionKVStore/StagedDeletion hits); the only survey hit is :2171, a refutation of an unrelated perf claim; `gh issue list --label tech-debt --state all --search "KVStoreCache"` returns only #10345/#10387/#10388/#10443/#10444, all about the `max` guard and its tests, none about the cache's value; no open issue mentions KVStore; KVStoreCache is not exported from packages/agent/src (the dist .d.ts is transitive type emission, not the frozen SDK surface); no architecture ratchet under src/test-kernel/architecture references it; #10335 extracted the class as a dedupe of three hand-rolled lifecycles but never ruled that the invalidation itself is load-bearing.
 
 <details><summary>Verifier reasoning</summary>
 
@@ -2187,7 +2187,7 @@ Nothing at the render level: the tooltip text and the two icons are reproduced e
 
 **Verifier corrections to the evidence above**
 
-see corrections field content above
+This verifier folded its corrections into the reasoning block below rather than filling the corrections field. Read that block: the numbered corrections it references are stated there.
 
 <details><summary>Verifier reasoning</summary>
 
@@ -2789,7 +2789,7 @@ Nothing in coverage: after step 1 the vscode-import invariant covers a strict su
 
 **Verifier corrections to the evidence above**
 
-See the corrections field content above.
+This verifier folded its corrections into the reasoning block below rather than filling the corrections field. Read that block: the numbered corrections it references are stated there.
 
 <details><summary>Verifier reasoning</summary>
 
@@ -3815,9 +3815,30 @@ Per lane PR:
 
 - `npm run typecheck` clean, `npm run lint` clean, `npm run format` applied.
 - Affected vitest suites pass. No new test files unless a deletion earns a regression pin (AGENTS.md testing discipline: default for a refactor PR is zero new tests).
-- `npm run check:dead-code-ratchet` passes, with `config/ratchets/knip-baseline.json` **shrunk** in the same PR for every export removed. A baseline that grows is a rejected PR.
+- `npm run check:dead-code-ratchet` passes. Where a deleted export **had** a baseline row, `config/ratchets/knip-baseline.json` shrinks in the same PR; a currently-live export has no row to remove and simply disappears with its consumers. Never add a row: if a deletion orphans some other export into dead code, un-export that symbol rather than baselining it. A baseline that grows is a rejected PR.
 - Title uses `refactor:` / `simplify:` / `dedupe:`, which activates the checklist §14 letter-level template: the body carries `## Net elements (R6)` (files, `^[+-]export` symbols, class/interface/enum declarations, net LoC from `git diff --stat origin/main`) and `## Consumer counts (R8)` (grepped caller counts for every deleted public symbol).
 - Behavior-preserving unless the candidate explicitly says otherwise. Where a deletion removes a catch or fallback, confirm against checklist §15 that it was not a masking site — a masking site gets fixed loudly, not deleted quietly.
+
+### Two candidates were reverted on review, both the same mistake
+
+`resumeOutcome` (lane `M9-progress`) and the `texra.agent.rounds` read (lane
+`M5-shared`) both shipped and were then reverted. In each case the verifier
+grepped the repository, found no reader, and concluded the value was dead — but
+the consumer was **outside the repo**:
+
+- `resumeOutcome` is forwarded verbatim to the public CLI NDJSON stream by
+  `projectCliSessionFact`, and the frozen-wire ruling in
+  `2026-08-03-ssot-consolidation-plan.md` puts public-key deletion on a
+  0.40-deprecate / 0.41-delete clock. The repo is at 0.40.6.
+- `texra.agent.rounds` is absent from every settings catalog, but
+  `JsonConfigProvider.get()` consults the workspace and global stores _before_
+  the catalog, so the key still overrides the default when a user has it in
+  `.texra/config.json`. Its replacement also shipped 2026-08-02, inside the
+  three-month compatibility window.
+
+The lesson for the next round: for anything that crosses a **public wire
+format, a persisted user file, or a settings key**, an in-repo consumer grep is
+not sufficient evidence of deadness. Add that to the verifier kill conditions.
 
 ## 5. Risks
 
