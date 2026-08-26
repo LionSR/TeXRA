@@ -1,11 +1,11 @@
-// Third-party imports
-
 // Type imports
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import type { ToolDefinition } from '@shared/schemas';
 
 // Local file imports
 import { BaseTool } from './base';
+
+// Third-party type imports
 import type { ZodType } from 'zod';
 
 const EXECUTION_FLAGS = [

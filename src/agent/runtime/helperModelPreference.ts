@@ -18,8 +18,7 @@ import { getHelperModelName } from './helperModelName';
 /**
  * Swap `config`'s model for the configured helper model, or return it unchanged
  * when the helper model already equals it, a tool-use agent's helper model can't
- * call functions (the tool-use flow would strip its tools), or the helper model
- * is unavailable.
+ * call functions, or the helper model is unavailable.
  */
 export async function applyHelperModelPreference(
   config: AgentConfig,
@@ -29,11 +28,9 @@ export async function applyHelperModelPreference(
 
   const helperModelConfig = await resolveRuntimeModelConfig(helperModel);
 
-  // A tool-use agent (e.g. latexFixer) needs its tools. The provider adapters
-  // drop function tools for a model that does not declare function calling
-  // (`toOpenAIResponseTools` skips every function tool when
-  // `!supportsFunctionCalling`), so mirror that check and bail unless the
-  // helper model declares it — not only on an explicit `=== false`.
+  // A tool-use agent (e.g. latexFixer) needs its tools, so do not assign a
+  // helper model that does not declare function calling — not only one that
+  // explicitly sets the capability to false.
   if (
     config.agentCategory === AgentCategory.ToolUse &&
     !helperModelConfig?.capabilities.supportsFunctionCalling
