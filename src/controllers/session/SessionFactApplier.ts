@@ -2,7 +2,6 @@ import type { DeleteStreamResult } from '@agent/storage';
 import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
 import { roundedUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
-import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import type { SessionRendererPort } from '@controllers/session/SessionRendererPort';
 import {
   SessionState,
@@ -196,7 +195,7 @@ export class SessionFactApplier {
     addOutputFiles: (_streamId, event) =>
       this.renderer.invalidate(event.streamId, 'files'),
     updateMissingOutputs: (_streamId, event) =>
-      this.renderer.onMissingOutputsChanged(event.streamId),
+      this.renderer.invalidate(event.streamId, 'missingOutputs'),
     updateCompileFailures: (_streamId, event) =>
       this.renderer.invalidate(event.streamId, 'compileFailures'),
     goalPaused: (_streamId, event) =>
@@ -255,14 +254,9 @@ export class SessionFactApplier {
   }
 
   /** Push metadata and mark the stream as registered with this renderer. */
-  private pushStreamMetadata(
-    streamId: StreamTabId,
-    options?: {
-      streamStates?: Map<StreamTabId, StreamPhaseState>;
-    },
-  ): void {
+  private pushStreamMetadata(streamId: StreamTabId): void {
     this.registeredWithRenderer.add(streamId);
-    this.renderer.onStreamMetadataChanged(streamId, options);
+    this.renderer.onStreamMetadataChanged(streamId);
   }
 
   /**
@@ -348,7 +342,6 @@ export class SessionFactApplier {
               fact.phase,
               fact.previousPhase,
               fact.substate,
-              fact.runStartedAt,
             );
           case 'setParentStream':
             return this.handleSetParentStream(fact.payload);
@@ -674,9 +667,7 @@ export class SessionFactApplier {
     // focus policy belong to the host presentation, not the session fact.
     const firstHostDelivery = !this.registeredWithRenderer.has(streamId);
     if (firstHostDelivery) {
-      this.pushStreamMetadata(streamId, {
-        streamStates: this.state.streamStatus.getAllStreamStates(),
-      });
+      this.pushStreamMetadata(streamId);
     }
   }
 
@@ -696,9 +687,7 @@ export class SessionFactApplier {
       // A run start or config change may update agent name, model, or label,
       // which the frontend tabs display even for background subagents. Patch
       // only the affected stream instead of rebuilding all historical tabs.
-      this.pushStreamMetadata(streamId, {
-        streamStates: this.state.streamStatus.getAllStreamStates(),
-      });
+      this.pushStreamMetadata(streamId);
     }
   }
 
@@ -792,7 +781,7 @@ export class SessionFactApplier {
       return { ...prev, subagents: [...live, ...retained] };
     });
 
-    this.renderer.onBadgesChanged(parentStreamId);
+    this.renderer.invalidate(parentStreamId, 'subagents');
   }
 
   private notifyRosterParents(parents: readonly StreamTabId[]): void {
@@ -808,7 +797,7 @@ export class SessionFactApplier {
           withEventErrorHandling(
             'SessionFacts',
             `failed to notify roster changes for ${parent}`,
-            () => this.renderer.onBadgesChanged(parent),
+            () => this.renderer.invalidate(parent, 'subagents'),
           );
         }
       },
@@ -826,7 +815,6 @@ export class SessionFactApplier {
     status: StreamPhase,
     previousPhase?: StreamPhase,
     substate?: StreamSubstate,
-    runStartedAt?: number,
   ): Promise<void> {
     // A status for a removed stream is stale: removal is final, so the
     // transition must not re-mint the transcript or execution state the
@@ -888,14 +876,7 @@ export class SessionFactApplier {
     }
 
     if (isNewStream || isNewRunningTransition) {
-      this.pushStreamMetadata(streamId, {
-        streamStates: this.buildStreamStatesForRefresh(
-          streamId,
-          status,
-          substate,
-          runStartedAt,
-        ),
-      });
+      this.pushStreamMetadata(streamId);
     } else {
       const lastTimestamp =
         this.state.streamLogs.getTimestampRange(streamId).last;
@@ -911,26 +892,5 @@ export class SessionFactApplier {
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
     return this.state.getStreamMetadata(streamId).agentCategory;
-  }
-
-  /**
-   * Snapshot the status machine and splice in `streamId`'s about-to-be-applied
-   * status/substate, which hasn't been written to the machine yet when this
-   * is called during `setStreamStatus`. Combined into one map so the phase
-   * and substate views can't diverge on which streams they cover.
-   */
-  private buildStreamStatesForRefresh(
-    streamId: StreamTabId,
-    status: StreamPhase,
-    substate?: StreamSubstate,
-    runStartedAt?: number,
-  ): Map<StreamTabId, StreamPhaseState> {
-    const statesForRefresh = this.state.streamStatus.getAllStreamStates();
-    statesForRefresh.set(streamId, {
-      phase: status,
-      ...(substate ? { substate } : {}),
-      ...(runStartedAt !== undefined ? { runStartedAt } : {}),
-    });
-    return statesForRefresh;
   }
 }

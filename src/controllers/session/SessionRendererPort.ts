@@ -1,4 +1,3 @@
-import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import type {
   ConversationProgress,
   GoalStatus,
@@ -18,19 +17,21 @@ export type PresentedStreamId = StreamTabId | '';
 /**
  * A projection slice whose new value the host re-reads from the shared state
  * rather than receiving on the wire. Each key names the field the host reads
- * (`outputs.files`, `outputs.compileFailures`, `workPlan.queuedFollowUps`,
- * `SessionStreamMetadata.parentStreamId`,
- * `StreamExecutionState.contextState`) or the fact it reacts to
- * (`goalPaused`); nothing here is new vocabulary. Slices whose notification
- * carries real delta semantics — `onStageChanged`'s phase-vs-round split —
- * keep their own method.
+ * (`outputs.files`, `outputs.compileFailures`, `outputs.missing`,
+ * `workPlan.queuedFollowUps`, `SessionStreamMetadata.parentStreamId`,
+ * `StreamExecutionState.contextState`, `StreamExecutionState.subagents`) or
+ * the fact it reacts to (`goalPaused`); nothing here is new vocabulary.
+ * Slices whose notification carries real delta semantics —
+ * `onStageChanged`'s phase-vs-round split — keep their own method.
  */
 export type SessionRenderSlice =
   | 'files'
   | 'compileFailures'
+  | 'missingOutputs'
   | 'queuedFollowUps'
   | 'parentStreamId'
   | 'contextState'
+  | 'subagents'
   | 'goalPaused';
 
 /**
@@ -53,12 +54,12 @@ export interface SessionRendererPort {
    */
   invalidate(streamId: StreamTabId, slice: SessionRenderSlice): void;
 
-  onStreamMetadataChanged(
-    streamId: StreamTabId,
-    options?: {
-      streamStates?: Map<StreamTabId, StreamPhaseState>;
-    },
-  ): void;
+  /**
+   * The stream's metadata changed; hosts re-read it, and read phase/substate
+   * from `SessionState.streamStatus` — the status machine writes before it
+   * publishes, so the map is already current when this fires.
+   */
+  onStreamMetadataChanged(streamId: StreamTabId): void;
 
   onStreamStatusChanged(
     streamId: StreamTabId,
@@ -82,12 +83,6 @@ export interface SessionRendererPort {
    * other hosts project the slot verbatim.
    */
   onStageChanged(streamId: StreamTabId, stage: StreamStage): void;
-
-  /** The stream's child-activity roster changed; hosts re-read
-   *  `SessionState.getStreamState(streamId).subagents`. */
-  onBadgesChanged(streamId: StreamTabId): void;
-
-  onMissingOutputsChanged(streamId: StreamTabId): void;
 
   onRunUsageChanged(
     streamId: StreamTabId,

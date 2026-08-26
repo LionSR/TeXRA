@@ -159,12 +159,16 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   attach(session: SessionHandle): () => void {
     const state = new SessionState(session);
     this.state = state;
-    const applier = new SessionFactApplier(state, new HeadlessPort(this), {
-      // Headless owns no durable deletion: reporting nothing keeps the
-      // removal barrier, which is exactly what the live line wants — a
-      // removed child drops out of the roster it reads.
-      deleteStream: () => undefined,
-    });
+    const applier = new SessionFactApplier(
+      state,
+      new HeadlessPort(this, state),
+      {
+        // Headless owns no durable deletion: reporting nothing keeps the
+        // removal barrier, which is exactly what the live line wants — a
+        // removed child drops out of the roster it reads.
+        deleteStream: () => undefined,
+      },
+    );
     const detachSessionFacts = session.events.subscribeSessionFacts((fact) =>
       applier.handleSessionFact(fact),
     );
@@ -392,7 +396,10 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
  * shared record does not encode.
  */
 class HeadlessPort implements SessionRendererPort {
-  constructor(private readonly renderer: DefaultRunProgressRenderer) {}
+  constructor(
+    private readonly renderer: DefaultRunProgressRenderer,
+    private readonly state: SessionState,
+  ) {}
 
   isAvailable(): boolean {
     return true;
@@ -400,18 +407,17 @@ class HeadlessPort implements SessionRendererPort {
 
   dispose(): void {}
 
-  invalidate(_streamId: StreamTabId, _slice: SessionRenderSlice): void {}
+  invalidate(streamId: StreamTabId, slice: SessionRenderSlice): void {
+    // Only the child roster moves the single live line; the other slices are
+    // artifact/topology detail this host does not render.
+    if (slice === 'subagents') this.renderer.refreshFor(streamId, true);
+  }
 
-  onStreamMetadataChanged(
-    streamId: StreamTabId,
-    options?: Parameters<SessionRendererPort['onStreamMetadataChanged']>[1],
-  ): void {
+  onStreamMetadataChanged(streamId: StreamTabId): void {
     // A new stream and a new RUNNING transition report their phase here
-    // instead of through `onStreamStatusChanged`.
-    this.renderer.applyStatus(
-      streamId,
-      options?.streamStates?.get(streamId)?.phase,
-    );
+    // instead of through `onStreamStatusChanged`. The status machine writes
+    // before it publishes, so its map already holds this transition.
+    this.renderer.applyStatus(streamId, this.state.streamStatus.get(streamId));
   }
 
   onStreamStatusChanged(streamId: StreamTabId, status: StreamPhase): void {
@@ -434,12 +440,6 @@ class HeadlessPort implements SessionRendererPort {
   onStageChanged(streamId: StreamTabId, _stage: StreamStage): void {
     this.renderer.refreshFor(streamId);
   }
-
-  onBadgesChanged(streamId: StreamTabId): void {
-    this.renderer.refreshFor(streamId, true);
-  }
-
-  onMissingOutputsChanged(_streamId: StreamTabId): void {}
 
   onRunUsageChanged(
     _streamId: StreamTabId,

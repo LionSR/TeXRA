@@ -83,6 +83,7 @@ class TuiSessionRenderer implements SessionRendererPort {
     switch (slice) {
       case 'files':
       case 'compileFailures':
+      case 'missingOutputs':
         // Renderers read `StreamArtifactProjection` directly. The write itself
         // is proof of established provenance for this session — a live fact
         // must not wait on the focus-driven disk preload
@@ -93,10 +94,13 @@ class TuiSessionRenderer implements SessionRendererPort {
       case 'parentStreamId':
       case 'queuedFollowUps':
       case 'contextState':
-        // The applier already landed the edge / the session-owned queue /
-        // the model handler's context snapshot on `SessionState`; the CLI's
-        // topology snapshot, `queuedFollowUpsFor`, and the status bar's
-        // `streamStateFor` read re-derive from there at paint.
+      case 'subagents':
+        // The applier already landed the edge / the session-owned queue / the
+        // model handler's context snapshot / the child roster (live rows plus
+        // the finished children it retains for display, phase-merged and
+        // 200-capped) on `SessionState`; the CLI's topology snapshot,
+        // `queuedFollowUpsFor`, and the status bar's `streamStateFor` read
+        // re-derive from there at paint.
         return invalidateChildStreams();
       case 'goalPaused':
         return appendLocalAssistantTranscript(
@@ -147,20 +151,6 @@ class TuiSessionRenderer implements SessionRendererPort {
     // `StreamExecutionState.stage` is written by the applier before this
     // callback; renderers re-read it.
     invalidateChildStreams();
-  }
-
-  onBadgesChanged(_streamId: StreamTabId): void {
-    // The shared applier already landed this roster on `SessionState` — live
-    // rows plus the finished children it retains for display (phase-merged,
-    // 200-capped). The CLI reads it there; only the snapshots re-derive.
-    invalidateChildStreams();
-  }
-
-  onMissingOutputsChanged(streamId: StreamTabId): void {
-    // Renderers read `StreamArtifactProjection` directly; a disk-restored
-    // clear invalidates the memo like any other change. See `invalidate` for
-    // why the write marks the stream hydrated rather than only bumping.
-    markArtifactStreamHydrated(streamId);
   }
 
   onRunUsageChanged(

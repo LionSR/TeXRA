@@ -261,7 +261,7 @@ describe('ProgressBackend', () => {
       backend.state.streamLogs.ensureStream(streamId);
       backend.state.getOrCreateStreamState(streamId, AgentCategory.ToolUse);
       setChildRoster(backend, parent, [before, child, after]);
-      const badgesChanged = vi.spyOn(backend.renderer, 'onBadgesChanged');
+      const badgesChanged = vi.spyOn(backend.renderer, 'invalidate');
 
       emitRemoveStream(target, streamId);
 
@@ -272,7 +272,7 @@ describe('ProgressBackend', () => {
         before,
         after,
       ]);
-      expect(badgesChanged).toHaveBeenLastCalledWith(parent);
+      expect(badgesChanged).toHaveBeenCalledWith(parent, 'subagents');
     } finally {
       await backend.state.clearAll();
     }
@@ -378,7 +378,7 @@ describe('ProgressBackend', () => {
     vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
       {} as never,
     );
-    const badgesChanged = vi.spyOn(backend.renderer, 'onBadgesChanged');
+    const badgesChanged = vi.spyOn(backend.renderer, 'invalidate');
 
     expect(
       backend.applySessionFact({
@@ -387,7 +387,7 @@ describe('ProgressBackend', () => {
       }),
     ).toBe(true);
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([]);
-    expect(badgesChanged).toHaveBeenCalledWith(parent);
+    expect(badgesChanged).toHaveBeenCalledWith(parent, 'subagents');
   });
 
   it('keeps superseded settlements from revealing rows across parent and child reclaims', () => {
@@ -1301,9 +1301,16 @@ describe('ProgressBackend', () => {
     // The notification no longer carries the roster, so capture what a host
     // would re-read at scrub time to keep the scrub→restore sequence observable.
     let rosterDuringScrub: ActiveChildInfo[] | undefined;
+    const passThrough = backend.renderer.invalidate.bind(backend.renderer);
+    let scrubbed = false;
     const badgesChanged = vi
-      .spyOn(backend.renderer, 'onBadgesChanged')
-      .mockImplementationOnce(() => {
+      .spyOn(backend.renderer, 'invalidate')
+      .mockImplementation((invalidated, slice) => {
+        if (slice !== 'subagents' || scrubbed) {
+          passThrough(invalidated, slice);
+          return;
+        }
+        scrubbed = true;
         rosterDuringScrub = backend.state.getStreamState(parent)?.subagents;
         throw new Error('renderer unavailable during roster scrub');
       });
@@ -1324,7 +1331,7 @@ describe('ProgressBackend', () => {
     expect(backend.state.isStreamRemoved(stream)).toBe(false);
     expect(backend.state.getStreamState(parent)?.subagents).toEqual(roster);
     expect(rosterDuringScrub).toEqual([before, after]);
-    expect(badgesChanged).toHaveBeenCalledWith(parent);
+    expect(badgesChanged).toHaveBeenCalledWith(parent, 'subagents');
     expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(0, 1);
   });
 

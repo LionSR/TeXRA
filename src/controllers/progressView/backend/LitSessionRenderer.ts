@@ -105,14 +105,9 @@ export class LitSessionRenderer implements SessionRendererPort {
     this.pendingProgressUpdates.delete(streamId);
   }
 
-  onStreamMetadataChanged(
-    streamId: StreamTabId,
-    options?: {
-      streamStates?: Map<StreamTabId, StreamPhaseState>;
-    },
-  ): void {
+  onStreamMetadataChanged(streamId: StreamTabId): void {
     if (!this.isAvailable()) return;
-    this.updateStreamMetadata(streamId, options?.streamStates);
+    this.updateStreamMetadata(streamId);
   }
 
   onStreamStatusChanged(
@@ -166,6 +161,16 @@ export class LitSessionRenderer implements SessionRendererPort {
             reset: true,
           }),
         );
+      case 'missingOutputs':
+        return this.sendIfActive(streamId, () =>
+          this.sendMessage({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
+            stream: streamId,
+            rounds: nonEmptyRounds(
+              this.state.snapshots.getMissingOutputs(streamId),
+            ),
+          }),
+        );
       case 'queuedFollowUps':
         return this.sendIfActive(streamId, () =>
           this.sendMessage({
@@ -177,6 +182,9 @@ export class LitSessionRenderer implements SessionRendererPort {
       case 'parentStreamId':
         // Parent edge rides `StreamTabInfo.parentStreamId` on the metadata wire.
         if (!this.isAvailable()) return;
+        return this.updateStreamMetadata(streamId);
+      case 'subagents':
+        // The roster rides `StreamMetadata.subagents` on the metadata wire.
         return this.updateStreamMetadata(streamId);
       case 'contextState':
         // Lit's usage footer restores the same snapshot from the transcript
@@ -208,22 +216,6 @@ export class LitSessionRenderer implements SessionRendererPort {
       return;
     }
     this.sendIfActive(streamId, () => this.updateStreamMetadata(streamId));
-  }
-
-  onBadgesChanged(streamId: StreamTabId): void {
-    this.updateStreamMetadata(streamId);
-  }
-
-  onMissingOutputsChanged(streamId: StreamTabId): void {
-    this.sendIfActive(streamId, () => {
-      this.sendMessage({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
-        stream: streamId,
-        rounds: nonEmptyRounds(
-          this.state.snapshots.getMissingOutputs(streamId),
-        ),
-      });
-    });
   }
 
   onRunUsageChanged(
@@ -373,10 +365,7 @@ export class LitSessionRenderer implements SessionRendererPort {
   }
 
   /** Push one stream's metadata patch. */
-  updateStreamMetadata(
-    streamId: StreamTabId,
-    streamStates?: Map<StreamTabId, StreamPhaseState>,
-  ): void {
+  updateStreamMetadata(streamId: StreamTabId): void {
     if (!this.isAvailable()) return;
     const streamInfo = buildStreamInfo(
       this.state,
@@ -388,7 +377,7 @@ export class LitSessionRenderer implements SessionRendererPort {
       streamInfo,
       streamState: this.metadataFor(
         streamInfo,
-        streamStates ?? this.state.streamStatus.getAllStreamStates(),
+        this.state.streamStatus.getAllStreamStates(),
       ),
     });
   }
