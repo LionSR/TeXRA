@@ -23,11 +23,7 @@ import {
   openTexraConfigStores,
   openTexraWorkspaceConfigStore,
 } from '@platform/defaults/nodeStores';
-import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
 
 const log = createLog('extension');
 
@@ -88,11 +84,9 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
         // No default session exists yet during activation's own config setup,
         // and unit tests exercise transitions without one; a live session
         // always exists by the time a real workspace-folder change can fire.
-        // `?.` short-circuits argument evaluation, so the read below never runs
-        // (and never touches `platform()`) in those pre-session cases.
         tryDefaultSession()?.setApprovalPolicy(
-          readPlatformSetting<TexraApprovalPolicy>(
-            TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+          readPersistedTexraApprovalPolicy((key, fallback) =>
+            this.get(key, fallback),
           ),
         );
         appSignals.emit('approvalPolicyChanged', undefined);

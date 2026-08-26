@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// Local imports
+import { warn } from '@logger/logUtils';
+
 export const TEXRA_APPROVAL_POLICIES = ['never', 'ask', 'yolo'] as const;
 export const TexraApprovalPolicySchema = z.enum(TEXRA_APPROVAL_POLICIES);
 export type TexraApprovalPolicy = z.infer<typeof TexraApprovalPolicySchema>;
@@ -68,6 +71,32 @@ export function parseTexraApprovalPolicy(
     input.trim().toLowerCase(),
   );
   return parsed.success ? parsed.data : undefined;
+}
+
+/** Read the persisted TeXRA policy from a config getter (host-neutral). */
+export function readPersistedTexraApprovalPolicy(
+  get: <T>(key: string, defaultValue: T) => T,
+): TexraApprovalPolicy {
+  const raw = get<string>(
+    TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+    TEXRA_APPROVAL_POLICY_DEFAULT,
+  );
+  if (typeof raw !== 'string') {
+    if (raw != null) {
+      warn(
+        'approval-policy',
+        `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} value ${JSON.stringify(raw)}; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
+      );
+    }
+    return TEXRA_APPROVAL_POLICY_DEFAULT;
+  }
+  const parsed = parseTexraApprovalPolicy(raw);
+  if (parsed) return parsed;
+  warn(
+    'approval-policy',
+    `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} "${raw}"; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
+  );
+  return TEXRA_APPROVAL_POLICY_DEFAULT;
 }
 
 export type TexraApprovalPolicyDecision =
