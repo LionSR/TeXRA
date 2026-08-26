@@ -556,9 +556,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
                 }
               },
               (error: unknown) => {
-                this.log.debug('Follow-up result target is no longer attached', {
-                  data: error,
-                });
+                this.log.debug(
+                  'Follow-up result target is no longer attached',
+                  {
+                    data: error,
+                  },
+                );
               },
             );
           };

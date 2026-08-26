@@ -382,7 +382,7 @@ export const requestPanelSharedStyles: CSSResult = css`
      handle. The shared formControlStyles skin is for mono editors (6rem
      floor, 1px block padding, grid-centered), which left empty white
      bands above/below a short rejection note. The declarations both prose
-     boxes share live in `proseTextareaPartRule` above. */
+     boxes share live in proseTextareaPartRule above. */
   :is(${FEEDBACK_INPUTS}) {
     display: block;
     min-width: 0;
