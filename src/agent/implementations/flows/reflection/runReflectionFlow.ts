@@ -210,7 +210,6 @@ export async function runReflectionFlow(
       workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
       context: null,
       outputLocation: null,
-      conversation: [],
       modelHandlerCompatibilityKey: compatibilityKey,
       runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
       roundOutputs: [],

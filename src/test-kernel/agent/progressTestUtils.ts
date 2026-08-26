@@ -134,7 +134,6 @@ export function reflectionFlowShared(
       }),
     },
     outputLocation: null,
-    conversation: [],
     runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
     roundOutputs: [],
     continueRounds: true,

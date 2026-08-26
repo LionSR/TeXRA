@@ -182,7 +182,6 @@ export class ResponseCycleNode extends BaseNode<
     shared.workspaceSnapshot = prepRes.workspace.toSnapshot({
       excludeAssemblyStrings: true,
     });
-    shared.conversation = prepRes.context.messages;
 
     return FlowTransition.DEFAULT;
   }

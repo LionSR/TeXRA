@@ -129,7 +129,6 @@ describe('runReflectionFlow persisted-state recovery', () => {
     expect(ReflectionFlowStateSchema.parse(stored?.shared)).toMatchObject({
       currentRound: 0,
       totalRounds: 1,
-      conversation: [],
       modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
     });
   });
@@ -206,7 +205,6 @@ describe('runReflectionFlow persisted-state recovery', () => {
       workspaceSnapshot: { todos: { todos: [todo] } },
       context: null,
       outputLocation: null,
-      conversation: [],
       runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
       roundOutputs: [],
       continueRounds: true,
