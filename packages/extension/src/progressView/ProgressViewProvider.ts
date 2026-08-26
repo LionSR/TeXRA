@@ -4,11 +4,7 @@ import * as vscode from 'vscode';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import {
-  attachTerminalResultToast,
-  defaultSession,
-  StorageRootChangeRefusedError,
-} from '@agent/runtime';
+import { attachTerminalResultToast, defaultSession } from '@agent/runtime';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -24,10 +20,8 @@ import { getProgressStreamControls } from '@controllers/progressView/progressStr
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
-import type { ExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 import { DisposableStore } from '@platform/disposable';
 import { platform } from '@platform/platform';
-import type { WorkspaceProvider } from '@platform/interfaces';
 import type {
   AgentProposalPermission,
   ProgressViewOutboundMessage,
@@ -99,11 +93,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   private _mainViewProvider?: MainViewProvider;
   private readonly detachHostInteractions: () => void;
 
-  constructor(
-    protected readonly context: vscode.ExtensionContext,
-    private readonly config: ExtensionTexraConfig,
-    private readonly workspace: WorkspaceProvider,
-  ) {
+  constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
     this.logger = createChannelTrace('ProgressViewProvider');
 
@@ -193,26 +183,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     ProgressViewProvider._instance = this;
 
     this._disposables.add(
-      vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        const transition = this.config.enqueueWorkspaceTransition(
-          this.workspace.getWorkspacePath(),
-          (hooks) => this.backend.reloadAfterStorageRootChange(hooks),
-        );
-        void transition.completion.then(
-          () => this.syncFullView(),
-          (error: unknown) => {
-            this.logger.error(
-              `Failed workspace transition ${transition.generation}`,
-              { data: error },
-            );
-            void vscode.window.showErrorMessage(
-              error instanceof StorageRootChangeRefusedError
-                ? error.message
-                : 'TeXRA could not reload settings and transcripts after the workspace changed. Retry the workspace change or restart TeXRA.',
-            );
-          },
-        );
-      }),
+      // Only a non-first workspace folder can be added or removed here: VS
+      // Code restarts the extension host for a first-folder change, so the
+      // storage root never moves under a live window. Nothing to reload but
+      // the view (#11432).
+      vscode.workspace.onDidChangeWorkspaceFolders(() => this.syncFullView()),
     );
     this._disposables.add(
       vscode.window.onDidChangeActiveColorTheme(({ kind }) => {

@@ -161,8 +161,7 @@ describe('createLanguageModelPort', () => {
     const port = createPort();
     const listener = vi.fn();
 
-    port.onDidChangeModels(listener);
-    port.onDidChangeAccess(listener);
+    port.onDidChange(listener);
 
     expect(mocks.onDidChangeChatModels).toHaveBeenCalledWith(listener);
     expect(mocks.onDidChangeAccess).toHaveBeenCalledWith(listener);

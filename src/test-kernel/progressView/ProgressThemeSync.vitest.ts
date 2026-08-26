@@ -117,13 +117,9 @@ const { ProgressViewProvider } =
   await import('@progressView/ProgressViewProvider');
 
 function createProvider(): InstanceType<typeof ProgressViewProvider> {
-  return new ProgressViewProvider(
-    {
-      storageUri: { fsPath: '/tmp/ext-storage' },
-    } as unknown as vscode.ExtensionContext,
-    {} as never,
-    { getWorkspacePath: () => undefined } as never,
-  );
+  return new ProgressViewProvider({
+    storageUri: { fsPath: '/tmp/ext-storage' },
+  } as unknown as vscode.ExtensionContext);
 }
 
 function fireThemeChange(kind: number): void {

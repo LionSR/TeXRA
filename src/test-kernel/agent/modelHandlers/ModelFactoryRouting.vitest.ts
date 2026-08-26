@@ -75,10 +75,9 @@ function modelConfig(
 const AVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = {
   isAvailable: () => true,
   selectModels: async () => [],
-  onDidChangeModels: () => ({ dispose() {} }),
+  onDidChange: () => ({ dispose() {} }),
   sendRequest: () => (async function* () {})(),
   countTokens: async () => 0,
-  onDidChangeAccess: () => ({ dispose() {} }),
 };
 
 /** Run `inspect` against a created handler, always disposing it afterwards. */

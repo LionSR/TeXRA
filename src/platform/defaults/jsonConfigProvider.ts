@@ -29,7 +29,7 @@ export interface JsonConfigProviderOptions {
  * `update()` routes writes by {@link ConfigTarget}.
  */
 export class JsonConfigProvider implements ConfigProvider {
-  private workspaceStore: ConfigStore;
+  private readonly workspaceStore: ConfigStore;
   private readonly globalStore: ConfigStore;
 
   constructor({ workspace, global }: JsonConfigProviderOptions) {
@@ -45,13 +45,6 @@ export class JsonConfigProvider implements ConfigProvider {
     if (globalValue !== undefined) return globalValue;
     const schemaDefault = getCoreSettingDefault(storedKey) as T | undefined;
     return schemaDefault === undefined ? (defaultValue as T) : schemaDefault;
-  }
-
-  /** Switch workspace scope while retaining global values. */
-  replaceWorkspaceStore(workspaceStore: ConfigStore): ConfigStore {
-    const previousStore = this.workspaceStore;
-    this.workspaceStore = workspaceStore;
-    return previousStore;
   }
 
   async update<T>(

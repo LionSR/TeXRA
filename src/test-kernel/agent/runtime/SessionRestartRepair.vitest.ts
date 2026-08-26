@@ -1,17 +1,12 @@
-import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
-import {
-  acquireFreshExecutionLease,
-  releaseOwnedExecutionLease,
-} from '@agent/storage/executionLease';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import * as runClassification from '@agent/runtime/runClassification';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { platform } from '@platform/platform';
 import {
   LOG_LEVELS,
   RUN_OUTCOME,
@@ -29,8 +24,6 @@ import {
   writeForeignLease,
   writeOrphanedLease,
 } from '@test/support/executionLeaseFixtures';
-import { createDeferred } from '@test/support/asyncTestUtils';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   appendTranscriptEntry,
@@ -127,21 +120,6 @@ async function seedResumableExecution(
   });
   await executionStore.write(flowKey(id), validFlowRecord);
   return executionStore;
-}
-
-/**
- * Mocks a pending workspace-storage root change, returning the commit mock so
- * callers can assert whether it was invoked.
- */
-function mockPendingWorkspaceChange(
-  opts: { pending?: boolean; commit?: boolean } = {},
-): Mock<() => boolean> {
-  const commitWorkspaceStorageChange = vi.fn(() => opts.commit ?? true);
-  Object.assign(platform().storage, {
-    hasPendingWorkspaceStorageChange: () => opts.pending ?? true,
-    commitWorkspaceStorageChange,
-  });
-  return commitWorkspaceStorageChange;
 }
 
 afterEach(async () => {
@@ -512,243 +490,10 @@ describe('SessionHandle restart repair', () => {
     expect(session.status.get(reusedStreamId)).toBe(STREAM_PHASE.RUNNING);
   });
 
-  it('replaces stores with evictAll + bounded preload at the workspace-root boundary', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = openDeferredSession(transcripts);
-    const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
-    const preloadSnapshots = vi.spyOn(session.snapshots, 'preload');
-    const evictSnapshots = vi.spyOn(session.snapshots, 'evictAll');
-    const loadSnapshots = vi.spyOn(session.snapshots, 'load');
-    session.status.transition(
-      'previous-workspace' as StreamTabId,
-      STREAM_PHASE.RUNNING,
-      'lifecycle',
-    );
-
-    await session.reloadAfterStorageRootChange();
-
-    expect(reload).toHaveBeenCalledOnce();
-    expect(evictSnapshots).toHaveBeenCalledOnce();
-    expect(preloadSnapshots).toHaveBeenCalledWith([]);
-    expect(loadSnapshots).not.toHaveBeenCalled();
-    expect(
-      session.status.get('previous-workspace' as StreamTabId),
-    ).toBeUndefined();
-  });
-
-  it('refuses a storage-root change while an execution is live and changes nothing', async () => {
-    const liveExecutionId = 'workspace-live' as ExecutionId;
-    const transcripts = await StreamLogStore.open();
-    const session = openDeferredSession(transcripts);
-    const storage = platform().storage;
-    let activeRoot = '/workspace/old-storage';
-    vi.spyOn(storage, 'getStoragePath').mockImplementation(() => activeRoot);
-    const commit = vi.fn(() => {
-      activeRoot = '/workspace/new-storage';
-      return true;
-    });
-    Object.assign(storage, {
-      hasPendingWorkspaceStorageChange: () => true,
-      commitWorkspaceStorageChange: commit,
-    });
-    const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
-    const flush = vi.spyOn(transcripts, 'flush');
-    session.executions.track(
-      testExecutionHandle({
-        executionId: liveExecutionId,
-        parentStreamId: 'workspace-live-stream' as StreamTabId,
-        childStreamId: 'workspace-live-stream' as StreamTabId,
-        agent: 'assistant',
-      }),
-    );
-
-    await expect(session.reloadAfterStorageRootChange()).rejects.toThrow(
-      'cannot change its storage location while 1 run is live',
-    );
-
-    expect(flush).not.toHaveBeenCalled();
-    expect(commit).not.toHaveBeenCalled();
-    expect(reload).not.toHaveBeenCalled();
-    expect(storage.getStoragePath()).toBe('/workspace/old-storage');
-  });
-
-  it('refuses a storage-root change while a lane step is admitted but not started, leaving the session as it was', async () => {
-    const executionId = 'workspace-queued' as ExecutionId;
-    const transcripts = await StreamLogStore.open();
-    const session = openDeferredSession(transcripts);
-    const storage = platform().storage;
-    const commit = vi.fn(() => true);
-    Object.assign(storage, {
-      hasPendingWorkspaceStorageChange: () => true,
-      commitWorkspaceStorageChange: commit,
-    });
-    const flush = vi.spyOn(transcripts, 'flush');
-    const generationBefore = Reflect.get(session, 'storageGeneration');
-    const gate = createDeferred();
-    // Admitted synchronously; its body has not run yet.
-    const step = session.executions.runExecutionStep(executionId, async () => {
-      await gate.promise;
-      return 'ran';
-    });
-
-    await expect(session.reloadAfterStorageRootChange()).rejects.toThrow(
-      'cannot change its storage location while 1 run is live',
-    );
-
-    expect(flush).not.toHaveBeenCalled();
-    expect(commit).not.toHaveBeenCalled();
-    expect(Reflect.get(session, 'storageGeneration')).toBe(generationBefore);
-    // The readiness promise was not replaced by the refused change.
-    await expect(session.waitUntilReady()).resolves.toBeUndefined();
-    gate.resolve();
-    await expect(step).resolves.toBe('ran');
-  });
-
-  it('flushes old-root stores before committing the new storage root', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = openDeferredSession(transcripts);
-    const storage = platform().storage;
-    const order: string[] = [];
-    Object.assign(storage, {
-      hasPendingWorkspaceStorageChange: () => true,
-      commitWorkspaceStorageChange: () => {
-        order.push('commit');
-        return true;
-      },
-    });
-    vi.spyOn(transcripts, 'flush').mockImplementation(async () => {
-      order.push('transcripts.flush');
-    });
-    vi.spyOn(session.snapshots, 'flush').mockImplementation(async () => {
-      order.push('snapshots.flush');
-    });
-    vi.spyOn(transcripts, 'reload').mockImplementation(async () => {
-      order.push('transcripts.reload');
-    });
-
-    await session.reloadAfterStorageRootChange();
-
-    expect(order.indexOf('transcripts.flush')).toBeLessThan(
-      order.indexOf('commit'),
-    );
-    expect(order.indexOf('snapshots.flush')).toBeLessThan(
-      order.indexOf('commit'),
-    );
-    expect(order.indexOf('commit')).toBeLessThan(
-      order.indexOf('transcripts.reload'),
-    );
-  });
-
-  it('does not commit a new root when the old transcript flush fails', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = openDeferredSession(transcripts);
-    const commitWorkspaceStorageChange = mockPendingWorkspaceChange();
-    const flushError = new Error('old transcript writes remain unresolved');
-    vi.spyOn(transcripts, 'flush').mockRejectedValue(flushError);
-    const reload = vi.spyOn(transcripts, 'reload');
-
-    await expect(session.reloadAfterStorageRootChange()).rejects.toBe(
-      flushError,
-    );
-
-    expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
-    expect(reload).not.toHaveBeenCalled();
-  });
-
-  it('does not commit a new root after disposal during the old-root flush', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = openDeferredSession(transcripts);
-    const commitWorkspaceStorageChange = mockPendingWorkspaceChange();
-    let finishFlush: (() => void) | undefined;
-    const flushBlocked = new Promise<void>((resolve) => {
-      finishFlush = resolve;
-    });
-    vi.spyOn(transcripts, 'flush').mockReturnValue(flushBlocked);
-
-    const replacement = session.reloadAfterStorageRootChange();
-    await vi.waitFor(() => {
-      expect(transcripts.flush).toHaveBeenCalledOnce();
-    });
-
-    session.dispose();
-    finishFlush?.();
-
-    await expect(replacement).resolves.toBe(false);
-    expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
-  });
-
-  it('rolls back a failed new-root load and permits retry', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = openDeferredSession(transcripts);
-    const storage = platform().storage;
-    let activeRoot = '/workspace/old-storage';
-    const finalizeWorkspaceStorageChange = vi.fn();
-    const rollbackWorkspaceStorageChange = vi.fn(() => {
-      activeRoot = '/workspace/old-storage';
-      return true;
-    });
-    Object.assign(storage, {
-      getStoragePath: () => activeRoot,
-      hasPendingWorkspaceStorageChange: () =>
-        activeRoot === '/workspace/old-storage',
-      commitWorkspaceStorageChange: () => {
-        activeRoot = '/workspace/new-storage';
-        return true;
-      },
-      finalizeWorkspaceStorageChange,
-      rollbackWorkspaceStorageChange,
-    });
-    const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
-    const reloadError = new Error('new snapshot root is unreadable');
-    vi.spyOn(session.snapshots, 'preload')
-      .mockRejectedValueOnce(reloadError)
-      .mockResolvedValue();
-    const evictSnapshots = vi.spyOn(session.snapshots, 'evictAll');
-    session.status.transition(
-      'old-workspace-running' as StreamTabId,
-      STREAM_PHASE.RUNNING,
-      'lifecycle',
-    );
-    const transitionHooks = {
-      workspacePath: '/workspace/new',
-      afterStorageCommit: vi.fn(async () => {}),
-      afterStorageRollback: vi.fn(),
-      afterStorageFinalize: vi.fn(),
-    };
-
-    await expect(
-      session.reloadAfterStorageRootChange(transitionHooks),
-    ).rejects.toBe(reloadError);
-
-    expect(activeRoot).toBe('/workspace/old-storage');
-    expect(rollbackWorkspaceStorageChange).toHaveBeenCalledOnce();
-    expect(transitionHooks.afterStorageCommit).toHaveBeenCalledOnce();
-    expect(transitionHooks.afterStorageRollback).toHaveBeenCalledOnce();
-    expect(transitionHooks.afterStorageFinalize).not.toHaveBeenCalled();
-    expect(reload).toHaveBeenCalledTimes(2);
-    expect(evictSnapshots).toHaveBeenCalledTimes(2);
-    expect(reload).toHaveBeenNthCalledWith(2, {
-      discardPendingWrites: true,
-    });
-    expect(session.status.get('old-workspace-running' as StreamTabId)).toBe(
-      STREAM_PHASE.RUNNING,
-    );
-
-    await expect(
-      session.reloadAfterStorageRootChange(transitionHooks),
-    ).resolves.toBe(true);
-    expect(activeRoot).toBe('/workspace/new-storage');
-    expect(finalizeWorkspaceStorageChange).toHaveBeenCalledOnce();
-    expect(transitionHooks.afterStorageCommit).toHaveBeenCalledTimes(2);
-    expect(transitionHooks.afterStorageRollback).toHaveBeenCalledOnce();
-    expect(transitionHooks.afterStorageFinalize).toHaveBeenCalledOnce();
-  });
-
-  it('holds a foreign-owned run read-only and settles it only on a later pass after the owner exits', async () => {
+  it('holds a foreign-owned run read-only while its owner is live', async () => {
     const foreign = await startForeignInstance();
     const heldExecutionId = '9355abcd' as ExecutionId;
     const heldStreamId = `held#${heldExecutionId}` as StreamTabId;
-    mockPendingWorkspaceChange({ pending: true, commit: false });
     const transcripts = await StreamLogStore.open();
     appendRunningGroup(transcripts, heldStreamId, 'held-running-group');
     await transcripts.flush();
@@ -769,86 +514,10 @@ describe('SessionHandle restart repair', () => {
       expect(session.status.get(heldStreamId)).toBeUndefined();
       expect((await executionStore.readMeta())?.outcome).toBeUndefined();
       expect(transcripts.get(heldStreamId)?.getRange(0)).toHaveLength(1);
-
-      // No exit watch: the owner's death is noticed only by the next pass.
+    } finally {
       await foreign.shutdown();
-      await session.reloadAfterStorageRootChange();
-
-      expect(session.status.holdState(heldStreamId)).toBeUndefined();
-      expect(session.status.get(heldStreamId)).toBe(STREAM_PHASE.CANCELLED);
-      await expect(executionStore.readMeta()).resolves.toMatchObject({
-        outcome: RUN_OUTCOME.CANCELLED,
-      });
-      await expect(
-        executionStore.read(flowKey(heldExecutionId)),
-      ).resolves.toEqual(validFlowRecord);
-      expectClosedWith(transcripts, heldStreamId, RUN_OUTCOME.CANCELLED);
-    } finally {
       session.dispose();
     }
-  });
-
-  it('skips replacement when the workspace storage root is unchanged', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = openDeferredSession(transcripts);
-    const commitWorkspaceStorageChange = mockPendingWorkspaceChange({
-      pending: false,
-      commit: false,
-    });
-    const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
-
-    await session.reloadAfterStorageRootChange();
-
-    expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
-    expect(reload).not.toHaveBeenCalled();
-  });
-
-  it('does not resume a root replacement after session disposal', async () => {
-    const liveExecutionId = 'workspace-disposed' as ExecutionId;
-    const transcripts = await StreamLogStore.open();
-    const session = openDeferredSession(transcripts);
-    const commitWorkspaceStorageChange = mockPendingWorkspaceChange();
-    await acquireFreshExecutionLease(liveExecutionId);
-
-    try {
-      const replacement = session.reloadAfterStorageRootChange();
-      await Promise.resolve();
-      expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
-
-      session.dispose();
-      await releaseOwnedExecutionLease(liveExecutionId);
-
-      await expect(replacement).resolves.toBe(false);
-      expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
-    } finally {
-      await releaseOwnedExecutionLease(liveExecutionId);
-    }
-  });
-
-  it('refuses a launch while the workspace replacement is in flight', async () => {
-    const queuedExecutionId = 'workspace-queued' as ExecutionId;
-    const transcripts = await StreamLogStore.open();
-    const session = openDeferredSession(transcripts);
-    let finishReload: (() => void) | undefined;
-    const reloadBlocked = new Promise<void>((resolve) => {
-      finishReload = resolve;
-    });
-    vi.spyOn(transcripts, 'reload').mockReturnValue(reloadBlocked);
-    const start = vi.fn(async () => undefined);
-
-    const replacement = session.reloadAfterStorageRootChange();
-    await Promise.resolve();
-    await expect(
-      session.executions.launchExecution(queuedExecutionId, start),
-    ).rejects.toThrow(
-      'TeXRA is changing its storage location. Start this run again in a moment.',
-    );
-    expect(start).not.toHaveBeenCalled();
-
-    finishReload?.();
-    await replacement;
-    await session.executions.launchExecution(queuedExecutionId, start);
-    expect(start).toHaveBeenCalledOnce();
   });
 
   it('surfaces a repair write failure at the readiness boundary', async () => {

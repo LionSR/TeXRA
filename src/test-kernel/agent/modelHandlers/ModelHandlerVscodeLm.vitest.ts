@@ -96,10 +96,9 @@ function fakePort(
   return {
     isAvailable: () => true,
     selectModels: async () => [],
-    onDidChangeModels: () => ({ dispose() {} }),
+    onDidChange: () => ({ dispose() {} }),
     sendRequest,
     countTokens,
-    onDidChangeAccess: () => ({ dispose() {} }),
   };
 }
 

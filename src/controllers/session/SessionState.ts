@@ -139,9 +139,8 @@ export class SessionState {
    * so far reopens resurrection for an evicted id and would be a false
    * finality claim. An entry retires when a fresh workflow attachment
    * legitimately re-claims the identity (live-execution evidence → {@link
-   * SessionFactApplier}), or when the whole storage root is replaced
-   * (`resetAfterStorageRootChange`). Otherwise it lives for the session — the
-   * proven horizon for in-flight facts.
+   * SessionFactApplier}). Otherwise it lives for the session — the proven
+   * horizon for in-flight facts.
    */
   private readonly _removedStreams = new Map<StreamTabId, number>();
 
@@ -697,20 +696,6 @@ export class SessionState {
     this.logger.info('[Persistence] Managers loaded');
 
     this.logger.info('[Persistence] State load complete');
-  }
-
-  /**
-   * Drop workspace-scoped caches before loading a replacement storage root.
-   * The incarnation generations are an identity projection over the old
-   * root's stream ids, so they reset with the tombstones: a re-claimed
-   * identity in the new root must start from incarnation 0 again.
-   */
-  resetAfterStorageRootChange(): void {
-    this._sessionState.clear();
-    this._streamStates.clear();
-    this._streamMetadataCache.clear();
-    this._removedStreams.clear();
-    this._streamIncarnations.clear();
   }
 
   /**

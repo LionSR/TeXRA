@@ -68,16 +68,16 @@ export interface AppSignalPayloads {
   /**
    * The editor's language-model catalogue or access permissions changed.
    *
-   * Extension-only by construction: the sole emitter is VS Code's
-   * `lm.onDidChangeModels` / `onDidChangeAccess`. Desktop and CLI have no
-   * editor-provided model catalogue to change, so there is nothing to react
-   * to — not a missing subscription.
+   * Extension-only by construction: the sole emitter is the language-model
+   * port's `onDidChange`. Desktop and CLI have no editor-provided model
+   * catalogue to change, so there is nothing to react to — not a missing
+   * subscription.
    */
   languageModelsChanged: undefined;
 
   /**
-   * The session's approval policy changed (workspace transition or a settings
-   * update). Surfaces that re-paint the status-bar policy line.
+   * The session's approval policy changed through a settings update.
+   * Surfaces that re-paint the status-bar policy line.
    *
    * Extension-only: it exists because VS Code's status-bar tooltip is painted
    * outside the settings webview's own round-trip and has no other refresh

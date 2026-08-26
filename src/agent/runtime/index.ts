@@ -20,14 +20,12 @@
 // SessionHandle
 export {
   SessionHandle,
-  StorageRootChangeRefusedError,
   currentSession,
   defaultSession,
   initializeDefaultSession,
   teardownDefaultSession,
   tryDefaultSession,
 } from './SessionHandle';
-export type { WorkspaceStorageTransitionHooks } from './SessionHandle';
 
 // SessionEventHub
 export { SessionEventHub } from './SessionEventHub';

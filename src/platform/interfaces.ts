@@ -161,33 +161,6 @@ export interface StorageProvider {
 
   /** Cross-workspace global storage root path. */
   getGlobalStoragePath(): string;
-
-  /**
-   * Whether the host's workspace source differs from the storage root
-   * currently exposed to callers. Providers with a dynamic workspace source
-   * keep the old root pinned until the change is committed.
-   */
-  hasPendingWorkspaceStorageChange?(target?: {
-    workspacePath: string | undefined;
-  }): boolean;
-
-  /**
-   * Expose a captured workspace source as the new storage root. The runtime
-   * calls this only after execution ownership at the old root is quiescent.
-   * Returns whether the exposed root changed.
-   */
-  commitWorkspaceStorageChange?(target?: {
-    workspacePath: string | undefined;
-  }): boolean;
-
-  /** Finalize a successfully loaded workspace-storage replacement. */
-  finalizeWorkspaceStorageChange?(): void;
-
-  /**
-   * Restore the root exposed before the most recent commit. Returns whether a
-   * pending commit was rolled back.
-   */
-  rollbackWorkspaceStorageChange?(): boolean;
 }
 
 // ---------------------------------------------------------------------------
