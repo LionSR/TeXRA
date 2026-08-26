@@ -101,13 +101,17 @@ function rewriteRoster(
   return annotateDelegationAvailability(tool, undefined);
 }
 
-function delegationRegistry(names: readonly string[]) {
+/**
+ * A registry holding exactly these definitions: `resolveAgentTools` advertises
+ * the registry's own contract, not the one the declaration carries.
+ */
+function delegationRegistry(tools: readonly ToolInput[]) {
   return new MapToolRegistry(
     Object.fromEntries(
-      names.map((name) => [
-        name,
+      tools.map((tool) => [
+        tool.name,
         {
-          definition: { name },
+          definition: tool,
           call: async () => ({ status: 'executed', summary: '', output: '' }),
         },
       ]),
@@ -118,7 +122,7 @@ function delegationRegistry(names: readonly string[]) {
 async function resolveToolList(tools: ToolInput[] = [DELEGATE_AGENT_TOOL]) {
   const resolved = await resolveAgentTools({
     tools,
-    registry: delegationRegistry(tools.map((t) => t.name)),
+    registry: delegationRegistry(tools),
     logger: { warn: () => {} },
     toolInjections: new ToolInjectionRegistry(),
   });

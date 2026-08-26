@@ -8,8 +8,8 @@
  * `@tools/registry` — which imports every tool, including the LaTeX, Lean,
  * arxiv and Zotero ones — out of this file is what stops a generic tool's
  * module closure from dragging the whole domain-tool set behind it. Config
- * loading (which genuinely needs `resolveToolDefinitions`) stays in
- * `RemoteAgentLoader.ts`, which nothing under `src/tools/` reaches.
+ * loading stays in `RemoteAgentLoader.ts`, which nothing under `src/tools/`
+ * reaches.
  */
 import ky, { HTTPError } from 'ky';
 import { z } from 'zod';

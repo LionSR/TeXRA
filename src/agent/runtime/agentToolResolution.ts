@@ -2,7 +2,8 @@
  * Agent tool resolution — single source of truth for the effective tool list.
  *
  * The pipeline, in order:
- *   1. Start with the tool names declared in the agent YAML.
+ *   1. Start with the tool names declared in the agent YAML, and take each
+ *      one's contract (description, parameter schema) from the registry.
  *   2. Strip approval-gated tools when approval prompts are unavailable
  *      (e.g. a subagent running without an interactive approval channel).
  *   3. Strip user-disabled tools (settings dashboard toggle).
@@ -16,10 +17,10 @@
  *      and an "Available agents:" roster instead of a snapshot frozen when the
  *      tool registry was first constructed.
  *
- * Routine filtering outcomes (disabled, unavailable, not in registry) are
- * intentionally silent — YAML typos are surfaced once at load time by
- * `resolveToolDefinitions`; tools with missing external dependencies are
- * skipped quietly and stay inactive until set up (no toast on each cycle).
+ * Routine filtering outcomes (disabled, unavailable) are intentionally silent;
+ * tools with missing external dependencies are skipped quietly and stay
+ * inactive until set up (no toast on each cycle). A declared name the registry
+ * does not hold is the one reported case.
  */
 
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
@@ -126,19 +127,24 @@ export async function resolveAgentTools({
   const resolved: ToolDefinition[] = [];
   const resolvedNames = new Set<string>();
   for (const config of toolConfigs) {
-    const def = typeof config === 'string' ? { name: config } : config;
-    if (!passesRuntimeGates(def.name)) continue;
-    if (disabled.has(def.name)) continue;
-    if (unavailable.has(def.name)) continue;
-    if (!effectiveRegistry.has(def.name)) {
+    const name = typeof config === 'string' ? config : config.name;
+    if (resolvedNames.has(name)) continue;
+    if (!passesRuntimeGates(name)) continue;
+    if (disabled.has(name)) continue;
+    if (unavailable.has(name)) continue;
+    const registered = effectiveRegistry.get(name);
+    if (!registered) {
       // A declared name with no registration is a configuration error (typo,
       // or a tool retired from the registry) — dropping it silently would
       // strip the agent's capability with no trace.
-      logger.warn(`Declared tool not found in registry: ${def.name}`);
+      logger.warn(`Declared tool not found in registry: ${name}`);
       continue;
     }
-    resolved.push(def);
-    resolvedNames.add(def.name);
+    // The contract the model is shown is the registry's own, never one an
+    // agent definition carries: a declaration names a tool, it does not
+    // redefine it.
+    resolved.push(registered.definition);
+    resolvedNames.add(name);
   }
   for (const injection of toolInjections.list()) {
     if (!injection.shouldInject()) continue;

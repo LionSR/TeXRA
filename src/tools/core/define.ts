@@ -1,23 +1,12 @@
-// Third-party imports
-import { toJSONSchema, type ZodType } from 'zod';
-
 // Type imports
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import type { ToolDefinition } from '@shared/schemas';
 
-// Local imports - shared
-import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
-
 // Local file imports
 import { BaseTool } from './base';
 
-/** Convert a tool's Zod input schema into the JSON Schema `parameters` every `ToolDefinition` carries. */
-function toToolParameters(schema: ZodType): Record<string, unknown> {
-  return toJSONSchema(schema, TOOL_JSON_SCHEMA_OPTIONS) as Record<
-    string,
-    unknown
-  >;
-}
+// Third-party type imports
+import type { ZodType } from 'zod';
 
 const EXECUTION_FLAGS = [
   'parallelSafe',
@@ -89,8 +78,8 @@ export function defineTool<T>(
         {
           name: def.name,
           description: getDescription(),
-          parameters: toToolParameters(def.schema),
-          // Include original Zod schema for SDK-native conversions (OpenAI, Anthropic)
+          // The Zod schema is the tool's only parameter representation; the
+          // provider converters derive JSON Schema from it per request.
           zodSchema: def.schema,
           ...(def.availabilityCategory && {
             availabilityCategory: def.availabilityCategory,

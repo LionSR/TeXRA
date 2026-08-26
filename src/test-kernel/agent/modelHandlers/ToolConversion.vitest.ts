@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { extractToolNames } from '@agent/index/agentYamlScanner';
 import {
   convertGoogleToolSchema,
+  convertToolSchema,
   toAnthropicTools,
   toGoogleTools,
   toOpenAITools,
@@ -16,7 +17,7 @@ import {
 import type { ToolDefinition } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { REPO_ROOT } from '@test/support/repoScan';
-import { resolveToolDefinitions } from '@tools/registry';
+import { getDefaultToolRegistry } from '@tools/registry';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import { BashTool } from '@tools/bash';
 import { EditFileTool } from '@tools/EditTool';
@@ -89,6 +90,16 @@ function schemaAtPath(
     schema = propertySchema(schema, segment);
   }
   return schema;
+}
+
+/** The registry's own definitions for a declared tool list, in order. */
+function registeredDefinitions(names: readonly string[]): ToolDefinition[] {
+  const registry = getDefaultToolRegistry();
+  return names.map((name) => {
+    const tool = registry.get(name);
+    if (!tool) throw new Error(`Tool "${name}" is not registered`);
+    return tool.definition;
+  });
 }
 
 function expectDescribedParameters(
@@ -405,7 +416,11 @@ describe('tool schema descriptions', () => {
       const { definition } = testCase;
       const paths = descriptionPaths(testCase);
 
-      expectDescribedParameters(definition.name, definition.parameters, paths);
+      expectDescribedParameters(
+        definition.name,
+        convertToolSchema(definition),
+        paths,
+      );
       expectDescribedParameters(
         `${definition.name} anthropic`,
         anthropicByName.get(definition.name),
@@ -782,7 +797,7 @@ describe('toGoogleTools', () => {
       ...(extractToolNames(reviewYaml.settings?.tools) ?? []),
       DELEGATE_MULTI_AGENTS_TOOL_NAME,
     ];
-    const reviewTools = resolveToolDefinitions(reviewToolNames);
+    const reviewTools = registeredDefinitions(reviewToolNames);
 
     expect(reviewTools.map((definition) => definition.name)).toEqual(
       reviewToolNames,
@@ -801,7 +816,7 @@ describe('toGoogleTools', () => {
   });
 
   it('converts the registered workflow script JSON args for both Google APIs', () => {
-    const [definition] = resolveToolDefinitions(['delegate_multi_agents']);
+    const [definition] = registeredDefinitions(['delegate_multi_agents']);
 
     for (const schema of Object.values(googleSchemasFor(definition))) {
       expect(schema.properties.args.description).toEqual(expect.any(String));
