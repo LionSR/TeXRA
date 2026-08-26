@@ -124,23 +124,26 @@ describe('runDailyUpdateCheck', () => {
     expect(state.get(lastCheckedAtKey)).toBe(nowMs);
   });
 
-  it('does not stamp the throttle when the notification fails', async () => {
-    // A thrown notify must reject the check and leave no stamp, so the next
-    // launch retries instead of silently skipping the announcement for a day.
+  it('retries a failed release notification before recording it as notified', async () => {
+    // A thrown notify must reject the check and leave no stamp or release key,
+    // so the next launch retries instead of silently skipping the announcement.
     const state = new FakeStateStore();
-    const notify = vi.fn(() => {
+    const notify = vi.fn().mockImplementationOnce(() => {
       throw new Error('dialog failed');
     });
+    const options = checkOptions(state, {
+      lastNotifiedVersionKey,
+      fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
+      notify,
+    });
 
-    await expect(
-      runDailyUpdateCheck(
-        checkOptions(state, {
-          fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
-          notify,
-        }),
-      ),
-    ).rejects.toThrow('dialog failed');
+    await expect(runDailyUpdateCheck(options)).rejects.toThrow('dialog failed');
     expect(state.get(lastCheckedAtKey)).toBeUndefined();
+    expect(state.get(lastNotifiedVersionKey)).toBeUndefined();
+
+    await expect(runDailyUpdateCheck(options)).resolves.toBe('1.1.0');
+    expect(notify).toHaveBeenCalledTimes(2);
+    expect(state.get(lastNotifiedVersionKey)).toBe('1.1.0');
   });
 
   it('can offer stale source metadata without stamping the check', async () => {

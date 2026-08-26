@@ -51,7 +51,7 @@ async function createBrowserViewsHarness() {
 }
 
 describe('desktop browser views', () => {
-  it('republishes the current title for full and in-page navigation', async () => {
+  it('republishes the current title for full, in-page, and title-only navigation', async () => {
     const { browserViews, onNavigated, webContents } =
       await createBrowserViewsHarness();
 
@@ -60,6 +60,8 @@ describe('desktop browser views', () => {
     webContents.emit('did-navigate');
     webContents.title = 'In-page navigation title';
     webContents.emit('did-navigate-in-page');
+    webContents.title = 'Title-only update';
+    webContents.emit('page-title-updated');
 
     expect(onNavigated).toHaveBeenNthCalledWith(1, {
       tabId: 'browser-a',
@@ -68,6 +70,10 @@ describe('desktop browser views', () => {
     expect(onNavigated).toHaveBeenNthCalledWith(2, {
       tabId: 'browser-a',
       title: 'In-page navigation title',
+    });
+    expect(onNavigated).toHaveBeenNthCalledWith(3, {
+      tabId: 'browser-a',
+      title: 'Title-only update',
     });
   });
 });

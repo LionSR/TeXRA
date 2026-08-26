@@ -1,7 +1,9 @@
 // Node imports
 import { EventEmitter } from 'node:events';
+import { readFileSync } from 'node:fs';
 
 // Third-party imports
+import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -55,6 +57,39 @@ function removeAddedListeners(
       process.removeListener(signal, listener);
     }
   }
+}
+
+function hasSupervisedWorkspaceRelaunchHandoff(source: string): boolean {
+  const sourceFile = ts.createSourceFile(
+    'index.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  let found = false;
+
+  function visit(node: ts.Node): void {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === 'process' &&
+      node.expression.name.text === 'send' &&
+      node.arguments.length === 1
+    ) {
+      const [args] = node.arguments;
+      found ||=
+        args !== undefined &&
+        ts.isPropertyAccessExpression(args) &&
+        ts.isIdentifier(args.expression) &&
+        args.expression.text === 'workspaceRelaunch' &&
+        args.name.text === 'args';
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return found;
 }
 
 afterEach(() => {
@@ -201,6 +236,15 @@ describe('desktop development launcher', () => {
     expect(events).toEqual(['main-watch', 'port', 'vite', 'ready', 'electron']);
     expect(fetch).toHaveBeenCalledOnce();
     expect(children.every((child) => !child.killed)).toBe(true);
+  });
+
+  it('hands workspace relaunch arguments to the supervised development process', () => {
+    const desktopMain = readFileSync(
+      repoPath('packages/desktop/src/main/index.ts'),
+      'utf8',
+    );
+
+    expect(hasSupervisedWorkspaceRelaunchHandoff(desktopMain)).toBe(true);
   });
 
   it('launches Electron with the exact valid IPC relaunch arguments', async () => {

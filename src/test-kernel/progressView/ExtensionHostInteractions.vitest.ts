@@ -969,7 +969,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('cancels all pending requests on dispose with a stable cause', async () => {
-    const { handlers, interactions } = createInteractions();
+    const { handlers, interactions, toolEditApprovals } = createInteractions();
 
     const bashPromise = interactions.requestBashApproval?.({
       command: 'echo hi',
@@ -994,5 +994,8 @@ describe('createExtensionHostInteractions', () => {
     });
     expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
     expect(handlers.transport.planApproval.dismiss).toHaveBeenCalled();
+    expect(toolEditApprovals.cancel).toHaveBeenCalledWith({
+      cause: SESSION_DISPOSED_CAUSE,
+    });
   });
 });
