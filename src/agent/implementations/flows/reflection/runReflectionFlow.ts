@@ -1,8 +1,13 @@
 import { getExecutionStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
 import { PromptBuilder } from '@agent/prompt/PromptBuilder';
-import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
+import type {
+  BaseFlowContextInit,
+  ToolPolicy,
+} from '@agent/core/flows/BaseFlowServices';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
+import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
+import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
@@ -18,7 +23,6 @@ import {
   type RetryErrorInfo,
   type RoundOutput,
   type RunOutcome,
-  type StorageKey,
   type FileLocation,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -67,8 +71,30 @@ export function computeRoundStageTotal(
 
 export interface RunReflectionFlowInput extends BaseFlowContextInit {
   setting: AgentWorkflowSetting;
-  storageKey: StorageKey;
   parentStage: StageHandle;
+}
+
+/**
+ * Resolve workflow tool declarations at flow startup so a workflow advertises
+ * the registry-owned contract, just like a tool-use flow.
+ * Models without function calling receive no tool definitions, matching the
+ * reflection flow's former model-facing capability gate.
+ */
+async function resolveWorkflowSettingTools(
+  setting: AgentWorkflowSetting,
+  toolPolicy: ToolPolicy,
+  logger: { warn: (msg: string) => void },
+  supportsFunctionCalling: boolean,
+): Promise<AgentWorkflowSetting> {
+  const { tools } = await resolveAgentTools({
+    tools: setting.tools,
+    logger,
+    approvalPromptsUnavailable: toolPolicy.approvalPromptsUnavailable,
+    runtimeUnavailableTools: toolPolicy.runtimeUnavailableTools,
+    // Workflow agents do not use the tool-use flow's conditional infrastructure.
+    toolInjections: new ToolInjectionRegistry(),
+  });
+  return { ...setting, tools: supportsFunctionCalling ? tools : [] };
 }
 
 export interface RunReflectionFlowResult {
@@ -97,6 +123,12 @@ export async function runReflectionFlow(
     runScope,
   } = input;
   const { streamId, executionId } = runScope;
+  const resolvedSetting = await resolveWorkflowSettingTools(
+    setting,
+    input.toolPolicy,
+    logger,
+    modelCell.handler.capabilities?.supportsFunctionCalling === true,
+  );
 
   let shared: ReflectionFlowShared | undefined;
 
@@ -156,6 +188,7 @@ export async function runReflectionFlow(
 
   const services: ReflectionServices = {
     ...input,
+    setting: resolvedSetting,
     outputState,
     xmlManager,
     diffManager,
@@ -210,7 +243,6 @@ export async function runReflectionFlow(
       workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
       context: null,
       outputLocation: null,
-      conversation: [],
       modelHandlerCompatibilityKey: compatibilityKey,
       runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
       roundOutputs: [],

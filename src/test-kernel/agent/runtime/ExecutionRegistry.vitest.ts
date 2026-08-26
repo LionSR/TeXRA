@@ -157,7 +157,6 @@ function createLiveToolUseFlowContext(
   overrides: Partial<LiveToolUseFlowContext> = {},
 ): LiveToolUseFlowContext {
   return {
-    session: { appendFollowUp: vi.fn() },
     modelHandler: { supportsManualCompaction: true },
     requestImmediateCompaction: vi.fn(),
     modelSwitchDisabledReason: vi.fn(),
@@ -1627,9 +1626,7 @@ describe('executionRegistry', () => {
 
     try {
       approvals.toolEdit.bypass.setBypass(parentStreamId, true);
-      approvals.registerStreamParent(childStreamId, parentStreamId, [
-        'toolEdit',
-      ]);
+      approvals.registerStreamParent(childStreamId, parentStreamId);
       registry.track(handle);
 
       registry.detachActiveChildren(parentStreamId);

@@ -20,7 +20,6 @@ import type {
   CompileResult,
   FileLocation,
   OutputFileInfo,
-  StorageKey,
   StreamTabId,
 } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -79,7 +78,6 @@ function createCompileFailureFixture() {
     logExcerpt: '! Missing $ inserted.',
   };
   const summary = {
-    storageKey: 'run:compile-context' as StorageKey,
     currRound: 0,
     fileInfos: [],
     filesToOpen: [],

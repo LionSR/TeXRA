@@ -23,7 +23,7 @@ import { getConfig } from '@utils/config/configUtils';
 export function selectAutoOpenFinalOutput(
   result: WorkflowFlowResult,
 ): OutputFileSummary | undefined {
-  if (!getConfig<boolean>('texra.agentOutputs.autoOpenFinal', true)) {
+  if (!getConfig<boolean>('texra.agentOutputs.autoOpenFinal')) {
     return undefined;
   }
   if (result.outcome !== RUN_OUTCOME.COMPLETED) return undefined;

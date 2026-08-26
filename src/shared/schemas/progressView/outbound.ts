@@ -12,7 +12,6 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { SetThemeMessageSchema } from '../commonViewMessages';
 import { commandOnly } from '../messageFactories';
 import { GoalStatusSchema } from '../goal';
 import { AgentCategory } from '../agent';
@@ -382,7 +381,6 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     SyncInquiryThreadsMessageSchema,
     UpdateInquiryThreadMessageSchema,
     SetPlacementMessageSchema,
-    SetThemeMessageSchema,
     ProgressDeleteStreamMessageSchema,
     ProgressDeleteAllMessageSchema,
   ],

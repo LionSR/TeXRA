@@ -34,10 +34,25 @@ import {
   CodexSandboxModeSchema,
 } from '@shared/schemas/agentCliSettings';
 import {
-  CORE_SETTING_PATHS,
-  CoreSettingsShape,
-  type CoreSettingPath,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
+  ChildRunConcurrencyBudgetSchema,
+  LATEXDIFF_TEMP_FILE_LOCATIONS,
+  MODEL_COMPACTION_THRESHOLD_SETTING,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  ModelCompactionThresholdPercentSchema,
+  ModelRetryMaxAttemptsSchema,
+  TELEMETRY_ENABLED_DEFAULT,
 } from '@shared/schemas/coreSettings';
+import {
+  DEFAULT_ENABLED_REGEX_REPLACEMENTS,
+  DEFAULT_ENABLED_REPLACEMENTS,
+  NON_REGEX_REPLACEMENT_CATEGORIES,
+  REGEX_REPLACEMENT_CATEGORIES,
+} from '@shared/constants/replacementCategories';
+import {
+  AGENT_SKILLS_ENABLED_DEFAULT,
+  AgentSkillsEnabledSchema,
+} from '@shared/schemas/agentSkills';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ============================================================================
@@ -328,73 +343,54 @@ function surfacedSetting(entry: SurfacedSettingInput): SurfacedSettingEntry {
 // Core (config-tree) rows
 // ============================================================================
 
-/**
- * The schema leaf for a dotted Core setting path, resolved from
- * {@link CoreSettingsShape} rather than restated per row. Throws loudly on a
- * path that does not resolve — a renamed schema group must not degrade into a
- * row with no validation.
- */
-function coreLeafSchema(path: CoreSettingPath): z.ZodType {
-  const [head, ...rest] = path.split('.');
-  let node: unknown = (CoreSettingsShape as Record<string, unknown>)[
-    head as string
-  ];
-  for (const segment of rest) {
-    const group = node instanceof z.ZodPrefault ? node.unwrap() : node;
-    if (!(group instanceof z.ZodObject)) {
-      throw new Error(`Core setting path "${path}" has no schema group`);
-    }
-    node = (group.shape as Record<string, unknown>)[segment];
-  }
-  if (!(node instanceof z.ZodType)) {
-    throw new Error(`Core setting path "${path}" has no schema leaf`);
-  }
-  return node;
-}
-
-/** The schema's own `.describe()` copy, used when a row adds no editorial one. */
-function schemaDescription(schema: z.ZodType): string {
-  const inner: z.ZodType =
-    schema instanceof z.ZodPrefault ? (schema.unwrap() as z.ZodType) : schema;
-  const described = inner.description ?? schema.description;
-  if (described === undefined) {
-    throw new Error('Core setting schema carries no description');
-  }
-  return described;
-}
-
-type CoreRowSpec = Omit<
-  StateSettingEntry,
-  'key' | 'schema' | 'slots' | 'description'
-> & {
-  /** Editorial copy for rendered rows; the schema's own text otherwise. */
-  readonly description?: string;
-};
-
 const REPLACEMENT_ENGINE_READER = 'src/replacement/engine.ts';
 
+/** Standalone preamble used when extracting a TikZ figure for compilation. */
+const DEFAULT_TIKZ_TEMPLATE =
+  '\\documentclass[tikz,border=10pt]{standalone}\n' +
+  '\\usepackage{tikz}\n' +
+  '\\usepackage{pgfplots}\n' +
+  '\\usetikzlibrary{positioning}\n' +
+  '\\usetikzlibrary{patterns}\n' +
+  '\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n' +
+  '\\usetikzlibrary{shapes, arrows}\n\n' +
+  '\\begin{document}\n' +
+  '{{ tikzpicture }}\n' +
+  '\\end{document}';
+
 /**
- * Every Core setting path, keyed by path so the record is exhaustive by
- * construction — adding a leaf to `CoreSettingsShape` without filing its
- * honoring hosts is a type error, which is what the deleted
- * `_AssertEveryCorePathClassified` guard used to check against two hand-kept
- * path lists.
+ * Every config-file-backed setting, keyed by its dotted path under `texra.`.
  *
- * All three hosts read `.texra/config.json`, so the slot is uniform; the rows
- * differ only in who honors them and which UI renders them. `CORE_SETTING_PATHS`
- * owns iteration order, including the Models tab's control order.
+ * All three hosts read `.texra/config.json` and that storage is flat, so the
+ * key and the slot are derived rather than restated; a row carries the schema
+ * (with its `.prefault()` default), the copy, who honors it, and which UI
+ * renders it — exactly the shape every state-backed row below already uses.
+ *
+ * The record's own declaration order is the catalog order, including the
+ * Models tab's control order: reordering these keys reorders that UI.
  */
-const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
+const CORE_SETTING_ROWS: Record<
+  string,
+  Omit<StateSettingEntry, 'key' | 'slots'>
+> = {
   'agentOutputs.autoOpenFinal': {
+    schema: z.boolean().prefault(true),
+    description:
+      "When a workflow run completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
     honoredBy: everyHost('src/agent/runtime/selectAutoOpenFinalOutput.ts'),
   },
   childRunConcurrencyBudget: {
+    schema: ChildRunConcurrencyBudgetSchema,
     title: 'Child-run concurrency budget',
+    description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
     category: 'multi-agent',
     honoredBy: everyHost('src/agent/runtime/childRunBudget.ts'),
     surfaces: { settingsView: 'multi-agent' },
   },
   'goal.enabled': {
+    schema: z.boolean().prefault(true),
+    description:
+      'Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command="complete"). On by default; set to false to require manual continuation.',
     honoredBy: everyHost('src/tools/goal/goalFeatureFlag.ts'),
   },
   // The Models-tab provider toggles below are `configTarget: 'global'`:
@@ -406,8 +402,11 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
   // workspace override therefore remains visible and honored; cleanup of values
   // stranded by the regression window is tracked separately in #11173.
   'model.gpt5ReasoningSummary': {
+    schema: z.boolean().prefault(false),
     configTarget: 'global',
     title: 'GPT-5 reasoning summary',
+    description:
+      "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
     category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
@@ -430,8 +429,11 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     },
   },
   'model.useOpenAIResponsesAPI': {
+    schema: z.boolean().prefault(true),
     configTarget: 'global',
     title: 'Use the Responses API',
+    description:
+      "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
     category: 'model',
     honoredBy: everyHost('src/agent/runtime/ModelFactory.ts'),
     surfaces: {
@@ -447,8 +449,11 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     },
   },
   'model.useGoogleInteractionsServerState': {
+    schema: z.boolean().prefault(true),
     configTarget: 'global',
     title: 'Server-side conversation state',
+    description:
+      "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
     category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
@@ -466,8 +471,11 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     },
   },
   'model.useGoogleBackgroundResponses': {
+    schema: z.boolean().prefault(false),
     configTarget: 'global',
     title: 'Google background responses',
+    description:
+      'Run long-running Google workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
     category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
@@ -485,8 +493,11 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     },
   },
   'model.useBackgroundResponses': {
+    schema: z.boolean().prefault(true),
     configTarget: 'global',
     title: 'Background responses',
+    description:
+      'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
     category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
@@ -504,8 +515,11 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     },
   },
   'model.openaiParallelToolCalls': {
+    schema: z.boolean().prefault(true),
     configTarget: 'global',
     title: 'Parallel tool calls',
+    description:
+      'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool execution.',
     category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/openai/modelHandlerOpenAI.ts',
@@ -527,7 +541,9 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
   // global scope — a workspace override the runtime honors would then be
   // invisible in (and unwritable from) the settings view.
   'model.compactionThresholdPercent': {
+    schema: ModelCompactionThresholdPercentSchema,
     title: 'Compaction threshold',
+    description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
     category: 'model',
     honoredBy: everyHost('src/agent/modelHandlers/ModelHandler.ts', {
       command:
@@ -538,7 +554,9 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
   'model.retry.maxAttempts': {
+    schema: ModelRetryMaxAttemptsSchema,
     title: 'Automatic retries',
+    description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
     category: 'model',
     honoredBy: everyHost('src/agent/core/flows/ModelInvocationNode.ts', {
       command:
@@ -551,36 +569,65 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
   // Thin provider modules own the public prefer-switch surface; the shared
   // factory in subscriptionPreference.ts is not a separate consumer key.
   'chatgptCodex.preferSubscription': {
+    schema: z.boolean().prefault(false),
+    description:
+      'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing currently uses a 272,000-token Codex context cap, not the full 1,000,000-token API context.',
     honoredBy: everyHost('src/model/codex/codexPreference.ts'),
   },
   'xaiGrok.preferSubscription': {
+    schema: z.boolean().prefault(false),
+    description:
+      'Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice.',
     honoredBy: everyHost('src/model/xai/xaiPreference.ts'),
   },
   maxImageDimension: {
+    schema: z.number().min(100).max(10000).prefault(2000),
+    description:
+      'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
     honoredBy: everyHost('src/utils/media/img.ts'),
   },
   'bib.defaultPath': {
+    schema: z.string().prefault(''),
+    description:
+      'Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.',
     honoredBy: everyHost('src/tools/latex/ExtractBibliographyTool.ts'),
   },
   'bib.zoteroPort': {
+    schema: z.number().min(1).max(65535).prefault(23119),
+    description:
+      'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
     honoredBy: everyHost('src/tools/zotero/bbtClient.ts'),
   },
   'latex.latexindentConfig': {
+    schema: z.string().prefault(''),
+    description: 'Path to latexindent configuration file',
     honoredBy: everyHost('src/latex/formatter/latexindentpt.ts'),
   },
   'latex.texfmtConfig': {
+    schema: z.string().prefault(''),
+    description: 'Path to tex-fmt configuration file',
     honoredBy: everyHost('src/latex/formatter/texfmt.ts'),
   },
   'latex.tikzInputDirectory': {
+    schema: z.string().prefault(''),
+    description:
+      'Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.',
     honoredBy: everyHost('src/latex/texTools.ts'),
   },
   'latex.includeWorkspaceInTexinputs': {
+    schema: z.boolean().prefault(true),
+    description:
+      'Include the workspace root directory in TEXINPUTS when compiling TikZ figures',
     honoredBy: everyHost('src/latex/texTools.ts'),
   },
   'latex.tikzTemplate': {
+    schema: z.string().prefault(DEFAULT_TIKZ_TEMPLATE),
+    description:
+      'Template used for generating standalone documents when extracting and compiling TikZ figures',
     honoredBy: everyHost('src/latex/TikzPictureManager.ts'),
   },
   'latex.wrapCritiqueInAlign': {
+    schema: z.boolean().prefault(true),
     title: 'Wrap criticism in align environments',
     description:
       'Wrap bare criticism and comment commands inside align environments with intertext.',
@@ -589,6 +636,9 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     surfaces: { settingsView: 'latex' },
   },
   'latex.enabledReplacements': {
+    schema: z
+      .array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES))
+      .prefault(DEFAULT_ENABLED_REPLACEMENTS),
     title: 'Literal replacement groups',
     description: 'Enabled groups of direct LaTeX cleanup replacements.',
     category: 'latex',
@@ -596,6 +646,9 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     surfaces: { settingsView: 'latex' },
   },
   'latex.enabledReplacementsRegex': {
+    schema: z
+      .array(z.enum(REGEX_REPLACEMENT_CATEGORIES))
+      .prefault(DEFAULT_ENABLED_REGEX_REPLACEMENTS),
     title: 'Pattern replacement groups',
     description: 'Enabled groups of pattern-based LaTeX cleanup replacements.',
     category: 'latex',
@@ -603,6 +656,7 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     surfaces: { settingsView: 'latex' },
   },
   'latex.customReplacementsRegex': {
+    schema: z.record(z.string(), z.string()).prefault({}),
     title: 'Custom pattern replacements',
     description: 'Custom regular-expression replacements.',
     category: 'latex',
@@ -610,6 +664,7 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     surfaces: { settingsView: 'latex' },
   },
   'latex.customReplacements': {
+    schema: z.record(z.string(), z.string()).prefault({}),
     title: 'Custom literal replacements',
     description: 'Custom direct text replacements.',
     category: 'latex',
@@ -617,12 +672,22 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     surfaces: { settingsView: 'latex' },
   },
   'latexdiff.tempFileLocation': {
+    schema: z.enum(LATEXDIFF_TEMP_FILE_LOCATIONS).prefault('sameDirectory'),
+    description:
+      'Where to create temporary files for LaTeX preview and diff operations during tool edit approval.',
+    enumDescriptions: [
+      'Create temp files in the same directory as the original file. Best for resolving \\input{} and relative paths.',
+      'Create temp files in .texra-temp directory at workspace root. Keeps source directories clean but may break relative paths.',
+    ],
     honoredBy: everyHost('src/tools/approval/latexPreview.ts'),
   },
   // Only the extension's git commands read the commit count. The setup
   // assistant's host-neutral `update_config` writer is recorded separately so
   // a CLI-written value is recognized without mislabeling the writer as a reader.
   'git.numberOfCommitsToShow': {
+    schema: z.number().min(1).max(100).prefault(20),
+    description:
+      'Number of recent commits to show in the commit selection dropdown',
     honoredBy: {
       vscode: {
         reader: 'packages/extension/src/commands/git/gitCommands.ts',
@@ -633,6 +698,9 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     },
   },
   'agentReview.runOnCommit': {
+    schema: z.boolean().prefault(false),
+    description:
+      'Automatically review your changes for issues after each commit.',
     honoredBy: {
       vscode: {
         reader:
@@ -641,12 +709,17 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     },
   },
   'audio.soxPath': {
+    schema: z.string().prefault(''),
+    description: 'Path to the SoX executable. Overrides automatic detection.',
     honoredBy: everyHost('src/tools/media/audio.ts'),
   },
   'logger.debugMode': {
+    schema: z.boolean().prefault(false),
+    description: 'Whether to show verbose debug messages in the logger view',
     honoredBy: everyHost('src/logger/logUtils.ts'),
   },
   'telemetry.enabled': {
+    schema: z.boolean().prefault(TELEMETRY_ENABLED_DEFAULT),
     title: 'Share usage telemetry',
     description:
       'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names. Turning this off stops reporting for rounds billed to your own API keys; rounds covered by a subscription are still recorded, because they meter your usage against your plan.',
@@ -656,9 +729,13 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     surfaces: { settingsView: 'telemetry' },
   },
   'debug.saveModelIO': {
+    schema: z.boolean().prefault(false),
+    description:
+      'Save what TeXRA sends to and receives from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.',
     honoredBy: everyHost('src/agent/debug/debugMessageSaver.ts'),
   },
   'skills.enabled': {
+    schema: AgentSkillsEnabledSchema.prefault(AGENT_SKILLS_ENABLED_DEFAULT),
     title: 'Make skills available to tool-use agents',
     description:
       'Discover TeXRA and imported skills and expose them to tool-use agent prompts.',
@@ -672,6 +749,7 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     surfaces: { settingsView: 'agent-skills', cliConfig: true },
   },
   'toolUse.requireEditApproval': {
+    schema: z.boolean().prefault(true),
     title: 'Under Ask: require approval for file edits',
     description:
       'When approval policy is Ask, show a diff before an agent changes workspace files. Inert under Never and Auto-approve.',
@@ -680,6 +758,7 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
     surfaces: { settingsView: 'approval' },
   },
   'toolUse.requireBashApproval': {
+    schema: z.boolean().prefault(true),
     title: 'Under Ask: require approval for shell commands',
     description:
       'When approval policy is Ask, pause before an agent runs a shell command. Inert under Never and Auto-approve.',
@@ -689,25 +768,50 @@ const CORE_SETTING_ROWS: Record<CoreSettingPath, CoreRowSpec> = {
   },
 };
 
-function coreSettingRow(path: CoreSettingPath): StateSettingEntry {
-  const spec = CORE_SETTING_ROWS[path];
-  const schema = coreLeafSchema(path);
-  return {
-    ...spec,
-    key: `texra.${path}`,
-    schema,
-    description: spec.description ?? schemaDescription(schema),
-    slots: sameSlot('config'),
-  };
+/** The config-file-backed rows, with their derived key and uniform slot. */
+const CORE_TREE_SETTINGS: readonly StateSettingEntry[] = Object.entries(
+  CORE_SETTING_ROWS,
+).map(([path, row]) => ({
+  ...row,
+  key: `texra.${path}`,
+  slots: sameSlot('config'),
+}));
+
+const CORE_TREE_SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> =
+  new Map(CORE_TREE_SETTINGS.map((entry) => [entry.key, entry]));
+
+const coreSettingDefaults = new Map<string, unknown>();
+
+/**
+ * Return a fresh copy of a config-tree setting's catalog-owned default, or
+ * `undefined` for a key the config tree does not own.
+ *
+ * This is the resolution step every `ConfigProvider` applies between the stored
+ * value and the caller's fallback, so a cataloged key needs no per-call-site
+ * default. Parsed defaults are memoized because this sits on the read path of
+ * every absent setting; object values are cloned so a caller cannot mutate the
+ * catalog's own default.
+ */
+export function getCoreSettingDefault(key: string): unknown {
+  const canonicalKey = key.startsWith('texra.') ? key : `texra.${key}`;
+  const entry = CORE_TREE_SETTINGS_BY_KEY.get(canonicalKey);
+  if (!entry) return undefined;
+  if (!coreSettingDefaults.has(canonicalKey)) {
+    coreSettingDefaults.set(canonicalKey, entry.schema.parse(undefined));
+  }
+  const value = coreSettingDefaults.get(canonicalKey);
+  return value !== null && typeof value === 'object'
+    ? structuredClone(value)
+    : value;
 }
 
 /**
- * Config-tree rows. Every `CORE_SETTING_PATHS` entry appears here (the record
- * above is exhaustive), plus `texra.approvalPolicy`, which is config-backed but
- * lives outside `CoreSettingsShape`.
+ * Config-file-backed rows: the config-tree rows above plus
+ * `texra.approvalPolicy`, which stays hand-written because the approval-policy
+ * module owns its schema and its legacy-spelling normalization.
  */
 const CORE_SETTINGS: readonly StateSettingEntry[] = [
-  ...CORE_SETTING_PATHS.map(coreSettingRow),
+  ...CORE_TREE_SETTINGS,
   surfacedSetting({
     key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
@@ -722,8 +826,8 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'tools',
     slots: sameSlot('config'),
     honoredBy: {
-      vscode: { reader: 'src/shared/approvalPolicy.ts' },
-      desktop: { reader: 'src/shared/approvalPolicy.ts' },
+      vscode: { reader: 'src/utils/config/platformSettings.ts' },
+      desktop: { reader: 'src/utils/config/platformSettings.ts' },
       cli: {
         reader: 'packages/cli/src/runtime/cliConfig.ts',
         reachability: {

@@ -22,7 +22,6 @@ import type {
   OutputFileInfo,
   Plan,
   RoundIndexed,
-  StorageKey,
   StreamTabId,
   TodoItem,
   TokenUsageStats,
@@ -51,8 +50,8 @@ const tempDirs = useTempDirs();
 
 const STREAM = 'polish@gpt#abc123def' as StreamTabId;
 const OTHER_STREAM = 'review@gpt#fed321cba' as StreamTabId;
-const RUN = 'run-1' as StorageKey;
-const RUN_2 = 'run-2' as StorageKey;
+const RUN = 'run-1' as ExecutionId;
+const RUN_2 = 'run-2' as ExecutionId;
 
 const TODO: TodoItem = {
   content: 'Write the introduction',

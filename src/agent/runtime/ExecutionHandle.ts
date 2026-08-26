@@ -81,9 +81,9 @@ type TerminalState = 'open' | 'claimed' | 'settled';
  *
  * This is derived from — not a parallel re-declaration of — {@link
  * ToolUseFlowContext}, so a shape change to either surface fails type-checking
- * instead of silently diverging: the nested `session`/`modelHandler` views are
- * `Pick`s of the flow context's own types, and the method members are picked
- * through directly. `runToolUseFlow`'s context is deliberately richer (it owns
+ * instead of silently diverging: the nested `modelHandler` view is a `Pick` of
+ * the flow context's own type, and the method members are picked through
+ * directly. `runToolUseFlow`'s context is deliberately richer (it owns
  * the live `ToolUseSessionLifecycle` and the full `RunModelHandler`); the
  * handle keeps only what a consumer of an attached run needs.
  *
@@ -96,7 +96,6 @@ type TerminalState = 'open' | 'claimed' | 'settled';
  */
 export type LiveToolUseFlowContext = {
   readonly ownerSession?: SessionHandle;
-  readonly session: Pick<ToolUseFlowContext['session'], 'appendFollowUp'>;
   readonly modelHandler: Pick<
     ToolUseFlowContext['modelHandler'],
     'supportsManualCompaction'

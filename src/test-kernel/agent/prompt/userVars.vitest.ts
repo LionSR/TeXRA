@@ -28,9 +28,10 @@ import {
   getToolFlags,
   resolveOutputFiles,
 } from '@agent/prompt/userVars';
+import type { ConfigProvider } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -42,6 +43,15 @@ import {
 // getConfig reads through the platform config provider; drive the setting
 // via this provider instead of patching the ESM export.
 const fakeConfig = new FakeConfigProvider();
+
+const callerDefaultConfig: ConfigProvider = {
+  get<T>(_key: string, defaultValue?: T): T {
+    return defaultValue as T;
+  },
+  async update<T>(_key: string, _value: T): Promise<void> {},
+  inspect: () => undefined,
+  isExplicitlySet: () => false,
+};
 
 setupPlatform({}, { config: fakeConfig });
 
@@ -123,6 +133,22 @@ describe('buildUserVars runtime skill diagnostics', () => {
       type: 'skills.snapshot',
       skills: [],
     });
+  });
+
+  it('uses caller defaults with an SDK-provided config provider', async () => {
+    await installPlatform({}, { config: callerDefaultConfig });
+    const vars = await buildUserVars(
+      baseConfig,
+      { ...baseSetting, agentCategory: AgentCategory.ToolUse },
+      basePrompt,
+      '/agents/generic',
+      { isOpenai: false, isAnthropic: false, isGoogle: false },
+      noopTrace,
+      { workspacePath: '/workspace' },
+    );
+
+    expect(vars.DEFAULT_BIB_PATH).toBe('');
+    expect(vars.AVAILABLE_SKILLS).toBe('');
   });
 
   it('emits the raw accepted catalog without changing prompt membership', async () => {

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
-import { STREAM_PHASE, type StorageKey } from '@shared/schemas';
+import { STREAM_PHASE, type ExecutionId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 function subscribeOverTestSession() {
@@ -29,7 +29,7 @@ function emitUsage(session: SessionHandle): void {
       type: 'usage',
       payload: {
         streamId: 'stream-a',
-        storageKey: 'run-a' as StorageKey,
+        storageKey: 'run-a' as ExecutionId,
         usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
       },
     },

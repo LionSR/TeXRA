@@ -221,7 +221,8 @@ function isUnrecognizedCommand(error: z.ZodError): boolean {
 /**
  * Asserts that `message` conforms to `schema` — for a send boundary where
  * every message is known to belong to exactly one outbound domain (e.g.
- * `BaseWebviewManager.postMessage`, which only ever sends `MainViewMessage`s).
+ * `MainViewMessageHandler.postToManagerTarget`, which only ever sends
+ * `MainViewMessage`s).
  * Throws on any mismatch, including a `command` the schema doesn't recognize
  * at all.
  */

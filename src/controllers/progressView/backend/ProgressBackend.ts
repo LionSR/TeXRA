@@ -171,7 +171,6 @@ export class ProgressBackend {
   /** Rebuild stream tabs and, when requested, rehydrate the active viewport. */
   async syncRenderedStreams(options: {
     syncActiveStream: boolean;
-    theme?: 'dark' | 'light';
   }): Promise<void> {
     const selectableStreams = this.state.selectableStreamNames();
     const activeStream = this.presentation.activeStream;
@@ -189,11 +188,7 @@ export class ProgressBackend {
     if (options.syncActiveStream && pendingSelectableActivation) {
       projectedStream = this.latestActivationTarget;
     }
-    this.renderer.sendStreamMetadata(
-      projectedStream,
-      rosterActiveStream,
-      options.theme,
-    );
+    this.renderer.sendStreamMetadata(projectedStream, rosterActiveStream);
     if (!options.syncActiveStream) return;
     if (pendingSelectableActivation) {
       // A structural refresh must not supersede a newer user selection that

@@ -91,14 +91,6 @@ export abstract class BaseViewMessageHandler<
   }
 
   /**
-   * Extension point invoked at the start of {@link dispatchInbound}, before
-   * the dispatcher runs. Subclasses that need per-message setup against the
-   * active webview (e.g. attaching it to sub-managers) override this instead
-   * of reimplementing dispatch.
-   */
-  protected onDispatch?(webviewView: T): void;
-
-  /**
    * Schema-driven dispatch shared by views that route through a typed
    * {@link DispatcherFn}. Tracks the active view, runs the dispatcher, logs
    * Zod validation failures at debug (expected, frequent) and handler
@@ -111,7 +103,6 @@ export abstract class BaseViewMessageHandler<
     handlers: HandlerRegistry<TMessage>,
   ): Promise<void> {
     this.setActiveView(webviewView);
-    this.onDispatch?.(webviewView);
 
     let unsupported = false;
     const handled = dispatcher(message, handlers, (error) => {

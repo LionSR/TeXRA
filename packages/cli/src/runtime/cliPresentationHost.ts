@@ -40,46 +40,11 @@ const ApprovalBypassNdjsonEvent = {
   superYolo: 'updateSuperYoloBypassState',
 } as const satisfies Record<ApprovalBypassKind, string>;
 
-/**
- * Builds the NDJSON-mode handler map. `requestOpenFile` and
- * `requestEnsureProgressView` have no NDJSON wire representation today and
- * stay deliberate no-ops; every other event returns `true` when it rendered
- * a user-visible record so the session can report delivery. Building this
- * per `logger` keeps the handlers closed over the specific `Logger` instance
- * in play at call time (an ndjson sink is created lazily via
- * `ensureLogger()`).
- */
-function createRuntimePresentationNdjsonHandlers(
-  logger: Logger,
-): PresentationEventHandlers<RuntimePresentationEventPayloads> {
-  return {
-    requestShowError: (payload) => {
-      logger.error(payload.message);
-      return true;
-    },
-    requestShowInstruction: (payload) => {
-      logger.info(payload.message, {
-        key: payload.key,
-        actions: payload.actions,
-        showSuppress: payload.showSuppress,
-      });
-      return true;
-    },
-    requestOpenFile: () => false,
-    showAgentConfigBanner: ({ agentName }) => {
-      logger.error(missingAgentMessage(agentName));
-      return true;
-    },
-    requestEnsureProgressView: () => false,
-  };
-}
-
 export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let sink: LogSink | undefined;
   let logger: Logger | undefined;
-  let ndjsonHandlers:
-    PresentationEventHandlers<RuntimePresentationEventPayloads> | undefined;
   let closed = false;
+  const ndjson = context.outputFormat === 'ndjson';
   const runProgress = createRunProgressRenderer(context);
   function ensureLogger(): Logger {
     if (logger) return logger;
@@ -94,16 +59,27 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   }
 
   /**
-   * Text-mode (non-NDJSON) handler map. `requestOpenFile` and
-   * `requestEnsureProgressView` have no dedicated text-mode presentation
-   * today, so they stay no-ops and report no delivery. `showAgentConfigBanner`
-   * is rendered as a visible, actionable "agent not found" error so CLI
-   * launch failures surface once through the targeted path. Reproduced
-   * per-key here rather than as a catch-all, so a future
+   * The one runtime-presentation handler map, both modes. Every event returns
+   * `true` when it rendered a user-visible record so the session can report
+   * delivery. `showAgentConfigBanner` is rendered as a visible, actionable
+   * "agent not found" error so CLI launch failures surface once through the
+   * targeted path. Reproduced per-key rather than as a catch-all, so a future
    * `RuntimePresentationEventPayloads` addition is a compile error to decide
    * on rather than a silent fall-through.
+   *
+   * `requestOpenFile` and `requestEnsureProgressView` have no presentation of
+   * their own in either mode. Their debug line is gated on `!ndjson` because
+   * the NDJSON logger writes to STDOUT, so a debug call there would put a
+   * `kind: 'log'` record on the frozen public wire.
+   * `RUNTIME_PRESENTATION_NDJSON_CASES` in
+   * `src/test-kernel/cli/RunProgressRenderer.vitest.ts` pins the exact record
+   * set each event may emit in NDJSON mode.
+   *
+   * `runProgress?.preserve()` is inert in NDJSON mode: production never builds
+   * a renderer there (`shouldRenderRunProgress`), and where a test context
+   * does, `preserve()` no-ops behind its own `ansi && liveLine` guard.
    */
-  const textModeHandlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
+  const handlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
     {
       requestShowError: (payload) => {
         runProgress?.preserve();
@@ -111,16 +87,24 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         return true;
       },
       requestShowInstruction: (payload) => {
-        // Not gated by quietLogs (below): unlike the debug fallback, this is
-        // an actionable instruction (e.g. missing API key), not routine
-        // progress noise.
+        // Not gated by quietLogs (unlike the debug fallback): this is an
+        // actionable instruction (e.g. missing API key), not routine progress
+        // noise. The action hint is a text-mode affordance; NDJSON carries the
+        // actions as fields instead, and `StderrTextSink` drops `fields`, so
+        // one call serves both.
         runProgress?.preserve();
-        const hint = formatInstructionActionHint(payload.actions, 'cli');
-        ensureLogger().info(`${payload.message}${hint}`);
+        const hint = ndjson
+          ? ''
+          : formatInstructionActionHint(payload.actions, 'cli');
+        ensureLogger().info(`${payload.message}${hint}`, {
+          key: payload.key,
+          actions: payload.actions,
+          showSuppress: payload.showSuppress,
+        });
         return true;
       },
       requestOpenFile: () => {
-        logDebugEvent('requestOpenFile');
+        if (!ndjson) logDebugEvent('requestOpenFile');
         return false;
       },
       showAgentConfigBanner: ({ agentName }) => {
@@ -129,7 +113,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         return true;
       },
       requestEnsureProgressView: () => {
-        logDebugEvent('requestEnsureProgressView');
+        if (!ndjson) logDebugEvent('requestEnsureProgressView');
         return false;
       },
     };
@@ -139,7 +123,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       runProgress ? runProgress.attach(session) : () => undefined,
     prepareInteractivePrompt: () => runProgress?.preserve(),
     emitApprovalBypassState({ streamId, kind, bypassActive }) {
-      if (closed || context.outputFormat !== 'ndjson') return;
+      if (closed || !ndjson) return;
       const record: CliNdjsonRecord = {
         kind: 'progress',
         event: ApprovalBypassNdjsonEvent[kind],
@@ -153,12 +137,6 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       payload: RuntimePresentationEventPayloads[K],
     ): boolean {
       if (closed) return false;
-
-      const handlers =
-        context.outputFormat === 'ndjson'
-          ? (ndjsonHandlers ??=
-              createRuntimePresentationNdjsonHandlers(ensureLogger()))
-          : textModeHandlers;
       return dispatchPresentationEvent(handlers, event, payload) === true;
     },
     async close() {

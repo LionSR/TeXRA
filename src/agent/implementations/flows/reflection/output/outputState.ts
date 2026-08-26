@@ -22,7 +22,6 @@ import {
   type OutputFileInfo,
   type RoundIndexed,
   type RoundOutput,
-  type StorageKey,
 } from '@shared/schemas';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
@@ -40,7 +39,6 @@ export interface OutputState {
  */
 export interface OutputDependencies {
   readonly setting: AgentWorkflowSetting;
-  readonly storageKey: StorageKey;
   readonly config: AgentConfig;
   readonly baseFiles: FileLocation[];
   readonly logger: AgentTrace;

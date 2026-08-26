@@ -200,9 +200,6 @@ function freshRoundShared(messages: ProviderMessage[]): ToolUseRoundShared {
     lastError: undefined,
     toolCalls: undefined,
     text: undefined,
-    roundIndex: 0,
-    roundResponseTimeMs: 0,
-    roundNormalizedUsage: undefined,
   };
 }
 

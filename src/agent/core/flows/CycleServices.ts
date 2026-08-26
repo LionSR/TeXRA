@@ -20,7 +20,6 @@ interface CycleRunServices extends BaseFlowContextInit {
   readonly fileService: TaskRunFileService;
   readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;
-  readonly toolRegistry: IToolRegistry;
 }
 
 /** Services for response cycle flow nodes. */
@@ -36,6 +35,7 @@ export interface ResponseCycleServices extends CycleRunServices {
  * interface by adding `run` and `workspace` before running the round.
  */
 export interface ToolUseRoundServices extends CycleRunServices {
+  readonly toolRegistry: IToolRegistry;
   /** Terminal tool available for the optional provider-native final turn. */
   readonly finalTool?: FinalTool;
   /** Session for injecting queued user messages after tool dispatch. */

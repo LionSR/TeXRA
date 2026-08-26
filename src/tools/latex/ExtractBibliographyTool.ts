@@ -61,7 +61,7 @@ export class ExtractBibliographyTool extends defineTool({
 
     // Use provided bibPath, or fall back to configured default
     const effectiveBibPath =
-      bibPath || getConfig<string>('texra.bib.defaultPath', '');
+      bibPath || getConfig<string>('texra.bib.defaultPath');
 
     if (effectiveBibPath) {
       const { path: resolved } = resolveAndFormat(effectiveBibPath);

@@ -10,7 +10,6 @@ import {
   MESSAGE_TYPES,
   type FileLocation,
   type OutputFileInfo,
-  type StorageKey,
 } from '@shared/schemas';
 
 import { computeOutputDiffStats } from './diffComputation';
@@ -74,7 +73,6 @@ export async function summarizeRound(
       deps.logger.debug('Finalized round', {
         data: {
           round: currRound,
-          storageKey: deps.storageKey,
           files: fileInfos.length,
         },
         messageType: MESSAGE_TYPES.INTERNAL,

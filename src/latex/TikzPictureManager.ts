@@ -16,29 +16,6 @@ import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 const log = createLog(CHANNEL);
 
 /**
- * Get the TikZ template from configuration or use default
- * @returns The TikZ template string
- */
-function getTikzTemplate(): string {
-  return getConfig<string>(
-    'texra.latex.tikzTemplate',
-    `
-  \\documentclass[tikz,border=10pt]{standalone}
-  \\usepackage{tikz}
-  \\usepackage{pgfplots}
-  \\usetikzlibrary{positioning}
-  \\usetikzlibrary{patterns}
-  \\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}
-  \\usetikzlibrary{shapes, arrows}
-
-  \\begin{document}
-  {{ tikzpicture }}
-  \\end{document}
-  `,
-  );
-}
-
-/**
  * Create a standalone LaTeX file for a TikZ picture
  * @param tikzpictures TikZ picture content
  * @param label Label for the figure
@@ -52,9 +29,10 @@ async function createStandalone(
   buildDir: string,
   suffix?: string,
 ): Promise<FileLocation> {
-  const standaloneContent = await renderPrompt(getTikzTemplate(), {
-    tikzpicture: tikzpictures,
-  });
+  const standaloneContent = await renderPrompt(
+    getConfig<string>('texra.latex.tikzTemplate'),
+    { tikzpicture: tikzpictures },
+  );
 
   const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
   const texLocation = pathToLocation(path.join(buildDir, filename));

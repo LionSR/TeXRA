@@ -1,11 +1,11 @@
-import type {
-  FollowUpQueueBatch,
-  FollowUpQueueInput,
-} from '@agent/followUp/FollowUpQueue';
+import type { FollowUpQueueBatch } from '@agent/followUp/FollowUpQueue';
 
-/** Contract for injecting queued user messages into an active tool-use cycle. */
+/**
+ * Contract for reading queued user messages inside an active tool-use cycle.
+ * Producers put input in through the session's follow-up queue
+ * (`SessionHandle.followUps`), never through this consumer surface.
+ */
 export interface IToolUseSession {
-  appendFollowUp(followUp: FollowUpQueueInput): void;
   appendSyntheticFollowUp(text: string): void;
   hasQueuedFollowUp(): boolean;
   /** Wait for the next follow-up items. Returns null if interrupted. */

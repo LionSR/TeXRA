@@ -1,6 +1,7 @@
 // Local imports
 import { createLog } from '@logger/logUtils';
 import { platform, tryPlatform } from '@platform/platform';
+import { getCoreSettingDefault } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Third-party imports
@@ -21,11 +22,17 @@ function configProvider() {
  *   than this shared configuration path.
  *
  * @param path Configuration path (e.g., 'agents' or 'api.engine')
- * @param defaultValue Optional default value if configuration is not found
- * @returns The configuration value or default value
+ * Cataloged keys resolve their schema default even when an SDK consumer
+ * supplies a structurally valid provider that only honors caller fallbacks.
+ *
+ * @param defaultValue Optional fallback for keys the catalog does not own
+ * @returns The configured, catalog-default, or caller-fallback value
  */
 export function getConfig<T>(path: string, defaultValue?: T): T {
-  return configProvider().get(path, defaultValue);
+  const configured = configProvider().get<T | undefined>(path);
+  if (configured !== undefined) return configured;
+  const catalogDefault = getCoreSettingDefault(path) as T | undefined;
+  return catalogDefault === undefined ? (defaultValue as T) : catalogDefault;
 }
 
 /**

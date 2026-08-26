@@ -65,7 +65,7 @@ const API_MAX_IMAGE_DIMENSION = 8000;
 /** Resize an image if it exceeds the maximum dimensions. Returns the original path if no resize needed. */
 async function resizeImageIfNeeded(imagePath: string): Promise<string> {
   const maxDimension = Math.min(
-    getConfig<number>('texra.maxImageDimension', 2000),
+    getConfig<number>('texra.maxImageDimension'),
     API_MAX_IMAGE_DIMENSION,
   );
   const { width, height } = getImageDimensions(imagePath);

@@ -1,26 +1,23 @@
 /**
- * Single owner of the YAML `tools:` materialization step: turn an agent
- * definition's declared tool names into resolved {@link ToolDefinition}
- * objects before the settings reach `AgentSettingSchema`.
+ * Single owner of the YAML `tools:` normalization step: turn an agent
+ * definition's declared tool names into the bare `{ name }` entries
+ * `AgentSettingSchema` expects. The contract a tool is advertised with — its
+ * description and parameter schema — is the registry's, applied once per run
+ * by `resolveAgentTools`, so nothing here touches the tool registry.
  *
  * Shared by the local definition loader ({@link ./agentLoad}) and the remote
- * one (`@agent/remote/RemoteAgentLoader`), which report unresolved names on
- * their own log channels. Both already depend on `@tools/registry`, so this
- * module adds nothing to either one's module closure.
+ * one (`@agent/remote/RemoteAgentLoader`), which report on their own log
+ * channels.
  */
 import type { AgentSettingInput } from '@agent/core/definition/AgentDataclass';
 import { createLog } from '@logger/logUtils';
 import { AgentCategory } from '@shared/schemas';
-import { resolveToolDefinitions } from '@tools/registry';
 
-export function resolveAgentSettingTools(
+export function normalizeAgentSettingTools(
   settings: AgentSettingInput,
   channel: string,
 ): AgentSettingInput {
   if (!Array.isArray(settings.tools)) return settings;
-  // The channel is caller-threaded (local and remote loaders report on their
-  // own), so bind at call scope rather than freezing one at module load.
-  const log = createLog(channel);
   // Latent silent-failure trap: the shared settings schema accepts `tools:`
   // for every category, but a workflow (reflection) run only *sends* the
   // definitions to the provider — a returned tool call is never dispatched.
@@ -30,7 +27,9 @@ export function resolveAgentSettingTools(
     settings.agentCategory === AgentCategory.Workflow &&
     settings.tools.length > 0
   ) {
-    log.warn(
+    // The channel is caller-threaded (local and remote loaders report on their
+    // own), so bind at call scope rather than freezing one at module load.
+    createLog(channel).warn(
       `Workflow-category agent declares tools: [${settings.tools
         .map((tool) => (typeof tool === 'string' ? tool : tool.name))
         .join(
@@ -40,8 +39,8 @@ export function resolveAgentSettingTools(
   }
   return {
     ...settings,
-    tools: resolveToolDefinitions(settings.tools, (name, reason) =>
-      log.warn(`Tool "${name}" ${reason}`),
+    tools: settings.tools.map((tool) =>
+      typeof tool === 'string' ? { name: tool } : tool,
     ),
   };
 }

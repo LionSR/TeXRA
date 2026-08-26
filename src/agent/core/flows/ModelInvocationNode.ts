@@ -39,12 +39,11 @@ import {
 } from '@common/errors/sdkError/providerErrorFormat';
 import type { ResolvedModelConfig } from '@model/openRouterRouting';
 import {
-  DEFAULT_CORE_SETTINGS,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
   STREAM_PHASE,
   toRetryErrorInfo,
   type RetryErrorInfo,
-  type ToolDefinition,
 } from '@shared/schemas';
 import { isKimiCodeExclusiveModel } from '@shared/model/kimiCodeRetryGate';
 import { generateShortId } from '@utils/core';
@@ -76,7 +75,7 @@ function getNodeMaxRetries(): number {
     getValidatedConfig(
       'texra.model.retry.maxAttempts',
       ModelRetryMaxAttemptsSchema,
-      DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+      MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     )
   );
 }
@@ -138,7 +137,6 @@ export interface ModelInvocationConfig<TShared, TServices> {
     services: TServices,
   ) => string | undefined;
   getEndTag?: (services: TServices) => string | undefined;
-  getTools?: (services: TServices) => ToolDefinition[] | undefined;
   getFinalTool?: (
     shared: TShared,
     services: TServices,
@@ -702,11 +700,7 @@ export class ModelInvocationNode<
           systemPrompt: prepRes.systemPrompt,
           endTag: this._config.getEndTag?.(services),
           signal,
-          // `?? services.setting.tools` would be wrong here: a configured
-          // getTools that returns undefined is an explicit "no tools".
-          tools: this._config.getTools
-            ? this._config.getTools(services)
-            : services.setting.tools,
+          tools: services.setting.tools,
           finalTool: prepRes.finalTool,
         });
 

@@ -9,8 +9,3 @@ export const AgentSkillsEnabledSchema = z
   .describe(
     'Discover TeXRA and imported skills and expose them to tool-use agent prompts',
   );
-
-/** Canonical persisted form; absence has the documented enabled default. */
-export const AgentSkillsSettingsSchema = z.strictObject({
-  enabled: AgentSkillsEnabledSchema.prefault(AGENT_SKILLS_ENABLED_DEFAULT),
-});

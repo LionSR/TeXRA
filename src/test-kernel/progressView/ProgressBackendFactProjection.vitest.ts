@@ -26,7 +26,6 @@ import {
   type OutputFileInfo,
   type Plan,
   type ProgressViewOutboundMessage,
-  type StorageKey,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
@@ -545,7 +544,7 @@ describe('ProgressBackend', () => {
     const target = createListeningBackend();
     const { backend, messages } = target;
     const streamId = 'session:output-files' as StreamTabId;
-    const storageKey = 'run:session-usage' as StorageKey;
+    const storageKey = 'run:session-usage' as ExecutionId;
     const outputFile = paperOutputFile();
     const compileFailure: CompileFailure = {
       round: 1,

@@ -81,7 +81,6 @@ const inquiryData = {
   requestId: 'inquiry-1',
   streamId: 'stream-1',
   allowBypass: false,
-  mode: 'new' as const,
   question: 'Which source should I use?',
   threadId: 'ei_0123456789ab',
   context: null,

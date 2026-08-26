@@ -13,8 +13,9 @@ import type { StreamTabId } from '@shared/schemas';
  *
  * Subagents inherit the parent stream's bypass through the existing
  * delegation wiring (`configureDelegatedChildApprovals`), so no
- * child-stream handling is needed here — per-kind ancestry means a goal
- * parent with bash bypassed but edits gated propagates exactly that split.
+ * child-stream handling is needed here — each bypass kind resolves its own
+ * value through that ancestry, so a goal parent with bash bypassed but edits
+ * gated propagates exactly that split.
  *
  * The approval modules are imported lazily: this file sits in the host-neutral
  * agent-loop import graph (via ToolUseWaitNode), and pulling the approval

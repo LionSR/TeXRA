@@ -44,12 +44,7 @@ import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { DisposableStore } from '@platform/disposable';
-import type {
-  AgentSource,
-  ExecutionId,
-  StorageKey,
-  StreamTabId,
-} from '@shared/schemas';
+import type { AgentSource, ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   AgentCategory,
   INSTRUCTION_ACTION,
@@ -81,7 +76,6 @@ const logger = createLog('AgentLaunchContext');
 
 export interface AgentLaunchContext extends AgentCore {
   usageMonitor: UsageMonitor;
-  storageKey: StorageKey;
   parentStage: StageHandle;
   attachedMemoryMisses: AttachedMemoryMiss[];
   /** Abort the sticky signal published on {@link AgentCore.runScope}. */
@@ -455,7 +449,6 @@ async function assembleAgentLaunchContext(
     initialMediaMayBeInserted ? undefined : initialInstruction,
   );
   resources.add(() => parentStage.end(RUN_OUTCOME.FAILED));
-  const storageKey = (parentStage.id || executionId) as StorageKey;
 
   // Tell the user when attached images will be dropped because the chosen model
   // lacks vision. The downstream initializeMessages/addMediaToUserMessage guards
@@ -516,7 +509,12 @@ async function assembleAgentLaunchContext(
 
   const usageMonitor = new UsageMonitor(
     modelCell,
-    { logger: agentLogger, storageKey, streamId },
+    {
+      logger: agentLogger,
+      executionId,
+      runStageId: parentStage.id,
+      streamId,
+    },
     {
       agentName: config.agent,
       agentCategory: setting.agentCategory,
@@ -530,7 +528,6 @@ async function assembleAgentLaunchContext(
     toolPolicy: createToolPolicy(input.toolPolicy),
     logger: agentLogger,
     parentStage,
-    storageKey,
     userVarChannels,
     attachedMemoryMisses,
     usageMonitor,

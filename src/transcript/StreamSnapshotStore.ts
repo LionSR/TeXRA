@@ -49,7 +49,6 @@ import {
   type Plan,
   type ReadonlyRoundIndexed,
   type RoundIndexed,
-  type StorageKey,
   type StreamSnapshot,
   type StreamTabId,
   type StreamTabMeta,
@@ -231,7 +230,7 @@ interface OverlayPatches {
   outputFiles: OutputFilesPatch;
   missingOutputs: Map<number, string[] | null>;
   compileFailures: Map<number, CompileFailure[] | null>;
-  usage: Map<StorageKey, TokenUsageStats>;
+  usage: Map<ExecutionId, TokenUsageStats>;
   workPlan: WorkPlanOverlay;
 }
 
@@ -288,10 +287,10 @@ function mergeWorkPlanOverlay(
  * seeding matches what was already applied eagerly.
  */
 function mergeUsagePatch(
-  existing: Map<StorageKey, TokenUsageStats> | undefined,
-  patch: Map<StorageKey, TokenUsageStats>,
-): Map<StorageKey, TokenUsageStats> {
-  const merged = existing ?? new Map<StorageKey, TokenUsageStats>();
+  existing: Map<ExecutionId, TokenUsageStats> | undefined,
+  patch: Map<ExecutionId, TokenUsageStats>,
+): Map<ExecutionId, TokenUsageStats> {
+  const merged = existing ?? new Map<ExecutionId, TokenUsageStats>();
   for (const [storageKey, delta] of patch) {
     merged.set(
       storageKey,
@@ -851,7 +850,7 @@ export class StreamSnapshotStore {
 
   private applyUsageDeltaMemory(
     record: StreamRecord,
-    storageKey: StorageKey,
+    storageKey: ExecutionId,
     delta: TokenUsageStats,
   ): TokenUsageStats | undefined {
     if (isEmptyUsage(delta)) return record.usage.get(storageKey);
@@ -1000,7 +999,7 @@ export class StreamSnapshotStore {
    */
   private addUsage(
     stream: StreamTabId,
-    storageKey: StorageKey,
+    storageKey: ExecutionId,
     usage: ExtendedTokenUsageStats,
   ): void {
     // UI-only per-round display fields are not part of the durable usage row.
@@ -1025,7 +1024,7 @@ export class StreamSnapshotStore {
     const delta = parsed.success ? parsed.data : emptyUsageStats();
     const overlayPatch = isEmptyUsage(delta)
       ? undefined
-      : new Map<StorageKey, TokenUsageStats>([[storageKey, delta]]);
+      : new Map<ExecutionId, TokenUsageStats>([[storageKey, delta]]);
 
     this.mutateWithOverlay(
       stream,

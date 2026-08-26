@@ -1214,7 +1214,6 @@ function enqueueOtherStreamInquiry(
     kind: 'externalInquiry',
     data: {
       requestId,
-      mode: 'followUp',
       question,
       threadId,
       allowBypass: false,
@@ -1232,7 +1231,6 @@ function enqueueSessionInquiry(
     kind: 'externalInquiry',
     data: {
       requestId,
-      mode: 'followUp',
       question,
       threadId,
       allowBypass: false,

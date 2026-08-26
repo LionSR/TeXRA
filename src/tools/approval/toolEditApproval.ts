@@ -191,10 +191,7 @@ export function firstChangedLine(
 export async function requestToolEditApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
-  const approvalsEnabled = getConfig<boolean>(
-    TOOL_EDIT_APPROVAL_CONFIG_KEY,
-    true,
-  );
+  const approvalsEnabled = getConfig<boolean>(TOOL_EDIT_APPROVAL_CONFIG_KEY);
 
   const context = tryUseRunContext();
   const session = getRunContextSession(context) ?? defaultSession();

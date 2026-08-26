@@ -9,6 +9,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
+import { getCoreSettingDefault } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
@@ -27,8 +28,11 @@ vi.mock('@utils/system/execUtils', () => ({
   executeCommand: mocks.executeCommand,
 }));
 
+// Mirrors production: JsonConfigProvider resolves the settings-catalog default
+// when no user value is stored, so callers no longer pass a literal fallback.
 vi.mock('@utils/config/configUtils', () => ({
-  getConfig: <T>(_key: string, fallback: T) => fallback,
+  getConfig: <T>(key: string, fallback?: T) =>
+    (getCoreSettingDefault(key) as T | undefined) ?? (fallback as T),
 }));
 
 describe('LaTeXdiffService shadow output', () => {

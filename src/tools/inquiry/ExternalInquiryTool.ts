@@ -307,8 +307,7 @@ export class ExternalInquiryTool extends defineTool({
         },
       },
     });
-    const isFollowUp = !!input.thread_id;
-    const basePermission = {
+    const permission: ExternalInquiryPermission = {
       requestId: persisted.threadId, // legacy field — panel addresses by threadId now
       question: input.question,
       threadId: persisted.threadId,
@@ -317,22 +316,10 @@ export class ExternalInquiryTool extends defineTool({
       attachFiles,
       allowBypass: false,
       streamId,
+      sessionLinks: collectKnownSessionLinks(manifest),
+      draft: getOpenTurnDraft(manifest),
+      transcript: manifestToTranscript(manifest),
     };
-    const permission: ExternalInquiryPermission = isFollowUp
-      ? {
-          ...basePermission,
-          mode: 'followUp',
-          sessionLinks: collectKnownSessionLinks(manifest),
-          draft: getOpenTurnDraft(manifest),
-          transcript: manifestToTranscript(manifest),
-        }
-      : {
-          ...basePermission,
-          mode: 'new',
-          sessionLinks: null,
-          draft: null,
-          transcript: null,
-        };
     const interaction =
       ownerSession.interactions.openExternalInquiry(permission);
     if (!interaction) {

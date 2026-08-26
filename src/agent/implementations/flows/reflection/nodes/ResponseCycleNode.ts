@@ -8,7 +8,6 @@ import type {
 } from '@agent/core/state/AgentState';
 import { buildFailedRetryInfo } from '@common/errors/sdkError/providerErrorFormat';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
-import { getDefaultToolRegistry } from '@tools/registry';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import {
@@ -96,7 +95,6 @@ export class ResponseCycleNode extends BaseNode<
       // copy taken when the cycle started.
       flow.setServices({
         ...this.services,
-        toolRegistry: getDefaultToolRegistry(),
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,
@@ -182,7 +180,6 @@ export class ResponseCycleNode extends BaseNode<
     shared.workspaceSnapshot = prepRes.workspace.toSnapshot({
       excludeAssemblyStrings: true,
     });
-    shared.conversation = prepRes.context.messages;
 
     return FlowTransition.DEFAULT;
   }

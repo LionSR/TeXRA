@@ -6,13 +6,15 @@ import type {
   LatexdiffMessage,
   LatexdiffvcMessage,
   LatexdiffvcOperationMessage,
+  MainViewMessage,
 } from '@shared/schemas';
 
-import { BaseWebviewManager } from './BaseWebviewManager';
-
-export class DiffManager extends BaseWebviewManager {
+export class DiffManager {
   private readonly channel = 'DiffManager';
   private readonly log = createLog(this.channel);
+
+  /** Posts to whichever launcher webview is dispatching right now. */
+  constructor(private readonly post: (message: MainViewMessage) => void) {}
 
   handleLatexdiff(message: LatexdiffMessage): void {
     void vscode.commands.executeCommand(
@@ -61,7 +63,7 @@ export class DiffManager extends BaseWebviewManager {
       void vscode.window.showInformationMessage(infoMessage);
     }
 
-    this.postMessage({
+    this.post({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
       commits,
       isGitRepo,

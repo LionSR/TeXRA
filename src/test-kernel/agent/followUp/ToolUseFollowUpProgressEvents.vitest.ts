@@ -1,9 +1,8 @@
 import '@test/support/defaultSessionTestSetup';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { LiveToolUseFlowContext } from '@agent/runtime/ExecutionHandle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   notifyFollowUpSent,
@@ -63,15 +62,13 @@ describe('tool-use follow-up progress events', () => {
 
   function trackToolUseFlow({
     stream = streamId,
-    appendFollowUp,
     executionId = `exec-${stream}`,
     session,
   }: {
     readonly stream?: StreamTabId;
-    readonly appendFollowUp: LiveToolUseFlowContext['session']['appendFollowUp'];
     readonly executionId?: string;
     readonly session?: SessionHandle;
-  }): void {
+  } = {}): void {
     const handle = testExecutionHandle({
       executionId,
       parentStreamId: stream,
@@ -79,7 +76,6 @@ describe('tool-use follow-up progress events', () => {
     });
     handle.attachToolUseFlow({
       ...(session ? { ownerSession: session } : {}),
-      session: { appendFollowUp },
       modelHandler: { supportsManualCompaction: true },
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => undefined,
@@ -95,9 +91,9 @@ describe('tool-use follow-up progress events', () => {
     const run = createRecordingHost();
     const session = trackSession();
     const recorded = recordSessionEvents(session.events);
-    const appendFollowUp = vi.fn();
+    const lease = session.followUps.claimLive(streamId, 'flow')!;
 
-    trackToolUseFlow({ appendFollowUp, session });
+    trackToolUseFlow({ session });
 
     const result = await submitFollowUp(streamId, 'please continue', {
       session,
@@ -105,11 +101,9 @@ describe('tool-use follow-up progress events', () => {
     recorded.detach();
 
     expect(result).toEqual({ status: 'sent' });
-    expect(appendFollowUp).toHaveBeenCalledWith({
-      text: 'please continue',
-      mediaFiles: undefined,
-      displayText: undefined,
-    });
+    expect(session.followUps.queue(lease).drainItems()).toMatchObject([
+      { text: 'please continue', origin: 'user' },
+    ]);
     expect(recorded.events).toEqual([followUpSentEvent(streamId)]);
     expect(run.events).toEqual([]);
   });
@@ -207,17 +201,15 @@ describe('tool-use follow-up progress events', () => {
   });
 
   it('does not append through stale active contexts after final status', async () => {
-    const appendFollowUp = vi.fn();
-
     seedStreamStatusForTest(defaultSession().status, streamId, {
       phase: STREAM_PHASE.COMPLETED,
     });
-    trackToolUseFlow({ appendFollowUp });
+    trackToolUseFlow();
 
     const result = await submitFollowUp(streamId, 'late follow-up');
 
     expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
-    expect(appendFollowUp).not.toHaveBeenCalled();
+    expect(defaultSession().followUps.getAll(streamId)).toEqual([]);
   });
 
   it('does not emit a follow-up sent fact when no follow-up reaches a live session', async () => {

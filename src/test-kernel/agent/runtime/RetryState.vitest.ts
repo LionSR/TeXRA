@@ -44,7 +44,6 @@ import {
   MESSAGE_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
-  DEFAULT_CORE_SETTINGS,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -419,7 +418,7 @@ describe('ModelInvocationNode retry', () => {
     {
       name: 'settings are unset',
       stored: undefined,
-      expectedAttempts: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+      expectedAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     },
     {
       name: 'the stored count is the canonical maximum',
@@ -429,7 +428,7 @@ describe('ModelInvocationNode retry', () => {
     {
       name: 'the stored count exceeds the canonical maximum',
       stored: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max + 1,
-      expectedAttempts: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+      expectedAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     },
   ])(
     'resolves the canonical retry count and delay when $name',

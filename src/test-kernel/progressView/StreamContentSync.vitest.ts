@@ -15,7 +15,7 @@ import type {
   FileLocation,
   OutputFileInfo,
   Plan,
-  StorageKey,
+  ExecutionId,
   StreamTabId,
   SyncStreamContentPayload,
   TodoItem,
@@ -42,7 +42,7 @@ const plan: Plan = {
 
 const stream = 'stream:shared-snapshot' as StreamTabId;
 const parentStream = 'stream:parent' as StreamTabId;
-const runId = 'run-1' as StorageKey;
+const runId = 'run-1' as ExecutionId;
 const activeSubagent: ActiveChildInfo = {
   executionId: 'child-1',
   agentName: 'search',

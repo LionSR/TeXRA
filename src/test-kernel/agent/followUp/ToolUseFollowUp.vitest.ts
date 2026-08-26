@@ -7,7 +7,6 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseFollowUpTarget } from '@agent/runtime/executionRegistry';
-import type { LiveToolUseFlowContext } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -27,13 +26,10 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
   } as unknown as SessionHandle;
 }
 
-function activeTarget(
-  appendFollowUp: LiveToolUseFlowContext['session']['appendFollowUp'],
-): ToolUseFollowUpTarget {
+function activeTarget(): ToolUseFollowUpTarget {
   return {
     kind: 'active',
     context: {
-      session: { appendFollowUp },
       modelHandler: { supportsManualCompaction: true },
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => undefined,
@@ -76,8 +72,7 @@ describe('submitFollowUp', () => {
 
   it('reports input admitted by a live flow as sent', async () => {
     const streamId = id('stream:live-flow');
-    const appendFollowUp = vi.fn();
-    const session = fakeSession(activeTarget(appendFollowUp));
+    const session = fakeSession(activeTarget());
     const flow = session.followUps.claimLive(streamId, 'flow')!;
     const tryResumeStream = mockTryResume();
 
@@ -89,7 +84,6 @@ describe('submitFollowUp', () => {
     ).resolves.toEqual({ status: 'sent' });
 
     expect(tryResumeStream).not.toHaveBeenCalled();
-    expect(appendFollowUp).not.toHaveBeenCalled();
     expect(session.followUps.queue(flow).drainItems()).toMatchObject([
       { text: 'during active turn' },
     ]);
@@ -104,7 +98,7 @@ describe('submitFollowUp', () => {
 
   it('does not report an automatic live-flow notification as user input', async () => {
     const streamId = id('stream:live-flow-notification');
-    const session = fakeSession(activeTarget(vi.fn()));
+    const session = fakeSession(activeTarget());
     const flow = session.followUps.claimLive(streamId, 'flow')!;
 
     await expect(

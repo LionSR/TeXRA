@@ -28,7 +28,6 @@ import {
   AgentFileLocationSchema,
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
-  type ToolDefinition,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -203,26 +202,6 @@ type ContinuationNodeResult = SkippableNodeResult<{
   reachedTokenLimit: boolean;
   contextWindowExceeded: boolean;
 }>;
-
-export function responseCycleToolsForModel(
-  services: Pick<
-    ResponseCycleServices,
-    'modelCell' | 'setting' | 'toolRegistry' | 'toolPolicy'
-  >,
-): ToolDefinition[] | undefined {
-  if (!services.modelCell.handler.capabilities.supportsFunctionCalling) {
-    return undefined;
-  }
-  const runtimeUnavailable = new Set(
-    services.toolPolicy.runtimeUnavailableTools ?? [],
-  );
-  return services.setting.tools.filter(
-    (tool) =>
-      !runtimeUnavailable.has(tool.name) &&
-      (services.toolPolicy.approvalPromptsUnavailable !== true ||
-        services.toolRegistry.get(tool.name)?.requiresApproval !== true),
-  );
-}
 
 /**
  * Transforms the raw model response into output-ready text, updates usage metrics,
@@ -623,7 +602,6 @@ export function createResponseCycleFlow(): Flow<
     backgroundModeAware: true,
     getSystemPrompt: (shared) => shared.systemPrompt,
     getEndTag: () => OUTPUT_END_TAG,
-    getTools: responseCycleToolsForModel,
     storeResponse: (shared, response) => {
       shared.responseObject = response;
     },

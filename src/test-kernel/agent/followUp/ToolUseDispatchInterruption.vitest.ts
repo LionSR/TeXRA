@@ -114,9 +114,6 @@ function createRoundFixture(abortOn: 'tool-call-extraction' | 'tool-b') {
     lastError: undefined,
     toolCalls: undefined,
     text: undefined,
-    roundIndex: 0,
-    roundResponseTimeMs: 0,
-    roundNormalizedUsage: undefined,
   };
 
   return { createResponse, services, shared, toolACall, toolBCall, toolCCall };

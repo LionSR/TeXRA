@@ -148,7 +148,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
     ).toEqual(['b']);
   });
 
-  it('forgets a terminal stream so a late live-owner submission finds no owner', () => {
+  it('forgets a terminal stream so a late live-owner submission is refused', () => {
     const queues = new ToolUseFollowUpQueue();
     const id = stream('stream:terminal');
     const lease = queues.claimLive(id, 'flow')!;
@@ -156,7 +156,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
     expect(queues.hasLiveOwner(id)).toBe(false);
     expect(queues.submit(id, { text: 'late' }, 'live_owner')).toEqual({
-      kind: 'not_owned',
+      kind: 'refused',
     });
   });
 
@@ -168,7 +168,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
     queues.release(first, 'terminal');
 
     expect(queues.submit(id, { text: 'late' }, 'live_owner')).toEqual({
-      kind: 'not_owned',
+      kind: 'refused',
     });
 
     const retry = queues.claimChildRun(id, executionId);
@@ -200,7 +200,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
     expect(queues.terminalize(id)).toBe(true);
     expect(queues.release(lease, 'recoverable')).toBe(false);
     expect(queues.submit(id, { text: 'late' }, 'live_owner')).toEqual({
-      kind: 'not_owned',
+      kind: 'refused',
     });
   });
 

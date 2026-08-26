@@ -18,7 +18,7 @@ import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
 import { agentKey, AgentCategory, type AgentSource } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
-import { resolveAgentSettingTools } from './agentSettingTools';
+import { normalizeAgentSettingTools } from './agentSettingTools';
 
 const CHANNEL = 'agentLoad';
 
@@ -54,7 +54,9 @@ export function validateAgentYamlContent(
   const rootName = data.name;
 
   if (!data.inherits) {
-    AgentSettingSchema.parse(resolveAgentSettingTools(data.settings, CHANNEL));
+    AgentSettingSchema.parse(
+      normalizeAgentSettingTools(data.settings, CHANNEL),
+    );
     AgentPromptSchema.parse(data.prompts);
   }
 
@@ -115,7 +117,7 @@ export async function loadAgentSettingAndPrompts(
             agentCategory: AgentCategory.Workflow,
           };
     return [
-      AgentSettingSchema.parse(resolveAgentSettingTools(settings, CHANNEL)),
+      AgentSettingSchema.parse(normalizeAgentSettingTools(settings, CHANNEL)),
       AgentPromptSchema.parse(definition.prompts),
     ];
   }
@@ -177,11 +179,11 @@ export async function loadAgentSettingAndPrompts(
 
   settings = ensureAgentCategoryForSource(settings, entry.source);
 
-  const resolvedSettings = resolveAgentSettingTools(settings, CHANNEL);
+  const normalizedSettings = normalizeAgentSettingTools(settings, CHANNEL);
 
   // Apply defaults and validate the final settings and prompts
   return [
-    AgentSettingSchema.parse(resolvedSettings),
+    AgentSettingSchema.parse(normalizedSettings),
     AgentPromptSchema.parse(prompts),
   ];
 }

@@ -2,11 +2,7 @@ import type { PromptBuilder } from '@agent/prompt/PromptBuilder';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { LatexMediaManager } from '@latex/LatexMediaManager';
-import type {
-  AgentFileLocation,
-  FileLocation,
-  StorageKey,
-} from '@shared/schemas';
+import type { AgentFileLocation, FileLocation } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files/taskRunStorage';
 import type { OutputState } from './output/outputState';
 import type { LatexDiffManager } from './output/LatexDiffManager';
@@ -19,7 +15,6 @@ export interface WorkflowOutputPolicy {
 
 export interface ReflectionServices extends BaseFlowContextInit {
   readonly setting: AgentWorkflowSetting;
-  readonly storageKey: StorageKey;
   readonly outputState: OutputState;
   readonly xmlManager: XmlOutputManager;
   readonly diffManager: LatexDiffManager;

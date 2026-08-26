@@ -43,7 +43,6 @@ function createPermission(
       streamId: 'stream-1',
       threadId: 'ei_000000000000',
       question: 'What is the answer?',
-      mode: 'new',
       ...overrides,
     },
   };

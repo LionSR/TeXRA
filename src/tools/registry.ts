@@ -1,6 +1,3 @@
-// Third-party imports
-import stableStringify from 'fast-json-stable-stringify';
-
 // Local imports
 import type {
   ITool,
@@ -8,7 +5,6 @@ import type {
   ToolHost,
 } from '@agent/core/tools/ToolTypes';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import type { ToolDefinition } from '@shared/schemas';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
@@ -196,80 +192,4 @@ export function isDefaultToolUnavailableOnHost(
   host: ToolHost,
 ): boolean {
   return getDefaultTools()[name].unavailableHosts?.includes(host) === true;
-}
-
-/** Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores. */
-const VALID_TOOL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-
-/**
- * A declared tool: a registry name, or a whole definition — either one a parent
- * agent's load already resolved, or one an embedder registered as a value, the
- * only way to attach the runtime-only fields no YAML can express.
- */
-type RawToolConfig = string | ToolDefinition;
-
-function differsFrom(declared: unknown, registered: unknown): boolean {
-  if (declared === undefined || declared === registered) return false;
-  return stableStringify(declared) !== stableStringify(registered);
-}
-
-/**
- * Whether an entry states a contract of its own instead of the registered one.
- * An inherited entry carries the definition a parent's load already resolved,
- * so repeating the registry's own description and parameters is not an override.
- */
-function overridesContract(
-  item: RawToolConfig,
-  registered: ToolDefinition,
-): boolean {
-  if (typeof item === 'string') return false;
-  return (
-    differsFrom(item.description, registered.description) ||
-    differsFrom(item.parameters, registered.parameters)
-  );
-}
-
-/**
- * Resolve declared tools to their definitions. A registered tool's contract is
- * the registered one: a definition entry that names it contributes only that
- * name, and any description or parameters it carries are dropped with a warning
- * rather than handed to the model in place of the real contract.
- *
- * @param tools - Declared tool names or definitions
- * @param warnOnMissing - Optional callback for logging warnings. `reason` says
- *   what happened to the entry, so a dropped override is never reported as a
- *   missing tool.
- * @returns Array of resolved ToolDefinition objects
- */
-export function resolveToolDefinitions(
-  tools: RawToolConfig[],
-  warnOnMissing?: (toolName: string, reason: string) => void,
-): ToolDefinition[] {
-  const registry = getDefaultToolRegistry();
-  const seenNames = new Set<string>();
-
-  return tools.flatMap((item): ToolDefinition[] => {
-    const name = typeof item === 'string' ? item : item.name;
-    if (seenNames.has(name)) {
-      return [];
-    }
-    seenNames.add(name);
-
-    const tool = VALID_TOOL_NAME.test(name) ? registry.get(name) : undefined;
-
-    // Unregistered name: keep an embedder's own definition, and fall back to a
-    // bare name for everything else so the entry is still visible downstream.
-    if (!tool) {
-      warnOnMissing?.(name, 'not found in registry');
-      return [typeof item === 'string' ? { name } : item];
-    }
-
-    if (overridesContract(item, tool.definition)) {
-      warnOnMissing?.(
-        name,
-        'is declared with a description or parameters; agent definitions name tools, so the registered definition is used instead',
-      );
-    }
-    return [tool.definition];
-  });
 }

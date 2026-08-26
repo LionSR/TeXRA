@@ -80,16 +80,10 @@ export class ToolUseRoundPrepNode extends BaseNode<
       );
     }
 
-    resetCycleState(shared, [
-      'response',
-      'toolCalls',
-      'text',
-      'roundNormalizedUsage',
-    ]);
-    shared.roundResponseTimeMs = 0;
+    resetCycleState(shared, ['response', 'toolCalls', 'text']);
 
     await saveCycleDebug(shared.messages, 'messages', this.services, {
-      continuationCount: shared.roundIndex,
+      continuationCount: this.services.run.totalRounds,
       baseName: 'tooluse',
     });
 
