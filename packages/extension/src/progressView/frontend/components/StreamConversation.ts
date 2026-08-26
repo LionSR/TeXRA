@@ -6,10 +6,7 @@ import { provide } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared
-import type {
-  InquiryThreadSummary,
-  PermissionPayload,
-} from '@shared/schemas';
+import type { InquiryThreadSummary, PermissionPayload } from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 
 // Local imports - progress view
