@@ -64,8 +64,8 @@ export function createToolUseRoundFlow(): Flow<
       shared.response = response;
     },
     getPostCompactionContext: defaultPostCompactionContext,
-    getDebugFileOptions: (shared) => ({
-      continuationCount: shared.roundIndex,
+    getDebugFileOptions: (_shared, services) => ({
+      continuationCount: services.run.totalRounds,
       baseName: 'tooluse_response',
     }),
   });

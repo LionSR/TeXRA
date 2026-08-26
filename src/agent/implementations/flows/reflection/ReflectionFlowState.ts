@@ -30,7 +30,6 @@ export const ReflectionFlowStateSchema = z.object({
   context: RoundContextSchema.nullable(),
   outputLocation: AgentFileLocationSchema.nullable(),
 
-  conversation: ProviderMessageArraySchema,
   runStateSnapshot: AgentRunStateSnapshotSchema,
 
   roundOutputs: z.array(RoundOutputSchema),
@@ -41,7 +40,7 @@ export const ReflectionFlowStateSchema = z.object({
   /** Distinguishes failure from cancellation during resume. */
   lastError: RetryErrorInfoSchema.optional(),
 
-  /** Provider-message format used by the persisted conversation. */
+  /** Provider-message format used by the persisted `context.messages`. */
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
 
   /** One-shot repair context injected into the next round's user request. */

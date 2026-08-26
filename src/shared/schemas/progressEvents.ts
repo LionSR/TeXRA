@@ -8,7 +8,7 @@ import type {
 import type { z } from 'zod';
 
 import type { AgentCategory } from './agent';
-import type { ExecutionId, StorageKey, StreamTabId } from './identifiers';
+import type { ExecutionId, StreamTabId } from './identifiers';
 import type { FileLocation } from './output';
 import type { RoundStage } from './streamState';
 import type { ExtendedTokenUsageStats } from './usage';
@@ -83,10 +83,11 @@ export interface UpdateCompileFailuresPayload {
   >;
 }
 
-/** Usage is storage-key scoped: tool-use can resume → multiple runs per tab. */
+/** Usage is execution-scoped; a resume accumulates onto the same key. The
+ *  field name is frozen by the public NDJSON vocabulary. */
 export interface UpdateStreamUsagePayload {
   streamId: StreamTabId;
-  storageKey: StorageKey;
+  storageKey: ExecutionId;
   usage: ExtendedTokenUsageStats;
 }
 

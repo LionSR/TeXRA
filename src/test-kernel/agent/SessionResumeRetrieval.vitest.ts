@@ -525,16 +525,12 @@ describe('retrieveSessionResumeData', () => {
     });
   });
 
-  it('retrieves a workflow record with the current conversation field', async () => {
-    const executionId = 'workflow-current-conversation' as ExecutionId;
-    const streamId =
-      'reflection@gpt54#workflow-current-conversation' as StreamTabId;
+  it('retrieves a workflow record in the current shape', async () => {
+    const executionId = 'workflow-current-shape' as ExecutionId;
+    const streamId = 'reflection@gpt54#workflow-current-shape' as StreamTabId;
     await writeFlowRecord(
       executionId,
-      reflectionFlowShared({
-        currentRound: 1,
-        conversation: [{ role: 'user', content: 'Continue.' }],
-      }),
+      reflectionFlowShared({ currentRound: 1 }),
     );
 
     await expect(

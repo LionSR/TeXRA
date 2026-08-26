@@ -7,7 +7,6 @@ import type {
   FinalTool,
   SdkToolCall,
 } from '@agent/types/ModelHandlerContracts';
-import { NormalizedUsageSchema } from '@agent/types/NormalizedUsage';
 
 /**
  * Schema for serializable tool-use round fields. Extends BaseCycleFieldsSchema
@@ -32,23 +31,6 @@ const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
   toolCalls: z.array(z.custom<SdkToolCall>()).optional(),
   /** Text content from response */
   text: z.string().optional(),
-  /**
-   * Current round index (0-based).
-   *
-   * Used for debug file naming and usage tracking. Incremented after each
-   * successful round in ToolUseProcessNode.post().
-   */
-  roundIndex: z.int().nonnegative(),
-  /**
-   * Accumulated response time for current round (milliseconds).
-   * Reset after finalization when continuing to next round.
-   */
-  roundResponseTimeMs: z.number().nonnegative(),
-  /**
-   * Normalized usage for current round.
-   * Reset after finalization when continuing to next round.
-   */
-  roundNormalizedUsage: NormalizedUsageSchema.optional(),
   /** Last tool-result message index that received a blank-turn continuation. */
   blankToolResultContinuationMessageIndex: z.int().nonnegative().optional(),
 });
@@ -59,8 +41,10 @@ type ToolUseRoundFields = z.infer<typeof ToolUseRoundFieldsSchema>;
 /**
  * Shared state for tool-use round flows.
  *
- * Uses flat structure (like ResponseCycleFlow) for consistency.
- * All fields come from ToolUseRoundFieldsSchema.
+ * Flat, and deliberately narrower than the reflection cycle's state: per-round
+ * counters and accumulators are not mirrored here. The round index is
+ * `services.run.totalRounds`, and the response time and usage of the one model
+ * call a round makes are read straight off that call's result.
  *
  * ## Architecture
  * - Mutable state: `shared` (this interface) - flat, no nested wrappers

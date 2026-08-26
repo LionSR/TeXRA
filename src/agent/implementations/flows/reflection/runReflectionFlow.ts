@@ -23,7 +23,6 @@ import {
   type RetryErrorInfo,
   type RoundOutput,
   type RunOutcome,
-  type StorageKey,
   type FileLocation,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -72,7 +71,6 @@ export function computeRoundStageTotal(
 
 export interface RunReflectionFlowInput extends BaseFlowContextInit {
   setting: AgentWorkflowSetting;
-  storageKey: StorageKey;
   parentStage: StageHandle;
 }
 
@@ -245,7 +243,6 @@ export async function runReflectionFlow(
       workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
       context: null,
       outputLocation: null,
-      conversation: [],
       modelHandlerCompatibilityKey: compatibilityKey,
       runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
       roundOutputs: [],

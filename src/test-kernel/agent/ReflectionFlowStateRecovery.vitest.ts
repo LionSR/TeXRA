@@ -27,7 +27,6 @@ import { createRunScope } from '@agent/runtime/RunScope';
 import {
   RUN_OUTCOME,
   type ExecutionId,
-  type StorageKey,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -82,7 +81,6 @@ async function runPersistedReflectionFlow(
         setting: SETTING,
         prompt: PROMPT,
         logger: noopTrace,
-        storageKey: executionId as StorageKey,
         parentStage: noopTrace.openStage('Reflection flow recovery test'),
         userVarChannels: {
           input: Object.freeze({ MODEL: CONFIG.model }),
@@ -129,7 +127,6 @@ describe('runReflectionFlow persisted-state recovery', () => {
     expect(ReflectionFlowStateSchema.parse(stored?.shared)).toMatchObject({
       currentRound: 0,
       totalRounds: 1,
-      conversation: [],
       modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
     });
   });
@@ -206,7 +203,6 @@ describe('runReflectionFlow persisted-state recovery', () => {
       workspaceSnapshot: { todos: { todos: [todo] } },
       context: null,
       outputLocation: null,
-      conversation: [],
       runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
       roundOutputs: [],
       continueRounds: true,

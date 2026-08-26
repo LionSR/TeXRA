@@ -32,7 +32,6 @@ import {
 import {
   ToolError,
   type ExecutionId,
-  type StorageKey,
   type StreamTabId,
   type TokenUsageStats,
   type ToolResult,
@@ -76,7 +75,7 @@ export function publishAgentCliStreamUsage(
   logger.usage(
     {
       streamId: childStreamId,
-      storageKey: executionId as StorageKey,
+      storageKey: executionId,
       usage,
     },
     { recordTranscript: false },

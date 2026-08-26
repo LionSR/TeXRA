@@ -41,8 +41,6 @@ function buildServices(): ToolUseRoundServices {
 function buildShared(): ToolUseRoundShared {
   return {
     messages: [],
-    roundIndex: 0,
-    roundResponseTimeMs: 0,
   } as unknown as ToolUseRoundShared;
 }
 

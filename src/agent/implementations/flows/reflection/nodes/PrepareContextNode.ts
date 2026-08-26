@@ -23,7 +23,7 @@ export class PrepareContextNode extends BaseNode<
   async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
     return {
       currentRound: shared.currentRound,
-      conversation: shared.conversation,
+      conversation: shared.context?.messages ?? [],
       compileFailureContext: shared.compileFailureContext,
     };
   }

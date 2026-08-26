@@ -62,7 +62,7 @@ export async function checkExpectedOutputs(
       } else {
         debugInternal(
           deps.logger,
-          `No expected outputs for round ${currRound} storageKey=${deps.storageKey}`,
+          `No expected outputs for round ${currRound}`,
         );
       }
 

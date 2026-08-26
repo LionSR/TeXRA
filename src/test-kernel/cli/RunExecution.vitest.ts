@@ -7,12 +7,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
 import { AgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
-import type {
-  ExecutionId,
-  StorageKey,
-  StreamTabId,
-  TodoItem,
-} from '@shared/schemas';
+import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import {
@@ -568,7 +563,7 @@ describe('executeCliRequest', () => {
           type: 'usage',
           payload: {
             streamId,
-            storageKey: 'run-1' as StorageKey,
+            storageKey: 'run-1' as ExecutionId,
             usage: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
           },
         },

@@ -11,7 +11,7 @@ import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   AgentCategory,
-  type StorageKey,
+  type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -31,7 +31,7 @@ type MonitorContext = ReturnType<typeof createMonitorWithEvents>;
 function createMonitorWithEvents() {
   const logger = new TraceEmitter();
   const hub = new SessionEventHub();
-  const storageKey = 'usage-last-totals' as StorageKey;
+  const executionId = 'usage-last-totals' as ExecutionId;
   const streamId = 'stream:usage-last-totals' as StreamTabId;
   const recorded = recordSessionEvents(hub, { scope: 'run' });
   const detachTrace = logger.subscribe((event) =>
@@ -40,7 +40,7 @@ function createMonitorWithEvents() {
   const modelCell = testModelCell({ ...testModelInfo, dispose: vi.fn() });
   const monitor = new UsageMonitor(
     modelCell,
-    { logger, storageKey, streamId },
+    { logger, executionId, runStageId: undefined, streamId },
     { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
   );
   return {
