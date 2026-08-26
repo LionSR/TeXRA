@@ -65,9 +65,7 @@ export function computeRoundStageTotal(
   return Math.max(totalRounds, roundIndex + 1);
 }
 
-export interface RunReflectionFlowInput<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
+export interface RunReflectionFlowInput extends BaseFlowContextInit {
   setting: AgentWorkflowSetting;
   storageKey: StorageKey;
   parentStage: StageHandle;
@@ -85,8 +83,8 @@ export interface RunReflectionFlowResult {
   error?: RetryErrorInfo;
 }
 
-export async function runReflectionFlow<C = unknown>(
-  input: RunReflectionFlowInput<C>,
+export async function runReflectionFlow(
+  input: RunReflectionFlowInput,
 ): Promise<RunReflectionFlowResult> {
   const {
     modelCell,
@@ -156,7 +154,7 @@ export async function runReflectionFlow<C = unknown>(
       ),
   };
 
-  const services: ReflectionServices<C> = {
+  const services: ReflectionServices = {
     ...input,
     outputState,
     xmlManager,
@@ -224,11 +222,11 @@ export async function runReflectionFlow<C = unknown>(
   // Hydrate the canonical live collection from the persisted round snapshot.
   outputState.rounds = roundsFromPersisted(shared.roundOutputs);
 
-  const prepContextNode = new PrepareContextNode<C>();
-  const texCountNode = new TeXCountNode<C>();
-  const mediaNode = new MediaExtractionNode<C>();
-  const responseCycleNode = new ResponseCycleNode<C>();
-  const outputNode = new OutputNode<C>();
+  const prepContextNode = new PrepareContextNode();
+  const texCountNode = new TeXCountNode();
+  const mediaNode = new MediaExtractionNode();
+  const responseCycleNode = new ResponseCycleNode();
+  const outputNode = new OutputNode();
 
   prepContextNode.next(texCountNode);
   texCountNode.next(mediaNode);
@@ -237,7 +235,7 @@ export async function runReflectionFlow<C = unknown>(
 
   const pf = new RoundPersistedFlow<
     ReflectionFlowShared,
-    ReflectionServices<C>
+    ReflectionServices
   >(prepContextNode, kv, {
     parentStage,
     sharedSchema: ReflectionFlowStateSchema,

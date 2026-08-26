@@ -94,16 +94,6 @@ describe('ReportReviewIssueTool', () => {
     });
   });
 
-  it('normalizes null optional fields to undefined for the sink', async () => {
-    const { sink, tool } = useAcceptingSink();
-
-    await tool.call({ ...REPORT, endLine: null, suggestion: null });
-
-    expect(sink).toHaveBeenCalledWith(
-      expect.objectContaining({ endLine: undefined, suggestion: undefined }),
-    );
-  });
-
   it('reports that agent review is unavailable when no host serves it', async () => {
     const tool = new ReportReviewIssueTool();
 

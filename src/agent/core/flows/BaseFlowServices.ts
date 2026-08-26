@@ -44,14 +44,14 @@ export function createToolPolicy(policy: ToolPolicy = {}): ToolPolicy {
   });
 }
 
-export interface AgentCore<C = unknown> {
+export interface AgentCore {
   /** Run identity and owning session; the same frozen object the ambient `RunContext` carries. */
   readonly runScope: RunScope;
   /**
    * The run's live model handler and model id. Shared by reference with the
    * launch context, so a mid-run switch is visible here without a mirror.
    */
-  readonly modelCell: ModelCell<C>;
+  readonly modelCell: ModelCell;
   /** Immutable per-run tool policy; read by cycle flows instead of the ambient RunContext. */
   readonly toolPolicy: ToolPolicy;
   config: AgentConfig;
@@ -63,6 +63,6 @@ export interface AgentCore<C = unknown> {
   initialUserMessageForTranscript?: string;
 }
 
-export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
+export interface BaseFlowContextInit extends AgentCore {
   onRoundFinalized: RoundFinalizedCallback;
 }

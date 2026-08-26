@@ -28,9 +28,9 @@ type ToolUseCycleOutcome =
   | { outcome: 'cancelled'; response?: string }
   | { outcome: 'failed'; lastError: RetryErrorInfo; response?: string };
 
-export class ToolUseCycleNode<C> extends BaseNode<
+export class ToolUseCycleNode extends BaseNode<
   ToolUseRunShared,
-  ToolUseServices<C>
+  ToolUseServices
 > {
   async prep(shared: ToolUseRunShared): Promise<CyclePrepResult> {
     if (shared.stateSlices === null) {
@@ -96,7 +96,7 @@ export class ToolUseCycleNode<C> extends BaseNode<
       finalToolAttempted: finalTool !== undefined,
     };
 
-    const flow = createToolUseRoundFlow<C>();
+    const flow = createToolUseRoundFlow();
     // The spread copies the model cell by reference, so the round's nodes read
     // the handler and provider client the run is live on rather than a copy
     // taken when the round started.

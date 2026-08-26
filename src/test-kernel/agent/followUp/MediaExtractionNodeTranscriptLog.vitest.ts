@@ -12,15 +12,15 @@ import { reflectionFlowShared } from '../progressTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
 
 function buildServices(
-  overrides: Partial<ReflectionServices<unknown>> = {},
-): ReflectionServices<unknown> {
+  overrides: Partial<ReflectionServices> = {},
+): ReflectionServices {
   return {
     logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     modelCell: testModelCell({
       addMediaToUserMessage: vi.fn(async () => []),
     }) as never,
     ...overrides,
-  } as ReflectionServices<unknown>;
+  } as ReflectionServices;
 }
 
 const MEDIA_FILES: FileLocation[] = [

@@ -34,9 +34,9 @@ type CycleOutcome =
   | { outcome: 'cancelled' }
   | { outcome: 'failed'; lastError: RetryErrorInfo };
 
-export class ResponseCycleNode<C = unknown> extends BaseNode<
+export class ResponseCycleNode extends BaseNode<
   ReflectionFlowShared,
-  ReflectionServices<C>
+  ReflectionServices
 > {
   async prep(shared: ReflectionFlowShared): Promise<CyclePrepInput> {
     const { context } = shared;
@@ -90,7 +90,7 @@ export class ResponseCycleNode<C = unknown> extends BaseNode<
     const modelHandler = this.services.modelCell.handler;
 
     try {
-      const flow = createResponseCycleFlow<C>();
+      const flow = createResponseCycleFlow();
       // The spread copies the model cell by reference, so the cycle's nodes
       // read the handler and provider client the run is live on rather than a
       // copy taken when the cycle started.

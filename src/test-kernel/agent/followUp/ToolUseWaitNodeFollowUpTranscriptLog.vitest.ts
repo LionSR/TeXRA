@@ -12,8 +12,8 @@ import {
 import { testModelCell } from '../modelCellTestUtils';
 
 function buildServices(
-  overrides: Partial<ToolUseServices<unknown>> = {},
-): ToolUseServices<unknown> {
+  overrides: Partial<ToolUseServices> = {},
+): ToolUseServices {
   return {
     runScope: testRunScope('test-stream'),
     logger: Object.assign(new TraceEmitter(), {
@@ -30,7 +30,7 @@ function buildServices(
     fileService: { createLocation: vi.fn() } as never,
     onRoundFinalized: () => {},
     ...overrides,
-  } as ToolUseServices<unknown>;
+  } as ToolUseServices;
 }
 
 // WaitPrepResult isn't exported by ToolUseWaitNode.ts; this structurally
@@ -47,7 +47,7 @@ function userFollowUp(): WaitExecResult {
   };
 }
 
-function failAppend(services: ToolUseServices<unknown>, message: string): void {
+function failAppend(services: ToolUseServices, message: string): void {
   (
     services.modelCell.handler.createUserFollowUpMessages as ReturnType<
       typeof vi.fn
@@ -56,7 +56,7 @@ function failAppend(services: ToolUseServices<unknown>, message: string): void {
 }
 
 function runPost(
-  services: ToolUseServices<unknown>,
+  services: ToolUseServices,
   execRes: WaitExecResult,
 ): Promise<unknown> {
   const node = new ToolUseWaitNode().setServices(services);
@@ -67,7 +67,7 @@ function runPost(
 }
 
 async function runPostWithFailedAppend(
-  services: ToolUseServices<unknown>,
+  services: ToolUseServices,
   message: string,
   execRes: WaitExecResult = userFollowUp(),
 ): Promise<void> {

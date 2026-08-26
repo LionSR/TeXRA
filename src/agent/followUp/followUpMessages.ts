@@ -21,10 +21,10 @@ import type {
 import type { TaskRunFileService } from '@utils/files/taskRunStorage';
 import type { FollowUpQueueBatchItem } from './FollowUpQueue';
 
-interface FollowUpMessageServices<C> {
+interface FollowUpMessageServices {
   readonly modelCell: {
     readonly handler: Pick<
-      IModelHandler<ProviderMessage, unknown, SdkToolCall, C>,
+      IModelHandler<ProviderMessage, unknown, SdkToolCall>,
       'addMediaToUserMessage' | 'capabilities' | 'createUserFollowUpMessages'
     >;
   };
@@ -80,10 +80,10 @@ interface AppendFollowUpResult {
   readonly attachmentKinds: MediaAttachmentKind[];
 }
 
-export async function appendFollowUpAsUserMessage<C>(
+export async function appendFollowUpAsUserMessage(
   messages: ProviderMessage[],
   followUp: FollowUpQueueBatchItem,
-  services: FollowUpMessageServices<C>,
+  services: FollowUpMessageServices,
 ): Promise<AppendFollowUpResult> {
   const nextMessages =
     await services.modelCell.handler.createUserFollowUpMessages(
@@ -115,10 +115,8 @@ export async function appendFollowUpAsUserMessage<C>(
   return { messages: nextMessages, attachmentKinds };
 }
 
-interface FollowUpBatchServices<C> extends Omit<
-  FollowUpMessageServices<C>,
-  'logger'
-> {
+interface FollowUpBatchServices
+  extends Omit<FollowUpMessageServices, 'logger'> {
   readonly logger: AgentTrace;
   /** Callback when a queued follow-up batch is consumed (clears UI display). */
   readonly onFollowUpConsumed?: () => void;
@@ -140,11 +138,11 @@ interface FollowUpBatchServices<C> extends Omit<
  * the resume wrapper restores it for replay instead of treating the lost input
  * as consumed.
  */
-export async function applyFollowUpBatch<C>(
+export async function applyFollowUpBatch(
   target: { messages: ProviderMessage[] },
   followUps: readonly FollowUpQueueBatchItem[],
   synthetic: boolean | undefined,
-  services: FollowUpBatchServices<C>,
+  services: FollowUpBatchServices,
 ): Promise<void> {
   for (const followUp of followUps) {
     let result: AppendFollowUpResult | undefined;

@@ -109,17 +109,12 @@ export class FileInteractionState {
     return this.readFiles.has(path);
   }
 
-  recordEdits(edits: EditRecord[] | undefined): {
-    paths: string[];
-    lineChanges?: LineChanges;
-  } {
+  recordEdits(edits: EditRecord[] | undefined): string[] {
     if (!Array.isArray(edits)) {
-      return { paths: [] };
+      return [];
     }
 
     const touchedPaths = new Set<string>();
-    let totalAdded = 0;
-    let totalRemoved = 0;
 
     for (const entry of edits) {
       const path = entry?.path;
@@ -136,18 +131,9 @@ export class FileInteractionState {
         this.edits.set(path, { added, removed });
       }
       touchedPaths.add(path);
-
-      totalAdded += added;
-      totalRemoved += removed;
     }
 
-    return {
-      paths: [...touchedPaths],
-      lineChanges:
-        totalAdded || totalRemoved
-          ? { added: totalAdded, removed: totalRemoved }
-          : undefined,
-    };
+    return [...touchedPaths];
   }
 }
 
