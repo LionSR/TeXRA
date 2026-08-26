@@ -6,7 +6,6 @@ import {
   AgentRosterForm,
   agentRosterSelectWindow,
   buildChatDefaultAgentItems,
-  selectableAgents,
   selectedAgentKeys,
   setChatDefaultAgent,
 } from '@cli/chat/tui/forms/AgentRosterForm';
@@ -83,17 +82,25 @@ describe('AgentRosterForm', () => {
       name: 'changeReviewer',
       hidden: true,
     };
-    const selectable = selectableAgents([...agents, hidden]);
-
-    expect(selectable).toEqual(agents);
     expect(
       buildChatDefaultAgentItems(
         [...agents, hidden],
         ['builtInToolUse:assistant', 'builtInToolUse:changeReviewer'],
       ),
-    ).toHaveLength(2);
+    ).toEqual([
+      {
+        value: '',
+        label: 'Automatic',
+        description: 'Choose from the effective workspace roster',
+      },
+      {
+        value: 'builtInToolUse:assistant',
+        label: 'assistant',
+        description: 'General assistant',
+      },
+    ]);
     expect(
-      selectedAgentKeys(['builtInToolUse:changeReviewer'], selectable),
+      selectedAgentKeys(['builtInToolUse:changeReviewer'], agents),
     ).toEqual(['builtInToolUse:changeReviewer']);
   });
 

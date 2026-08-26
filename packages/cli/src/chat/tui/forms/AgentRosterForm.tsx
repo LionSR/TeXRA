@@ -61,7 +61,7 @@ function selectionLabel(record: CliAgentRosterRecord): string {
   return selection.kind;
 }
 
-export function selectableAgents(
+function selectableAgents(
   agents: readonly AgentEntry[],
 ): readonly AgentEntry[] {
   return agents.filter((agent) => !agent.hidden);
