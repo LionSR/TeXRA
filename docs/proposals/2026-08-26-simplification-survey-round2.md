@@ -24,18 +24,20 @@ Verifiers found factual errors in the evidence of most surviving candidates. Tho
 
 Nine lanes, partitioned so that each owns a disjoint file set.
 
-| Lane               | Scope                                         | Items  | Net LoC   | Net elements |
-| ------------------ | --------------------------------------------- | ------ | --------- | ------------ |
-| `M1-extension`     | Extension host and the three webview trees    | 6      | -418      | -23          |
-| `M2-agent`         | Agent flows, prompts, follow-up, review       | 5      | -166      | -14          |
-| `M3-handlers-auth` | Model handlers and auth/OAuth                 | 7      | -167      | -23          |
-| `M4-tools`         | Tools layer                                   | 3      | -138      | -11          |
-| `M5-shared`        | Shared, controllers, storage, utils, platform | 6      | -234      | -15          |
-| `M6-desktop`       | Desktop host                                  | 2      | -246      | -5           |
-| `M7-cli`           | CLI                                           | 3      | -66       | -6           |
-| `M8-scripts`       | Scripts, CI, build verifiers                  | 4      | -171      | -17          |
-| `M9-progress`      | Progress-view and session-fact plumbing       | 4      | -657      | -28          |
-| **Total**          |                                               | **40** | **-2263** | **-142**     |
+| Lane                                                                  | Scope                                         | Items  | Net LoC                    | Net elements |
+| --------------------------------------------------------------------- | --------------------------------------------- | ------ | -------------------------- | ------------ |
+| [`M1-extension`](https://github.com/texra-ai/coauthor/pull/11433)     | Extension host and the three webview trees    | 6      | -418 (measured -374)       | -23          |
+| [`M2-agent`](https://github.com/texra-ai/coauthor/pull/11434)         | Agent flows, prompts, follow-up, review       | 5      | -166 (measured -172)       | -14          |
+| [`M3-handlers-auth`](https://github.com/texra-ai/coauthor/pull/11435) | Model handlers and auth/OAuth                 | 7      | -167 (measured -168)       | -23          |
+| [`M4-tools`](https://github.com/texra-ai/coauthor/pull/11436)         | Tools layer                                   | 3      | -138 (measured -134)       | -11          |
+| [`M5-shared`](https://github.com/texra-ai/coauthor/pull/11437)        | Shared, controllers, storage, utils, platform | 6      | -234 (measured -251)       | -15          |
+| [`M6-desktop`](https://github.com/texra-ai/coauthor/pull/11438)       | Desktop host                                  | 2      | -246 (measured -246)       | -5           |
+| [`M7-cli`](https://github.com/texra-ai/coauthor/pull/11439)           | CLI                                           | 3      | -66 (measured -43)         | -6           |
+| [`M8-scripts`](https://github.com/texra-ai/coauthor/pull/11440)       | Scripts, CI, build verifiers                  | 4      | -171 (measured -176)       | -17          |
+| [`M9-progress`](https://github.com/texra-ai/coauthor/pull/11441)      | Progress-view and session-fact plumbing       | 4      | -657 (measured -399)       | -28          |
+| **Total**                                                             |                                               | **40** | **-2263 (measured -1963)** | **-142**     |
+
+Estimates are the verifiers' figures; measured numbers are `git diff --shortstat origin/main` on each merged lane branch. The gap is almost entirely `M9-progress`, where the desktop host-interactions suite was kept rather than deleted: the verifier's own correction found five behaviours in it with no counterpart in the extension suite, including the repo's only dispose-cancellation test.
 
 ### Shared-file contention
 
