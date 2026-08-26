@@ -125,7 +125,6 @@
     "delay": "^7.0.0",
     "diff": "^9.0.0",
     "diff-match-patch": "^1.0.5",
-    "dotenv": "^17.4.2",
     "escape-string-regexp": "^5.0.0",
     "execa": "^10.0.1",
     "fast-xml-parser": "^5.11.0",
