@@ -158,9 +158,6 @@ describe('desktop composition root and launch environment', () => {
     expect(indexSource).toContain(
       'installDesktopNavigationPolicy(window.webContents',
     );
-    expect(indexSource).toMatch(
-      /if \(isFatalDesktopShutdownRequested\(\)\) \{\s*pendingWorkspaceRelaunch = undefined;\s*event\.preventDefault\(\);/u,
-    );
     expect(bootstrapSource).toMatch(
       /await import\('\.\/index\.js'\);\s*removeFatalStartupHandlers\(\);\s*installPostStartupRejectionHandler\(\);/u,
     );

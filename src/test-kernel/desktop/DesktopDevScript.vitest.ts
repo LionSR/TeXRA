@@ -193,6 +193,10 @@ describe('desktop development launcher', () => {
       '/desktop',
       '--texra-workspace-path=/tmp/new-paper',
     ];
+    // Unsafe messages must never arm a replacement. A valid message still
+    // wins if it arrives before the child exits.
+    children[4]?.emit('message', ['--workspace', 1]);
+    children[4]?.emit('message', []);
     children[4]?.emit('message', replacementArgs);
     children[4]?.emit('exit', 0, null);
     await vi.waitFor(() => expect(calls).toHaveLength(6));
@@ -203,5 +207,11 @@ describe('desktop development launcher', () => {
       TEXRA_DESKTOP_DEV_SUPERVISED: '1',
     });
     expect(children[3]?.killed).toBe(false);
+
+    // A replacement child with no IPC handoff exits the supervisor rather
+    // than recursively respawning another Electron process.
+    children[5]?.emit('exit', 0, null);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toHaveLength(6);
   });
 });

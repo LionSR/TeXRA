@@ -45,9 +45,24 @@ describe('desktop window lifecycle', () => {
     webContents.emit('will-prevent-unload', discard);
     expect(discard.preventDefault).toHaveBeenCalledOnce();
     expect(clearPendingWorkspaceRelaunch).toHaveBeenCalledOnce();
+
+    const fatal = { preventDefault: vi.fn() };
+    const fatalWebContents = new FakeWebContents();
+    const clearFatalRelaunch = vi.fn();
+    installUnsavedChangesHandler({
+      webContents: fatalWebContents,
+      showDiscardDialog,
+      isFatalShutdownRequested: () => true,
+      clearPendingWorkspaceRelaunch: clearFatalRelaunch,
+      clearContinueQuitAfterWindowClose,
+    });
+    fatalWebContents.emit('will-prevent-unload', fatal);
+    expect(fatal.preventDefault).toHaveBeenCalledOnce();
+    expect(clearFatalRelaunch).toHaveBeenCalledOnce();
+    expect(showDiscardDialog).toHaveBeenCalledTimes(2);
   });
 
-  it('closes a live window before running shutdown on the subsequent quit', async () => {
+  it('continues a closed-window quit through one shutdown sequence', async () => {
     let listener: ((event: { preventDefault(): void }) => void) | undefined;
     const app = {
       on: vi.fn((_event, handler) => {
@@ -60,8 +75,14 @@ describe('desktop window lifecycle', () => {
       close,
       isDestroyed: () => false,
     };
-    const runShutdown = vi.fn(async () => {});
-    const continueAfterWindowClose = vi.fn();
+    const sequence: string[] = [];
+    const runShutdown = vi.fn(async () => {
+      sequence.push('shutdown');
+    });
+    let continueQuit: (() => void) | undefined;
+    const continueAfterWindowClose = vi.fn((continuation: () => void) => {
+      continueQuit = continuation;
+    });
     installBeforeQuitHandler({
       app,
       getMainWindow: () => window,
@@ -72,11 +93,20 @@ describe('desktop window lifecycle', () => {
     listener?.(first);
     expect(first.preventDefault).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
+    expect(continueAfterWindowClose).toHaveBeenCalledOnce();
     expect(runShutdown).not.toHaveBeenCalled();
+
     window = null;
+    continueQuit?.();
     const second = { preventDefault: vi.fn() };
     listener?.(second);
     await vi.waitFor(() => expect(runShutdown).toHaveBeenCalledOnce());
     expect(second.preventDefault).toHaveBeenCalledOnce();
+    expect(app.quit).toHaveBeenCalledTimes(2);
+    expect(sequence).toEqual(['shutdown']);
+
+    listener?.({ preventDefault: vi.fn() });
+    expect(runShutdown).toHaveBeenCalledOnce();
+    expect(app.quit).toHaveBeenCalledTimes(2);
   });
 });
