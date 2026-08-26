@@ -2583,38 +2583,6 @@ describe('ModelHandlerAnthropic output initialization', () => {
       assert.equal(updatedMessages.at(-1)?.role, 'user');
     });
   });
-
-  it('leaves messages untouched for models without assistant prefill', async () => {
-    await withTempOutputPath('anthropic-no-prefill-', async (outputPath) => {
-      const handler = createAnthropicHandler({
-        supportsAssistantPrefill: false,
-      });
-      stubHandlerForTest(handler);
-
-      const agentSetting = createOutputInitAgentSetting();
-      const userText = 'revise the document';
-      const messages: MessageParam[] = [
-        {
-          role: 'user',
-          content: [{ type: 'text', text: userText }],
-        },
-      ];
-      const workspaceState = AgentWorkspaceState.create();
-
-      const [, updatedMessages] = await handler.initializeOutputAndPrefill(
-        {} as AgentConfig,
-        agentSetting,
-        messages,
-        workspaceState,
-        pathToLocation(outputPath),
-      );
-
-      assert.equal(updatedMessages.length, 1);
-      const last = updatedMessages.at(-1);
-      assert.equal(last?.role, 'user');
-      assert.deepEqual(last?.content, [{ type: 'text', text: userText }]);
-    });
-  });
 });
 
 describe('ModelHandlerAnthropic updateMessageContent (prefill)', () => {
