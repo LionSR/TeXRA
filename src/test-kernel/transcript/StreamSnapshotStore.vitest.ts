@@ -21,6 +21,7 @@ import type {
   ExecutionId,
   OutputFileInfo,
   Plan,
+  ReadonlyRoundIndexed,
   RoundIndexed,
   StreamTabId,
   TodoItem,
@@ -498,25 +499,6 @@ describe('StreamSnapshotStore', () => {
     );
   });
 
-  it('seeds existing disk data before an unloaded usage mutation, so it is not erased', async () => {
-    // A prior session persisted usage for run-1.
-    await writeStreamFile(STREAM, 'usageStats.json', {
-      'run-1': usage(100, 20, 0.5),
-    });
-
-    // A fresh store (NOT load()ed) handles a delta for a NEW run.
-    const store = new StreamSnapshotStore();
-    void snapshotFacts(store).addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
-    await store.flush();
-
-    // run-1 (prior) survives — the unseeded write did not clobber it.
-    const raw = await readStreamFile(STREAM, 'usageStats.json');
-    expect(raw).toMatchObject({
-      [RUN]: usage(100, 20, 0.5),
-      [RUN_2]: usage(50, 10, 0.25),
-    });
-  });
-
   it('merges a mutation with on-disk sidecars for a stream outside the load() id set instead of clobbering them (#9956)', async () => {
     // A prior session persisted usage and a plan for STREAM.
     const previous = new StreamSnapshotStore();
@@ -657,7 +639,7 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
-  it('returns pre-seed usage only after a partial preload baseline is merged', async () => {
+  it('merges a partial-preload disk baseline into pre-seed usage for same and different runs', async () => {
     await writeStreamFile(OTHER_STREAM, 'usageStats.json', {
       [RUN]: usage(100, 20, 0.5),
     });
@@ -665,87 +647,95 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
 
+    // Both deltas are eagerly readable while the seed's disk read is still
+    // in flight — before the baseline has merged.
+    snapshotFacts(store).addUsage(OTHER_STREAM, RUN, usage(50, 10, 0.25));
     snapshotFacts(store).addUsage(OTHER_STREAM, RUN_2, usage(50, 10, 0.25));
+    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject(
+      usage(50, 10, 0.25),
+    );
     expect(store.getRunUsage(OTHER_STREAM).get(RUN_2)).toMatchObject(
       usage(50, 10, 0.25),
     );
     await store.flush();
 
+    // After the seed merges the disk baseline: the same-run delta sums with
+    // it, the different-run delta sits beside it.
+    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject(
+      usage(150, 30, 0.75),
+    );
     const raw = await readStreamFile(OTHER_STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
-      [RUN]: usage(100, 20, 0.5),
+      [RUN]: usage(150, 30, 0.75),
       [RUN_2]: usage(50, 10, 0.25),
     });
   });
 
-  it('includes the disk baseline in a pre-seed usage result for the same run', async () => {
-    await writeStreamFile(OTHER_STREAM, 'usageStats.json', {
-      [RUN]: usage(100, 20, 0.5),
-    });
+  // All three round-keyed accumulators overlay through the shared
+  // mergeRoundPatch path, so one scenario pins each sidecar kind: a stream
+  // outside the preloaded set is still unseeded when the mutation lands, and
+  // the seed's disk read races the caller's read of its own write.
+  it.each<{
+    kind: string;
+    file: string;
+    prior: unknown[];
+    next: unknown[];
+    mutate: (store: StreamSnapshotStore) => void;
+    read: (store: StreamSnapshotStore) => ReadonlyRoundIndexed<unknown>;
+  }>([
+    {
+      kind: 'output files',
+      file: 'outputFiles.json',
+      prior: [outputFile('prior.tex', 0)],
+      next: [outputFile('next.tex', 1)],
+      mutate: (store) =>
+        snapshotFacts(store).addOutputFiles(OTHER_STREAM, {
+          1: [outputFile('next.tex', 1)],
+        }),
+      read: (store) => store.getOutputFiles(OTHER_STREAM),
+    },
+    {
+      kind: 'missing outputs',
+      file: 'missingOutputs.json',
+      prior: ['prior.tex'],
+      next: ['next.tex'],
+      mutate: (store) =>
+        snapshotFacts(store).updateMissingOutputs(OTHER_STREAM, {
+          1: ['next.tex'],
+        }),
+      read: (store) => store.getMissingOutputs(OTHER_STREAM),
+    },
+    {
+      kind: 'compile failures',
+      file: 'compileFailures.json',
+      prior: [compileFailure('prior.tex', 0)],
+      next: [compileFailure('next.tex', 1)],
+      mutate: (store) =>
+        snapshotFacts(store).updateCompileFailures(OTHER_STREAM, {
+          1: [compileFailure('next.tex', 1)],
+        }),
+      read: (store) => store.getCompileFailures(OTHER_STREAM),
+    },
+  ])(
+    'returns $kind immediately for streams outside a partial preload without erasing disk state',
+    async ({ file, prior, next, mutate, read }) => {
+      await writeStreamFile(OTHER_STREAM, file, { '0': prior });
 
-    const store = new StreamSnapshotStore();
-    await store.preload([STREAM]);
+      const store = new StreamSnapshotStore();
+      await store.preload([STREAM]);
 
-    snapshotFacts(store).addUsage(OTHER_STREAM, RUN, usage(50, 10, 0.25));
-    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject(
-      usage(50, 10, 0.25),
-    );
-    await store.flush();
+      mutate(store);
+      // The overlay applies eagerly, so this synchronous read-back sees the
+      // mutation while the seed is still in flight.
+      expect(read(store)[1]).toEqual(next);
+      await store.flush();
 
-    // After the seed merges the disk baseline, the typed view shows the sum.
-    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject(
-      usage(150, 30, 0.75),
-    );
-
-    const raw = await readStreamFile(OTHER_STREAM, 'usageStats.json');
-    expect(raw).toMatchObject({ [RUN]: usage(150, 30, 0.75) });
-  });
-
-  it('returns output files immediately for streams outside a partial preload without erasing disk outputs', async () => {
-    const prior = outputFile('prior.tex', 0);
-    const next = outputFile('next.tex', 1);
-    await writeStreamFile(OTHER_STREAM, 'outputFiles.json', { '0': [prior] });
-
-    const store = new StreamSnapshotStore();
-    await store.preload([STREAM]);
-
-    snapshotFacts(store).addOutputFiles(OTHER_STREAM, { 1: [next] });
-    expect(store.getOutputFiles(OTHER_STREAM)[1]).toEqual([next]);
-    await store.flush();
-
-    const raw = await readStreamFile(OTHER_STREAM, 'outputFiles.json');
-    expect(raw).toMatchObject({
-      '0': [prior],
-      '1': [next],
-    });
-  });
-
-  it('returns missing outputs immediately for streams outside a partial preload without erasing disk markers', async () => {
-    // Same race as the output-files case above, replayed for
-    // updateMissingOutputs: a stream outside the preloaded set is still
-    // unseeded when the mutation lands, so the seed's disk read is racing
-    // the caller's read of its own write.
-    await writeStreamFile(OTHER_STREAM, 'missingOutputs.json', {
-      '0': ['prior.tex'],
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.preload([STREAM]);
-
-    snapshotFacts(store).updateMissingOutputs(OTHER_STREAM, {
-      1: ['next.tex'],
-    });
-    // The overlay applies eagerly, so this synchronous read-back sees the
-    // mutation while the seed is still in flight.
-    expect(store.getMissingOutputs(OTHER_STREAM)[1]).toEqual(['next.tex']);
-    await store.flush();
-
-    const raw = await readStreamFile(OTHER_STREAM, 'missingOutputs.json');
-    expect(raw).toMatchObject({
-      '0': ['prior.tex'],
-      '1': ['next.tex'],
-    });
-  });
+      expect(await readStreamFile(OTHER_STREAM, file)).toMatchObject({
+        '0': prior,
+        '1': next,
+      });
+    },
+  );
 
   it('rejects malformed missing-output patches before mutating memory or persisted state', async () => {
     const store = new StreamSnapshotStore();
@@ -777,28 +767,6 @@ describe('StreamSnapshotStore', () => {
     expect(await readStreamFile(STREAM, 'missingOutputs.json')).toEqual({
       '0': ['prior.tex'],
       '1': ['next.tex'],
-    });
-  });
-
-  it('returns compile failures immediately for streams outside a partial preload without erasing disk markers', async () => {
-    const prior = compileFailure('prior.tex', 0);
-    const next = compileFailure('next.tex', 1);
-    await writeStreamFile(OTHER_STREAM, 'compileFailures.json', {
-      '0': [prior],
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.preload([STREAM]);
-
-    snapshotFacts(store).updateCompileFailures(OTHER_STREAM, { 1: [next] });
-    // Eagerly applied for the same reason as the missing-outputs case above.
-    expect(store.getCompileFailures(OTHER_STREAM)[1]).toEqual([next]);
-    await store.flush();
-
-    const raw = await readStreamFile(OTHER_STREAM, 'compileFailures.json');
-    expect(raw).toMatchObject({
-      '0': [prior],
-      '1': [next],
     });
   });
 
