@@ -25,6 +25,7 @@ import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflecti
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import {
+  MESSAGE_TYPES,
   RUN_OUTCOME,
   type ExecutionId,
   type StreamTabId,
@@ -32,6 +33,7 @@ import {
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { testModelCell } from './modelCellTestUtils';
 import { reflectionFlowShared } from './progressTestUtils';
 
@@ -61,6 +63,7 @@ function createModelCell(): RunReflectionFlowInput['modelCell'] {
 async function runPersistedReflectionFlow(
   executionId: ExecutionId,
   streamId: StreamTabId,
+  logger: RunReflectionFlowInput['logger'] = noopTrace,
 ): Promise<Awaited<ReturnType<typeof runReflectionFlow>>> {
   const session = createTestSession();
   const runScope = createRunScope({
@@ -80,8 +83,8 @@ async function runPersistedReflectionFlow(
         runScope,
         setting: SETTING,
         prompt: PROMPT,
-        logger: noopTrace,
-        parentStage: noopTrace.openStage('Reflection flow recovery test'),
+        logger,
+        parentStage: logger.openStage('Reflection flow recovery test'),
         userVarChannels: {
           input: Object.freeze({ MODEL: CONFIG.model }),
           transient: {},
@@ -143,6 +146,33 @@ describe('runReflectionFlow persisted-state recovery', () => {
       cause: readFailure,
     });
     expect(deleteSpy).not.toHaveBeenCalled();
+  });
+
+  it('reports workspace preparation failure even when validation prevents output extraction', async () => {
+    const { key, store } = recoveryCase('preparation-failure');
+    await store.write(key, flowRecord({ currentRound: 'zero' }));
+    const preparationFailure = new Error('workspace unavailable');
+    vi.spyOn(
+      TaskRunFileService.prototype,
+      'prepareRunWorkspace',
+    ).mockRejectedValueOnce(preparationFailure);
+    const logger = { ...noopTrace, warn: vi.fn() };
+
+    await expect(
+      runPersistedReflectionFlow(
+        'reflection-flow-preparation-failure' as ExecutionId,
+        'workflow@gpt54#reflection-flow-preparation-failure' as StreamTabId,
+        logger,
+      ),
+    ).rejects.toMatchObject({
+      name: PersistedFlowStateError.name,
+      reason: 'invalid-shared',
+    });
+
+    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('workspace unavailable'),
+      { data: preparationFailure, messageType: MESSAGE_TYPES.INTERNAL },
+    );
   });
 
   it.each([
