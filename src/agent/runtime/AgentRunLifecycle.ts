@@ -21,9 +21,9 @@ import {
   attachProviderError,
 } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
+import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
 import { platform } from '@platform/platform';
 import type {
-  ExecutionId,
   RetryErrorInfo,
   RunOutcome,
   StreamTabId,
@@ -79,15 +79,6 @@ export interface RunFlowLifecycleOptions {
    * via `executions`). Throwing here must not abort the run, so it is guarded.
    */
   onRun?: (handle: AgentRunHandle) => void | Promise<void>;
-  /**
-   * Run-end side effect supplied by the composition layer. The lifecycle owns
-   * *when* it fires (terminal completion/failure, and the parked-handle
-   * teardown for a later kill) and the guard rails (skipped for WAITING
-   * suspensions, logged rather than rethrown), but not *what* it does.
-   * Kept injected so this module does not statically reach tool-domain
-   * services such as the Lean language adapter.
-   */
-  onRunEnd?: (executionId: ExecutionId) => void | Promise<void>;
 }
 
 type FlowRecordDisposition = FinalizeExecutionInput['flowRecord'];
@@ -652,14 +643,13 @@ export async function runFlowWithLifecycle(
     throw finalizedFailure;
   };
   /**
-   * Invoke the composition-supplied run-end hook when the run genuinely ends.
-   * The lifecycle owns the guard rails: the WAITING branch invokes it only
-   * from the parked-handle teardown if a later kill actually ends the run.
+   * Run the run-end side effects when the run genuinely ends. The WAITING
+   * branch invokes this only from the parked-handle teardown, if a later kill
+   * actually ends the run.
    */
   const runOnRunEnd = async (): Promise<void> => {
-    if (!options?.onRunEnd) return;
     try {
-      await options.onRunEnd(executionId);
+      await stopLeanServersForEndedRun(executionId);
     } catch (runEndError) {
       logger.warn('Failed to run the run-end hook', {
         data: { agentIdentifier, streamId, error: runEndError },
