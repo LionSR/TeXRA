@@ -388,8 +388,12 @@ describe('NativeSubagentStrategy', () => {
     expect(interrupt).not.toHaveBeenCalled();
   });
 
-  it('binds resumed-turn cancellation to the replacement run handle', async () => {
-    const params = baseParams();
+  it('binds resumed-turn cancellation and policy options to the replacement run', async () => {
+    const params = {
+      ...baseParams(),
+      approvalPromptsUnavailable: true,
+      runtimeUnavailableTools: ['bash'],
+    };
     const childStreamId = CHILD_STREAM_ID;
     const initialHandle = {
       childStreamId,
@@ -430,6 +434,13 @@ describe('NativeSubagentStrategy', () => {
 
     const resumed = strategy.runTurn!([], fakePorts(), turn);
     await ready;
+    expect(mocks.resumeToolUseTurn).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        approvalPromptsUnavailable: true,
+        runtimeUnavailableTools: ['bash'],
+      }),
+    );
     turn.abort();
     await resumed;
 
