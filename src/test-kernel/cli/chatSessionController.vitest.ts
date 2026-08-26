@@ -151,7 +151,6 @@ import {
 import {
   chatTuiCanInterruptActiveRun,
   chatTuiCanStopActiveRun,
-  chatTuiCanStartRootRun,
   chatTuiIsResumableIdleOnExit,
   chatTuiSigintAction,
   TuiSession,
@@ -515,34 +514,6 @@ describe('CLI terminal outcome resolution', () => {
         cause: expect.any(Error),
       }),
     );
-  });
-});
-
-describe('chatTuiCanStartRootRun', () => {
-  it('allows a new root run when no run has ever been started', () => {
-    expect(chatTuiCanStartRootRun(makeSession())).toBe(true);
-  });
-
-  it('allows a new root run after a prior run has completed', () => {
-    expect(
-      chatTuiCanStartRootRun(
-        makeSession({
-          runPromise: Promise.resolve(),
-          runCompleted: true,
-        }),
-      ),
-    ).toBe(true);
-  });
-
-  it('disallows a new root run while a run is pending', () => {
-    expect(
-      chatTuiCanStartRootRun(
-        makeSession({
-          runPromise: new Promise(() => {}), // never settles
-          runCompleted: false,
-        }),
-      ),
-    ).toBe(false);
   });
 });
 
