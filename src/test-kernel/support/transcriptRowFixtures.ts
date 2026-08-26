@@ -18,7 +18,6 @@ import {
   type StreamLogEntry,
   type TaskGroup,
 } from '@shared/schemas';
-import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import {
   projectTranscriptRow,
   toolRowModel,
@@ -27,6 +26,7 @@ import {
   type TranscriptRow,
   type TranscriptRowOf,
 } from '@shared/transcript';
+import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/streams/compactionActivityProjection';
 
