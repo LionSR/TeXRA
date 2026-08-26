@@ -214,6 +214,51 @@ function mergeRoundPatch<T>(
   return merged;
 }
 
+/** Element type per round-keyed accumulator field; keys define {@link RoundKeyedField}. */
+interface RoundFieldElement {
+  outputFiles: OutputFileInfo;
+  missingOutputs: string;
+  compileFailures: CompileFailure;
+}
+type RoundKeyedField = keyof RoundFieldElement;
+
+/**
+ * Wire→domain normalizer per round-keyed field, applied to each round's raw
+ * value by {@link StreamSnapshotStore.applyRoundFieldFact}. Returning `null`
+ * deletes the round's entry; `missingOutputs` deliberately keeps `[]` so an
+ * empty list overwrites the round (clearing its missing set) rather than
+ * deleting it.
+ */
+const ROUND_FIELD_NORMALIZERS: {
+  [K in RoundKeyedField]: (raw: unknown) => RoundFieldElement[K][] | null;
+} = {
+  outputFiles: (raw) => {
+    const normalized = OutputFileInfoListSchema.parse(
+      Array.isArray(raw) ? raw : [],
+    );
+    return normalized.length === 0 ? null : normalized;
+  },
+  missingOutputs: (raw) =>
+    z.array(z.string()).parse(Array.isArray(raw) ? raw : []),
+  compileFailures: (raw) => {
+    const normalized = CompileFailureSchema.array().parse(
+      Array.isArray(raw) ? raw : [],
+    );
+    return normalized.length === 0 ? null : normalized;
+  },
+};
+
+/** Record accessor per round-keyed field, typed so a generic caller keeps the element type. */
+const ROUND_FIELD_OF: {
+  [K in RoundKeyedField]: (
+    record: StreamRecord,
+  ) => RoundIndexed<RoundFieldElement[K]>;
+} = {
+  outputFiles: (record) => record.outputFiles,
+  missingOutputs: (record) => record.missingOutputs,
+  compileFailures: (record) => record.compileFailures,
+};
+
 /** Partial work-plan fields recorded while a stream is unseeded. */
 interface WorkPlanOverlay {
   todos?: readonly TodoItem[];
@@ -653,13 +698,25 @@ export class StreamSnapshotStore {
             this.setPlan(event.streamId, event.plan);
             return;
           case 'addOutputFiles':
-            this.addOutputFiles(event.streamId, event.filesByRound);
+            this.applyRoundFieldFact(
+              event.streamId,
+              'outputFiles',
+              event.filesByRound,
+            );
             return;
           case 'updateMissingOutputs':
-            this.updateMissingOutputs(event.streamId, event.filesByRound);
+            this.applyRoundFieldFact(
+              event.streamId,
+              'missingOutputs',
+              event.filesByRound,
+            );
             return;
           case 'updateCompileFailures':
-            this.updateCompileFailures(event.streamId, event.filesByRound);
+            this.applyRoundFieldFact(
+              event.streamId,
+              'compileFailures',
+              event.filesByRound,
+            );
             return;
           default: {
             // Exhaustiveness check: adding a type to `SNAPSHOT_RUN_FACT_TYPES`
@@ -795,25 +852,6 @@ export class StreamSnapshotStore {
   // ==========================================================================
 
   /**
-   * Shared round→value patch parsing for the round-keyed accumulators
-   * (output files, missing outputs, compile failures). `normalize` returns
-   * `null` to delete a round's entry (e.g. once its failure list empties
-   * out) or the value list to store otherwise.
-   */
-  private parseRoundPatch<T>(
-    filesByRound: Record<string, unknown>,
-    normalize: (raw: unknown) => T[] | null,
-  ): Map<number, T[] | null> {
-    const patch = new Map<number, T[] | null>();
-    for (const [round, raw] of Object.entries(filesByRound)) {
-      const key = RoundKeySchema.safeParse(round);
-      if (!key.success) continue;
-      patch.set(key.data, normalize(raw));
-    }
-    return patch;
-  }
-
-  /**
    * Apply a parsed round-keyed patch to one round-keyed field of a stream's
    * record. `field` selects which field (output files / missing outputs /
    * compile failures) — always present on the record (defaulted at
@@ -841,7 +879,7 @@ export class StreamSnapshotStore {
   // as a separate param, so a caller can't pass a field/key pair that disagree.
   private writeRoundKeyedField(
     stream: StreamTabId,
-    field: 'outputFiles' | 'missingOutputs' | 'compileFailures',
+    field: RoundKeyedField,
   ): void {
     this.write(stream, OVERLAY_TO_SIDECAR_KEY[field], {
       ...this.records.get(stream)?.[field],
@@ -916,81 +954,46 @@ export class StreamSnapshotStore {
     this.queueAfterSeed(stream, version, () => undefined);
   }
 
-  private addOutputFiles(
+  /**
+   * Apply one round-keyed run fact (`addOutputFiles` / `updateMissingOutputs`
+   * / `updateCompileFailures`) to its field: parse the wire patch per round
+   * through the field's normalizer (see {@link ROUND_FIELD_NORMALIZERS} for
+   * the delete-vs-overwrite semantics), skip effectively-empty patches, and
+   * run the shared eager-apply + overlay-reconcile sequence.
+   */
+  private applyRoundFieldFact<K extends RoundKeyedField>(
     stream: StreamTabId,
-    filesByRound: RoundIndexed<OutputFileInfo>,
+    field: K,
+    filesByRound: RoundIndexed<RoundFieldElement[K]>,
   ): void {
-    const patch = this.parseRoundPatch<OutputFileInfo>(filesByRound, (raw) => {
-      const normalized = OutputFileInfoListSchema.parse(
-        Array.isArray(raw) ? raw : [],
-      );
-      return normalized.length === 0 ? null : normalized;
-    });
+    const normalize = ROUND_FIELD_NORMALIZERS[field];
+    const patch = new Map<number, RoundFieldElement[K][] | null>();
+    for (const [round, raw] of Object.entries(filesByRound)) {
+      const key = RoundKeySchema.safeParse(round);
+      if (!key.success) continue;
+      patch.set(key.data, normalize(raw));
+    }
     if (patch.size === 0) return;
 
+    // The two casts restate what the tables above pin per key — `patch`
+    // holds exactly the element type `OverlayPatches[K]` stores, and
+    // `mergeRoundPatch` services every round-keyed overlay — but TS cannot
+    // reduce the `OverlayPatches[K]` indexed access while `K` is generic.
     this.mutateWithOverlay(
       stream,
-      'outputFiles',
-      patch,
-      mergeRoundPatch,
+      field,
+      patch as OverlayPatches[K],
+      mergeRoundPatch as (
+        existing: OverlayPatches[K] | undefined,
+        next: OverlayPatches[K],
+      ) => OverlayPatches[K],
       () =>
         this.applyRoundPatch(
-          (record) => record.outputFiles,
+          ROUND_FIELD_OF[field],
           this.getOrCreateRecord(stream),
           patch,
         ),
-      () => this.writeRoundKeyedField(stream, 'outputFiles'),
-    );
-  }
-
-  private updateMissingOutputs(
-    stream: StreamTabId,
-    filesByRound: RoundIndexed<string>,
-  ): void {
-    const patch = this.parseRoundPatch<string>(filesByRound, (raw) =>
-      z.array(z.string()).parse(Array.isArray(raw) ? raw : []),
-    );
-    if (patch.size === 0) return;
-
-    this.mutateWithOverlay(
-      stream,
-      'missingOutputs',
-      patch,
-      mergeRoundPatch,
-      () =>
-        this.applyRoundPatch(
-          (record) => record.missingOutputs,
-          this.getOrCreateRecord(stream),
-          patch,
-        ),
-      () => this.writeRoundKeyedField(stream, 'missingOutputs'),
-    );
-  }
-
-  private updateCompileFailures(
-    stream: StreamTabId,
-    filesByRound: RoundIndexed<CompileFailure>,
-  ): void {
-    const patch = this.parseRoundPatch<CompileFailure>(filesByRound, (raw) => {
-      const normalized = CompileFailureSchema.array().parse(
-        Array.isArray(raw) ? raw : [],
-      );
-      return normalized.length === 0 ? null : normalized;
-    });
-    if (patch.size === 0) return;
-
-    this.mutateWithOverlay(
-      stream,
-      'compileFailures',
-      patch,
-      mergeRoundPatch,
-      () =>
-        this.applyRoundPatch(
-          (record) => record.compileFailures,
-          this.getOrCreateRecord(stream),
-          patch,
-        ),
-      () => this.writeRoundKeyedField(stream, 'compileFailures'),
+      () => this.writeRoundKeyedField(stream, field),
     );
   }
 
