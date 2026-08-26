@@ -71,6 +71,11 @@ import { createDesktopBrowserViews } from './desktopBrowserViews.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import {
+  installBeforeQuitHandler,
+  installRendererNavigationCleanup,
+  installUnsavedChangesHandler,
+} from './desktopWindowLifecycle.js';
+import {
   DESKTOP_WORKSPACE_COMMANDS,
   EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
 } from '../shared/desktopWorkspaceMessages.js';
@@ -507,28 +512,27 @@ function createWindow(options: {
   // reading of it: Chromium emits it after the renderer's beforeunload handler
   // observes a dirty Monaco buffer and refuses the unload, so every close path
   // (quit, workspace switch, window close) asks here and nowhere else.
-  window.webContents.on('will-prevent-unload', (event) => {
-    if (isFatalDesktopShutdownRequested()) {
+  installUnsavedChangesHandler({
+    webContents: window.webContents,
+    showDiscardDialog: () =>
+      dialog.showMessageBoxSync(window, {
+        type: 'warning',
+        buttons: ['Keep Editing', 'Discard Changes'],
+        defaultId: 0,
+        cancelId: 0,
+        title: 'Unsaved Changes',
+        message: 'This workspace has unsaved editor changes.',
+        detail: 'Discard the changes and continue?',
+      }),
+    isFatalShutdownRequested: isFatalDesktopShutdownRequested,
+    clearPendingWorkspaceRelaunch: () => {
       pendingWorkspaceRelaunch = undefined;
-      event.preventDefault();
-      return;
-    }
-    const response = dialog.showMessageBoxSync(window, {
-      type: 'warning',
-      buttons: ['Keep Editing', 'Discard Changes'],
-      defaultId: 0,
-      cancelId: 0,
-      title: 'Unsaved Changes',
-      message: 'This workspace has unsaved editor changes.',
-      detail: 'Discard the changes and continue?',
-    });
-    if (response === 1) {
-      event.preventDefault();
-      return;
-    }
-    pendingWorkspaceRelaunch = undefined;
-    continueQuitAfterWindowClose = undefined;
+    },
+    clearContinueQuitAfterWindowClose: () => {
+      continueQuitAfterWindowClose = undefined;
+    },
   });
+
   const openWorkspaceFolder = async () => {
     const result = await dialog.showOpenDialog(window, {
       title: 'Open Workspace Folder',
@@ -1100,17 +1104,7 @@ function createWindow(options: {
   // reload: the app-signal subscription must survive a reload and die with the
   // window, or macOS dock reactivation would stack one listener per reopen.
   windowResources.add(() => workspaceIpc.dispose());
-  let initialRendererNavigationComplete = false;
-  window.webContents.on('did-navigate', () => {
-    if (!initialRendererNavigationComplete) {
-      initialRendererNavigationComplete = true;
-      return;
-    }
-    // A fresh renderer has its own terminal IDs and browser-tab layout. Tear
-    // down the previous document's main-process resources before those IDs can
-    // be reused or an old WebContentsView can cover the new page.
-    workspaceIpc.disposeRendererResources();
-  });
+  installRendererNavigationCleanup(window.webContents, workspaceIpc);
   const mainViewIpc = installDesktopMainViewIpc(window, {
     workspace: workspaceIpc,
     handleExecuteMessage: async (message) => {
@@ -1302,23 +1296,13 @@ if (protocolLifecycle.shouldContinue) {
         // editor can veto that close and remain fully operational. Once the
         // window really closes, its handler calls app.quit() again and this
         // listener proceeds with the ordinary shutdown chain.
-        let shutdownStarted = false;
-        let quitting = false;
-        app.on('before-quit', (event) => {
-          if (quitting) return;
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            event.preventDefault();
-            continueQuitAfterWindowClose = () => app.quit();
-            mainWindow.close();
-            return;
-          }
-          event.preventDefault();
-          if (shutdownStarted) return;
-          shutdownStarted = true;
-          void lifecycle.runShutdown().finally(() => {
-            quitting = true;
-            app.quit();
-          });
+        installBeforeQuitHandler({
+          app,
+          getMainWindow: () => mainWindow,
+          lifecycle,
+          continueAfterWindowClose: (continueQuit) => {
+            continueQuitAfterWindowClose = continueQuit;
+          },
         });
 
         void initializeDesktopCrashReporting({
