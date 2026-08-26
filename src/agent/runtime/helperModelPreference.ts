@@ -29,11 +29,11 @@ export async function applyHelperModelPreference(
 
   const helperModelConfig = await resolveRuntimeModelConfig(helperModel);
 
-  // A tool-use agent (e.g. latexFixer) needs its tools. The tool-use flow drops
-  // every tool unless the model positively declares function calling
-  // (`responseCycleToolsForModel` returns nothing when
-  // `!capabilities.supportsFunctionCalling`), so mirror that check and bail
-  // unless the helper model declares it — not only on an explicit `=== false`.
+  // A tool-use agent (e.g. latexFixer) needs its tools. The provider adapters
+  // drop function tools for a model that does not declare function calling
+  // (`toOpenAIResponseTools` skips every function tool when
+  // `!supportsFunctionCalling`), so mirror that check and bail unless the
+  // helper model declares it — not only on an explicit `=== false`.
   if (
     config.agentCategory === AgentCategory.ToolUse &&
     !helperModelConfig?.capabilities.supportsFunctionCalling
