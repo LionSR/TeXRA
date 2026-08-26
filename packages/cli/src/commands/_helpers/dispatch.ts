@@ -3,16 +3,16 @@
  * walking, flag reordering, unknown-command/-flag suggestions, and usage
  * rendering.
  */
-import {
-  type ArgDef,
-  type ArgsDef,
-  type CommandDef,
-  type CommandMeta,
-  renderUsage,
-} from 'citty';
+import { type ArgDef, renderUsage } from 'citty';
 import stripAnsi from 'strip-ansi';
 import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
 import { readCliAmbientState } from '@cli/runtime/cliContext';
+import {
+  commandArgs,
+  commandMeta,
+  commandSubcommands,
+  type AnyCommand,
+} from '@cli/runtime/completionCommandTree';
 import { ensureArray } from '@utils/core';
 import {
   editDistance,
@@ -118,43 +118,12 @@ function firstPositionalIndex(rawArgs: readonly string[]): number | undefined {
 // commandTree
 // ---------------------------------------------------------------------------
 
-// Citty's `CommandDef<T>` is invariant in `T` (T appears in both `run` and
-// `setup` parameters), so a narrower const-inferred command isn't assignable
-// to the parent type. We treat the subcommand tree as `CommandDef<any>` while
-// walking it; this matches citty's own `subCommands` shape and lets
-// `showUsage` accept either width via cast at the call site.
-export type AnyCommand = CommandDef<any>;
-
 interface ResolvedCliCommand {
   readonly command: AnyCommand;
   readonly parent?: AnyCommand;
   readonly commandPath: readonly string[];
   readonly parentPath: readonly string[];
   readonly rootCommand: AnyCommand;
-}
-
-async function resolveCommandMeta(cmd: AnyCommand): Promise<CommandMeta> {
-  const meta = cmd.meta;
-  if (meta == null) return {};
-  return typeof meta === 'function' ? await meta() : await meta;
-}
-
-async function commandSubCommands(
-  cmd: AnyCommand,
-): Promise<Record<string, AnyCommand> | undefined> {
-  const rawSubs = cmd.subCommands;
-  if (!rawSubs) return undefined;
-  return typeof rawSubs === 'function'
-    ? await (rawSubs as () => Promise<Record<string, AnyCommand>>)()
-    : ((await rawSubs) as Record<string, AnyCommand>);
-}
-
-async function commandArgs(cmd: AnyCommand): Promise<ArgsDef> {
-  const rawArgs = cmd.args;
-  if (!rawArgs) return {};
-  return typeof rawArgs === 'function'
-    ? await (rawArgs as () => Promise<ArgsDef> | ArgsDef)()
-    : ((await rawArgs) as ArgsDef);
 }
 
 /**
@@ -197,10 +166,7 @@ async function resolveDeepestSubCommandPath({
   parentPath,
   rootCommand,
 }: ResolveDeepestSubCommandPathInput): Promise<ResolvedCliCommand> {
-  const subCommands = await commandSubCommands(cmd);
-  if (!subCommands) {
-    return { command: cmd, parent, commandPath, parentPath, rootCommand };
-  }
+  const subCommands = await commandSubcommands(cmd);
   for (let i = 0; i < rawArgs.length; i++) {
     const token = rawArgs[i];
     if (token === undefined) break;
@@ -378,9 +344,7 @@ export async function detectUnknownCliCommand(
       continue;
     }
 
-    const subCommands = await commandSubCommands(cmd);
-    if (!subCommands) return undefined;
-
+    const subCommands = await commandSubcommands(cmd);
     const next = subCommands[token];
     if (next) {
       cmd = next;
@@ -644,8 +608,8 @@ async function usageParentWithFullPath(
   }
 
   const [parentMeta, rootMeta] = await Promise.all([
-    resolveCommandMeta(parent),
-    context.rootCommand ? resolveCommandMeta(context.rootCommand) : undefined,
+    commandMeta(parent),
+    context.rootCommand ? commandMeta(context.rootCommand) : undefined,
   ]);
   return {
     ...parent,

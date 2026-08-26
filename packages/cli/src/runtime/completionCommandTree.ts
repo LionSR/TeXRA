@@ -122,15 +122,26 @@ export function completionFlagTokens(flag: CompletionFlag): string[] {
   ]);
 }
 
-async function commandMeta(command: AnyCommand): Promise<CommandMeta> {
+/**
+ * The citty command-tree accessors. `meta`, `args`, and `subCommands` may each
+ * be a value, a promise, or a thunk, so every walker of the tree needs these.
+ * Shared by the completion generators below and by the dispatch-time `--help`
+ * scoping and unknown-command/-flag detection in
+ * `@cli/commands/_helpers/dispatch` - one resolution behavior, one place.
+ */
+export async function commandMeta(command: AnyCommand): Promise<CommandMeta> {
   return command.meta ? await resolveValue(command.meta) : {};
 }
 
-async function commandArgs(command: AnyCommand): Promise<ArgsDef> {
+export async function commandArgs(command: AnyCommand): Promise<ArgsDef> {
   return command.args ? await resolveValue(command.args) : {};
 }
 
-async function commandSubcommands(
+/**
+ * Resolves each child as well, so a lazily declared subcommand is a real
+ * command definition to every caller. Returns `{}` for a leaf.
+ */
+export async function commandSubcommands(
   command: AnyCommand,
 ): Promise<Record<string, AnyCommand>> {
   const subcommands = command.subCommands
