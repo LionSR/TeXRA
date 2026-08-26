@@ -1,5 +1,4 @@
 // Third-party imports
-import type { ZodType } from 'zod';
 
 // Type imports
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
@@ -7,6 +6,7 @@ import type { ToolDefinition } from '@shared/schemas';
 
 // Local file imports
 import { BaseTool } from './base';
+import type { ZodType } from 'zod';
 
 const EXECUTION_FLAGS = [
   'parallelSafe',
