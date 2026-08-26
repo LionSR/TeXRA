@@ -1,19 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  BUILTIN_DEFAULT_CHAT_AGENT,
-  pickDefaultToolUseAgent,
-} from '@cli/runtime/defaultAgents';
+import { pickDefaultToolUseAgent } from '@cli/runtime/defaultAgents';
 import {
   implicitDefaultToolUseAgents,
   isImplicitDefaultEligible,
 } from '@shared/constants/agents';
 
 describe('CLI implicit default agent policy', () => {
-  it('uses assistant as the built-in default chat agent', () => {
-    expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('assistant');
-  });
-
   it('filters implicit default candidates without mutating explicit options', () => {
     const candidates = [
       { name: 'simplifier', source: 'built-in' },

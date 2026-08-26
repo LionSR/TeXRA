@@ -327,21 +327,4 @@ describe('desktop preview host', () => {
     expect(postToRenderer).toHaveBeenCalledTimes(1);
     expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
   });
-
-  it('forceExternal=true skips the overlay path entirely', async () => {
-    const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
-    const { texPath, pdfPath } = await makeTexFixture('paper');
-    const shell = makeShell();
-    const postToRenderer = vi.fn((_message: unknown) => true);
-
-    const host = createDesktopPreviewHost({
-      shell,
-      postToRenderer,
-      forceExternal: true,
-    });
-
-    await host.openBuildDisplay(createExternalLocation(texPath));
-    expect(postToRenderer).not.toHaveBeenCalled();
-    expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
-  });
 });

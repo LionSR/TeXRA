@@ -58,7 +58,6 @@ import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 
 // Local file imports
 import {
-  computeAnthropicPrice,
   normalizeAnthropicUsage,
   type AnthropicPricingConfig,
 } from './anthropicUsage';
@@ -1372,11 +1371,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       messages.pop();
     }
     return true;
-  }
-
-  /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
-  computePrice(responseUsage: BetaUsage): number {
-    return computeAnthropicPrice(responseUsage, this.pricingConfig());
   }
 
   /** Normalizes Anthropic usage data into a unified format. */

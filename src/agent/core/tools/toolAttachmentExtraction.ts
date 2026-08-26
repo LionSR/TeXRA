@@ -10,7 +10,6 @@ import {
 const ERROR_PAYLOAD_STRIPPED_KEYS = new Set([
   'output',
   'summary',
-  'lineChanges',
   'edits',
   'files',
 ]);

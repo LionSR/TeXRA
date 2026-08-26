@@ -83,7 +83,6 @@ describe('desktop protocol callbacks', () => {
     },
   ])('$name', ({ url, path, query }) => {
     expect(parseDesktopProtocolCallback(url)).toEqual({
-      rawUrl: url,
       path,
       query,
     });
@@ -131,7 +130,6 @@ describe('desktop protocol callbacks', () => {
 
     expect(listener).toHaveBeenCalledWith(
       expect.objectContaining({
-        rawUrl: 'texra://texra-ai.texra/auth-callback?state=startup',
         path: '/auth-callback',
         query: 'state=startup',
       }),
@@ -144,9 +142,7 @@ describe('desktop protocol callbacks', () => {
     router.subscribe(listener);
 
     const { routeArgv } = router;
-    expect(
-      routeArgv(['texra://texra-ai.texra/auth-callback?state=standalone']),
-    ).toBe(1);
+    routeArgv(['texra://texra-ai.texra/auth-callback?state=standalone']);
 
     expect(listener).toHaveBeenCalledWith(
       expect.objectContaining({ query: 'state=standalone' }),

@@ -67,10 +67,6 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
   assertOwnedExecutionLease: vi.fn(),
   validateOwnedExecutionLease: vi.fn(async () => {}),
-  abandonOwnedExecutionLease: vi.fn(),
-  completeOwnedExecutionLease: vi.fn(async () => ({
-    status: 'released' as const,
-  })),
 }));
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({

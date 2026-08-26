@@ -387,9 +387,6 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
           })}
           ${renderStateSettingToggleRow({
             key: WorkspaceStateKey.GIT_MARK_COMMITS,
-            label: 'Mark TeXRA commits',
-            description:
-              'Use the TeXRA author identity for commits created by agents.',
             checked: this.markCommits,
             disabled: this.toggleDisabled,
           })}

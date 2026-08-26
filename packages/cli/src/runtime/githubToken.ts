@@ -17,9 +17,6 @@ export async function saveGitHubToken(token: string): Promise<void> {
     secretName: GITHUB_TOKEN_STORAGE_KEY,
     value: token,
     kind: 'github',
-    emptyMessage: 'GitHub token is empty.',
-    placeholderMessage:
-      'This looks like a placeholder rather than a GitHub token. Enter a personal access token from GitHub.',
   });
 }
 

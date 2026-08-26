@@ -60,10 +60,7 @@ export function createBannerHandlers(host: MainViewInboundHost) {
           await host.refreshAfterCredentialChange();
         }
       } catch (error) {
-        host.logger.debug(
-          host.channel,
-          `Sign-in from banner failed: ${toErrorMessage(error)}`,
-        );
+        host.log.debug(`Sign-in from banner failed: ${toErrorMessage(error)}`);
       }
     },
     [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {

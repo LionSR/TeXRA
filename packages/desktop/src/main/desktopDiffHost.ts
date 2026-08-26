@@ -27,8 +27,7 @@ import {
 export interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
   /**
    * Falls back to the OS default editor (writes a `.diff` patch file and
-   * calls `openPath`). Used when the renderer overlay is unavailable or
-   * `forceExternal === true`.
+   * calls `openPath`). Used when the renderer overlay is unavailable.
    */
   openPath(filePath: string): Promise<void>;
 }
@@ -166,7 +165,7 @@ export function createDesktopDiffHost(
 
       // Prefer the in-app Review workbench when wired. A `false` return value
       // or a thrown error opts into the external-editor fallback (covers the
-      // startup IPC race, destroyed BrowserWindow, and `forceExternal`).
+      // startup IPC race and a destroyed BrowserWindow).
       const shownInRenderer = tryShowInRenderer(
         { ...options, source: 'desktopDiffHost', fallback: 'external editor' },
         {

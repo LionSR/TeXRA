@@ -102,7 +102,7 @@ export const WorkflowAgentInputSchema = z.strictObject({
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 
 const WORKTREE_DISABLED_MESSAGE =
-  "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `texra.git.worktreeSupport` ('Allow agents to work in git worktrees' on the Multi-Agent settings tab).";
+  "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `texra.git.worktreeSupport` ('Subagent worktrees' on the Multi-Agent settings tab).";
 const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
   'The delegated instruction above is your full task contract. This includes any tool, network, file, approval, output-format, or scope constraints it states. If a requested action conflicts with those constraints or needs missing context, report the conflict instead of assuming permission.',
   'Your final response is delivered verbatim to the parent orchestrator. End with the substantive result (answer, findings, evidence, unresolved caveats), never only a status note such as "done".',

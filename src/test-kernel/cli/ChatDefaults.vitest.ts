@@ -14,7 +14,6 @@ import {
   CLI_BUILTIN_DEFAULT_MODEL,
   loadWorkspaceCliConfig,
 } from '@cli/runtime/cliConfig';
-import { BUILTIN_DEFAULT_CHAT_AGENT } from '@cli/runtime/defaultAgents';
 import * as logSinks from '@cli/runtime/logSinks';
 import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -123,7 +122,6 @@ function expectChatDefaults(
 
 describe('CLI chat defaults', () => {
   it('uses assistant and DeepSeek as the built-in chat defaults', async () => {
-    expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('assistant');
     expect(CLI_BUILTIN_DEFAULT_MODEL).toBe('deepseekproT');
     expect(MODEL_CONFIGS[CLI_BUILTIN_DEFAULT_MODEL]).toBeDefined();
 

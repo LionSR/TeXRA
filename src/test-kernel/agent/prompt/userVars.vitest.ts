@@ -66,31 +66,9 @@ const baseConfig: AgentConfig = AgentConfigSchema.parse({
   agent: 'agent',
   instruction: '',
   inputFile: 'input.tex',
-  toolConfig: {
-    autoExtractFigure: false,
-    autoExtractTikzFigure: false,
-    attachTeXCount: false,
-    autoCompileInputPdf: false,
-  },
 });
 
 describe('getToolFlags', () => {
-  it('uses texra.debug.saveModelIO setting for PRINT_INPUT_PROMPT', async () => {
-    try {
-      fakeConfig.set('texra.debug.saveModelIO', true);
-      expect(
-        getToolFlags(baseConfig, baseSetting, basePrompt).PRINT_INPUT_PROMPT,
-      ).toBe(true);
-
-      fakeConfig.set('texra.debug.saveModelIO', false);
-      expect(
-        getToolFlags(baseConfig, baseSetting, basePrompt).PRINT_INPUT_PROMPT,
-      ).toBe(false);
-    } finally {
-      await fakeConfig.update('texra.debug.saveModelIO', undefined);
-    }
-  });
-
   it('derives round count from additional userRequest entries', () => {
     const prompt: AgentPrompt = {
       ...basePrompt,
@@ -98,7 +76,7 @@ describe('getToolFlags', () => {
     };
     const setting: AgentSetting = { ...baseSetting, rounds: 1 };
 
-    const flags = getToolFlags(baseConfig, setting, prompt);
+    const flags = getToolFlags(setting, prompt);
     expect(flags.ROUNDS).toBe(3);
   });
 });
@@ -253,7 +231,6 @@ describe('buildUserVars declared type', () => {
 
     expectTypeOf<BuiltResult>().toEqualTypeOf<BuiltUserVars>();
     // Fixed keys keep their precise types.
-    expectTypeOf<BuiltUserVars['MEDIA_CONTENT']>().toEqualTypeOf<null>();
     expectTypeOf<BuiltUserVars['IS_OPENAI_MODEL']>().toEqualTypeOf<boolean>();
     expectTypeOf<BuiltUserVars['INPUT_FILES']>().toEqualTypeOf<string[]>();
     // Custom required-file keys are admitted beside the fixed vocabulary.
@@ -352,7 +329,6 @@ describe('buildUserVars with missing configured files', () => {
       LIST_OF_ALL_CONTEXTS: '',
       LIST_OF_ALL_EDITEDS: '',
       MEDIA_FILE: null,
-      MEDIA_CONTENT: null,
     });
   });
 
@@ -387,10 +363,10 @@ describe('requiredFilesInternal custom variables', () => {
   });
 
   // A required file named after a file category generates the fixed X_FILE /
-  // X_CONTENT variables and would silently override them — and, for
-  // validators like MEDIA_CONTENT's z.null(), produce checkpoints the
-  // persisted channel schema rejects, making the session impossible to
-  // resume. The guard fails loudly at variable-build time instead.
+  // X_CONTENT variables and would silently override them, producing
+  // checkpoints the persisted channel schema's per-key validators reject and
+  // making the session impossible to resume. The guard fails loudly at
+  // variable-build time instead.
   it.each(['INPUT', 'CONTEXT', 'EDITED', 'MEDIA'])(
     'rejects a required file named %s whose generated variables collide with the fixed vocabulary',
     async (varName) => {
@@ -423,7 +399,7 @@ describe('requiredFilesInternal custom variables', () => {
     expect(vars['BRIEF_FILE']).toBe('/agents/generic/brief.txt');
     expect(vars['BRIEF_CONTENT']).toBe('briefing notes');
     // The fixed slots the collision guard protects keep their built values.
-    expect(vars.MEDIA_CONTENT).toBeNull();
+    expect(vars.MEDIA_FILE).toBeNull();
     expect(vars.MODEL).toBe('test-model');
   });
 });

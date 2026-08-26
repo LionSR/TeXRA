@@ -12,7 +12,7 @@ import type { ToolUseRoundShared } from '@agent/implementations/flows/tooluse/to
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { testModelCell } from '../modelCellTestUtils';
 
-function buildServices(): ToolUseRoundServices<unknown> {
+function buildServices(): ToolUseRoundServices {
   return {
     run: { totalResponseTimeMs: 0, usageAccumulator: {}, totalRounds: 0 },
     workspace: {
@@ -35,7 +35,7 @@ function buildServices(): ToolUseRoundServices<unknown> {
       error: vi.fn(),
       responseFinalized: vi.fn(),
     },
-  } as unknown as ToolUseRoundServices<unknown>;
+  } as unknown as ToolUseRoundServices;
 }
 
 function buildShared(): ToolUseRoundShared {
@@ -47,8 +47,8 @@ function buildShared(): ToolUseRoundShared {
 }
 
 function setup(): {
-  services: ToolUseRoundServices<unknown>;
-  node: ToolUseProcessNode<unknown>;
+  services: ToolUseRoundServices;
+  node: ToolUseProcessNode;
   shared: ToolUseRoundShared;
 } {
   const services = buildServices();

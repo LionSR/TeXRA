@@ -17,9 +17,7 @@ export interface WorkflowOutputPolicy {
   readonly shouldRejectOnCompileFailure: () => boolean;
 }
 
-export interface ReflectionServices<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
+export interface ReflectionServices extends BaseFlowContextInit {
   readonly setting: AgentWorkflowSetting;
   readonly storageKey: StorageKey;
   readonly outputState: OutputState;

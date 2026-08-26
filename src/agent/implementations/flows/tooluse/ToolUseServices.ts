@@ -7,7 +7,7 @@ import type { SubagentProgressUpdate } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files/taskRunStorage';
 import type { PreparedShared, ToolUseRunShared } from './nodes/types';
 
-export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
+export interface ToolUseServices extends BaseFlowContextInit {
   readonly setting: AgentToolUseSetting;
   readonly session: IToolUseSession;
   /** Run-storage-aware file locator; used to attach follow-up media files. */

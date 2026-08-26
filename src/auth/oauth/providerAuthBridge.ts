@@ -1,12 +1,11 @@
 /**
- * Bridge between provider-specific auth errors and the shared
- * {@link SubscriptionOAuthError} used inside the coordinator machine.
+ * Re-mint the shared {@link SubscriptionOAuthError} raised inside the
+ * coordinator machine as the caller's provider-specific auth error.
  */
 import {
   SubscriptionOAuthError,
   type SubscriptionOAuthErrorKind,
 } from './subscriptionOAuthError';
-import type { SubscriptionOAuthClient } from './SubscriptionOAuthCoordinator';
 
 interface ProviderAuthError extends Error {
   readonly kind: SubscriptionOAuthErrorKind;
@@ -33,43 +32,4 @@ export function rethrowAsProviderAuthError(
     });
   }
   throw error;
-}
-
-/**
- * Map provider-thrown auth errors into {@link SubscriptionOAuthError} for the
- * shared coordinator's refresh/fatal handling.
- */
-export function wrapProviderOAuthClient(
-  client: SubscriptionOAuthClient,
-  ErrorType: ProviderAuthErrorCtor,
-): SubscriptionOAuthClient {
-  const toShared = (error: unknown): never => {
-    if (error instanceof ErrorType) {
-      throw new SubscriptionOAuthError(
-        error.message,
-        error.kind,
-        error.status,
-        {
-          cause: error,
-        },
-      );
-    }
-    throw error;
-  };
-  return {
-    exchangeAuthorizationCode: async (params) => {
-      try {
-        return await client.exchangeAuthorizationCode(params);
-      } catch (error) {
-        return toShared(error);
-      }
-    },
-    refreshTokens: async (refreshToken) => {
-      try {
-        return await client.refreshTokens(refreshToken);
-      } catch (error) {
-        return toShared(error);
-      }
-    },
-  };
 }

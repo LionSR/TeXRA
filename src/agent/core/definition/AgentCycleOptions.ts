@@ -62,15 +62,8 @@ export type UserVars = {
   LIST_OF_ALL_EDITEDS: string;
   /** First attached media file; content is never inlined (display-only). */
   MEDIA_FILE: string | null;
-  MEDIA_CONTENT: null;
   /** Resolved output file list; absent when no usable outputs are configured. */
   OUTPUT_FILES?: string[];
-  /** Tool toggles projected for template conditionals. */
-  AUTO_EXTRACT_FIGURE: boolean;
-  AUTO_EXTRACT_TIKZ_FIGURE: boolean;
-  INCLUDE_TEX_COUNT: boolean;
-  PRINT_INPUT_PROMPT: boolean;
-  AUTO_COMPILE_INPUT_PDF: boolean;
   /** When-to-choose guidance, '' when the tool is not on the roster. */
   CODEX_GUIDANCE: string;
   CLAUDE_CODE_GUIDANCE: string;
@@ -143,13 +136,7 @@ const UserVariableValueSchemas = {
   LIST_OF_ALL_CONTEXTS: z.string(),
   LIST_OF_ALL_EDITEDS: z.string(),
   MEDIA_FILE: z.string().nullable(),
-  MEDIA_CONTENT: z.null(),
   OUTPUT_FILES: z.array(z.string()),
-  AUTO_EXTRACT_FIGURE: z.boolean(),
-  AUTO_EXTRACT_TIKZ_FIGURE: z.boolean(),
-  INCLUDE_TEX_COUNT: z.boolean(),
-  PRINT_INPUT_PROMPT: z.boolean(),
-  AUTO_COMPILE_INPUT_PDF: z.boolean(),
   CODEX_GUIDANCE: z.string(),
   CLAUDE_CODE_GUIDANCE: z.string(),
   ROUNDS: z.number(),

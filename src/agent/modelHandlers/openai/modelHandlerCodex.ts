@@ -249,14 +249,6 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     return rewritten as ResponseCreateParamsBase;
   }
 
-  /** OAuth access token in place of an API key (becomes the Bearer header),
-   *  or the user's OpenAI API key once the subscription preference is off. */
-  protected override async getApiKey(): Promise<string> {
-    return this.hasConfiguredSubscriptionProfile()
-      ? this.resolveAccessToken()
-      : super.getApiKey();
-  }
-
   /** The Codex backend while the subscription is active, else the default
    *  OpenAI base from the parent. */
   public override getBaseUrl(): string | null {

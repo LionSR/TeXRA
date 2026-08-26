@@ -130,8 +130,8 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    *
    * @returns Fresh access token, or null if no session or refresh failed.
    */
-  async ensureFreshToken(forceRefresh?: boolean): Promise<string | null> {
-    const session = await this.getFreshSession(forceRefresh);
+  async ensureFreshToken(): Promise<string | null> {
+    const session = await this.getFreshSession();
     return session?.accessToken ?? null;
   }
 
@@ -273,9 +273,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     return toStorableSupabaseSession(data.session);
   }
 
-  private async getFreshSession(
-    forceRefresh?: boolean,
-  ): Promise<SupabaseSession | null> {
+  private async getFreshSession(): Promise<SupabaseSession | null> {
     try {
       const { session, version } = await this.loadStableSessionSnapshot();
       if (!session) {
@@ -284,22 +282,17 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
 
       const timeUntilExpiry = session.expiresAt - Date.now();
 
-      if (
-        forceRefresh ||
-        timeUntilExpiry < this.options.tokenRefreshThresholdMs
-      ) {
+      if (timeUntilExpiry < this.options.tokenRefreshThresholdMs) {
         this.log.info(
           'SupabaseSession',
           `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
         );
         const refreshed = await this.refreshSession(session, version);
         if (refreshed) return refreshed;
-        if (forceRefresh || timeUntilExpiry <= 0) {
+        if (timeUntilExpiry <= 0) {
           this.log.warn(
             'SupabaseSession',
-            forceRefresh
-              ? 'Force refresh requested but refresh failed, returning null'
-              : 'Token expired and refresh failed, returning null',
+            'Token expired and refresh failed, returning null',
           );
           return null;
         }

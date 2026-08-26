@@ -40,14 +40,14 @@ import type { ToolUseRoundShared } from './toolUseRound/roundShared';
  * BEFORE calling the model, so the model's thinking/response considers the
  * user's feedback.
  */
-export function createToolUseRoundFlow<C>(): Flow<
+export function createToolUseRoundFlow(): Flow<
   ToolUseRoundShared,
-  ToolUseRoundServices<C>
+  ToolUseRoundServices
 > {
-  const prepNode = new ToolUseRoundPrepNode<C>();
+  const prepNode = new ToolUseRoundPrepNode();
   const callNode = new ModelInvocationNode<
     ToolUseRoundShared,
-    ToolUseRoundServices<C>
+    ToolUseRoundServices
   >({
     operationName: 'Model request',
     streaming: true,
@@ -69,8 +69,8 @@ export function createToolUseRoundFlow<C>(): Flow<
       baseName: 'tooluse_response',
     }),
   });
-  const processNode = new ToolUseProcessNode<C>();
-  const dispatchNode = new ToolUseDispatchNode<C>();
+  const processNode = new ToolUseProcessNode();
+  const dispatchNode = new ToolUseDispatchNode();
 
   prepNode.next(callNode);
   callNode.next(processNode);
@@ -78,5 +78,5 @@ export function createToolUseRoundFlow<C>(): Flow<
   processNode.on(FlowTransition.CONTINUE, prepNode);
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ToolUseRoundShared, ToolUseRoundServices<C>>(prepNode);
+  return new Flow<ToolUseRoundShared, ToolUseRoundServices>(prepNode);
 }

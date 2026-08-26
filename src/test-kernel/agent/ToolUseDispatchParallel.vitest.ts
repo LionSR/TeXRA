@@ -103,8 +103,8 @@ function dispatchHarness(opts: HarnessOptions) {
     }),
     run: AgentRunStateSnapshotSchema.parse({}),
     workspace: AgentWorkspaceState.create(),
-  } as unknown as ToolUseRoundServices<unknown>;
-  const node = new ToolUseDispatchNode<unknown>();
+  } as unknown as ToolUseRoundServices;
+  const node = new ToolUseDispatchNode();
   node.setServices(services);
   return { node, trace: runTrace.trace, dispose: () => runTrace.dispose() };
 }
@@ -134,12 +134,12 @@ interface DispatchInternals {
   ): Promise<string | undefined>;
 }
 
-function internals(node: ToolUseDispatchNode<unknown>): DispatchInternals {
+function internals(node: ToolUseDispatchNode): DispatchInternals {
   return node as unknown as DispatchInternals;
 }
 
 function execPrepped(
-  node: ToolUseDispatchNode<unknown>,
+  node: ToolUseDispatchNode,
   prepped: SdkToolCall[],
 ): Promise<unknown[]> {
   return withTestRunContext(node.services.runScope, () =>
@@ -149,7 +149,7 @@ function execPrepped(
 
 /** prep() then the batch executor, mirroring Node's _run sequence. */
 async function runDispatch(
-  node: ToolUseDispatchNode<unknown>,
+  node: ToolUseDispatchNode,
   calls: SdkToolCall[],
   currentUserInstruction?: string,
 ): Promise<unknown[]> {

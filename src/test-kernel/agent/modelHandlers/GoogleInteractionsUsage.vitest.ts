@@ -2,10 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - agent model handlers
-import {
-  computeGoogleInteractionsPrice,
-  normalizeGoogleInteractionsUsage,
-} from '@agent/modelHandlers/google/googleInteractionsUsage';
+import { normalizeGoogleInteractionsUsage } from '@agent/modelHandlers/google/googleInteractionsUsage';
 import type { Interactions } from '@google/genai';
 
 const CONFIG = {
@@ -18,15 +15,17 @@ function usage(fields: Partial<Interactions.Usage>): Interactions.Usage {
   return fields as Interactions.Usage;
 }
 
+const price = (raw: Interactions.Usage): number =>
+  normalizeGoogleInteractionsUsage(raw, 0, CONFIG).cost;
+
 describe('Google Interactions usage', () => {
   it('prices cached input and visible output', () => {
-    const interactionsPrice = computeGoogleInteractionsPrice(
+    const interactionsPrice = price(
       usage({
         total_input_tokens: 1000,
         total_cached_tokens: 600,
         total_output_tokens: 100,
       }),
-      CONFIG,
     );
 
     expect(interactionsPrice).toBeCloseTo(
@@ -37,13 +36,12 @@ describe('Google Interactions usage', () => {
 
   it('does not double-count thought tokens (mirrors candidates + thoughts)', () => {
     // Interactions reports visible output and thoughts separately.
-    const interactionsPrice = computeGoogleInteractionsPrice(
+    const interactionsPrice = price(
       usage({
         total_input_tokens: 1000,
         total_output_tokens: 100,
         total_thought_tokens: 40,
       }),
-      CONFIG,
     );
 
     // Explicit: output billed once at 140 tokens, not 100 + a 40-token surcharge.
@@ -76,7 +74,6 @@ describe('Google Interactions usage', () => {
   });
 
   it('returns a zeroed usage for a null payload', () => {
-    expect(computeGoogleInteractionsPrice(null, CONFIG)).toBe(0);
     const normalized = normalizeGoogleInteractionsUsage(null, 5, CONFIG);
     expect(normalized.inputTokens).toBe(0);
     expect(normalized.outputTokens).toBe(0);
