@@ -10,10 +10,10 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 // Code-generate the catalog-derived parts of the VS Code manifest
-// (`contributes.configuration`, `contributes.commands`,
-// `contributes.keybindings`) from their single sources of truth so the
-// manifest never has to be hand-edited. In `--check` mode this is the CI diff
-// gate: it fails when the committed manifest drifts from the catalogs.
+// (`contributes.commands`, `contributes.keybindings`) from the command catalog
+// so the manifest never has to be hand-edited; `contributes.configuration` is
+// forbidden outright (native settings view). In `--check` mode this is the CI
+// diff gate: it fails when the committed manifest drifts from the catalog.
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
