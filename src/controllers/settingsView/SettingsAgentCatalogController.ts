@@ -35,6 +35,7 @@ export interface SettingsAgentCatalogEntry {
   description?: string;
   path?: string;
   tools?: string[];
+  hidden?: boolean;
 }
 
 export interface SettingsAgentCatalogState {
@@ -234,6 +235,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
     const enabledKeys = this.deps.state.getEnabledAgentKeys(category);
     return this.deps.state
       .getAgents(category)
+      .filter((entry) => !entry.hidden)
       .map((entry) => this.toSelectionItem(entry, enabledKeys))
       .sort(byName);
   }

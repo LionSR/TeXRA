@@ -70,6 +70,7 @@ export interface TeamCatalogAgent {
   readonly name: string;
   readonly source: AgentSource;
   readonly tools?: string[];
+  readonly hidden?: boolean;
 }
 
 export interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
@@ -89,13 +90,13 @@ export function planTeamRun<T extends TeamCatalogAgent>(
   preset: TeamPreset,
   options: TeamRunOptions<T>,
 ): TeamRunPlan<T> {
+  const agents = byCategory((category) =>
+    options.agents[category].filter((agent) => !agent.hidden),
+  );
   const resolved = byCategory((category) =>
-    resolvePresetAgents(preset.agents[category], options.agents[category]),
+    resolvePresetAgents(preset.agents[category], agents[category]),
   );
-  const override = resolveAgentOverride(
-    options.agentOverride,
-    options.agents.toolUse,
-  );
+  const override = resolveAgentOverride(options.agentOverride, agents.toolUse);
   const rootAgent =
     override.agent ??
     selectTeamRootAgent(resolved.toolUse.resolved, {

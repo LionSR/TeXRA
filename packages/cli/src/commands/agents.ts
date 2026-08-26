@@ -89,7 +89,7 @@ const agentsListCommand = defineCliCommand({
     all: {
       type: 'boolean',
       description:
-        'Show every agent, including agents hidden by workspace visibility settings',
+        'Show all public agents, including agents hidden by workspace visibility settings',
     },
     category: {
       type: 'enum',

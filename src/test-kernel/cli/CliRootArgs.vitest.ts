@@ -1235,7 +1235,7 @@ describe('runCli usage output stream routing', () => {
     let result = await runCli(['run', '--help']);
     expectOk(result);
     expect(stdout).toContain(
-      'Workflow agent name from `texra agents list --category workflow --all`',
+      'Public workflow agent name from `texra agents list --category workflow --all`',
     );
 
     stdout = '';
@@ -1243,7 +1243,7 @@ describe('runCli usage output stream routing', () => {
     result = await runCli(['agents', 'run', '--help']);
     expectOk(result);
     expect(stdout).toContain(
-      'Tool-use agent name from `texra agents list --category toolUse --all`',
+      'Public tool-use agent name from `texra agents list --category toolUse --all`',
     );
   });
 

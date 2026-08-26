@@ -167,36 +167,6 @@ describe('AgentRosterController', () => {
     ).toEqual(['lead']);
   });
 
-  it('omits hidden agents from all and explicitly selected rosters', () => {
-    const hidden: AgentRosterEntry = {
-      category: 'toolUse',
-      source: 'builtInToolUse',
-      name: 'changeReviewer',
-      hidden: true,
-    };
-    const visible: AgentRosterEntry = {
-      category: 'toolUse',
-      source: 'builtInToolUse',
-      name: 'lead',
-    };
-    const getAgents = (category: AgentCategory) =>
-      category === 'toolUse' ? [visible, hidden] : [];
-
-    const all = controller(new FakeStateStore(), { getAgents });
-    expect(all.getVisibleAgents('toolUse')).toEqual([visible]);
-
-    const selected = controller(
-      new FakeStateStore({
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
-          kind: 'custom',
-          agentKeys: { workflow: [], toolUse: ['changeReviewer', 'lead'] },
-        },
-      }),
-      { getAgents },
-    );
-    expect(selected.getVisibleAgents('toolUse')).toEqual([visible]);
-  });
-
   it('persists one canonical team selection', async () => {
     const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState);

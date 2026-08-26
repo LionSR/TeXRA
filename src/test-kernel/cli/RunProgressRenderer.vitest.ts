@@ -108,7 +108,7 @@ const RUNTIME_PRESENTATION_NDJSON_CASES = {
       kind: 'log',
       level: 'error',
       message:
-        'Agent not found: polish. Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.',
+        'Agent not found: polish. Use `texra agents list` for visible starter agents, `texra agents list --all` for all public agents, or pass a known launchable agent name from a team preset.',
       fields: {},
     },
   },

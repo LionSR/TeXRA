@@ -365,7 +365,7 @@ describe('CLI agents command', () => {
 
     expect(exitCode).toBe(2);
     expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
-      'Agent not found: missing-agent. Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.',
+      'Agent not found: missing-agent. Use `texra agents list` for visible starter agents, `texra agents list --all` for all public agents, or pass a known launchable agent name from a team preset.',
     );
     expect(cliOutputMock.emitCliResult).not.toHaveBeenCalled();
   });

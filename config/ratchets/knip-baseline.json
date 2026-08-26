@@ -131,12 +131,6 @@
       "file": "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
       "category": "production-dead",
       "kind": "exports",
-      "name": "selectedAgentKeys"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "setChatDefaultAgent"
     },
     {

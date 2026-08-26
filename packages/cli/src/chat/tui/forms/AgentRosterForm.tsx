@@ -88,7 +88,7 @@ export function buildChatDefaultAgentItems(
   ];
 }
 
-export function selectedAgentKeys(
+function selectedAgentKeys(
   selection: AgentRosterCategorySelection,
   agents: readonly AgentEntry[],
 ): readonly string[] {

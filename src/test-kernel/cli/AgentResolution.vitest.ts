@@ -153,7 +153,7 @@ describe('CLI agent resolution', () => {
     agentCatalogMock.resolveAgentForLaunch.mockReturnValue(undefined);
 
     await expect(resolveCliLaunchAgent('missing', 'agentsRun')).rejects.toThrow(
-      'Tool-use agent not found: missing. Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.',
+      'Tool-use agent not found: missing. Use `texra agents list` for visible starter agents, `texra agents list --all` for all public agents, or pass a known launchable agent name from a team preset.',
     );
   });
 
