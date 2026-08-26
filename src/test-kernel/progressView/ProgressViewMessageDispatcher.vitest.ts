@@ -284,22 +284,6 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(ZodError);
   });
-
-  it('does not throw for THEME_SET, though BaseWebviewApp intercepts it before dispatchMessage() in production', () => {
-    // THEME_SET shares its command string with COMMON_COMMANDS.THEME_SET;
-    // BaseWebviewApp's messageListener routes it through handleCommonMessage
-    // before handleMessage/dispatchMessage ever sees it. uiHandlers still
-    // carries a documented no-op entry to keep the outbound union exhaustive.
-    const onError = vi.fn();
-
-    const handled = dispatchMessage(
-      { command: PROGRESS_VIEW_COMMANDS.THEME_SET, theme: 'dark' },
-      onError,
-    );
-
-    expect(handled).toBe(true);
-    expect(onError).not.toHaveBeenCalled();
-  });
 });
 
 describe('dispatchProgressViewOutbound Unsupported-command gating (@shared/utils/dispatcher wiring)', () => {
@@ -356,7 +340,7 @@ describe('dispatchProgressViewOutbound Unsupported-command gating (@shared/utils
   });
 });
 
-// #8123: outbound webview/desktop IPC (BaseWebviewManager.postMessage,
+// #8123: outbound webview/desktop IPC (the launcher managers' post path,
 // desktopIpcTypes.ts's postToRenderer) now runs payloads through these
 // existing outbound schemas before sending, mirroring the inbound-side
 // validation `createDispatcher` already performs. Vitest runs with
@@ -378,7 +362,7 @@ describe('assertOutboundMessage / assertKnownOutboundMessage (#8123)', () => {
     ).not.toThrow();
   });
 
-  it('throws when a MainView outbound message drifts from its schema (single-domain boundary, e.g. BaseWebviewManager.postMessage)', () => {
+  it('throws when a MainView outbound message drifts from its schema (single-domain boundary, e.g. MainViewMessageHandler.postToManagerTarget)', () => {
     expect(() =>
       assertOutboundMessage(MainViewMessageSchema, {
         command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,

@@ -13,8 +13,6 @@ import {
 } from '@shared/schemas';
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 
-// Local imports - webview commands
-import { setWaColorScheme, themeIsDark } from '@shared/wa/waColorScheme';
 import type { ZodError } from 'zod';
 
 interface CommonMessageContext {
@@ -136,20 +134,19 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
   }
 
   /**
-   * Handle theme updates from the extension host.
+   * Record the host theme kind.
    *
-   * Mirrors the theme kind onto `<html>` as `wa-light` / `wa-dark` so Web
-   * Awesome's color-scheme classes activate (per WA's native theming model).
-   * Also keeps the legacy `body.<theme>` class for downstream rules.
+   * This method has no DOM job: `@shared/wa/waColorScheme`'s MutationObserver
+   * is the single owner of the `wa-light` / `wa-dark` class on `<html>`. It
+   * derives darkness from the body signals the host itself sets — VS Code's
+   * `vscode-*` classes and `data-vscode-theme-kind`, and on desktop the same
+   * attributes written by `applyHostBodyTheme()` — so no push is needed here.
+   * Writing `document.body.className = theme` from this method used to erase
+   * those host classes, which is why the `:host-context(.vscode-*)` rules
+   * stopped matching once a theme message arrived.
    */
   protected onThemeChange(theme: Theme): void {
     this.theme = theme;
-    document.body.className = theme;
-    // Defer the class swap to the shared helper so the class set + ordering
-    // stays in one place across hosts, and reuse `themeIsDark()` so the
-    // dark-detection rule ('high-contrast' renders dark) lives next to the
-    // desktop renderer's path in @shared/wa/hostTheme.
-    setWaColorScheme(themeIsDark(theme));
   }
 
   /**

@@ -834,7 +834,7 @@ describe('ProgressBackend', () => {
 
     await backend.syncRenderedStreams({ syncActiveStream: true });
 
-    expect(sendStreamMetadata).toHaveBeenCalledWith(stream, '', undefined);
+    expect(sendStreamMetadata).toHaveBeenCalledWith(stream, '');
     expect(messages).toContainEqual(
       expect.objectContaining({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,

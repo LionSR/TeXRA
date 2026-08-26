@@ -1,9 +1,9 @@
-// Host-neutral helpers for applying theme classes onto <body> + <html>.
+// Host-neutral helper for applying theme classes onto <body> + <html>.
 //
-// Both hosts (VS Code BaseWebviewApp and the Electron renderer) used to
-// hand-roll body.classList mutation + setWaColorScheme() in lockstep. Keep
-// the class names + ordering in one place so any future addition (e.g.
-// `wa-high-contrast`) doesn't need parallel edits across hosts.
+// Only the Electron renderer calls this: it is the host there, so it has to
+// write the body signals itself. Inside VS Code the host writes them and the
+// MutationObserver in `waColorScheme.ts` derives `wa-light`/`wa-dark` from
+// them, so no webview code applies a theme by hand.
 //
 // The theme-kind vocabulary and the kind→darkness mapping live in
 // `waColorScheme.ts` (the leaf this module already depends on); import them
@@ -19,8 +19,9 @@ import { setWaColorScheme, THEME_CLASSES, themeIsDark } from './waColorScheme';
  *   - sets `body.dataset.vscodeThemeKind`
  *   - swaps the `wa-light`/`wa-dark` class on <html> via setWaColorScheme()
  *
- * Equivalent to the desktop's `applyDesktopTheme()` and the VS Code
- * `BaseWebviewApp.onThemeChange()` body manipulation, just centralised.
+ * This is the desktop renderer's stand-in for the body signals VS Code sets
+ * on its own webviews, so the shared observer classifies both hosts the same
+ * way.
  */
 export function applyHostBodyTheme(theme: Theme): void {
   if (typeof document === 'undefined') return;

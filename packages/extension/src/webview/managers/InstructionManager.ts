@@ -2,14 +2,13 @@ import { polishTextWithAI, FileContext } from '@agent/runtime';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { createLog } from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type { MainViewInboundMessage } from '@shared/schemas';
+import type { MainViewInboundMessage, MainViewMessage } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
 import { THREE_DAYS_MS } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { PASTED_DIR } from '@utils/files/pastedImageName';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
-import { BaseWebviewManager } from './BaseWebviewManager';
 
 const CHANNEL = 'InstructionManager';
 const log = createLog(CHANNEL);
@@ -24,9 +23,9 @@ type ClipboardImageMessage = Extract<
   { command: typeof MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE }
 >;
 
-export class InstructionManager extends BaseWebviewManager {
-  constructor() {
-    super();
+export class InstructionManager {
+  /** Posts to whichever launcher webview is dispatching right now. */
+  constructor(private readonly post: (message: MainViewMessage) => void) {
     setTimeout(async () => {
       try {
         await StorageFS.ensureDir(PASTED_DIR);
@@ -40,25 +39,22 @@ export class InstructionManager extends BaseWebviewManager {
   async handlePolishInstructionText(
     message: PolishInstructionMessage,
   ): Promise<void> {
-    if (!this.webview) {
-      return;
-    }
     try {
       const fileContext = this.buildFileContext(message);
       const result = await polishTextWithAI(message.text, fileContext);
       if (result.success) {
-        this.postMessage({
+        this.post({
           command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
           text: result.text,
         });
       } else {
-        this.postMessage({
+        this.post({
           command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
           error: result.error ?? 'Error polishing text',
         });
       }
     } catch (error) {
-      this.postMessage({
+      this.post({
         command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
         error: toErrorMessage(error),
       });
@@ -85,16 +81,13 @@ export class InstructionManager extends BaseWebviewManager {
   }
 
   async handleClipboardImage(message: ClipboardImageMessage): Promise<void> {
-    if (!this.webview) {
-      return;
-    }
     try {
       const { base64, mediaType, fileName } = message;
       if (!base64 || !mediaType || !fileName) {
         return;
       }
       await savePastedImageBase64(base64, fileName);
-      this.postMessage({
+      this.post({
         command: MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE,
         file: fileName,
       });

@@ -394,7 +394,7 @@ export class LitSessionRenderer implements SessionRendererPort {
   }
 
   /**
-   * Update stream metadata and theme for the webview.
+   * Update stream metadata for the webview.
    * Use this for structural updates (initial sync, stream add/remove).
    * For incremental updates, prefer the targeted notifications above.
    * `projectedStream` selects which tab gets active-tab enrichment (worktree
@@ -403,11 +403,8 @@ export class LitSessionRenderer implements SessionRendererPort {
   sendStreamMetadata(
     projectedStream: PresentedStreamId,
     activeStream: PresentedStreamId,
-    theme?: 'dark' | 'light',
   ): void {
     if (!this.isAvailable()) return;
-
-    if (theme) this.setTheme(theme);
 
     const streams = buildStreamInfos(this.state, projectedStream);
     const states = this.state.streamStatus.getAllStreamStates();
@@ -516,14 +513,6 @@ export class LitSessionRenderer implements SessionRendererPort {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SET_PLACEMENT,
       placement,
-    });
-  }
-
-  /** Push the host theme alone — theme flips need no metadata rebuild. */
-  setTheme(theme: 'dark' | 'light'): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.THEME_SET,
-      theme,
     });
   }
 
