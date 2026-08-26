@@ -10,6 +10,7 @@ import {
   type RunContext,
 } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
+import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type {
   HostInteractions,
@@ -1256,11 +1257,9 @@ describe('headless delegation', () => {
   });
 
   it('tells orchestrators that delegated instructions must carry parent constraints', () => {
-    const parameters = new DelegateAgentTool().definition.parameters as {
-      properties?: Record<string, { description?: string }>;
-    };
+    const parameters = convertToolSchema(new DelegateAgentTool().definition);
     const instructionDescription =
-      parameters.properties?.instruction?.description ?? '';
+      parameters?.properties?.instruction?.description ?? '';
 
     expect(instructionDescription).toContain(
       'copy every relevant parent constraint',

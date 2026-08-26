@@ -1,9 +1,6 @@
 /**
- * Config-loading half of the remote-agent client. Resolving a remote agent's
- * YAML tool list pulls in `@tools/registry` (through
- * `resolveAgentSettingTools`), which imports every registered tool; keep this
- * module out of any path reachable from `src/tools/`. The listing half — which
- * the agent index does reach — lives in `./remoteAgentList`.
+ * Config-loading half of the remote-agent client. The listing half — which the
+ * agent index does reach — lives in `./remoteAgentList`.
  */
 import {
   type AgentSettingInput,
@@ -13,7 +10,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { updateAgentMeta } from '@agent/index/agentRegistry';
 import { extractToolNames } from '@agent/index/agentYamlScanner';
-import { resolveAgentSettingTools } from '@agent/runtime/agentSettingTools';
+import { normalizeAgentSettingTools } from '@agent/runtime/agentSettingTools';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { createLog } from '@logger/logUtils';
@@ -57,16 +54,14 @@ export async function loadRemoteAgent(
     }
     const validated = parsedYaml.value;
 
-    // Extract metadata before resolving tools to full definitions (for registry cache)
     const settings: AgentSettingInput = validated.settings;
     const toolNames = extractToolNames(settings.tools);
     const defaultOutputFiles = settings.defaultOutputFiles;
 
-    // Process tool definitions (remote agents are self-contained)
-    const resolvedSettings = resolveAgentSettingTools(settings, CHANNEL);
-
     const config: RemoteAgentConfig = {
-      settings: AgentSettingSchema.parse(resolvedSettings),
+      settings: AgentSettingSchema.parse(
+        normalizeAgentSettingTools(settings, CHANNEL),
+      ),
       prompts: AgentPromptSchema.parse(validated.prompts),
     };
 
