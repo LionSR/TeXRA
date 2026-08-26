@@ -157,7 +157,6 @@ function createLiveToolUseFlowContext(
   overrides: Partial<LiveToolUseFlowContext> = {},
 ): LiveToolUseFlowContext {
   return {
-    session: { appendFollowUp: vi.fn() },
     modelHandler: { supportsManualCompaction: true },
     requestImmediateCompaction: vi.fn(),
     modelSwitchDisabledReason: vi.fn(),

@@ -259,7 +259,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   private renderHeader(data: ExternalInquiryPermission): TemplateResult {
     return html`
       <wa-badge variant="neutral" appearance="filled">
-        ${data.mode === 'followUp' ? 'follow-up' : 'new question'}
+        ${(data.transcript?.length ?? 0) > 1 ? 'follow-up' : 'new question'}
       </wa-badge>
     `;
   }

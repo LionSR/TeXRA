@@ -727,7 +727,6 @@ describe('runFlowWithLifecycle', () => {
           STREAM_PHASE.CANCELLED,
         );
         const flowContext: LiveToolUseFlowContext = {
-          session: { appendFollowUp: vi.fn() },
           modelHandler: { supportsManualCompaction: false },
           requestImmediateCompaction: vi.fn(),
           modelSwitchDisabledReason: vi.fn(),

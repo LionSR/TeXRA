@@ -566,7 +566,6 @@ describe('session.interactions request bookkeeping', () => {
           threadId: 'inquiry:unattached',
           question: 'Can this notification be shown?',
           streamId,
-          mode: 'new',
           allowBypass: false,
           sessionLinks: null,
           draft: null,

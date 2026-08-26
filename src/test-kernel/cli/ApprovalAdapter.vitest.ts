@@ -314,7 +314,6 @@ describe('approval prompt hooks', () => {
       tracker.hooks,
     ).openExternalInquiry?.({
       requestId: 'ei_aabbccdd0011',
-      mode: 'followUp' as const,
       threadId: 'ei_aabbccdd0011',
       question: 'May I ask an external model to verify this proof?',
       allowBypass: false,

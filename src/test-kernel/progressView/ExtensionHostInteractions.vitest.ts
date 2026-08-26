@@ -784,7 +784,6 @@ describe('createExtensionHostInteractions', () => {
         question: 'Which convention should be used?',
         allowBypass: false,
         streamId: STREAM_A,
-        mode: 'new',
       }),
     ).resolves.toEqual({ threadId: 'thread-a' });
 
@@ -794,7 +793,6 @@ describe('createExtensionHostInteractions', () => {
       question: 'Which convention should be used?',
       allowBypass: false,
       streamId: 'stream-a',
-      mode: 'new',
     });
     interactions.dismissExternalInquiry('thread-a');
     expect(handlers.transport.externalInquiry.dismiss).toHaveBeenCalledWith(

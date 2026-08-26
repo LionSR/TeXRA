@@ -25,7 +25,6 @@ import {
   toNewestFirstByTimestamp,
   unique,
   hexId12,
-  normalizeFilePath,
 } from '@utils/core';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -49,8 +48,6 @@ const InquiryTurnBaseShape = {
   timestamp: z.string().min(1),
   question: z.string(),
   context: z.string().nullish(),
-  questionRelativePath: z.string().min(1),
-  contextRelativePath: z.string().nullish(),
   suggestSearch: z.boolean().nullish(),
   attachFiles: z.array(z.string()).nullish(),
 };
@@ -69,7 +66,6 @@ const AnsweredInquiryTurnSchema = z.object({
   kind: z.literal('answered'),
   answer: z.string(),
   answeredAt: z.string().min(1),
-  answerRelativePath: z.string().min(1),
   sessionLinks: InquirySessionLinksSchema.nullish(),
 });
 type AnsweredInquiryTurn = z.infer<typeof AnsweredInquiryTurnSchema>;
@@ -132,20 +128,12 @@ const threadMutex = new KeyedMutex<string>();
 // Path helpers
 // ============================================================================
 
-function turnDir(turnIndex: number): string {
-  return `t${turnIndex}`;
-}
-
 function threadDir(threadId: InquiryThreadId): string {
   return path.join(THREADS_DIR, threadId);
 }
 
 function threadManifestPath(threadId: InquiryThreadId): string {
   return path.join(threadDir(threadId), 'manifest.json');
-}
-
-function threadTurnDir(threadId: InquiryThreadId, turnIndex: number): string {
-  return path.join(threadDir(threadId), turnDir(turnIndex));
 }
 
 /**
@@ -320,42 +308,13 @@ export async function recordOpenQuestion(params: {
     };
 
     const turnIndex = baseManifest.turns.length + 1;
-    const turnPath = threadTurnDir(threadId, turnIndex);
     const trimmedContext = params.context?.trim() || undefined;
-
-    await GlobalStorageFS.ensureDir(turnPath);
-
-    const td = turnDir(turnIndex);
-    const questionRelativePath = normalizeFilePath(
-      path.join(td, 'question.txt'),
-    );
-    const contextRelativePath = trimmedContext
-      ? normalizeFilePath(path.join(td, 'context.txt'))
-      : undefined;
-
-    const writeOps: Promise<void>[] = [
-      GlobalStorageFS.writeAtomic(
-        path.join(turnPath, 'question.txt'),
-        params.question,
-      ),
-    ];
-    if (trimmedContext) {
-      writeOps.push(
-        GlobalStorageFS.writeAtomic(
-          path.join(turnPath, 'context.txt'),
-          trimmedContext,
-        ),
-      );
-    }
-    await Promise.all(writeOps);
 
     const turn: OpenInquiryTurn = {
       turnIndex,
       timestamp,
       question: params.question,
       context: trimmedContext,
-      questionRelativePath,
-      contextRelativePath,
       kind: 'open',
       suggestSearch: params.suggestSearch ?? undefined,
       attachFiles: params.attachFiles?.length ? params.attachFiles : undefined,
@@ -390,16 +349,8 @@ export async function recordAnswerForOpenTurn(params: {
 }): Promise<PersistedAnsweredTurn | null> {
   const outcome = await withOpenTurnUpdate(
     params.threadId,
-    async (existing, lastTurn, timestamp) => {
-      const turnPath = threadTurnDir(params.threadId, lastTurn.turnIndex);
-      const td = turnDir(lastTurn.turnIndex);
-      const answerRelativePath = normalizeFilePath(path.join(td, 'answer.txt'));
+    (existing, lastTurn, timestamp) => {
       const sessionLinks = normalizeSessionLinks(params.sessionLinks);
-
-      await GlobalStorageFS.writeAtomic(
-        path.join(turnPath, 'answer.txt'),
-        params.answer,
-      );
 
       // `draft` is open-turn-only state and must not survive the transition.
       const { draft: _draft, ...openFields } = lastTurn;
@@ -408,7 +359,6 @@ export async function recordAnswerForOpenTurn(params: {
         kind: 'answered',
         answer: params.answer,
         answeredAt: timestamp,
-        answerRelativePath,
         sessionLinks,
       };
 
@@ -480,9 +430,8 @@ export async function persistOpenTurnDraft(params: {
 
     // Deliberately does not bump updatedAt: a draft autosave is not a state
     // transition (unlike open/answer/drop), and updatedAt drives listing
-    // sort order, the `since` freshness filter, and the "Updated: ..." text
-    // shown to the model — none of which should react to the user still
-    // typing an unsent answer.
+    // sort order and the "Updated: ..." text shown to the model — neither of
+    // which should react to the user still typing an unsent answer.
     const nextManifest: ExternalInquiryThreadManifest = {
       ...existing,
       turns: [...existing.turns.slice(0, -1), nextTurn],
@@ -581,10 +530,8 @@ export async function listThreadsByStatus(params: {
   scope: 'stream' | 'all';
   streamId?: StreamTabId;
   limit?: number;
-  since?: string;
 }): Promise<InquiryThreadSummary[]> {
   const all = await listAllManifests();
-  const cutoff = params.since ? Date.parse(params.since) : null;
 
   const filtered = all.filter((m) => {
     if (params.status !== 'any' && m.status !== params.status) return false;
@@ -592,7 +539,6 @@ export async function listThreadsByStatus(params: {
       if (!params.streamId) return false;
       if (m.parentStreamId !== params.streamId) return false;
     }
-    if (cutoff != null && Date.parse(m.updatedAt) < cutoff) return false;
     return true;
   });
 

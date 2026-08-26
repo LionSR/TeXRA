@@ -141,13 +141,11 @@ function admitFollowUp(
       return { status: 'sent' };
     }
     if (submission.kind === 'queued') return { status: 'queued' };
-    if (submission.kind === 'refused') {
-      return { status: 'failed', reason: 'not_resumable' };
-    }
-    // No queue entry to join: deliver to the live context directly.
-    target.context.session.appendFollowUp(item);
-    notifyFollowUpSent(streamId, ownerSession);
-    return { status: 'sent' };
+    // The queue is the only way in. A refusal here means the session has no
+    // entry for this stream (terminalized by a stream deletion, or terminally
+    // released) or is disposed: the flow context may still be attached during
+    // teardown, but the continuation boundary that owns it is gone.
+    return { status: 'failed', reason: 'not_resumable' };
   }
 
   if (target.kind === 'no_session') {
@@ -161,7 +159,7 @@ function admitFollowUp(
     options.mode === 'live_notification' ? 'live_owner' : 'recoverable';
   const submission = ownerSession.followUps.submit(streamId, item, admission);
   if (submission.kind === 'duplicate') return { status: 'sent' };
-  if (submission.kind === 'refused' || submission.kind === 'not_owned') {
+  if (submission.kind === 'refused') {
     return { status: 'failed', reason: 'not_resumable' };
   }
   if (submission.kind !== 'queued' || !submission.lease) {

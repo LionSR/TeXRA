@@ -5,7 +5,6 @@ import {
 import type {
   FollowUpQueue,
   FollowUpQueueBatch,
-  FollowUpQueueInput,
 } from '@agent/followUp/FollowUpQueue';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { StreamTabId } from '@shared/schemas';
@@ -35,10 +34,6 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
       );
     }
     this.followUps = childQueue;
-  }
-
-  appendFollowUp(followUp: FollowUpQueueInput): void {
-    this.followUps.enqueue(followUp);
   }
 
   appendSyntheticFollowUp(text: string): void {
