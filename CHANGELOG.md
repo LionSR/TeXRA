@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.40.5] - 2026-08-26
+
 ### Shared (all surfaces)
 
 #### Bug Fixes
@@ -14,6 +16,12 @@ All notable changes to this project will be documented in this file.
 - **Codex runs use the installed runtime consistently** — TeXRA recognizes the
   current Codex installation layout, honors Extra high reasoning when that
   runtime accepts it, and retains the High fallback for older installs.
+- **Stopped and failed runs remain resumable** — stopping a waiting run, a
+  failed child run, an early setup failure, or a missing structured submission
+  no longer discards or strands saved progress.
+- **Corrupted conversation state fails with a clear validation error** —
+  invalid saved provider messages are rejected during resume instead of causing
+  a confusing failure later in the model request.
 
 ### Extension (VS Code) and Desktop
 
@@ -23,6 +31,37 @@ All notable changes to this project will be documented in this file.
   extension and desktop run toolbar now matches the CLI: file edits and
   shell commands each have their own auto-approve toggle, and AUTO-TASK
   remains the complete grant for delegated agent work.
+
+#### Bug Fixes
+
+- **Team badges show the team actually in use** — Settings restores the active
+  team when opened, does not mark cancelled or blocked team changes as active,
+  and refreshes when the agent roster changes.
+
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Follow-up results return to the view that sent them** — switching progress
+  views while attachments are being saved no longer applies a submission result
+  to another view's draft.
+
+### CLI
+
+#### Features
+
+- **Terminal tabs use compact live titles** — tab titles keep the project and
+  run state visible under truncation, with distinct running and approval-needed
+  markers.
+
+#### Bug Fixes
+
+- **Work plans survive partial history-load failures** — live plan and to-do
+  updates no longer disappear when another saved workflow artifact cannot be
+  loaded.
+- **Ignored chat defaults explain why** — malformed user configuration, invalid
+  agent or model defaults, and misspelled `chat` keys now produce a warning
+  unless `--quiet` is active.
 
 ## [0.40.4] - 2026-08-23
 
