@@ -5,10 +5,10 @@ import {
   type FileOpResult,
 } from '@shared/schemas';
 
+import { emitClearMissingOutputs } from './streamEventUtils';
 // The clean schema is the source of truth for the fields both file operations
 // share; the pack config is structurally assignable to it.
 import type { CleanConfig as FileOpConfig } from './fileOpSchemas';
-import { emitClearMissingOutputs } from './streamEventUtils';
 
 /** The per-operation primitives a file operation (clean or pack) supplies. */
 interface FileOpActions {
