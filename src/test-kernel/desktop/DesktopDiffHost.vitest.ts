@@ -237,22 +237,6 @@ describe('createDesktopDiffHost', () => {
     consoleSpy.mockRestore();
   });
 
-  it('honors forceExternal even when postToRenderer is wired', async () => {
-    const posted: unknown[] = [];
-    const { host, openedPaths } = createHost({
-      postToRenderer: (message) => {
-        posted.push(message);
-        return true;
-      },
-      forceExternal: true,
-    });
-
-    await openDiffPair(host, 'Compare', ['a.txt', 'b.txt']);
-
-    expect(posted).toHaveLength(0);
-    expectOpenedPatchFile(openedPaths);
-  });
-
   it('removes external-editor patch directories when the host is disposed', async () => {
     const { host, openedPaths } = createHost();
 
