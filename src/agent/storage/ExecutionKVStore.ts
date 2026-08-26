@@ -6,6 +6,7 @@
  * and generic read/write for arbitrary keys.
  */
 
+import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -15,7 +16,6 @@ import {
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import { KVStore } from '@common/storage/KVStore';
-import { KVStoreCache } from '@common/storage/KVStoreCache';
 import { createLog } from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
@@ -407,17 +407,20 @@ function normalizeWorkspaceFilePaths(paths: readonly string[]): string[] {
 // ============================================================================
 
 // LRU-capped store cache. StorageFSKVStore is stateless (file-backed),
-// so eviction is lossless — re-creation just makes a new thin wrapper.
-const storeCache = new KVStoreCache<ExecutionId, StorageFSKVStore>(
-  (executionId) => new StorageFSKVStore(executionId),
-  { max: 50 },
-);
+// so eviction is lossless — re-creation just makes a new thin wrapper. The
+// cache exists for instance identity (callers spy on the returned store),
+// not to avoid work.
+const storeCache = new LRUCache<ExecutionId, StorageFSKVStore>({ max: 50 });
 
 export function getExecutionStore(executionId: ExecutionId): ExecutionKVStore {
-  return storeCache.get(executionId);
+  const cached = storeCache.get(executionId);
+  if (cached) return cached;
+  const created = new StorageFSKVStore(executionId);
+  storeCache.set(executionId, created);
+  return created;
 }
 
 /** Clear the in-memory store cache. Called during extension deactivation. */
 export function clearStoreCache(): void {
-  storeCache.invalidateAll();
+  storeCache.clear();
 }

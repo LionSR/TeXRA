@@ -14,7 +14,7 @@ import {
   type StreamTabId,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { generateExecutionId } from '@utils/core';
+import { aggregateError, generateExecutionId } from '@utils/core';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { AgentExecutionHandle } from './ExecutionHandle';
@@ -228,13 +228,10 @@ export async function runAgent(
         }
 
         if (artifactFailures.length > 0) {
-          const artifactFailure =
-            artifactFailures.length === 1
-              ? artifactFailures[0]
-              : new AggregateError(
-                  artifactFailures,
-                  `Execution ${executionId} has multiple final artifact failures`,
-                );
+          const artifactFailure = aggregateError(
+            artifactFailures,
+            `Execution ${executionId} has multiple final artifact failures`,
+          );
           if (runFailure) {
             throw new AggregateError(
               [runFailure.error, artifactFailure],

@@ -70,11 +70,10 @@ describe('renderModelOption uses wa-icon, matching renderAgentOption', () => {
   it('renders inline provenance in the launcher option', () => {
     const option = renderOptions(
       templates.renderAgentOptions([
-        { value: 'inline:helper', label: 'helper', isInline: true },
+        { value: 'inline:helper', label: 'helper', source: 'inline' },
       ]),
     ).querySelector('wa-option');
 
-    expect(option?.getAttribute('data-inline')).toBe('true');
     expect(option?.getAttribute('title')).toContain(
       'Definition supplied directly by the embedding application',
     );

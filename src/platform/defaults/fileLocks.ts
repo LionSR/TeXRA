@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 import { lock, type LockOptions } from 'proper-lockfile';
 
+import { throwAggregated } from '@utils/core';
 import { KeyedMutex } from '@utils/core/keyedMutex';
 
 import type { FileLockProvider } from '../interfaces';
@@ -71,13 +72,7 @@ export function createNodeFileLocks(tuning: FileLockTuning): FileLockProvider {
         const failures = [operationFailure, compromised, releaseFailure].filter(
           (error) => error !== undefined,
         );
-        if (failures.length === 1) throw failures[0];
-        if (failures.length > 1) {
-          throw new AggregateError(
-            failures,
-            `File lock failed: ${canonicalPath}`,
-          );
-        }
+        throwAggregated(failures, `File lock failed: ${canonicalPath}`);
         return value as T;
       });
     },

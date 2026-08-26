@@ -50,9 +50,9 @@ function buildAgentTooltip(opt: AgentOptionData): string {
     hints.push(
       'Plans a pipeline of specialized agents. Ask it which agent to use, or name agents in your instruction to steer delegation.',
     );
-  if (opt.isRemote) hints.push(properties.remote.hint);
-  if (opt.isCustom) hints.push(properties.custom.hint);
-  if (opt.isInline) hints.push(properties.inline.hint);
+  // The two built-in sources carry no origin hint and have no row here.
+  if (opt.source !== undefined && opt.source in properties)
+    hints.push(properties[opt.source as keyof typeof properties].hint);
   if (opt.isToolUse) hints.push('Can execute tools and code');
 
   return hints.join('\n');
@@ -67,9 +67,6 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
       title=${tooltip || nothing}
       data-label=${opt.label}
       data-tool-use=${opt.isToolUse ? 'true' : nothing}
-      data-remote=${opt.isRemote ? 'true' : nothing}
-      data-custom=${opt.isCustom ? 'true' : nothing}
-      data-inline=${opt.isInline ? 'true' : nothing}
     >
       ${
         opt.isOrchestrator
@@ -77,14 +74,14 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
           : nothing
       }${opt.label}
       ${
-        opt.isRemote
+        opt.source === 'remote'
           ? html`<span class="agent-icon">
               ${waIcon(AGENT_DECORATORS.properties.remote.icon)}</span
             >`
           : nothing
       }
       ${
-        opt.isInline
+        opt.source === 'inline'
           ? html`<span class="agent-icon">
               ${waIcon(AGENT_DECORATORS.properties.inline.icon)}</span
             >`

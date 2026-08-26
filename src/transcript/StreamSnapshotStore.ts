@@ -26,7 +26,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
-import { KVStoreCache } from '@common/storage/KVStoreCache';
 import { createLog } from '@logger/logUtils';
 import {
   CompileFailureSchema,
@@ -443,29 +442,16 @@ export class StreamSnapshotStore {
     overlays: {},
   }));
   /**
-   * Lazily-created per-stream handles over `streamDataDir(streamId)`. A
-   * handle is a stateless wrapper, so dropping one is lossless:
-   * `evict()`/`evictAll()` drop handles alongside the records, and
-   * {@link invalidateKvHandles} forces re-resolution after a stream's
-   * directory may have moved (staged-deletion rollback, storage-root
-   * refresh).
-   */
-  private readonly kvHandles = new KVStoreCache<StreamTabId>(
-    (streamId) => new KVStore(streamDataDir(streamId)),
-  );
-  /**
    * The crash-safe staged-deletion + rollback-recovery machine. It owns which
    * namespace holds a staged stream's data and the sidecar writes buffered
-   * behind that rename; this store keeps the records, KV handles, write
-   * mutexes, and stream versions it reaches back for through
-   * {@link StagedDeletionHost}.
+   * behind that rename; this store keeps the records, write mutexes, and
+   * stream versions it reaches back for through {@link StagedDeletionHost}.
    */
   private readonly deletions = new StagedDeletionCoordinator({
     queueWrite: (stream, key, value) => this.queueWrite(stream, key, value),
     cancelPendingWrites: (stream) => this.cancelPendingWritesForStream(stream),
     bumpStreamVersion: (stream) => this.records.bumpVersion(stream),
     seedChain: (stream) => this.records.get(stream)?.seedChain,
-    invalidateKvHandles: (stream) => this.invalidateKvHandles(stream),
     evict: (stream) => this.evict(stream),
   } satisfies StagedDeletionHost);
 
@@ -575,12 +561,10 @@ export class StreamSnapshotStore {
     // Record creation on read-only access stays deliberate:
     // hasDiskProvenance() keys off record presence.
     this.getOrCreateRecord(streamId);
-    return this.kvHandles.get(streamId);
-  }
-
-  /** Drop the cached KV handle so the next access re-resolves against the stream's current directory. */
-  private invalidateKvHandles(stream: StreamTabId): void {
-    this.kvHandles.invalidate(stream);
+    // A handle holds only the storage-root-relative directory and every
+    // operation re-resolves the root, so constructing one per access is
+    // equivalent to caching it and never goes stale.
+    return new KVStore(streamDataDir(streamId));
   }
 
   private async listStreamsUnder(root: string): Promise<StreamTabId[]> {
@@ -1133,7 +1117,6 @@ export class StreamSnapshotStore {
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   private evict(stream: StreamTabId): void {
     this.records.evict(stream);
-    this.kvHandles.invalidate(stream);
     this.seedQueues.delete(stream);
     for (const key of [...this.writeMutexes.keys()]) {
       if (!key.startsWith(`${stream}::`)) continue;
@@ -1147,7 +1130,6 @@ export class StreamSnapshotStore {
 
   evictAll(): void {
     this.records.evictAll();
-    this.kvHandles.invalidateAll();
     this.seedQueues.clear();
     this.writeMutexes.clear();
     this.dirtyWrites.clear();
@@ -1902,7 +1884,6 @@ export class StreamSnapshotStore {
         if (this.streamVersion(stream) !== version) return;
         await this.retryDirtyWrites(stream);
         if (this.streamVersion(stream) !== version) return;
-        this.invalidateKvHandles(stream);
         await this.seedFromDisk(stream, version);
       })
       .then(

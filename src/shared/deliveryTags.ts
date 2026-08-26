@@ -37,9 +37,10 @@ export interface DeliveryTagEntry {
    * the producer) and needs `decodeXmlEntities()` before display.
    * `subagent-progress` is included because its "todos" variant runs todo
    * text through `escapeText()`, producing `&amp;`/`&lt;` entities in the
-   * body. `github-webhook-activity` / `execution-activity` use
-   * `wrapAndSanitizeTag()` instead, which neutralizes embedded tag names
-   * rather than XML-entity-escaping, so they are not in the escaped subset.
+   * body. `github-webhook-activity` / `execution-activity` neutralize
+   * embedded tag names instead (see `wrapWebhookEvent()` in
+   * `src/tools/github/formatUtils.ts`) rather than XML-entity-escaping, so
+   * they are not in the escaped subset.
    */
   readonly escaped: boolean;
 }

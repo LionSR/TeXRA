@@ -80,8 +80,11 @@ export const AGENT_DECORATORS = {
       label: 'Remote',
       hint: 'Remote agent: Prompts loaded from cloud',
     },
+    // `star`, not a person glyph: `circle-user` is already the Account glyph
+    // inside the same settings window, and this row is rendered as the
+    // custom-agent badge in Settings -> Agents.
     custom: {
-      icon: 'circle-user',
+      icon: 'star',
       label: 'Custom',
       hint: 'Custom agent: User-defined in your agents directory',
     },
