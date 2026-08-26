@@ -12,6 +12,7 @@ import {
   midEraWorkflowOutputStem,
 } from '@shared/constants/workflowOutput';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { getConfig } from '@utils/config/configUtils';
 
 import { CHANNEL, DEFAULT_MAX_ROUNDS } from './constants';
 
@@ -35,7 +36,12 @@ export function generateTimestamp(): string {
  * helpers derive the legacy chunk form internally so the result matches
  * what pre-refactor runs wrote to disk.
  */
-function getFilePatterns(base: string, model: string, agent: string): string[] {
+function getFilePatterns(
+  base: string,
+  model: string,
+  agent: string,
+  numRounds: number,
+): string[] {
   const patterns: string[] = [];
 
   // Mid-era layout: files live under `r{round}/<base>_<cleanAgent>_<model>.*`.
@@ -43,7 +49,7 @@ function getFilePatterns(base: string, model: string, agent: string): string[] {
   // from the mid-era PR; without matching patterns here, clean/pack would
   // leave them orphaned.
   const midEraStem = midEraWorkflowOutputStem({ base, agent, model });
-  for (let round = 0; round < DEFAULT_MAX_ROUNDS; round++) {
+  for (let round = 0; round < numRounds; round++) {
     patterns.push(
       `r${round}/${midEraStem}`,
       `r${round}/${midEraStem}_diff`,
@@ -56,7 +62,7 @@ function getFilePatterns(base: string, model: string, agent: string): string[] {
     }
   }
 
-  for (let round = 0; round < DEFAULT_MAX_ROUNDS; round++) {
+  for (let round = 0; round < numRounds; round++) {
     // Legacy flat layout: `<base>_<chunk>_r{round}_<model>.*`
     const legacyStem = workflowOutputCopyStem({ base, agent, model, round });
     // Legacy stem already includes `_<model>`; for suffix variants
@@ -117,9 +123,10 @@ export function resolveHousekeepingTargets(
   const inputDir = path.dirname(inputFile);
   log.debug(`Parsed paths: baseName=${baseName}, inputDir=${inputDir}`);
 
+  const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
   // Pass the raw agent; getFilePatterns derives both the legacy chunk and
   // the new clean-agent forms internally so both disk layouts are matched.
-  const filePatterns = getFilePatterns(baseName, model, agent);
+  const filePatterns = getFilePatterns(baseName, model, agent, maxRounds);
   log.debug(`Generated patterns: ${filePatterns}`);
 
   return { baseName, inputDir, filePatterns };

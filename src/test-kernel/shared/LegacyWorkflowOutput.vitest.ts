@@ -30,7 +30,13 @@ describe('filename-era workflow output grammar', () => {
       'texra-legacy-workflow-output-',
       tempDirs,
     );
-    await installPlatform({ workspacePath }, { fs: nodeFilesystem });
+    await installPlatform(
+      {
+        config: { 'texra.agent.rounds': 2 },
+        workspacePath,
+      },
+      { fs: nodeFilesystem },
+    );
   });
 
   afterEach(async () => {
