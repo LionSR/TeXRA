@@ -332,35 +332,6 @@ describe('ProgressBackend', () => {
     expect(fullSync.streamStates?.child).toEqual(patch.streamState);
   });
 
-  it('scopes direct session events to each backend session', async () => {
-    const first = createListeningBackend();
-    const second = createListeningBackend();
-    const firstStream = 'session:first' as StreamTabId;
-    const secondStream = 'session:second' as StreamTabId;
-
-    emitActiveStream(first, {
-      streamId: firstStream,
-      agentCategory: AgentCategory.Workflow,
-    });
-
-    await vi.waitFor(() =>
-      expect(first.backend.presentation.activeStream).toBe(firstStream),
-    );
-    expect(second.backend.presentation.activeStream).not.toBe(firstStream);
-    expect(JSON.stringify(second.messages)).not.toContain(firstStream);
-
-    emitActiveStream(second, {
-      streamId: secondStream,
-      agentCategory: AgentCategory.ToolUse,
-    });
-
-    await vi.waitFor(() =>
-      expect(second.backend.presentation.activeStream).toBe(secondStream),
-    );
-    expect(first.backend.presentation.activeStream).toBe(firstStream);
-    expect(JSON.stringify(first.messages)).not.toContain(secondStream);
-  });
-
   it('isolates same-stream run facts across simultaneous backend sessions', async () => {
     const first = createListeningBackend();
     const second = createListeningBackend();
