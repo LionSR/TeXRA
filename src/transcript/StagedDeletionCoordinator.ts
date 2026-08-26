@@ -20,8 +20,8 @@
  *   `flush()`.
  *
  * It reaches the snapshot store only through {@link StagedDeletionHost} — the
- * store keeps ownership of records, KV handles, write mutexes, and stream
- * versions, and this coordinator never inspects them.
+ * store keeps ownership of records, write mutexes, and stream versions, and
+ * this coordinator never inspects them.
  */
 
 // Third-party imports
@@ -77,8 +77,8 @@ export interface StagedStreamSnapshotDeletion {
 /**
  * The narrow port back into the snapshot store. Every member is a capability
  * the staged-deletion machine cannot own itself: durable writes, the store's
- * per-(stream, category) write locks, its stream-version guard, its cached KV
- * handles, its seeding chain, and its in-memory record.
+ * per-(stream, category) write locks, its stream-version guard, its seeding
+ * chain, and its in-memory record.
  */
 export interface StagedDeletionHost {
   /** Persist one sidecar through the store's serialized write queue. */
