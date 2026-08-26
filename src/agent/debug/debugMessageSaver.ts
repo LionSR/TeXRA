@@ -32,7 +32,7 @@ type DebugObjectType = 'messages' | 'response';
  * The one current setting covers request messages, responses, and the final
  * input prompt.
  */
-export function shouldSaveModelIO(): boolean {
+function shouldSaveModelIO(): boolean {
   return getConfig<boolean>('texra.debug.saveModelIO', false);
 }
 

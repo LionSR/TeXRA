@@ -115,8 +115,10 @@ export async function appendFollowUpAsUserMessage(
   return { messages: nextMessages, attachmentKinds };
 }
 
-interface FollowUpBatchServices
-  extends Omit<FollowUpMessageServices, 'logger'> {
+interface FollowUpBatchServices extends Omit<
+  FollowUpMessageServices,
+  'logger'
+> {
   readonly logger: AgentTrace;
   /** Callback when a queued follow-up batch is consumed (clears UI display). */
   readonly onFollowUpConsumed?: () => void;

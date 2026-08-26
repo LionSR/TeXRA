@@ -233,45 +233,46 @@ export async function runReflectionFlow(
   mediaNode.next(responseCycleNode);
   responseCycleNode.next(outputNode);
 
-  const pf = new RoundPersistedFlow<
-    ReflectionFlowShared,
-    ReflectionServices
-  >(prepContextNode, kv, {
-    parentStage,
-    sharedSchema: ReflectionFlowStateSchema,
-    callbacks: {
-      createRoundStage: (roundIndex, parent, shared) =>
-        logger.openStage(`r${roundIndex}`, {
-          parent: parent ?? undefined,
-          kind: 'round',
-          index: roundIndex,
-          total: computeRoundStageTotal(shared.totalRounds, roundIndex),
-        }),
-      resetForNextRound: (s) => {
-        s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
-      },
-      signal: runScope.signal,
-      // Bounded compile-repair round (#7077): a compile failure on what
-      // would otherwise be the final round gets exactly one extra round
-      // so the model sees the failure context via PrepareContextNode
-      // instead of the run silently ending on a broken output. Gated on
-      // the same setting that produced compileFailureContext in the
-      // first place, and on the one-shot `compileRepairRoundGranted`
-      // flag so a repair round that itself fails to compile doesn't
-      // chain a second one — even across resume.
-      grantExtraRound: (s) => {
-        if (
-          !s.compileFailureContext ||
-          s.compileRepairRoundGranted ||
-          !workflowOutputPolicy.shouldRejectOnCompileFailure()
-        ) {
-          return false;
-        }
-        s.compileRepairRoundGranted = true;
-        return true;
+  const pf = new RoundPersistedFlow<ReflectionFlowShared, ReflectionServices>(
+    prepContextNode,
+    kv,
+    {
+      parentStage,
+      sharedSchema: ReflectionFlowStateSchema,
+      callbacks: {
+        createRoundStage: (roundIndex, parent, shared) =>
+          logger.openStage(`r${roundIndex}`, {
+            parent: parent ?? undefined,
+            kind: 'round',
+            index: roundIndex,
+            total: computeRoundStageTotal(shared.totalRounds, roundIndex),
+          }),
+        resetForNextRound: (s) => {
+          s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
+        },
+        signal: runScope.signal,
+        // Bounded compile-repair round (#7077): a compile failure on what
+        // would otherwise be the final round gets exactly one extra round
+        // so the model sees the failure context via PrepareContextNode
+        // instead of the run silently ending on a broken output. Gated on
+        // the same setting that produced compileFailureContext in the
+        // first place, and on the one-shot `compileRepairRoundGranted`
+        // flag so a repair round that itself fails to compile doesn't
+        // chain a second one — even across resume.
+        grantExtraRound: (s) => {
+          if (
+            !s.compileFailureContext ||
+            s.compileRepairRoundGranted ||
+            !workflowOutputPolicy.shouldRejectOnCompileFailure()
+          ) {
+            return false;
+          }
+          s.compileRepairRoundGranted = true;
+          return true;
+        },
       },
     },
-  });
+  );
 
   pf.setServices(services);
 

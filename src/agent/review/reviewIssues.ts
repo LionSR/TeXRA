@@ -17,7 +17,7 @@ import { z } from 'zod';
 // Local imports
 import { normalizeFilePath } from '@utils/core';
 
-export const REVIEW_SEVERITIES = ['critical', 'warning', 'info'] as const;
+const REVIEW_SEVERITIES = ['critical', 'warning', 'info'] as const;
 export type ReviewSeverity = (typeof REVIEW_SEVERITIES)[number];
 
 export interface ReviewIssue {

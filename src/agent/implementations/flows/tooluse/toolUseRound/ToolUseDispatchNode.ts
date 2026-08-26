@@ -254,11 +254,7 @@ export class ToolUseDispatchNode extends BaseNode<
       const primary = results[primaryIndex];
       // Primary interrupted or never ran: leave the duplicate null too.
       if (!primary) continue;
-      const {
-        edits: _edits,
-        files: _files,
-        ...sharedResult
-      } = primary.result;
+      const { edits: _edits, files: _files, ...sharedResult } = primary.result;
       // The primary already injected any attachments into the follow-up;
       // repeating them per duplicate would duplicate binary context.
       results[index] = this.makeSyntheticResult(

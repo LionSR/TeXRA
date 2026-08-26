@@ -557,9 +557,7 @@ export function resolveOutputFiles(
 
 type ToolFlagVars = Pick<
   UserVars,
-  | 'CODEX_GUIDANCE'
-  | 'CLAUDE_CODE_GUIDANCE'
-  | 'ROUNDS'
+  'CODEX_GUIDANCE' | 'CLAUDE_CODE_GUIDANCE' | 'ROUNDS'
 >;
 
 const TOOL_GUIDANCE = {
