@@ -1,19 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import type { AgentEntry } from '@agent/index/agentEntry';
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { TeamOptionDataSchema } from '@shared/schemas';
-import type { AgentCategory, AgentSource } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 
+import {
+  physicistCatalog,
+  type AgentCatalog,
+} from '@test/support/agentCatalogFixtures';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
 import { commandOf } from './desktopSettingsTestSupport';
-
-type AgentCatalog = Record<AgentCategory, AgentEntry[]>;
 
 interface ControllerFixtureOptions {
   readonly workspaceState?: FakeStateStore;
@@ -155,30 +155,6 @@ function remoteTeamPreset(): Record<string, unknown> {
     agents: { workflow: [], toolUse: ['orchestrator'] },
     texraHostedAgents: ['orchestrator'],
   };
-}
-
-function physicistCatalog(): AgentCatalog {
-  const workflow = ['correct', 'polish'].map((name): AgentEntry => ({
-    source: 'builtInWorkflow',
-    name,
-    path: `/agents/${name}.yaml`,
-    category: 'workflow',
-  }));
-  const toolUse = [
-    ['orchestrator', 'builtInToolUse'],
-    ['research', 'custom'],
-    ['numerics', 'builtInToolUse'],
-    ['review', 'builtInToolUse'],
-    ['presenter', 'builtInToolUse'],
-    ['latexFixer', 'builtInToolUse'],
-  ].map(([name, source]): AgentEntry => ({
-    source: source as AgentSource,
-    name,
-    path: `/agents/${name}.yaml`,
-    category: 'toolUse',
-    ...(name === 'orchestrator' ? { tools: ['delegate_agent'] } : {}),
-  }));
-  return { workflow, toolUse };
 }
 
 describe('DefaultDesktopAgentSettingsController', () => {

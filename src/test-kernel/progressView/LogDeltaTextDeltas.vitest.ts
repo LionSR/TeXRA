@@ -23,29 +23,16 @@ import {
   type ProgressViewOutboundMessage,
   type StreamLogEntry,
   type StreamLogTextDelta,
-  type TaskGroup,
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { TranscriptRow } from '@shared/transcript';
-import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { assertSupported } from '@shared/utils/dispatcher';
+import { projectTaskGroupsFromStreamLog } from '@test/support/transcriptRowFixtures';
 
 /** The painted text of any text-bearing row. */
 function rowText(row: TranscriptRow | undefined): string | undefined {
   return row && 'text' in row ? row.text.full : undefined;
-}
-
-/** Test-local full replay through the production reducer (the resync path). */
-function projectTaskGroupsFromStreamLog(
-  entries: Iterable<StreamLogEntry>,
-): TaskGroup[] {
-  const taskGroups: TaskGroup[] = [];
-  const taskGroupIndex = new Map<string, number>();
-  for (const entry of entries) {
-    upsertTaskGroupFromStreamLog(taskGroups, taskGroupIndex, entry);
-  }
-  return taskGroups;
 }
 
 const STREAM_ID = 'stream-a' as StreamTabId;
