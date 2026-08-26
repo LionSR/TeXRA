@@ -732,10 +732,15 @@ export class LaTeXTab extends LitElement {
       };
       return;
     }
-    const result = settingByKey(
-      LATEX_CONFIG_FIELD_TO_KEY[field],
-    )?.schema.safeParse(parsed);
-    if (!result?.success) {
+    const settingKey = LATEX_CONFIG_FIELD_TO_KEY[field];
+    const entry = settingByKey(settingKey);
+    if (!entry) {
+      throw new Error(
+        `Missing catalog entry for LaTeX setting "${settingKey}"`,
+      );
+    }
+    const result = entry.schema.safeParse(parsed);
+    if (!result.success) {
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
         [field]: 'Enter a JSON object with string values.',
