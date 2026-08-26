@@ -722,8 +722,8 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'tools',
     slots: sameSlot('config'),
     honoredBy: {
-      vscode: { reader: 'src/shared/approvalPolicy.ts' },
-      desktop: { reader: 'src/shared/approvalPolicy.ts' },
+      vscode: { reader: 'src/utils/config/platformSettings.ts' },
+      desktop: { reader: 'src/utils/config/platformSettings.ts' },
       cli: {
         reader: 'packages/cli/src/runtime/cliConfig.ts',
         reachability: {

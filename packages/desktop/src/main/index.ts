@@ -40,13 +40,17 @@ import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProce
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { DisposableStore } from '@platform/disposable';
-import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
+import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, agentKeyOf, type AgentSource } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { killActiveRecording } from '@tools/media/audio';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   readGitEnvironmentSummary,
@@ -1286,8 +1290,8 @@ if (protocolLifecycle.shouldContinue) {
         processResources.add(() => processStores.dispose());
         await processSession.waitUntilReady();
         processSession.setApprovalPolicy(
-          readPersistedTexraApprovalPolicy((key, fallback) =>
-            platform().config.get(key, fallback),
+          readPlatformSetting<TexraApprovalPolicy>(
+            TEXRA_APPROVAL_POLICY_CONFIG_KEY,
           ),
         );
         sessionStores = processStores.stores;
