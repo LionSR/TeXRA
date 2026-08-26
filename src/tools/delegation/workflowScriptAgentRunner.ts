@@ -320,9 +320,9 @@ export function createWorkflowScriptAgentRunner(
             // call time), so this is a single-owner read rather than a
             // reconstruction of the engine's rule.
             workflowPhase: invocation.options.phase,
-            // Live per-kind ancestry, matching LLM delegation: each approval
-            // follows the parent's corresponding bypass. The run's own stream
-            // inherits from the orchestrator, so nested delegation remains
+            // Live inherited bypass values, matching LLM delegation: each
+            // approval follows the parent's corresponding bypass. The run's own
+            // stream inherits from the orchestrator, so nested delegation remains
             // transitive.
             onStreamResolved: (resolvedStreamId) => {
               invocation.report?.({ childStreamId: resolvedStreamId });

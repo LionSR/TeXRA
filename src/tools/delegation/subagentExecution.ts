@@ -134,9 +134,9 @@ export async function executeSubagent(
   const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
 
   const inheritChildStreamApprovals = (resolvedStreamId: StreamTabId): void => {
-    // Live per-kind ancestry: each approval follows the parent's corresponding
-    // bypass, so a partial grant propagates only that grant, while complete
-    // delegated-task approval also reaches nested orchestrators.
+    // Live inherited bypass values: each approval follows the parent's
+    // corresponding bypass, so a partial grant propagates only that grant.
+    // Complete delegated-task approval also reaches nested orchestrators.
     configureDelegatedChildApprovals(
       resolvedStreamId,
       parentStreamId,

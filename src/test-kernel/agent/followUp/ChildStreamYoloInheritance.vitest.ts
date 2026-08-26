@@ -53,7 +53,7 @@ describe('child subagent stream approval inheritance', () => {
     configureDelegatedChildApprovals(child, parent);
 
     expect(isApprovalBypassedForStream(child)).toBe(true);
-    // Edit-YOLO inheritance must not drag bash along — kinds stay per-graph.
+    // Edit-YOLO inheritance must not drag bash along — bypass values stay independent.
     expect(isBashApprovalBypassedForStream(child)).toBe(false);
   });
 
