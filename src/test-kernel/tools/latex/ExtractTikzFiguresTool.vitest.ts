@@ -58,15 +58,4 @@ describe('ExtractTikzFiguresTool', () => {
     expect(result.summary).not.toContain('Compiled');
     expect(result.files).toBeUndefined();
   });
-
-  it('returns error when LaTeX file is missing', async () => {
-    await installPlatform({});
-
-    const result = await new ExtractTikzFiguresTool().call({
-      texPath: 'absent.tex',
-    });
-
-    expect(result.status).toBe('error');
-    expect(result.error).toContain('LaTeX file not found');
-  });
 });

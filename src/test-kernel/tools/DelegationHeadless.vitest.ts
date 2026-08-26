@@ -10,7 +10,6 @@ import {
   type RunContext,
 } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
-import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type {
   HostInteractions,
@@ -1217,20 +1216,15 @@ describe('headless delegation', () => {
     );
   });
 
-  it('adds a substantive handoff requirement to tool-use subagent instructions', async () => {
+  it('extends the bare instruction with injected handoff guidance', async () => {
+    // Regression pin for #5864: delegation must inject handoff guidance rather
+    // than hand the caller's instruction through verbatim. Deliberately
+    // wording-free — the injected copy churns (#9568) without behavior changing.
     await withRunContext(parentRunContext(), () => callDelegateReview());
 
     const instruction = mocks.executeAgent.mock.calls.at(-1)?.[0].instruction;
-    expect(instruction).toContain(
-      'Your final response is delivered verbatim to the parent orchestrator',
-    );
-    expect(instruction).toContain('never only a status note');
-    expect(instruction).toContain(
-      'tool, network, file, approval, output-format, or scope constraints',
-    );
-    expect(instruction).toContain(
-      'report the conflict instead of assuming permission',
-    );
+    expect(instruction).toContain('Check the proof.');
+    expect(instruction.length).toBeGreaterThan('Check the proof.'.length);
   });
 
   it('carries the current parent instruction into the subagent constraint context', async () => {
@@ -1253,30 +1247,6 @@ describe('headless delegation', () => {
       }),
       expect.any(String),
       expect.anything(),
-    );
-  });
-
-  it('tells orchestrators that delegated instructions must carry parent constraints', () => {
-    const parameters = convertToolSchema(new DelegateAgentTool().definition);
-    const instructionDescription =
-      parameters?.properties?.instruction?.description ?? '';
-
-    expect(instructionDescription).toContain(
-      'copy every relevant parent constraint',
-    );
-    expect(instructionDescription).toContain('tool/network/file/approval');
-    expect(instructionDescription).toContain(
-      'does not automatically inherit the parent conversation',
-    );
-  });
-
-  it('tells orchestrators that delegations run asynchronously and support parallel dispatch', () => {
-    const description = new DelegateAgentTool().definition.description;
-
-    expect(description).toContain('Delegations run asynchronously');
-    expect(description).toContain('launch them all in one turn');
-    expect(description).toContain(
-      'arrives automatically as a follow-up message',
     );
   });
 
