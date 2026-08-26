@@ -525,9 +525,7 @@ describe('instruction-panel desktop composer', () => {
       requireQuery(extension, '#executeButton wa-icon').getAttribute('name'),
     ).toBe('arrow-up');
     expect(
-      requireQuery(extension, '#sessionTypeToolUse').getAttribute(
-        'appearance',
-      ),
+      requireQuery(extension, '#sessionTypeToolUse').getAttribute('appearance'),
     ).toBe('default');
   });
 
