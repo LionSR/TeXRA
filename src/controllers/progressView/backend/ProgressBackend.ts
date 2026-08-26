@@ -313,7 +313,7 @@ export class ProgressBackend {
       this.releasePresentationLeases();
       if (this.renderer.isAvailable()) {
         this.renderer.onActiveStreamChanged('');
-        this.renderer.syncStreamContent('', { includeActiveState: true });
+        this.renderer.syncStreamContent('');
         if (previousStream) {
           this.renderer.releaseStreamContent(previousStream);
         }
@@ -371,7 +371,7 @@ export class ProgressBackend {
     this.transcriptPresentationLease = transcriptLeaseResult.value;
     this.presentation.select(stream);
     if (options.notifyActivation) this.renderer.onActiveStreamChanged(stream);
-    this.renderer.syncStreamContent(stream, { includeActiveState: true });
+    this.renderer.syncStreamContent(stream);
     if (previousStream && previousStream !== stream) {
       this.renderer.releaseStreamContent(previousStream);
     }

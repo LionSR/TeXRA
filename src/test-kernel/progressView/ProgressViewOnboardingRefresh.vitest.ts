@@ -506,13 +506,11 @@ describe('progress-view onboarding refresh wiring', () => {
       'ProgressView',
     );
     const fileOperationRequest = {
-      streamId: 'stream-a',
       agent: 'correct',
       model: 'gemini31p',
       inputFile: 'input.tex',
       outputFiles: ['declared.tex', '/workspace/generated.tex', 'extra.tex'],
       executionId: 'exec-123',
-      skipProgressViewClear: true,
     };
     expect(mocks.safeExecuteCommand).toHaveBeenNthCalledWith(
       2,

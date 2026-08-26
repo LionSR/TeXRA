@@ -216,19 +216,6 @@ function mergeRoundPatch<T>(
   return merged;
 }
 
-/**
- * Overlay shape for {@link StreamSnapshotStore.updateMissingOutputs} /
- * {@link StreamSnapshotStore.clearMissingOutputs} on an unseeded stream:
- * `reset` records that a `clearMissingOutputs()` happened somewhere in the
- * recorded sequence, so replay wipes the disk-read state before layering
- * `patch` on top, instead of merging onto stale disk rounds a clear was
- * supposed to erase.
- */
-interface RoundOverlay<T> {
-  reset: boolean;
-  patch: Map<number, T[] | null>;
-}
-
 /** Partial work-plan fields recorded while a stream is unseeded. */
 interface WorkPlanOverlay {
   todos?: readonly TodoItem[];
@@ -243,7 +230,7 @@ interface WorkPlanOverlay {
  */
 interface OverlayPatches {
   outputFiles: OutputFilesPatch;
-  missingOutputs: RoundOverlay<string>;
+  missingOutputs: Map<number, string[] | null>;
   compileFailures: Map<number, CompileFailure[] | null>;
   usage: Map<StorageKey, TokenUsageStats>;
   workPlan: WorkPlanOverlay;
@@ -293,26 +280,6 @@ function mergeWorkPlanOverlay(
   patch: WorkPlanOverlay,
 ): WorkPlanOverlay {
   return { ...existing, ...patch };
-}
-
-/**
- * Merge {@link RoundOverlay} patches in call order so `clearMissingOutputs`
- * interleaved with `updateMissingOutputs` on the same unseeded stream
- * replays correctly regardless of which fired first: a reset (`clear`)
- * supersedes everything recorded before it — it drops the earlier round
- * patch outright, matching a disk write of `{}` — while a later update
- * layers its round patch on top and preserves whichever reset flag is
- * already recorded.
- */
-function mergeMissingOutputsOverlay(
-  existing: RoundOverlay<string> | undefined,
-  patch: RoundOverlay<string>,
-): RoundOverlay<string> {
-  if (patch.reset) return patch;
-  return {
-    reset: existing?.reset ?? false,
-    patch: mergeRoundPatch(existing?.patch, patch.patch),
-  };
 }
 
 /**
@@ -605,8 +572,8 @@ export class StreamSnapshotStore {
   }
 
   private kv(streamId: StreamTabId): KVStore {
-    // Record creation on read-only access stays deliberate (see
-    // clearMissingOutputs): hasDiskProvenance() keys off record presence.
+    // Record creation on read-only access stays deliberate:
+    // hasDiskProvenance() keys off record presence.
     this.getOrCreateRecord(streamId);
     return this.kvHandles.get(streamId);
   }
@@ -725,11 +692,6 @@ export class StreamSnapshotStore {
       (sessionEvent) => {
         if (sessionEvent.scope !== 'session') return;
         switch (sessionEvent.event.type) {
-          case 'clearMissingOutputs':
-            // Exactly addressed (#9590 rule A3): the payload carries the
-            // initiator-selected streamId; there is no config fan-out.
-            this.clearMissingOutputs(sessionEvent.event.payload.streamId);
-            return;
           case 'updateStreamDescription':
             this.setDescription(
               sessionEvent.event.payload.streamId,
@@ -1010,8 +972,8 @@ export class StreamSnapshotStore {
     this.mutateWithOverlay(
       stream,
       'missingOutputs',
-      { reset: false, patch },
-      mergeMissingOutputsOverlay,
+      patch,
+      mergeRoundPatch,
       () =>
         this.applyRoundPatch(
           (record) => record.missingOutputs,
@@ -1162,42 +1124,6 @@ export class StreamSnapshotStore {
       }
     }
     return paths;
-  }
-
-  /**
-   * Clear the missing-outputs marker for a stream (memory + disk). Goes
-   * through the same `mutateWithOverlay` shape as `updateMissingOutputs` (via
-   * the shared `reset`-aware overlay), so a clear and an update racing on the
-   * same unseeded stream replay in call order instead of the clear always
-   * landing last.
-   *
-   * `existed` checks `missingOutputs` content specifically, not merely
-   * whether the stream has a record: every record defaults `missingOutputs`
-   * to `{}` on creation, and a record gets created for read-only reasons
-   * too (`kv()` — used by `read()` and other read-only `kv()` calls — as
-   * well as any other accumulator's own lazy creation, e.g. `setTodos`).
-   * Gating on record
-   * presence alone would treat those as "missing outputs existed" and write
-   * a spurious `missingOutputs.json`, resurrecting a `streamData/{id}/`
-   * directory `listPersistedStreams()` would then report for a stream that
-   * was never actually tracking missing outputs (or was just deleted).
-   */
-  private clearMissingOutputs(stream: StreamTabId): void {
-    let existed = false;
-    this.mutateWithOverlay(
-      stream,
-      'missingOutputs',
-      { reset: true, patch: new Map<number, string[] | null>() },
-      mergeMissingOutputsOverlay,
-      () => {
-        const record = this.records.get(stream);
-        existed = !!record && Object.keys(record.missingOutputs).length > 0;
-        this.getOrCreateRecord(stream).missingOutputs = {};
-      },
-      () => {
-        if (existed) this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {});
-      },
-    );
   }
 
   // ==========================================================================
@@ -2177,10 +2103,9 @@ export class StreamSnapshotStore {
     consumeOverlay(overlays, 'outputFiles', sidecarsToWrite, (patch) =>
       this.applyRoundPatch((r) => r.outputFiles, record, patch),
     );
-    consumeOverlay(overlays, 'missingOutputs', sidecarsToWrite, (patch) => {
-      if (patch.reset) record.missingOutputs = {};
-      this.applyRoundPatch((r) => r.missingOutputs, record, patch.patch);
-    });
+    consumeOverlay(overlays, 'missingOutputs', sidecarsToWrite, (patch) =>
+      this.applyRoundPatch((r) => r.missingOutputs, record, patch),
+    );
     consumeOverlay(overlays, 'compileFailures', sidecarsToWrite, (patch) =>
       this.applyRoundPatch((r) => r.compileFailures, record, patch),
     );

@@ -284,7 +284,6 @@ describe('createExtensionHostInteractions', () => {
         payload: {
           streamId: 'stream-a',
           suppressViewSwitch: true,
-          ensureVisible: true,
         },
       },
     });
@@ -362,7 +361,6 @@ describe('createExtensionHostInteractions', () => {
           payload: {
             streamId: 'failing-subagent',
             suppressViewSwitch: true,
-            ensureVisible: true,
           },
         },
       },

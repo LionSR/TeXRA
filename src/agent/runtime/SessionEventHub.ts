@@ -1,10 +1,9 @@
 import type { AgentEvent, StatusEvent } from '@agent/trace';
 import { createLog } from '@logger/logUtils';
 import type {
-  ClearMissingOutputsPayload,
   FollowUpSentPayload,
   GoalStateChangedPayload,
-  InquiryThreadUpdatedEvent,
+  InquiryThreadSummary,
   RemoveStreamPayload,
   SetActiveStreamPayload,
   SetParentStreamPayload,
@@ -29,11 +28,7 @@ export type SessionFact =
     }
   | {
       readonly type: 'inquiryThreadUpdated';
-      readonly payload: InquiryThreadUpdatedEvent;
-    }
-  | {
-      readonly type: 'clearMissingOutputs';
-      readonly payload: ClearMissingOutputsPayload;
+      readonly payload: InquiryThreadSummary;
     }
   | {
       readonly type: 'updateQueuedFollowUps';

@@ -37,7 +37,7 @@ import {
   STREAM_PHASE,
   runIdentityDisplayName,
   type ActiveChildInfo,
-  type InquiryThreadUpdatedEvent,
+  type InquiryThreadSummary,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { childElapsedMs } from '@shared/streams/childElapsed';
@@ -242,7 +242,7 @@ export class BackgroundTasksPanel extends LitElement {
 
   @consume({ context: inquiryThreadsContext, subscribe: true })
   @state()
-  private inquiries: InquiryThreadUpdatedEvent[] = EMPTY_INQUIRY_THREADS;
+  private inquiries: InquiryThreadSummary[] = EMPTY_INQUIRY_THREADS;
 
   /** Current phase per stream — a workflow-script run's row is otherwise
    *  indistinguishable at minute 2 and minute 38 of the same run. */
@@ -332,7 +332,7 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private renderInquiryItem(
-    thread: InquiryThreadUpdatedEvent,
+    thread: InquiryThreadSummary,
     index: number,
   ): TemplateResult {
     const preview = thread.lastQuestionPreview || '(empty question)';
@@ -632,7 +632,7 @@ function taskStatusBadge(child: ActiveChildInfo): {
 }
 
 function inquiryStatusVariant(
-  status: InquiryThreadUpdatedEvent['status'],
+  status: InquiryThreadSummary['status'],
 ): 'warning' | 'success' | 'neutral' {
   if (status === 'open') return 'warning';
   if (status === 'answered') return 'success';

@@ -27,8 +27,6 @@ import { createLog } from '@logger/logUtils';
 import type {
   InquiryThreadId,
   InquiryThreadSummary,
-  InquiryThreadUpdatedEvent,
-  InquiryResumeOutcome,
   StreamTabId,
 } from '@shared/schemas';
 import {
@@ -113,15 +111,13 @@ export function buildContinuationText(params: {
 
 async function emitInquiryThreadUpdate(
   threadId: InquiryThreadId,
-  extra: { resumeOutcome: InquiryResumeOutcome },
   session?: SessionHandle,
 ): Promise<void> {
   const summary = await getThreadSummary(threadId);
   if (!summary) return;
-  const payload: InquiryThreadUpdatedEvent = { ...summary, ...extra };
   (resolveEmitSession(session) ?? defaultSession()).events.emit({
     scope: 'session',
-    event: { type: 'inquiryThreadUpdated', payload },
+    event: { type: 'inquiryThreadUpdated', payload: summary },
   });
 }
 
@@ -130,11 +126,7 @@ async function archiveAsParentFinished(
   threadId: InquiryThreadId,
   session?: SessionHandle,
 ): Promise<InjectionOutcome> {
-  await emitInquiryThreadUpdate(
-    threadId,
-    { resumeOutcome: 'parent_finished' },
-    session,
-  );
+  await emitInquiryThreadUpdate(threadId, session);
   return 'archived';
 }
 
@@ -166,11 +158,7 @@ async function deliverContinuation(params: {
     return archiveAsParentFinished(params.threadId, params.session);
   }
 
-  await emitInquiryThreadUpdate(
-    params.threadId,
-    { resumeOutcome: outcome },
-    params.session,
-  );
+  await emitInquiryThreadUpdate(params.threadId, params.session);
   return outcome;
 }
 

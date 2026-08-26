@@ -24,7 +24,7 @@ import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,
 } from '../mainView/state';
-import { InquiryThreadUpdatedEventSchema } from '../inquiry';
+import { InquiryThreadSummarySchema } from '../inquiry';
 import {
   AgentProposalPermissionSchema,
   BashPermissionSchema,
@@ -266,12 +266,12 @@ const UpdateRecordingMessageSchema = z.object({
 
 const SyncInquiryThreadsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS),
-  threads: z.array(InquiryThreadUpdatedEventSchema),
+  threads: z.array(InquiryThreadSummarySchema),
 });
 
 const UpdateInquiryThreadMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD),
-  thread: InquiryThreadUpdatedEventSchema,
+  thread: InquiryThreadSummarySchema,
 });
 
 const StreamContentRenderFields = {

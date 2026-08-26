@@ -26,7 +26,10 @@ import {
 } from '@agent/core/state/executionRequests';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
+import {
+  createProgressHostInteractions,
+  type ProgressHostInteractions,
+} from '@controllers/progressView/backend/progressHostInteractions';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { buildStreamInfo } from '@controllers/session/streamInfoUtils';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
@@ -110,7 +113,6 @@ import {
 import { buildDesktopOnboardingSetStateMessage } from '../shared/desktopOnboardingMessages.js';
 import { DESKTOP_SHELL_COMMANDS } from '../shared/desktopShellMessages.js';
 import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
-import { createDesktopHostInteractions } from './desktopHostInteractions.js';
 import { listDesktopWorkspaceFiles } from './desktopFileSelection.js';
 import { toLogData } from './desktopLogUtils.js';
 import {
@@ -367,14 +369,19 @@ export class DesktopProgressBridge {
         this.backend.approvalHandlers.toolEdit.dismiss(requestId),
       detachCause: SESSION_DISPOSED_CAUSE,
     });
-    this.hostInteractions = createDesktopHostInteractions({
-      interactions: presentationHost,
-      session: this.session,
-      getApprovalHandlers: () => this.backend.approvalHandlers,
-      getToolEditApprovals: () => this.toolEditApprovals!,
-      setApprovalBypassState: this.backend.setApprovalBypassState,
+    this.hostInteractions = {
+      // The shared progress-view host port plus the Electron shell's
+      // notification surface, which the runtime reaches through
+      // `session.interactions`.
+      ...createProgressHostInteractions({
+        interactions: presentationHost,
+        session: this.session,
+        getApprovalHandlers: () => this.backend.approvalHandlers,
+        getToolEditApprovals: () => this.toolEditApprovals!,
+        setApprovalBypassState: this.backend.setApprovalBypassState,
+      }),
       showInfoMessage: (message) => this.options.host.showInfoMessage(message),
-    });
+    };
     this.fileActions = new DesktopProgressFileActions(this.options.host, {
       startExecution: (request) => {
         const logger = this.logger;

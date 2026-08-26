@@ -265,6 +265,15 @@ mechanism, which is a stronger argument for the ruling than the doc had.
   is the _only_ path that propagates `clearMissingOutputs`). Deleting this
   first requires seed-authoritative sender reads — a store redesign.
   Recorded so nobody re-proposes the UI-side deletion.
+  **Superseded 2026-08-26**: the premise (a live producer) no longer holds.
+  `clearMissingOutputs` had zero production emitters — its only caller was
+  gated behind an always-true `skipProgressViewClear` flag — so the fact,
+  its emitter, and the `reset` arm of `onMissingOutputsChanged` were deleted.
+  The wire-level `reset` field and its shared frontend handler stay: they are
+  generic across `UPDATE_FILES` / `UPDATE_MISSING_OUTPUTS` /
+  `UPDATE_COMPILE_FAILURES`, and `UPDATE_COMPILE_FAILURES` still sends
+  `reset: true` unconditionally. The seed-authoritative-reads concern this
+  ruling protects is about the non-reset merge path, which is untouched.
 
 ## 4. The irreducibility register (survived attack — do not re-flag)
 

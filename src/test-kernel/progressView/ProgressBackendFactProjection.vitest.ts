@@ -17,7 +17,7 @@ import {
   AgentCategory,
   type ActiveChildInfo,
   type CompileFailure,
-  type InquiryThreadUpdatedEvent,
+  type InquiryThreadSummary,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -775,8 +775,7 @@ describe('ProgressBackend', () => {
       lastQuestionPreview: 'Can you check this estimate?',
       lastActivityIso: '2026-07-06T12:00:00.000Z',
       turnCount: 1,
-      resumeOutcome: null,
-    } satisfies InquiryThreadUpdatedEvent;
+    } satisfies InquiryThreadSummary;
 
     await backend.state.snapshots.load([]);
     emitActiveStream(target, {
@@ -847,14 +846,6 @@ describe('ProgressBackend', () => {
     target.session.events.emit({
       scope: 'session',
       event: {
-        type: 'clearMissingOutputs',
-        payload: { streamId: parentStreamId },
-      },
-    });
-
-    target.session.events.emit({
-      scope: 'session',
-      event: {
         type: 'inquiryThreadUpdated',
         payload: inquiryThread,
       },
@@ -864,9 +855,6 @@ describe('ProgressBackend', () => {
       stage: { kind: 'round', index: 2, total: 4 },
       subagents: [child],
     });
-    expect(backend.state.snapshots.getMissingOutputs(parentStreamId)).toEqual(
-      {},
-    );
     expect(
       messages.some(
         (message) =>
@@ -1335,7 +1323,7 @@ describe('ProgressBackend', () => {
       subagents: [child],
     }));
     backend.state.beginStreamRemoval(removing);
-    backend.renderer.syncStreamContent(parent, { includeActiveState: true });
+    backend.renderer.syncStreamContent(parent);
 
     // The durable transcript and canonical parent roster stay resident until
     // guarded deletion commits, but the removal barrier is already the live

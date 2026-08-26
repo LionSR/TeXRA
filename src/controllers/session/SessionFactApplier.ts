@@ -115,7 +115,6 @@ function sessionFactStreamIds(fact: SessionFact): StreamTabId[] {
     case 'inquiryThreadUpdated':
       return fact.payload.parentStreamId ? [fact.payload.parentStreamId] : [];
     case 'goalStateChanged':
-    case 'clearMissingOutputs':
     case 'updateQueuedFollowUps':
     case 'followUpSent':
     case 'setActiveStream':
@@ -330,11 +329,6 @@ export class SessionFactApplier {
             return this.handleGoalStateChanged(fact.payload.streamId);
           case 'inquiryThreadUpdated':
             return this.renderer.onInquiryThreadUpdated(fact.payload);
-          case 'clearMissingOutputs':
-            return this.renderer.onMissingOutputsChanged(
-              fact.payload.streamId,
-              { reset: true },
-            );
           // followUpSent refreshes from the follow-ups store exactly like
           // updateQueuedFollowUps: the send itself is not a payload, but the
           // queue may have changed.

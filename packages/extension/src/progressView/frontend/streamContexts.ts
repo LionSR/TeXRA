@@ -9,7 +9,7 @@ import { createContext } from '@lit/context';
 
 // Local imports - progress view
 import type {
-  InquiryThreadUpdatedEvent,
+  InquiryThreadSummary,
   PermissionPayload,
   PhaseStage,
   StreamLifecycleStatus,
@@ -100,9 +100,9 @@ export const permissionsContext = createContext<PermissionPayload[]>(
   'progress-permissions',
 );
 
-export const EMPTY_INQUIRY_THREADS: InquiryThreadUpdatedEvent[] = [];
+export const EMPTY_INQUIRY_THREADS: InquiryThreadSummary[] = [];
 
-export const inquiryThreadsContext = createContext<InquiryThreadUpdatedEvent[]>(
+export const inquiryThreadsContext = createContext<InquiryThreadSummary[]>(
   'progress-inquiry-threads',
 );
 

@@ -1,11 +1,10 @@
 import type { TaskState } from '@agent/core/state/TaskState';
 import type {
   AddOutputFilesPayload,
-  ClearMissingOutputsPayload,
   ExecutionId,
   GoalPausedPayload,
   GoalStateChangedPayload,
-  InquiryThreadUpdatedEvent,
+  InquiryThreadSummary,
   RemoveStreamPayload,
   SetActiveStreamPayload,
   SetParentStreamPayload,
@@ -63,15 +62,14 @@ export interface CliNdjsonProgressEventPayloads {
   addOutputFiles: AddOutputFilesPayload;
   updateMissingOutputs: UpdateMissingOutputsPayload;
   updateCompileFailures: UpdateCompileFailuresPayload;
-  clearMissingOutputs: ClearMissingOutputsPayload;
   setTaskState: {
     streamId: StreamTabId;
     executionId?: ExecutionId;
     taskState: TaskState;
   };
   updateStreamUsage: UpdateStreamUsagePayload;
-  /** Inquiry thread state changed (open, answered, dropped, or resume outcome). */
-  inquiryThreadUpdated: InquiryThreadUpdatedEvent;
+  /** Inquiry thread state changed (open, answered, or dropped). */
+  inquiryThreadUpdated: InquiryThreadSummary;
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;
   updateConversationProgress: UpdateConversationProgressPayload;

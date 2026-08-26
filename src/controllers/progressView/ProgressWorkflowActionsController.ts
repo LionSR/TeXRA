@@ -23,13 +23,11 @@ export interface WorkflowDiffRequest {
 export type WorkflowFileOperation = 'pack' | 'clean';
 
 export interface WorkflowFileOperationRequest {
-  streamId: StreamTabId;
   agent: string;
   model: string;
   inputFile: string;
   outputFiles: string[];
   executionId?: string;
-  skipProgressViewClear: boolean;
 }
 
 interface ProgressWorkflowActionsState extends StreamOutputsSource {
@@ -87,13 +85,11 @@ export class ProgressWorkflowActionsController {
       const outputFiles = this.resolveOutputFiles(stream, config);
 
       await this.deps.runFileOperation(operation, {
-        streamId: stream,
         agent: config.agent,
         model: config.model,
         inputFile: config.inputFiles[0] ?? '',
         outputFiles,
         ...(executionId && { executionId }),
-        skipProgressViewClear: true,
       });
     });
   }

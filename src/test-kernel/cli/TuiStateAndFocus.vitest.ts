@@ -3807,7 +3807,7 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('projects missing-output and compile facts and clears the addressed stream', () => {
+  it('projects missing-output and compile facts', () => {
     withRunFacts((hub, session) => {
       const artifacts = () => projectStreamArtifacts(session.snapshots, root);
       hub.emit({
@@ -3851,35 +3851,6 @@ describe('sessionSignalsAdapter run facts', () => {
           0: [expect.objectContaining({ displayName: 'paper.pdf' })],
         },
       });
-
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'clearMissingOutputs',
-          payload: { streamId: root },
-        },
-      });
-      expect(artifacts().missingOutputsByRound).toEqual({});
-
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'updateMissingOutputs',
-          streamId: root,
-          filesByRound: { 1: ['again.tex'] },
-        },
-      });
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'clearMissingOutputs',
-          payload: { streamId: root },
-        },
-      });
-
-      expect(artifacts().missingOutputsByRound).toEqual({});
-      expect(artifacts().compileFailuresByRound[0]).toHaveLength(1);
     });
   });
 

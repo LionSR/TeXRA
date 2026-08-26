@@ -17,7 +17,7 @@ import type {
   ActiveChildInfo,
   ConversationProgress,
   GoalStatus,
-  InquiryThreadUpdatedEvent,
+  InquiryThreadSummary,
   Plan,
   StreamPhase,
   StreamStage,
@@ -451,7 +451,7 @@ class HeadlessPort implements SessionRendererPort {
 
   onPlanChanged(_streamId: StreamTabId, _plan: Plan | null): void {}
 
-  onInquiryThreadUpdated(_thread: InquiryThreadUpdatedEvent): void {}
+  onInquiryThreadUpdated(_thread: InquiryThreadSummary): void {}
 
   onGoalActiveChanged(
     _streamId: StreamTabId,
@@ -461,10 +461,7 @@ class HeadlessPort implements SessionRendererPort {
 
   clearPendingConversationProgress(_streamId: StreamTabId): void {}
 
-  syncStreamContent(
-    _stream: PresentedStreamId,
-    _options?: { includeActiveState?: boolean },
-  ): void {}
+  syncStreamContent(_stream: PresentedStreamId): void {}
 }
 
 function formatInputLabel(files: readonly string[]): string | undefined {

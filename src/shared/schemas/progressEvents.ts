@@ -33,11 +33,6 @@ export interface SetActiveStreamPayload {
    * stream tab appears without yanking the user away from their current view.
    */
   suppressViewSwitch?: boolean;
-  /**
-   * When suppressing a switch, widen a restrictive category filter so this
-   * stream remains reachable. Used for interaction requests with pending UI.
-   */
-  ensureVisible?: boolean;
 }
 
 export interface UpdateStreamDescriptionPayload {
@@ -86,16 +81,6 @@ export interface UpdateCompileFailuresPayload {
   filesByRound: NonNullable<
     z.infer<typeof UpdateCompileFailuresMessageSchema>['rounds']
   >;
-}
-
-/**
- * Clear the "missing outputs" marker on exactly one tab. The initiator
- * selects the `StreamTabId` it acted on; agent/model/config identity is
- * query/display data, not command authorization, so configuration-based
- * fan-out addressing does not exist (#9590 rule A3).
- */
-export interface ClearMissingOutputsPayload {
-  streamId: StreamTabId;
 }
 
 /** Usage is storage-key scoped: tool-use can resume → multiple runs per tab. */

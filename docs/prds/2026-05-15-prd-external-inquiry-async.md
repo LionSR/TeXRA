@@ -281,6 +281,8 @@ async function emitInquiryThreadUpdate(
 
 The Background Tasks UI consumes `resumeOutcome` to render the appropriate badge (e.g. `parent_finished` → `answered · parent finished`). All UI changes are silent — no toasts, no host-level dialogs.
 
+> **Retired 2026-08-26.** The badge was never built. `resumeOutcome` shipped as a write-only field on `inquiryThreadUpdated` and was deleted along with the `extra` parameter of `emitInquiryThreadUpdate`; the three outcomes remain logged and returned as the tool's `InjectionOutcome`. Re-adding the wire field is a one-line schema change if the badge is ever built.
+
 The injected text is enqueued as a **user-role** message (same role `sendFollowUp` uses for typed-in follow-ups and Goal continuations).
 
 **Four state cases**, end-to-end:

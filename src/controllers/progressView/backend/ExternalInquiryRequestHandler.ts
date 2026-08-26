@@ -1,7 +1,7 @@
 import type { AgentTrace } from '@agent/trace';
 import type {
   ExternalInquiryPermission,
-  InquiryThreadUpdatedEvent,
+  InquiryThreadSummary,
 } from '@shared/schemas';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
 import {
@@ -18,7 +18,7 @@ const MAX_INQUIRY_THREADS = 100;
 interface ExternalInquiryRequestHandlerOptions {
   show: (permission: ExternalInquiryPermission) => void;
   dismiss: (requestId: string) => void;
-  syncThreads: (threads: InquiryThreadUpdatedEvent[]) => void;
+  syncThreads: (threads: InquiryThreadSummary[]) => void;
   canSend: () => boolean;
   logger?: Pick<AgentTrace, 'debug'>;
 }

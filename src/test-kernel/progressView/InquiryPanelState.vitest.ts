@@ -14,7 +14,7 @@ import {
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   InquiryThreadId,
-  InquiryThreadUpdatedEvent,
+  InquiryThreadSummary,
   ProgressViewOutboundHandlerRegistry,
   ProgressViewOutboundMessage,
   StreamTabId,
@@ -30,8 +30,8 @@ function seedState(initialState: ProgressState): () => ProgressState {
 function thread(
   threadId: string,
   parentStreamId: string | null,
-  status: InquiryThreadUpdatedEvent['status'],
-): InquiryThreadUpdatedEvent {
+  status: InquiryThreadSummary['status'],
+): InquiryThreadSummary {
   return {
     threadId: threadId as InquiryThreadId,
     parentStreamId: parentStreamId as StreamTabId | null,
