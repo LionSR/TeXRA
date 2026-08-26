@@ -150,6 +150,30 @@ describe('agent creator orchestration', () => {
     expect(ui.promptAddToConfig).toHaveBeenCalledWith('researcher', 'toolUse');
   });
 
+  it('stops before description when name selection is cancelled', async () => {
+    const ui = createUi([], {
+      promptAgentName: vi.fn(async () => undefined),
+    });
+
+    await runAgentCreator(CONFIG, 'workflow', ui);
+
+    expect(ui.promptDescription).not.toHaveBeenCalled();
+    expect(mocks.createHelperModelKit).not.toHaveBeenCalled();
+    expect(AbsoluteFS.write).not.toHaveBeenCalled();
+  });
+
+  it('stops before generation when description is cancelled', async () => {
+    const ui = createUi([], {
+      promptDescription: vi.fn(async () => undefined),
+    });
+
+    await runAgentCreator(CONFIG, 'workflow', ui);
+
+    expect(ui.getCustomAgentDir).not.toHaveBeenCalled();
+    expect(mocks.createHelperModelKit).not.toHaveBeenCalled();
+    expect(AbsoluteFS.write).not.toHaveBeenCalled();
+  });
+
   it('stops tool-use creation before filesystem access when tool selection is cancelled', async () => {
     const ui = createUi([], {
       pickTools: vi.fn(async () => undefined),
