@@ -97,22 +97,6 @@ describe('workspace storage defaults', () => {
     },
   );
 
-  it('pins the workspace storage root at construction', async () => {
-    const root = await makeStorageRoot();
-    let workspacePath: string | undefined = '/workspace/a';
-    const provider = new WorkspaceStorageProvider(root, () => workspacePath);
-    const storagePath = provider.getStoragePath();
-
-    workspacePath = '/workspace/b';
-
-    expect(provider.getStoragePath()).toBe(storagePath);
-    expect(provider.getGlobalStoragePath()).toBe(join(root, 'global-storage'));
-    await expect(pathExists(storagePath)).resolves.toBe(true);
-    await expect(readWorkspaceMarker(storagePath)).resolves.toMatchObject({
-      path: '/workspace/a',
-    });
-  });
-
   it('migrates legacy hash-only workspace storage when possible', async () => {
     const root = await makeStorageRoot();
     const workspacePath = '/workspace/Legacy Project';

@@ -297,7 +297,9 @@ lease exclusivity is proven airtight), startup double abort-check,
 error-classification arm (external producer shapes). **Refuted-as-deletable
 and stays:** `ModelCell` retirement guards (reachable via `/model` racing
 a child-result wake into a WAITING parent), `storageGeneration` (it IS the
-per-pass cancellation token; supersede lands mid-await),
+per-pass cancellation token; supersede lands mid-await — ruling retired
+2026-08-26: #11452 deleted the only supersede writer, so the field was
+removed and the teardown abort signal is the remaining cancellation token),
 the CLI interrupted-follow-up shadow buffer (the dying flow still owns the
 durable queue's lease — some holding pen must exist), the onboarding
 funnel's edge-trigger (protects a user choice from level-triggered

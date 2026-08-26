@@ -30,7 +30,6 @@
  */
 
 import pDefer, { type DeferredPromise } from 'p-defer';
-import PQueue from 'p-queue';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
@@ -154,9 +153,7 @@ export class SessionHandle {
    */
   readonly workflowControls: WorkflowControlRegistry;
   private restartRepairPromise: Promise<unknown> | undefined;
-  private readonly restartRepairQueue = new PQueue({ concurrency: 1 });
   private readonly restartRepairAbort = new AbortController();
-  private storageGeneration = 0;
   /** LIFO owner for the session's constructor-registered teardown. */
   private readonly teardown = new DisposableStore();
   constructor(init: SessionHandleInit) {
@@ -267,43 +264,32 @@ export class SessionHandle {
     return this.ensureRestartRepair().then(() => undefined);
   }
 
-  private enqueueRestartRepair<T>(work: () => Promise<T>): Promise<T> {
-    // `add` widens to `T | void` for abort/timeout options; neither is used.
-    return this.restartRepairQueue.add(work) as Promise<T>;
-  }
-
   /**
-   * Start the restart-repair pass for the current storage generation, or reuse
-   * the in-flight one. Shared by the constructor and {@link waitUntilReady}.
+   * Start the single restart-repair pass, or reuse the in-flight one. Shared
+   * by the constructor and {@link waitUntilReady}; the memoized promise is
+   * the single-flight guard.
    */
   private ensureRestartRepair(): Promise<unknown> {
     if (!this.restartRepairPromise) {
-      this.restartRepairPromise = this.enqueueRestartRepair(() =>
-        this.repairStoresAfterRestart(this.storageGeneration),
-      );
+      this.restartRepairPromise = this.repairStoresAfterRestart();
     }
     return this.restartRepairPromise;
   }
 
   /**
-   * Whether a repair pass started for `generation` may no longer mutate: a
-   * later storage generation owns the stores, or session teardown aborted
-   * repair. Both reads are pure, so every checkpoint below re-reads them.
+   * Whether the repair pass may no longer mutate: session teardown aborted
+   * repair. The read is pure, so every checkpoint below re-reads it.
    */
-  private isRepairSuperseded(generation: number): boolean {
-    return (
-      generation !== this.storageGeneration ||
-      this.restartRepairAbort.signal.aborted
-    );
+  private isRepairSuperseded(): boolean {
+    return this.restartRepairAbort.signal.aborted;
   }
 
-  private async repairStoresAfterRestart(generation: number): Promise<boolean> {
+  private async repairStoresAfterRestart(): Promise<boolean> {
     try {
-      if (this.restartRepairAbort.signal.aborted) return false;
-      if (generation !== this.storageGeneration) return false;
+      if (this.isRepairSuperseded()) return false;
       await this.snapshots.preload([...this.computeStartupSeedSet()]);
-      if (this.isRepairSuperseded(generation)) return false;
-      await this.runRestartRepair(generation);
+      if (this.isRepairSuperseded()) return false;
+      await this.runRestartRepair();
       return true;
     } catch (error) {
       logger.warn('Failed to repair session stores after restart', {
@@ -346,8 +332,8 @@ export class SessionHandle {
    * in-memory phases are facts about this registry, and startup never
    * remembers one for a run it does not own.
    */
-  private async runRestartRepair(generation: number): Promise<void> {
-    if (this.isRepairSuperseded(generation)) return;
+  private async runRestartRepair(): Promise<void> {
+    if (this.isRepairSuperseded()) return;
     const unfinished = new Set(this.transcripts.getUnfinishedStreamIds());
     const candidateSet = new Set(this.computeStartupSeedSet());
     // The scan reads the authoritative `meta.streamId` edge, so it also
@@ -384,7 +370,7 @@ export class SessionHandle {
         { data: error },
       );
     }
-    if (this.isRepairSuperseded(generation)) return;
+    if (this.isRepairSuperseded()) return;
     const candidates = [...candidateSet].filter(
       (streamId) =>
         this.transcripts.has(streamId) &&
@@ -444,7 +430,7 @@ export class SessionHandle {
         );
       }
     }
-    if (this.isRepairSuperseded(generation)) return;
+    if (this.isRepairSuperseded()) return;
     for (const [streamId, cause] of unreadableStreams) {
       if (
         this.status.getGeneration(streamId) ===

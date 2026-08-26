@@ -462,7 +462,8 @@ grow, don't remove), and the OpenAI-compat `.nullish()` /
 `?? undefined` normalizations (98); and **(iii) the fenced
 irreducibility registers** — lease/crash-repair machinery, the
 `inBandSubagentExecution.ts:529` manifest read-back, auth credential
-cells, ModelCell, storageGeneration, the interrupted-follow-up buffer
+cells, ModelCell, storageGeneration (since removed: #11452 deleted its
+only supersede writer), the interrupted-follow-up buffer
 (`ToolUseFollowUpQueueManager.ts:83,364`), onboarding funnel,
 round-update reset, `workflowExecutionState` sealed-guard silent
 returns (documented late-async-publication tolerance — watch, don't

@@ -572,7 +572,7 @@ export class SessionFactApplier {
    * Complete a command-owned removal once its host delete resolves. A retained
    * (`active`/`failed`) outcome retires the barrier and replays buffered facts;
    * a committed outcome discards the buffer; anything the command path reports
-   * as `undefined` (reserved id, no durable data, storage-root change) retires
+   * as `undefined` (reserved id, or the data directory cannot be used) retires
    * the barrier because nothing was deleted.
    */
   completeCommandRemoval(

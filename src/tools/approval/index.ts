@@ -65,21 +65,18 @@ export function configureDelegatedChildApprovals(
 
 /**
  * Clean up all approval state for a deleted stream in the owning session.
- * Cancels pending host interactions and clears stream-scoped bypass state.
+ * Cancels pending host interactions; `forgetStreamAncestry` clears the
+ * stream's ancestry edges and its explicit bypass values.
  */
 function cleanupApprovalsForStream(
   streamId: StreamTabId,
   session: SessionHandle = defaultSession(),
 ): void {
-  const { toolEdit, bash, proposal } = session.approvals;
   session.interactions.cancel({
     streamId,
     cause: 'Stream resources released.',
   });
   session.approvals.forgetStreamAncestry(streamId);
-  toolEdit.bypass.clearForStream(streamId);
-  bash.bypass.clearForStream(streamId);
-  proposal.clearForStream(streamId);
 }
 
 /**

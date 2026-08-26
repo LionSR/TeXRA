@@ -42,8 +42,17 @@ export interface StreamApprovalBypass {
     enabled: boolean,
     options?: { silent?: boolean },
   ): void;
-  clearForStream(streamId: StreamTabId): void;
   clearAll(): void;
+}
+
+/**
+ * Internal bypass surface: adds per-stream value teardown, which only the
+ * ancestry owner (`forgetStreamAncestry`) may call — clearing a stream's
+ * explicit values before its children are promoted would silently revoke
+ * their inherited bypasses.
+ */
+interface StreamApprovalBypassState extends StreamApprovalBypass {
+  clearForStream(streamId: StreamTabId): void;
 }
 
 function createStreamApprovalBypass(
@@ -51,7 +60,7 @@ function createStreamApprovalBypass(
   interactions: Pick<SessionHostInteractions, 'setApprovalBypassState'>,
   resolveParent: (streamId: StreamTabId) => StreamTabId | undefined,
   resolveDescendants: (streamId: StreamTabId) => readonly StreamTabId[],
-): StreamApprovalBypass {
+): StreamApprovalBypassState {
   const byStream = new Map<StreamTabId, boolean>();
 
   function resolve(streamId: StreamTabId): boolean {
@@ -136,23 +145,10 @@ interface StreamApprovalController {
   ): Promise<T>;
 }
 
-interface StreamApprovalControllerOptions {
-  kind: ApprovalBypassKind;
-  interactions: Pick<SessionHostInteractions, 'setApprovalBypassState'>;
-  resolveParent: (streamId: StreamTabId) => StreamTabId | undefined;
-  resolveDescendants: (streamId: StreamTabId) => readonly StreamTabId[];
-}
-
 function createStreamApprovalController(
-  options: StreamApprovalControllerOptions,
+  bypass: StreamApprovalBypass,
 ): StreamApprovalController {
   const queues = new Map<StreamTabId | undefined, PQueue>();
-  const bypass = createStreamApprovalBypass(
-    options.kind,
-    options.interactions,
-    options.resolveParent,
-    options.resolveDescendants,
-  );
 
   return {
     bypass,
@@ -231,9 +227,10 @@ export interface SessionApprovals {
    */
   detachStreamFromParent(streamId: StreamTabId): void;
   /**
-   * Drop `streamId` from the ancestry graph. Direct children are first
-   * promoted through {@link detachStreamFromParent}, preserving their
-   * effective values before the torn-down parent's own values are cleared.
+   * Drop `streamId` from the ancestry graph and clear its explicit bypass
+   * values for every kind. Direct children are first promoted through
+   * {@link detachStreamFromParent}, preserving their effective values before
+   * the torn-down parent's own values are cleared.
    */
   forgetStreamAncestry(streamId: StreamTabId): void;
   /**
@@ -273,27 +270,29 @@ export function createSessionApprovals(
     return descendants;
   };
 
-  const toolEdit = createStreamApprovalController({
-    kind: 'toolEdit',
+  const toolEditBypass = createStreamApprovalBypass(
+    'toolEdit',
     interactions,
     resolveParent,
     resolveDescendants,
-  });
-  const bash = createStreamApprovalController({
-    kind: 'bash',
+  );
+  const bashBypass = createStreamApprovalBypass(
+    'bash',
     interactions,
     resolveParent,
     resolveDescendants,
-  });
+  );
+  const toolEdit = createStreamApprovalController(toolEditBypass);
+  const bash = createStreamApprovalController(bashBypass);
   const proposal = createStreamApprovalBypass(
     'superYolo',
     interactions,
     resolveParent,
     resolveDescendants,
   );
-  const bypasses: readonly StreamApprovalBypass[] = [
-    toolEdit.bypass,
-    bash.bypass,
+  const bypasses: readonly StreamApprovalBypassState[] = [
+    toolEditBypass,
+    bashBypass,
     proposal,
   ];
 
@@ -335,6 +334,10 @@ export function createSessionApprovals(
         .map(([child]) => child);
       for (const child of directChildren) detachStreamFromParent(child);
       parentOf.delete(streamId);
+      // Only after the children were promoted: clearing the parent's
+      // explicit values first would resolve an inherited bypass to `false`
+      // and silently revoke it.
+      for (const bypass of bypasses) bypass.clearForStream(streamId);
     },
     clearAll() {
       for (const bypass of bypasses) bypass.clearAll();
