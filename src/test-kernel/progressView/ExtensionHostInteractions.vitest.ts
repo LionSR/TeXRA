@@ -7,6 +7,7 @@ import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import type { ProgressHostInteractionsOptions } from '@controllers/progressView/backend/progressHostInteractions';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
+import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import type { StreamTabId } from '@shared/schemas';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 
@@ -219,16 +220,35 @@ describe('createExtensionHostInteractions', () => {
       streamId: STREAM_B,
     });
 
-    await expect(
-      interactions.approvePendingDelegatedWork(STREAM_A, 'proposal-current'),
-    ).resolves.toBeUndefined();
+    // The approval also awaits the tool-edit controller: it must not report
+    // completion while pending tool edits for the stream are still approving.
+    let releaseToolEdits: (() => void) | undefined;
+    toolEditApprovals.approvePendingForStream.mockReturnValue(
+      new Promise<void>((resolve) => {
+        releaseToolEdits = resolve;
+      }),
+    );
+    let approvalCompleted = false;
+    const approval = interactions.approvePendingDelegatedWork(
+      STREAM_A,
+      'proposal-current',
+    );
+    void approval.then(() => {
+      approvalCompleted = true;
+    });
+    await vi.waitFor(() =>
+      expect(toolEditApprovals.approvePendingForStream).toHaveBeenCalledWith(
+        'stream-a',
+      ),
+    );
+    expect(approvalCompleted).toBe(false);
+    releaseToolEdits?.();
+    await expect(approval).resolves.toBeUndefined();
+
     await expect(parallelProposal).resolves.toEqual({ action: 'approve' });
     await expect(parallelBash).resolves.toEqual({ action: 'approve' });
     expect(handlers.transport.proposal.dismiss).toHaveBeenCalledWith(
       'proposal-parallel',
-    );
-    expect(toolEditApprovals.approvePendingForStream).toHaveBeenCalledWith(
-      'stream-a',
     );
 
     expect(
@@ -772,10 +792,12 @@ describe('createExtensionHostInteractions', () => {
 
   it('shows external inquiries without waiting for a user decision', async () => {
     const presentationSink = createPresentationSink();
+    const session = createTestSession();
     const { handlers, interactions } = createInteractions({
       presentationSink,
-      session: createTestSession(),
+      session,
     });
+    const sessionEvents = recordSessionEvents(session);
 
     await expect(
       interactions.openExternalInquiry?.({
@@ -787,6 +809,20 @@ describe('createExtensionHostInteractions', () => {
       }),
     ).resolves.toEqual({ threadId: 'thread-a' });
 
+    // The owning stream is revealed before the inquiry shows: the progress
+    // view is ensured and the stream registered without yanking the active
+    // tab (#8246).
+    expect(presentationSink.emit).toHaveBeenCalledWith(
+      'requestEnsureProgressView',
+      {},
+    );
+    expect(sessionEvents).toContainEqual({
+      scope: 'session',
+      event: {
+        type: 'setActiveStream',
+        payload: { streamId: 'stream-a', suppressViewSwitch: true },
+      },
+    });
     expect(handlers.transport.externalInquiry.show).toHaveBeenCalledWith({
       requestId: 'thread-a',
       threadId: 'thread-a',
@@ -876,5 +912,87 @@ describe('createExtensionHostInteractions', () => {
       approvalResult,
     );
     expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(request);
+  });
+
+  it('can cancel synchronously while presenting a request', async () => {
+    const { handlers, interactions } = createInteractions();
+    handlers.transport.bash.show.mockImplementation(() => {
+      interactions.cancel({
+        kind: 'bash',
+        streamId: 'stream-sync' as StreamTabId,
+        cause: 'Stopped during presentation.',
+      });
+    });
+
+    const result = interactions.requestBashApproval?.({
+      command: 'echo pending',
+      streamId: 'stream-sync' as StreamTabId,
+    });
+
+    await expect(result).resolves.toEqual({
+      action: 'reject',
+      cause: 'Stopped during presentation.',
+    });
+  });
+
+  it('preserves typed proposal approval overrides', async () => {
+    const { handlers, interactions } = createInteractions();
+
+    const resultPromise = interactions.requestAgentProposal?.({
+      requestId: 'proposal-a',
+      streamId: STREAM_A,
+      agent: 'demo-agent',
+      model: 'gpt-5',
+      instruction: 'Begin the calculation.',
+      memories: [],
+      workingDirectory: null,
+      agentSource: null,
+      agentCategory: 'toolUse',
+    });
+
+    expect(
+      interactions.submitProposalDecision('proposal-a', {
+        action: 'approve',
+        model: 'openai:gpt-5',
+        agent: 'configured-agent',
+      }),
+    ).toBe(true);
+
+    await expect(resultPromise).resolves.toEqual({
+      action: 'approve',
+      model: 'openai:gpt-5',
+      agent: 'configured-agent',
+    });
+    expect(handlers.transport.proposal.dismiss).toHaveBeenCalledWith(
+      'proposal-a',
+    );
+  });
+
+  it('cancels all pending requests on dispose with a stable cause', async () => {
+    const { handlers, interactions } = createInteractions();
+
+    const bashPromise = interactions.requestBashApproval?.({
+      command: 'echo hi',
+      streamId: STREAM_A,
+    });
+    const planPromise = interactions.requestPlanApproval?.({
+      requestId: 'plan-a',
+      streamId: STREAM_B,
+      goalEnabled: false,
+      plan: { objective: 'Prove the lemma.' },
+    });
+
+    interactions.dispose?.();
+
+    await expect(bashPromise).resolves.toEqual({
+      action: 'reject',
+      cause: SESSION_DISPOSED_CAUSE,
+    });
+    await expect(planPromise).resolves.toEqual({
+      action: 'reject',
+      cause: SESSION_DISPOSED_CAUSE,
+    });
+    expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
+    expect(handlers.transport.planApproval.dismiss).toHaveBeenCalled();
   });
 });

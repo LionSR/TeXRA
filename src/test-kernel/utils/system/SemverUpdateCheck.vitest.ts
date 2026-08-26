@@ -88,6 +88,61 @@ describe('runDailyUpdateCheck', () => {
     expect(state.get(lastCheckedAtKey)).toBe(nowMs);
   });
 
+  it('throttles a repeat check within the same day', async () => {
+    const state = new FakeStateStore();
+    const fetchLatest = vi.fn(async () => ({
+      version: '1.0.0',
+      refreshed: true,
+    }));
+    let clockMs = nowMs;
+    const options = checkOptions(state, { fetchLatest, now: () => clockMs });
+
+    await runDailyUpdateCheck(options);
+    expect(fetchLatest).toHaveBeenCalledTimes(1);
+
+    // Ten minutes later: still inside the daily window, no fetch.
+    clockMs += 10 * 60 * 1000;
+    await runDailyUpdateCheck(options);
+    expect(fetchLatest).toHaveBeenCalledTimes(1);
+
+    // A full day later: the throttle window has elapsed.
+    clockMs += 24 * 60 * 60 * 1000;
+    await runDailyUpdateCheck(options);
+    expect(fetchLatest).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not notify when the latest version is not newer', async () => {
+    const state = new FakeStateStore();
+    const notify = vi.fn();
+
+    await expect(
+      runDailyUpdateCheck(checkOptions(state, { notify })),
+    ).resolves.toBeUndefined();
+
+    expect(notify).not.toHaveBeenCalled();
+    // A live refresh still stamps the throttle even without a notification.
+    expect(state.get(lastCheckedAtKey)).toBe(nowMs);
+  });
+
+  it('does not stamp the throttle when the notification fails', async () => {
+    // A thrown notify must reject the check and leave no stamp, so the next
+    // launch retries instead of silently skipping the announcement for a day.
+    const state = new FakeStateStore();
+    const notify = vi.fn(() => {
+      throw new Error('dialog failed');
+    });
+
+    await expect(
+      runDailyUpdateCheck(
+        checkOptions(state, {
+          fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
+          notify,
+        }),
+      ),
+    ).rejects.toThrow('dialog failed');
+    expect(state.get(lastCheckedAtKey)).toBeUndefined();
+  });
+
   it('can offer stale source metadata without stamping the check', async () => {
     const state = new FakeStateStore();
     const notify = vi.fn();
