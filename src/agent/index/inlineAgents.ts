@@ -164,6 +164,7 @@ function normalizeInlineAgent(definition: unknown): InlineAgent {
       source: 'inline',
       path: '',
       category,
+      hidden: parsed.hidden,
       description: parsed.description,
       tools: tools?.length ? tools : undefined,
       defaultOutputFiles: defaultOutputFiles?.length

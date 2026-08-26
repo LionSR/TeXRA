@@ -30,6 +30,7 @@ export interface AgentRosterEntry {
   readonly name: string;
   readonly source: AgentSource;
   readonly category: AgentCategory;
+  readonly hidden?: boolean;
 }
 
 export class InvalidAgentTeamError extends Error {}
@@ -193,11 +194,13 @@ export class AgentRosterController<
       category,
       this.extraPresets(),
     );
-    if (identifiers === undefined) return this.deps.getAgents(category);
+    if (identifiers === undefined) {
+      return this.deps.getAgents(category).filter((entry) => !entry.hidden);
+    }
 
     const resolved = identifiers
       .map((identifier) => this.deps.resolveAgent(category, identifier))
-      .filter((entry): entry is Entry => entry !== undefined);
+      .filter((entry): entry is Entry => entry !== undefined && !entry.hidden);
     return [
       ...new Map(resolved.map((entry) => [agentKeyOf(entry), entry])).values(),
     ];

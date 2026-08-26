@@ -8,12 +8,14 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   computeAgentOptionsData,
   getAgent,
+  getCategoryAgent,
   getVisibleAgent,
   getVisibleAgents,
   invalidateRemoteAgentsAfterSignOut,
   isRemoteAgent,
   loadAgents,
   refresh,
+  resolveAgentForLaunch,
 } from '@agent/index/agentRegistry';
 import * as logger from '@logger/logUtils';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
@@ -120,6 +122,19 @@ describe('agent registry', () => {
     const workflow = getAgent('builtInWorkflow:polish', AgentCategory.ToolUse);
     expect(workflow?.name).toBe('polish');
     expect(workflow?.category).toBe(AgentCategory.Workflow);
+  });
+
+  it('hides changeReviewer from rosters without blocking its explicit launch', () => {
+    expect(getAgent('changeReviewer')?.hidden).toBe(true);
+    expect(
+      getVisibleAgents('toolUse').map((agent) => agent.name),
+    ).not.toContain('changeReviewer');
+    expect(getCategoryAgent('toolUse', 'changeReviewer')?.name).toBe(
+      'changeReviewer',
+    );
+    expect(resolveAgentForLaunch('toolUse', 'changeReviewer')?.entry.name).toBe(
+      'changeReviewer',
+    );
   });
 
   it('keeps the current cache visible while a refresh is pending', async () => {

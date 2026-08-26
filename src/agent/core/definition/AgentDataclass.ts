@@ -135,6 +135,7 @@ export type AgentPromptInput = z.infer<typeof AgentPromptInputSchema>;
 
 export const AgentDefinitionSchema = z.strictObject({
   name: AgentNameSchema,
+  hidden: z.boolean().optional(),
   description: z.string().optional(),
   inherits: z.string().optional(),
   settings: AgentSettingInputSchema.prefault({}),

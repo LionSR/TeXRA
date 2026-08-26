@@ -1,4 +1,5 @@
 name: changeReviewer
+hidden: true
 description: Reviews the working tree's diff against the main branch. Verifies each suspicion with repository tools and language-server diagnostics. Reports confirmed findings to the Agent Review panel. It is read-only and does not edit.
 
 settings:
