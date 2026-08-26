@@ -26,16 +26,6 @@ const baselinePath = path.join(
   'knip-baseline.json',
 );
 
-export {
-  classifyFindings,
-  compareFindings,
-  countByCategory,
-  diffFindings,
-  extractFindings,
-  findingKey,
-  parseKnipIssues,
-  readBaseline,
-} from './check-dead-code-ratchet-core.mjs';
 import {
   classifyFindings,
   countByCategory,

@@ -69,7 +69,9 @@ const VSCODE_FREE_ZONE_DIRS = [
   'src/hosts',
   'src/common',
   'src/utils',
+  'src/logger',
   'packages/agent/src',
+  'packages/desktop/src',
   'packages/extension/src/webview/frontend',
   'packages/extension/src/progressView/frontend',
   'packages/extension/src/settingsView/frontend',
@@ -691,6 +693,26 @@ export default tseslint.config(
         {
           paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: AUTH_RESTRICTED_IMPORT_PATTERNS,
+        },
+      ],
+    },
+  },
+
+  // The `@common/state` barrel and its `stateManager` are backed by VS Code's
+  // Memento API. The desktop host shares only the key definitions.
+  {
+    files: ['packages/desktop/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@common/state', '@common/state/stateManager'],
+              message:
+                'Desktop must not import the VS Code-backed state store; share state keys through @common/state/stateKeys.',
+            },
+          ],
         },
       ],
     },

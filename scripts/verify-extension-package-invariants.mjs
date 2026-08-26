@@ -21,7 +21,7 @@ const snapshotPath = path.join(
   'scripts',
   'extension-package-invariants.snapshot.json',
 );
-const packagePath = findExtensionPackagePath();
+const packagePath = path.join(rootDir, 'packages', 'extension', 'package.json');
 const packageDir = path.dirname(packagePath);
 const vscodeIgnorePath = path.join(packageDir, '.vscodeignore');
 
@@ -86,18 +86,6 @@ const REQUIRED_VSCODEIGNORE_LINES = [
 // line after all plain ignore lines regardless of file position. Guard
 // against a future PR reintroducing it for an unrelated reason.
 const FORBIDDEN_VSCODEIGNORE_PATTERNS = [/^!\s*resources\/\*\*$/];
-
-function findExtensionPackagePath() {
-  const splitPackagePath = path.join(
-    rootDir,
-    'packages',
-    'extension',
-    'package.json',
-  );
-  return fs.existsSync(splitPackagePath)
-    ? splitPackagePath
-    : path.join(rootDir, 'package.json');
-}
 
 function collectStringValues(value, results = []) {
   if (typeof value === 'string') {
