@@ -134,7 +134,6 @@ type TestableBridge = {
       close(): void;
     };
     requestEviction(streamId: StreamTabId): void;
-    reload(): Promise<void>;
     ensureLoaded(streamId: StreamTabId): Promise<void>;
     getUnfinishedStreamIds(): StreamTabId[];
     get(streamId: StreamTabId):
@@ -2759,7 +2758,6 @@ describe('DesktopProgressBridge', () => {
 
     await bridgeSession(bridge).flushArtifacts();
     bridge.streamLogs.requestEviction(streamId);
-    await bridge.streamLogs.reload();
     await bridge.streamLogs.ensureLoaded(streamId);
 
     expect(
