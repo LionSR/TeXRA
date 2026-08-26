@@ -23,8 +23,8 @@ import { postMessage } from '@shared/hostBridge';
 import {
   type LatexConfigValues,
   type LatexSettingsStatus,
-  CoreSettingsShape,
   DEFAULT_LATEX_SETTINGS_STATUS,
+  settingByKey,
 } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
@@ -732,10 +732,10 @@ export class LaTeXTab extends LitElement {
       };
       return;
     }
-    const result = CoreSettingsShape.latex
-      .unwrap()
-      .shape[field].safeParse(parsed);
-    if (!result.success) {
+    const result = settingByKey(
+      LATEX_CONFIG_FIELD_TO_KEY[field],
+    )?.schema.safeParse(parsed);
+    if (!result?.success) {
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
         [field]: 'Enter a JSON object with string values.',
@@ -746,7 +746,10 @@ export class LaTeXTab extends LitElement {
       ...this.replacementJsonErrors,
       [field]: undefined,
     };
-    this.dispatchSetConfigValue(field, result.data);
+    this.dispatchSetConfigValue(
+      field,
+      result.data as LatexConfigValueFor<typeof field>,
+    );
   }
 
   private dispatchSetConfigValue<F extends LatexConfigField>(
