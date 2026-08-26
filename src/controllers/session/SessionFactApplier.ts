@@ -378,39 +378,18 @@ export class SessionFactApplier {
               // A prior removeStream fact for the same incarnation owns this
               // deletion's settlement (the store dedups its delete promise);
               // only the owning barrier retires the tombstone and replays.
-              if (!created || settled) return;
+              if (settled) return;
               settled = true;
-              this.finishPendingDeletion(streamId, pending);
-              const retained = outcome === 'active' || outcome === 'failed';
-              const retirement =
-                retained || outcome === 'superseded'
-                  ? this.state.retireStreamTombstone(
-                      streamId,
-                      expectedIncarnation,
-                    )
-                  : { retired: false, changedRosterParents: [] };
-              const commitment =
-                !retained && outcome !== 'superseded'
-                  ? this.state.commitStreamTombstone(
-                      streamId,
-                      expectedIncarnation,
-                    )
-                  : { committed: false, changedRosterParents: [] };
-              this.notifyRosterParents([
-                ...retirement.changedRosterParents,
-                ...commitment.changedRosterParents,
-              ]);
-              // A retained deletion still lives: replay the facts buffered
-              // while it was provisional so status/stage/roster/metadata are
-              // not stuck stale. Replay only when the retirement above
-              // actually removed THIS removal's barrier — a superseded
-              // deletion whose identity a fresh run re-claimed (or a newer
-              // deletion B owns) must never replay through that newer
-              // barrier. A committed deletion discards them (the stream is
-              // gone).
-              if (retained && retirement.retired) {
-                this.replayDeferredFacts(pending.facts);
-              }
+              this.settleRemoval({
+                streamId,
+                incarnation: expectedIncarnation,
+                outcome,
+                created,
+                pending,
+                // A fact-path host owns no durable deletion of its own, so
+                // reporting nothing means the removal stands.
+                unreportedOutcome: 'commit',
+              });
             };
             return Promise.resolve(
               this.options.deleteStream(
@@ -562,38 +541,60 @@ export class SessionFactApplier {
   }
 
   /**
-   * Complete a command-owned removal once its host delete resolves. A retained
-   * (`active`/`failed`) outcome retires the barrier and replays buffered facts;
-   * a committed outcome discards the buffer; anything the command path reports
-   * as `undefined` (reserved id, no durable data, storage-root change) retires
-   * the barrier because nothing was deleted.
+   * Settle one removal barrier once its host delete resolves — the single
+   * owner for both the `removeStream` fact path and a host command. A
+   * retained (`active`/`failed`) outcome retires the barrier and replays the
+   * facts buffered while it was provisional; `deleted` commits the tombstone
+   * and discards them; `superseded` retires without replaying, because a
+   * fresh run (or a newer deletion) already owns the identity.
+   *
+   * `unreportedOutcome` is the one place the two paths differ: a command
+   * reporting `undefined` (reserved id, no durable data, storage-root change)
+   * deleted nothing and `retain`s, while a fact-path host owns no durable
+   * deletion of its own, so reporting nothing means the removal stands and
+   * the tombstone `commit`s. `pending` is the barrier the caller captured at
+   * begin — identity, not incarnation, because `beginStreamRemoval` reuses
+   * the incarnation and two successive barriers for one stream can share it
+   * after a rejected delete. A caller holding no object (the command path)
+   * omits it and takes the incarnation lookup it has always used.
    */
-  completeCommandRemoval(
-    streamId: StreamTabId,
-    incarnation: number,
-    outcome: DeleteStreamResult | undefined,
-    created: boolean,
-  ): void {
+  settleRemoval(args: {
+    readonly streamId: StreamTabId;
+    readonly incarnation: number;
+    readonly outcome: void | DeleteStreamResult | undefined;
+    readonly created: boolean;
+    readonly pending?: PendingDeletion;
+    readonly unreportedOutcome: 'commit' | 'retain';
+  }): void {
+    const { streamId, incarnation, outcome, created, unreportedOutcome } = args;
     if (!created) return;
-    const pending = this.pendingDeletions.get(streamId);
-    if (pending && pending.incarnation === incarnation) {
-      this.finishPendingDeletion(streamId, pending);
-    }
+    const existing = this.pendingDeletions.get(streamId);
+    const pending =
+      args.pending ??
+      (existing?.incarnation === incarnation ? existing : undefined);
+    if (pending) this.finishPendingDeletion(streamId, pending);
     const retained =
-      outcome === 'active' || outcome === 'failed' || outcome === undefined;
+      outcome === 'active' ||
+      outcome === 'failed' ||
+      (outcome === undefined && unreportedOutcome === 'retain');
     const retirement =
-      outcome !== 'deleted'
+      retained || outcome === 'superseded'
         ? this.state.retireStreamTombstone(streamId, incarnation)
         : { retired: false, changedRosterParents: [] };
     const commitment =
-      outcome === 'deleted'
+      !retained && outcome !== 'superseded'
         ? this.state.commitStreamTombstone(streamId, incarnation)
         : { committed: false, changedRosterParents: [] };
     this.notifyRosterParents([
       ...retirement.changedRosterParents,
       ...commitment.changedRosterParents,
     ]);
-    if (retirement.retired && retained && pending) {
+    // A retained deletion still lives: replay so status/stage/roster/metadata
+    // are not stuck stale. Replay only when the retirement above actually
+    // removed THIS removal's barrier — a superseded deletion whose identity a
+    // fresh run re-claimed (or a newer deletion B owns) must never replay
+    // through that newer barrier. A committed deletion discards them.
+    if (retained && retirement.retired && pending) {
       this.replayDeferredFacts(pending.facts);
     }
   }

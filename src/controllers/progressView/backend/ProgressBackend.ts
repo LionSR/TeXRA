@@ -520,12 +520,15 @@ export class ProgressBackend {
       // rail. selectableStreamNames() deliberately hides provisional
       // removals, so repairing presentation first would omit the stream that
       // durable cleanup just reported as still live.
-      this.factApplier.completeCommandRemoval(
-        stream,
-        commandRemoval.incarnation,
-        retained,
-        commandRemoval.created,
-      );
+      this.factApplier.settleRemoval({
+        streamId: stream,
+        incarnation: commandRemoval.incarnation,
+        outcome: retained,
+        created: commandRemoval.created,
+        // A command reporting nothing deleted nothing (reserved id, no
+        // durable data, storage-root change), so the barrier retires.
+        unreportedOutcome: 'retain',
+      });
     } else if (retainedOutcome) {
       // A fact-path removal owns its barrier in SessionFactApplier. Let it
       // retire and replay before this retained-state rebuild enumerates the
