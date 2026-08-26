@@ -396,7 +396,7 @@ class AgentReviewServiceImpl {
       return {
         accepted: false,
         reason:
-          'No agent review session is collecting issues. Findings can only be reported from a review started via "Run Agent Review".',
+          'No agent review session is collecting issues. Findings can only be reported from a review started via "Find Issues (Agent Review)".',
       };
     }
     if (this.issues.length >= MAX_ISSUES_PER_REVIEW) {

@@ -421,7 +421,9 @@ Reviews a diff or file for correctness, clarity, security, and convention fit, a
 
 Reviews the working tree's diff against the main branch, verifies each suspicion with repository tools and language-server diagnostics, and reports confirmed findings to the Agent Review (Find Issues) panel in Source Control. It is read-only, does not edit, and has no `bash` tool by design.
 
-**Best for:** Reviewing uncommitted changes before you commit
+Launch it with the **Find Issues** button in Source Control (or the `Find Issues (Agent Review)` command) rather than from the agent dropdown: findings are only accepted into the panel while a review started there is collecting them.
+
+**Best for:** Reviewing uncommitted changes before you commit, driven from Source Control
 
 ### `testEngineer`
 
