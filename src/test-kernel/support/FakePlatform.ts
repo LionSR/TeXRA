@@ -22,6 +22,7 @@ import {
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
+import { getCoreSettingDefault } from '@shared/schemas';
 import type { PlatformSecrets } from '@platform/secrets';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
@@ -74,7 +75,8 @@ export class FakeConfigProvider implements ConfigProvider {
   get<T>(key: string, defaultValue?: T): T {
     const resolvedKey = this.resolveExistingKey(key);
     if (resolvedKey === undefined) {
-      return defaultValue as T;
+      const catalogDefault = getCoreSettingDefault(key) as T | undefined;
+      return catalogDefault === undefined ? (defaultValue as T) : catalogDefault;
     }
     return this.values.get(resolvedKey) as T;
   }
@@ -164,7 +166,8 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     if (this.workspaceValues.has(key))
       return this.workspaceValues.get(key) as T;
     if (this.globalValues.has(key)) return this.globalValues.get(key) as T;
-    return defaultValue as T;
+    const catalogDefault = getCoreSettingDefault(key) as T | undefined;
+    return catalogDefault === undefined ? (defaultValue as T) : catalogDefault;
   }
 
   async update<T>(key: string, value: T, target?: ConfigTarget): Promise<void> {

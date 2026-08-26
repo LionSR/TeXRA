@@ -33,7 +33,7 @@ function resetRecordingState(): void {
 
 /** Resolve the sox executable command from config or auto-detection. */
 function resolveSoxCommand(): ResolvedBinaryCommand | null {
-  const configuredPath = getConfig<string>('texra.audio.soxPath', '');
+  const configuredPath = getConfig<string>('texra.audio.soxPath');
   if (configuredPath && AbsoluteFS.existsSync(configuredPath)) {
     return BinaryResolver.resolveOptionalCommand('sox', [], {
       resolvedPath: configuredPath,

@@ -5,7 +5,6 @@
 import { LRUCache } from 'lru-cache';
 
 import { createLog } from '@logger/logUtils';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
 import { assertNever } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -162,7 +161,7 @@ export const REGEX_CATEGORIES: RegexReplacementCategory[] = [
 ];
 
 function shouldWrapCritiqueInAlign(): boolean {
-  return getConfig('texra.latex.wrapCritiqueInAlign', true);
+  return getConfig('texra.latex.wrapCritiqueInAlign');
 }
 
 function selectEnabledCategories<T extends ReplacementCategory>(
@@ -178,13 +177,9 @@ function selectEnabledCategories<T extends ReplacementCategory>(
  * replacements from user settings take precedence over predefined rules.
  */
 function getAllReplacements(): NonRegexReplacementCategory {
-  const enabledNames = getConfig<string[]>(
-    'texra.latex.enabledReplacements',
-    DEFAULT_CORE_SETTINGS.latex.enabledReplacements,
-  );
+  const enabledNames = getConfig<string[]>('texra.latex.enabledReplacements');
   const customReplacements = getConfig<Record<string, string>>(
     'texra.latex.customReplacements',
-    {},
   );
 
   const enabledCategories = selectEnabledCategories(
@@ -212,11 +207,9 @@ function getAllReplacements(): NonRegexReplacementCategory {
 function getAllReplacementsRegex(): RegexReplacementCategory[] {
   const enabledNames = getConfig<string[]>(
     'texra.latex.enabledReplacementsRegex',
-    DEFAULT_CORE_SETTINGS.latex.enabledReplacementsRegex,
   );
   const customReplacements = getConfig<Record<string, ReplacementValue>>(
     'texra.latex.customReplacementsRegex',
-    {},
   );
 
   const enabledCategories = selectEnabledCategories(

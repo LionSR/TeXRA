@@ -181,11 +181,9 @@ export async function compileLatex2Pdf(
 
     const tikzInputDirectory = getConfig<string>(
       'texra.latex.tikzInputDirectory',
-      '',
     );
     const includeWorkspace = getConfig<boolean>(
       'texra.latex.includeWorkspaceInTexinputs',
-      true,
     );
     const workspacePath = includeWorkspace ? WorkspaceFS.getPath() : null;
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({

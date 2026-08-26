@@ -53,7 +53,6 @@ import {
   type MediaAttachmentKind,
   type ToolFileAttachment,
   type ToolResult,
-  DEFAULT_CORE_SETTINGS,
 } from '@shared/schemas';
 import { clamp, filterNotNullish } from '@utils/core';
 import { isImageMimeType } from '@utils/files/mimeUtils';
@@ -414,7 +413,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   private isBackgroundModeToggleEnabled(): boolean {
-    return getConfig<boolean>('texra.model.useBackgroundResponses', true);
+    return getConfig<boolean>('texra.model.useBackgroundResponses');
   }
 
   protected override backgroundModeSupported = true;
@@ -1676,7 +1675,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     // Phase 4: EXECUTE - Build final params and make the API call
     const parallelToolCalls = getConfig<boolean>(
       'texra.model.openaiParallelToolCalls',
-      DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
     );
     const params: ResponseCreateParamsBase = {
       ...baseParams,
@@ -1736,7 +1734,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       const isGpt5 = isGpt5ModelName(this.config.name);
       const includeSummary =
         !isGpt5 ||
-        getConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
+        getConfig<boolean>('texra.model.gpt5ReasoningSummary');
       if (includeSummary) {
         params.reasoning = {
           ...(params.reasoning as Reasoning),

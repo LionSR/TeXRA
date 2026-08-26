@@ -36,7 +36,6 @@ import {
   type ToolDefinition,
   type ToolFileAttachment,
   type ToolResult,
-  DEFAULT_CORE_SETTINGS,
 } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
@@ -330,7 +329,6 @@ export class ModelHandlerOpenAI<
     if (tools?.length) {
       const parallelToolCalls = getConfig<boolean>(
         'texra.model.openaiParallelToolCalls',
-        DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
       );
       baseParams.parallel_tool_calls = parallelToolCalls;
       // These tools are parsed by TeXRA after the response. The SDK's
