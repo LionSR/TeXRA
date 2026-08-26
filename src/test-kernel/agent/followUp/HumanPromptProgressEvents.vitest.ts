@@ -115,7 +115,6 @@ describe('human prompt progress events', () => {
         payload: {
           streamId,
           suppressViewSwitch: true,
-          ensureVisible: true,
         },
       },
       {
@@ -177,7 +176,6 @@ describe('human prompt progress events', () => {
         payload: {
           streamId,
           suppressViewSwitch: true,
-          ensureVisible: true,
         },
       },
       {

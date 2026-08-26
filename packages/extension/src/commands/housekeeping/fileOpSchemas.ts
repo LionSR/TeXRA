@@ -32,9 +32,7 @@ export const FileOpCommandArgsSchema = z.tuple([
  */
 const fileOpConfigFields = {
   outputFiles: z.array(z.string()).prefault([]),
-  streamId: z.string().optional(),
   executionId: ExecutionIdSchema.optional(),
-  skipProgressViewClear: z.boolean().optional(),
 };
 
 export const PackConfigSchema = FileOpParamsSchema.extend({

@@ -168,10 +168,6 @@ const PROGRESS_PROJECTION_CASES = {
     }),
     payload: { streamId, filesByRound: { 1: [] } },
   },
-  clearMissingOutputs: {
-    source: sessionFact('clearMissingOutputs', { streamId }),
-    payload: { streamId },
-  },
   setTaskState: {
     source: runEvent({
       type: 'run.config',

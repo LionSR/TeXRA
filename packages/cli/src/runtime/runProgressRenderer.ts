@@ -461,10 +461,7 @@ class HeadlessPort implements SessionRendererPort {
 
   clearPendingConversationProgress(_streamId: StreamTabId): void {}
 
-  syncStreamContent(
-    _stream: PresentedStreamId,
-    _options?: { includeActiveState?: boolean },
-  ): void {}
+  syncStreamContent(_stream: PresentedStreamId): void {}
 }
 
 function formatInputLabel(files: readonly string[]): string | undefined {

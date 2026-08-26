@@ -69,8 +69,6 @@ function projectCliSessionFact(
       return { event: 'goalStateChanged', payload: fact.payload };
     case 'inquiryThreadUpdated':
       return { event: 'inquiryThreadUpdated', payload: fact.payload };
-    case 'clearMissingOutputs':
-      return { event: 'clearMissingOutputs', payload: fact.payload };
     case 'updateQueuedFollowUps':
       return { event: 'updateQueuedFollowUps', payload: fact.payload };
     case 'followUpSent':

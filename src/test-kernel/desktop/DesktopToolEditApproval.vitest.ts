@@ -397,7 +397,6 @@ describe('desktop tool edit approval', () => {
           payload: {
             streamId: 'stream-2',
             suppressViewSwitch: true,
-            ensureVisible: true,
           },
         },
       });

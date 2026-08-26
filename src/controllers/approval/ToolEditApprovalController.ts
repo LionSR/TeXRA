@@ -393,7 +393,6 @@ export class ToolEditApprovalController {
             payload: {
               streamId,
               suppressViewSwitch: true,
-              ensureVisible: true,
             },
           },
         });

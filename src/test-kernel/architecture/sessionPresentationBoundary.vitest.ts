@@ -25,7 +25,7 @@ describe('session and presentation ownership boundary', () => {
     );
 
     expect(source).not.toMatch(
-      /suppressViewSwitch|ensureVisible|hasPendingPermissions|onActiveStreamChanged|syncStreamContent/,
+      /suppressViewSwitch|hasPendingPermissions|onActiveStreamChanged|syncStreamContent/,
     );
   });
 });

@@ -106,7 +106,6 @@ export function createProgressHostInteractions(
           payload: {
             streamId,
             suppressViewSwitch: true,
-            ensureVisible: true,
           },
         },
       });

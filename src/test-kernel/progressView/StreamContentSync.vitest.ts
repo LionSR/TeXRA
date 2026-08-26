@@ -139,7 +139,7 @@ describe('progress view stream-content projection', () => {
       subagents: [activeSubagent],
     }));
 
-    renderer.syncStreamContent(stream, { includeActiveState: true });
+    renderer.syncStreamContent(stream);
 
     expect(bridge.syncStream).toHaveBeenCalledWith(stream);
     expect(messages.at(-1)).toMatchObject({
@@ -186,7 +186,7 @@ describe('progress view stream-content projection', () => {
       stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
     }));
 
-    renderer.syncStreamContent(stream, { includeActiveState: true });
+    renderer.syncStreamContent(stream);
 
     expect(messages.at(-1)).toMatchObject({
       stream,
@@ -250,7 +250,7 @@ describe('progress view stream-content projection', () => {
     }));
     messages.length = 0;
 
-    renderer.syncStreamContent(stream, { includeActiveState: true });
+    renderer.syncStreamContent(stream);
 
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({

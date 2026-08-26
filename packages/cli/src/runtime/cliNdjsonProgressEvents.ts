@@ -1,7 +1,6 @@
 import type { TaskState } from '@agent/core/state/TaskState';
 import type {
   AddOutputFilesPayload,
-  ClearMissingOutputsPayload,
   ExecutionId,
   GoalPausedPayload,
   GoalStateChangedPayload,
@@ -63,7 +62,6 @@ export interface CliNdjsonProgressEventPayloads {
   addOutputFiles: AddOutputFilesPayload;
   updateMissingOutputs: UpdateMissingOutputsPayload;
   updateCompileFailures: UpdateCompileFailuresPayload;
-  clearMissingOutputs: ClearMissingOutputsPayload;
   setTaskState: {
     streamId: StreamTabId;
     executionId?: ExecutionId;

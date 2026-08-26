@@ -22,8 +22,8 @@ export type PresentedStreamId = StreamTabId | '';
  * `SessionStreamMetadata.parentStreamId`,
  * `StreamExecutionState.contextState`) or the fact it reacts to
  * (`goalPaused`); nothing here is new vocabulary. Slices whose notification
- * carries real delta semantics — `onMissingOutputsChanged`'s `reset`,
- * `onStageChanged`'s phase-vs-round split — keep their own method.
+ * carries real delta semantics — `onStageChanged`'s phase-vs-round split —
+ * keep their own method.
  */
 export type SessionRenderSlice =
   | 'files'
@@ -87,13 +87,7 @@ export interface SessionRendererPort {
    *  `SessionState.getStreamState(streamId).subagents`. */
   onBadgesChanged(streamId: StreamTabId): void;
 
-  /** Delta-semantic: `reset` clears the stream's rounds instead of replacing
-   *  them, so this one keeps its own envelope rather than folding into
-   *  {@link SessionRendererPort.invalidate}. */
-  onMissingOutputsChanged(
-    streamId: StreamTabId,
-    options?: { reset?: boolean },
-  ): void;
+  onMissingOutputsChanged(streamId: StreamTabId): void;
 
   onRunUsageChanged(
     streamId: StreamTabId,
@@ -120,8 +114,5 @@ export interface SessionRendererPort {
    * Full active-viewport rebuild. Lit owns bridge cursor sync + controls packing;
    * TUI no-ops (transcript projection is separate).
    */
-  syncStreamContent(
-    stream: PresentedStreamId,
-    options?: { includeActiveState?: boolean },
-  ): void;
+  syncStreamContent(stream: PresentedStreamId): void;
 }

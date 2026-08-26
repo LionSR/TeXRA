@@ -110,7 +110,6 @@ export interface SnapshotProjection {
     storageKey: StorageKey,
     usage: ExtendedTokenUsageStats,
   ): void;
-  clearMissingOutputs(stream: StreamTabId): void;
   setDescription(stream: StreamTabId, description: string): void;
   setParentStream(child: StreamTabId, parent: StreamTabId | null): void;
 }
@@ -156,12 +155,6 @@ export function snapshotFacts(store: StreamSnapshotStore): SnapshotProjection {
       emitRun(streamId, {
         type: 'usage',
         payload: { streamId, storageKey, usage },
-      });
-    },
-    clearMissingOutputs: (streamId) => {
-      events.emit({
-        scope: 'session',
-        event: { type: 'clearMissingOutputs', payload: { streamId } },
       });
     },
     setDescription: (streamId, description) => {

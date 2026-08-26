@@ -14,8 +14,10 @@ import {
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
-import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
-import { createDesktopHostInteractions } from '@desktop/main/desktopHostInteractions';
+import {
+  createProgressHostInteractions,
+  type ProgressHostInteractions,
+} from '@controllers/progressView/backend/progressHostInteractions';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import {
   AgentCategory,
@@ -139,11 +141,10 @@ function createPortSession(): {
     resolveToolEditPermission: () => {},
     detachCause: 'Test session detached.',
   });
-  const interactions = createDesktopHostInteractions({
+  const interactions = createProgressHostInteractions({
     interactions: presentationSink,
     session,
     setApprovalBypassState,
-    showInfoMessage: vi.fn(),
     getApprovalHandlers: () => handlers,
     getToolEditApprovals: () => toolEditApprovals,
   });

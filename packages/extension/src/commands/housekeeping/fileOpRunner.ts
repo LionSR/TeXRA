@@ -5,7 +5,6 @@ import {
   type FileOpResult,
 } from '@shared/schemas';
 
-import { emitClearMissingOutputs } from './streamEventUtils';
 // The clean schema is the source of truth for the fields both file operations
 // share; the pack config is structurally assignable to it.
 import type { CleanConfig as FileOpConfig } from './fileOpSchemas';
@@ -35,8 +34,7 @@ interface FileOpActions {
 /**
  * Shared toolbar orchestration for the housekeeping file operations: run the
  * workspace op (multiple or single by `outputFiles` count), merge the runDir
- * leg when an `executionId` is present, surface the result, then clear only the
- * caller-selected tab's missing outputs.
+ * leg when an `executionId` is present, then surface the result.
  */
 export async function runFileOp(
   config: FileOpConfig,
@@ -68,9 +66,4 @@ export async function runFileOp(
     result = await runWorkspaceOp();
   }
   actions.showResult(result, inputFile);
-  // Exactly addressed (#9590 A3): clear only the tab the caller selected.
-  // Config-only invocations have no stream context and clear nothing.
-  if (!config.skipProgressViewClear && config.streamId) {
-    emitClearMissingOutputs(config.streamId);
-  }
 }

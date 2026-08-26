@@ -214,19 +214,8 @@ export class LitSessionRenderer implements SessionRendererPort {
     this.updateStreamMetadata(streamId);
   }
 
-  onMissingOutputsChanged(
-    streamId: StreamTabId,
-    options?: { reset?: boolean },
-  ): void {
+  onMissingOutputsChanged(streamId: StreamTabId): void {
     this.sendIfActive(streamId, () => {
-      if (options?.reset) {
-        this.sendMessage({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
-          stream: streamId,
-          reset: true,
-        });
-        return;
-      }
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
         stream: streamId,
@@ -296,15 +285,8 @@ export class LitSessionRenderer implements SessionRendererPort {
     });
   }
 
-  syncStreamContent(
-    stream: PresentedStreamId,
-    options: {
-      includeActiveState?: boolean;
-    } = {},
-  ): void {
+  syncStreamContent(stream: PresentedStreamId): void {
     if (!this.isAvailable()) return;
-
-    const { includeActiveState = false } = options;
 
     if (!stream) {
       this.sendMessage({
@@ -316,7 +298,7 @@ export class LitSessionRenderer implements SessionRendererPort {
 
     this.webviewBridge.syncStream(stream);
 
-    const projection = this.buildStreamContent(stream, includeActiveState);
+    const projection = this.buildStreamContent(stream);
     if (projection) {
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
@@ -334,7 +316,6 @@ export class LitSessionRenderer implements SessionRendererPort {
    */
   private buildStreamContent(
     stream: StreamTabId,
-    includeActiveState: boolean,
   ): StreamContentRenderPayload | undefined {
     const { state, getStreamControls } = this;
     const existingState = state.getStreamState(stream);
@@ -342,12 +323,10 @@ export class LitSessionRenderer implements SessionRendererPort {
       state.getStreamMetadata(stream).agentCategory ?? existingState?.category;
     if (category === undefined) return undefined;
 
-    if (includeActiveState) {
-      state.getOrCreateStreamState(stream, category);
-    }
-    const executionState = includeActiveState
-      ? state.getStreamState(stream)
-      : undefined;
+    // `getOrCreateStreamState` materializes the row; `getStreamState` is the
+    // read that filters removed children out of `subagents`, so both calls stay.
+    state.getOrCreateStreamState(stream, category);
+    const executionState = state.getStreamState(stream);
     return buildStreamContentRender(stream, category, {
       runUsage: mapToRecord(state.snapshots.getRunUsage(stream)),
       activeState: executionState && {

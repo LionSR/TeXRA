@@ -304,7 +304,6 @@ export class ExternalInquiryTool extends defineTool({
         payload: {
           streamId,
           suppressViewSwitch: true,
-          ensureVisible: true,
         },
       },
     });

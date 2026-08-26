@@ -195,7 +195,6 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
         payload: {
           streamId,
           suppressViewSwitch: true,
-          ensureVisible: true,
         },
       });
     }

@@ -7,15 +7,16 @@ import type {
   RetryResult,
   UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
-import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
+import {
+  createProgressHostInteractions,
+  type ProgressHostInteractionsOptions,
+} from '@controllers/progressView/backend/progressHostInteractions';
 import type { StreamTabId } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import type { ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
 
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.ts';
 import { createRecordingApprovalHandlers } from '../progressView/approvalHandlerSetHarness';
 
 interface DesktopHostInteractions {
@@ -61,20 +62,6 @@ interface DesktopHostInteractions {
   dispose?(): void;
 }
 
-interface DesktopHostInteractionsModule {
-  createDesktopHostInteractions(options: {
-    interactions: { emit: (event: string, payload: unknown) => void };
-    session: SessionHandle;
-    showInfoMessage(message: string): Promise<void> | void;
-    getApprovalHandlers(): ApprovalRequestHandlerSet;
-    getToolEditApprovals(): {
-      approvePendingForStream: ReturnType<typeof vi.fn>;
-      cancel: ReturnType<typeof vi.fn>;
-      requestApproval: ReturnType<typeof vi.fn>;
-    };
-  }): DesktopHostInteractions;
-}
-
 /** Reads the `requestId` passed to a handler's `.show()`, optionally for one stream. */
 function shownRequestId(
   show: ReturnType<typeof vi.fn>,
@@ -101,7 +88,6 @@ function expectStreamRegistered(
       payload: {
         streamId,
         suppressViewSwitch: true,
-        ensureVisible: true,
       },
     },
   });
@@ -110,9 +96,6 @@ function expectStreamRegistered(
 async function createInteractions(
   handlers = createRecordingApprovalHandlers(),
 ) {
-  const { createDesktopHostInteractions } = (await import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopHostInteractions.ts'))
-  )) as DesktopHostInteractionsModule;
   const presentationSink = { emit: vi.fn() };
   const session = createTestSession();
   const toolEditApprovals = {
@@ -129,13 +112,16 @@ async function createInteractions(
   });
 
   return {
-    interactions: createDesktopHostInteractions({
+    interactions: createProgressHostInteractions({
       interactions: presentationSink,
       session,
-      showInfoMessage: vi.fn(),
       getApprovalHandlers: () => handlers,
-      getToolEditApprovals: () => toolEditApprovals,
-    }),
+      getToolEditApprovals: () =>
+        toolEditApprovals as unknown as ReturnType<
+          ProgressHostInteractionsOptions['getToolEditApprovals']
+        >,
+      setApprovalBypassState: vi.fn(),
+    }) as unknown as DesktopHostInteractions,
     handlers,
     presentationSink,
     sessionEvents,
@@ -143,7 +129,7 @@ async function createInteractions(
   };
 }
 
-describe('createDesktopHostInteractions', () => {
+describe('createProgressHostInteractions on the desktop host', () => {
   it('approves already-pending delegated work only in the selected stream', async () => {
     const { interactions, handlers, toolEditApprovals } =
       await createInteractions();
