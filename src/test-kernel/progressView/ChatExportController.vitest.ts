@@ -90,7 +90,7 @@ async function persistTranscriptEntry(
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
     timestamp: 100,
-    messageType: MESSAGE_TYPES.DEFAULT,
+    messageType: MESSAGE_TYPES.USER_MESSAGE,
     text: 'hello',
   });
   await store.flush();
@@ -160,6 +160,28 @@ describe('ChatExportController.buildExportInput', () => {
   const controller = new ChatExportController({ latexPreamble: '' });
 
   beforeEach(installStoragePlatform);
+
+  it('reports config_missing when nothing is stored', async () => {
+    await expect(controller.buildExportInput('missing')).resolves.toEqual({
+      status: 'config_missing',
+    });
+  });
+
+  it('returns ok when config and transcript are stored', async () => {
+    const executionId = 'exec-full' as ExecutionId;
+    await getExecutionStore(executionId).writeRunRecord(config());
+    const streamId = await persistTranscriptEntry(executionId, 'orchestrator');
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-05T00:00:00.000Z',
+      streamId,
+    });
+
+    await expect(
+      controller.buildExportInput(executionId),
+    ).resolves.toMatchObject({
+      status: 'ok',
+    });
+  });
 
   it('reports conversation_missing when a config is stored but no transcript exists', async () => {
     const executionId = 'exec-no-chat' as ExecutionId;
