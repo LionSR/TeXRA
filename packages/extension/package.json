@@ -846,6 +846,10 @@
           "when": "texra.activated"
         },
         {
+          "command": "texra.auth.grok.signIn",
+          "when": "texra.activated"
+        },
+        {
           "command": "texra.auth.signOut",
           "when": "texra.activated"
         },
