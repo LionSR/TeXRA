@@ -239,6 +239,13 @@ export class SettingsModelSelectionController {
     if (!supportsReasoningLevel(config)) return;
 
     item.supportsReasoningLevel = true;
+    const supportedLevels = config.capabilities.supportedReasoningEfforts
+      ?.map((effort) => EFFORT_TO_LEVEL.get(effort))
+      .filter((level): level is ReasoningLevel => level !== undefined);
+    if (supportedLevels?.length) {
+      item.supportedReasoningLevels = supportedLevels;
+    }
+
     const defaultLevel = EFFORT_TO_LEVEL.get(
       config.capabilities.reasoningEffort,
     );
@@ -247,7 +254,10 @@ export class SettingsModelSelectionController {
     }
 
     const parsed = ReasoningLevelSchema.safeParse(override);
-    if (parsed.success) {
+    if (
+      parsed.success &&
+      (!supportedLevels?.length || supportedLevels.includes(parsed.data))
+    ) {
       item.reasoningLevel = parsed.data;
     }
   }

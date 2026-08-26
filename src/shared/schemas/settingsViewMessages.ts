@@ -276,6 +276,7 @@ export type UpdateAgentSelectionMessage = z.infer<
 /** Reasoning effort levels that a user can select (low → high tiers). */
 export const ReasoningLevelSchema = z.enum([
   'none',
+  'minimal',
   'low',
   'medium',
   'high',
@@ -285,6 +286,7 @@ export const ReasoningLevelSchema = z.enum([
 export type ReasoningLevel = z.infer<typeof ReasoningLevelSchema>;
 export const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {
   none: 'None',
+  minimal: 'Minimal',
   low: 'Low',
   medium: 'Medium',
   high: 'High',
@@ -313,6 +315,8 @@ const ModelSelectionItemSchema = z.object({
   defaultReasoningLevel: ReasoningLevelSchema.optional(),
   /** The user's chosen reasoning level override (undefined = use default). */
   reasoningLevel: ReasoningLevelSchema.optional(),
+  /** Exact registry-declared effort vocabulary for this model. */
+  supportedReasoningLevels: z.array(ReasoningLevelSchema).optional(),
   /** Whether this model qualifies as a "fast first response" pick (price-based). */
   isFast: z.boolean().optional(),
   // Resolved once by computeModelOptionsData and carried verbatim so the

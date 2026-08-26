@@ -38,7 +38,10 @@ import {
   classifyMediaEntry,
   unknownMediaCategoryWarning,
 } from '../support/mediaClassification';
-import { getDeclaredMaxReasoningEffort } from '../support/reasoningEffort';
+import {
+  getDeclaredMaxReasoningEffort,
+  normalizeSupportedReasoningEffort,
+} from '../support/reasoningEffort';
 import { OPENROUTER_BASE_URL } from '../support/ProxyConfigResolver';
 import {
   resolveMoonshotRequestParameters,
@@ -72,8 +75,11 @@ import type {
   ChatUsage,
   ChatMessages,
   ChatToolCall,
+  ChatAssistantMessage,
   ChatContentItems,
   ChatRequest,
+  ChatRequestEffort,
+  ReasoningDetailUnion,
 } from '@openrouter/sdk/models';
 
 function isOpenRouterChatStream(
@@ -99,6 +105,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   ChatResult,
   ChatContentItems
 > {
+  private reasoningDetails: ReasoningDetailUnion[] = [];
+
   /** Client-side compaction is implemented for tool-use sessions regardless of the routed-through provider. */
   override get supportsManualCompaction(): boolean {
     return this.isToolUseMode();
@@ -176,6 +184,28 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     );
   }
 
+  private normalizeReasoningEffort(effort: ReasoningEffort): ChatRequestEffort {
+    const supported = this.capabilities.supportedReasoningEfforts;
+    let normalized = effort;
+    if (supported?.length) {
+      normalized = normalizeSupportedReasoningEffort(
+        effort,
+        supported,
+        this.capabilities.reasoningEffort,
+      );
+    } else if (
+      effort === ReasoningEffort.NONE ||
+      effort === ReasoningEffort.MINIMAL
+    ) {
+      normalized = ReasoningEffort.LOW;
+    }
+    return toOpenRouterReasoningEffort(
+      this.validateReasoningEffort(normalized),
+      getDeclaredMaxReasoningEffort(this.config.capabilities) ===
+        ReasoningEffort.MAX,
+    );
+  }
+
   /** Creates an OpenRouter response after SDK-boundary error tagging is installed. */
   protected override async createResponseImpl(
     options: CreateResponseOptions<ChatMessages, OpenRouter>,
@@ -208,18 +238,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     // Reasoning configuration:
     // OpenRouter SDK serializes `reasoning.effort` but not `reasoning.enabled`.
     // Use getEffectiveReasoningEffort() for tier-based restrictions (e.g. GPT-5
-    // xhigh capped to high for Max-tier users on server-side keys).
+    // xhigh capped to high for Max-tier users on server-side keys), then clamp
+    // to the model's exact registry-declared vocabulary when one is available.
     if (this.capabilities.supportsReasoning) {
       const effective = this.capabilities.supportsReasoningEffort
-        ? (this.getEffectiveReasoningEffort() ?? 'low')
-        : 'low';
-      const effort = effective === 'none' ? 'low' : effective;
+        ? (this.getEffectiveReasoningEffort() ?? ReasoningEffort.LOW)
+        : ReasoningEffort.LOW;
       request.reasoning = {
-        effort: toOpenRouterReasoningEffort(
-          this.validateReasoningEffort(effort),
-          getDeclaredMaxReasoningEffort(this.config.capabilities) ===
-            ReasoningEffort.MAX,
-        ),
+        effort: this.normalizeReasoningEffort(effective),
       };
     }
 
@@ -374,7 +400,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           // Minimize reasoning for summarization — use lowest valid effort
           ...(this.capabilities.supportsReasoningEffort &&
           !moonshotParameters?.disableThinkingInCompactionSummary
-            ? { reasoning: { effort: 'low' } }
+            ? {
+                reasoning: {
+                  effort: this.normalizeReasoningEffort(ReasoningEffort.NONE),
+                },
+              }
             : {}),
         };
         const summaryResponse = await auxiliaryRetry(
@@ -576,6 +606,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     const message = responseObject?.choices?.[0]?.message;
     if (!message) return null;
 
+    this.reasoningDetails = [...(message.reasoningDetails ?? [])];
+
     // Try reasoningDetails first (OpenRouter normalized format)
     const reasoningDetails = message.reasoningDetails;
     if (reasoningDetails) {
@@ -633,16 +665,20 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       result: ToolResult;
       attachments: ToolFileAttachment[];
     }>,
-    _workspaceState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatMessages[]> {
     if (entries.length === 0) return [];
 
-    const callMsg: ChatMessages = {
+    const reasoningDetails = this.reasoningDetails;
+    this.reasoningDetails = [];
+    const callMsg: ChatAssistantMessage & { role: 'assistant' } = {
       role: 'assistant',
       toolCalls: entries.map(({ call }) => call.raw),
+      ...(reasoningDetails.length ? { reasoningDetails } : {}),
       ...(text ? { content: text } : {}),
     };
+    workspaceState?.resetReasoning();
 
     const resultMsgs: ChatMessages[] = entries.map(
       ({ call, result, attachments }) => ({
