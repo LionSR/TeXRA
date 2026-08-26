@@ -830,12 +830,6 @@
       "name": "CLI_COMPLETION_SHELLS"
     },
     {
-      "file": "packages/cli/src/runtime/defaultAgents.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "BUILTIN_DEFAULT_CHAT_AGENT"
-    },
-    {
       "file": "packages/cli/src/runtime/doctor.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -1296,12 +1290,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "EXTENSION_INTERNAL_COMMAND_IDS"
-    },
-    {
-      "file": "packages/extension/src/commands/extensionCommandHandlers.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "EXTENSION_REGISTRY_CATALOG_COMMAND_IDS"
     },
     {
       "file": "packages/extension/src/frontend/auth/agentCatalogRefreshScope.ts",
