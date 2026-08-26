@@ -553,9 +553,7 @@ export function entriesToOptionData(
     label: entry.name,
     isToolUse: entry.category === AgentCategory.ToolUse,
     isOrchestrator: hasDelegationTool(entry.tools),
-    isRemote: entry.source === 'remote',
-    isCustom: entry.source === 'custom',
-    isInline: entry.source === 'inline',
+    source: entry.source,
   }));
 }
 

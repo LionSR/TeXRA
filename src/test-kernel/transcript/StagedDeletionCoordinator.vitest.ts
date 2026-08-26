@@ -67,9 +67,6 @@ function createFakeHost(): FakeHost {
       calls.push('bumpStreamVersion');
     },
     seedChain: () => undefined,
-    invalidateKvHandles: () => {
-      calls.push('invalidateKvHandles');
-    },
     evict: () => {
       calls.push('evict');
     },
@@ -210,8 +207,8 @@ describe('StagedDeletionCoordinator', () => {
     );
   });
 
-  it('reconcile restores a crash-left staged directory and invalidates cached KV handles', async () => {
-    const { calls, coordinator } = setupCoordinator();
+  it('reconcile restores a crash-left staged directory', async () => {
+    const { coordinator } = setupCoordinator();
     const stagedDir = stagedStreamDataDir(STREAM);
     await StorageFS.ensureDir(stagedDir);
     await StorageFS.write(
@@ -226,8 +223,6 @@ describe('StagedDeletionCoordinator', () => {
       pendingCleanup: [],
       discarded: [],
     });
-    // The store cached a KV handle for the directory that just moved.
-    expect(calls).toContain('invalidateKvHandles');
     expect(
       await StorageFS.readJson(
         path.join(streamDataDir(STREAM), `${PLAN_KEY}.json`),

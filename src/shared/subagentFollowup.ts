@@ -45,7 +45,7 @@ const DELIVERY_TAG_ALTERNATION = DELIVERY_TAG_NAMES.join('|');
 // `codex-result-partial`, letting a future hyphen-extended tag prefix-match
 // an existing one (no current DELIVERY_TAGS entry is a prefix of another, but
 // the vocabulary is a shared, growing const). Every producer
-// (deliveryEnvelope.ts / subagentResults.ts / sanitizeTag.ts) only ever
+// (deliveryEnvelope.ts / subagentResults.ts / github/formatUtils.ts) only ever
 // follows a tag name with whitespace (attributes), `>` (bare open, e.g.
 // `<execution-activity>`), or the exact `/>` self-closing delimiter, so anchor
 // on those delimiters instead of accepting any slash continuation.

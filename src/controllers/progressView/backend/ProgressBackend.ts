@@ -38,6 +38,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import type { TranscriptPresentationLease } from '@transcript/StreamLogStore';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
+import { aggregateError } from '@utils/core';
 
 const log = createLog('ProgressBackend');
 
@@ -355,8 +356,7 @@ export class ProgressBackend {
     }
     if (failures.length > 0) {
       closeTranscriptLease();
-      if (failures.length === 1) throw failures[0].reason;
-      throw new AggregateError(
+      throw aggregateError(
         failures.map((failure) => failure.reason),
         `Failed to hydrate stream ${stream}`,
       );

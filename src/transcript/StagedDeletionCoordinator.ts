@@ -93,8 +93,6 @@ export interface StagedDeletionHost {
   bumpStreamVersion(stream: StreamTabId): void;
   /** The stream's in-flight seed/refresh chain, if one is running. */
   seedChain(stream: StreamTabId): Promise<void> | undefined;
-  /** Drop cached KV handles after a rename moved the stream's directory. */
-  invalidateKvHandles(stream: StreamTabId): void;
   /** Drop the stream's in-memory record once a deletion commits. */
   evict(stream: StreamTabId): void;
 }
@@ -288,7 +286,6 @@ export class StagedDeletionCoordinator {
         if (!hasLiveData) {
           await StorageFS.ensureDir(STREAM_DATA_DIR);
           await StorageFS.rename(stagedDir, liveDir);
-          this.host.invalidateKvHandles(stream);
           if (liveStreams.has(stream)) restored.push(stream);
           else pendingCleanup.push(stream);
           return;
@@ -431,7 +428,6 @@ export class StagedDeletionCoordinator {
           recovering.phase = 'transitioning';
           await StorageFS.rename(stagedDir, liveDir);
           outcome = 'restored';
-          this.host.invalidateKvHandles(stream);
         }
         if (!hasLiveData && (liveWasAuthoritative || !hasStagedData)) {
           await StorageFS.ensureDir(liveDir);

@@ -11,7 +11,6 @@ import {
   workflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -250,10 +249,9 @@ async function packAdditionalXmlFiles(
   outputFolderExists: boolean,
 ): Promise<boolean> {
   const cleanAgent = getCleanAgentName(agent);
-  const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
 
   let anyPacked = false;
-  for (let i = 0; i < maxRounds; i++) {
+  for (let i = 0; i < DEFAULT_MAX_ROUNDS; i++) {
     // Both layouts, named by the shared grammar helpers so this reader matches
     // exactly what the writers produced: flat `<base>_<chunk>_r{round}_<model>`
     // and round-subfolder `r{round}/<base>_<cleanAgent>_<model>`.
