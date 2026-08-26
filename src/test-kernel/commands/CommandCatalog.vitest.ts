@@ -13,10 +13,18 @@ import {
   type CommandCatalogEntry,
 } from '@shared/commands/catalog';
 
+interface CommandPaletteItem {
+  command: string;
+  when?: string;
+}
+
 interface PackageJson {
   contributes: {
     commands: unknown[];
     keybindings?: unknown[];
+    menus?: {
+      commandPalette?: CommandPaletteItem[];
+    };
   };
 }
 
@@ -41,6 +49,18 @@ describe('commandCatalog', () => {
     assert.deepEqual(
       packageJson.contributes.keybindings ?? [],
       commandKeybindings,
+    );
+  });
+
+  it('gates the Grok subscription sign-in command in the command palette', () => {
+    assert.deepEqual(
+      packageJson.contributes.menus?.commandPalette?.find(
+        (entry) => entry.command === 'texra.auth.grok.signIn',
+      ),
+      {
+        command: 'texra.auth.grok.signIn',
+        when: 'texra.activated',
+      },
     );
   });
 
