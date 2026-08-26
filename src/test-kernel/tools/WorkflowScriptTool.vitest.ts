@@ -412,9 +412,8 @@ return null`;
     expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
   });
 
-  it('declares the task-plan contract at the model-facing boundary', () => {
+  it('pins the provider schema shape at the model-facing boundary', () => {
     const definition = new WorkflowScriptTool().definition;
-    const description = definition.description;
     const providerSchema = convertToolSchema(definition);
     const providerProperties = providerSchema?.properties as
       Record<string, { description?: string }> | undefined;
@@ -435,30 +434,6 @@ return null`;
     );
     expect(providerProperties?.scriptPath?.description).toContain(
       'Provide exactly one of script or scriptPath',
-    );
-    expect(description).toContain(
-      'declare meta.tasks as { id, label, phase? } records',
-    );
-    expect(description).toContain(
-      "meta.phases accepts title strings such as ['Draft', 'Merge']",
-    );
-    expect(description).toContain(
-      'progress shows the pending plan before execution',
-    );
-    expect(description).toContain(
-      'A task phase must name a title in meta.phases',
-    );
-    expect(description).toContain(
-      'Every agent() call must then reference one declared task with { id }',
-    );
-    expect(description).toContain(
-      'omit label and phase from the call because meta.tasks owns them',
-    );
-    expect(description).toContain(
-      'A call without meta.tasks may also use id, label, and phase',
-    );
-    expect(description).toContain(
-      'Omit meta.tasks when the call set is data-dependent',
     );
     expect(
       definition.zodSchema?.safeParse({

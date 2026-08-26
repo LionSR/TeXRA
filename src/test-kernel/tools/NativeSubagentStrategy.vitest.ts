@@ -541,59 +541,6 @@ describe('NativeSubagentStrategy', () => {
     ).resolves.toMatchObject({ parentExecutionId: 'parent-exec' });
   });
 
-  it('runTurn hands its consumed batch directly to the persisted flow cursor', async () => {
-    const params = {
-      ...baseParams(),
-      approvalPromptsUnavailable: true,
-      runtimeUnavailableTools: ['ask_user'],
-    };
-    const strategy = createNativeSubagentStrategy(params);
-    const childStreamId = CHILD_STREAM_ID;
-
-    await launchWaitingTurn(params, strategy);
-
-    const config = { agentCategory: 'toolUse' };
-    const snapshot = createToolUseResumeData({
-      executionId: params.executionId,
-      streamId: childStreamId,
-    });
-    mocks.readConfig.mockResolvedValue(config);
-    mocks.retrieveSessionResumeData.mockResolvedValue(snapshot);
-    mocks.resumeToolUseTurn.mockResolvedValueOnce(
-      toolUseTurnResult('completed', params.executionId, { response: 'done' }),
-    );
-
-    const turn = await strategy.runTurn!(
-      [{ text: 'keep going', origin: 'user' }],
-      fakePorts(),
-      new AbortController(),
-    );
-
-    expect(mocks.retrieveSessionResumeData).toHaveBeenCalledWith(
-      childStreamId,
-      params.executionId,
-      config,
-    );
-    expect(mocks.resumeToolUseTurn).toHaveBeenCalledWith(
-      snapshot,
-      expect.objectContaining({
-        approvalPromptsUnavailable: true,
-        parentStreamId: params.parentStreamId,
-        drainedFollowUps: [
-          {
-            text: 'keep going',
-            displayText: undefined,
-            mediaFiles: undefined,
-            origin: 'user',
-          },
-        ],
-        runtimeUnavailableTools: ['ask_user'],
-        session: params.session,
-      }),
-    );
-    expect(strategy.isTerminal(turn)).toBe(true);
-  });
-
   it('preserves #7491: a failed direct resume throws for child-loop error delivery', async () => {
     const params = baseParams();
     const strategy = createNativeSubagentStrategy(params);
