@@ -77,6 +77,53 @@ These are architectural changes, not mechanical deletions, and two of them are l
 - **Tier B — one PR each.** `Retire the in-place workspace-storage transition` (-1550) and `Delete the nested Core config tree` (-220). Large, self-contained, and each deserves its own review thread.
 - **Tier C — hold for an explicit decision.** `Delete the CLI external-inquiry surface` (-1050, high) and `One policy gate for all seven request kinds` (-50, high). The first removes a user-visible capability from one host; the second reshapes approval authority, which has its own ratchet.
 
+## 1b. Outcome of implementation (2026-08-26)
+
+Nine of the ten lanes shipped as #11452-#11460. Central validation — typecheck,
+lint, dead-code ratchet and the full 10k-test suite, run on the merged set and
+then on each branch in isolation — overturned three verified findings. All three
+were caught by tests, not by review, and each is recorded here so they are not
+re-proposed.
+
+**Reverted: `RunFlowLifecycleOptions.onRunEnd` (run-lifecycle).** Deleting the
+injection seam and importing `stopLeanServersForEndedRun` directly pulls
+`src/tools/lean/leanLanguageServices.ts` into bash's module closure, which
+`src/test-kernel/architecture/toolRegistryCycle.vitest.ts` forbids. The seam's
+own doc comment stated this ("Kept injected so this module does not statically
+reach tool-domain services such as the Lean language adapter"); the verifier
+judged the module-level boundary illusory because the ratchet baseline already
+carries an `agent -> tools` edge. The ratchet was the wrong guard to check.
+
+**Lane deferred: `P7-events`.** Its lead finding — delete the `streamStates`
+option on `onStreamMetadataChanged` because "it round-trips a map the renderer
+already has" — is false. `SessionFactApplier.buildStreamStatesForRefresh`
+splices in the stream's _about-to-be-applied_ status, which the status machine
+has not been written yet at that point, and says so in its own docstring.
+Without it the first metadata send reports `ready` where it must report
+`running`, which two independent suites pin. The lane's other two findings
+(fold the payload-free port methods into `invalidate`, one owner for
+stream-removal barrier settlement, -36 LoC together) are unaffected and can be
+re-proposed on their own.
+
+**Partly reverted: the approval-policy read (settings-pipeline).**
+`readPlatformSetting` resolves through the ambient platform provider, but the
+workspace transition re-seeds from the provider instance whose workspace store
+was just swapped, so reading through the platform returns the pre-swap value.
+The transition's post-commit and post-rollback re-seeds regressed. That one call
+site and its host-neutral reader are restored; the finding's other three rewires
+stand.
+
+**Excluded by maintainer decision.** `Delete the CLI's entire external-inquiry
+surface` (-1050) was not implemented. It remains a verified finding, not a
+refuted one.
+
+The lesson generalizes the round-2 one. Round 2 learned that an in-repo grep
+does not prove deadness when the consumer is outside the repo. Round 3 adds:
+at the architectural level, a claim that a seam or parameter is redundant must
+be checked against **what the code says it is for**, not only against who calls
+it. All three overturned findings had a docstring or a guard stating the reason,
+and in each case the verifier reasoned past it.
+
 ## 2. Findings in detail
 
 ### run-lifecycle — The run lifecycle, end to end
