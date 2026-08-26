@@ -52,16 +52,17 @@ describe('commandCatalog', () => {
     );
   });
 
-  it('gates the Grok subscription sign-in command in the command palette', () => {
-    assert.deepEqual(
-      packageJson.contributes.menus?.commandPalette?.find(
-        (entry) => entry.command === 'texra.auth.grok.signIn',
-      ),
+  it('gates the sole Grok subscription sign-in command palette entry', () => {
+    const grokEntries = packageJson.contributes.menus?.commandPalette?.filter(
+      (entry) => entry.command === 'texra.auth.grok.signIn',
+    );
+
+    assert.deepEqual(grokEntries, [
       {
         command: 'texra.auth.grok.signIn',
         when: 'texra.activated',
       },
-    );
+    ]);
   });
 
   // commandKeybindings is derived from a hand-mirrored order list

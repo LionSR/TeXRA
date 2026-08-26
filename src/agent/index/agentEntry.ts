@@ -12,6 +12,7 @@ export interface AgentEntry {
   source: AgentSource;
   path: string; // absolute path to YAML (empty for remote)
   category: AgentCategory;
+  hidden?: boolean;
   description?: string;
   tools?: string[]; // tool names for tool-use agents
   defaultOutputFiles?: string[];

@@ -276,6 +276,7 @@ function scanYaml(
         source,
         path: entry.path,
         category,
+        hidden: entry.definition.hidden,
         description: entry.definition.description,
         tools: tools?.length ? tools : undefined,
         defaultOutputFiles: defaultOutputFiles?.length
