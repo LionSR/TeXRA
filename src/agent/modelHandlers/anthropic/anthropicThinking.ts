@@ -102,7 +102,10 @@ export const requiresNoTemperatureWithThinking = (fullName: string): boolean =>
   );
 
 type AnthropicEffort = NonNullable<BetaOutputConfig['effort']>;
-type AnthropicReasoningEffort = Exclude<ReasoningEffort, ReasoningEffort.NONE>;
+type AnthropicReasoningEffort = Exclude<
+  ReasoningEffort,
+  ReasoningEffort.NONE | ReasoningEffort.MINIMAL
+>;
 
 const ANTHROPIC_EFFORT_ORDER: readonly AnthropicReasoningEffort[] = [
   ReasoningEffort.LOW,
@@ -122,7 +125,8 @@ export function normalizeAnthropicEffort(
   reasoningEffort: ReasoningEffort | null,
 ): AnthropicEffort {
   const requested =
-    reasoningEffort === ReasoningEffort.NONE
+    reasoningEffort === ReasoningEffort.NONE ||
+    reasoningEffort === ReasoningEffort.MINIMAL
       ? ReasoningEffort.LOW
       : (reasoningEffort ?? ReasoningEffort.HIGH);
 

@@ -2,7 +2,7 @@ import { equal } from 'node:assert/strict';
 
 import { equivalentListCost } from './equivalentCost.ts';
 
-// gpt-5.6-sol list price in llm-zoo@1.30.0: $4/M input, $20/M output,
+// gpt-5.6-sol list price in llm-zoo@1.31.0: $4/M input, $20/M output,
 // cache discount 0.1. The fast-tier registry entry for the same model id
 // ($8/$40) must not be selected.
 Deno.test('prices a known model at standard-tier list price', () => {

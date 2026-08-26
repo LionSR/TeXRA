@@ -76,6 +76,8 @@ export function toOpenAIReasoningEffort(
     case ReasoningEffort.NONE:
     case ReasoningEffort.LOW:
       return 'low';
+    case ReasoningEffort.MINIMAL:
+      return 'minimal';
     case ReasoningEffort.MEDIUM:
       return 'medium';
     case ReasoningEffort.HIGH:
