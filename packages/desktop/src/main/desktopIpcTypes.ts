@@ -21,11 +21,6 @@ export interface DesktopOverlayPostOptions {
    * skipped entirely, which keeps tests and unattended invocations working.
    */
   postToRenderer?(message: unknown): boolean | void;
-  /**
-   * Force the external-application flow. Useful for headless tests and as an
-   * opt-out if the in-app overlay misbehaves. Defaults to `false`.
-   */
-  forceExternal?: boolean;
 }
 
 /**
@@ -38,7 +33,7 @@ export function tryShowInRenderer(
   options: DesktopOverlayPostOptions & { source: string; fallback: string },
   message: unknown,
 ): boolean {
-  if (!options.postToRenderer || options.forceExternal) return false;
+  if (!options.postToRenderer) return false;
   try {
     return options.postToRenderer(message) !== false;
   } catch (error) {
