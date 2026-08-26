@@ -442,7 +442,7 @@ export function resolveDelegationScopeAgents(
   const byKey = new Map<string, AgentEntry>();
   for (const key of keys) {
     const entry = getRosterAgent(category, key);
-    if (entry) byKey.set(agentKeyOf(entry), entry);
+    if (entry && !entry.hidden) byKey.set(agentKeyOf(entry), entry);
   }
   return [...byKey.values()];
 }

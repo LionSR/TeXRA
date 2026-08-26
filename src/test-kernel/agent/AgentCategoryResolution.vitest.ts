@@ -173,6 +173,24 @@ describe('cross-category agent resolution', () => {
     ]);
   });
 
+  it('does not delegate to source-qualified metadata-hidden agents', () => {
+    expect(
+      getRosterAgent('toolUse', 'builtInToolUse:changeReviewer'),
+    ).toMatchObject({
+      name: 'changeReviewer',
+      hidden: true,
+    });
+    expect(
+      resolveDelegationScopeAgents(
+        {
+          workflow: [],
+          toolUse: ['builtInToolUse:changeReviewer'],
+        },
+        AgentCategory.ToolUse,
+      ),
+    ).toEqual([]);
+  });
+
   it('preserves exact source-qualified roster entries before name deduplication', () => {
     expect(getRosterAgent('toolUse', 'custom:review')?.source).toBe('custom');
     expect(getRosterAgent('toolUse', 'builtInToolUse:review')?.source).toBe(

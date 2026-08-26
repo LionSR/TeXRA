@@ -61,6 +61,12 @@ function selectionLabel(record: CliAgentRosterRecord): string {
   return selection.kind;
 }
 
+export function selectableAgents(
+  agents: readonly AgentEntry[],
+): readonly AgentEntry[] {
+  return agents.filter((agent) => !agent.hidden);
+}
+
 export function buildChatDefaultAgentItems(
   agents: readonly AgentEntry[],
   effectiveKeys: readonly string[],
@@ -72,7 +78,7 @@ export function buildChatDefaultAgentItems(
       label: 'Automatic',
       description: 'Choose from the effective workspace roster',
     },
-    ...agents
+    ...selectableAgents(agents)
       .filter((agent) => effective.has(agentKeyOf(agent)))
       .map((agent) => ({
         value: agentKeyOf(agent),
@@ -116,7 +122,9 @@ async function loadRosterData(): Promise<AgentRosterData> {
   return {
     record: await readCliAgentRoster(),
     presets: createWorkspaceAgentRosterController().allPresets(),
-    agents: byCategory((category) => getAgentsByCategory(category)),
+    agents: byCategory((category) =>
+      selectableAgents(getAgentsByCategory(category)),
+    ),
   };
 }
 

@@ -273,15 +273,20 @@ describe('CLI agents command', () => {
     );
   });
 
-  it('lists the full catalog with --all semantics', async () => {
+  it('lists roster-disabled agents but omits metadata-hidden agents with --all', async () => {
     const workflowAgent = {
       ...CORRECT_AGENT,
       description: 'Fixes typos.',
       rounds: 1,
     };
+    const hiddenAgent = {
+      ...CHAT_AGENT,
+      name: 'changeReviewer',
+      hidden: true,
+    };
     stubCatalog({
       [AgentCategory.Workflow]: { all: [workflowAgent] },
-      [AgentCategory.ToolUse]: { all: [CHAT_AGENT] },
+      [AgentCategory.ToolUse]: { all: [CHAT_AGENT, hiddenAgent] },
     });
 
     const exitCode = await listAgents(createRunCommandCliContext(), {

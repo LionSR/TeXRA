@@ -220,7 +220,7 @@ const AGENT_COMPLETION_SHELL_FUNCTIONS: ByCategory<string> = {
   toolUse: '_texra_tool_use_agents',
 };
 
-/** Per-category agent listing sources (roster-filtered `agents list`). */
+/** Per-category sources include roster-disabled agents but omit metadata-hidden ones. */
 const AGENT_COMPLETION_SOURCES: ByCategory<CompletionSource> = byCategory(
   (category) => ({
     shellFunction: AGENT_COMPLETION_SHELL_FUNCTIONS[category],

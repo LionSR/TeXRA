@@ -6,6 +6,7 @@ import {
   AgentRosterForm,
   agentRosterSelectWindow,
   buildChatDefaultAgentItems,
+  selectableAgents,
   selectedAgentKeys,
   setChatDefaultAgent,
 } from '@cli/chat/tui/forms/AgentRosterForm';
@@ -74,6 +75,26 @@ describe('AgentRosterForm', () => {
         description: 'General assistant',
       },
     ]);
+  });
+
+  it('omits metadata-hidden agents without discarding stored selections', () => {
+    const hidden: AgentEntry = {
+      ...agents[0],
+      name: 'changeReviewer',
+      hidden: true,
+    };
+    const selectable = selectableAgents([...agents, hidden]);
+
+    expect(selectable).toEqual(agents);
+    expect(
+      buildChatDefaultAgentItems(
+        [...agents, hidden],
+        ['builtInToolUse:assistant', 'builtInToolUse:changeReviewer'],
+      ),
+    ).toHaveLength(2);
+    expect(
+      selectedAgentKeys(['builtInToolUse:changeReviewer'], selectable),
+    ).toEqual(['builtInToolUse:changeReviewer']);
   });
 
   it('windows long roster lists to the available terminal rows', () => {

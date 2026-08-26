@@ -308,8 +308,9 @@ function collectCliAgents(
 ): AgentEntry[] {
   const categories = categoryFilter ? [categoryFilter] : AGENT_CATEGORIES;
   return categories.flatMap((category) =>
-    source === 'visible'
+    (source === 'visible'
       ? getVisibleAgents(category)
-      : getAgentsByCategory(category),
+      : getAgentsByCategory(category)
+    ).filter((agent) => !agent.hidden),
   );
 }
