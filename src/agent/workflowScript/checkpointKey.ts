@@ -21,14 +21,14 @@ export function deriveWorkflowScriptCheckpointId(identity: {
   readonly defaultAgent: string;
   readonly parentExecutionId: string;
 }): string {
-  return truncatedHexId(
-    stableStringify({
-      defaultAgent: identity.defaultAgent,
-      name: identity.name,
-      parentExecutionId: identity.parentExecutionId,
-    }),
-    32,
-  );
+  // safe-stable-stringify returns undefined only for undefined/symbol/function
+  // input; a typed record binding selects its string-returning overload.
+  const source: Record<string, string> = {
+    defaultAgent: identity.defaultAgent,
+    name: identity.name,
+    parentExecutionId: identity.parentExecutionId,
+  };
+  return truncatedHexId(stableStringify(source), 32);
 }
 
 /** Build the execution-KV key owned by one workflow invocation. */
