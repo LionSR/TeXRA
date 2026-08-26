@@ -44,10 +44,7 @@ import {
   resolveMoonshotRequestParameters,
   type MoonshotRequestParameters,
 } from '../support/moonshotRequestParameters';
-import {
-  computeOpenRouterPrice,
-  normalizeOpenRouterUsage,
-} from './openRouterUsage';
+import { normalizeOpenRouterUsage } from './openRouterUsage';
 import { tagOpenRouterSdkError } from './openRouterSdkError';
 import { toOpenAITools } from '../toolConversion';
 import {
@@ -555,10 +552,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // ---------------------------------------------------------------------------
   // Pricing & usage
   // ---------------------------------------------------------------------------
-
-  computePrice(responseUsage: ChatUsage | null): number {
-    return computeOpenRouterPrice(responseUsage, this.standardPricingConfig());
-  }
 
   normalizeUsage(
     rawUsage: ChatUsage | null,

@@ -91,7 +91,7 @@ function setCumulativeInputTokens(
 /** The subscription path drives the Codex backend and zero-rates usage. */
 function expectOnSubscription(handler: ModelHandlerCodex): void {
   expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
-  expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBe(0);
+  expect(handler.normalizeUsage(ONE_MILLION_INPUT_TOKENS, 0).cost).toBe(0);
 }
 
 describe('ModelHandlerCodex subscription fallback', () => {
@@ -128,7 +128,9 @@ describe('ModelHandlerCodex subscription fallback', () => {
     await setPreferCodexSubscription(false);
 
     expect(handler.getBaseUrl()).not.toBe(CODEX_BACKEND_BASE_URL);
-    expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBeGreaterThan(0);
+    expect(
+      handler.normalizeUsage(ONE_MILLION_INPUT_TOKENS, 0).cost,
+    ).toBeGreaterThan(0);
   });
 
   it('clamps the effective context window to the Codex ceiling while the preference is on', async () => {
@@ -247,7 +249,7 @@ describe('ModelHandlerCodex subscription fallback', () => {
     expect(handler.getEffectiveContextWindow()).toBe(
       LARGE_WINDOW_SUBSCRIPTION_CONTEXT,
     );
-    expect(handler.computePrice(RAW_USAGE)).toBe(0);
+    expect(handler.normalizeUsage(RAW_USAGE, 0).cost).toBe(0);
     expect(handler.getLastCredentialUsageRoute()).toBe('chatgpt-subscription');
 
     const rejectedClient = handler.tagClient(
@@ -269,7 +271,6 @@ describe('ModelHandlerCodex subscription fallback', () => {
     expect(handler.getEffectiveContextWindow()).toBe(
       largeWindowConfig.contextWindow,
     );
-    expect(handler.computePrice(RAW_USAGE)).toBe(0);
     expect(handler.normalizeUsage(RAW_USAGE, 1000)).toMatchObject({
       cost: 0,
       usageRoute: 'chatgpt-subscription',

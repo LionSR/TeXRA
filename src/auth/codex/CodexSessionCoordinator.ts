@@ -5,7 +5,6 @@
  * authorize URL, claims, and device-login redirect live here; single-flight
  * refresh, storage races, and error mapping live in the shared machine.
  */
-import { wrapProviderOAuthClient } from '../oauth/providerAuthBridge';
 import {
   SubscriptionOAuthCoordinator,
   type SubscriptionOAuthClient,
@@ -100,7 +99,7 @@ export class CodexSessionCoordinator extends SubscriptionOAuthCoordinator<CodexS
     super({
       storage: init.storage,
       policy: CODEX_POLICY,
-      client: wrapProviderOAuthClient(client, CodexAuthError),
+      client,
       now: init.now,
       errorType: CodexAuthError,
     });

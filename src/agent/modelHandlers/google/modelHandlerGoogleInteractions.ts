@@ -60,10 +60,7 @@ import {
   type GoogleMediaSource,
 } from './googleHandlerShared';
 import { tagGoogleSdkError } from './googleSdkError';
-import {
-  computeGoogleInteractionsPrice,
-  normalizeGoogleInteractionsUsage,
-} from './googleInteractionsUsage';
+import { normalizeGoogleInteractionsUsage } from './googleInteractionsUsage';
 import {
   BackgroundRunLifecycle,
   type BackgroundRetrieveFailureVerdict,
@@ -924,13 +921,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // ===========================================================================
   // Usage / price (PORT — delegate to the snake_case adapter)
   // ===========================================================================
-
-  computePrice(responseUsage: Usage | null): number {
-    return computeGoogleInteractionsPrice(
-      responseUsage,
-      this.standardPricingConfig(),
-    );
-  }
 
   normalizeUsage(
     rawUsage: Usage | null,

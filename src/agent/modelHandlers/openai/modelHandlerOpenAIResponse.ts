@@ -2442,21 +2442,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     return { text: newResponse, usage, stopReason };
   }
 
-  /** Price computation adapted for Responses API token fields. */
-  computePrice(responseUsage: ResponseUsage): number {
-    const providerCapabilities = this.getUsageProviderCapabilities();
-    return computeOpenAIResponsePrice(
-      responseUsage,
-      providerCapabilities
-        ? {
-            inputPrice: providerCapabilities.inputPrice,
-            outputPrice: providerCapabilities.outputPrice,
-            cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
-          }
-        : this.standardPricingConfig(),
-    );
-  }
-
   /**
    * Provider identifier for usage tracking. `openai-response` distinguishes
    * OpenAI's Responses surface from its Chat Completions surface; compatible
@@ -2473,13 +2458,21 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     rawUsage: ResponseUsage,
     responseTimeMs: number,
   ): NormalizedUsage {
+    const providerCapabilities = this.getUsageProviderCapabilities();
+    const pricing = providerCapabilities
+      ? {
+          inputPrice: providerCapabilities.inputPrice,
+          outputPrice: providerCapabilities.outputPrice,
+          cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
+        }
+      : this.standardPricingConfig();
     const usage = normalizeOpenAIResponseUsage(
       rawUsage,
       responseTimeMs,
       this.usageProvider,
-      (usage) => this.computePrice(usage),
+      (responseUsage) => computeOpenAIResponsePrice(responseUsage, pricing),
     );
-    const usageRoute = this.getUsageProviderCapabilities()?.usageRoute;
+    const usageRoute = providerCapabilities?.usageRoute;
     return usageRoute == null ? usage : { ...usage, usageRoute };
   }
 

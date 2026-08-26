@@ -55,7 +55,7 @@ import {
   toOpenAIReasoningEffort,
 } from '../support/reasoningEffort';
 import { tagOpenAISdkError } from './openAISdkError';
-import { computeOpenAIPrice, normalizeOpenAIUsage } from './openAIUsage';
+import { normalizeOpenAIUsage } from './openAIUsage';
 import {
   appendUserTextToChatMessages,
   createChatRoundMessages,
@@ -204,8 +204,8 @@ export class ModelHandlerOpenAI<
       async (conversationMessages, compactionSystemPrompt) => {
         // System-prompt-swap: send conversation messages as-is with a
         // summarization system prompt. Apply provider-specific normalization
-        // (e.g. DeepSeek's convertContentToString, mergeConsecutiveRoles) so
-        // the compaction call doesn't get rejected.
+        // (e.g. the vision-aware content stringification flag, DeepSeek's
+        // mergeConsecutiveRoles) so the compaction call doesn't get rejected.
         const normalizedConversation =
           this.prepareNormalizedMessages(conversationMessages);
 
@@ -911,11 +911,6 @@ export class ModelHandlerOpenAI<
       messages.pop();
     }
     return true;
-  }
-
-  /** Computes cost based on token usage and model pricing. */
-  computePrice(responseUsage: ExtendedCompletionUsage | null): number {
-    return computeOpenAIPrice(responseUsage, this.standardPricingConfig());
   }
 
   /**

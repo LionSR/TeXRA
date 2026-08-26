@@ -3,8 +3,8 @@
  *
  * Pure functions extracted from `ModelHandlerAnthropic` so token accounting and
  * cache-aware price computation can be reasoned about and unit-tested without a
- * live handler instance. The handler keeps thin `computePrice` / `normalizeUsage`
- * overrides that delegate here with the model's pricing config.
+ * live handler instance. The handler keeps a thin `normalizeUsage` override
+ * that delegates here with the model's pricing config.
  */
 
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -72,7 +72,7 @@ function getAnthropicUsageTokenTotals(
 }
 
 /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
-export function computeAnthropicPrice(
+function computeAnthropicPrice(
   responseUsage: BetaUsage,
   config: AnthropicPricingConfig,
 ): number {

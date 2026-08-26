@@ -4,6 +4,8 @@ import * as path from 'node:path';
 // Local imports - shared
 import type { AgentCategory, AgentSource } from '@shared/schemas';
 
+import type { TemplateAgentFilePlan } from './backend/templateAgentCreation';
+
 export interface SettingsAgentDirectoryEntry {
   path?: string;
 }
@@ -37,14 +39,6 @@ type SettingsRevealAgentFileResult =
 
 type SettingsOpenAgentFolderResult =
   { ok: true; path: string } | { ok: false; reason: 'missingLocalDirectory' };
-
-interface SettingsAgentTemplatePlan {
-  fileName: string;
-  filePath: string;
-  baseName: string;
-  description: string;
-  templateKind: 'toolUse' | 'workflowSingle';
-}
 
 export class SettingsAgentDirectoryController {
   constructor(private readonly deps: SettingsAgentDirectoryControllerDeps) {}
@@ -114,7 +108,7 @@ export class SettingsAgentDirectoryController {
     category: AgentCategory;
     name: string;
     customDir: string;
-  }): SettingsAgentTemplatePlan {
+  }): TemplateAgentFilePlan {
     const fileName = input.name.endsWith('.yaml')
       ? input.name
       : `${input.name}.yaml`;
