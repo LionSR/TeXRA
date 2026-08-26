@@ -3,7 +3,7 @@ import { createLog } from '@logger/logUtils';
 import type {
   FollowUpSentPayload,
   GoalStateChangedPayload,
-  InquiryThreadSummary,
+  InquiryThreadUpdatedEvent,
   RemoveStreamPayload,
   SetActiveStreamPayload,
   SetParentStreamPayload,
@@ -28,7 +28,7 @@ export type SessionFact =
     }
   | {
       readonly type: 'inquiryThreadUpdated';
-      readonly payload: InquiryThreadSummary;
+      readonly payload: InquiryThreadUpdatedEvent;
     }
   | {
       readonly type: 'updateQueuedFollowUps';

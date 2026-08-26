@@ -31,7 +31,7 @@ export type InquiryThreadId = z.infer<typeof InquiryThreadIdSchema>;
 const InquiryThreadStatusSchema = z.enum(['open', 'answered', 'dropped']);
 export type InquiryThreadStatus = z.infer<typeof InquiryThreadStatusSchema>;
 
-export const InquiryThreadSummarySchema = z.object({
+const InquiryThreadSummarySchema = z.object({
   threadId: InquiryThreadIdSchema,
   parentStreamId: StreamTabIdSchema.nullable(),
   status: InquiryThreadStatusSchema,
@@ -40,6 +40,25 @@ export const InquiryThreadSummarySchema = z.object({
   turnCount: z.int().nonnegative(),
 });
 export type InquiryThreadSummary = z.infer<typeof InquiryThreadSummarySchema>;
+
+// ============================================================================
+// Resume outcome — UI badge metadata for inquiryThreadUpdated events
+// ============================================================================
+
+const InquiryResumeOutcomeSchema = z.enum([
+  'sent',
+  'queued',
+  'parent_finished',
+]);
+export type InquiryResumeOutcome = z.infer<typeof InquiryResumeOutcomeSchema>;
+
+export const InquiryThreadUpdatedEventSchema =
+  InquiryThreadSummarySchema.extend({
+    resumeOutcome: InquiryResumeOutcomeSchema.nullish(),
+  });
+export type InquiryThreadUpdatedEvent = z.infer<
+  typeof InquiryThreadUpdatedEventSchema
+>;
 
 // ============================================================================
 // Action payloads — sent from inquiry panel to the host (keyed by threadId)

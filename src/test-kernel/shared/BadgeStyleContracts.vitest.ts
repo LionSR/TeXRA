@@ -33,16 +33,6 @@ const BADGE_STYLE_CONTRACTS: readonly BadgeStyleContract[] = [
     },
   },
   {
-    tagName: 'worktree-chip',
-    selector: '.pill::part(base)',
-    declarations: {
-      gap: 'var(--wa-space-3xs)',
-      padding: '0 var(--wa-space-2xs)',
-      'font-size': '',
-      'font-weight': '',
-    },
-  },
-  {
     tagName: 'background-tasks-panel',
     selector: 'wa-badge.task-status::part(base)',
     declarations: {
@@ -106,7 +96,6 @@ describe('badge style contracts', () => {
   useLitComponentTestDom(() =>
     Promise.all([
       import('@progressView/frontend/components/StreamHeader'),
-      import('@progressView/frontend/components/WorktreeChip'),
       import('@progressView/frontend/components/BackgroundTasksPanel'),
       import('@settingsView/frontend/tabs/GoalTab'),
       import('@settingsView/frontend/components/tools/ToolCard'),

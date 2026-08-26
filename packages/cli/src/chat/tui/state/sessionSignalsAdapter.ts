@@ -12,7 +12,7 @@ import { SessionState } from '@controllers/session/SessionState';
 import {
   type ConversationProgress,
   type GoalStatus,
-  type InquiryThreadSummary,
+  type InquiryThreadUpdatedEvent,
   type Plan,
   type StreamStage,
   type StreamTabId,
@@ -187,7 +187,7 @@ class TuiSessionRenderer implements SessionRendererPort {
     markWorkPlanArtifactHydrated(streamId, 'plan');
   }
 
-  onInquiryThreadUpdated(_thread: InquiryThreadSummary): void {}
+  onInquiryThreadUpdated(_thread: InquiryThreadUpdatedEvent): void {}
 
   onGoalActiveChanged(
     _streamId: StreamTabId,

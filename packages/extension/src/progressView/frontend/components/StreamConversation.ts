@@ -6,7 +6,10 @@ import { provide } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared
-import type { InquiryThreadSummary, PermissionPayload } from '@shared/schemas';
+import type {
+  InquiryThreadUpdatedEvent,
+  PermissionPayload,
+} from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 
 // Local imports - progress view
@@ -97,7 +100,7 @@ export class StreamConversation extends SignalWatcher(LitElement) {
 
   @provide({ context: inquiryThreadsContext })
   @state()
-  private inquiryThreadsContextValue: InquiryThreadSummary[] =
+  private inquiryThreadsContextValue: InquiryThreadUpdatedEvent[] =
     EMPTY_INQUIRY_THREADS;
 
   @provide({ context: phaseStagesContext })

@@ -2,7 +2,7 @@ import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import type {
   ConversationProgress,
   GoalStatus,
-  InquiryThreadSummary,
+  InquiryThreadUpdatedEvent,
   Plan,
   StreamPhase,
   StreamStage,
@@ -99,7 +99,7 @@ export interface SessionRendererPort {
 
   onPlanChanged(streamId: StreamTabId, plan: Plan | null): void;
 
-  onInquiryThreadUpdated(thread: InquiryThreadSummary): void;
+  onInquiryThreadUpdated(thread: InquiryThreadUpdatedEvent): void;
 
   onGoalActiveChanged(
     streamId: StreamTabId,

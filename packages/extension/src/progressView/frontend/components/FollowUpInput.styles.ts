@@ -2,6 +2,8 @@
 
 import { css, type CSSResult } from 'lit';
 
+import { proseTextareaPartRule } from '@shared/styles/requestPanelSharedStyles';
+
 export const followUpInputStyles: CSSResult = css`
   :host {
     display: none;
@@ -90,20 +92,7 @@ export const followUpInputStyles: CSSResult = css`
   /* The one place a textarea renders sans rather than mono: this is prose a
      user writes to an agent, not code. */
   #followUpInput::part(textarea) {
-    field-sizing: content;
-    width: 100%;
-    height: auto;
-    min-height: var(--textarea-min-height);
-    max-height: var(--textarea-max-height);
-    padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
-    box-sizing: border-box;
-    overflow-x: hidden;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    font-family: var(--wa-font-family-body);
-    font-size: var(--font-size);
-    line-height: var(--line-height-relaxed);
+    ${proseTextareaPartRule}
   }
 
   .follow-up-actions {

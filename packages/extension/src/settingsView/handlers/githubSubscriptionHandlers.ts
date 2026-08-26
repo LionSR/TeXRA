@@ -58,14 +58,11 @@ export class GitHubSubscriptionHandlers {
       this.ctx,
       'Failed to save GitHub token',
       async () => {
-        const stored = await storeCredential(platform().secrets, {
+        await storeCredential(platform().secrets, {
           secretName: GITHUB_TOKEN_STORAGE_KEY,
           value: token,
           kind: 'github',
-          placeholderMessage:
-            'This looks like a placeholder rather than a GitHub token. Enter a personal access token from GitHub.',
         });
-        if (!stored) return;
         void vscode.window.showInformationMessage(GITHUB_TOKEN_SAVED_MESSAGE);
         await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
       },

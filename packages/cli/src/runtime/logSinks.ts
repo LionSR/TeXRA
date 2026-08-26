@@ -1,6 +1,9 @@
 // Node imports
 import { createInterface } from 'node:readline/promises';
 
+// Third-party imports
+import PQueue from 'p-queue';
+
 // Local imports
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { LogLevel } from '@shared/schemas';
@@ -195,8 +198,7 @@ const processStdoutTarget: NdjsonWritable = {
 };
 
 export class NdjsonStdoutSink implements LogSink {
-  private readonly queue: CliNdjsonRecord[] = [];
-  private drainPromise: Promise<void> | undefined;
+  private readonly queue = new PQueue({ concurrency: 1 });
   private stdoutClosed = false;
 
   constructor(private readonly stdout: NdjsonWritable = processStdoutTarget) {}
@@ -207,56 +209,36 @@ export class NdjsonStdoutSink implements LogSink {
 
   writeRecord(record: CliNdjsonRecord): void {
     if (this.isClosed()) return;
-    this.queue.push(record);
-    void this.ensureDrain().catch(() => undefined);
+    void this.queue.add(() => this.writeLine(record)).catch(() => undefined);
   }
 
-  async flush(): Promise<void> {
-    while (this.drainPromise || this.queue.length > 0) {
-      await (this.drainPromise ?? this.ensureDrain());
-    }
+  flush(): Promise<void> {
+    return this.queue.onIdle();
   }
 
   async close(): Promise<void> {
     await this.flush();
   }
 
-  private ensureDrain(): Promise<void> {
-    if (!this.drainPromise) {
-      const promise = this.drain();
-      this.drainPromise = promise;
-      void promise.finally(() => {
-        if (this.drainPromise === promise) {
-          this.drainPromise = undefined;
-        }
-        if (!this.stdoutClosed && this.queue.length > 0) {
-          void this.ensureDrain().catch(() => undefined);
-        }
-      });
-    }
-    return this.drainPromise;
-  }
-
-  private async drain(): Promise<void> {
+  /**
+   * Writes one queued record, honouring backpressure. Never rejects: the
+   * queued promise is voided, so a throw here would surface as an unhandled
+   * rejection. A failed write or an unserializable record closes the sink.
+   */
+  private async writeLine(record: CliNdjsonRecord): Promise<void> {
     if (this.isClosed()) {
       this.closeQueue();
       return;
     }
-    while (!this.isClosed() && this.queue.length > 0) {
-      const record = this.queue.shift();
-      if (!record) continue;
-      const line = `${JSON.stringify(record)}\n`;
-      let canContinue: boolean;
-      try {
-        canContinue = this.stdout.write(line);
-      } catch {
-        this.closeQueue();
-        return;
-      }
-      if (!canContinue && !(await this.waitForStdoutDrain())) {
-        this.closeQueue();
-        return;
-      }
+    let canContinue: boolean;
+    try {
+      canContinue = this.stdout.write(`${JSON.stringify(record)}\n`);
+    } catch {
+      this.closeQueue();
+      return;
+    }
+    if (!canContinue && !(await this.waitForStdoutDrain())) {
+      this.closeQueue();
     }
   }
 
@@ -264,9 +246,10 @@ export class NdjsonStdoutSink implements LogSink {
     return this.stdoutClosed || !this.stdout.usable;
   }
 
+  /** Drops every record still queued: stdout is gone, nothing more can land. */
   private closeQueue(): void {
     this.stdoutClosed = true;
-    this.queue.length = 0;
+    this.queue.clear();
   }
 
   private waitForStdoutDrain(): Promise<boolean> {

@@ -17,7 +17,7 @@ import {
   AgentCategory,
   type ActiveChildInfo,
   type CompileFailure,
-  type InquiryThreadSummary,
+  type InquiryThreadUpdatedEvent,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -775,7 +775,7 @@ describe('ProgressBackend', () => {
       lastQuestionPreview: 'Can you check this estimate?',
       lastActivityIso: '2026-07-06T12:00:00.000Z',
       turnCount: 1,
-    } satisfies InquiryThreadSummary;
+    } satisfies InquiryThreadUpdatedEvent;
 
     await backend.state.snapshots.load([]);
     emitActiveStream(target, {

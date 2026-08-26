@@ -169,9 +169,6 @@ export class AccountTab extends LitElement {
           <div class="settings-section">
             ${renderStateSettingToggleRow({
               key: TELEMETRY_ENABLED_KEY,
-              label: 'Share usage telemetry',
-              description:
-                'Sends model, token, cost, timing, and host metadata. Prompt text, document content, and file names are never sent. Turning this off stops reporting for rounds billed to your own API keys; rounds covered by a subscription are still recorded, because they meter your usage against your plan.',
               checked: this.telemetryEnabled,
             })}
           </div>

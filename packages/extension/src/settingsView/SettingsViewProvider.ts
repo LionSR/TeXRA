@@ -29,11 +29,7 @@ export class SettingsViewProvider extends BaseWebviewProvider {
     this.contentProvider = new BundledViewContentProvider(
       context,
       'SettingsView',
-      {
-        dist: 'settingsView',
-        bundleKey: 'settingsBundleUri',
-        styleKey: 'settingsStyleUri',
-      },
+      'settingsView',
     );
     this.messageHandler = new SettingsViewMessageHandler(context);
 

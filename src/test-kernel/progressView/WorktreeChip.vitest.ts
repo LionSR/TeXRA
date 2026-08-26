@@ -23,32 +23,6 @@ describe('worktree-chip', () => {
     expect(element.shadowRoot?.textContent).toContain('issue-4018');
   });
 
-  it('uses shared tooltips for PR metadata without duplicate ids', async () => {
-    const element = await mountChip({
-      workingDirectory: '/tmp/texra/issue-4018',
-      branch: 'issue-4018',
-      pr: {
-        number: 42,
-        state: 'open',
-        title: 'Tooltip migration',
-        additions: 3,
-        deletions: 1,
-        ciState: 'success',
-      },
-    });
-    const shadow = element.shadowRoot!;
-    const ids = [...shadow.querySelectorAll<HTMLElement>('[id]')].map(
-      (node) => node.id,
-    );
-
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(shadow.querySelector('[title]')).toBeNull();
-    expect(shadow.querySelectorAll('wa-tooltip')).toHaveLength(4);
-    expect(
-      shadow.querySelector('wa-tooltip[for="worktree-pr-title"]')?.textContent,
-    ).toBe('Tooltip migration');
-  });
-
   it('exposes dirty state to assistive technology', async () => {
     const element = await mountChip({
       workingDirectory: '/tmp/texra/issue-4018',

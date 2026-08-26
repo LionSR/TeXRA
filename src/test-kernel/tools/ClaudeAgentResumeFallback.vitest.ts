@@ -22,7 +22,6 @@ const mocks = vi.hoisted(() => ({
   getCurrentToolContexts: vi.fn(),
   registerExecution: vi.fn(),
   getExecutionStore: vi.fn(),
-  ensureRunDir: vi.fn(),
   createChildStream: vi.fn(),
   startChildRunLoop: vi.fn(),
   currentSession: vi.fn(),
@@ -70,10 +69,6 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/storage/executionLease', () => ({
   assertOwnedExecutionLease: vi.fn(),
-}));
-
-vi.mock('@utils/files/taskRunStorage', () => ({
-  ensureRunDir: mocks.ensureRunDir,
 }));
 
 vi.mock('@tools/delegation/childStream', () => ({
@@ -158,7 +153,6 @@ describe('claude_agent tool launch and resume fallback', () => {
     mocks.getCurrentToolContexts.mockReturnValue(fakeToolContexts());
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.getExecutionStore.mockReturnValue({ write: async () => {} });
-    mocks.ensureRunDir.mockResolvedValue(undefined);
     mocks.buildClaudeAgentEnv.mockResolvedValue({});
     mocks.findClaudeBinaryPath.mockResolvedValue(undefined);
     mocks.createChildStream.mockReturnValue(

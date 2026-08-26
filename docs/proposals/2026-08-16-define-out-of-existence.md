@@ -310,6 +310,11 @@ the 6 LoC of `seen`-set insurance at `streamApprovalQueue.ts:67-72`, not
 converted to a throw; either was sanctioned. The round-update protocol was not
 touched, correctly: `reset` is still on the wire with its rationale comment,
 and `clearMissingOutputs` is still the only path that propagates it.
+**Amended 2026-08-26**: that last clause no longer holds — see the
+supersession note above. `clearMissingOutputs` has been deleted, and
+`UPDATE_COMPILE_FAILURES` is now the only sender of `reset: true`. The row's
+conclusion (keep the wire-level `reset` field) still stands; only its stated
+reason has moved.
 
 ## 5. Execution shape
 

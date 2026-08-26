@@ -98,7 +98,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     const host: MainViewInboundHost = {
       viewName: this.viewName,
       channel: this.channel,
-      logger: this.logger,
+      log: this.log,
       context: this.context,
       refreshOnboardingFunnel: this.refreshOnboardingFunnel,
       fileManager: this.fileManager,
@@ -166,7 +166,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     if (!webviewView) {
       return;
     }
-    this.logger.debug(this.channel, 'Webview ready signal received');
+    this.log.debug('Webview ready signal received');
     // Flush queued restores only after the launcher document has installed its
     // message listener. Posting during switchMode's HTML swap can drop them.
     this.onWebviewReady?.();

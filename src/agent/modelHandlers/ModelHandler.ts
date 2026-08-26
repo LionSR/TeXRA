@@ -638,18 +638,13 @@ export abstract class ModelHandler<
     }
   }
 
-  /** Resolve the key from the same atomic route used by client construction. */
-  protected async getApiKey(): Promise<string> {
-    return (await this.resolveClientCredential()).apiKey;
-  }
-
   /**
    * Retrieves base URL for API requests based on provider and OpenRouter configuration.
    * @returns Base URL string or null for providers using default URLs
    */
   public getBaseUrl(): string | null {
     const activeRoute = this.activeAttemptCredentialRoute;
-    // Use centralized check to ensure consistency with getApiKey()
+    // Use centralized check to ensure consistency with client construction
     // Pass the decision along to avoid duplicate checks
     const useOpenRouter =
       activeRoute !== undefined
@@ -1563,12 +1558,6 @@ export abstract class ModelHandler<
 
     return [false, messages];
   }
-
-  /**
-   * Calculates API usage cost based on token counts and provider pricing.
-   * @returns Total cost in provider's currency units
-   */
-  abstract computePrice(responseUsage: U): number;
 
   /**
    * Normalizes provider-specific usage data into a unified format.

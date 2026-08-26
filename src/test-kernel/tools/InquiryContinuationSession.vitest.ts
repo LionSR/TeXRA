@@ -150,6 +150,7 @@ describe('external inquiry continuation session routing', () => {
               lastQuestionPreview: 'Check the boundary case.',
               lastActivityIso: '2026-06-14T08:01:00.000Z',
               turnCount: 1,
+              resumeOutcome: 'sent',
             },
           },
         },
@@ -182,6 +183,7 @@ describe('external inquiry continuation session routing', () => {
             type: 'inquiryThreadUpdated',
             payload: expect.objectContaining({
               threadId: THREAD,
+              resumeOutcome: 'sent',
             }),
           },
         },
@@ -220,6 +222,7 @@ describe('external inquiry continuation session routing', () => {
             type: 'inquiryThreadUpdated',
             payload: expect.objectContaining({
               threadId: THREAD,
+              resumeOutcome: 'sent',
             }),
           },
         },

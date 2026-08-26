@@ -8,7 +8,7 @@ import {
   type StreamState,
   type StreamTabInfo,
   type StreamTabId,
-  type InquiryThreadSummary,
+  type InquiryThreadUpdatedEvent,
   type InquiryThreadId,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
@@ -93,7 +93,7 @@ export interface ProgressState {
   /** Log messages per stream — separated so log appends don't trigger meta context updates */
   streamLogs: Map<StreamTabId, StreamLogs>;
   /** Durable external inquiry thread summaries, keyed by thread id. */
-  inquiries: Map<InquiryThreadId, InquiryThreadSummary>;
+  inquiries: Map<InquiryThreadId, InquiryThreadUpdatedEvent>;
 }
 
 /**

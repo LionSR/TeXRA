@@ -44,7 +44,7 @@ function tokenCounts(usage: InteractionsUsage | null): GoogleTokenCounts {
 }
 
 /** Compute Google cost from Interactions token totals. */
-export function computeGoogleInteractionsPrice(
+function computeGoogleInteractionsPrice(
   usage: InteractionsUsage | null,
   config: StandardPricingConfig,
 ): number {

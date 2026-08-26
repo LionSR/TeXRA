@@ -181,7 +181,6 @@ vi.mock('@logger/logUtils', () => ({
     info: () => {},
     debug: () => {},
   }),
-  initialize: () => {},
   error: mocks.logError,
   warn: () => {},
   info: () => {},

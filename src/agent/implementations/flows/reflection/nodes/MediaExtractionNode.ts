@@ -15,9 +15,9 @@ interface PrepInput {
   currentRound: number;
 }
 
-export class MediaExtractionNode<C = unknown> extends BaseNode<
+export class MediaExtractionNode extends BaseNode<
   ReflectionFlowShared,
-  ReflectionServices<C>
+  ReflectionServices
 > {
   async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
     const { config, fileService } = this.services;

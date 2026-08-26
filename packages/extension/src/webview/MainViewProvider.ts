@@ -104,11 +104,6 @@ export class MainViewProvider
     this.contentProvider = new BundledViewContentProvider(
       context,
       'MainView',
-      {
-        dist: 'webview',
-        bundleKey: 'mainViewBundleUri',
-        styleKey: 'mainViewStyleUri',
-      },
       'webview',
     );
     this.setupFileWatcher();

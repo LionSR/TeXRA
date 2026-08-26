@@ -130,7 +130,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     showWarning: this.showWarning,
     showError: this.showError,
     logError: (message, error) => {
-      this.logger.error(this.channel, message, { data: error });
+      this.log.error(message, { data: error });
     },
     post: (message) => {
       this.postToActiveView(message);
@@ -269,16 +269,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         const restored =
           await this.agentProposalController.restoreProposalConfig(proposal);
         if (!restored) return;
-        this.logger.info(
-          this.channel,
-          'Restored proposal config to main view',
-          {
-            data: {
-              agent: proposal.agent,
-              agentCategory: proposal.agentCategory,
-            },
+        this.log.info('Restored proposal config to main view', {
+          data: {
+            agent: proposal.agent,
+            agentCategory: proposal.agentCategory,
           },
-        );
+        });
       },
       retry: {
         submit: (stream, requestId, feedback) =>
@@ -298,7 +294,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         showWarning: this.showWarning,
         showError: this.showError,
         reportDetail: (message, data) => {
-          this.logger.error(this.channel, message, { data });
+          this.log.error(message, { data });
         },
         getController: () => Promise.resolve(this.getChatExportController()),
         getTraceViewerTemplate: () =>
@@ -317,7 +313,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return {
       // Common handlers - passthrough to webview
       [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: async () => {
-        this.logger.debug(this.channel, 'Webview ready signal received');
+        this.log.debug('Webview ready signal received');
         const view = this.getActiveView();
         if (view) {
           await this.provider.markWebviewReady(view);
@@ -469,7 +465,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         showInfo: this.showInfo,
         showError: this.showError,
         logError: (message, error) => {
-          this.logger.error(this.channel, message, {
+          this.log.error(message, {
             data: error instanceof Error ? error : undefined,
           });
         },
@@ -498,30 +494,25 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           result,
         );
         if (!resolved) {
-          this.logger.warn(
-            this.channel,
+          this.log.warn(
             `No pending host interaction found for proposal: ${requestId}`,
           );
         }
       },
       onMissingProposal: (requestId) => {
-        this.logger.warn(
-          this.channel,
+        this.log.warn(
           `No pending agent proposal found for setup: ${requestId}`,
         );
       },
       onInvalidProposal: (issues) => {
-        this.logger.warn(this.channel, 'Invalid proposal config', {
+        this.log.warn('Invalid proposal config', {
           data: { errors: issues },
         });
       },
       onSetupComplete: (proposal) => {
-        this.logger.info(
-          this.channel,
+        this.log.info(
           `Agent proposal ${proposal.requestId} set up in main view`,
-          {
-            data: { agent: proposal.agent },
-          },
+          { data: { agent: proposal.agent } },
         );
       },
     });
@@ -559,17 +550,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             ).then(
               (delivered) => {
                 if (!delivered) {
-                  this.logger.debug(
-                    this.channel,
+                  this.log.debug(
                     'Follow-up result target did not accept the message',
                   );
                 }
               },
               (error: unknown) => {
-                this.logger.debug(
-                  this.channel,
+                this.log.debug(
                   'Follow-up result target is no longer attached',
-                  { data: error },
+                  {
+                    data: error,
+                  },
                 );
               },
             );
@@ -578,8 +569,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         reportImageSaveError: (_image, error) => {
           // Best-effort: a failed image save must not block the text, but log
           // it so a missing attachment is diagnosable.
-          this.logger.warn(
-            this.channel,
+          this.log.warn(
             `Failed to save pasted follow-up image: ${toErrorMessage(error)}`,
           );
         },
@@ -873,7 +863,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       error: errorMsg,
     });
     void this.host.error(`Could not polish the follow-up: ${errorMsg}`);
-    this.logger.error(this.channel, `Error polishing follow-up: ${errorMsg}`, {
+    this.log.error(`Error polishing follow-up: ${errorMsg}`, {
       data: error instanceof Error ? error : undefined,
     });
   }
@@ -905,7 +895,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
-      this.logger.error(this.channel, validation.message);
+      this.log.error(validation.message);
       await this.host.error(validation.message);
       return;
     }
@@ -923,7 +913,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<boolean> {
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
-      this.logger.error(this.channel, validation.message);
+      this.log.error(validation.message);
       await this.host.error(validation.message);
       return false;
     }

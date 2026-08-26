@@ -190,10 +190,13 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
     const handler = new ModelHandlerCodex(createOpenAIConfig('gpt-5'));
 
     assert.equal(
-      handler.computePrice({
-        input_tokens: 10_000,
-        output_tokens: 10_000,
-      } as any),
+      handler.normalizeUsage(
+        {
+          input_tokens: 10_000,
+          output_tokens: 10_000,
+        } as any,
+        0,
+      ).cost,
       0,
     );
   });

@@ -272,12 +272,12 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     return this.now() + this.policy.refreshBufferMs >= session.expiresAtMs;
   }
 
-  async getFreshAccessToken(forceRefresh = false): Promise<string> {
-    const session = await this.getFreshSession(forceRefresh);
+  async getFreshAccessToken(): Promise<string> {
+    const session = await this.getFreshSession();
     return session.accessToken;
   }
 
-  async getFreshSession(forceRefresh = false): Promise<S> {
+  async getFreshSession(): Promise<S> {
     return this.mapErrors(async () => {
       const { generation, session } = await this.loadStableSession();
       if (!session) {
@@ -286,7 +286,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
           'expired',
         );
       }
-      if (!forceRefresh && !this.isExpiringSoon(session)) return session;
+      if (!this.isExpiringSoon(session)) return session;
       return this.refresh(session, generation);
     });
   }

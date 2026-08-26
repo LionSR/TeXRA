@@ -126,7 +126,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     const ctx: SettingsHandlerContext = {
       channel: this.channel,
-      logger: this.logger,
+      log: this.log,
       extensionContext: context,
       withActiveWebview: (fn) => this.withActiveWebview(fn),
     };
@@ -402,7 +402,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       commandKind: data.kind,
     });
     if (action.kind === 'none') {
-      this.logger.debug(this.channel, 'No command for tool', {
+      this.log.debug('No command for tool', {
         data: { ...data, reason: action.reason },
       });
       return;

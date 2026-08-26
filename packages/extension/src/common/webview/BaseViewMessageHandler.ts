@@ -3,18 +3,12 @@ import * as vscode from 'vscode';
 import { ZodError } from 'zod';
 
 // Local imports - common
-import * as logger from '@logger/logUtils';
+import { createLog, type Log } from '@logger/logUtils';
 import {
   UnsupportedCommandError,
   type DispatcherFn,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
-
-/** The channel-first logging surface this view and its subclasses use. */
-type ViewMessageLogger = Pick<
-  typeof logger,
-  'debug' | 'info' | 'warn' | 'error'
->;
 
 type CommandMessage = { command: string };
 
@@ -38,9 +32,8 @@ function isCommandMessage(
 export abstract class BaseViewMessageHandler<
   T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
 > {
-  protected readonly logger: ViewMessageLogger;
   protected readonly channel: string;
-  private readonly log: ReturnType<typeof logger.createLog>;
+  protected readonly log: Log;
 
   /**
    * Active webview reference, tracked on every dispatch. Subclasses access it
@@ -49,9 +42,8 @@ export abstract class BaseViewMessageHandler<
   private _activeView: T | undefined;
 
   constructor(protected readonly viewName: string) {
-    this.logger = logger;
     this.channel = `${viewName}MessageHandler`;
-    this.log = logger.createLog(this.channel);
+    this.log = createLog(this.channel);
   }
 
   /**

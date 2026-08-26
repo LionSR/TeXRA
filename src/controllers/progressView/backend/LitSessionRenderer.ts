@@ -17,7 +17,7 @@ import { cloneRoundIndexed } from '@shared/schemas';
 import type {
   ConversationProgress,
   GoalStatus,
-  InquiryThreadSummary,
+  InquiryThreadUpdatedEvent,
   PermissionPayload,
   Plan,
   ProgressPermissionKind,
@@ -264,7 +264,7 @@ export class LitSessionRenderer implements SessionRendererPort {
     });
   }
 
-  onInquiryThreadUpdated(thread: InquiryThreadSummary): void {
+  onInquiryThreadUpdated(thread: InquiryThreadUpdatedEvent): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD,
       thread,
@@ -492,7 +492,7 @@ export class LitSessionRenderer implements SessionRendererPort {
     });
   }
 
-  syncInquiryThreads(threads: InquiryThreadSummary[]): void {
+  syncInquiryThreads(threads: InquiryThreadUpdatedEvent[]): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS,
       threads,

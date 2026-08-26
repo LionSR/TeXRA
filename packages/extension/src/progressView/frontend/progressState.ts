@@ -19,7 +19,7 @@ import {
   STREAM_STATUS,
   type PermissionPayload,
   type ProgressViewPlacement,
-  type InquiryThreadSummary,
+  type InquiryThreadUpdatedEvent,
   type PhaseStage,
   type StreamLifecycleStatus,
   type StreamState,
@@ -57,7 +57,7 @@ import { getPermissionKey } from './permissionState';
 const EMPTY_TASK_GROUPS: TaskGroup[] = [];
 
 /** Stable empty array for activeInquiries$ default. */
-const EMPTY_INQUIRIES: InquiryThreadSummary[] = [];
+const EMPTY_INQUIRIES: InquiryThreadUpdatedEvent[] = [];
 
 /** Stable empty map returned when no parent has active children. */
 const EMPTY_CHILD_MAP: Map<StreamTabId, StreamTabInfo[]> = new Map();

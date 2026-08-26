@@ -139,8 +139,7 @@ export class LatexSettingsHandlers {
       autoRevealExclude: isRecommendedValueSet('autoRevealExclude'),
     }),
     onDetectionError: (error) => {
-      this.ctx.logger.error(
-        this.ctx.channel,
+      this.ctx.log.error(
         `LaTeX settings detection failed: ${toErrorMessage(error)}`,
       );
     },
@@ -201,8 +200,7 @@ export class LatexSettingsHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND>,
   ): Promise<void> {
     if (!this.toolingController.isAllowedInstallCommand(data.installCommand)) {
-      this.ctx.logger.warn(
-        this.ctx.channel,
+      this.ctx.log.warn(
         `Rejected unknown install command: ${data.installCommand}`,
       );
       return;

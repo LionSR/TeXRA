@@ -20,7 +20,6 @@ describe('UserVariableChannelsSchema', () => {
         MODEL: 'gpt54',
         IS_OPENAI_MODEL: true,
         INPUT_FILES: ['paper.tex'],
-        MEDIA_CONTENT: null,
       }),
       transient: {
         MODEL: 'gpt55',
@@ -51,20 +50,6 @@ describe('UserVariableChannelsSchema', () => {
         UserVariableChannelsSchema.parse({
           input: {},
           transient: { ATTACHED_MEMORY_MISSES: [{ path: 42 }] },
-        }),
-      z.ZodError,
-    );
-  });
-
-  // A custom required file named MEDIA generates a string MEDIA_CONTENT;
-  // getRequiredFileVars rejects that name at variable-build time, and this
-  // boundary keeps rejecting such checkpoints.
-  it('rejects a string MEDIA_CONTENT — the collision shape the required-file guard prevents', () => {
-    assert.throws(
-      () =>
-        UserVariableChannelsSchema.parse({
-          input: {},
-          transient: { MEDIA_CONTENT: 'custom file content' },
         }),
       z.ZodError,
     );

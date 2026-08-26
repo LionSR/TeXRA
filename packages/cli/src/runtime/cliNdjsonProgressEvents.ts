@@ -4,7 +4,7 @@ import type {
   ExecutionId,
   GoalPausedPayload,
   GoalStateChangedPayload,
-  InquiryThreadSummary,
+  InquiryThreadUpdatedEvent,
   RemoveStreamPayload,
   SetActiveStreamPayload,
   SetParentStreamPayload,
@@ -68,8 +68,8 @@ export interface CliNdjsonProgressEventPayloads {
     taskState: TaskState;
   };
   updateStreamUsage: UpdateStreamUsagePayload;
-  /** Inquiry thread state changed (open, answered, or dropped). */
-  inquiryThreadUpdated: InquiryThreadSummary;
+  /** Inquiry thread state changed (open, answered, dropped, or resume outcome). */
+  inquiryThreadUpdated: InquiryThreadUpdatedEvent;
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;
   updateConversationProgress: UpdateConversationProgressPayload;

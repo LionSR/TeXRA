@@ -17,7 +17,7 @@ import type {
   ActiveChildInfo,
   ConversationProgress,
   GoalStatus,
-  InquiryThreadSummary,
+  InquiryThreadUpdatedEvent,
   Plan,
   StreamPhase,
   StreamStage,
@@ -451,7 +451,7 @@ class HeadlessPort implements SessionRendererPort {
 
   onPlanChanged(_streamId: StreamTabId, _plan: Plan | null): void {}
 
-  onInquiryThreadUpdated(_thread: InquiryThreadSummary): void {}
+  onInquiryThreadUpdated(_thread: InquiryThreadUpdatedEvent): void {}
 
   onGoalActiveChanged(
     _streamId: StreamTabId,

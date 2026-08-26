@@ -39,10 +39,7 @@ export type ModelCredentialRoute =
 export interface ResolvedClientCredential {
   readonly apiKey: string;
   readonly baseUrl: string | null;
-  readonly route: Exclude<
-    ModelCredentialRoute,
-    'chatgpt-subscription' | 'xai-subscription'
-  >;
+  readonly route: ModelCredentialRoute;
   readonly usageRoute?: 'glm-coding-plan-subscription';
 }
 
