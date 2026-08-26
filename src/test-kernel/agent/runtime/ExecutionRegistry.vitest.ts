@@ -1627,9 +1627,7 @@ describe('executionRegistry', () => {
 
     try {
       approvals.toolEdit.bypass.setBypass(parentStreamId, true);
-      approvals.registerStreamParent(childStreamId, parentStreamId, [
-        'toolEdit',
-      ]);
+      approvals.registerStreamParent(childStreamId, parentStreamId);
       registry.track(handle);
 
       registry.detachActiveChildren(parentStreamId);
