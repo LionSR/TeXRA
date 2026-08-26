@@ -38,7 +38,6 @@ import {
 import type {
   ExecutionId,
   OutputFileInfo,
-  StorageKey,
   StreamPhase,
   StreamTabId,
   ProgressViewInboundHandlerRegistry,
@@ -3022,7 +3021,7 @@ describe('DesktopProgressBridge', () => {
         type: 'usage',
         payload: {
           streamId: childStreamId,
-          storageKey: childExecutionId as StorageKey,
+          storageKey: childExecutionId as ExecutionId,
           usage: { inputTokens: 5, outputTokens: 2, cost: 0.01 },
         },
       });
@@ -4246,7 +4245,7 @@ describe('DesktopProgressBridge', () => {
           type: 'usage',
           payload: {
             streamId: childStreamId,
-            storageKey: childExecutionId as StorageKey,
+            storageKey: childExecutionId as ExecutionId,
             usage: {
               inputTokens: 11,
               outputTokens: 7,

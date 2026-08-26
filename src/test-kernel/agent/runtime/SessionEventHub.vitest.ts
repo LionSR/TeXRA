@@ -7,7 +7,7 @@ import {
   type SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import { type StorageKey, type StreamTabId } from '@shared/schemas';
+import { type ExecutionId, type StreamTabId } from '@shared/schemas';
 
 import { recordSessionEvents } from '../progressTestUtils';
 
@@ -128,7 +128,7 @@ describe('SessionEventHub', () => {
     trace.usage(
       {
         streamId,
-        storageKey: 'run:usage' as StorageKey,
+        storageKey: 'run:usage' as ExecutionId,
         usage: { inputTokens: 10, outputTokens: 5, cost: 0 },
       },
       {

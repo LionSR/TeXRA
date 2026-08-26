@@ -9,7 +9,6 @@ import { AgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type {
   ExecutionId,
-  StorageKey,
   StreamTabId,
   TodoItem,
 } from '@shared/schemas';
@@ -568,7 +567,7 @@ describe('executeCliRequest', () => {
           type: 'usage',
           payload: {
             streamId,
-            storageKey: 'run-1' as StorageKey,
+            storageKey: 'run-1' as ExecutionId,
             usage: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
           },
         },

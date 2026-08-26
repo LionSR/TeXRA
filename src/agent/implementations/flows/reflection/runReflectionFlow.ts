@@ -18,7 +18,6 @@ import {
   type RetryErrorInfo,
   type RoundOutput,
   type RunOutcome,
-  type StorageKey,
   type FileLocation,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -67,7 +66,6 @@ export function computeRoundStageTotal(
 
 export interface RunReflectionFlowInput extends BaseFlowContextInit {
   setting: AgentWorkflowSetting;
-  storageKey: StorageKey;
   parentStage: StageHandle;
 }
 

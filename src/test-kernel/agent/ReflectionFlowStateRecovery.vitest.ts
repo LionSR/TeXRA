@@ -27,7 +27,6 @@ import { createRunScope } from '@agent/runtime/RunScope';
 import {
   RUN_OUTCOME,
   type ExecutionId,
-  type StorageKey,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
@@ -82,7 +81,6 @@ async function runPersistedReflectionFlow(
         setting: SETTING,
         prompt: PROMPT,
         logger: noopTrace,
-        storageKey: executionId as StorageKey,
         parentStage: noopTrace.openStage('Reflection flow recovery test'),
         userVarChannels: {
           input: Object.freeze({ MODEL: CONFIG.model }),

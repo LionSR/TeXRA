@@ -107,7 +107,6 @@ import {
   type ExtendedTokenUsageStats,
   type Plan,
   type RunIdentity,
-  type StorageKey,
   type StreamPhase,
   type StreamTabId,
   type TodoItem,
@@ -360,7 +359,7 @@ function emitRunStart(
 function emitUsage(
   hub: SessionEventHub,
   streamId: StreamTabId,
-  storageKey: StorageKey,
+  storageKey: ExecutionId,
   usage: ExtendedTokenUsageStats,
 ): void {
   hub.emit({
@@ -3619,7 +3618,7 @@ describe('sessionSignalsAdapter run facts', () => {
 
   it('applies direct usage events without host emission', () => {
     withRunFacts((hub, session) => {
-      const storageKey = 'root-direct-run' as StorageKey;
+      const storageKey = 'root-direct-run' as ExecutionId;
       const usage = {
         inputTokens: 100,
         outputTokens: 20,
@@ -3856,7 +3855,7 @@ describe('sessionSignalsAdapter run facts', () => {
 
   it('applies direct usage sequences exactly once', () => {
     withRunFacts((hub, session) => {
-      const storageKey = 'root-direct-sequence-run' as StorageKey;
+      const storageKey = 'root-direct-sequence-run' as ExecutionId;
       const firstUsage = {
         inputTokens: 100,
         outputTokens: 20,
@@ -3967,7 +3966,7 @@ describe('sessionSignalsAdapter run facts', () => {
 
   it('keeps latest usage separate from cumulative resume usage', () => {
     withRunFacts((hub, session) => {
-      const storageKey = 'root-run' as StorageKey;
+      const storageKey = 'root-run' as ExecutionId;
 
       emitUsage(hub, root, storageKey, {
         inputTokens: 100,

@@ -9,7 +9,6 @@ import type {
   Plan,
   RoundIndexed,
   RunIdentity,
-  StorageKey,
   StreamLogEntry,
   StreamTabId,
   TodoItem,
@@ -107,7 +106,7 @@ export interface SnapshotProjection {
   ): void;
   addUsage(
     stream: StreamTabId,
-    storageKey: StorageKey,
+    storageKey: ExecutionId,
     usage: ExtendedTokenUsageStats,
   ): void;
   setDescription(stream: StreamTabId, description: string): void;
