@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  getDefaultToolRegistry,
   getDefaultUnavailableToolNames,
   resolveToolDefinitions,
 } from '@tools/registry';
@@ -24,9 +23,6 @@ describe('tool registry resolution', () => {
       'send_to_terminal',
     ]);
     expect(getDefaultUnavailableToolNames('extension')).toEqual([]);
-    expect(
-      getDefaultToolRegistry().get('inquiry')?.hosts?.cli?.reason,
-    ).toContain('graphical inquiry panel');
   });
 
   it('replaces a declared contract with the registered tool definition', () => {

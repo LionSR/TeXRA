@@ -42,7 +42,6 @@ export type {
   ITool,
   IToolRegistry,
   ToolHost,
-  ToolHostExclusion,
 } from '@agent/core/tools/ToolTypes';
 export { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 export { defineTool } from '@tools/core/define';
