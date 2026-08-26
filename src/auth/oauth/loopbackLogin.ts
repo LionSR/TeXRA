@@ -8,6 +8,7 @@
 import http from 'node:http';
 
 import { AUTH_CALLBACK_TIMEOUT_MS } from '../config';
+import type { SubscriptionAuthorizeRequest } from './SubscriptionOAuthCoordinator';
 
 /**
  * The loopback route could never be established — the registered callback
@@ -22,16 +23,9 @@ export class LoopbackTransportUnavailableError extends Error {
   }
 }
 
-interface LoopbackAuthorizeRequest {
-  url: string;
-  verifier: string;
-  state: string;
-  redirectUri: string;
-}
-
 /** Minimal coordinator surface the loopback flow needs. */
 export interface LoopbackOAuthCoordinator<S> {
-  buildAuthorizeRequest(port: number): LoopbackAuthorizeRequest;
+  buildAuthorizeRequest(port: number): SubscriptionAuthorizeRequest;
   completeLoginWithCode(params: {
     code: string;
     verifier: string;

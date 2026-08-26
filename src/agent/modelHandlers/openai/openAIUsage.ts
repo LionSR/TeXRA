@@ -3,8 +3,8 @@
  *
  * Pure functions extracted from `ModelHandlerOpenAI` so token accounting and
  * cache-aware price computation can be reasoned about and unit-tested without a
- * live handler instance. The handler keeps thin `computePrice` / `normalizeUsage`
- * overrides that delegate here with the model's pricing config and provider id.
+ * live handler instance. The handler keeps a thin `normalizeUsage` override
+ * that delegates here with the model's pricing config and provider id.
  */
 
 import type { ExtendedCompletionUsage } from '@agent/types/ProviderUsage';
@@ -30,7 +30,7 @@ function getCachedTokens(usage: ExtendedCompletionUsage): number {
 }
 
 /** Computes cost based on token usage and model pricing. */
-export function computeOpenAIPrice(
+function computeOpenAIPrice(
   responseUsage: ExtendedCompletionUsage | null,
   config: StandardPricingConfig,
 ): number {

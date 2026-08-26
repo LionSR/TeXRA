@@ -5,18 +5,10 @@ import {
   type FileOpResult,
 } from '@shared/schemas';
 
+// The clean schema is the source of truth for the fields both file operations
+// share; the pack config is structurally assignable to it.
+import type { CleanConfig as FileOpConfig } from './fileOpSchemas';
 import { emitClearMissingOutputs } from './streamEventUtils';
-
-/** Fields the toolbar/config-driven file-operation commands share. */
-interface FileOpConfig {
-  readonly agent: string;
-  readonly model: string;
-  readonly inputFile: string;
-  readonly outputFiles: string[];
-  readonly executionId?: ExecutionId;
-  readonly skipProgressViewClear?: boolean;
-  readonly streamId?: string;
-}
 
 /** The per-operation primitives a file operation (clean or pack) supplies. */
 interface FileOpActions {

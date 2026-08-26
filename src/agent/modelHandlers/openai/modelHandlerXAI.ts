@@ -1,8 +1,7 @@
-import OpenAI from 'openai';
-
 import type {
   ExtractResponseResult,
   ModelCredentialSelection,
+  ResolvedClientCredential,
 } from '@agent/types/ModelHandlerContracts';
 import type { StandardPricingConfig } from '@agent/modelHandlers/support/priceUtils';
 import {
@@ -15,7 +14,6 @@ import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { logOpenAICompatibleClientConfig } from './openAIChatHelpers';
 import {
   xaiCacheDiscountFactor,
   xaiLongContextTier,
@@ -135,40 +133,23 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     return super.getBaseUrl();
   }
 
-  override async getClient(
+  protected override async resolveClientCredential(
     selection: ModelCredentialSelection = 'configured',
-  ): Promise<OpenAI> {
-    if (!(await this.wantsSubscriptionRoute(selection))) {
-      if (this.prefersSubscriptionRoute(selection)) {
-        this.logger.debug(
-          'Prefer Grok subscription is on but no signed-in session: using the xAI API key path.',
-        );
-      }
-      return super.getClient(selection);
+  ): Promise<ResolvedClientCredential> {
+    if (await this.wantsSubscriptionRoute(selection)) {
+      return {
+        apiKey: await this.resolveAccessToken(),
+        // Never send the OAuth token to custom endpoints or OpenRouter.
+        baseUrl: XAI_SUBSCRIPTION_BASE_URL,
+        route: 'xai-subscription',
+      };
     }
-
-    const apiKey = await this.resolveAccessToken();
-    this.logger.debug(
-      `Using Grok subscription (xAI OAuth). Base URL: ${XAI_SUBSCRIPTION_BASE_URL}`,
-    );
-    const client = new OpenAI({
-      apiKey,
-      // Never send the OAuth token to custom endpoints or OpenRouter.
-      baseURL: XAI_SUBSCRIPTION_BASE_URL,
-      fetch: this.longRunningModelFetch,
-      maxRetries: 0,
-    });
-    logOpenAICompatibleClientConfig(
-      this.logger,
-      this.config,
-      client.baseURL,
-      'xai-subscription',
-    );
-    return this.rememberClientCredentialRoute(
-      client,
-      'xai-subscription',
-      apiKey,
-    );
+    if (this.prefersSubscriptionRoute(selection)) {
+      this.logger.debug(
+        'Prefer Grok subscription is on but no signed-in session: using the xAI API key path.',
+      );
+    }
+    return super.resolveClientCredential(selection);
   }
 
   private async resolveAccessToken(): Promise<string> {

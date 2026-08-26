@@ -33,8 +33,8 @@ export function templateAgentNamePrompt(category: AgentCategory): string {
   )} agent (without .yaml extension)`;
 }
 
-/** Plan fields this module needs; a superset lives on the directory controller's plan. */
-interface TemplateAgentFilePlan {
+/** The planned template-agent file, as produced by the directory controller. */
+export interface TemplateAgentFilePlan {
   readonly fileName: string;
   readonly filePath: string;
   readonly baseName: string;

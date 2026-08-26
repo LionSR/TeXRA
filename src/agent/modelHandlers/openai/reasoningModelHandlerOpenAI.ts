@@ -17,6 +17,9 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
  *   content on separate channels, so the aggregator is always on.
  * - `shouldIncludeReasoningInToolCalls()` — when the model reasons, its
  *   reasoning must be replayed into tool-use follow-up messages.
+ * - `convertContentToStringUnlessVision` — every provider in this family
+ *   ships both vision and non-vision variants and stringifies only the
+ *   non-vision ones.
  * - `requiresBatchedParallelToolResults` — most providers with separate
  *   reasoning channels need one batched follow-up message to preserve that
  *   reasoning across parallel tool calls. Unconditional here (not gated on
@@ -25,9 +28,8 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
  *   comment (#7101 triage).
  *
  * Overrides that vary between these providers stay on the concrete handlers:
- * the GLM batching exception, content-stringification flags (DeepSeek
- * stringifies unconditionally while Kimi/GLM/MiniMax preserve vision parts),
- * the `thinking`/`reasoning_split` parameter shape, and each provider's
+ * the GLM batching exception, DeepSeek's `mergeConsecutiveRoles`, the
+ * `thinking`/`reasoning_split` parameter shape, and each provider's
  * reasoning-field extraction.
  *
  * Providers that merely tolerate reasoning tokens without a separate channel
@@ -37,6 +39,7 @@ export class ReasoningModelHandlerOpenAI<
   TCall extends OpenAIToolCall | DeepSeekToolCall = OpenAIToolCall,
 > extends ModelHandlerOpenAI<TCall> {
   protected override useReasoningStreamAggregator = true;
+  protected override readonly convertContentToStringUnlessVision = true;
 
   override get requiresBatchedParallelToolResults(): boolean {
     return true;

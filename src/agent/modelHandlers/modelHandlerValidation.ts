@@ -238,10 +238,6 @@ export class ModelHandlerValidation extends ModelHandler<
     // The validation model always produces a complete response.
   }
 
-  computePrice(_responseUsage: ValidationResponse['usage']): number {
-    return 0;
-  }
-
   normalizeUsage(
     rawUsage: ValidationResponse['usage'],
     responseTimeMs: number,
