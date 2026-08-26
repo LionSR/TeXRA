@@ -1,6 +1,6 @@
 {
   "name": "@texra-ai/cli",
-  "version": "0.40.5",
+  "version": "0.40.6",
   "description": "TeXRA CLI — your AI theorist in the terminal.",
   "license": "Apache-2.0",
   "author": "TeXRA.ai",
