@@ -77,8 +77,8 @@ export interface RunReflectionFlowInput extends BaseFlowContextInit {
 }
 
 /**
- * Resolve workflow tool declarations immediately before model invocation so a
- * workflow advertises the registry-owned contract, just like a tool-use flow.
+ * Resolve workflow tool declarations at flow startup so a workflow advertises
+ * the registry-owned contract, just like a tool-use flow.
  * Models without function calling receive no tool definitions, matching the
  * reflection flow's former model-facing capability gate.
  */
