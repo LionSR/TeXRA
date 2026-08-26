@@ -195,7 +195,7 @@ export function isDefaultToolUnavailableOnHost(
   name: RegisteredToolName,
   host: ToolHost,
 ): boolean {
-  return getDefaultTools()[name].hosts?.[host]?.available === false;
+  return getDefaultTools()[name].unavailableHosts?.includes(host) === true;
 }
 
 /** Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores. */
