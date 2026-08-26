@@ -128,9 +128,7 @@ function isTelemetryEnabledBySetting(): boolean {
   // not reverse a user-wide privacy choice, while the CLI still honours a
   // project-local `false` when no global value is present.
   if (configuredValues.includes(false)) return false;
-  return configuredValues.length > 0
-    ? true
-    : TELEMETRY_ENABLED_DEFAULT;
+  return configuredValues.length > 0 ? true : TELEMETRY_ENABLED_DEFAULT;
 }
 
 /** Why optional usage logging is off, or `null` when it is on. */

@@ -22,7 +22,6 @@ import {
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
-import { getCoreSettingDefault } from '@shared/schemas';
 import type { PlatformSecrets } from '@platform/secrets';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
@@ -30,6 +29,7 @@ import {
   fileTypeFor,
   type FileTypeProbe,
 } from '@platform/defaults/fsEntryTypeBits';
+import { getCoreSettingDefault } from '@shared/schemas';
 
 function fakeFsError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });
@@ -76,7 +76,9 @@ export class FakeConfigProvider implements ConfigProvider {
     const resolvedKey = this.resolveExistingKey(key);
     if (resolvedKey === undefined) {
       const catalogDefault = getCoreSettingDefault(key) as T | undefined;
-      return catalogDefault === undefined ? (defaultValue as T) : catalogDefault;
+      return catalogDefault === undefined
+        ? (defaultValue as T)
+        : catalogDefault;
     }
     return this.values.get(resolvedKey) as T;
   }

@@ -1733,8 +1733,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     if (this.capabilities.supportsReasoning) {
       const isGpt5 = isGpt5ModelName(this.config.name);
       const includeSummary =
-        !isGpt5 ||
-        getConfig<boolean>('texra.model.gpt5ReasoningSummary');
+        !isGpt5 || getConfig<boolean>('texra.model.gpt5ReasoningSummary');
       if (includeSummary) {
         params.reasoning = {
           ...(params.reasoning as Reasoning),

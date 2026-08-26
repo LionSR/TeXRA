@@ -153,9 +153,7 @@ export async function buildUserVars(
     // work for workflow agents. The settings toggle gives users a hard off
     // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
     agentSetting.agentCategory === AgentCategory.ToolUse &&
-    AgentSkillsEnabledSchema.parse(
-      getConfig<unknown>(AGENT_SKILLS_CONFIG_KEY),
-    )
+    AgentSkillsEnabledSchema.parse(getConfig<unknown>(AGENT_SKILLS_CONFIG_KEY))
       ? loadRuntimeSkillCatalog()
       : // A fresh object per call, not a shared constant: `skills` is handed
         // to the snapshot consumer, and a shared array would accumulate.
