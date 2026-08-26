@@ -4,8 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   installDesktopBeforeQuitWiring,
-  installRendererNavigationCleanup,
-  installUnsavedChangesHandler,
+  installDesktopWindowLifecycleWiring,
 } from '@desktop/main/desktopWindowLifecycle';
 
 class FakeWebContents extends EventEmitter {}
@@ -14,9 +13,37 @@ describe('desktop window lifecycle', () => {
   it('skips initial renderer navigation and cleans up on reload', () => {
     const webContents = new FakeWebContents();
     const disposeRendererResources = vi.fn();
-    installRendererNavigationCleanup(webContents, { disposeRendererResources });
+    installDesktopWindowLifecycleWiring({
+      webContents,
+      workspaceIpc: { disposeRendererResources },
+      showDiscardDialog: () => 0,
+      isFatalShutdownRequested: () => false,
+      clearPendingWorkspaceRelaunch: vi.fn(),
+      clearContinueQuitAfterWindowClose: vi.fn(),
+    });
     webContents.emit('did-navigate');
     expect(disposeRendererResources).not.toHaveBeenCalled();
+    webContents.emit('did-navigate');
+    expect(disposeRendererResources).toHaveBeenCalledOnce();
+  });
+
+  it('installs navigation cleanup and unsaved-change handling on one window webContents', () => {
+    const webContents = new FakeWebContents();
+    const disposeRendererResources = vi.fn();
+    const discard = { preventDefault: vi.fn() };
+
+    installDesktopWindowLifecycleWiring({
+      webContents,
+      workspaceIpc: { disposeRendererResources },
+      showDiscardDialog: () => 1,
+      isFatalShutdownRequested: () => false,
+      clearPendingWorkspaceRelaunch: vi.fn(),
+      clearContinueQuitAfterWindowClose: vi.fn(),
+    });
+
+    webContents.emit('will-prevent-unload', discard);
+    expect(discard.preventDefault).toHaveBeenCalledOnce();
+    webContents.emit('did-navigate');
     webContents.emit('did-navigate');
     expect(disposeRendererResources).toHaveBeenCalledOnce();
   });
@@ -26,8 +53,9 @@ describe('desktop window lifecycle', () => {
     const clearPendingWorkspaceRelaunch = vi.fn();
     const clearContinueQuitAfterWindowClose = vi.fn();
     const showDiscardDialog = vi.fn(() => 0);
-    installUnsavedChangesHandler({
+    installDesktopWindowLifecycleWiring({
       webContents,
+      workspaceIpc: { disposeRendererResources: vi.fn() },
       showDiscardDialog,
       isFatalShutdownRequested: () => false,
       clearPendingWorkspaceRelaunch,
@@ -49,8 +77,9 @@ describe('desktop window lifecycle', () => {
     const fatal = { preventDefault: vi.fn() };
     const fatalWebContents = new FakeWebContents();
     const clearFatalRelaunch = vi.fn();
-    installUnsavedChangesHandler({
+    installDesktopWindowLifecycleWiring({
       webContents: fatalWebContents,
+      workspaceIpc: { disposeRendererResources: vi.fn() },
       showDiscardDialog,
       isFatalShutdownRequested: () => true,
       clearPendingWorkspaceRelaunch: clearFatalRelaunch,

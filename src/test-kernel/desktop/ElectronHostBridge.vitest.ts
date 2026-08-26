@@ -48,6 +48,19 @@ async function loadHostBridgeModule(): Promise<HostBridgeModule> {
   ) as Promise<HostBridgeModule>;
 }
 
+async function loadPreloadModule(electron: {
+  contextBridge: { exposeInMainWorld(name: string, api: unknown): void };
+  ipcRenderer: {
+    on(channel: string, listener: (...args: unknown[]) => void): void;
+    off(channel: string, listener: (...args: unknown[]) => void): void;
+    send(channel: string, message: unknown): void;
+  };
+}): Promise<void> {
+  vi.resetModules();
+  mocks.doMock('electron', () => electron);
+  await import(moduleFileUrl(desktopSourcePath('preload', 'index.ts')));
+}
+
 async function loadMainHostBridgeModule(ipcMain: {
   on(
     channel: string,
@@ -93,6 +106,35 @@ function fakeMainWindow(sends: Array<{ channel: string; message: unknown }>) {
 }
 
 describe('desktop Electron host bridge', () => {
+  it('keeps IPC listeners through canceled closes and removes them after unload', async () => {
+    const contextBridge = { exposeInMainWorld: vi.fn() };
+    const ipcRenderer = { on: vi.fn(), off: vi.fn(), send: vi.fn() };
+    const listeners = new Map<string, () => void>();
+    vi.stubGlobal(
+      'addEventListener',
+      vi.fn((event: string, listener: () => void) => {
+        listeners.set(event, listener);
+      }),
+    );
+
+    await loadPreloadModule({ contextBridge, ipcRenderer });
+
+    expect(listeners.has('beforeunload')).toBe(false);
+    expect(listeners.has('unload')).toBe(true);
+    const hostListener = ipcRenderer.on.mock.calls[0]?.[1];
+    expect(hostListener).toEqual(expect.any(Function));
+
+    // A dirty renderer can cancel beforeunload and remain alive. Its host IPC
+    // listener must stay connected until Chromium completes the unload.
+    expect(ipcRenderer.off).not.toHaveBeenCalled();
+    listeners.get('unload')?.();
+    expect(ipcRenderer.off).toHaveBeenCalledOnce();
+    expect(ipcRenderer.off).toHaveBeenCalledWith(
+      ELECTRON_WEBVIEW_PUSH_CHANNEL,
+      hostListener,
+    );
+  });
+
   it('exposes only the shared synchronous host bridge surface', async () => {
     const { installElectronHostBridge } = await loadHostBridgeModule();
     const sends: Array<{ channel: string; message: unknown }> = [];

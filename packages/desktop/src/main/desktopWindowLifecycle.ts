@@ -27,7 +27,7 @@ interface BeforeQuitApp {
   quit(): void;
 }
 
-export function installRendererNavigationCleanup(
+function installRendererNavigationCleanup(
   webContents: EventSource,
   workspaceIpc: DisposableRendererResources,
 ): void {
@@ -77,7 +77,16 @@ export function installDesktopBeforeQuitWiring(options: {
   installBeforeQuitHandler(options);
 }
 
-export function installUnsavedChangesHandler(options: {
+export interface DesktopWindowLifecycleWiring {
+  webContents: EventSource;
+  workspaceIpc: DisposableRendererResources;
+  showDiscardDialog(): number;
+  isFatalShutdownRequested(): boolean;
+  clearPendingWorkspaceRelaunch(): void;
+  clearContinueQuitAfterWindowClose(): void;
+}
+
+function installUnsavedChangesHandler(options: {
   webContents: EventSource;
   showDiscardDialog(): number;
   isFatalShutdownRequested(): boolean;
@@ -97,4 +106,11 @@ export function installUnsavedChangesHandler(options: {
     options.clearPendingWorkspaceRelaunch();
     options.clearContinueQuitAfterWindowClose();
   });
+}
+
+export function installDesktopWindowLifecycleWiring(
+  options: DesktopWindowLifecycleWiring,
+): void {
+  installUnsavedChangesHandler(options);
+  installRendererNavigationCleanup(options.webContents, options.workspaceIpc);
 }

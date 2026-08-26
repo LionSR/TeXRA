@@ -73,8 +73,7 @@ import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { handoffDesktopWorkspaceRelaunch } from './desktopWorkspaceRelaunch.js';
 import {
   installDesktopBeforeQuitWiring,
-  installRendererNavigationCleanup,
-  installUnsavedChangesHandler,
+  installDesktopWindowLifecycleWiring,
 } from './desktopWindowLifecycle.js';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
@@ -509,30 +508,6 @@ function createWindow(options: {
   initializeDesktopSetupAuth();
   windowResources.add(registerDesktopSetupSignIn(signInForRemoteAgentCatalog));
   const folderPickerDefaultPath = options.workspacePath ?? app.getPath('home');
-  // The renderer owns editor dirtiness. This event is the main process's only
-  // reading of it: Chromium emits it after the renderer's beforeunload handler
-  // observes a dirty Monaco buffer and refuses the unload, so every close path
-  // (quit, workspace switch, window close) asks here and nowhere else.
-  installUnsavedChangesHandler({
-    webContents: window.webContents,
-    showDiscardDialog: () =>
-      dialog.showMessageBoxSync(window, {
-        type: 'warning',
-        buttons: ['Keep Editing', 'Discard Changes'],
-        defaultId: 0,
-        cancelId: 0,
-        title: 'Unsaved Changes',
-        message: 'This workspace has unsaved editor changes.',
-        detail: 'Discard the changes and continue?',
-      }),
-    isFatalShutdownRequested: isFatalDesktopShutdownRequested,
-    clearPendingWorkspaceRelaunch: () => {
-      pendingWorkspaceRelaunch = undefined;
-    },
-    clearContinueQuitAfterWindowClose: () => {
-      continueQuitAfterWindowClose = undefined;
-    },
-  });
 
   const openWorkspaceFolder = async () => {
     const result = await dialog.showOpenDialog(window, {
@@ -1105,7 +1080,31 @@ function createWindow(options: {
   // reload: the app-signal subscription must survive a reload and die with the
   // window, or macOS dock reactivation would stack one listener per reopen.
   windowResources.add(() => workspaceIpc.dispose());
-  installRendererNavigationCleanup(window.webContents, workspaceIpc);
+  // The renderer owns editor dirtiness. This event is the main process's only
+  // reading of it: Chromium emits it after the renderer's beforeunload handler
+  // observes a dirty Monaco buffer and refuses the unload, so every close path
+  // (quit, workspace switch, window close) asks here and nowhere else.
+  installDesktopWindowLifecycleWiring({
+    webContents: window.webContents,
+    workspaceIpc,
+    showDiscardDialog: () =>
+      dialog.showMessageBoxSync(window, {
+        type: 'warning',
+        buttons: ['Keep Editing', 'Discard Changes'],
+        defaultId: 0,
+        cancelId: 0,
+        title: 'Unsaved Changes',
+        message: 'This workspace has unsaved editor changes.',
+        detail: 'Discard the changes and continue?',
+      }),
+    isFatalShutdownRequested: isFatalDesktopShutdownRequested,
+    clearPendingWorkspaceRelaunch: () => {
+      pendingWorkspaceRelaunch = undefined;
+    },
+    clearContinueQuitAfterWindowClose: () => {
+      continueQuitAfterWindowClose = undefined;
+    },
+  });
   const mainViewIpc = installDesktopMainViewIpc(window, {
     workspace: workspaceIpc,
     handleExecuteMessage: async (message) => {

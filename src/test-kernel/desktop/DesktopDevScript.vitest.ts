@@ -219,6 +219,22 @@ describe('desktop development launcher', () => {
     expect(relaunch).not.toHaveBeenCalled();
   });
 
+  it('relaunches packaged desktop with the exact workspace arguments', () => {
+    const args = withWorkspacePathArg(['/desktop'], '/tmp/new-paper');
+    const send = vi.fn();
+    const relaunch = vi.fn();
+
+    handoffDesktopWorkspaceRelaunch(args, {
+      supervised: false,
+      send,
+      relaunch,
+    });
+
+    expect(relaunch).toHaveBeenCalledOnce();
+    expect(relaunch).toHaveBeenCalledWith(args);
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('launches Electron with the exact valid IPC relaunch arguments', async () => {
     const { calls, children, port } = await launchDesktopDev();
     const replacementArgs = [
