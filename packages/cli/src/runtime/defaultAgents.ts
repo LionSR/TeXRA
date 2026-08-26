@@ -4,7 +4,7 @@ import {
   implicitDefaultToolUseAgents,
 } from '@shared/constants/agents';
 
-export const BUILTIN_DEFAULT_CHAT_AGENT = 'assistant';
+const BUILTIN_DEFAULT_CHAT_AGENT = 'assistant';
 
 // Priority for the implicit default: the built-in default first, then the shared
 // preferred order with the built-in removed so it isn't re-checked (it already

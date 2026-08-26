@@ -8,6 +8,7 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import { platform } from '@platform/platform';
+import { providerDisplayName } from '@shared/constants/providers';
 
 export function loadProviderApiKeyStatuses(): Promise<
   Record<ApiProvider, ApiKeyStatus>
@@ -25,8 +26,8 @@ export async function saveProviderApiKey(
   await storeCredential(platform().secrets, {
     secretName: apiKeySecretName(provider),
     value: key,
-    emptyMessage: 'API key is empty.',
-    placeholderMessage: `This looks like a placeholder rather than a ${provider} API key. Enter the key issued by the provider.`,
+    kind: 'provider',
+    label: providerDisplayName(provider),
   });
   invalidateApiKeyCache();
 }
