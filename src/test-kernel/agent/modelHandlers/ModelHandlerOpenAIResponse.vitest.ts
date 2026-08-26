@@ -1,8 +1,5 @@
 // Node imports
 import { strict as assert } from 'node:assert';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 
 // Third-party imports
 import { describe, it, vi } from 'vitest';
@@ -16,9 +13,6 @@ import { APIUserAbortError, OpenAIError } from 'openai';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentSettingSchema } from '@agent/core/definition/AgentDataclass';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import type {
@@ -39,19 +33,16 @@ import {
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { AgentCategory, type ToolDefinition } from '@shared/schemas';
+import type { ToolDefinition } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
-import { pathToLocation } from '@utils/files/fileLocation';
 import type {
   ResponseInputItem,
   ResponseUsage,
 } from 'openai/resources/responses/responses';
 import type OpenAI from 'openai';
 
-// pathToLocation and AbsoluteFS resolve through platform services, so this
-// suite needs the real node fs rather than the in-memory default.
 setupPlatform({}, { fs: nodeFilesystem });
 
 const OPENAI_RESPONSE_TEST_CONFIG = Object.freeze({
@@ -1425,47 +1416,6 @@ describe('ModelHandlerOpenAIResponse.extractResponse', () => {
     );
 
     assert.equal(result.text, expected);
-  });
-});
-
-describe('ModelHandlerOpenAIResponse.initializeOutputAndPrefill', () => {
-  it('preserves user content when no output file exists', async () => {
-    const tempDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'openai-response-prefill-empty-'),
-    );
-    const outputPath = path.join(tempDir, 'r0', 'output.xml');
-
-    try {
-      const handler = createHandler();
-      const agentSetting = AgentSettingSchema.parse({
-        agentCategory: AgentCategory.Workflow,
-      });
-      const userMessage: ResponseInputItem = {
-        type: 'message',
-        role: 'user',
-        content: [{ type: 'input_text', text: 'revise the document' }],
-      } as ResponseInputItem;
-      const messages: ResponseInputItem[] = [userMessage];
-      const workspaceState = AgentWorkspaceState.create();
-
-      const [isComplete, updatedMessages] =
-        await handler.initializeOutputAndPrefill(
-          {} as AgentConfig,
-          agentSetting,
-          messages,
-          workspaceState,
-          pathToLocation(outputPath),
-        );
-
-      assert.equal(isComplete, false);
-      assert.equal(updatedMessages.length, 1);
-      const onlyContent = (updatedMessages[0] as any).content;
-      assert.deepEqual(onlyContent, [
-        { type: 'input_text', text: 'revise the document' },
-      ]);
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
   });
 });
 

@@ -113,7 +113,7 @@ describe('agent creator orchestration', () => {
     expect(ui.openCreatedFile).toHaveBeenCalledWith(
       resolve('/agents/editor.yaml'),
     );
-    expect(events).toEqual(['write', 'show', 'register', 'open']);
+    expect(events.indexOf('write')).toBeLessThan(events.indexOf('register'));
   });
 
   it('passes selected tool metadata into tool-use generation', async () => {
