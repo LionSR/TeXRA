@@ -48,15 +48,15 @@ export interface FollowUpRecoveryLease
 /**
  * How one submission landed: a replayed delivery id, input a live flow
  * consumer will read this turn, input parked on the stream's queue (with the
- * recovery lease when this submission claimed it), a stream with no queue
- * entry to join, or a boundary that cannot accept input at all (disposed
- * session, terminalized stream).
+ * recovery lease when this submission claimed it), or a refusal — the
+ * boundary has no entry to join and will not create one (disposed session,
+ * terminalized stream, or a live-owner submission to a stream whose entry is
+ * gone).
  */
 type FollowUpSubmission =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'delivered_live' }
   | { readonly kind: 'queued'; readonly lease?: FollowUpRecoveryLease }
-  | { readonly kind: 'not_owned' }
   | { readonly kind: 'refused' };
 
 /**
@@ -158,7 +158,7 @@ export class ToolUseFollowUpQueue {
 
     let entry = this.entries.get(streamId);
     if (admission === 'live_owner') {
-      if (!entry) return { kind: 'not_owned' };
+      if (!entry) return { kind: 'refused' };
     } else {
       if (!entry && this.terminalized.has(streamId)) {
         return { kind: 'refused' };

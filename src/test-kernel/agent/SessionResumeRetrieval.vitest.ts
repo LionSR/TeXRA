@@ -402,7 +402,7 @@ async function runResumedFlowToWaiting(
 function abortOnFirstFlowStepWrite(
   store: ReturnType<typeof getExecutionStore>,
   getFlowContext: () => ToolUseSetupContext | undefined,
-  options: { onlyStepWrite?: boolean; followUpText?: string } = {},
+  options: { onlyStepWrite?: boolean; onFlowStepWrite?: () => void } = {},
 ): { writeSpy: ReturnType<typeof vi.spyOn>; abortError: DOMException } {
   const abortError = createAbortError();
   const realWrite = store.write.bind(store);
@@ -419,11 +419,7 @@ function abortOnFirstFlowStepWrite(
         : isCursorWrite;
       if (!fired && isTargetWrite) {
         fired = true;
-        if (options.followUpText) {
-          getFlowContext()?.session.appendFollowUp({
-            text: options.followUpText,
-          });
-        }
+        if (getFlowContext()) options.onFlowStepWrite?.();
         getFlowContext()?.interrupt();
         throw abortError;
       }
@@ -1119,10 +1115,12 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       await expect(
         runPersistedFlow(executionId, streamId, snapshot, {
           attachment: {
-            attach: (context) => {
-              context.session.appendFollowUp({
-                text: 'queued before recovery',
-              });
+            attach: () => {
+              session.followUps.submit(
+                streamId,
+                { text: 'queued before recovery' },
+                'live_owner',
+              );
             },
           },
           session,
@@ -1494,7 +1492,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const result = await runPersistedFlow(executionId, streamId, snapshot, {
         attachment: {
           attach: (context) => {
-            context.session.appendFollowUp({ text: 'queued during resume' });
+            session.followUps.submit(
+              streamId,
+              { text: 'queued during resume' },
+              'live_owner',
+            );
             context.interrupt();
           },
         },
@@ -1531,7 +1533,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const { writeSpy, abortError } = abortOnFirstFlowStepWrite(
       store,
       () => flowContext,
-      { followUpText: 'late active-turn input' },
+      {
+        onFlowStepWrite: () =>
+          session.followUps.submit(
+            streamId,
+            { text: 'late active-turn input' },
+            'live_owner',
+          ),
+      },
     );
 
     try {
@@ -1578,7 +1587,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const { writeSpy, abortError } = abortOnFirstFlowStepWrite(
       store,
       () => flowContext,
-      { followUpText: 'queued for next turn' },
+      {
+        onFlowStepWrite: () =>
+          session.followUps.submit(
+            streamId,
+            { text: 'queued for next turn' },
+            'live_owner',
+          ),
+      },
     );
 
     try {

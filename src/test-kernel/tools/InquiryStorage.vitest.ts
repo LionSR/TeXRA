@@ -118,7 +118,6 @@ describe('InquiryStorage', () => {
   });
 
   it('opens, answers, and resolves a thread end-to-end', async () => {
-    const atomicWriteSpy = vi.spyOn(platform().fs, 'writeFileAtomic');
     const opened = await recordOpenQuestion({
       parentStreamId: STREAM_A,
       parentExecutionId: null,
@@ -143,15 +142,6 @@ describe('InquiryStorage', () => {
     expect(answered).not.toBeNull();
     expect(answered!.manifest.status).toBe('answered');
     expect(answered!.turn.answer).toBe('C = (n(n-2))^{-1} * ω_n^{2/n}');
-
-    const turnDir = path.join(threadDirFor(opened.threadId), 't1');
-    expect(atomicWriteSpy.mock.calls.map(([target]) => target)).toEqual(
-      expect.arrayContaining([
-        path.join(turnDir, 'question.txt'),
-        path.join(turnDir, 'context.txt'),
-        path.join(turnDir, 'answer.txt'),
-      ]),
-    );
 
     const stillOpen = await listThreadsByStatus({
       status: 'open',
@@ -233,14 +223,12 @@ describe('InquiryStorage', () => {
       question: 'Q1',
       allowBypass: false,
       streamId: STREAM_A,
-      mode: 'new',
       sessionLinks: undefined,
       draft: getOpenTurnDraft(manifest!),
       transcript: manifestToTranscript(manifest!),
     });
 
     expect(permission).toMatchObject({
-      mode: 'new',
       draft,
       transcript: [{ turnIndex: 1, question: 'Q1', answer: undefined }],
     });
@@ -407,8 +395,6 @@ describe('InquiryStorage', () => {
           turnIndex: 1,
           timestamp: '2025-01-01T00:00:00.000Z',
           question: 'Future Q',
-          questionRelativePath: 't1/question.txt',
-          answerRelativePath: 't1/answer.txt',
         },
       ],
     });

@@ -112,7 +112,7 @@ export type AgentProposalPermission = z.infer<
 // External Inquiry — see also `./inquiry.ts` for thread / session-link / action schemas
 // ============================================================================
 
-// Shared inquiry fields present in both new and follow-up permissions.
+// Inquiry fields carried by every inquiry permission.
 const CommonExternalInquiryFieldsSchema = z.object({
   question: z.string(),
   threadId: InquiryThreadIdSchema,
@@ -127,28 +127,15 @@ const ExternalInquiryHydrationFieldsSchema = z.object({
   transcript: z.array(InquiryTranscriptTurnSchema).nullish(),
 });
 
-// Both inquiry modes share the same fields and differ only in the `mode`
-// discriminator. Hydration fields live on both so the discriminated union
-// exposes a common surface for renderers that read them regardless of mode.
-const ExternalInquiryPermissionBaseSchema = PermissionBaseSchema.extend(
+/**
+ * One shape for every inquiry turn. First and follow-up dispatches carry the
+ * identical field set — the panel tells them apart from `transcript` — so
+ * there is no discriminator to narrow on. Hydration fields are always
+ * present (nullish on a fresh thread that has nothing to hydrate).
+ */
+export const ExternalInquiryPermissionSchema = PermissionBaseSchema.extend(
   CommonExternalInquiryFieldsSchema.shape,
 ).extend(ExternalInquiryHydrationFieldsSchema.shape);
-
-/**
- * First inquiry in a thread. Fresh dispatches have no prior transcript, draft,
- * or session links, but durable hydration may carry a saved open-turn draft.
- */
-const NewExternalInquiryPermissionSchema =
-  ExternalInquiryPermissionBaseSchema.extend({ mode: z.literal('new') });
-
-/** Follow-up inquiry — carries thread context from prior turns. */
-const FollowUpExternalInquiryPermissionSchema =
-  ExternalInquiryPermissionBaseSchema.extend({ mode: z.literal('followUp') });
-
-export const ExternalInquiryPermissionSchema = z.discriminatedUnion('mode', [
-  NewExternalInquiryPermissionSchema,
-  FollowUpExternalInquiryPermissionSchema,
-]);
 export type ExternalInquiryPermission = z.infer<
   typeof ExternalInquiryPermissionSchema
 >;

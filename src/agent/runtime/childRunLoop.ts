@@ -371,10 +371,10 @@ export interface ChildRunLoopHandle {
  * whole lifetime, so the stop button always finds a live target — including
  * the inter-turn WAITING gap, when no flow-owned context is attached.
  *
- * Does NOT implement the session duck-type (no `session.appendFollowUp`), so
- * flow-only commands such as context compaction ignore it. Follow-ups route
- * through the queue-owned submission path, which joins this loop's live lease
- * instead of creating a competing continuation.
+ * Carries no flow-owned session view, so flow-only commands such as context
+ * compaction ignore it. Follow-ups route through the queue-owned submission
+ * path, which joins this loop's live lease instead of creating a competing
+ * continuation.
  *
  * `interrupt()` additionally delegates into a live native turn's flow
  * context, when one is currently attached. `handle.getToolUseFlow()` is the

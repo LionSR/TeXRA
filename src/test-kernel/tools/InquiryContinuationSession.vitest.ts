@@ -71,8 +71,6 @@ function answeredManifest(): ExternalInquiryThreadManifest {
         turnIndex: 1,
         timestamp: '2026-06-14T08:00:00.000Z',
         question: 'Check the boundary case.',
-        questionRelativePath: 'question.md',
-        answerRelativePath: 'answer.md',
         answer: 'Boundary case holds.',
         answeredAt: '2026-06-14T08:01:00.000Z',
       },

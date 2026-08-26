@@ -49,7 +49,6 @@ describe('CLI external inquiry modal', () => {
           requestId: 'inquiry-note-free',
           allowBypass: false,
           streamId: 'inquiry-stream',
-          mode: 'new',
           question: 'Which external fact should be checked?',
           threadId: 'ei_000000000001',
         },

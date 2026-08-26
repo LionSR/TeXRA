@@ -87,7 +87,6 @@ interface InterruptibleFlowInput {
 }
 
 interface TestFlowContext {
-  readonly session: { appendFollowUp(item: unknown): void };
   interrupt(): void;
 }
 
@@ -364,7 +363,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       ) => {
         expect(input.tools).toBe(tools);
         const flowContext: TestFlowContext = {
-          session: { appendFollowUp: vi.fn() },
           interrupt: () => {
             order.push('interrupt');
             input.interrupt();
