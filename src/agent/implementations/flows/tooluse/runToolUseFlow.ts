@@ -59,9 +59,7 @@ import { setToolUseSharedModel } from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseServices } from './ToolUseServices';
 
-export interface RunToolUseFlowInput<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
+export interface RunToolUseFlowInput extends BaseFlowContextInit {
   /** Abort this run's sticky signal. */
   interrupt: () => void;
   setting: AgentToolUseSetting;
@@ -147,9 +145,9 @@ export interface ToolUseFlowAttachment {
   detach(context: ToolUseFlowContext): void;
 }
 
-class ToolUsePersistedFlow<C> extends PersistedFlow<
+class ToolUsePersistedFlow extends PersistedFlow<
   ToolUseRunShared,
-  ToolUseServices<C>
+  ToolUseServices
 > {
   async prepareForFollowUp(shared: ToolUseRunShared): Promise<void> {
     shared.shouldSkipCycle = true;
@@ -164,8 +162,8 @@ const MODEL_SWITCH_DIFFERENT_FORMAT_ERROR =
 const MODEL_SWITCH_DIFFERENT_FORMAT_REASON =
   'different conversation format; start new chat';
 
-export async function runToolUseFlow<C = unknown>(
-  input: RunToolUseFlowInput<C>,
+export async function runToolUseFlow(
+  input: RunToolUseFlowInput,
   toolRegistry?: IToolRegistry,
   attachment?: ToolUseFlowAttachment,
 ): Promise<RunToolUseFlowResult> {
@@ -224,7 +222,7 @@ export async function runToolUseFlow<C = unknown>(
       : undefined;
   let pendingStructuredOutput: ToolUseRunShared['structured'];
   let response: string | undefined;
-  let finalTool: ToolUseServices<C>['finalTool'];
+  let finalTool: ToolUseServices['finalTool'];
   if (outputSchema) {
     const terminalTool = buildTerminalTool(outputSchema, (value) => {
       pendingStructuredOutput = value;
@@ -238,7 +236,7 @@ export async function runToolUseFlow<C = unknown>(
 
   const kv = getExecutionStore(executionId);
 
-  const services: ToolUseServices<C> = {
+  const services: ToolUseServices = {
     ...input,
     setting: { ...setting, tools: resolvedTools },
     session: sessionLifecycle,
@@ -251,7 +249,7 @@ export async function runToolUseFlow<C = unknown>(
     },
     fileService: new TaskRunFileService(executionId),
   };
-  let activePersistedFlow: ToolUsePersistedFlow<C> | undefined;
+  let activePersistedFlow: ToolUsePersistedFlow | undefined;
 
   const persistModelSwitch = async (model: string): Promise<void> => {
     const flow = activePersistedFlow;
@@ -304,7 +302,7 @@ export async function runToolUseFlow<C = unknown>(
     const nextHandler = (await createModelHandler(
       nextConfig,
       services.runScope.session.responseTextProcessing,
-    )) as RunModelHandler<C>;
+    )) as RunModelHandler;
     if (
       !modelHandlersShareConversationFormat(
         services.modelCell.handler,
@@ -478,13 +476,13 @@ export async function runToolUseFlow<C = unknown>(
     ];
     let finalAction: Action | undefined;
     do {
-      const prepareNode = new ToolUsePrepareNode<C>();
-      const cycleNode = new ToolUseCycleNode<C>();
-      const waitNode = new ToolUseWaitNode<C>(resumedFollowUps);
+      const prepareNode = new ToolUsePrepareNode();
+      const cycleNode = new ToolUseCycleNode();
+      const waitNode = new ToolUseWaitNode(resumedFollowUps);
       prepareNode.next(cycleNode);
       cycleNode.next(waitNode);
       waitNode.on(FlowTransition.CONTINUE, cycleNode);
-      const pf = new ToolUsePersistedFlow<C>(
+      const pf = new ToolUsePersistedFlow(
         prepareNode,
         kv,
         executionId,

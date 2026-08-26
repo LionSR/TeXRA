@@ -35,9 +35,9 @@ interface ToolUseRoundPrepResult {
  * they are injected here BEFORE calling the model. This ensures the model's
  * thinking/response considers the user's feedback.
  */
-export class ToolUseRoundPrepNode<C> extends BaseNode<
+export class ToolUseRoundPrepNode extends BaseNode<
   ToolUseRoundShared,
-  ToolUseRoundServices<C>
+  ToolUseRoundServices
 > {
   async prep(_shared: ToolUseRoundShared): Promise<ToolUseRoundPrepResult> {
     const interrupted = this.services.runScope.signal.aborted;

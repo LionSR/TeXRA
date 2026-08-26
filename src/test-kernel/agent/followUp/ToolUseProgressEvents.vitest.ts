@@ -96,7 +96,7 @@ function setRoundFlowState(state: Partial<typeof roundFlowState>): void {
 
 function createErrorLoggerNode(): {
   error: ReturnType<typeof vi.fn>;
-  node: ToolUseCycleNode<unknown>;
+  node: ToolUseCycleNode;
 } {
   const error = vi.fn();
   const node = new ToolUseCycleNode().setServices({
@@ -105,7 +105,7 @@ function createErrorLoggerNode(): {
   return { error, node };
 }
 
-type CycleOutcome = Parameters<ToolUseCycleNode<unknown>['post']>[2];
+type CycleOutcome = Parameters<ToolUseCycleNode['post']>[2];
 
 // Runs ToolUseCycleNode.post against a prepared workspace with only the
 // onCycleResponse service wired, returning the spy and mutated shared state.
@@ -147,8 +147,8 @@ function createCycleNode(
   host: ReturnType<typeof createRecordingHost>['host'],
   logger: TraceEmitter,
   overrides: Record<string, unknown> = {},
-): ToolUseCycleNode<unknown> {
-  return new ToolUseCycleNode<unknown>().setServices({
+): ToolUseCycleNode {
+  return new ToolUseCycleNode().setServices({
     runScope: testRunScope(streamId, { interactions: host }),
     logger,
     modelCell: testModelCell({ getClient: vi.fn() }),

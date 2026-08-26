@@ -113,8 +113,4 @@ export class ModelHandlerMiniMax extends ReasoningModelHandlerOpenAI {
 
     return callMsg;
   }
-
-  // MiniMax stringifies content for non-vision models; vision models use the
-  // standard OpenAI image_url format.
-  protected override readonly convertContentToStringUnlessVision = true;
 }

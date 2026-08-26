@@ -226,16 +226,15 @@ export class SupabaseClient {
   /**
    * Get the current GoTrue session access token.
    * Returns null if no session is authenticated or auth system is not ready.
-   * @param forceRefresh - When true, forces a token refresh.
    */
-  static async getAccessToken(forceRefresh?: boolean): Promise<string | null> {
+  static async getAccessToken(): Promise<string | null> {
     if (!this.authProvider) {
       // Auth provider not set - system not initialized
       return null;
     }
 
     try {
-      return await this.authProvider.ensureFreshToken(forceRefresh);
+      return await this.authProvider.ensureFreshToken();
     } catch (error) {
       log.error(`Error getting access token: ${toErrorMessage(error)}`);
       return null;

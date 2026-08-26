@@ -141,10 +141,6 @@ export class ProgressApp extends ProgressAppBase {
     super.disconnectedCallback();
   }
 
-  protected get readyCommand(): string | null {
-    return PROGRESS_VIEW_COMMANDS.WEBVIEW_READY;
-  }
-
   render(): TemplateResult {
     const isEditorMode = placement.get() === 'editor';
     const desktopView = this.getAttribute('data-desktop-view');

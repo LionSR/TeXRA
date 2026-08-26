@@ -167,8 +167,8 @@ describe('SettingsProfileKeyController', () => {
     );
   });
 
-  it('does nothing when committing an empty provider key', async () => {
-    const { controller, secrets, refreshCount, hosts } =
+  it('reports an empty provider key instead of storing it', async () => {
+    const { controller, secrets, failures, refreshCount, hosts } =
       await createController();
 
     await controller.commitProviderKey('openai', '');
@@ -176,6 +176,7 @@ describe('SettingsProfileKeyController', () => {
     assert.equal(await secrets.get('apiKey.openai'), undefined);
     assert.equal(refreshCount(), 0);
     assert.equal(hosts.prompt.messages.length, 0);
+    assert.match(failures[0] ?? '', /empty/);
   });
 
   it('opens provider key URLs when configured', async () => {

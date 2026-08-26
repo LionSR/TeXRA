@@ -325,14 +325,11 @@ export function createDesktopSettingsIpc(
       prompt: GITHUB_TOKEN_PROMPT,
     });
     if (token == null) return;
-    const stored = await storeCredential(platform().secrets, {
+    await storeCredential(platform().secrets, {
       secretName: GITHUB_TOKEN_STORAGE_KEY,
       value: token,
       kind: 'github',
-      placeholderMessage:
-        'This looks like a placeholder rather than a GitHub token. Enter a personal access token from GitHub.',
     });
-    if (!stored) return;
     await options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE);
     await postGitHubTokenStatus();
     await refreshToolAvailability();

@@ -19,9 +19,9 @@ import type { ToolUseRunShared, CyclePrepResult } from './types';
  * `../toolUseRound/`, which is the inner per-LLM-call prep node that
  * runs at the start of every model invocation inside `ToolUseRoundFlow`.
  */
-export class ToolUsePrepareNode<C> extends BaseNode<
+export class ToolUsePrepareNode extends BaseNode<
   ToolUseRunShared,
-  ToolUseServices<C>
+  ToolUseServices
 > {
   async exec(_prepRes: void): Promise<CyclePrepResult> {
     const {

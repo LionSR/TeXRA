@@ -58,8 +58,4 @@ export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
       ? { type: 'enabled' }
       : { type: 'disabled' };
   }
-
-  // GLM stringifies content for non-vision models; vision models (GLM-4.5v,
-  // GLM-4.6v) use the standard OpenAI image_url format.
-  protected override readonly convertContentToStringUnlessVision = true;
 }

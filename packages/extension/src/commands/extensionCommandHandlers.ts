@@ -137,19 +137,6 @@ export type ExtensionRegistryCommandId =
   ExtensionRegistryCatalogCommandId | InternalExtensionRegistryCommandId;
 
 /**
- * Runtime mirror of `ExtensionRegistryCatalogCommandId`, used by tests to
- * assert `EXTENSION_COMMAND_HANDLERS` registers every catalog entry tagged
- * `extensionRegistry: true` (and flag strays that no longer belong).
- */
-export const EXTENSION_REGISTRY_CATALOG_COMMAND_IDS: readonly ExtensionRegistryCatalogCommandId[] =
-  commandCatalog
-    .filter(
-      (entry): entry is ExtensionRegistryCatalogEntry =>
-        'extensionRegistry' in entry && entry.extensionRegistry === true,
-    )
-    .map((entry) => entry.id);
-
-/**
  * Capabilities the registry handlers need from the extension host. Mirrors
  * `DesktopCommandActions` in shape — both register parallel handler maps
  * over the same `CommandId` union with their host-specific actions.

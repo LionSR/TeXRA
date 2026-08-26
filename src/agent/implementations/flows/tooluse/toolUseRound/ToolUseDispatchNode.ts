@@ -89,9 +89,9 @@ function endsToolUseTurn(result: ToolExecutionResult | null): boolean {
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
-export class ToolUseDispatchNode<C> extends BaseNode<
+export class ToolUseDispatchNode extends BaseNode<
   ToolUseRoundShared,
-  ToolUseRoundServices<C>
+  ToolUseRoundServices
 > {
   /** Instruction snapshot associated with the tool calls being dispatched. */
   private _currentUserInstruction: string | undefined;
@@ -254,12 +254,7 @@ export class ToolUseDispatchNode<C> extends BaseNode<
       const primary = results[primaryIndex];
       // Primary interrupted or never ran: leave the duplicate null too.
       if (!primary) continue;
-      const {
-        edits: _edits,
-        files: _files,
-        lineChanges: _lineChanges,
-        ...sharedResult
-      } = primary.result;
+      const { edits: _edits, files: _files, ...sharedResult } = primary.result;
       // The primary already injected any attachments into the follow-up;
       // repeating them per duplicate would duplicate binary context.
       results[index] = this.makeSyntheticResult(
@@ -430,16 +425,7 @@ export class ToolUseDispatchNode<C> extends BaseNode<
     const trackedEdits = options.workspace.interactions.recordEdits(
       result.status === 'executed' ? result.edits : undefined,
     );
-    if (
-      result.status === 'executed' &&
-      !result.lineChanges &&
-      trackedEdits.lineChanges
-    ) {
-      result.lineChanges = trackedEdits.lineChanges;
-      extracted.sanitizedResult.lineChanges = trackedEdits.lineChanges;
-    }
-
-    const editedFiles = trackedEdits.paths.map((path) => ({
+    const editedFiles = trackedEdits.map((path) => ({
       path,
       ok: true,
       source: 'tool',

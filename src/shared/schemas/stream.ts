@@ -214,36 +214,6 @@ export const StreamLifecycleStatusSchema = z.union([
   StreamStatusSchema.transform(streamStatusToLifecycleStatus),
 ]);
 
-export const WORKTREE_PR_STATE = {
-  OPEN: 'open',
-  MERGED: 'merged',
-  CLOSED: 'closed',
-  DRAFT: 'draft',
-} as const;
-
-const WorktreePRStateSchema = z.enum(WORKTREE_PR_STATE);
-export type WorktreePRState = z.infer<typeof WorktreePRStateSchema>;
-
-export const WORKTREE_CI_STATE = {
-  PENDING: 'pending',
-  RUNNING: 'running',
-  SUCCESS: 'success',
-  FAILURE: 'failure',
-  UNKNOWN: 'unknown',
-} as const;
-
-const WorktreeCIStateSchema = z.enum(WORKTREE_CI_STATE);
-export type WorktreeCIState = z.infer<typeof WorktreeCIStateSchema>;
-
-const WorktreePRInfoSchema = z.object({
-  number: z.number(),
-  state: WorktreePRStateSchema,
-  title: z.string().optional(),
-  additions: z.number().optional(),
-  deletions: z.number().optional(),
-  ciState: WorktreeCIStateSchema.optional(),
-});
-
 const WorktreeInfoSchema = z.object({
   /** Absolute path of the worktree the agent is operating in. */
   workingDirectory: z.string(),
@@ -251,8 +221,6 @@ const WorktreeInfoSchema = z.object({
   branch: z.string().optional(),
   /** True if the working tree has uncommitted changes. */
   dirty: z.boolean().optional(),
-  /** Associated GitHub pull request, if one is known to exist. */
-  pr: WorktreePRInfoSchema.optional(),
 });
 export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
 

@@ -80,9 +80,9 @@ interface ToolUseProcessPrepResult {
 }
 
 /** Processes the model response to extract tool calls and usage data. */
-export class ToolUseProcessNode<C> extends BaseNode<
+export class ToolUseProcessNode extends BaseNode<
   ToolUseRoundShared,
-  ToolUseRoundServices<C>
+  ToolUseRoundServices
 > {
   async prep(shared: ToolUseRoundShared): Promise<ToolUseProcessPrepResult> {
     return {

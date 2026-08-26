@@ -206,15 +206,18 @@ describe('ModelHandlerAnthropic cache pricing', () => {
         outputPrice: 15,
       }),
     );
-    const price = handler.computePrice({
-      input_tokens: 1000,
-      output_tokens: 100,
-      cache_read_input_tokens: 0,
-      cache_creation_input_tokens: 30,
-      cache_creation: cacheCreation,
-      server_tool_use: null,
-      service_tier: 'standard',
-    } as any);
+    const { cost: price } = handler.normalizeUsage(
+      {
+        input_tokens: 1000,
+        output_tokens: 100,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 30,
+        cache_creation: cacheCreation,
+        server_tool_use: null,
+        service_tier: 'standard',
+      } as any,
+      0,
+    );
 
     expect(price).toBeCloseTo(expected, 12);
   });

@@ -151,8 +151,6 @@ const ExecutedToolResultSchema = z.object({
   /** End the current model turn after this successful tool result is paired. */
   endTurn: z.boolean().optional(),
   error: z.undefined().optional(),
-  /** Statistics about line changes made */
-  lineChanges: LineChangesSchema.optional(),
   /** Records of edits made during tool execution */
   edits: z.array(EditRecordSchema).optional(),
   /** File attachments (may contain binary data) */
@@ -167,7 +165,6 @@ const ErrorToolResultSchema = z.object({
   /** Brief summary for human-facing logs */
   summary: z.string().optional(),
   output: z.undefined().optional(),
-  lineChanges: z.undefined().optional(),
   edits: z.undefined().optional(),
   files: z.undefined().optional(),
   ...ToolResultSharedFields,

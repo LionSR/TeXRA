@@ -16,7 +16,7 @@ import type { TaskRunFileService } from '@utils/files/taskRunStorage';
  * state both inner primitives operate on. The live provider client comes from
  * the `modelCell` every flow already carries through `BaseFlowContextInit`.
  */
-interface CycleRunServices<C = unknown> extends BaseFlowContextInit<C> {
+interface CycleRunServices extends BaseFlowContextInit {
   readonly fileService: TaskRunFileService;
   readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;
@@ -24,9 +24,7 @@ interface CycleRunServices<C = unknown> extends BaseFlowContextInit<C> {
 }
 
 /** Services for response cycle flow nodes. */
-export interface ResponseCycleServices<
-  C = unknown,
-> extends CycleRunServices<C> {
+export interface ResponseCycleServices extends CycleRunServices {
   round: ConversationRoundStateSnapshot;
 }
 
@@ -37,7 +35,7 @@ export interface ResponseCycleServices<
  * The outer session step (ToolUseCycleNode) bridges ToolUseServices into this
  * interface by adding `run` and `workspace` before running the round.
  */
-export interface ToolUseRoundServices<C = unknown> extends CycleRunServices<C> {
+export interface ToolUseRoundServices extends CycleRunServices {
   /** Terminal tool available for the optional provider-native final turn. */
   readonly finalTool?: FinalTool;
   /** Session for injecting queued user messages after tool dispatch. */

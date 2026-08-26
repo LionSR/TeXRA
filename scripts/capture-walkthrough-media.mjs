@@ -128,8 +128,8 @@ function mainWebview(name, captures) {
     height: 1040,
     templatePath: join(extensionRoot, 'src', 'webview', 'index.html'),
     replacements: {
-      mainViewBundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
-      mainViewStyleUri: fileUri('packages/extension/dist/webview/index.css'),
+      bundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
+      styleUri: fileUri('packages/extension/dist/webview/index.css'),
     },
     messageMode: 'postMessage',
     messages: mainWorkflowMessages,
@@ -157,8 +157,8 @@ const webviewViews = [
     height: 520,
     templatePath: join(extensionRoot, 'src', 'webview', 'index.html'),
     replacements: {
-      mainViewBundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
-      mainViewStyleUri: fileUri('packages/extension/dist/webview/index.css'),
+      bundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
+      styleUri: fileUri('packages/extension/dist/webview/index.css'),
     },
     messageMode: 'postMessage',
     messages: [
@@ -184,12 +184,8 @@ const webviewViews = [
     height: 760,
     templatePath: join(extensionRoot, 'src', 'settingsView', 'index.html'),
     replacements: {
-      settingsBundleUri: fileUri(
-        'packages/extension/dist/settingsView/bundle.js',
-      ),
-      settingsStyleUri: fileUri(
-        'packages/extension/dist/settingsView/index.css',
-      ),
+      bundleUri: fileUri('packages/extension/dist/settingsView/bundle.js'),
+      styleUri: fileUri('packages/extension/dist/settingsView/index.css'),
     },
     messages: [
       { command: 'setTab', tab: 'models' },
@@ -234,12 +230,8 @@ const webviewViews = [
       'data-desktop-view': 'progress',
     },
     replacements: {
-      progressBundleUri: fileUri(
-        'packages/extension/dist/progressView/bundle.js',
-      ),
-      progressStyleUri: fileUri(
-        'packages/extension/dist/progressView/index.css',
-      ),
+      bundleUri: fileUri('packages/extension/dist/progressView/bundle.js'),
+      styleUri: fileUri('packages/extension/dist/progressView/index.css'),
     },
     messages: progressMessages(),
     captures: [

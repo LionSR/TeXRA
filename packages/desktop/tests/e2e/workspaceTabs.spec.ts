@@ -530,6 +530,23 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
     expect(Math.abs(alignment.verticalOffset)).toBeLessThanOrEqual(1);
   }
 
+  // The active Settings page owns scrolling for every hierarchical page: with
+  // the Tools content mounted the panel must overflow its viewport, and its
+  // scrollTop must move when set. Measured at the narrow panel width above.
+  const scrollMetrics = await page.evaluate(() => {
+    const root = document.querySelector(
+      'settings-app[data-desktop-view="settings"]',
+    )?.shadowRoot;
+    const panel = root?.querySelector<HTMLElement>('.settings-panel');
+    if (!panel) return null;
+    const overflows = panel.scrollHeight > panel.clientHeight;
+    panel.scrollTop = panel.scrollHeight;
+    return { overflows, scrollTop: panel.scrollTop };
+  });
+  expect(scrollMetrics).not.toBeNull();
+  expect(scrollMetrics!.overflows).toBe(true);
+  expect(scrollMetrics!.scrollTop).toBeGreaterThan(0);
+
   await page.evaluate(() => {
     window.postMessage({ command: 'setTab', tab: 'shortcuts' }, '*');
   });

@@ -323,8 +323,7 @@ export class AgentHandlers {
               showErrorMessage: (message) => {
                 void showLoggedMessage(this.ctx.channel, message).catch(
                   (err: unknown) => {
-                    this.ctx.logger.warn(
-                      this.ctx.channel,
+                    this.ctx.log.warn(
                       `Error notification failed after handoff: ${toErrorMessage(err)}`,
                     );
                   },

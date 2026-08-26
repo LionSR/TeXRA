@@ -397,10 +397,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     return true;
   }
 
-  computePrice(_responseUsage: VscodeLmUsage): number {
-    return 0;
-  }
-
   normalizeUsage(
     _rawUsage: VscodeLmUsage,
     _responseTimeMs: number,

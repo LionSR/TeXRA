@@ -73,27 +73,16 @@ interface DetachedChildRunLaunch<TTurn> {
   readonly onLoopFailed?: (error: unknown) => void;
 }
 
-interface DetachedChildRunInputBase {
-  readonly executionId: ExecutionId;
-  readonly parentStreamId: StreamTabId;
-  /** The child stream tab id the run is registered under. */
-  readonly childStreamId: StreamTabId;
-  readonly agentName: string;
-  /** Roll the child's final cost into the parent's usage totals. */
-  readonly recordCost?: (totalCostUsd: number | undefined) => void;
-  /**
-   * False for an awaited in-band child, which runs while its parent is
-   * blocked awaiting it and therefore rides the parent's budget slot (see
-   * the child-run budget design note). Detached children default to true.
-   */
-  readonly budgeted?: boolean;
-  /** Progress sink override for awaiting persist-only callers. */
-  readonly notify?: ChildRunLoopParams<never>['notify'];
-  /** In-memory settled-turn facts for awaiting persist-only callers. */
-  readonly onTurnSettled?: ChildRunLoopParams<never>['onTurnSettled'];
-  /** Publish caller-owned state after final artifacts drain, before lease release. */
-  readonly afterArtifactsDrained?: ChildRunLoopParams<never>['afterArtifactsDrained'];
-}
+/**
+ * Everything the choreography forwards to the child run loop verbatim: the
+ * loop owns these field contracts, and the two members the guard supplies
+ * itself (`strategy` from `buildLaunch`, `childStream` from
+ * `createChildStream`) are the only ones a launch site does not pass through.
+ */
+type DetachedChildRunInputBase = Omit<
+  ChildRunLoopParams<never>,
+  'strategy' | 'childStream'
+>;
 
 export type DetachedChildRunInput<TTurn> = DetachedChildRunInputBase &
   (
@@ -138,24 +127,19 @@ export async function startDetachedChildRunLoop<TTurn>(
         launch = await input.buildLaunch();
       }
       autoCloseOnLaunchFailure = launch.strategy.autoCloseChildStream === true;
+      const {
+        createChildStream: _createChildStream,
+        buildLaunch: _buildLaunch,
+        budgeted,
+        ...loopParams
+      } = input;
       ({ completion } = startChildRunLoop({
+        ...loopParams,
         ...(childStream !== undefined && { childStream }),
-        childStreamId: input.childStreamId,
-        parentStreamId: input.parentStreamId,
-        executionId: input.executionId,
-        agentName: input.agentName,
         strategy: launch.strategy,
-        ...(input.recordCost !== undefined && { recordCost: input.recordCost }),
-        ...(input.notify !== undefined && { notify: input.notify }),
-        ...(input.onTurnSettled !== undefined && {
-          onTurnSettled: input.onTurnSettled,
-        }),
-        ...(input.afterArtifactsDrained !== undefined && {
-          afterArtifactsDrained: input.afterArtifactsDrained,
-        }),
         // Every detached native/workflow child takes one shared-budget slot per
         // turn; an awaited in-band child rides its idle parent's slot instead.
-        budgeted: input.budgeted ?? true,
+        budgeted: budgeted ?? true,
       }));
     } catch (error) {
       if (childStream) {

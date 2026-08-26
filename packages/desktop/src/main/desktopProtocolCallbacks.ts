@@ -7,7 +7,6 @@ import {
 } from '../shared/desktopProtocol.js';
 
 export interface DesktopProtocolCallback {
-  rawUrl: string;
   path: string;
   query: string;
 }
@@ -22,7 +21,7 @@ type DesktopProtocolCallbackListener = (
 
 export interface DesktopProtocolCallbackRouter {
   routeUrl(rawUrl: string): boolean;
-  routeArgv(argv: readonly string[]): number;
+  routeArgv(argv: readonly string[]): void;
   subscribe(
     listener: DesktopProtocolCallbackListener,
   ): DesktopProtocolCallbackSubscription;
@@ -78,7 +77,6 @@ export function parseDesktopProtocolCallback(
   if (!isAuthCallbackPath(path)) return null;
 
   return {
-    rawUrl,
     path,
     query: url.search.slice(1),
   };
@@ -124,11 +122,9 @@ export function createDesktopProtocolCallbackRouter(
     routeUrl,
 
     routeArgv(argv) {
-      let routedCount = 0;
       for (const rawUrl of findDesktopProtocolUrls(argv)) {
-        if (routeUrl(rawUrl)) routedCount++;
+        routeUrl(rawUrl);
       }
-      return routedCount;
     },
 
     subscribe(listener) {

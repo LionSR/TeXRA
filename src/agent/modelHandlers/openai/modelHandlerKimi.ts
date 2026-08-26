@@ -80,10 +80,6 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
       : route;
   }
 
-  // Kimi K2.5 supports vision with standard OpenAI-style image_url format;
-  // only stringify content for non-vision variants so image parts survive.
-  protected override readonly convertContentToStringUnlessVision = true;
-
   protected override getThinkingParameter():
     { type: 'enabled' | 'disabled' } | undefined {
     // See AMBIGUOUS_THINKING_DEFAULT_FULLNAMES: these wire names default to

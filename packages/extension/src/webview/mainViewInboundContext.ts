@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import { RecordingManager } from '@frontend/media/RecordingManager';
-import type { LogUtilsOptions } from '@logger/logUtils';
+import type { Log } from '@logger/logUtils';
 
 import type { DiffManager } from './managers/DiffManager';
 import type { FileManager } from './managers/FileManager';
@@ -16,13 +16,7 @@ import type { InstructionManager } from './managers/InstructionManager';
 export interface MainViewInboundHost {
   readonly viewName: string;
   readonly channel: string;
-  readonly logger: {
-    debug: (
-      channel: string,
-      message: string,
-      options?: LogUtilsOptions,
-    ) => void;
-  };
+  readonly log: Log;
   readonly context: vscode.ExtensionContext;
   /**
    * Recompute and re-push the onboarding funnel (owned by
