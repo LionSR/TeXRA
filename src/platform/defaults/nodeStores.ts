@@ -67,7 +67,7 @@ async function canCreateOrWrite(filePath: string): Promise<boolean> {
  * malformed JSON) fall back to the internal workspace store so settings stay
  * readable and writable — degraded, never fatal.
  */
-export async function openTexraWorkspaceConfigStore(
+async function openTexraWorkspaceConfigStore(
   storage: StorageProvider,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,

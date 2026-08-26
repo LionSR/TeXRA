@@ -123,7 +123,12 @@ export interface LanguageModelPort {
   selectModels(
     selector?: LanguageModelSelector,
   ): Promise<readonly LanguageModelInfo[]>;
-  onDidChangeModels(listener: () => void): Disposable;
+  /**
+   * The host's catalogue or the caller's access to it changed. One event,
+   * because every consumer recomputes the same derived value from both:
+   * `LanguageModelInfo.access` folds access into each catalogue entry.
+   */
+  onDidChange(listener: () => void): Disposable;
   sendRequest(
     model: LanguageModelReference,
     messages: readonly LanguageModelMessage[],
@@ -135,7 +140,6 @@ export interface LanguageModelPort {
     input: LanguageModelTokenCountInput,
     signal?: AbortSignal,
   ): Promise<number>;
-  onDidChangeAccess(listener: () => void): Disposable;
 }
 
 const UNAVAILABLE_MESSAGE =
@@ -146,7 +150,7 @@ export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
   {
     isAvailable: () => false,
     selectModels: async () => [],
-    onDidChangeModels: () => ({ dispose() {} }),
+    onDidChange: () => ({ dispose() {} }),
     sendRequest: (): AsyncIterable<LanguageModelResponsePart> => ({
       [Symbol.asyncIterator]: () => ({
         next: (): Promise<IteratorResult<LanguageModelResponsePart>> =>
@@ -164,6 +168,5 @@ export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
         UNAVAILABLE_MESSAGE,
       );
     },
-    onDidChangeAccess: () => ({ dispose() {} }),
   },
 );

@@ -47,7 +47,6 @@ import {
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
-import { platform } from '@platform/platform';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
@@ -58,10 +57,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import {
-  isInFlightPhase,
-  STREAM_TRANSITION_CAUSE,
-} from '@shared/streams/streamStatus';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
@@ -117,26 +113,6 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
       | 'workflowControls'
     >
   >;
-
-export interface WorkspaceStorageTransitionHooks {
-  readonly workspacePath: string | undefined;
-  afterStorageCommit(): Promise<void>;
-  afterStorageRollback(): void;
-  afterStorageFinalize(): void;
-}
-
-/**
- * A storage-root change was refused because executions are live in this
- * session. Nothing was changed; the caller retries once they have finished.
- */
-export class StorageRootChangeRefusedError extends Error {
-  constructor(readonly liveExecutionIds: readonly string[]) {
-    super(
-      `TeXRA cannot change its storage location while ${liveExecutionIds.length} ${liveExecutionIds.length === 1 ? 'run is' : 'runs are'} live in this window. Stop or finish them, then retry the workspace change.`,
-    );
-    this.name = 'StorageRootChangeRefusedError';
-  }
-}
 
 export class SessionHandle {
   /**
@@ -291,53 +267,6 @@ export class SessionHandle {
     return this.ensureRestartRepair().then(() => undefined);
   }
 
-  /**
-   * Replace session persistence after the host's workspace storage root moves.
-   *
-   * Ordinary view loads must not reopen these live stores. The host calls this
-   * explicit lifecycle boundary only after a workspace-root change.
-   */
-  reloadAfterStorageRootChange(
-    hooks?: WorkspaceStorageTransitionHooks,
-  ): Promise<boolean> {
-    if (
-      this.transcripts.mode.kind !== 'persistent' ||
-      this.restartRepairAbort.signal.aborted
-    ) {
-      return Promise.resolve(false);
-    }
-    const hasPendingStorageChange =
-      platform().storage.hasPendingWorkspaceStorageChange?.(
-        hooks && { workspacePath: hooks.workspacePath },
-      );
-    if (hasPendingStorageChange === false) return Promise.resolve(false);
-    // A storage-root change is refused, not queued, while any execution is
-    // live: a run writes under the root it was claimed in, so the two may not
-    // overlap. The hold is taken before any session state moves, so a refusal
-    // changes nothing; while it is held, launches and resumes are refused.
-    let releaseHold: () => void;
-    try {
-      releaseHold = this.executions.holdLifecycle(
-        (live) => new StorageRootChangeRefusedError(live),
-        () =>
-          new Error(
-            'TeXRA is changing its storage location. Start this run again in a moment.',
-          ),
-      );
-    } catch (error) {
-      return Promise.reject(error);
-    }
-    this.storageGeneration += 1;
-    const generation = this.storageGeneration;
-    const repair = this.enqueueRestartRepair(() =>
-      this.repairStoresAfterRestart(generation, true, hooks).finally(
-        releaseHold,
-      ),
-    );
-    this.restartRepairPromise = repair;
-    return repair;
-  }
-
   private enqueueRestartRepair<T>(work: () => Promise<T>): Promise<T> {
     // `add` widens to `T | void` for abort/timeout options; neither is used.
     return this.restartRepairQueue.add(work) as Promise<T>;
@@ -368,19 +297,9 @@ export class SessionHandle {
     );
   }
 
-  private async repairStoresAfterRestart(
-    generation: number,
-    reloadTranscripts = false,
-    transitionHooks?: WorkspaceStorageTransitionHooks,
-  ): Promise<boolean> {
+  private async repairStoresAfterRestart(generation: number): Promise<boolean> {
     try {
       if (this.restartRepairAbort.signal.aborted) return false;
-      if (reloadTranscripts) {
-        return await this.replaceStoresAfterStorageRootChange(
-          generation,
-          transitionHooks,
-        );
-      }
       if (generation !== this.storageGeneration) return false;
       await this.snapshots.preload([...this.computeStartupSeedSet()]);
       if (this.isRepairSuperseded(generation)) return false;
@@ -392,95 +311,6 @@ export class SessionHandle {
       });
       throw error;
     }
-  }
-
-  private async replaceStoresAfterStorageRootChange(
-    generation: number,
-    transitionHooks?: WorkspaceStorageTransitionHooks,
-  ): Promise<boolean> {
-    if (generation !== this.storageGeneration) return false;
-    try {
-      await Promise.all([this.transcripts.flush(), this.snapshots.flush()]);
-    } catch (flushError) {
-      return this.restoreRestartRepairAfterReplacementFailure(
-        generation,
-        flushError,
-      );
-    }
-    if (this.isRepairSuperseded(generation)) return false;
-    const storage = platform().storage;
-    const storageRootChanged = storage.commitWorkspaceStorageChange?.(
-      transitionHooks && { workspacePath: transitionHooks.workspacePath },
-    );
-    if (storageRootChanged === false) {
-      try {
-        await transitionHooks?.afterStorageCommit();
-        await this.runRestartRepair(generation);
-        transitionHooks?.afterStorageFinalize();
-        return false;
-      } catch (replacementError) {
-        transitionHooks?.afterStorageRollback();
-        throw replacementError;
-      }
-    }
-    const previousStatus = this.status.getAllStreamStates();
-    try {
-      await transitionHooks?.afterStorageCommit();
-      await this.transcripts.reload();
-      this.status.clearAll();
-      this.snapshots.evictAll();
-      await this.snapshots.preload([...this.computeStartupSeedSet()]);
-      await this.runRestartRepair(generation);
-      storage.finalizeWorkspaceStorageChange?.();
-      transitionHooks?.afterStorageFinalize();
-      return true;
-    } catch (replacementError) {
-      if (storage.rollbackWorkspaceStorageChange?.() !== true) {
-        transitionHooks?.afterStorageRollback();
-        throw replacementError;
-      }
-      transitionHooks?.afterStorageRollback();
-      try {
-        await this.transcripts.reload({ discardPendingWrites: true });
-        this.snapshots.evictAll();
-        await this.snapshots.preload([...this.computeStartupSeedSet()]);
-        this.status.clearAll();
-        // Each phase is restored in one step: the applier treats a RUNNING
-        // fact as a run start, so no intermediate phase may be published.
-        for (const [streamId, state] of previousStatus) {
-          this.status.transition(
-            streamId,
-            state.phase,
-            STREAM_TRANSITION_CAUSE.ROLLBACK,
-            { substate: state.substate },
-          );
-        }
-      } catch (rollbackError) {
-        throw new AggregateError(
-          [replacementError, rollbackError],
-          'Workspace storage replacement and rollback both failed',
-        );
-      }
-      return this.restoreRestartRepairAfterReplacementFailure(
-        generation,
-        replacementError,
-      );
-    }
-  }
-
-  private async restoreRestartRepairAfterReplacementFailure(
-    generation: number,
-    replacementError: unknown,
-  ): Promise<never> {
-    try {
-      await this.runRestartRepair(generation);
-    } catch (repairError) {
-      throw new AggregateError(
-        [replacementError, repairError],
-        'Workspace storage replacement failed and restored restart repair also failed',
-      );
-    }
-    throw replacementError;
   }
 
   /**

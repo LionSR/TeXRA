@@ -1,9 +1,9 @@
 // Node imports
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - extension
 import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
@@ -79,45 +79,5 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
     first.push('mutated');
 
     expect(config.get<string[]>(key)).not.toContain('mutated');
-  });
-
-  it('rebinds reads and writes when the workspace folder changes', async () => {
-    const tempDir = await makeTempDir('texra-extension-config-', tempDirs);
-    const firstWorkspace = join(tempDir, 'first');
-    const secondWorkspace = join(tempDir, 'second');
-    const firstConfig = join(firstWorkspace, '.texra', 'config.json');
-    const secondConfig = join(secondWorkspace, '.texra', 'config.json');
-    const internalStorage = join(tempDir, 'internal');
-    const globalStorage = join(tempDir, 'global');
-    await Promise.all([
-      mkdir(join(firstWorkspace, '.texra'), { recursive: true }),
-      mkdir(join(secondWorkspace, '.texra'), { recursive: true }),
-      mkdir(internalStorage),
-      mkdir(globalStorage),
-    ]);
-    await Promise.all([
-      writeFile(firstConfig, '{"texra.bib.zoteroPort": 24001}\n'),
-      writeFile(secondConfig, '{"texra.bib.zoteroPort": 24002}\n'),
-    ]);
-
-    const config = await createExtensionTexraConfig(
-      createStorage(internalStorage, globalStorage),
-      firstWorkspace,
-    );
-
-    expect(config.get('texra.bib.zoteroPort')).toBe(24001);
-    const transition = config.enqueueWorkspaceTransition(
-      secondWorkspace,
-      async (hooks) => {
-        await hooks.afterStorageCommit();
-        hooks.afterStorageFinalize();
-      },
-    );
-    await transition.completion;
-    expect(config.get('texra.bib.zoteroPort')).toBe(24002);
-
-    await config.update('texra.bib.zoteroPort', 25000);
-    await expect(readFile(firstConfig, 'utf8')).resolves.toContain('24001');
-    await expect(readFile(secondConfig, 'utf8')).resolves.toContain('25000');
   });
 });

@@ -316,8 +316,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     appSignals.emit('languageModelsChanged', undefined);
   };
   context.subscriptions.push(
-    languageModel.onDidChangeModels(invalidateLanguageModels),
-    languageModel.onDidChangeAccess(invalidateLanguageModels),
+    languageModel.onDidChange(invalidateLanguageModels),
   );
   // A broken transcript directory must not abort activation: degrade to an
   // in-memory store and say so, exactly as the CLI TUI does. The degraded
@@ -528,11 +527,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     log.warn(`Failed to initialize usage logging: ${toErrorMessage(error)}`);
   }
 
-  const progressViewProvider = new ProgressViewProvider(
-    context,
-    config,
-    workspace,
-  );
+  const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
 
   log.info('TeXRA extension activated');

@@ -3,11 +3,7 @@ import PQueue from 'p-queue';
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
 import type { DeleteStreamResult, SessionStores } from '@agent/storage';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
-import {
-  StorageRootChangeRefusedError,
-  type SessionHandle,
-  type WorkspaceStorageTransitionHooks,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   WebviewBridge,
   type ProgressViewMessageSender,
@@ -113,8 +109,6 @@ export class ProgressBackend {
   private readonly hasPendingPermissions: (streamId: string) => boolean;
   private readonly storageOperationQueue = new PQueue({ concurrency: 1 });
   private readonly detachEventListeners: Array<() => void> = [];
-  private storageGeneration = 0;
-  private presentationReloadPending = false;
   private activationGeneration = 0;
   private latestActivationTarget: PresentedStreamId = '';
   private readonly inFlightActivationGenerations = new Set<number>();
@@ -448,7 +442,6 @@ export class ProgressBackend {
   ): Promise<DeleteStreamResult | undefined> {
     const wasActive = this.presentation.activeStream === stream;
     const activationGeneration = this.activationGeneration;
-    const storageGeneration = this.storageGeneration;
 
     // A host command (no caller incarnation) owns its removal barrier and
     // pending buffer through the applier, exactly like a `removeStream` fact.
@@ -481,9 +474,6 @@ export class ProgressBackend {
             return true;
           }),
         (preparationRetained) => {
-          if (storageGeneration !== this.storageGeneration) {
-            return Promise.resolve(undefined);
-          }
           if (preparationRetained) {
             return Promise.resolve('failed' as const);
           }
@@ -684,15 +674,10 @@ export class ProgressBackend {
 
   async deleteAllStreams(): Promise<void> {
     const activationGeneration = this.activationGeneration;
-    const storageGeneration = this.storageGeneration;
     const outcome = await this.enqueuePreparedStorageOperation(
       () => this.prepareAllStreamDeletions(),
-      (_prepared) =>
-        storageGeneration === this.storageGeneration
-          ? this.deleteAllStreamsNow()
-          : Promise.resolve(undefined),
+      () => this.deleteAllStreamsNow(),
     );
-    if (!outcome) return;
     const newerIntentControlsSelection =
       this.newerIntentControlsSelection(activationGeneration);
     try {
@@ -783,48 +768,6 @@ export class ProgressBackend {
     });
   }
 
-  /** Replace session stores and presentation caches after a workspace move. */
-  reloadAfterStorageRootChange(
-    transitionHooks?: WorkspaceStorageTransitionHooks,
-  ): Promise<void> {
-    const reload = async () => {
-      let sessionReloadError: unknown;
-      let storageRootReplaced = false;
-      try {
-        storageRootReplaced = transitionHooks
-          ? await this.session.reloadAfterStorageRootChange(transitionHooks)
-          : await this.session.reloadAfterStorageRootChange();
-      } catch (error) {
-        // A refused change touched nothing, so there is nothing to reload.
-        if (error instanceof StorageRootChangeRefusedError) throw error;
-        sessionReloadError = error;
-      }
-      if (sessionReloadError || storageRootReplaced) {
-        this.storageGeneration += 1;
-        this.presentationReloadPending = true;
-      }
-      if (!this.presentationReloadPending) return;
-      this.state.resetAfterStorageRootChange();
-      this.presentation.reload();
-      this.releasePresentationLeases();
-      this.webviewBridge.clearAll();
-      try {
-        await this.loadPresentationState();
-        this.presentationReloadPending = false;
-      } catch (presentationReloadError) {
-        if (sessionReloadError) {
-          throw new AggregateError(
-            [sessionReloadError, presentationReloadError],
-            'Failed to replace session storage and reload its presentation',
-          );
-        }
-        throw presentationReloadError;
-      }
-      if (sessionReloadError) throw sessionReloadError;
-    };
-    return this.enqueueStorageOperation(reload);
-  }
-
   private loadPresentationState(): Promise<void> {
     return this.state.load(this.stateOwnership);
   }
@@ -841,8 +784,8 @@ export class ProgressBackend {
 
   /**
    * Reserve queue order before stopping executions, but perform that
-   * preparation outside the queue. An earlier root replacement may be waiting
-   * for the same execution leases and must be able to observe their release.
+   * preparation outside the queue, so an earlier queued deletion waiting on
+   * the same execution leases can still observe their release.
    */
   private enqueuePreparedStorageOperation<T, P>(
     prepare: () => Promise<P>,

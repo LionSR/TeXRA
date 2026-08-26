@@ -195,8 +195,6 @@ export class ExecutionRegistry {
     ChildExecutionActivation
   >();
   private readonly lanes = new Map<string, ExecutionLane>();
-  /** While set, every new lifecycle step is refused with this error. */
-  private lifecycleHold: Error | undefined;
 
   constructor(options: ExecutionRegistryInit) {
     this.events = options.events;
@@ -251,53 +249,6 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Refuse new lifecycle steps (launches, resumes, deletes) until the
-   * returned release runs; each refused step rejects with `blocked()`. Throws
-   * `refusal(live)` instead, changing nothing, when any execution is live:
-   * session maintenance that would pull the storage out from under a run is
-   * refused, never queued behind it. Live means tracked, a generation not yet
-   * disposed, a lane step admitted but not yet finished, or a child loop whose
-   * activation is still reserved: every one of them writes under the current
-   * storage root.
-   */
-  holdLifecycle(
-    refusal: (liveExecutionIds: string[]) => Error,
-    blocked: () => Error,
-  ): () => void {
-    this.assertActive();
-    const live = this.liveExecutionIds();
-    if (live.length > 0) throw refusal(live);
-    if (this.lifecycleHold) {
-      throw new Error(
-        'A storage location change is already in progress. Retry once it finishes.',
-      );
-    }
-    const hold = blocked();
-    this.lifecycleHold = hold;
-    return () => {
-      if (this.lifecycleHold === hold) this.lifecycleHold = undefined;
-    };
-  }
-
-  private liveExecutionIds(): string[] {
-    const live = new Set<string>([
-      ...this.handles.keys(),
-      ...this.childActivations.keys(),
-    ]);
-    for (const [executionId, lane] of this.lanes) {
-      if (
-        lane.live !== undefined ||
-        lane.queue.size > 0 ||
-        lane.queue.pending > 0 ||
-        lane.waiting.size > 0
-      ) {
-        live.add(executionId);
-      }
-    }
-    return [...live];
-  }
-
-  /**
    * Whether `streamId` is running, resuming, or parked with a live flow in this
    * process: the states in which a resume must be refused outright rather than
    * queued on the execution lane, since it would otherwise start a fresh
@@ -346,7 +297,6 @@ export class ExecutionRegistry {
     },
   ): Promise<T> {
     this.assertActive();
-    if (this.lifecycleHold) return Promise.reject(this.lifecycleHold);
     const lane = this.laneFor(executionId);
     let settle!: (result: Promise<T>) => void;
     let refuse!: (error: Error) => void;
