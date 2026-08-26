@@ -87,8 +87,6 @@ export class ToolUseCycleNode extends BaseNode<
       messages: prepRes.messages,
       shouldStop: false,
       endTurn: false,
-      roundIndex: prepRes.runState.totalRounds,
-      roundResponseTimeMs: 0,
       systemPrompt: prepRes.systemPrompt,
       currentUserInstruction:
         typeof instruction === 'string' ? instruction : undefined,

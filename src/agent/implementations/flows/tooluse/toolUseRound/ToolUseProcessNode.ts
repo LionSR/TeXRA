@@ -50,13 +50,6 @@ function isToolResultMessage(message: ProviderMessage | undefined): boolean {
   );
 }
 
-/** Advance to the next round, resetting the per-round accumulators. */
-function advanceRound(shared: ToolUseRoundShared): void {
-  shared.roundIndex += 1;
-  shared.roundResponseTimeMs = 0;
-  shared.roundNormalizedUsage = undefined;
-}
-
 /** Result of exec() containing extracted data needed for post() side effects. */
 type ToolUseProcessExecResult =
   | { kind: 'skipped' }
@@ -191,19 +184,15 @@ export class ToolUseProcessNode extends BaseNode<
     workspace.serverToolContent.lastAssistantContent =
       execRes.lastAssistantContent ?? [];
 
-    if (shared.responseTimeMs != null) {
-      shared.roundResponseTimeMs += shared.responseTimeMs;
-    }
-    if (execRes.normalizedUsage) {
-      shared.roundNormalizedUsage = execRes.normalizedUsage;
-    }
-
     recordCycleMetrics(
       run,
-      shared.roundResponseTimeMs,
-      shared.roundNormalizedUsage ?? null,
+      shared.responseTimeMs ?? 0,
+      execRes.normalizedUsage ?? null,
     );
     await onRoundFinalized(run);
+    // The only increment site for this counter, and it must stay after both
+    // debug-file reads (ToolUseRoundFlow, ToolUseRoundPrepNode) — they name
+    // this round's files by it.
     run.totalRounds += 1;
 
     shared.stopReason = execRes.stopReason;
@@ -228,7 +217,6 @@ export class ToolUseProcessNode extends BaseNode<
         shared.blankToolResultContinuationMessageIndex = lastMessageIndex;
         workspace.resetServerToolContent();
         workspace.resetReasoning();
-        advanceRound(shared);
         return FlowTransition.CONTINUE;
       }
 
@@ -265,7 +253,6 @@ export class ToolUseProcessNode extends BaseNode<
         }
         shared.finalToolAttempted = true;
         shared.toolCalls = undefined;
-        advanceRound(shared);
         return FlowTransition.CONTINUE;
       }
 
@@ -277,7 +264,6 @@ export class ToolUseProcessNode extends BaseNode<
 
     shared.toolCalls = execRes.toolCalls;
     shared.text = execRes.text;
-    advanceRound(shared);
     return FlowTransition.DEFAULT;
   }
 }
