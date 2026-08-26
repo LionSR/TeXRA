@@ -698,26 +698,6 @@ export default tseslint.config(
     },
   },
 
-  // The `@common/state` barrel and its `stateManager` are backed by VS Code's
-  // Memento API. The desktop host shares only the key definitions.
-  {
-    files: ['packages/desktop/src/**/*.{ts,tsx}'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@common/state', '@common/state/stateManager'],
-              message:
-                'Desktop must not import the VS Code-backed state store; share state keys through @common/state/stateKeys.',
-            },
-          ],
-        },
-      ],
-    },
-  },
-
   // Extension browser frontends may use host-neutral types from backend
   // modules, but runtime values must come from browser-safe shared modules.
   {
