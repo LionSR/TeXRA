@@ -1,12 +1,10 @@
 // Node imports
 import { EventEmitter } from 'node:events';
-import { readFileSync } from 'node:fs';
-
-// Third-party imports
-import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { handoffDesktopWorkspaceRelaunch } from '@desktop/main/desktopWorkspaceRelaunch';
+import { withWorkspacePathArg } from '@desktop/shared/workspacePath';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 // Local imports - desktop test paths
@@ -57,39 +55,6 @@ function removeAddedListeners(
       process.removeListener(signal, listener);
     }
   }
-}
-
-function hasSupervisedWorkspaceRelaunchHandoff(source: string): boolean {
-  const sourceFile = ts.createSourceFile(
-    'index.ts',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  let found = false;
-
-  function visit(node: ts.Node): void {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      node.expression.expression.text === 'process' &&
-      node.expression.name.text === 'send' &&
-      node.arguments.length === 1
-    ) {
-      const [args] = node.arguments;
-      found ||=
-        args !== undefined &&
-        ts.isPropertyAccessExpression(args) &&
-        ts.isIdentifier(args.expression) &&
-        args.expression.text === 'workspaceRelaunch' &&
-        args.name.text === 'args';
-    }
-    ts.forEachChild(node, visit);
-  }
-
-  visit(sourceFile);
-  return found;
 }
 
 afterEach(() => {
@@ -238,13 +203,20 @@ describe('desktop development launcher', () => {
     expect(children.every((child) => !child.killed)).toBe(true);
   });
 
-  it('hands workspace relaunch arguments to the supervised development process', () => {
-    const desktopMain = readFileSync(
-      repoPath('packages/desktop/src/main/index.ts'),
-      'utf8',
-    );
+  it('hands the exact workspace relaunch arguments to the supervised development process', () => {
+    const args = withWorkspacePathArg(['/desktop'], '/tmp/new-paper');
+    const send = vi.fn();
+    const relaunch = vi.fn();
 
-    expect(hasSupervisedWorkspaceRelaunchHandoff(desktopMain)).toBe(true);
+    handoffDesktopWorkspaceRelaunch(args, {
+      supervised: true,
+      send,
+      relaunch,
+    });
+
+    expect(send).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledWith(args);
+    expect(relaunch).not.toHaveBeenCalled();
   });
 
   it('launches Electron with the exact valid IPC relaunch arguments', async () => {

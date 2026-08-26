@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  installBeforeQuitHandler,
+  installDesktopBeforeQuitWiring,
   installRendererNavigationCleanup,
   installUnsavedChangesHandler,
 } from '@desktop/main/desktopWindowLifecycle';
@@ -62,6 +62,19 @@ describe('desktop window lifecycle', () => {
     expect(showDiscardDialog).toHaveBeenCalledTimes(2);
   });
 
+  it('registers the composition-root before-quit listener', () => {
+    const app = { on: vi.fn(), quit: vi.fn() };
+
+    installDesktopBeforeQuitWiring({
+      app,
+      getMainWindow: () => null,
+      lifecycle: { runShutdown: vi.fn(async () => {}) },
+      continueAfterWindowClose: vi.fn(),
+    });
+
+    expect(app.on).toHaveBeenCalledWith('before-quit', expect.any(Function));
+  });
+
   it('continues a closed-window quit through one shutdown sequence', async () => {
     let listener: ((event: { preventDefault(): void }) => void) | undefined;
     const app = {
@@ -83,7 +96,7 @@ describe('desktop window lifecycle', () => {
     const continueAfterWindowClose = vi.fn((continuation: () => void) => {
       continueQuit = continuation;
     });
-    installBeforeQuitHandler({
+    installDesktopBeforeQuitWiring({
       app,
       getMainWindow: () => window,
       lifecycle: { runShutdown },

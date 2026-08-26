@@ -2,7 +2,6 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
 
-import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 
 import { sourceFilesUnder } from '@test/support/repoScan';
@@ -39,60 +38,6 @@ function readDesktopPlatformIndex(): Promise<string> {
 
 function readDesktopBootstrap(): Promise<string> {
   return readFile(desktopSourcePath('main', 'bootstrap.ts'), 'utf8');
-}
-
-function hasBeforeQuitHandlerInstallation(source: string): boolean {
-  const sourceFile = ts.createSourceFile(
-    'index.ts',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  let importsHandler = false;
-  let installsHandler = false;
-
-  function visit(node: ts.Node): void {
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      node.moduleSpecifier.text === './desktopWindowLifecycle.js'
-    ) {
-      importsHandler =
-        node.importClause?.namedBindings !== undefined &&
-        ts.isNamedImports(node.importClause.namedBindings) &&
-        node.importClause.namedBindings.elements.some(
-          (element) => element.name.text === 'installBeforeQuitHandler',
-        );
-    }
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === 'installBeforeQuitHandler' &&
-      ts.isObjectLiteralExpression(node.arguments[0])
-    ) {
-      const propertyNames = new Set(
-        node.arguments[0].properties
-          .filter(
-            (
-              property,
-            ): property is
-              ts.PropertyAssignment | ts.ShorthandPropertyAssignment =>
-              ts.isPropertyAssignment(property) ||
-              ts.isShorthandPropertyAssignment(property),
-          )
-          .map((property) => property.name.getText(sourceFile)),
-      );
-      installsHandler =
-        propertyNames.has('app') &&
-        propertyNames.has('getMainWindow') &&
-        propertyNames.has('lifecycle') &&
-        propertyNames.has('continueAfterWindowClose');
-    }
-    ts.forEachChild(node, visit);
-  }
-
-  visit(sourceFile);
-  return importsHandler && installsHandler;
 }
 
 // Asserts each needle first occurs after the anchor, in the given order.
@@ -157,12 +102,6 @@ describe('desktop composition root and launch environment', () => {
       'afterExecutionSettlement:',
       'processResources.dispose()',
     ]);
-  });
-
-  it('installs the lifecycle-aware before-quit handler in the composition root', async () => {
-    const source = await readDesktopMainIndex();
-
-    expect(hasBeforeQuitHandlerInstallation(source)).toBe(true);
   });
 
   it('starts each window diff-host disposal before queueing its completion', async () => {

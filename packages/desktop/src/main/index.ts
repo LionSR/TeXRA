@@ -70,8 +70,9 @@ import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { createDesktopBrowserViews } from './desktopBrowserViews.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
+import { handoffDesktopWorkspaceRelaunch } from './desktopWorkspaceRelaunch.js';
 import {
-  installBeforeQuitHandler,
+  installDesktopBeforeQuitWiring,
   installRendererNavigationCleanup,
   installUnsavedChangesHandler,
 } from './desktopWindowLifecycle.js';
@@ -1177,14 +1178,14 @@ function createWindow(options: {
         }
         // The development supervisor owns Vite and the Electron child. Let it
         // replace the child so the new process keeps a live renderer URL.
-        if (
-          process.env.TEXRA_DESKTOP_DEV_SUPERVISED === '1' &&
-          typeof process.send === 'function'
-        ) {
-          process.send(workspaceRelaunch.args);
-        } else {
-          app.relaunch({ args: workspaceRelaunch.args });
-        }
+        handoffDesktopWorkspaceRelaunch(workspaceRelaunch.args, {
+          supervised: process.env.TEXRA_DESKTOP_DEV_SUPERVISED === '1',
+          send:
+            typeof process.send === 'function'
+              ? (args) => process.send?.(args)
+              : undefined,
+          relaunch: (args) => app.relaunch({ args }),
+        });
         // Use the lifecycle-aware path so the process session drains before
         // Electron starts the replacement process.
         app.quit();
@@ -1296,7 +1297,7 @@ if (protocolLifecycle.shouldContinue) {
         // editor can veto that close and remain fully operational. Once the
         // window really closes, its handler calls app.quit() again and this
         // listener proceeds with the ordinary shutdown chain.
-        installBeforeQuitHandler({
+        installDesktopBeforeQuitWiring({
           app,
           getMainWindow: () => mainWindow,
           lifecycle,

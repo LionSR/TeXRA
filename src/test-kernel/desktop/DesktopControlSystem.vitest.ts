@@ -2,8 +2,10 @@
 import { readFileSync } from 'node:fs';
 
 // Third-party imports
-import ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Local imports
+import { installUnsavedCloseVeto } from '@desktop/renderer/desktopUnsavedClose';
 
 // Local imports - desktop test paths
 import { repoPath } from './desktopTestPaths.ts';
@@ -12,73 +14,18 @@ function read(relativePath: string): string {
   return readFileSync(repoPath(relativePath), 'utf8');
 }
 
-function callsMethod(
-  node: ts.Node,
-  receiver: string,
-  method: string,
-): node is ts.CallExpression {
-  return (
-    ts.isCallExpression(node) &&
-    ts.isPropertyAccessExpression(node.expression) &&
-    ts.isIdentifier(node.expression.expression) &&
-    node.expression.expression.text === receiver &&
-    node.expression.name.text === method
-  );
-}
-
-function hasRendererUnsavedCloseVeto(source: string): boolean {
-  const sourceFile = ts.createSourceFile(
-    'main.ts',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  let found = false;
-
-  function visit(node: ts.Node): void {
-    if (
-      callsMethod(node, 'window', 'addEventListener') &&
-      ts.isStringLiteral(node.arguments[0]) &&
-      node.arguments[0].text === 'beforeunload'
-    ) {
-      const handler = node.arguments[1];
-      if (
-        handler &&
-        (ts.isArrowFunction(handler) || ts.isFunctionExpression(handler)) &&
-        ts.isIdentifier(handler.parameters[0]?.name) &&
-        ts.isBlock(handler.body)
-      ) {
-        const eventName = handler.parameters[0].name.text;
-        const guard = handler.body.statements.find(ts.isIfStatement);
-        const hasDirtyGuard =
-          guard !== undefined &&
-          ts.isPrefixUnaryExpression(guard.expression) &&
-          guard.expression.operator === ts.SyntaxKind.ExclamationToken &&
-          callsMethod(
-            guard.expression.operand,
-            'editorPane',
-            'hasUnsavedChanges',
-          ) &&
-          ts.isReturnStatement(guard.thenStatement);
-        const preventsDefault = handler.body.statements.some((statement) => {
-          let callsPreventDefault = false;
-          function findPreventDefault(descendant: ts.Node): void {
-            if (callsMethod(descendant, eventName, 'preventDefault')) {
-              callsPreventDefault = true;
-            }
-            ts.forEachChild(descendant, findPreventDefault);
-          }
-          findPreventDefault(statement);
-          return callsPreventDefault;
-        });
-        found ||= hasDirtyGuard && preventsDefault;
-      }
-    }
-    ts.forEachChild(node, visit);
-  }
-
-  visit(sourceFile);
-  return found;
+function createBeforeUnloadWindow() {
+  let listener:
+    | ((event: { preventDefault(): void; returnValue: string }) => void)
+    | undefined;
+  return {
+    addEventListener: vi.fn((_type, nextListener) => {
+      listener = nextListener;
+    }),
+    dispatch(event: { preventDefault(): void; returnValue: string }) {
+      listener?.(event);
+    },
+  };
 }
 
 describe('desktop control system', () => {
@@ -98,10 +45,20 @@ describe('desktop control system', () => {
     expect(browserViews).toContain('setPermissionCheckHandler');
   });
 
-  it('vetoes renderer closes while the editor has unsaved changes', () => {
-    const renderer = read('packages/desktop/src/renderer/main.ts');
+  it('vetoes renderer closes only while the editor has unsaved changes', () => {
+    const dirtyWindow = createBeforeUnloadWindow();
+    const dirtyEvent = { preventDefault: vi.fn(), returnValue: 'unchanged' };
+    installUnsavedCloseVeto(dirtyWindow, { hasUnsavedChanges: () => true });
+    dirtyWindow.dispatch(dirtyEvent);
+    expect(dirtyEvent.preventDefault).toHaveBeenCalledOnce();
+    expect(dirtyEvent.returnValue).toBe('');
 
-    expect(hasRendererUnsavedCloseVeto(renderer)).toBe(true);
+    const cleanWindow = createBeforeUnloadWindow();
+    const cleanEvent = { preventDefault: vi.fn(), returnValue: 'unchanged' };
+    installUnsavedCloseVeto(cleanWindow, { hasUnsavedChanges: () => false });
+    cleanWindow.dispatch(cleanEvent);
+    expect(cleanEvent.preventDefault).not.toHaveBeenCalled();
+    expect(cleanEvent.returnValue).toBe('unchanged');
   });
 
   it('keeps editor dirtiness out of desktop IPC', () => {
