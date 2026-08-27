@@ -10,7 +10,11 @@ import {
 } from '@shared/schemas';
 
 interface TeamRosterAgentCatalog {
-  getAgents(category: AgentCategory): { name: string; source: AgentSource }[];
+  getAgents(category: AgentCategory): {
+    name: string;
+    source: AgentSource;
+    hidden?: boolean;
+  }[];
 }
 
 export interface TeamRosterResolution {
@@ -85,7 +89,7 @@ function resolveAgentKeys(
   category: AgentCategory,
   names: string[],
 ): { keys: string[]; nameSlots: string[] } {
-  const entries = state.getAgents(category);
+  const entries = state.getAgents(category).filter((entry) => !entry.hidden);
   const keys: string[] = [];
   const nameSlots: string[] = [];
   for (const name of names) {

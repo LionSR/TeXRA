@@ -32,9 +32,17 @@ import { writeTextStderr } from './logSinks';
  * is ignored rather than auto-selected. An explicit `--agent` override bypasses
  * this and is honored as-is.
  */
-function usableConfiguredAgent(value: string | undefined): string | undefined {
+function usableConfiguredAgent(
+  value: string | undefined,
+  visibleToolUseAgents?: readonly { readonly name: string }[],
+): string | undefined {
   const trimmed = value?.trim();
-  return trimmed && isImplicitDefaultEligible(trimmed) ? trimmed : undefined;
+  return trimmed &&
+    isImplicitDefaultEligible(trimmed) &&
+    (!visibleToolUseAgents ||
+      visibleToolUseAgents.some((agent) => agent.name === trimmed))
+    ? trimmed
+    : undefined;
 }
 
 interface ChatDefaults {
@@ -63,9 +71,15 @@ interface PartialDefaults {
   readonly model?: string;
 }
 
-function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
+function defaultsFromConfigValues(
+  values: CliConfigValues,
+  visibleToolUseAgents?: readonly { readonly name: string }[],
+): PartialDefaults {
   return {
-    agent: usableConfiguredAgent(resolveConfiguredAgent(values, 'chat')),
+    agent: usableConfiguredAgent(
+      resolveConfiguredAgent(values, 'chat'),
+      visibleToolUseAgents,
+    ),
     model: commandConfigModel(values, 'chat'),
   };
 }
@@ -94,7 +108,10 @@ export function __resetUserConfigWarningDedupeForTests(): void {
   previousUserConfigWarnings = new Set();
 }
 
-async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
+async function loadUserDefaults(
+  quiet: boolean,
+  visibleToolUseAgents?: readonly { readonly name: string }[],
+): Promise<PartialDefaults> {
   // A missing user config means no user defaults (parseCliConfigValues maps
   // the undefined fallback to {}). A read failure — corrupt JSON, a
   // permission error — a top-level shape that isn't an object, and an
@@ -140,7 +157,7 @@ async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
   });
   for (const warning of warnings) warn(warning);
   previousUserConfigWarnings = thisCallsWarnings;
-  return defaultsFromConfigValues(values);
+  return defaultsFromConfigValues(values, visibleToolUseAgents);
 }
 
 async function loadHistoryDefaults(): Promise<PartialDefaults> {
@@ -241,7 +258,10 @@ export async function resolveChatDefaults(
 ): Promise<ChatDefaults> {
   const overrideAgent = init.agentOverride?.trim();
   const overrideModel = init.modelOverride?.trim();
-  const envAgent = usableConfiguredAgent(init.envAgent);
+  const envAgent = usableConfiguredAgent(
+    init.envAgent,
+    init.visibleToolUseAgents,
+  );
   const envModel = init.envModel?.trim();
   let agent = overrideAgent || envAgent;
   let agentSource = sourceForOverride(overrideAgent, envAgent);
@@ -258,9 +278,9 @@ export async function resolveChatDefaults(
     // context so startup does not depend on platform initialization.
     [workspace, user, history] = await Promise.all([
       loadWorkspaceCliConfig(init.cwd).then((loaded) =>
-        defaultsFromConfigValues(loaded.values),
+        defaultsFromConfigValues(loaded.values, init.visibleToolUseAgents),
       ),
-      loadUserDefaults(init.quiet ?? false),
+      loadUserDefaults(init.quiet ?? false, init.visibleToolUseAgents),
       loadHistoryDefaults(),
     ]);
     const tiers: ReadonlyArray<
