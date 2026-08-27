@@ -28,6 +28,7 @@ export type PresentedStreamId = StreamTabId | '';
 export type SessionRenderSlice =
   | 'files'
   | 'compileFailures'
+  | 'missingOutputs'
   | 'queuedFollowUps'
   | 'parentStreamId'
   | 'contextState'
@@ -86,8 +87,6 @@ export interface SessionRendererPort {
   /** The stream's child-activity roster changed; hosts re-read
    *  `SessionState.getStreamState(streamId).subagents`. */
   onBadgesChanged(streamId: StreamTabId): void;
-
-  onMissingOutputsChanged(streamId: StreamTabId): void;
 
   onRunUsageChanged(
     streamId: StreamTabId,

@@ -166,6 +166,16 @@ export class LitSessionRenderer implements SessionRendererPort {
             reset: true,
           }),
         );
+      case 'missingOutputs':
+        return this.sendIfActive(streamId, () => {
+          this.sendMessage({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
+            stream: streamId,
+            rounds: nonEmptyRounds(
+              this.state.snapshots.getMissingOutputs(streamId),
+            ),
+          });
+        });
       case 'queuedFollowUps':
         return this.sendIfActive(streamId, () =>
           this.sendMessage({
@@ -212,18 +222,6 @@ export class LitSessionRenderer implements SessionRendererPort {
 
   onBadgesChanged(streamId: StreamTabId): void {
     this.updateStreamMetadata(streamId);
-  }
-
-  onMissingOutputsChanged(streamId: StreamTabId): void {
-    this.sendIfActive(streamId, () => {
-      this.sendMessage({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
-        stream: streamId,
-        rounds: nonEmptyRounds(
-          this.state.snapshots.getMissingOutputs(streamId),
-        ),
-      });
-    });
   }
 
   onRunUsageChanged(
