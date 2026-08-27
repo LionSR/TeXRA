@@ -7,8 +7,13 @@ const mocks = vi.hoisted(() => ({
   copyFile: vi.fn(async () => undefined),
   ensureDir: vi.fn(async () => undefined),
   fileExists: vi.fn(async () => false),
+  applySettingsTeamRoster:
+    vi.fn<
+      typeof import('@controllers/settingsView/SettingsTeamRosterController').applySettingsTeamRoster
+    >(),
   getAgent: vi.fn(() => ({ path: '/custom/my-agent.yaml' })),
   getSourceDirectory: vi.fn(async () => undefined as string | undefined),
+  logWarn: vi.fn(),
   refreshAfterAgentMutation: vi.fn(async () => undefined),
   showLoggedMessage: vi.fn(async () => ''),
   showInformationMessage: vi.fn(),
@@ -47,6 +52,9 @@ vi.mock('@controllers/settingsView/SettingsAgentControllerFactory', () => ({
     roster: {},
   }),
 }));
+vi.mock('@controllers/settingsView/SettingsTeamRosterController', () => ({
+  applySettingsTeamRoster: mocks.applySettingsTeamRoster,
+}));
 vi.mock(
   '@controllers/settingsView/SettingsRemoteAgentPromptController',
   () => ({
@@ -54,7 +62,8 @@ vi.mock(
   }),
 );
 vi.mock('@frontend/auth/agentCatalogRefreshScope', () => ({
-  withAgentCatalogAuthRefreshDeferred: vi.fn(),
+  withAgentCatalogAuthRefreshDeferred: async (action: () => Promise<void>) =>
+    action(),
 }));
 vi.mock('@frontend/agents/AgentDirectoryManager', () => ({
   agentDirectories: {
@@ -96,10 +105,15 @@ function createHandlers(): AgentHandlers {
   return new AgentHandlers(
     {
       channel: 'test',
-      extensionContext: {},
-      logger: { debug: vi.fn(), error: vi.fn(), warn: vi.fn() },
+      extensionContext: {} as import('vscode').ExtensionContext,
+      log: {
+        debug: vi.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        warn: mocks.logWarn,
+      },
       withActiveWebview: vi.fn(),
-    } as never,
+    },
     mocks.refreshAfterAgentMutation,
   );
 }
@@ -115,8 +129,32 @@ const CUSTOMIZE_MY_AGENT = {
   agentName: 'my-agent',
 } as const;
 
+const APPLY_AGENT_MODE_PRESET = {
+  command: 'applyAgentModePreset',
+  presetId: 'my-preset',
+} as const;
+
 describe('AgentHandlers custom-agent file actions', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('logs notification failures after applying a team preset', async () => {
+    mocks.showLoggedMessage.mockRejectedValueOnce(
+      new Error('notification unavailable'),
+    );
+    mocks.applySettingsTeamRoster.mockImplementationOnce(
+      async (_presetId, { presentation }) => {
+        await presentation.showErrorMessage('Unable to apply team');
+      },
+    );
+
+    await createHandlers().handleApplyAgentModePreset(APPLY_AGENT_MODE_PRESET);
+
+    await vi.waitFor(() =>
+      expect(mocks.logWarn).toHaveBeenCalledWith(
+        'Error notification failed after handoff: notification unavailable',
+      ),
+    );
+  });
 
   it('coalesces repeated requests while the host confirmation is pending', async () => {
     let resolveConfirmation!: (choice: string | undefined) => void;
