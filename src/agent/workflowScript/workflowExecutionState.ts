@@ -20,7 +20,10 @@ interface WorkflowCallDefinition {
   readonly id: string;
   readonly label: string;
   readonly phase?: string;
+  readonly kind: WorkflowExecutionCall['kind'];
   readonly agent?: string;
+  /** Model the script declared for this call; the host may still substitute. */
+  readonly model?: string;
   readonly files: WorkflowExecutionCall['files'];
 }
 
@@ -198,8 +201,11 @@ export class WorkflowExecutionState {
     const canonical = {
       label: definition.label,
       stageId: stageIndex < 0 ? undefined : stageIdFor(stageIndex),
+      issued: true as const,
+      kind: definition.kind,
       files: definition.files,
       ...(definition.agent !== undefined && { agent: definition.agent }),
+      ...(definition.model !== undefined && { model: definition.model }),
     };
     if (!call) {
       call = {
@@ -256,7 +262,13 @@ export class WorkflowExecutionState {
     });
   }
 
-  queueCall(id: string): void {
+  /**
+   * Queue a call for a concurrency slot. Live-attempt facts of a prior attempt
+   * are dropped — a stale resolved model must not describe the attempt about
+   * to start — while the model the script itself declared stays visible
+   * until the host reports what it resolved.
+   */
+  queueCall(id: string, declared: { readonly model?: string } = {}): void {
     const call = this.#call(id);
     const queuedAt = now();
     // Interactive retry re-queues a still-live call: keep the logical start so
@@ -269,7 +281,7 @@ export class WorkflowExecutionState {
       status: WORKFLOW_CALL_STATUS.QUEUED,
       childExecutionId: undefined,
       childStreamId: undefined,
-      model: undefined,
+      model: declared.model,
       settledBySweep: undefined,
       blockedReason: undefined,
       error: undefined,
@@ -505,6 +517,9 @@ function resetRecoveredLiveFields(
 ) {
   return (
     !reusable && {
+      // Not yet issued by this attempt: the script re-issues (and re-stamps)
+      // every call it reaches.
+      issued: undefined,
       childExecutionId: undefined,
       childStreamId: undefined,
       model: undefined,

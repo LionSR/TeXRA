@@ -14,6 +14,10 @@ import {
   type AgentProposalPermission,
 } from '@shared/schemas';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+import {
+  WORKFLOW_SCRIPT_PROPOSAL_COPY,
+  workflowScriptPlanSummary,
+} from '@shared/copy/workflowScriptProposal';
 
 import { ConfirmCard } from './ConfirmCard';
 import {
@@ -56,11 +60,30 @@ export function agentProposalMetadataRows({
   ) {
     const workflow = payload.workflowScript;
     return (
-      3 +
       wrappedRows(
-        `${workflow.name} · ${workflow.tasks.length} tasks · ${workflow.phases.length} phases`,
+        `${workflow.name} · ${workflowScriptPlanSummary(workflow)}`,
         width,
       ) +
+      wrappedRows(
+        WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(payload.agent, payload.model),
+        width,
+      ) +
+      wrappedRows(WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning, width) +
+      wrappedRows(
+        workflow.tasks.length > 0
+          ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
+          : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote,
+        width,
+      ) +
+      (fileGroups.length > 0
+        ? 1 +
+          fileGroups.reduce(
+            (rows, group) =>
+              rows +
+              wrappedRows(fileGroupText(group.label, group.files), width),
+            0,
+          )
+        : 0) +
       wrappedRows(`Script: ${workflow.scriptPath}`, width)
     );
   }
@@ -144,16 +167,36 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
             <Text>
               <Text bold>{workflowScript.name}</Text>
               {' · '}
-              {workflowScript.tasks.length} tasks ·{' '}
-              {workflowScript.phases.length} phases
+              {workflowScriptPlanSummary(workflowScript)}
             </Text>
             <Text>
-              <Text bold>Default: </Text>
-              {props.payload.agent} ({props.payload.model})
+              {WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
+                props.payload.agent,
+                props.payload.model,
+              )}
             </Text>
             <Text color="yellow">
-              May run tasks concurrently and incur high model cost.
+              {WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
             </Text>
+            <Text dimColor>
+              {workflowScript.tasks.length > 0
+                ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
+                : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote}
+            </Text>
+            {fileGroups.length > 0 ? (
+              <Box flexDirection="column">
+                <Text dimColor>
+                  {WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading}:
+                </Text>
+                {fileGroups.map((group) => (
+                  <FileGroup
+                    key={group.label}
+                    label={group.label}
+                    files={group.files}
+                  />
+                ))}
+              </Box>
+            ) : null}
             <Text dimColor>Script: {workflowScript.scriptPath}</Text>
           </>
         ) : (

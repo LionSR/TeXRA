@@ -3,11 +3,13 @@ import type {
   HostUserQuestionRequest,
 } from '@agent/runtime';
 import {
+  AgentCategory,
   agentProposalCategoryLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
   type RetryPermission,
 } from '@shared/schemas';
+import { workflowScriptPlanSummary } from '@shared/copy/workflowScriptProposal';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 
@@ -128,6 +130,13 @@ function agentProposalApprovalSummary(
       proposal.agentCategory,
     )})`,
     `Model: ${proposal.model}`,
+    ...(proposal.agentCategory === AgentCategory.Workflow &&
+    proposal.workflowScript
+      ? [
+          `Multi-agent workflow: ${proposal.workflowScript.name} · ${workflowScriptPlanSummary(proposal.workflowScript)}`,
+          `Script: ${proposal.workflowScript.scriptPath}`,
+        ]
+      : []),
     ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
     ...getProposalFileGroups(proposal).map((group) =>
       boundFileGroups

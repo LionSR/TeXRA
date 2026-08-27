@@ -30,7 +30,9 @@ import {
   type WorkflowControlAction,
 } from '@shared/schemas';
 import {
+  formatWorkflowCallFiles,
   formatWorkflowPhaseHeading,
+  WORKFLOW_CALL_KIND_LABEL,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
   type WorkflowPhaseHeading,
@@ -251,24 +253,27 @@ function workflowTaskMetadata(
   const terminal = isTerminalWorkflowCallProgress(call);
   const usage = streamPreferredUsage(streamId, child);
   let elapsed: string | undefined;
-  let model: string | undefined;
   let cost: number | undefined;
+  // The call's own record names the model the host resolved for it (or the
+  // script declared); the stream config only fills in for older records.
+  const model = call.model ?? configModel;
   if (terminal) {
     if ('durationMs' in call && call.durationMs !== undefined) {
       elapsed = formatCompactDuration(call.durationMs);
     }
-    model = ('model' in call ? call.model : undefined) ?? configModel;
     cost =
       ('totalCostUsd' in call ? call.totalCostUsd : undefined) ?? usage?.cost;
   } else {
     if (child?.runStartedAt !== undefined) {
       elapsed = formatCompactDuration(nowMs - child.runStartedAt);
     }
-    model = configModel;
     cost = usage?.cost;
   }
   const parts = [
+    call.kind === undefined ? undefined : WORKFLOW_CALL_KIND_LABEL[call.kind],
+    call.agent,
     model ? getRuntimeModelLabel(model) : undefined,
+    formatWorkflowCallFiles(call.files),
     elapsed,
     usage && usage.outputTokens > 0
       ? `${TOKENS_GENERATED}${formatCompactTokenCount(usage.outputTokens)}`

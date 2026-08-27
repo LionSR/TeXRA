@@ -200,11 +200,15 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     );
 
     expect(summary?.textContent).toContain('review-team');
-    expect(summary?.textContent).toContain('2 tasks · 2 phases');
-    expect(summary?.textContent).toContain('Review');
+    expect(summary?.textContent).toContain('2 phases · 2 declared items');
+    expect(summary?.textContent).not.toContain('tasks');
     expect(element.shadowRoot?.textContent).toContain('Multi-agent workflow');
-    expect(element.shadowRoot?.textContent).toContain('Default agent: writer');
+    expect(element.shadowRoot?.textContent).toContain(
+      'Defaults: writer (sonnet)',
+    );
     expect(element.shadowRoot?.textContent).toContain('high model cost');
+    expect(details?.textContent).toContain('plan labels');
+    expect(details?.textContent).toContain('Files available to the script');
     expect(details?.hasAttribute('open')).toBe(false);
     expect(
       element.shadowRoot?.querySelector('.proposal-agent-dropdown'),

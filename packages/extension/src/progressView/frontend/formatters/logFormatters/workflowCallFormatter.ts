@@ -13,7 +13,11 @@ import { assertNever } from '@utils/core';
 
 function statusIcon(call: WorkflowCallProgress): TemplateResult {
   switch (call.status) {
+    case 'declared':
+      return waIcon('circle');
     case 'planned':
+    case 'queued':
+      return waIcon('circle-dot');
     case 'running':
       return waIcon(terminalStatusIcon('running'));
     case 'completed':
@@ -29,7 +33,7 @@ function statusIcon(call: WorkflowCallProgress): TemplateResult {
   }
 }
 
-function terminalMetadata(
+function callMetadata(
   parts: readonly string[],
 ): TemplateResult | typeof nothing {
   return parts.length > 0
@@ -70,7 +74,7 @@ export function formatWorkflowCallTemplate(
       <span class="workflow-task-icon">${statusIcon(call)}</span>
       <span class="workflow-task-body">
         <span class="workflow-task-title">${call.label}</span>
-        ${terminalMetadata(row.metadataParts)}
+        ${callMetadata(row.metadataParts)}
         ${
           detail
             ? html`<span
