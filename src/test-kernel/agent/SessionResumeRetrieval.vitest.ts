@@ -1416,6 +1416,36 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
   });
 
+  it('preserves a reused checkpoint when cancellation lands during attachment', async () => {
+    const executionId = 'abc-reused-cancel-attachment' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-reused-cancel-attachment' as StreamTabId;
+    const storedShared = activeHandlerShared();
+    await writeFlowRecord(executionId, storedShared);
+    const session = createTestSession();
+    const releaseSpy = vi.spyOn(session.followUps, 'release');
+    const dispositions: Array<'preserve' | 'delete'> = [];
+
+    try {
+      const result = await runPersistedFlow(executionId, streamId, undefined, {
+        attachment: { attach: (flowContext) => flowContext.interrupt() },
+        session,
+        onFlowRecordDisposition: (value) => dispositions.push(value),
+      });
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(dispositions).toEqual(['preserve']);
+      expect(releaseSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ streamId, kind: 'flow' }),
+        'terminal',
+      );
+      expect(await readFlowRecord(executionId)).toMatchObject({
+        shared: storedShared,
+      });
+    } finally {
+      releaseSpy.mockRestore();
+    }
+  });
+
   it('keeps a fresh launch cancelled during setup harmless', async () => {
     const executionId = 'abc-fresh-cancel-setup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-fresh-cancel-setup' as StreamTabId;
@@ -1436,7 +1466,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(readSpy).not.toHaveBeenCalled();
       expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
-      expect(dispositions).toEqual(['delete']);
+      expect(dispositions).toEqual(['preserve']);
       expect(releaseSpy).toHaveBeenCalledWith(
         expect.objectContaining({ streamId, kind: 'flow' }),
         'terminal',

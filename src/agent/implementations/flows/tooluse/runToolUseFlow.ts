@@ -378,6 +378,7 @@ export async function runToolUseFlow(
     'cancellation' | 'initial-read-failure' | undefined;
   let persistenceRecoveryPending = false;
   let persistedFlowRecordExists = false;
+  let startupCancellationBeforeRecovery = false;
   let flowRunStarted = false;
   let primaryFailure: { readonly error: unknown } | undefined;
   let earlyResult: RunToolUseFlowResult | undefined;
@@ -431,7 +432,11 @@ export async function runToolUseFlow(
     // A host can hand off a cancellation synchronously during setup. Observe
     // it before touching the persisted resume record.
     if (signal.aborted) {
-      if (input.resume) resumeStartupPreservation = 'cancellation';
+      if (input.resume) {
+        resumeStartupPreservation = 'cancellation';
+      } else {
+        startupCancellationBeforeRecovery = true;
+      }
       earlyResult = { outcome };
       throw startupInterruption;
     }
@@ -609,10 +614,15 @@ export async function runToolUseFlow(
         'Flow record preserved after persistence recovery failure';
     } else if (outcome === STREAM_PHASE.WAITING) {
       preservationReason = 'Flow record preserved for native subagent WAITING';
-    } else if (signal.aborted && !flowRunStarted && persistedFlowRecordExists) {
+    } else if (
+      signal.aborted &&
+      !flowRunStarted &&
+      (persistedFlowRecordExists || startupCancellationBeforeRecovery)
+    ) {
       // Startup cancellation can happen before this invocation owns or starts
-      // the flow. Preserve a checkpoint only when the recovery read confirmed
-      // that this executionId was reused (#11430).
+      // the flow. Preserve a reused checkpoint, including when cancellation
+      // arrives before the recovery read can establish whether one exists
+      // (#11430).
       preservationReason = 'Flow record preserved after startup interruption';
     } else if (flowRunStarted && signal.aborted) {
       preservationReason = 'Flow record preserved after user interruption';
@@ -642,7 +652,9 @@ export async function runToolUseFlow(
     }
     const preserveFlowRecord = preservationReason !== undefined;
     const preserveFollowUpQueue =
-      preserveFlowRecord && !persistenceRecoveryPending;
+      preserveFlowRecord &&
+      !persistenceRecoveryPending &&
+      !startupCancellationBeforeRecovery;
 
     if (preservationReason) logger.debug(preservationReason);
     attemptTeardown('reporting flow-record disposition', () =>
