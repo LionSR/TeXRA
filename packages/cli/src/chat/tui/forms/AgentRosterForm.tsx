@@ -24,6 +24,7 @@ import { platform } from '@platform/platform';
 import {
   AGENT_MODE_PRESETS,
   agentKeyOf,
+  agentMatchesIdentifier,
   byCategory,
   STARTER_AGENT_MODE_PRESET,
   type AgentCategory,
@@ -93,7 +94,9 @@ function selectedAgentKeys(
   agents: readonly AgentEntry[],
 ): readonly string[] {
   if (selection === 'all') return agents.map(agentKeyOf);
-  return selection;
+  return selection.filter((key) =>
+    agents.some((agent) => agentMatchesIdentifier(agent, key)),
+  );
 }
 
 function selectionSizeLabel(selection: AgentRosterCategorySelection): string {
