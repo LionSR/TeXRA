@@ -97,11 +97,13 @@ describe('MainView execution handlers', () => {
     expect(mocks.executeCommand).not.toHaveBeenCalled();
   });
 
-  it('executes the prepared request before launch information settles', async () => {
+  it('dispatches before launch information settles and logs its rejection', async () => {
     const request = { agentName: 'team-root' };
-    let settleInfo!: () => void;
-    const infoPromise = new Promise<void>((resolve) => {
+    let settleInfo!: (value: void | PromiseLike<void>) => void;
+    let rejectInfo!: (reason?: unknown) => void;
+    const infoPromise = new Promise<void>((resolve, reject) => {
       settleInfo = resolve;
+      rejectInfo = reject;
     });
     mocks.showInformationMessage.mockReturnValue(infoPromise);
     mocks.prepareMainViewExecutionLaunch.mockResolvedValue({
@@ -120,25 +122,13 @@ describe('MainView execution handlers', () => {
       request,
     );
 
-    settleInfo();
-    await infoPromise;
-  });
-
-  it('logs rejected launch information without creating an unhandled rejection', async () => {
-    const rejection = new Error('toast dismissed unexpectedly');
-    mocks.showInformationMessage.mockReturnValue(Promise.reject(rejection));
-    mocks.prepareMainViewExecutionLaunch.mockResolvedValue({
-      status: 'prepared',
-      preparation: { valid: true, request: { agentName: 'team-root' } },
-      infoMessage: 'Continuing without writer',
-    });
-
-    await handleExecute({});
+    rejectInfo(new Error('toast dismissed unexpectedly'));
     await vi.waitFor(() => {
       expect(mocks.warn).toHaveBeenCalledExactlyOnceWith(
         'Information notification failed: toast dismissed unexpectedly',
       );
     });
+    settleInfo();
   });
 
   it.each([
