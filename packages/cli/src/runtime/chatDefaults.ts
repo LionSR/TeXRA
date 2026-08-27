@@ -34,13 +34,21 @@ import { writeTextStderr } from './logSinks';
  */
 function usableConfiguredAgent(
   value: string | undefined,
-  visibleToolUseAgents?: readonly { readonly name: string }[],
+  visibleToolUseAgents?: readonly {
+    readonly name: string;
+    readonly source?: string;
+  }[],
 ): string | undefined {
   const trimmed = value?.trim();
   return trimmed &&
     isImplicitDefaultEligible(trimmed) &&
     (!visibleToolUseAgents ||
-      visibleToolUseAgents.some((agent) => agent.name === trimmed))
+      visibleToolUseAgents.some(
+        (agent) =>
+          agent.name === trimmed ||
+          (agent.source !== undefined &&
+            `${agent.source}:${agent.name}` === trimmed),
+      ))
     ? trimmed
     : undefined;
 }
@@ -73,7 +81,10 @@ interface PartialDefaults {
 
 function defaultsFromConfigValues(
   values: CliConfigValues,
-  visibleToolUseAgents?: readonly { readonly name: string }[],
+  visibleToolUseAgents?: readonly {
+    readonly name: string;
+    readonly source?: string;
+  }[],
 ): PartialDefaults {
   return {
     agent: usableConfiguredAgent(
@@ -110,7 +121,10 @@ export function __resetUserConfigWarningDedupeForTests(): void {
 
 async function loadUserDefaults(
   quiet: boolean,
-  visibleToolUseAgents?: readonly { readonly name: string }[],
+  visibleToolUseAgents?: readonly {
+    readonly name: string;
+    readonly source?: string;
+  }[],
 ): Promise<PartialDefaults> {
   // A missing user config means no user defaults (parseCliConfigValues maps
   // the undefined fallback to {}). A read failure — corrupt JSON, a
@@ -219,7 +233,10 @@ function buildChatDefaults(init: {
   readonly model: string | undefined;
   readonly agentSource: ChatDefaultValueSource | undefined;
   readonly modelSource: ChatDefaultValueSource | undefined;
-  readonly visibleToolUseAgents?: readonly { readonly name: string }[];
+  readonly visibleToolUseAgents?: readonly {
+    readonly name: string;
+    readonly source?: string;
+  }[];
 }): ChatDefaults {
   const agentSource = init.agentSource ?? 'builtin-default';
   const modelSource = init.modelSource ?? 'builtin-default';
@@ -238,7 +255,10 @@ interface ResolveChatDefaultsInit {
   readonly modelOverride?: string;
   readonly envAgent?: string;
   readonly envModel?: string;
-  readonly visibleToolUseAgents?: readonly { readonly name: string }[];
+  readonly visibleToolUseAgents?: readonly {
+    readonly name: string;
+    readonly source?: string;
+  }[];
   /** Suppresses the user-config warnings `loadUserDefaults` would otherwise
    *  print directly — pass `context.quietLogs` so this tier's warnings
    *  respect `--quiet` the same way `contextFromArgs` gates every other
