@@ -102,7 +102,9 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     <FormFrame title="/model" showCloseHint={false}>
       <Text dimColor>{description}</Text>
       {items.length === 0 ? (
-        <Text>{formatCliNoRunnableModelsMessage(CHAT_API_MODE_MODEL_RECOVERY)}</Text>
+        <Text>
+          {formatCliNoRunnableModelsMessage(CHAT_API_MODE_MODEL_RECOVERY)}
+        </Text>
       ) : (
         <Box flexDirection="column">
           <Select
