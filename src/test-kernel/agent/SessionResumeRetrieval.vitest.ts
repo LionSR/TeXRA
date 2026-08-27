@@ -1400,9 +1400,15 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
             attachment: {
               attach: (context) => {
                 flowContext = context;
+                session.followUps.submit(
+                  streamId,
+                  { text: 'reused recovery input' },
+                  'live_owner',
+                );
               },
             },
             session,
+            deferDispose: true,
             onFlowRecordDisposition: (value) => dispositions.push(value),
           },
         );
@@ -1417,10 +1423,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         expect(await readFlowRecord(executionId)).toMatchObject({
           shared: storedShared,
         });
+        expect(session.followUps.getAll(streamId)).toEqual([
+          'reused recovery input',
+        ]);
       } finally {
         readSpy.mockRestore();
         deleteSpy.mockRestore();
         releaseSpy.mockRestore();
+        session.dispose();
       }
     }
 
@@ -1439,8 +1449,18 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           streamId,
           undefined,
           {
-            attachment: { attach: (flowContext) => flowContext.interrupt() },
+            attachment: {
+              attach: (flowContext) => {
+                session.followUps.submit(
+                  streamId,
+                  { text: 'reused attachment input' },
+                  'live_owner',
+                );
+                flowContext.interrupt();
+              },
+            },
             session,
+            deferDispose: true,
             onFlowRecordDisposition: (value) => dispositions.push(value),
           },
         );
@@ -1449,13 +1469,17 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         expect(dispositions).toEqual(['preserve']);
         expect(releaseSpy).toHaveBeenCalledWith(
           expect.objectContaining({ streamId, kind: 'flow' }),
-          'terminal',
+          'recoverable',
         );
+        expect(session.followUps.getAll(streamId)).toEqual([
+          'reused attachment input',
+        ]);
         expect(await readFlowRecord(executionId)).toMatchObject({
           shared: storedShared,
         });
       } finally {
         releaseSpy.mockRestore();
+        session.dispose();
       }
     }
 
@@ -1482,9 +1506,15 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
             attachment: {
               attach: (context) => {
                 flowContext = context;
+                session.followUps.submit(
+                  streamId,
+                  { text: 'fresh recovery input' },
+                  'live_owner',
+                );
               },
             },
             session,
+            deferDispose: true,
             onFlowRecordDisposition: (value) => dispositions.push(value),
           },
         );
@@ -1498,10 +1528,12 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           'terminal',
         );
         expect(await readFlowRecord(executionId)).toBeUndefined();
+        expect(session.followUps.getAll(streamId)).toEqual([]);
       } finally {
         readSpy.mockRestore();
         deleteSpy.mockRestore();
         releaseSpy.mockRestore();
+        session.dispose();
       }
     }
   });
