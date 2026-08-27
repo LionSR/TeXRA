@@ -1370,119 +1370,139 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
   });
 
-  it('preserves a reused checkpoint when a fresh launch is cancelled during setup', async () => {
-    const executionId = 'abc-reused-cancel-setup' as ExecutionId;
-    const streamId = 'chat@gpt54#abc-reused-cancel-setup' as StreamTabId;
-    const storedShared = activeHandlerShared();
-    await writeFlowRecord(executionId, storedShared);
-    const store = getExecutionStore(executionId);
-    const deleteSpy = vi.spyOn(store, 'delete');
-    const session = createTestSession();
-    const releaseSpy = vi.spyOn(session.followUps, 'release');
-    const realRead = store.read.bind(store);
-    let flowContext: ToolUseSetupContext | undefined;
-    const readSpy = vi.spyOn(store, 'read').mockImplementation(async (key) => {
-      const record = await realRead(key);
-      flowContext?.interrupt();
-      return record;
-    });
-    const dispositions: Array<'preserve' | 'delete'> = [];
+  it('distinguishes reused and fresh startup cancellation checkpoint and queue disposition', async () => {
+    {
+      const executionId = 'abc-reused-cancel-setup' as ExecutionId;
+      const streamId = 'chat@gpt54#abc-reused-cancel-setup' as StreamTabId;
+      const storedShared = activeHandlerShared();
+      await writeFlowRecord(executionId, storedShared);
+      const store = getExecutionStore(executionId);
+      const deleteSpy = vi.spyOn(store, 'delete');
+      const session = createTestSession();
+      const releaseSpy = vi.spyOn(session.followUps, 'release');
+      const realRead = store.read.bind(store);
+      let flowContext: ToolUseSetupContext | undefined;
+      const readSpy = vi
+        .spyOn(store, 'read')
+        .mockImplementation(async (key) => {
+          const record = await realRead(key);
+          flowContext?.interrupt();
+          return record;
+        });
+      const dispositions: Array<'preserve' | 'delete'> = [];
 
-    try {
-      const result = await runPersistedFlow(executionId, streamId, undefined, {
-        attachment: {
-          attach: (context) => {
-            flowContext = context;
+      try {
+        const result = await runPersistedFlow(
+          executionId,
+          streamId,
+          undefined,
+          {
+            attachment: {
+              attach: (context) => {
+                flowContext = context;
+              },
+            },
+            session,
+            onFlowRecordDisposition: (value) => dispositions.push(value),
           },
-        },
-        session,
-        onFlowRecordDisposition: (value) => dispositions.push(value),
-      });
+        );
 
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
-      expect(dispositions).toEqual(['preserve']);
-      expect(releaseSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ streamId, kind: 'flow' }),
-        'recoverable',
-      );
-      expect(await readFlowRecord(executionId)).toMatchObject({
-        shared: storedShared,
-      });
-    } finally {
-      readSpy.mockRestore();
-      deleteSpy.mockRestore();
-      releaseSpy.mockRestore();
+        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+        expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
+        expect(dispositions).toEqual(['preserve']);
+        expect(releaseSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ streamId, kind: 'flow' }),
+          'recoverable',
+        );
+        expect(await readFlowRecord(executionId)).toMatchObject({
+          shared: storedShared,
+        });
+      } finally {
+        readSpy.mockRestore();
+        deleteSpy.mockRestore();
+        releaseSpy.mockRestore();
+      }
     }
-  });
 
-  it('preserves a reused checkpoint when cancellation lands during attachment', async () => {
-    const executionId = 'abc-reused-cancel-attachment' as ExecutionId;
-    const streamId = 'chat@gpt54#abc-reused-cancel-attachment' as StreamTabId;
-    const storedShared = activeHandlerShared();
-    await writeFlowRecord(executionId, storedShared);
-    const session = createTestSession();
-    const releaseSpy = vi.spyOn(session.followUps, 'release');
-    const dispositions: Array<'preserve' | 'delete'> = [];
+    {
+      const executionId = 'abc-reused-cancel-attachment' as ExecutionId;
+      const streamId = 'chat@gpt54#abc-reused-cancel-attachment' as StreamTabId;
+      const storedShared = activeHandlerShared();
+      await writeFlowRecord(executionId, storedShared);
+      const session = createTestSession();
+      const releaseSpy = vi.spyOn(session.followUps, 'release');
+      const dispositions: Array<'preserve' | 'delete'> = [];
 
-    try {
-      const result = await runPersistedFlow(executionId, streamId, undefined, {
-        attachment: { attach: (flowContext) => flowContext.interrupt() },
-        session,
-        onFlowRecordDisposition: (value) => dispositions.push(value),
-      });
-
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(dispositions).toEqual(['preserve']);
-      expect(releaseSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ streamId, kind: 'flow' }),
-        'terminal',
-      );
-      expect(await readFlowRecord(executionId)).toMatchObject({
-        shared: storedShared,
-      });
-    } finally {
-      releaseSpy.mockRestore();
-    }
-  });
-
-  it('keeps a fresh launch cancelled during setup harmless', async () => {
-    const executionId = 'abc-fresh-cancel-setup' as ExecutionId;
-    const streamId = 'chat@gpt54#abc-fresh-cancel-setup' as StreamTabId;
-    const store = getExecutionStore(executionId);
-    const session = createTestSession();
-    let flowContext: ToolUseSetupContext | undefined;
-    const readSpy = vi.spyOn(store, 'read').mockImplementation(async () => {
-      flowContext?.interrupt();
-      return undefined;
-    });
-    const deleteSpy = vi.spyOn(store, 'delete');
-    const releaseSpy = vi.spyOn(session.followUps, 'release');
-    const dispositions: Array<'preserve' | 'delete'> = [];
-
-    try {
-      const result = await runPersistedFlow(executionId, streamId, undefined, {
-        attachment: {
-          attach: (context) => {
-            flowContext = context;
+      try {
+        const result = await runPersistedFlow(
+          executionId,
+          streamId,
+          undefined,
+          {
+            attachment: { attach: (flowContext) => flowContext.interrupt() },
+            session,
+            onFlowRecordDisposition: (value) => dispositions.push(value),
           },
-        },
-        session,
-        onFlowRecordDisposition: (value) => dispositions.push(value),
-      });
+        );
 
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(readSpy).toHaveBeenCalledOnce();
-      expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
-      expect(dispositions).toEqual(['delete']);
-      expect(releaseSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ streamId, kind: 'flow' }),
-        'terminal',
-      );
-    } finally {
-      readSpy.mockRestore();
-      deleteSpy.mockRestore();
-      releaseSpy.mockRestore();
+        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+        expect(dispositions).toEqual(['preserve']);
+        expect(releaseSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ streamId, kind: 'flow' }),
+          'terminal',
+        );
+        expect(await readFlowRecord(executionId)).toMatchObject({
+          shared: storedShared,
+        });
+      } finally {
+        releaseSpy.mockRestore();
+      }
+    }
+
+    {
+      const executionId = 'abc-fresh-cancel-setup' as ExecutionId;
+      const streamId = 'chat@gpt54#abc-fresh-cancel-setup' as StreamTabId;
+      const store = getExecutionStore(executionId);
+      const session = createTestSession();
+      let flowContext: ToolUseSetupContext | undefined;
+      const readSpy = vi.spyOn(store, 'read').mockImplementation(async () => {
+        flowContext?.interrupt();
+        return undefined;
+      });
+      const deleteSpy = vi.spyOn(store, 'delete');
+      const releaseSpy = vi.spyOn(session.followUps, 'release');
+      const dispositions: Array<'preserve' | 'delete'> = [];
+
+      try {
+        const result = await runPersistedFlow(
+          executionId,
+          streamId,
+          undefined,
+          {
+            attachment: {
+              attach: (context) => {
+                flowContext = context;
+              },
+            },
+            session,
+            onFlowRecordDisposition: (value) => dispositions.push(value),
+          },
+        );
+
+        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+        expect(readSpy).toHaveBeenCalledOnce();
+        expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
+        expect(dispositions).toEqual(['delete']);
+        expect(releaseSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ streamId, kind: 'flow' }),
+          'terminal',
+        );
+        expect(await readFlowRecord(executionId)).toBeUndefined();
+      } finally {
+        readSpy.mockRestore();
+        deleteSpy.mockRestore();
+        releaseSpy.mockRestore();
+      }
     }
   });
 
