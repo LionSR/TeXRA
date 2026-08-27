@@ -336,16 +336,14 @@ export async function runToolUseFlow(
     });
   };
 
-  // A resume completes its one-shot handoff immediately after the live context
-  // is attached, before the flow is interruptible. An async cancellation racing
-  // in during the recovery read must not erase follow-ups appended to the
-  // now-live session after attachment, so this window asks the lifecycle to
-  // preserve the queue, matching the startup preservation guard below.
-  // Cleared once the flow has passed both guards and moved into real work, so a
-  // later mid-run cancellation asks for the normal destructive clear. Whether
-  // that clear actually happens is the lifecycle's call: it alone knows whether
-  // this flow owns the queue or borrowed an outer consumer's.
-  let inResumeStartupWindow = input.resume !== undefined;
+  // Startup cancellation must not clear a potentially reused queue before the
+  // non-resume recovery read establishes whether this invocation owns a
+  // checkpoint. Cleared once the flow has passed the startup guards and moved
+  // into real work, so a later mid-run cancellation asks for the normal
+  // destructive clear. Whether that clear actually happens is the lifecycle's
+  // call: it alone knows whether this flow owns the queue or borrowed an outer
+  // consumer's.
+  let inStartupWindow = true;
 
   const flowContext: ToolUseFlowContext = {
     ownerSession: runSession,
@@ -356,7 +354,7 @@ export async function runToolUseFlow(
     interrupt(): void {
       input.interrupt();
       runSession.interactions.cancel({ streamId, cause: 'Run interrupted.' });
-      sessionLifecycle.interrupt(inResumeStartupWindow ? 'preserve' : 'clear');
+      sessionLifecycle.interrupt(inStartupWindow ? 'preserve' : 'clear');
     },
     requestImmediateCompaction(): void {
       services.modelCell.handler.requestCompaction();
@@ -377,6 +375,7 @@ export async function runToolUseFlow(
   let resumeStartupPreservation:
     'cancellation' | 'initial-read-failure' | undefined;
   let persistenceRecoveryPending = false;
+  let persistedFlowRecordExists = false;
   let flowRunStarted = false;
   let primaryFailure: { readonly error: unknown } | undefined;
   let earlyResult: RunToolUseFlowResult | undefined;
@@ -429,8 +428,8 @@ export async function runToolUseFlow(
     attachmentFollowUps = input.takePendingFollowUps?.() ?? [];
     // A host can hand off a cancellation synchronously during setup. Observe
     // it before touching the persisted resume record.
-    if (signal.aborted) {
-      if (input.resume) resumeStartupPreservation = 'cancellation';
+    if (signal.aborted && input.resume) {
+      resumeStartupPreservation = 'cancellation';
       earlyResult = { outcome };
       throw startupInterruption;
     }
@@ -445,6 +444,7 @@ export async function runToolUseFlow(
     } else {
       persistenceRecoveryPending = true;
       const flowRecord = await readPersistedFlowRecord(kv, executionId);
+      persistedFlowRecordExists = flowRecord != null;
       // Cancellation can also arrive while the recovery read is pending. Do
       // not start a repair write after that handoff.
       if (signal.aborted) {
@@ -468,7 +468,7 @@ export async function runToolUseFlow(
     // Past both startup cancellation guards: any later interrupt() is a
     // genuine mid-run cancellation, so go back to the normal destructive
     // queue clear instead of the resume-startup rescue above.
-    inResumeStartupWindow = false;
+    inStartupWindow = false;
 
     let resumedFollowUps: readonly FollowUpQueueBatchItem[] = [
       ...(input.drainedFollowUps ?? []),
@@ -607,6 +607,12 @@ export async function runToolUseFlow(
         'Flow record preserved after persistence recovery failure';
     } else if (outcome === STREAM_PHASE.WAITING) {
       preservationReason = 'Flow record preserved for native subagent WAITING';
+    } else if (signal.aborted && !flowRunStarted && persistedFlowRecordExists) {
+      // Startup cancellation can happen before this invocation owns or starts
+      // the flow. Preserve a reused checkpoint, including when cancellation
+      // arrives before the recovery read can establish whether one exists
+      // (#11430).
+      preservationReason = 'Flow record preserved after startup interruption';
     } else if (flowRunStarted && signal.aborted) {
       preservationReason = 'Flow record preserved after user interruption';
     } else if (shared.userCancelledRetry) {
