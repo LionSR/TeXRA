@@ -24,6 +24,7 @@ import {
   type RoundOutput,
   type RunOutcome,
   type FileLocation,
+  MESSAGE_TYPES,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -31,6 +32,7 @@ import {
   workflowOutputPath,
 } from '@shared/constants/workflowOutput';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { LatexDiffManager } from './output/LatexDiffManager';
 import { XmlOutputManager } from './output/XmlOutputManager';
@@ -201,9 +203,22 @@ export async function runReflectionFlow(
   };
 
   // Kick off run-workspace preparation (awaited lazily by extractFilesFromXml).
-  outputState.runPreparation = fileService.prepareRunWorkspace(baseFiles, {
-    linkFiles: collectRunSupportFiles(services.config),
-  });
+  // Handle failure here too: a response can fail or be cancelled before output
+  // extraction reaches the promise, and leaving it rejected would both hide the
+  // filesystem failure and trigger an unhandled rejection.
+  outputState.runPreparation = fileService
+    .prepareRunWorkspace(baseFiles, {
+      linkFiles: collectRunSupportFiles(services.config),
+    })
+    .catch((error) => {
+      logger.warn(
+        `Failed to prepare run workspace; in-place diffs may be empty: ${toErrorMessage(error)}`,
+        {
+          data: error,
+          messageType: MESSAGE_TYPES.INTERNAL,
+        },
+      );
+    });
 
   const kv = getExecutionStore(executionId);
 

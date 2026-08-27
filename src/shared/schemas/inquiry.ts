@@ -28,7 +28,11 @@ export type InquiryThreadId = z.infer<typeof InquiryThreadIdSchema>;
 // Status + summary
 // ============================================================================
 
-const InquiryThreadStatusSchema = z.enum(['open', 'answered', 'dropped']);
+export const InquiryThreadStatusSchema = z.enum([
+  'open',
+  'answered',
+  'dropped',
+]);
 export type InquiryThreadStatus = z.infer<typeof InquiryThreadStatusSchema>;
 
 const InquiryThreadSummarySchema = z.object({

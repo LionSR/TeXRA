@@ -12,7 +12,6 @@
 import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
 import {
   fileLocationDisplayPath,
-  MESSAGE_TYPES,
   OUTPUT_DOCUMENTS_TAG,
   type FileLocation,
 } from '@shared/schemas';
@@ -36,16 +35,8 @@ async function prepareRunWorkspaceIfNeeded(
 ): Promise<void> {
   if (!state.runPreparation) return;
 
-  try {
-    await state.runPreparation;
-  } catch (error) {
-    deps.logger.debug('Failed to prepare run workspace', {
-      data: error,
-      messageType: MESSAGE_TYPES.INTERNAL,
-    });
-  } finally {
-    state.runPreparation = null;
-  }
+  await state.runPreparation;
+  state.runPreparation = null;
 }
 
 /**
