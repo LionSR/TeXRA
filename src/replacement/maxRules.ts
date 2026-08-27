@@ -106,9 +106,11 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
 
   // 1. Math Operators (defined with \DeclareMathOperator*)
   // These require _{\op} and ^{\op} format
+  // Keep longer commands before any command prefixes because replacements run
+  // sequentially and match unanchored substrings.
   // prettier-ignore
   const mathOperators = [
-      'argmin','argmax','tr','Tr','sign','sort','argsort','Cov','Cat','Bern','Unif','ReLU','Concat','Skip','Upsample','Softmax','Conv','BatchNorm','LayerNorm','MaxPool','Dropout','TransformerEncoder','Attention','MultiHead','AdaLN',
+      'argmin','argmax','tr','TransformerEncoder','Tr','sign','sort','argsort','Cov','Cat','Bern','Unif','ReLU','Concat','Skip','Upsample','Softmax','Conv','BatchNorm','LayerNorm','MaxPool','Dropout','Attention','MultiHead','AdaLN',
     ];
 
   // 2. Text Commands (defined with \newcommand{\cmd}{{\text{name}}})

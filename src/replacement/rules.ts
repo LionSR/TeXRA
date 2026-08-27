@@ -700,13 +700,6 @@ export const LATEX_SPACING_REPLACEMENTS: NonRegexReplacementCategory = {
     '{-\\,0}': '{0}',
     '{-\\,1}': '{1}',
 
-    // ===== Symbol separator handling =====
-    // Vertical bars and other delimiters
-    ')\\!\\|': ') \\|',
-    '}\\!\\|': '} \\|',
-    ')\\!\\': ') \\',
-    '}\\!\\': '} \\',
-
     // Math operator spacing
     '\\!\\left\\!': ' \\left ',
     '\\!\\cdot\\!': ' \\cdot ',
@@ -714,6 +707,13 @@ export const LATEX_SPACING_REPLACEMENTS: NonRegexReplacementCategory = {
     '\\!\\cdots\\!': ' \\cdots ',
     '\\!\\vdots\\!': ' \\vdots ',
     '\\!\\ddots\\!': ' \\ddots ',
+
+    // ===== Symbol separator handling =====
+    // Vertical bars and other delimiters
+    ')\\!\\|': ') \\|',
+    '}\\!\\|': '} \\|',
+    ')\\!\\': ') \\',
+    '}\\!\\': '} \\',
 
     // ===== Vertical spacing commands =====
     // Remove unnecessary skip commands
