@@ -3,8 +3,8 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  bootstrapDesktopWindowLifecycle,
   installDesktopBeforeQuitWiring,
-  installDesktopWindowLifecycleWiring,
 } from '@desktop/main/desktopWindowLifecycle';
 
 class FakeWebContents extends EventEmitter {}
@@ -13,7 +13,7 @@ describe('desktop window lifecycle', () => {
   it('skips initial renderer navigation and cleans up on reload', () => {
     const webContents = new FakeWebContents();
     const disposeRendererResources = vi.fn();
-    installDesktopWindowLifecycleWiring({
+    bootstrapDesktopWindowLifecycle({
       webContents,
       workspaceIpc: { disposeRendererResources },
       showDiscardDialog: () => 0,
@@ -27,33 +27,12 @@ describe('desktop window lifecycle', () => {
     expect(disposeRendererResources).toHaveBeenCalledOnce();
   });
 
-  it('installs navigation cleanup and unsaved-change handling on one window webContents', () => {
-    const webContents = new FakeWebContents();
-    const disposeRendererResources = vi.fn();
-    const discard = { preventDefault: vi.fn() };
-
-    installDesktopWindowLifecycleWiring({
-      webContents,
-      workspaceIpc: { disposeRendererResources },
-      showDiscardDialog: () => 1,
-      isFatalShutdownRequested: () => false,
-      clearPendingWorkspaceRelaunch: vi.fn(),
-      clearContinueQuitAfterWindowClose: vi.fn(),
-    });
-
-    webContents.emit('will-prevent-unload', discard);
-    expect(discard.preventDefault).toHaveBeenCalledOnce();
-    webContents.emit('did-navigate');
-    webContents.emit('did-navigate');
-    expect(disposeRendererResources).toHaveBeenCalledOnce();
-  });
-
   it('allows discard and clears continuations when editing continues', () => {
     const webContents = new FakeWebContents();
     const clearPendingWorkspaceRelaunch = vi.fn();
     const clearContinueQuitAfterWindowClose = vi.fn();
     const showDiscardDialog = vi.fn(() => 0);
-    installDesktopWindowLifecycleWiring({
+    bootstrapDesktopWindowLifecycle({
       webContents,
       workspaceIpc: { disposeRendererResources: vi.fn() },
       showDiscardDialog,
@@ -77,7 +56,7 @@ describe('desktop window lifecycle', () => {
     const fatal = { preventDefault: vi.fn() };
     const fatalWebContents = new FakeWebContents();
     const clearFatalRelaunch = vi.fn();
-    installDesktopWindowLifecycleWiring({
+    bootstrapDesktopWindowLifecycle({
       webContents: fatalWebContents,
       workspaceIpc: { disposeRendererResources: vi.fn() },
       showDiscardDialog,

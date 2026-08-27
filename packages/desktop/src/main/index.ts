@@ -72,8 +72,8 @@ import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { handoffDesktopWorkspaceRelaunchFromMainProcess } from './desktopWorkspaceRelaunch.js';
 import {
+  bootstrapDesktopWindowLifecycle,
   installDesktopBeforeQuitWiring,
-  installDesktopWindowLifecycleWiring,
 } from './desktopWindowLifecycle.js';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
@@ -1084,7 +1084,7 @@ function createWindow(options: {
   // reading of it: Chromium emits it after the renderer's beforeunload handler
   // observes a dirty Monaco buffer and refuses the unload, so every close path
   // (quit, workspace switch, window close) asks here and nowhere else.
-  installDesktopWindowLifecycleWiring({
+  bootstrapDesktopWindowLifecycle({
     webContents: window.webContents,
     workspaceIpc,
     showDiscardDialog: () =>

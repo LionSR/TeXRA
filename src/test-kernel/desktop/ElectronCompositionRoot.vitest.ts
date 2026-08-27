@@ -1,9 +1,11 @@
+import { EventEmitter } from 'node:events';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { bootstrapDesktopWindowLifecycle } from '@desktop/main/desktopWindowLifecycle';
 import { sourceFilesUnder } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { normalizeFilePath } from '@utils/core';
@@ -58,6 +60,28 @@ function expectOrderedAfter(
 
 describe('desktop composition root and launch environment', () => {
   const tempDirs = useTempDirs();
+
+  it('boots each window lifecycle on its created webContents', () => {
+    const webContents = new EventEmitter();
+    const disposeRendererResources = vi.fn();
+    const discard = { preventDefault: vi.fn() };
+
+    bootstrapDesktopWindowLifecycle({
+      webContents,
+      workspaceIpc: { disposeRendererResources },
+      showDiscardDialog: () => 1,
+      isFatalShutdownRequested: () => false,
+      clearPendingWorkspaceRelaunch: vi.fn(),
+      clearContinueQuitAfterWindowClose: vi.fn(),
+    });
+
+    webContents.emit('will-prevent-unload', discard);
+    expect(discard.preventDefault).toHaveBeenCalledOnce();
+    webContents.emit('did-navigate');
+    expect(disposeRendererResources).not.toHaveBeenCalled();
+    webContents.emit('did-navigate');
+    expect(disposeRendererResources).toHaveBeenCalledOnce();
+  });
 
   async function createResourceTree(resourcesPath: string): Promise<void> {
     await Promise.all([

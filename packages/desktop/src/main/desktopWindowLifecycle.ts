@@ -108,7 +108,7 @@ function installUnsavedChangesHandler(options: {
   });
 }
 
-export function installDesktopWindowLifecycleWiring(
+export function bootstrapDesktopWindowLifecycle(
   options: DesktopWindowLifecycleWiring,
 ): void {
   installUnsavedChangesHandler(options);
