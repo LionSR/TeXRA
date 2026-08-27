@@ -7,7 +7,7 @@ import {
   type StreamLogTextDelta,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import { isObject } from '@utils/core';
+import { clamp, isObject } from '@utils/core';
 
 export type StreamLogAppendInput = Omit<
   StreamLogEntry,
@@ -549,7 +549,7 @@ export class StreamLog {
 
   getRange(fromSeq: number, toSeq: number = this.seqCounter): StreamLogEntry[] {
     const safeFrom = Math.max(0, fromSeq);
-    const safeTo = Math.min(this.seqCounter, Math.max(safeFrom, toSeq));
+    const safeTo = clamp(toSeq, safeFrom, this.seqCounter);
     if (safeFrom >= safeTo) return [];
     return this.entries.slice(safeFrom, safeTo);
   }

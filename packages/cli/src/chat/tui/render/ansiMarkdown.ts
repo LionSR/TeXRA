@@ -27,6 +27,7 @@ import {
   createMarkdownRenderer,
   type MarkdownItInstance,
 } from '@shared/markdown/createMarkdownRenderer';
+import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';
 
@@ -354,7 +355,7 @@ function configureAnsi(
 
   r.hr = (tokens, idx) =>
     `${quoteBlockStart(tokens, idx)}${style.dim(
-      '─'.repeat(Math.max(1, Math.min(40, width ?? 40))),
+      '─'.repeat(clamp(width ?? 40, 1, 40)),
     )}\n`;
 
   // Emit raw SGR codes so the styling stays open across the link body. The
