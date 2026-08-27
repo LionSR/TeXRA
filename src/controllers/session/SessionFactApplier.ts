@@ -880,7 +880,7 @@ export class SessionFactApplier {
 
     const isNewStream = !this.state.streamLogs.has(streamId);
     this.state.streamLogs.ensureStream(streamId);
-    // Persisted streams may be in stream logs but missing from _streamStates.
+    // Persisted streams may be in stream logs but missing from _ephemeralState.
     // The first RUNNING transition already created/reset the state above.
     const category = runningCategory ?? this.getStreamCategory(streamId);
     if (!isNewRunningTransition && category !== undefined) {
