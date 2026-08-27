@@ -433,10 +433,8 @@ async function getFileVars(
 /**
  * A required-file variable `X` generates the `X_FILE`/`X_CONTENT` pair, which
  * `buildUserVars` spreads after the fixed variables — so a name like `MEDIA`
- * or `INPUT` would silently override a fixed variable, and the persisted
- * channel schema's per-key validator would then reject checkpoints the
- * application itself produced, making the session impossible to resume. Fail
- * loudly when the variables are built instead.
+ * or `INPUT` would silently override a fixed variable. Fail loudly when the
+ * variables are built instead.
  */
 function assertNoFixedVarCollision(varName: string): void {
   for (const generatedKey of [`${varName}_FILE`, `${varName}_CONTENT`]) {

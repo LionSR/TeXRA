@@ -214,10 +214,11 @@ export async function clearTerminalExecutionState(
  * the caveat below — and every such site should say why in a comment.
  *
  * Caveat, learned from #11314: preserving is not free. A record whose cursor
- * was never rewound (`cursor.nextNodeId !== null`) fails
- * `ResumableFlowRecordSchema`'s refinement, so every reader classifies it
- * `invalid-flow` and only `history delete` can remove it. Keeping such a
- * record is strictly worse than deleting it. So a caller that ends COMPLETED
+ * was never rewound (`cursor.nextNodeId === null`) fails
+ * `ResumableFlowRecordSchema`'s refinement. `deriveResumability` reports it
+ * as `unreadable`, which `classifyRun` maps to `unclassified`; only `history
+ * delete` can remove it. Keeping such a record is strictly worse than deleting
+ * it. So a caller that ends COMPLETED
  * *without* consuming its cursor must still report `'delete'`; this policy
  * covers the ordinary case where the outcome and the cursor agree.
  */

@@ -579,9 +579,10 @@ export async function runToolUseFlow(
       // Rewind before throwing. The outcome was COMPLETED, so the rewind above
       // was skipped and the cursor still points past the terminal step; the
       // `catch` below then preserves the record. Preserving an un-rewound
-      // cursor produces a file no reader accepts -- `ResumableFlowRecordSchema`
-      // rejects `nextNodeId !== null`, so it is unresumable and only
-      // `history delete` can clear it (#11314). Rewinding makes the preserved
+      // cursor produces a checkpoint `deriveResumability` reports as unreadable,
+      // which `classifyRun` maps to unclassified: `ResumableFlowRecordSchema`
+      // rejects `nextNodeId === null`, so only `history delete` can clear it
+      // (#11314). Rewinding makes the preserved
       // record mean what preservation is for: a resume gets another model turn
       // to call `submit_output`.
       await activePersistedFlow?.prepareForFollowUp(shared);

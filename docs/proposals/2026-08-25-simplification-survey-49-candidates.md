@@ -37,15 +37,15 @@ Seven disjoint-lane PRs, batched by path ownership so they can be written in
 parallel and merged in any order. Small items are batched into their lane PR
 rather than shipped one at a time.
 
-| Lane           | Scope                                   | Items | PR     | Estimated net LoC | Measured net LoC |
-| -------------- | --------------------------------------- | ----- | ------ | ----------------- | ---------------- |
-| `L1-cli`       | CLI                                     | 7     | #11416 | -294              | -306             |
-| `L2-extension` | Extension host and views                | 6     | #11417 | -209              | -294             |
-| `L3-desktop`   | Desktop renderer                        | 3     | #11418 | -61               | -57              |
-| `L4-agent`     | Agent runtime, flows, storage, handlers | 10    | #11419 | -266              | -341             |
-| `L5-tools`     | Tools                                   | 7     | #11420 | -449              | -571             |
-| `L6-shared`    | Shared, controllers, platform, utils    | 13    | #11421 | -402              | -439             |
-| `L7-scripts`   | Scripts, config, resources              | 3     | #11422 | -1112             | -1181            |
+| Lane           | Scope                                   | Items | PR     | Estimated net LoC | Survey net elements | Measured net LoC |
+| -------------- | --------------------------------------- | ----- | ------ | ----------------- | ------------------- | ---------------- |
+| `L1-cli`       | CLI                                     | 7     | #11416 | -294              | -67                 | -306             |
+| `L2-extension` | Extension host and views                | 6     | #11417 | -209              | -31                 | -294             |
+| `L3-desktop`   | Desktop renderer                        | 3     | #11418 | -61               | -45                 | -57              |
+| `L4-agent`     | Agent runtime, flows, storage, handlers | 10    | #11419 | -266              | -32                 | -341             |
+| `L5-tools`     | Tools                                   | 7     | #11420 | -449              | -33                 | -571             |
+| `L6-shared`    | Shared, controllers, platform, utils    | 13    | #11421 | -402              | -43                 | -439             |
+| `L7-scripts`   | Scripts, config, resources              | 3     | #11422 | -1112             | -16                 | -1181            |
 
 All seven shipped. Measured total across the 223 changed files: +1236 / -4425,
 net **-3189 LoC**, against a survey estimate of -2793. Forty-seven of the 49
@@ -1529,7 +1529,7 @@ Scope is bounded (one file deleted, three small edits in one component, one comm
 #### Fold the internal-only Kimi Code route resolver, wire-id helper, and config synthesizer into their two live entry points
 
 - **Area**: `latex-replacement-model` · **Kind**: speculative-generality · **Risk**: low
-- **Net**: -40 LoC, -4 elements
+- **Net**: -40 LoC, -3 elements
 
 **Evidence**
 
@@ -1537,7 +1537,7 @@ src/model/kimiCodeSubscriptionRouting.ts exports 7 symbols; only 3 have producti
 
 **Proposal**
 
-Move the four-branch body of `resolveKimiCodeRoute` into `isKimiCodeRoute(config, facts): boolean` and delete `resolveKimiCodeRoute`; inline `kimiCodeWireModelId`'s one-entry `KIMI_CODE_WIRE_MODEL_IDS` lookup into `kimiCodeRuntimeConfig`, and inline `kimiCodeRuntimeConfig` into `kimiCodeEffectiveConfig` (:170-178) since it is the only caller; drop the `export` on `KimiCodeRoutingFacts`. Module keeps exactly three exported functions. Reroute the three vitest describes through `isKimiCodeRoute(config, {useOpenRouter, keySet, preferKimiCode})` and `kimiCodeEffectiveConfig(config, facts)` — the four positional args map 1:1 onto the facts literal, so every existing case survives. Regenerate the knip baseline: 3 rows leave, none is added.
+Move the four-branch body of `resolveKimiCodeRoute` into `isKimiCodeRoute(config, facts): boolean` and delete `resolveKimiCodeRoute`; inline `kimiCodeWireModelId`'s one-entry `KIMI_CODE_WIRE_MODEL_IDS` lookup into `kimiCodeRuntimeConfig`, and inline `kimiCodeRuntimeConfig` into `kimiCodeEffectiveConfig` (:170-178) since it is the only caller. Module keeps `KimiCodeRoutingFacts` and three exported functions. Reroute the three vitest describes through `isKimiCodeRoute(config, {useOpenRouter, keySet, preferKimiCode})` and `kimiCodeEffectiveConfig(config, facts)` — the four positional args map 1:1 onto the facts literal, so every existing case survives. Regenerate the knip baseline: 3 rows leave, none is added.
 
 **What we give up**
 
@@ -1933,7 +1933,7 @@ Residual risk is that the kept core manipulates the git index and working tree (
 #### log-usage: delete the two wire fields no client has ever sent (subscriptionSource, isMultipleOutput)
 
 - **Area**: `resources-prompts-supabase` · **Kind**: dead-export · **Risk**: medium
-- **Net**: -8 LoC, -2 elements
+- **Net**: -8 LoC, -3 elements
 
 **Evidence**
 
