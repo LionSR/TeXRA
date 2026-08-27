@@ -300,7 +300,24 @@ export function createChatSubmitDriver(
           await sleep(25);
           followUpTarget = session.streamId;
         }
-        if (!followUpTarget || session.stopRequested) return;
+        if (session.stopRequested) {
+          // The user's own interrupt explains the outcome, so hand the draft
+          // back without a notice rather than dropping a typed message.
+          requestDraftRestore(line);
+          return;
+        }
+        if (!followUpTarget) {
+          // The root run completed before `onStreamResolved` ever populated a
+          // stream id (a failed launch, config parse, or auth failure), so
+          // there is nothing to queue against. Same treatment as a refused
+          // send: the draft is the user's until admitted.
+          requestDraftRestore(line);
+          setTransientNotice(
+            'The conversation ended before the message could be sent. The message has been restored to the input.',
+            { ttlMs: Infinity },
+          );
+          return;
+        }
         const result = await submitFollowUp(followUpTarget, {
           text: prepared.instruction,
           mediaFiles,

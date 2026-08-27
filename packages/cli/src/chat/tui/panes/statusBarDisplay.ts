@@ -684,10 +684,8 @@ function statusBarBindingsText(
       statusBarBindingRow([childList, agent, ctrlC]),
     childNavigationAvailable &&
       statusBarBindingRow([childList, fullOutput, ctrlC]),
-    transcriptAvailable && statusBarBindingRow([childList, fullOutput, ctrlC]),
     parentNavigationAvailable && ctrlC,
     childNavigationAvailable && childList,
-    transcriptAvailable && statusBarBindingRow([fullOutput, ctrlC]),
   ].map((candidate) =>
     parentBack && candidate
       ? statusBarBindingRow([parentBack, candidate])

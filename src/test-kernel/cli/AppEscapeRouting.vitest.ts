@@ -211,7 +211,7 @@ function appProps(
     onSubmit: vi.fn(),
     onKillExecution: vi.fn(),
     onWorkflowControl: vi.fn(),
-    canInterruptActiveRun: () => true,
+    canStopActiveRun: () => true,
     canInterruptStream: () => true,
     onInterruptActive: vi.fn(),
     onInterruptStream,

@@ -208,22 +208,6 @@ function userPromptAwaitsLiveContinuation(
   );
 }
 
-/** Whether an entry belongs in append-only terminal scrollback now. */
-function isStaticTranscriptEntryAt(
-  rows: readonly TranscriptRow[],
-  index: number,
-  finalizedFrontier: number,
-  status: StreamPhase | undefined,
-): boolean {
-  const row = rows[index];
-  return (
-    row !== undefined &&
-    isFinalizedTranscriptRow(row, index, finalizedFrontier) &&
-    isRenderableTranscriptEntry(row) &&
-    !userPromptAwaitsLiveContinuation(rows, index, status)
-  );
-}
-
 /** `(settlement order, local-after-source tiebreak)` sort key for one row. */
 function transcriptOrderKey(
   row: TranscriptRow,
@@ -264,10 +248,11 @@ export function orderedStaticTranscriptEntries(
     key: readonly [number, number];
   }> = [];
   for (const [index, entry] of entries.entries()) {
+    // Finalized, renderable, and not a user prompt still awaiting its live
+    // continuation: the three conditions for append-only scrollback.
     if (!isFinalizedTranscriptRow(entry, index, finalizedFrontier)) break;
-    if (!isStaticTranscriptEntryAt(entries, index, finalizedFrontier, status)) {
-      continue;
-    }
+    if (!isRenderableTranscriptEntry(entry)) continue;
+    if (userPromptAwaitsLiveContinuation(entries, index, status)) continue;
     candidates.push({ entry, index, key: transcriptOrderKey(entry, index) });
   }
 

@@ -748,12 +748,11 @@ function reconcileSynthetics(
   sliceEntries: readonly TranscriptRow[],
   flags: FoldChangeFlags,
 ): void {
-  const wOO = state.workflowOperationalOnly;
   const current: TranscriptRow[] = [];
   for (const row of sliceEntries) {
     if (
       row.origin === 'local' &&
-      (!wOO || WORKFLOW_OPERATIONAL_KINDS.has(row.kind))
+      (!state.workflowOperationalOnly || isWorkflowOperationalRow(row))
     ) {
       current.push(row);
     }

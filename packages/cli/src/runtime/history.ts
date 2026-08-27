@@ -16,6 +16,7 @@ import {
 import { tryDefaultSession, type AgentConfig } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { createSessionStores } from '@controllers/session/createSessionStores';
 import {
   ExecutionIdSchema,
@@ -42,7 +43,9 @@ import {
   resolveAdjacentStreamCleanup,
 } from '@transcript/adjacentStreamCleanup';
 import { byStringProp } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { CliUsageError } from './cliContext';
 import { readCliResumeDataForListing } from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
@@ -286,9 +289,12 @@ const TRACE_VIEWER_SHARED_DIR_NAME = 'traceViewerShared';
  * Read the trace-viewer's single-file default bundle — one self-contained
  * `index.html` with no external `assets/` (JS/CSS/fonts all inlined) so the
  * default export opens correctly via `file://` with no server. Returns `null`
- * (without throwing) when the CLI install doesn't have the bundled template
- * — e.g. a dev checkout where `packages/trace-viewer` hasn't been built —
- * so the caller can report a clear error instead of an ENOENT stack trace.
+ * (without throwing) only when the template is absent — e.g. a dev checkout
+ * where `packages/trace-viewer` hasn't been built — so the caller can report a
+ * clear error instead of an ENOENT stack trace. Any other read failure
+ * (EACCES, a transient I/O error) is a different problem and must not be
+ * reported as "rebuild the CLI", so it surfaces as a usage error naming the
+ * real cause.
  */
 export async function readCliHistoryStandaloneTemplate(
   resourcesPath: string,
@@ -298,7 +304,14 @@ export async function readCliHistoryStandaloneTemplate(
     TRACE_VIEWER_DIR_NAME,
     'index.html',
   );
-  return readFile(templatePath, 'utf8').catch(() => null);
+  try {
+    return await readFile(templatePath, 'utf8');
+  } catch (error) {
+    if (isFileNotFoundError(error) || isNotADirectoryError(error)) return null;
+    throw new CliUsageError(
+      `history export: cannot read ${templatePath}: ${toErrorMessage(error)}`,
+    );
+  }
 }
 
 /**
@@ -315,9 +328,11 @@ export async function readCliHistoryStandaloneTemplate(
  * nesting under it, so staging is safe to repeat across multiple exports
  * pointed at the same shared directory.
  *
- * Returns `'missing'` (without throwing) when the CLI install doesn't have
- * the bundled assets — e.g. a dev checkout where `copy:resources` hasn't run
- * — so the caller can warn instead of failing the export outright.
+ * Returns `'missing'` (without throwing) only when the bundled assets are
+ * absent — e.g. a dev checkout where `copy:resources` hasn't run — so the
+ * caller can warn instead of failing the export outright. Any other probe
+ * failure (EACCES, a transient I/O error) is a different problem and surfaces
+ * as a usage error naming the real cause rather than a "rebuild the CLI" hint.
  */
 export async function stageCliHistoryTraceViewerAssets(params: {
   readonly resourcesPath: string;
@@ -327,9 +342,18 @@ export async function stageCliHistoryTraceViewerAssets(params: {
     params.resourcesPath,
     TRACE_VIEWER_SHARED_DIR_NAME,
   );
-  const sourceExists = await stat(assetsSrc)
-    .then((info) => info.isDirectory())
-    .catch(() => false);
+  let sourceExists: boolean;
+  try {
+    sourceExists = (await stat(assetsSrc)).isDirectory();
+  } catch (error) {
+    if (!isFileNotFoundError(error) && !isNotADirectoryError(error)) {
+      throw new CliUsageError(
+        `history export: cannot read ${assetsSrc}: ${toErrorMessage(error)}`,
+      );
+    }
+    sourceExists = false;
+  }
+  // A plain file where the bundle should be is also "this install lacks it".
   if (!sourceExists) return 'missing';
 
   await cp(assetsSrc, params.destDir, { recursive: true });

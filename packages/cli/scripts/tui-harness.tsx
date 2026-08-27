@@ -2440,7 +2440,6 @@ function renderHarnessApp(): React.JSX.Element {
       onSubmit={handleHarnessSubmit}
       onKillExecution={markHarnessExecutionStopped}
       onWorkflowControl={() => undefined}
-      canInterruptActiveRun={() => canInterrupt}
       canInterruptStream={canInterruptHarnessStream}
       canStopActiveRun={() => canInterrupt}
       colorEnabled={HARNESS_COLOR_ENABLED}

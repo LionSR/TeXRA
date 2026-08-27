@@ -156,7 +156,7 @@ export interface ConfigFormProps {
     value: unknown,
   ) => void | Promise<void>;
   /** Reset a setting to its default (delete the key). */
-  readonly resetValue?: (entry: SurfacedSettingEntry) => void | Promise<void>;
+  readonly resetValue: (entry: SurfacedSettingEntry) => void | Promise<void>;
   readonly formLinks?: readonly {
     readonly name: string;
     readonly label: string;
@@ -286,11 +286,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   // a consumer that coalesces empty→default (e.g. the git-author reader) quietly
   // uses the default, leaving the panel and the effect out of sync.
   const resetEntry = (entry: SurfacedSettingEntry): void => {
-    if (!props.resetValue) {
-      commit(entry, '');
-      return;
-    }
-    runWrite(entry, settingDefault(entry), () => props.resetValue?.(entry));
+    runWrite(entry, settingDefault(entry), () => props.resetValue(entry));
   };
 
   useInput((input, key) => {

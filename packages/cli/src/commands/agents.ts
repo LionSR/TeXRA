@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { getCustomAgentScanIssues, loadAgents } from '@agent/index';
+import { getCustomAgentScanIssues } from '@agent/index';
 
 import {
   AGENT_NAME_DESCRIPTION,
@@ -29,9 +29,6 @@ export async function listAgents(
   options: CliAgentListOptions = {},
 ): Promise<number> {
   await initLocalCliPlatform(context);
-  if (options.includeHidden !== true) {
-    await loadAgents({ includeRemote: false });
-  }
   const result = await loadCliAgentList(options);
 
   if (!context.quietLogs) {

@@ -185,14 +185,17 @@ export function createSessionExitController(
   const persistBeforePlatformShutdown = async (): Promise<void> => {
     try {
       await ctx.flushArtifacts();
-    } catch {
+    } catch (error) {
       // Signal exit remains best-effort, but platform shutdown must still run.
+      // The resume hint is printed before this runs, so a silent failure hands
+      // the user a `texra resume` for a session whose tail was never written.
+      log.warn(
+        `Transcript flush failed during signal exit; the session tail may be missing: ${toErrorMessage(error)}`,
+      );
     }
-    try {
-      await runPlatformShutdown();
-    } catch {
-      // process.exit below remains the terminal owner when shutdown fails.
-    }
+    // `runCliPlatformShutdownSequence` catches its own failures and never
+    // rejects, so there is no rejection arm to write here.
+    await runPlatformShutdown();
   };
   const armExit = (): void => {
     exitConfirmationExpiresAt = Date.now() + EXIT_CONFIRMATION_TTL_MS;
@@ -248,7 +251,7 @@ export function createSessionExitController(
     }
     void teardown({ kind: 'signal', exitCode });
   };
-  const handleSigterm = (): void => handleTermSignal(143);
+  const handleSigterm = (): void => handleTermSignal(CliExitCode.Terminated);
   const handleSighup = (): void => handleTermSignal(129);
   // Suspend/resume (Ctrl-Z / `kill -TSTP` / `fg`). Raw mode keeps the tty
   // driver from ever turning ^Z into a signal, so App's unified useInput

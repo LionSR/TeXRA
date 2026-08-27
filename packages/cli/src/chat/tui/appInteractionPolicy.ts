@@ -77,26 +77,6 @@ export interface EscapeInterruptState {
   readonly onInterruptStream: (streamId: StreamTabId) => void;
 }
 
-export function triggerEscapeInterrupt(
-  state: EscapeInterruptState,
-  streamId: StreamTabId | undefined,
-): boolean {
-  if (
-    streamId === undefined ||
-    !appEscapeInterruptActive({
-      inputDisabled: state.inputDisabled,
-      reverseSearchOpen: state.reverseSearchOpen,
-      runPending: state.canInterruptStream(streamId),
-      slashPaletteOpen: state.slashPaletteOpen,
-    })
-  ) {
-    return false;
-  }
-
-  state.onInterruptStream(streamId);
-  return true;
-}
-
 type AppCtrlCAction = 'clear-draft' | 'delegate' | 'interrupt' | 'exit';
 
 export interface AppCtrlCState {

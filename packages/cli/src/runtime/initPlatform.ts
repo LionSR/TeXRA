@@ -74,6 +74,13 @@ function showPersistentConfigWarning(message: string): void {
   writeTextStderr(`[warn] [cli.config] ${message}`);
 }
 
+// A shutdown-handler failure is actionable degradation by the same rule, so it
+// bypasses quietLogs too — every CLI command passes quietLogs:true, and routing
+// this through logAt would make the cross-host parity below unreachable.
+function showLifecycleError(message: string): void {
+  writeTextStderr(`[error] [cli.lifecycle] ${message}`);
+}
+
 const cliPlatformLog: LogBackend = {
   debug: (channel, message) => logAt('debug', channel, message),
   info: (channel, message) => logAt('info', channel, message),
@@ -256,9 +263,7 @@ export async function initCliPlatform(
     // handler failure is an error everywhere, not a warning in one host.
     const lifecycle = createLifecycleHost({
       onError: (phase, error) => {
-        logAt(
-          'error',
-          'cli.lifecycle',
+        showLifecycleError(
           `Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
         );
       },

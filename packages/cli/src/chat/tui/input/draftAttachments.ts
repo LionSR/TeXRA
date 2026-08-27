@@ -108,10 +108,6 @@ export class DraftAttachmentStore {
     return `[Image #${id}]`;
   }
 
-  isEmpty(): boolean {
-    return this.entries.size === 0;
-  }
-
   clear(): void {
     this.entries.clear();
     this.nextId = 1;
@@ -121,7 +117,8 @@ export class DraftAttachmentStore {
    * Expand text chips back to their stored content (reverse-offset splice so
    * earlier replacements don't shift later match indices, and any chip-like
    * text *inside* pasted content is never re-matched). Image chips are left in
-   * place — the image bytes ride along as media files (see {@link resolveMedia}).
+   * place — the image bytes ride along as media files (see
+   * {@link resolveImages}).
    */
   expandText(input: string): string {
     let out = input;
@@ -149,15 +146,10 @@ export class DraftAttachmentStore {
   }
 
   /**
-   * Absolute paths of image attachments whose `[Image #N]` chip still survives
-   * in the submitted draft. Orphaned chips (deleted from the text) are dropped,
-   * matching Claude Code's orphan gate.
+   * Image entries whose chip survives in `input`, in chip order. Orphaned
+   * chips (deleted from the text) are dropped, matching Claude Code's orphan
+   * gate.
    */
-  resolveMedia(input: string): string[] {
-    return this.resolveImages(input).map((entry) => entry.path);
-  }
-
-  /** Image entries whose chip survives in `input`, in chip order. */
   resolveImages(input: string): PastedImageEntry[] {
     const present = new Set(matchChips(input).map((m) => m.id));
     const images: PastedImageEntry[] = [];

@@ -162,6 +162,11 @@ async function runOrchestration(context: CliContext): Promise<number> {
     return result.exitCode;
   }
 
+  // The TUI intercepts every navigation action (`browse-*`,
+  // `configure-model-access`) internally, so `runOrchestrationTui` only ever
+  // resolves with an action this switch handles. An unhandled kind falls out
+  // of the switch and re-runs the launcher, which is the same outcome the
+  // navigation kinds used to spell out.
   launcher: while (true) {
     const history = await listCliHistoryEntries();
     const presets = readCliMultiAgentPresets();
@@ -315,12 +320,6 @@ async function runOrchestration(context: CliContext): Promise<number> {
       }
       case 'resume':
         return runResumeExecution(context, action.id);
-      case 'browse-resumes':
-      case 'configure-model-access':
-      case 'browse-agents':
-      case 'browse-teams':
-      case 'browse-accounts':
-        continue launcher;
       case 'configure-settings': {
         const { runConfigTui } = await import('../config/runConfigTui');
         await runConfigTui({

@@ -881,12 +881,6 @@
       "file": "packages/cli/src/runtime/modelAccess.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "formatCliNoRunnableModelsMessage"
-    },
-    {
-      "file": "packages/cli/src/runtime/modelAccess.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "formatModelStatusForCli"
     },
     {

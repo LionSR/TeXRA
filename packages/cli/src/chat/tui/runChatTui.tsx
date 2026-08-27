@@ -500,7 +500,6 @@ export async function runChat(
       onSubmit={(line, mediaFiles) =>
         void submitDriver.handleSubmittedLine(line, mediaFiles)
       }
-      canInterruptActiveRun={canInterruptActiveRun}
       canInterruptStream={(streamId) =>
         (streamId === session.streamId && canInterruptActiveRun()) ||
         runtimeSession.status.isInFlight(streamId)

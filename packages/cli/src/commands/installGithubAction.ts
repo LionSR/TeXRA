@@ -183,7 +183,6 @@ async function runInstallGithubAction(
 
   const url = remoteUrl(root);
   const slug = url ? parseGitHubSlug(url) : null;
-  await openGitHubAppInstaller(slug);
   const base = opts.base ?? defaultBranch(root) ?? 'main';
   const branch = opts.branch ?? DEFAULT_BRANCH_NAME;
   const startBranch = currentBranch(root);
@@ -215,6 +214,11 @@ async function runInstallGithubAction(
     );
     return CliExitCode.AgentError;
   }
+
+  // Only once the command is committed to writing the workflow file: the two
+  // guards above still abort having done nothing, so they must not leave an
+  // installer tab open behind them.
+  await openGitHubAppInstaller(slug);
 
   // Report the failure, put the user back on the branch they started from, and
   // hand back the error exit code.

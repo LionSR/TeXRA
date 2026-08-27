@@ -6,7 +6,7 @@
 import { Box, Text } from 'ink';
 
 import {
-  emptyModelListMessage,
+  formatCliNoRunnableModelsMessage,
   getCliModelAccessList,
   modelSelectItemsForCli,
   type CliModelAccess,
@@ -102,7 +102,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     <FormFrame title="/model" showCloseHint={false}>
       <Text dimColor>{description}</Text>
       {items.length === 0 ? (
-        <Text>{emptyModelListMessage(CHAT_API_MODE_MODEL_RECOVERY)}</Text>
+        <Text>{formatCliNoRunnableModelsMessage(CHAT_API_MODE_MODEL_RECOVERY)}</Text>
       ) : (
         <Box flexDirection="column">
           <Select
