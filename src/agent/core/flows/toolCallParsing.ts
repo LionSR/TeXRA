@@ -1,4 +1,4 @@
-import stableStringify from 'fast-json-stable-stringify';
+import stableStringify from 'safe-stable-stringify';
 import { z } from 'zod';
 
 import type { AgentTrace } from '@agent/trace';

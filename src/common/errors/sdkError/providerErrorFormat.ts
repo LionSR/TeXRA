@@ -1,4 +1,4 @@
-import stableStringify from 'fast-json-stable-stringify';
+import stableStringify from 'safe-stable-stringify';
 import { StatusCodes } from 'http-status-codes';
 import prettyMilliseconds from 'pretty-ms';
 

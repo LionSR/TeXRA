@@ -3,7 +3,6 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import dotenv from 'dotenv';
 import PQueue from 'p-queue';
 
 // Local imports
@@ -29,6 +28,7 @@ import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantComma
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
+import { isFileNotFoundError } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { appSignals } from '@eventBus/AppSignals';
@@ -240,9 +240,13 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const workspaceRoot = workspace.getWorkspacePath();
   if (!workspaceRoot) return;
 
-  dotenv.config({
-    path: path.join(workspaceRoot, '.env'),
-  });
+  try {
+    process.loadEnvFile(path.join(workspaceRoot, '.env'));
+  } catch (error) {
+    // A workspace without a .env is the normal case; any other failure
+    // (EACCES, ERR_INVALID_ARG_TYPE) stays loud instead of silently dropping it.
+    if (!isFileNotFoundError(error)) throw error;
+  }
   setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
   const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 

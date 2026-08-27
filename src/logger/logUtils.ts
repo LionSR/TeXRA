@@ -14,7 +14,6 @@
  * trusted operator terminal whose output is neither persisted nor exported.
  */
 // Third-party imports
-import { format } from 'date-fns';
 import safeStringify from 'safe-stable-stringify';
 
 // Local imports
@@ -125,6 +124,14 @@ export function isDebugModeEnabled(): boolean {
   return getConfigBeforePlatformInit('texra.logger.debugMode', false);
 }
 
+/** Local-time `yyyy-MM-dd HH:mm:ss.SSS` log-line timestamp. */
+function formatLogTimestamp(d: Date): string {
+  const p = (n: number, w = 2) => String(n).padStart(w, '0');
+  const date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  const time = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return `${date} ${time}.${p(d.getMilliseconds(), 3)}`;
+}
+
 /**
  * Write one line to the per-channel sink. Single emission point for both the
  * functional logger API and channel writers.
@@ -137,7 +144,7 @@ function writeLine(
   data: unknown,
 ): void {
   const sink = ensureChannel(channel, isAgent);
-  const timestamp = format(new Date(), 'yyyy-MM-dd HH:mm:ss.SSS');
+  const timestamp = formatLogTimestamp(new Date());
   const prefix = isAgent ? '' : `[${channel}] `;
   sink.appendLine(`${LEVEL_TAG[level]} [${timestamp}] ${prefix}${message}`);
 

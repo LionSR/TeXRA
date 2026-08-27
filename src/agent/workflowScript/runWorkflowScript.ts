@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
 
-import stableStringify from 'fast-json-stable-stringify';
+import stableStringify from 'safe-stable-stringify';
 import PQueue from 'p-queue';
 import pTimeout from 'p-timeout';
 import type {
@@ -47,14 +47,14 @@ function journalKey(
   const executionOptions: WorkflowAgentCallOptions = { ...options };
   delete executionOptions.label;
   delete executionOptions.phase;
-  return truncatedHexId(
-    stableStringify({
-      options: executionOptions,
-      prompt,
-      dependencyFingerprint,
-    }),
-    16,
-  );
+  // Typed binding so safe-stable-stringify resolves to its string-returning
+  // overload; an object input never yields undefined.
+  const source: object = {
+    options: executionOptions,
+    prompt,
+    dependencyFingerprint,
+  };
+  return truncatedHexId(stableStringify(source), 16);
 }
 
 const DEFAULT_CONCURRENCY = 4;

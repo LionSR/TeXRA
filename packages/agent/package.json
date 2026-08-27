@@ -39,10 +39,6 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "build:bundle": "node scripts/bundle.mjs",
-    "build:types": "tsc --checkers 8 -p ../../tsconfig.build.json && node scripts/rewrite-declaration-aliases.mjs",
-    "check:artifacts": "node scripts/validate-artifacts.mjs",
-    "clean": "node scripts/clean.mjs",
     "prepack": "npm run build"
   },
   "dependencies": {
@@ -71,7 +67,6 @@
     "diff-match-patch": "^1.0.5",
     "escape-string-regexp": "^5.0.0",
     "execa": "^10.0.1",
-    "fast-json-stable-stringify": "^2.1.0",
     "fast-xml-parser": "^5.11.0",
     "glob": "^13.0.6",
     "http-status-codes": "^2.3.0",
