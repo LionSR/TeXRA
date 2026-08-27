@@ -37,7 +37,7 @@ function countOccurrences(haystack: string, needle: string): number {
  * Returns the content unchanged when `oldStr` does not occur; callers that
  * require a match should validate occurrences first with `countOccurrences`.
  */
-export function replaceFirstLiteral(
+function replaceFirstLiteral(
   content: string,
   oldStr: string,
   newStr: string,
@@ -61,7 +61,7 @@ export function replaceFirstLiteral(
  * `oldStr` must be non-empty; an empty needle throws to avoid the pathological
  * `''.split('')` behavior.
  */
-export function replaceAllLiteral(
+function replaceAllLiteral(
   content: string,
   oldStr: string,
   newStr: string,
@@ -79,10 +79,7 @@ export function replaceAllLiteral(
  * the "not unique — found in lines X, Y" guidance when a search string matches
  * more than once.
  */
-export function findOccurrenceLineNumbers(
-  content: string,
-  needle: string,
-): number[] {
+function findOccurrenceLineNumbers(content: string, needle: string): number[] {
   if (needle.length === 0) {
     return [];
   }
@@ -170,8 +167,6 @@ interface LiteralReplacementRequest {
 interface LiteralReplacement {
   content: string;
   count: number;
-  firstMatchLine: number;
-  lineNumbers: number[];
 }
 
 /** Apply an exact literal replacement under an explicit match policy. */
@@ -188,9 +183,10 @@ export function replaceLiteralMatches({
     throw new ToolError(notFoundError());
   }
 
-  const lineNumbers = findOccurrenceLineNumbers(content, search);
-  const firstMatchIndex = content.indexOf(search);
   if (mode === 'unique' && count > 1) {
+    // Only ambiguous matches need the per-line guidance, so the scan over the
+    // whole file stays out of the common single-match path.
+    const lineNumbers = findOccurrenceLineNumbers(content, search);
     throw new ToolError(
       multipleMatchesError?.({ count, lineNumbers }) ??
         'The text to replace must be unique.',
@@ -205,8 +201,6 @@ export function replaceLiteralMatches({
         ? replaceAllLiteral(content, search, replacement)
         : replaceFirstLiteral(content, search, replacement),
     count: mode === 'all' ? count : 1,
-    firstMatchLine: content.slice(0, firstMatchIndex).split('\n').length,
-    lineNumbers,
   };
 }
 

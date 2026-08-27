@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, AGENT_SOURCE } from '@shared/schemas';
 import type { AgentSelectionItem } from '@shared/schemas';
-import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import {
   buildAgentSelectionMessage,
   buildCustomAgentDirMessage,
@@ -97,26 +96,6 @@ describe('settingsView notification message builders', () => {
       customPresets: [],
       orchestratorAgents: ['orchestrator-agent'],
       activePresetId: 'research',
-    });
-  });
-
-  it('buildAuthStatusMessage wraps the resolved status', async () => {
-    const status = {
-      signedIn: true,
-      email: 'user@example.com',
-      accountId: 'acct-1',
-      preferSubscription: true,
-    };
-    const getStatus = vi.fn().mockResolvedValue(status);
-
-    const message = await buildAuthStatusMessage(
-      SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      getStatus,
-    );
-
-    expect(message).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      status,
     });
   });
 });

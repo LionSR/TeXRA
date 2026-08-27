@@ -153,6 +153,12 @@ export class LitSessionRenderer implements SessionRendererPort {
             rounds: nonEmptyRounds(
               this.state.snapshots.getOutputFiles(streamId),
             ),
+            // Replace, don't merge: the store deletes a round whose output-file
+            // list goes empty (ROUND_FIELD_NORMALIZERS), and the read above
+            // already includes the fact that triggered this invalidation, since
+            // the store subscribes to session events in SessionHandle's
+            // constructor, before any host applier.
+            reset: true,
           }),
         );
       case 'compileFailures':

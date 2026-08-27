@@ -79,7 +79,14 @@ async function resolveNativeAgentRun(
     return null;
   }
   const { config } = metadata;
-  if (!config) return null;
+  if (!config) {
+    // Say so: the doc above promises a user-facing refusal for both halves of
+    // this guard, and a button the user just clicked must not go quiet.
+    await showInfo(
+      `This run's configuration was not saved, so it cannot be ${action}.`,
+    );
+    return null;
+  }
   // The config guard above guarantees the resolved metadata carries a config,
   // so the return type narrows `config` to defined for callers.
   return { ...metadata, config };
@@ -652,7 +659,14 @@ export function createProgressViewSecondTierHandlers(
     [CMD.POLISH_FOLLOW_UP]: async (data) => {
       await deps.preload?.(data.stream);
       const config = deps.getRunMetadata(data.stream).config;
-      if (!config) return;
+      if (!config) {
+        // Same port the polish failures use, rather than a silent return.
+        await deps.onPolishError(
+          data.stream,
+          new Error('This run has no saved configuration to polish against.'),
+        );
+        return;
+      }
       try {
         deps.onPolishProgress?.('Sending to AI for polishing...');
         const result = await deps.followUpPolish.polishFollowUp({

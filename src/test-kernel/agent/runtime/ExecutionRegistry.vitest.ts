@@ -1614,7 +1614,7 @@ describe('executionRegistry', () => {
   });
 
   it('preserves child approvals when detaching it from its parent', () => {
-    const approvals = createSessionApprovals();
+    const approvals = createSessionApprovals({ setApprovalBypassState() {} });
     const { registry } = createRegistry({ approvals });
     const parentStreamId = 'parent-detach-approvals' as StreamTabId;
     const childStreamId = 'child-detach-approvals' as StreamTabId;

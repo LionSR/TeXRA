@@ -435,6 +435,12 @@ export class StreamLogStore {
   private clearing = false;
   private stateRevision = 0;
   private summaryCacheMaintenanceEnabled = true;
+  /**
+   * Streams whose durable write has already been reported as failing. The
+   * throttled save retries indefinitely, so the cause is warned once per
+   * stream and re-armed by the next successful write.
+   */
+  private readonly writeFailureWarned = new Set<StreamTabId>();
 
   private constructor(mode: StreamLogStoreMode) {
     this.mode = Object.freeze(mode);
@@ -1719,10 +1725,21 @@ export class StreamLogStore {
         if (!logInstance) continue;
         try {
           await this.writeStream(streamId, logInstance, writeGeneration);
-        } catch {
+          this.writeFailureWarned.delete(streamId);
+        } catch (error) {
           // Failed writes re-mark their stream dirty so the next save retries.
           // Continue draining the batch so one unavailable file does not
-          // prevent unrelated transcripts from becoming durable.
+          // prevent unrelated transcripts from becoming durable. The cause is
+          // recorded once per stream: without it a full disk or a permission
+          // error means the transcript never becomes durable and nothing says
+          // why until flush() throws at session close.
+          if (!this.writeFailureWarned.has(streamId)) {
+            this.writeFailureWarned.add(streamId);
+            log.warn(
+              `Failed to persist the transcript for stream ${streamId}; it stays dirty and the next save retries: ${toErrorMessage(error)}`,
+              { data: error },
+            );
+          }
           if (this.streams.get(streamId)?.log !== undefined)
             this.markDirty(streamId);
         }

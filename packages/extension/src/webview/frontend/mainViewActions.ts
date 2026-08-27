@@ -326,7 +326,6 @@ function buildExecuteMessage(): MainViewExecuteMessage {
     agent: agent$.get(),
     model: model$.get(),
     instruction: instruction$.get(),
-    singleFiles: singleFiles$.get(),
     multiFiles: multiFiles$.get(),
     checkboxValues: checkboxValues$.get(),
     session: {

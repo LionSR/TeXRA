@@ -227,6 +227,13 @@ export async function processPdf2Png(
     const tempDir = await createTexraTempDir('texra-pdf-conversion-');
     try {
       const pagesToConvert = Math.min(pageCount, PDF_MAX_PAGES);
+      if (pagesToConvert < pageCount) {
+        // The cap protects against pathological PDFs, but dropping pages
+        // silently lets a model reason about a paper it has only part of.
+        log.warn(
+          `Rasterizing only the first ${pagesToConvert} of ${pageCount} pages from ${pdfPath}; the rest are not attached.`,
+        );
+      }
       const base64Images: string[] = [];
       for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
         base64Images.push(

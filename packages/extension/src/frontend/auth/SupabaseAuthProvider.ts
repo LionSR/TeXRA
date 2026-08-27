@@ -10,8 +10,8 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   AUTH_BRIDGE_URL,
   DEFAULT_OAUTH_PROVIDER,
+  getAuthCallbackUri,
   getExtensionId,
-  getExternalAuthCallbackInfo,
   AUTH_CALLBACK_TIMEOUT_MS,
   isOAuthProvider,
   type OAuthProvider,
@@ -398,7 +398,16 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     nonce: string,
   ): Promise<{ redirectTo: string }> {
     if (vscode.env.uiKind === vscode.UIKind.Web) {
-      const callbackInfo = await getExternalAuthCallbackInfo();
+      const externalUri = await vscode.env.asExternalUri(
+        vscode.Uri.parse(getAuthCallbackUri(vscode.env.uriScheme)),
+      );
+      // asExternalUri adds a ?state= routing token in Codespaces; carrying it on
+      // the redirect URL is what routes the callback back into the editor.
+      // skipEncoding (toString(true)) so auth-js's encodeURIComponent over
+      // redirectTo does not double-encode the already percent-encoded token;
+      // double-encoding corrupts it and the callback never returns (silent
+      // timeout).
+      const fullUrl = externalUri.toString(true);
       // In Codespaces/web the tunnel routing token must ride on redirect_to
       // (fullUrl already carries ?state=TUNNEL). Passing it as queryParams.state
       // instead overwrites GoTrue's own OAuth state on /authorize, which makes
@@ -407,10 +416,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       // so this is also correct for plain web.
       // PKCE flow: the callback carries a one-time ?code= (query), which the
       // shared createSessionFromCallback exchanges for a session.
-      const separator = callbackInfo.fullUrl.includes('?') ? '&' : '?';
-      return {
-        redirectTo: `${callbackInfo.fullUrl}${separator}app_nonce=${nonce}`,
-      };
+      const separator = fullUrl.includes('?') ? '&' : '?';
+      return { redirectTo: `${fullUrl}${separator}app_nonce=${nonce}` };
     }
 
     // Desktop: redirect GoTrue to the https bridge page instead of straight to

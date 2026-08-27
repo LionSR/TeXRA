@@ -10,10 +10,6 @@ export const MainViewExecuteFilesSchema = z.object({
   inputFiles: z.array(z.string()).optional(),
   contextFiles: z.array(z.string()).optional(),
   mediaFiles: z.array(z.string().nullable()).optional(),
-  outputFiles: z.array(z.string()).optional(),
-  editedFile: z.string().optional(),
-  editedFiles: z.array(z.string()).optional(),
-  baseFile: z.string().optional(),
 });
 
 /**

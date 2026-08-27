@@ -34,11 +34,7 @@ export class FileLister {
   }
 
   public async list(fileType: ListableFileType): Promise<string[]> {
-    const config = getFileListConfig(fileType, this.settings);
-    if (!config) {
-      return [];
-    }
-    return this.listFiles(config);
+    return this.listFiles(getFileListConfig(fileType, this.settings));
   }
 
   public async listEditedFiles(baseFileName: string): Promise<string[]> {

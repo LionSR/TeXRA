@@ -178,10 +178,11 @@ function truncatedResultResponsePreview(response: string): string {
 
   if (!lineLimited && !charLimited) return trimmed;
 
-  const extraLines = lines.length - RESULT_RESPONSE_PREVIEW_LINES;
-  const hidden = lineLimited
-    ? formatResultCount(extraLines, 'more line')
-    : 'more text';
+  // Count from what actually survives: when the character cap also fired, the
+  // line cap alone understates how much is hidden.
+  const hiddenLines = lines.length - preview.split('\n').length;
+  const hidden =
+    hiddenLines > 0 ? formatResultCount(hiddenLines, 'more line') : 'more text';
   return `${preview}\n… ${hidden}; open the subagent transcript for the full response`;
 }
 

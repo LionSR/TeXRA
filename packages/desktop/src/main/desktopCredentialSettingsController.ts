@@ -33,9 +33,10 @@ import {
   SUBSCRIPTION_USAGE_PROVIDERS,
   type SettingsViewInboundHandlerRegistry,
   type SubscriptionUsageSnapshots,
+  type UpdateChatGptAuthStatusMessage,
+  type UpdateGrokAuthStatusMessage,
 } from '@shared/schemas';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
-import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -449,21 +450,17 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   private async postChatGptAuthStatus(): Promise<void> {
-    this.options.renderer.postToRenderer(
-      await buildAuthStatusMessage(
-        SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-        getChatGptAuthStatus,
-      ),
-    );
+    this.options.renderer.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+      status: await getChatGptAuthStatus(),
+    } satisfies UpdateChatGptAuthStatusMessage);
   }
 
   private async postGrokAuthStatus(): Promise<void> {
-    this.options.renderer.postToRenderer(
-      await buildAuthStatusMessage(
-        SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-        getGrokAuthStatus,
-      ),
-    );
+    this.options.renderer.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
+      status: await getGrokAuthStatus(),
+    } satisfies UpdateGrokAuthStatusMessage);
   }
 
   private async postModelSelectionData(): Promise<void> {

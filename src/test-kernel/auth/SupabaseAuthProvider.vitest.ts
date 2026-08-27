@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const providerMocks = vi.hoisted(() => ({
+  asExternalUri: vi.fn(async (uri: { toString: () => string }) => uri),
   getUser: vi.fn(),
   invalidateModelOptionsCache: vi.fn(),
   invalidateRemoteAgentsAfterSignOut: vi.fn(async () => {}),
@@ -53,10 +54,15 @@ vi.mock('vscode', () => ({
     uiKind: 1,
     uriScheme: 'vscode',
     openExternal: providerMocks.openExternal,
+    // Web/Codespaces routing: the real API maps the vscode:// callback to a
+    // tunnel URL carrying a ?state= token, which the provider must preserve.
+    asExternalUri: providerMocks.asExternalUri,
   },
   ProgressLocation: { Notification: 15 },
   UIKind: { Desktop: 1, Web: 2 },
-  Uri: { parse: (value: string) => ({ value }) },
+  Uri: {
+    parse: (value: string) => ({ value, toString: () => value }),
+  },
   window: {
     withProgress: vi.fn(async (_options, task) =>
       task(
@@ -111,10 +117,7 @@ vi.mock('@model/computeModelOptions', () => ({
 }));
 
 // Local imports
-import {
-  AUTH_CALLBACK_TIMEOUT_MS,
-  setExternalAuthCallbackResolver,
-} from '@auth/config';
+import { AUTH_CALLBACK_TIMEOUT_MS } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
@@ -138,7 +141,6 @@ function seedPendingOAuthAttempt(
 afterEach(() => {
   testDoubles.secrets.clear();
   testDoubles.pkceTail = Promise.resolve(undefined);
-  setExternalAuthCallbackResolver(null);
   Object.assign(vscode.env, { uiKind: vscode.UIKind.Desktop });
 });
 
@@ -498,7 +500,9 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
     Object.assign(vscode.env, { uiKind: vscode.UIKind.Web });
     const callbackUrl =
       'https://example.github.dev/extension-auth-callback?state=a%2Bb%2F%3D';
-    setExternalAuthCallbackResolver(async () => ({ fullUrl: callbackUrl }));
+    providerMocks.asExternalUri.mockResolvedValue({
+      toString: () => callbackUrl,
+    });
     const { provider, session, coordinator } = createUnexpiredProvider();
     const uriHandler = createUriHandlerHarness();
     provider.setUriHandler(uriHandler.handler);
