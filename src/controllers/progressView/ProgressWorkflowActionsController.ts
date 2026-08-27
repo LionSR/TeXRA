@@ -1,11 +1,11 @@
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { createLog } from '@logger/logUtils';
 import type {
   OutputFileInfo,
   ReadonlyRoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
-import { createLog } from '@logger/logUtils';
 import { AgentCategory, cloneRoundIndexed } from '@shared/schemas';
 import { unique } from '@utils/core';
 import type { StreamOutputsSource } from './streamOutputs';
