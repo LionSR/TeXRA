@@ -610,6 +610,7 @@ describe('ProgressBackend', () => {
         command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
         stream: streamId,
         rounds: { 1: [outputFile] },
+        reset: true,
       },
     ]);
     expect(messages).toContainEqual({

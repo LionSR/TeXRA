@@ -423,7 +423,10 @@ export async function checkCoreDependencies(
           GM_INSTRUCTIONS +
           '\n\nOR\n\nImageMagick:\n' +
           MAGICK_INSTRUCTIONS;
-        throw new Error(errorMsg);
+        // Report through the host handler like every other missing tool: a
+        // throw here would be caught below and turn three installed tools into
+        // a false "missing" list while dropping this message entirely.
+        await reportMissingTool(errorMsg, INSTALL_DOCS);
       }
     }
 

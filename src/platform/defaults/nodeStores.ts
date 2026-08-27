@@ -82,6 +82,9 @@ async function openTexraWorkspaceConfigStore(
       ) {
         return projectStore;
       }
+      warn(
+        `Project .texra/config.json is not writable (${projectConfigPath}); using the internal workspace config store.`,
+      );
     } catch (error) {
       warn(
         `Cannot open project .texra/config.json; using the internal workspace config store. Cause: ${toErrorMessage(error)}`,

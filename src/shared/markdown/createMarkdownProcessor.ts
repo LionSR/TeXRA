@@ -742,14 +742,24 @@ export function protectLatexMathSpansForNormalize(content: string): {
 // `\_` `\*` etc., which carry real markdown-escape semantics.
 const LATEX_MACRO = /\\([,;:!(){}[\]])/g;
 
-/** FNV-1a hash → base-36 string. Cheap, no crypto needs here. */
+/**
+ * Two FNV-1a lanes → one base-36 key. Cheap, no crypto needs here — but the
+ * digest is the cache's identity key, so a collision would render one message
+ * as another. 32 bits is not enough for that over a long session (a 2000-entry
+ * window churns far more than 2000 distinct bodies), so two lanes run with
+ * different primes and are joined by a delimiter (concatenating two
+ * variable-length forms would re-import collisions across the boundary), with
+ * the length folded in as a third component.
+ */
 function hashContent(str: string): string {
-  let hash = 2166136261;
+  let a = 2166136261;
+  let b = 2166136261;
   for (let i = 0; i < str.length; i++) {
-    hash ^= str.charCodeAt(i);
-    hash = (hash * 16777619) >>> 0;
+    const code = str.charCodeAt(i);
+    a = ((a ^ code) * 16777619) >>> 0;
+    b = ((b ^ code) * 16777639) >>> 0;
   }
-  return hash.toString(36);
+  return `${a.toString(36)}.${b.toString(36)}.${str.length.toString(36)}`;
 }
 
 export function createMarkdownProcessor(

@@ -10,7 +10,7 @@
 // Local imports - utils
 import { createLog } from '@logger/logUtils';
 import { OUTPUT_DOCUMENT_TAG } from '@shared/schemas';
-import { isObject } from '@utils/core';
+import { ensureArray, isObject } from '@utils/core';
 
 // Local imports
 import { removeCDATA } from './xmlCdata';
@@ -138,26 +138,26 @@ export function extractContentFromXMLbyTagMultiple(
   if (containerTag in root) {
     const container = root[containerTag];
     if (isObject(container) && OUTPUT_DOCUMENT_TAG in container) {
-      const documents = container[OUTPUT_DOCUMENT_TAG];
-      if (Array.isArray(documents)) {
-        return documents.map((doc) => {
-          const entry = doc as Record<string, unknown>;
-          return {
-            content: entry.content?.toString().trim() ?? '',
-            // Same missing-name contract as the regex tier (extractNamedDocuments):
-            // a document without a usable `name` attribute is named 'unnamed'
-            // rather than admitting `undefined` into downstream naming logic.
-            name: (entry.name as string | undefined) ?? 'unnamed',
-          };
-        });
+      // fast-xml-parser yields an object for a single <document> and an array
+      // for several, and a bare string for a document with no attributes (which
+      // carries no name and no content, so it falls through to the regex tier).
+      const documents =
+        ensureArray(container[OUTPUT_DOCUMENT_TAG]).filter(isObject);
+      if (documents.length > 0) {
+        return documents.map((entry) => ({
+          content: entry.content?.toString().trim() ?? '',
+          // Same missing-name contract as the regex tier (extractNamedDocuments):
+          // a document without a usable `name` attribute is named 'unnamed'
+          // rather than admitting `undefined` into downstream naming logic.
+          name: (entry.name as string | undefined) ?? 'unnamed',
+        }));
       }
-      log.error(
-        `Document property is not an array in multiple document case. Structure: ${getObjectStructure(container)}`,
-      );
     }
   }
 
-  log.error(
+  // Not an error: the caller (XmlOutputManager) owns the recovery and narrates
+  // the regex fallback itself.
+  log.debug(
     `No ${containerTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
   );
   return null;
