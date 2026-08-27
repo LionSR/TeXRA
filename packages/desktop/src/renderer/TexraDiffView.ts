@@ -1,10 +1,7 @@
 // Third-party imports
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { consume } from '@lit/context';
-
 // Local imports - shared modules
-import { themeContext } from '@shared/BaseWebviewApp';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { DESKTOP_THEME_KIND, type Theme } from '@shared/schemas';
 import {
@@ -84,7 +81,6 @@ export class TexraDiffView extends LitElement {
   @property() language = 'plaintext';
   @property({ type: Boolean, reflect: true }) fill = false;
 
-  @consume({ context: themeContext, subscribe: true })
   @property({ attribute: false })
   hostTheme: Theme = DESKTOP_THEME_KIND.DARK;
   @state() private loading = false;

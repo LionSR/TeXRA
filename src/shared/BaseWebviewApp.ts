@@ -1,7 +1,5 @@
 // Third-party imports
 import { LitElement } from 'lit';
-import { createContext, provide } from '@lit/context';
-import { state } from 'lit/decorators.js';
 
 // Local imports - shared handlers
 import { COMMON_COMMANDS } from '@shared/ipc';
@@ -54,8 +52,6 @@ function handleCommonMessage(
   }
 }
 
-export const themeContext = createContext<Theme>('shared-theme');
-
 /**
  * Base class for Lit-powered webview apps.
  *
@@ -66,15 +62,11 @@ export const themeContext = createContext<Theme>('shared-theme');
  */
 
 export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
-  @provide({ context: themeContext })
-  @state()
-  protected theme: Theme = 'dark';
-
   protected debugMode = false;
 
   private readonly messageListener = (event: MessageEvent) => {
     const handled = handleCommonMessage(event.data, {
-      setTheme: (theme) => this.onThemeChange(theme),
+      setTheme: () => {},
       setDebugMode: (enabled) => {
         this.debugMode = enabled;
       },
@@ -131,22 +123,6 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
       `${appLabel} Message validation failed for command "${command}".`,
       error,
     );
-  }
-
-  /**
-   * Record the host theme kind.
-   *
-   * This method has no DOM job: `@shared/wa/waColorScheme`'s MutationObserver
-   * is the single owner of the `wa-light` / `wa-dark` class on `<html>`. It
-   * derives darkness from the body signals the host itself sets — VS Code's
-   * `vscode-*` classes and `data-vscode-theme-kind`, and on desktop the same
-   * attributes written by `applyHostBodyTheme()` — so no push is needed here.
-   * Writing `document.body.className = theme` from this method used to erase
-   * those host classes, which is why the `:host-context(.vscode-*)` rules
-   * stopped matching once a theme message arrived.
-   */
-  protected onThemeChange(theme: Theme): void {
-    this.theme = theme;
   }
 
   /**
