@@ -451,7 +451,7 @@ export async function runToolUseFlow(
     } else {
       persistenceRecoveryPending = true;
       const flowRecord = await readPersistedFlowRecord(kv, executionId);
-      persistedFlowRecordExists = flowRecord !== undefined;
+      persistedFlowRecordExists = flowRecord != null;
       // Cancellation can also arrive while the recovery read is pending. Do
       // not start a repair write after that handoff.
       if (signal.aborted) {

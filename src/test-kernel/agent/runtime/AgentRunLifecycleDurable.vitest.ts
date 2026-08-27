@@ -64,6 +64,7 @@ describe('runFlowWithLifecycle durable startup aborts', () => {
     seedStreamStatusForTest(session.status, streamId, {
       phase: STREAM_PHASE.COMPLETED,
     });
+    let disposition: 'preserve' | 'delete' | undefined;
 
     try {
       const result = await runFlowWithLifecycle(
@@ -75,7 +76,10 @@ describe('runFlowWithLifecycle durable startup aborts', () => {
               setting: AgentToolUseSettingSchema.parse({}),
               onRoundFinalized: () => {},
               onModelChanged: () => {},
-              onFlowRecordDisposition: lifecycle.setFlowRecordDisposition,
+              onFlowRecordDisposition: (value) => {
+                disposition = value;
+                lifecycle.setFlowRecordDisposition(value);
+              },
             },
             undefined,
             {
@@ -95,6 +99,7 @@ describe('runFlowWithLifecycle durable startup aborts', () => {
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(disposition).toBe('preserve');
       await expect(store.readMeta()).resolves.toMatchObject({
         outcome: RUN_OUTCOME.CANCELLED,
       });

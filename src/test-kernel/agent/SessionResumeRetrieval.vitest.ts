@@ -1451,22 +1451,30 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const streamId = 'chat@gpt54#abc-fresh-cancel-setup' as StreamTabId;
     const store = getExecutionStore(executionId);
     const session = createTestSession();
-    const readSpy = vi.spyOn(store, 'read');
+    let flowContext: ToolUseSetupContext | undefined;
+    const readSpy = vi.spyOn(store, 'read').mockImplementation(async () => {
+      flowContext?.interrupt();
+      return undefined;
+    });
     const deleteSpy = vi.spyOn(store, 'delete');
     const releaseSpy = vi.spyOn(session.followUps, 'release');
     const dispositions: Array<'preserve' | 'delete'> = [];
 
     try {
       const result = await runPersistedFlow(executionId, streamId, undefined, {
-        attachment: { attach: (flowContext) => flowContext.interrupt() },
+        attachment: {
+          attach: (context) => {
+            flowContext = context;
+          },
+        },
         session,
         onFlowRecordDisposition: (value) => dispositions.push(value),
       });
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(readSpy).not.toHaveBeenCalled();
+      expect(readSpy).toHaveBeenCalledOnce();
       expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
-      expect(dispositions).toEqual(['preserve']);
+      expect(dispositions).toEqual(['delete']);
       expect(releaseSpy).toHaveBeenCalledWith(
         expect.objectContaining({ streamId, kind: 'flow' }),
         'terminal',
