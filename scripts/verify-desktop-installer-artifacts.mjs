@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, join, relative } from 'node:path';
 import process from 'node:process';
@@ -149,21 +150,15 @@ function getPlatformKeys() {
 }
 
 async function verifyIcon(requirement) {
-  try {
-    const iconStat = await stat(requirement.iconPath);
-    if (iconStat.size === 0) {
-      failures.push(
-        `${requirement.label} installer icon is empty: ${relative(repoRoot, requirement.iconPath)}`,
-      );
-    }
-  } catch (error) {
-    if (error?.code === 'ENOENT') {
-      failures.push(
-        `Missing ${requirement.label} installer icon: ${relative(repoRoot, requirement.iconPath)}`,
-      );
-    } else {
-      throw error;
-    }
+  const iconStat = statSync(requirement.iconPath, { throwIfNoEntry: false });
+  if (iconStat == null) {
+    failures.push(
+      `Missing ${requirement.label} installer icon: ${relative(repoRoot, requirement.iconPath)}`,
+    );
+  } else if (iconStat.size === 0) {
+    failures.push(
+      `${requirement.label} installer icon is empty: ${relative(repoRoot, requirement.iconPath)}`,
+    );
   }
 }
 
