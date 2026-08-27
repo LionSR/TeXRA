@@ -16,19 +16,19 @@ describe('shared file-listing rules', () => {
     const config = getFileListConfig('input', settings);
 
     expect(config).toMatchObject({
-      extensions: ['.txt', '.tex', '.md'],
-      ignoredFiles: ['command.tex', 'commands.tex', 'preamble.tex', 'yaml'],
+      include: ['.txt', '.tex', '.md'],
+      excludeFiles: ['command.tex', 'commands.tex', 'preamble.tex', 'yaml'],
     });
-    expect(config?.ignoredDirs).toContain('node_modules');
+    expect(config?.excludeDirs).toContain('node_modules');
   });
 
   it('normalizes filters once and applies file and directory rules', () => {
     const filters = prepareFileFilters({
-      extensions: ['.TEX'],
-      ignoredExtensions: ['.PDF'],
-      ignoredDirs: ['node_modules', 'drafts/generated'],
-      ignoredKeywords: ['scratch', 'template'],
-      ignoredFiles: ['command.tex'],
+      include: ['.TEX'],
+      excludeExtensions: ['.PDF'],
+      excludeDirs: ['node_modules', 'drafts/generated'],
+      excludeKeywords: ['scratch', 'template'],
+      excludeFiles: ['command.tex'],
     });
 
     const directoryCases: ReadonlyArray<readonly [string, boolean]> = [

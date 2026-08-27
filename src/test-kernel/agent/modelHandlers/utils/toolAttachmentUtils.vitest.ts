@@ -251,18 +251,22 @@ describe('extractToolAttachments', () => {
     expect(sanitizedResult.output).toBe('done');
   });
 
-  it('keeps error summaries out of model payloads', () => {
+  it('keeps error summaries for human-facing logs', () => {
     const { sanitizedResult } = extractToolAttachments({
       status: 'error',
       error: 'The operation failed before producing output.',
-      summary: 'The operation failed before producing output.',
+      summary: 'Operation failed.',
     });
 
     expect(sanitizedResult.status).toBe('error');
     expect(sanitizedResult.error).toBe(
       'The operation failed before producing output.',
     );
-    expect(Object.hasOwn(sanitizedResult, 'summary')).toBe(false);
+    // `summary` is "Brief summary for human-facing logs" on the error
+    // variant (see ErrorToolResultSchema) — it must survive sanitization so
+    // ToolUseDispatchNode's progress log can surface it, even though
+    // formatToolResultAsText never sends it to the model on this variant.
+    expect(sanitizedResult.summary).toBe('Operation failed.');
   });
 
   it('drops editedFiles from executed payloads', () => {

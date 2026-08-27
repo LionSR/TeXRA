@@ -11,18 +11,24 @@ import {
 } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
+import { ExecutionIdSchema } from '@shared/schemas';
 
 const log = createLog('ExecuteCommand');
 
-interface WrappedExecuteInput {
-  config: unknown;
-  executionId?: ExecutionId;
-  preferHelperModel?: boolean;
-  modelHandlerCompatibilityKey?: unknown;
-  copilotRouteOverride?: unknown;
-  onRun?: () => void;
-}
+/**
+ * The "wrapped" launch shape — `{ config, executionId?, ... }` — as opposed to
+ * a bare `AgentConfig` passed directly (see `runExecuteCommand`'s doc
+ * comment). `config` is validated separately against `AgentConfigSchema`, so
+ * it stays `z.unknown()` here. `onRun` is a live callback, not serializable
+ * data, so it is read directly off the input rather than run through Zod.
+ */
+const WrappedExecuteInputSchema = z.object({
+  config: z.unknown(),
+  executionId: ExecutionIdSchema.optional(),
+  preferHelperModel: z.boolean().optional(),
+  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
+  copilotRouteOverride: z.literal('direct').optional(),
+});
 
 /**
  * Execute an agent with the given configuration.
@@ -35,19 +41,14 @@ interface WrappedExecuteInput {
  */
 export async function runExecuteCommand(input: unknown): Promise<void> {
   try {
-    const wrapped =
-      input !== null && typeof input === 'object' && 'config' in input
-        ? (input as WrappedExecuteInput)
-        : null;
+    const isWrapped =
+      input !== null && typeof input === 'object' && 'config' in input;
+    const wrapped = isWrapped ? WrappedExecuteInputSchema.parse(input) : null;
     const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
-    const modelHandlerCompatibilityKey =
-      ModelHandlerCompatibilityKeySchema.nullish().parse(
-        wrapped?.modelHandlerCompatibilityKey,
-      );
-    const copilotRouteOverride = z
-      .literal('direct')
-      .optional()
-      .parse(wrapped?.copilotRouteOverride);
+    // Not data, so it bypasses the Zod schema above — see that schema's doc.
+    const onRun = isWrapped
+      ? (input as { onRun?: () => void }).onRun
+      : undefined;
 
     const request = wrapped?.executionId
       ? ({ kind: 'resume', config, executionId: wrapped.executionId } as const)
@@ -58,9 +59,9 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       // progress-view compile fixer); a direct main-view launch omits it and
       // keeps the user's selected model.
       preferHelperModel: wrapped?.preferHelperModel === true,
-      modelHandlerCompatibilityKey,
-      copilotRouteOverride,
-      onRun: wrapped?.onRun,
+      modelHandlerCompatibilityKey: wrapped?.modelHandlerCompatibilityKey,
+      copilotRouteOverride: wrapped?.copilotRouteOverride,
+      onRun,
     });
   } catch (error) {
     if (error instanceof ZodError) {

@@ -7,12 +7,12 @@ import {
   passesFileFilters,
   prepareFileFilters,
   shouldVisitDirectory,
-  type FileListConfig,
+  type FileFilterConfig,
 } from './fileListingRules';
 
 export interface WorkspaceFileListingOptions {
   root: string;
-  config: FileListConfig;
+  config: FileFilterConfig;
   readDirectory(path: string): Promise<[string, number][]>;
 }
 

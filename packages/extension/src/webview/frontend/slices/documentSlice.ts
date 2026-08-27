@@ -59,7 +59,7 @@ function isDocumentFileType(value: string): value is DocumentFileType {
 /** Check if a commit hash exists in the options array. */
 function hasCommitValue(value: string): boolean {
   if (!value) return false;
-  return (fileOptions$.get().commit ?? []).some((commit) => {
+  return fileOptions$.get().commit.some((commit) => {
     const [hash] = commit.split(': ');
     return hash === value;
   });
@@ -162,7 +162,7 @@ export const documentHandlers = {
 
     if (!commitHash) return;
     const fo = fileOptions$.get();
-    const options = fo.commit ?? [];
+    const options = fo.commit;
     if (!options.some((option) => option.startsWith(commitHash))) {
       fileOptions$.set({
         ...fo,

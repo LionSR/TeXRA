@@ -5,7 +5,7 @@ import {
   getFileListConfig,
   loadFileListSettings,
   matchesEditedFile,
-  type FileListConfig,
+  type FileFilterConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
@@ -76,7 +76,7 @@ type DesktopMultiFileType = keyof typeof MULTI_SET_COMMAND_BY_FILE_TYPE;
 
 async function listFiles(
   root: string,
-  rawConfig: FileListConfig,
+  rawConfig: FileFilterConfig,
 ): Promise<string[]> {
   return listWorkspaceFiles({
     root,
@@ -216,7 +216,7 @@ export function createDesktopFileSelection(
           // Electron's dialog filter extensions must not include the leading
           // dot (unlike getFileListConfig's `.tex`-style entries); the VS
           // Code picker gets this right via getFilterExtensions.
-          extensions: (listConfig?.extensions ?? ['*']).map((ext) =>
+          extensions: (listConfig?.include ?? ['*']).map((ext) =>
             ext.replace(/^\./, ''),
           ),
         },

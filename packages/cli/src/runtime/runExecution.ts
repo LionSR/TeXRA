@@ -298,18 +298,35 @@ export async function executeCliRequest(
   let ownedExecutionId: ExecutionId | undefined;
   const launchAbortController = new AbortController();
   let shutdownRequested = false;
-  let shutdownInterrupted = false;
-  let workflowOutputPublicationCommitted = false;
-  let shutdownArtifactFailure: unknown;
-  let shutdownFinalizationFailureReported = false;
+  // Workflow-output publication and shutdown-driven interruption race on the
+  // same synchronous tick (see tryCommitWorkflowOutputPublication and the
+  // onShutdown handler below): at most one may own the terminal verdict for
+  // this launch. Modeling that as one variable makes "both committed and
+  // interrupted" unrepresentable instead of relying on two booleans staying
+  // in sync by hand. The artifact-failure and report-dedupe bookkeeping are
+  // only ever meaningful once interrupted, so they live on that variant too.
+  type LaunchVerdict =
+    | { readonly kind: 'undecided' }
+    | { readonly kind: 'published' }
+    | {
+        readonly kind: 'interrupted';
+        artifactFailure: unknown;
+        finalizationFailureReported: boolean;
+      };
+  let launchVerdict: LaunchVerdict = { kind: 'undecided' };
   const reportFinalizationFailure = (error: unknown): void => {
     session.interactions.emit('requestShowError', {
       message: toErrorMessage(error),
     });
   };
   const reportShutdownFinalizationFailure = (error: Error): void => {
-    if (shutdownFinalizationFailureReported) return;
-    shutdownFinalizationFailureReported = true;
+    if (
+      launchVerdict.kind !== 'interrupted' ||
+      launchVerdict.finalizationFailureReported
+    ) {
+      return;
+    }
+    launchVerdict.finalizationFailureReported = true;
     reportFinalizationFailure(error);
   };
   let settleLeaseAcquired: (
@@ -330,12 +347,12 @@ export async function executeCliRequest(
   // Both callbacks enter on this event loop, and neither yields between the
   // check and assignment. Exactly one can therefore own the terminal verdict.
   const tryCommitWorkflowOutputPublication = (): boolean => {
-    if (shutdownInterrupted) return false;
-    workflowOutputPublicationCommitted = true;
+    if (launchVerdict.kind === 'interrupted') return false;
+    launchVerdict = { kind: 'published' };
     return true;
   };
   const finalizeShutdownStatus = (): Promise<boolean> => {
-    if (!shutdownInterrupted) return Promise.resolve(false);
+    if (launchVerdict.kind !== 'interrupted') return Promise.resolve(false);
     shutdownStatusFinalized ??= (async () => {
       const executionId = await leaseAcquired;
       if (!executionId) return false;
@@ -368,8 +385,11 @@ export async function executeCliRequest(
         // below, which rethrows it into runAgent's artifact aggregate. This
         // memoized operation itself resolves false so the outer shutdown await
         // cannot rethrow the same error over the primary run failure.
-        if (!(error instanceof ExecutionLeaseLostError)) {
-          shutdownArtifactFailure = error;
+        if (
+          !(error instanceof ExecutionLeaseLostError) &&
+          launchVerdict.kind === 'interrupted'
+        ) {
+          launchVerdict.artifactFailure = error;
         }
         return false;
       }
@@ -381,21 +401,27 @@ export async function executeCliRequest(
     async (shutdownDeadline) => {
       shutdownRequested = true;
       launchAbortController.abort();
-      // Paired with tryCommitWorkflowOutputPublication: keep this flag read
-      // and the shutdownInterrupted assignment below in one synchronous turn.
+      // Paired with tryCommitWorkflowOutputPublication: keep this read of
+      // launchVerdict and the assignment below in one synchronous turn.
       // Headless shutdown deliberately cascades into active children: a
       // detached child cannot outlive the exiting CLI process, so the
       // detach-on-stop toggle is not consulted on this path.
       const interruptionAccepted =
-        !workflowOutputPublicationCommitted && launchExecutionId
+        launchVerdict.kind !== 'published' && launchExecutionId
           ? session.executions.kill(launchExecutionId, {
               detachActiveChildren: false,
             })
           : false;
-      shutdownInterrupted = interruptionAccepted || shutdownInterrupted;
+      if (interruptionAccepted && launchVerdict.kind === 'undecided') {
+        launchVerdict = {
+          kind: 'interrupted',
+          artifactFailure: undefined,
+          finalizationFailureReported: false,
+        };
+      }
       let resumableCheckpoint:
         Extract<ResumabilityDecision, { kind: 'checkpoint' }> | undefined;
-      if (shutdownInterrupted && ownedExecutionId) {
+      if (launchVerdict.kind === 'interrupted' && ownedExecutionId) {
         try {
           const resumability = await deriveResumability(ownedExecutionId);
           if (resumability.kind === 'checkpoint') {
@@ -453,9 +479,12 @@ export async function executeCliRequest(
         launchSignal: launchAbortController.signal,
         beforeLeaseRelease: async () => {
           const handled = await finalizeShutdownStatus();
-          if (shutdownArtifactFailure !== undefined) {
-            const error = shutdownArtifactFailure;
-            shutdownArtifactFailure = undefined;
+          if (
+            launchVerdict.kind === 'interrupted' &&
+            launchVerdict.artifactFailure !== undefined
+          ) {
+            const error = launchVerdict.artifactFailure;
+            launchVerdict.artifactFailure = undefined;
             throw error;
           }
           return handled;

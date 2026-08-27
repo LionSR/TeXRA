@@ -7,12 +7,24 @@ import {
   ValidationErrorDiagnosticsSchema,
 } from '@shared/schemas';
 
-const ERROR_PAYLOAD_STRIPPED_KEYS = new Set([
-  'output',
-  'summary',
-  'edits',
-  'files',
-]);
+/**
+ * Sanitize the shared `diagnostics` field. Sanitized results only carry the
+ * validation-error diagnostics shape (see `ToolResultSharedFields.diagnostics`
+ * for why the source field is `z.unknown()`); any other tool's diagnostics
+ * payload — or a validation-error payload whose `formatted` doesn't actually
+ * match `FormattedZodIssueSchema` — is dropped rather than passed through
+ * untyped.
+ */
+function sanitizeDiagnostics(
+  diagnostics: unknown,
+): { type: 'validation_error'; formatted: unknown } | undefined {
+  if (diagnostics === undefined) return undefined;
+  const validationError =
+    ValidationErrorDiagnosticsSchema.safeParse(diagnostics);
+  if (!validationError.success) return undefined;
+  const { type, formatted } = validationError.data;
+  return { type, formatted };
+}
 
 /**
  * Result from extracting attachments from a tool result.
@@ -39,50 +51,60 @@ export function extractToolAttachments(
   result: ToolResult,
 ): ExtractedToolAttachments {
   const parsed = ToolResultSchema.parse(result);
-  const status = parsed.status;
-  const attachments: ToolFileAttachment[] =
-    status === 'executed' ? (parsed.files ?? []) : [];
-  const sanitizedResult: Record<string, unknown> = { status };
+  const diagnostics = sanitizeDiagnostics(parsed.diagnostics);
 
-  for (const [key, value] of Object.entries(parsed)) {
-    if (value === undefined) continue;
-    if (key === 'base64Data' || key === 'bytes') {
-      continue;
-    }
-    if (status === 'executed' && key === 'error') {
-      continue;
-    }
-    if (status === 'error' && ERROR_PAYLOAD_STRIPPED_KEYS.has(key)) {
-      continue;
-    }
-    if (key === 'diagnostics') {
-      // Sanitized results only carry the validation-error diagnostics shape
-      // (see ToolResultSharedFields.diagnostics); any other tool's
-      // diagnostics payload — or a validation-error payload whose `formatted`
-      // doesn't actually match FormattedZodIssueSchema — is dropped here
-      // rather than passed through untyped.
-      const validationError = ValidationErrorDiagnosticsSchema.safeParse(value);
-      if (validationError.success) {
-        const { type, formatted } = validationError.data;
-        sanitizedResult[key] = { type, formatted };
-      }
-      continue;
-    }
-    sanitizedResult[key] = value;
+  if (parsed.status === 'error') {
+    // Error variant: no binary-bearing fields exist on this branch of the
+    // schema (output/edits/files are all `z.undefined()` here), so there is
+    // nothing to strip beyond binary payloads that can't occur. `summary` is
+    // real on this variant — "Brief summary for human-facing logs" — and must
+    // survive sanitization; it feeds ToolUseDispatchNode's progress log.
+    const sanitizedResult: ToolResult = {
+      status: 'error',
+      error: parsed.error,
+      ...(parsed.summary !== undefined ? { summary: parsed.summary } : {}),
+      ...(parsed.userInstruction !== undefined
+        ? { userInstruction: parsed.userInstruction }
+        : {}),
+      ...(parsed.userPatch !== undefined
+        ? { userPatch: parsed.userPatch }
+        : {}),
+      ...(parsed.attachmentSummary !== undefined
+        ? { attachmentSummary: parsed.attachmentSummary }
+        : {}),
+      ...(diagnostics !== undefined ? { diagnostics } : {}),
+    };
+    return { attachments: [], sanitizedResult };
   }
 
-  if (status === 'executed' && attachments.length > 0) {
-    sanitizedResult.files = attachments.map((file): FileReference => ({
-      path: file.path,
-      mimeType: file.mimeType,
-      ...(file.description ? { description: file.description } : {}),
-    }));
-  } else {
-    delete sanitizedResult.files;
-  }
+  // Executed variant: strip binary data (base64Data/bytes) from files, keep
+  // everything else the schema declares.
+  const attachments: ToolFileAttachment[] = parsed.files ?? [];
+  const sanitizedFiles: FileReference[] | undefined =
+    attachments.length > 0
+      ? attachments.map((file): FileReference => ({
+          path: file.path,
+          mimeType: file.mimeType,
+          ...(file.description ? { description: file.description } : {}),
+        }))
+      : undefined;
 
-  return {
-    attachments,
-    sanitizedResult: sanitizedResult as ToolResult,
+  const sanitizedResult: ToolResult = {
+    status: 'executed',
+    ...(parsed.output !== undefined ? { output: parsed.output } : {}),
+    ...(parsed.summary !== undefined ? { summary: parsed.summary } : {}),
+    ...(parsed.endTurn !== undefined ? { endTurn: parsed.endTurn } : {}),
+    ...(parsed.edits !== undefined ? { edits: parsed.edits } : {}),
+    ...(sanitizedFiles !== undefined ? { files: sanitizedFiles } : {}),
+    ...(parsed.userInstruction !== undefined
+      ? { userInstruction: parsed.userInstruction }
+      : {}),
+    ...(parsed.userPatch !== undefined ? { userPatch: parsed.userPatch } : {}),
+    ...(parsed.attachmentSummary !== undefined
+      ? { attachmentSummary: parsed.attachmentSummary }
+      : {}),
+    ...(diagnostics !== undefined ? { diagnostics } : {}),
   };
+
+  return { attachments, sanitizedResult };
 }

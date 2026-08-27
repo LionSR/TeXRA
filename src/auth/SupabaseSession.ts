@@ -1,4 +1,4 @@
-import { Mutex } from 'async-mutex';
+import PQueue from 'p-queue';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -68,7 +68,12 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private lastStoredSession: SupabaseSession | null = null;
   private lastStoredSessionVersion = 0;
   private lastRefreshFailure: SessionRefreshFailure | null = null;
-  private readonly sessionMutex = new Mutex();
+  // Single-flight serialized writes, same mechanism as
+  // SubscriptionOAuthCoordinator's `sessionMutations`: concurrency:1 makes
+  // `.onIdle()` alone a sufficient "no mutation in flight, and none can start
+  // without bumping sessionMutationVersion first" barrier for
+  // `loadStableSessionSnapshot`'s version-recheck loop below.
+  private readonly sessionMutations = new PQueue({ concurrency: 1 });
   private readonly log: Required<SupabaseSessionLog>;
 
   constructor(private readonly options: SupabaseSessionCoordinatorOptions) {
@@ -103,15 +108,14 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    * delete the replacement.
    */
   async clearSessionIfCurrent(expected: SupabaseSession): Promise<boolean> {
-    let cleared = false;
-    await this.sessionMutex.runExclusive(async () => {
+    return this.sessionMutations.add(async () => {
       const current = await this.loadSession();
       if (
         !current ||
         current.accessToken !== expected.accessToken ||
         current.refreshToken !== expected.refreshToken
       ) {
-        return;
+        return false;
       }
 
       this.sessionMutationVersion += 1;
@@ -119,10 +123,8 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       await this.options.storage.delete();
       this.lastStoredSession = null;
       this.lastStoredSessionVersion = mutationVersion;
-      cleared = true;
+      return true;
     });
-
-    return cleared;
   }
 
   /**
@@ -317,12 +319,9 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private async loadStableSessionSnapshot(): Promise<StableSessionSnapshot> {
     for (;;) {
       const versionBeforeLoad = this.sessionMutationVersion;
-      await this.sessionMutex.waitForUnlock();
+      await this.sessionMutations.onIdle();
       const session = await this.loadSession();
-      if (
-        versionBeforeLoad === this.sessionMutationVersion &&
-        !this.sessionMutex.isLocked()
-      ) {
+      if (versionBeforeLoad === this.sessionMutationVersion) {
         return { session, version: versionBeforeLoad };
       }
     }
@@ -332,7 +331,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     session: SupabaseSession | null,
     operation: () => Promise<void>,
   ): Promise<void> {
-    await this.sessionMutex.runExclusive(async () => {
+    await this.sessionMutations.add(async () => {
       this.sessionMutationVersion += 1;
       const mutationVersion = this.sessionMutationVersion;
       await operation();
@@ -347,7 +346,8 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   ): Promise<SupabaseSession | null> {
     if (
       this.sessionMutationVersion !== expectedVersion ||
-      this.sessionMutex.isLocked()
+      this.sessionMutations.size > 0 ||
+      this.sessionMutations.pending > 0
     ) {
       return this.loadStableSession();
     }
