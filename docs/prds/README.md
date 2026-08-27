@@ -1,6 +1,6 @@
 ---
 created: 2026-06-21
-updated: 2026-08-17
+updated: 2026-08-27
 ---
 
 # PRD Index
@@ -25,6 +25,7 @@ that archived source branch, not `main`.
 
 | Document                                                                                                                                 | Created    | Updated    |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- |
+| [PRD: Effect 4 as the TeXRA backend runtime](./2026-08-26-effect-4-runtime-migration.md)                                                 | 2026-08-26 | 2026-08-27 |
 | [PRD: The session event journal — single-authority transcript persistence](./2026-08-18-session-event-journal.md)                        | 2026-08-18 | 2026-08-18 |
 | [PRD: One SQLite database per workspace for app-owned durable state](./2026-08-16-sqlite-workspace-state.md)                             | 2026-08-16 | 2026-08-17 |
 | [PRD: Transcript, persistence, and projection architecture for long-lived sessions](./2026-08-11-transcript-memory-architecture.md)      | 2026-08-11 | 2026-08-11 |
