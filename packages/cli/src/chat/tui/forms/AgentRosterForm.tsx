@@ -99,7 +99,7 @@ function selectedAgentKeys(
   );
 }
 
-function selectionSizeLabel(selection: AgentRosterCategorySelection): string {
+function selectionSizeLabel(selection: 'all' | readonly string[]): string {
   return selection === 'all' ? 'all' : String(selection.length);
 }
 
@@ -200,6 +200,13 @@ export function AgentRosterForm(
   };
 
   if (mode === 'overview') {
+    const selectionSize = (category: AgentCategory): string =>
+      selectionSizeLabel(
+        selectedAgentKeys(
+          data.record.agentKeys[category],
+          data.agents[category],
+        ),
+      );
     return frame(
       [
         {
@@ -220,7 +227,7 @@ export function AgentRosterForm(
         {
           value: 'custom-category',
           label: 'Custom selection',
-          description: `${selectionSizeLabel(data.record.agentKeys.workflow)} workflow, ${selectionSizeLabel(data.record.agentKeys.toolUse)} tool-use`,
+          description: `${selectionSize('workflow')} workflow, ${selectionSize('toolUse')} tool-use`,
         },
       ],
       (value) => setMode(value as AgentRosterFormMode),
