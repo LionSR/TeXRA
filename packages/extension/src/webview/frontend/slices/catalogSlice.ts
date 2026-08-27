@@ -49,9 +49,10 @@ function validateAgentSelection(
     );
     if (fallbackMatch) return fallbackMatch.value;
   }
-  // No match — keep stale value so the UI shows no selection.
-  // Execution will error with "unknown agent" if the user proceeds.
-  return currentValue;
+  // Workflow selections keep a stale value so the UI reports an unknown agent.
+  // Tool-use selections supply fallbacks and clear instead: a removed hidden
+  // selection must not remain launchable through the full catalog.
+  return preferredFallback.length === 0 ? currentValue : '';
 }
 
 function findAgentSelection(

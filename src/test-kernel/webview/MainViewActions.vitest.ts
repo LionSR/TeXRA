@@ -103,6 +103,17 @@ describe('main-view launch target', () => {
     mocks.postMessage.mockClear();
   });
 
+  it('clears a restored hidden tool-use selection with no public fallback', () => {
+    agent$.set({ ...agent$.get(), toolUse: 'builtInToolUse:changeReviewer' });
+
+    catalogHandlers[MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]({
+      command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      optionsData: { toolUse: [] },
+    });
+
+    expect(agent$.get().toolUse).toBe('');
+  });
+
   describe('persistence defaults', () => {
     it('prefaults launchTarget and selectedTeamId for users with pre-team persisted state', () => {
       const parsed = MainViewPersistedStateSchema.parse({});

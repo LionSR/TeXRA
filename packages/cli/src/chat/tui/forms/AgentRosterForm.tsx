@@ -95,9 +95,11 @@ function selectedAgentKeys(
   agents: readonly AgentEntry[],
 ): readonly string[] {
   if (selection === 'all') return agents.map(agentKeyOf);
-  return selection.filter((key) =>
-    agents.some((agent) => agentMatchesIdentifier(agent, key)),
-  );
+  return agents
+    .filter((agent) =>
+      selection.some((key) => agentMatchesIdentifier(agent, key)),
+    )
+    .map(agentKeyOf);
 }
 
 function selectionSizeLabel(selection: 'all' | readonly string[]): string {

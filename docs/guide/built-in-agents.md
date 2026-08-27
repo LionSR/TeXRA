@@ -52,7 +52,7 @@ The same catalog is available from any terminal:
 
 <CliAgentsListHero />
 
-<p class="hero-caption">One <code>category &nbsp;name&nbsp; description</code> row per agent, tab-separated and stable for scripts; <code>--category workflow</code> filters, <code>--all</code> includes hidden agents.</p>
+<p class="hero-caption">One <code>category &nbsp;name&nbsp; description</code> row per agent, tab-separated and stable for scripts; <code>--category workflow</code> filters, <code>--all</code> includes roster-disabled agents.</p>
 
 ## Quick reference
 

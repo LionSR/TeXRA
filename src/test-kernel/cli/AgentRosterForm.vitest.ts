@@ -33,16 +33,22 @@ const agents: AgentEntry[] = [
   },
 ];
 
+const staleAgentKeys = {
+  workflow: [],
+  toolUse: [
+    'assistant',
+    'builtInToolUse:assistant',
+    'builtInToolUse:changeReviewer',
+  ],
+};
+
 const loadStaleRoster: NonNullable<
   AgentRosterFormProps['load']
 > = async () => ({
   record: {
-    selection: { kind: 'all' },
-    effectiveSelection: { kind: 'all' },
-    agentKeys: {
-      workflow: [],
-      toolUse: ['builtInToolUse:assistant', 'builtInToolUse:changeReviewer'],
-    },
+    selection: { kind: 'custom', agentKeys: staleAgentKeys },
+    effectiveSelection: { kind: 'custom', agentKeys: staleAgentKeys },
+    agentKeys: staleAgentKeys,
     unresolvedNames: [],
   },
   presets: [],
