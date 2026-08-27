@@ -61,6 +61,10 @@ references/openrouter-skills/
 # Generated TypeScript compiler output
 out/
 
+# Vitest coverage output (npm run test:coverage); read by the
+# test-coverage-bot workflow at runtime, never committed.
+coverage/
+
 
 errorLogs/
 # Playwright MCP debug artifacts

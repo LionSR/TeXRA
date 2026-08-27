@@ -1,0 +1,89 @@
+name: Test Coverage Bot
+
+on:
+  schedule:
+    # Weekly: coverage over the kernel suite moves slowly, and the bot files at
+    # most one issue per run, so a tighter cadence would only produce noise.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: test-coverage-bot
+  cancel-in-progress: false
+
+jobs:
+  report:
+    # Repository variable kill switch:
+    #   TEST_COVERAGE_BOT_ENABLED=false disables scheduled coverage scans.
+    #   unset or any other value preserves the default enabled behavior.
+    if: vars.TEST_COVERAGE_BOT_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLAUDE_CODE_PROVIDER: ${{ vars.CLAUDE_CODE_PROVIDER || 'anthropic' }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      ANTHROPIC_BASE_URL: ${{ vars.ANTHROPIC_BASE_URL }}
+      CLAUDE_OPUS_MODEL: ${{ vars.CLAUDE_OPUS_MODEL }}
+      CLAUDE_SONNET_MODEL: ${{ vars.CLAUDE_SONNET_MODEL }}
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Unsharded on purpose: v8 coverage output from parallel shards would
+      # need a merge step, and this weekly job has no PR wall-time to protect.
+      # --maxWorkers=2 saturates the 2-vCPU hosted runner (see #8039).
+      - name: Kernel tests with coverage
+        run: pnpm run test:coverage --maxWorkers=2
+
+      - name: Publish coverage summary
+        run: |
+          {
+            echo '### Kernel test coverage'
+            echo
+            echo '| Area | Statements | Branches | Functions | Lines |'
+            echo '| --- | --- | --- | --- | --- |'
+            jq -r '.total | "| total | \(.statements.pct)% | \(.branches.pct)% | \(.functions.pct)% | \(.lines.pct)% |"' \
+              coverage/coverage-summary.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-kernel-coverage
+          path: coverage/coverage-summary.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - uses: LionSR/agent-ci-actions@v1
+        with:
+          provider: ${{ env.CLAUDE_CODE_PROVIDER }}
+          model-tier: sonnet
+          allowed-bots: 'github-actions[bot]'
+          allowed_tools_preset: coverage-bot
+          allowed_tools_preset_map_file: .github/automation/allowed-tools.json
+          claude-prompt-file: .github/prompts/test-coverage-bot-prompt.md
+          claude-prompt-context: |
+            Repository: ${{ github.repository }}
+            Coverage summary file: coverage/coverage-summary.json

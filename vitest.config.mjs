@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
-import { defineConfig } from 'vitest/config';
+import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 
 import { aliases, rootDir } from './scripts/aliases.mjs';
 
@@ -33,6 +33,18 @@ export default defineConfig({
     setupFiles: ['src/test-kernel/support/setupFakePlatform.ts'],
     testTimeout: kernelTimeoutMs,
     hookTimeout: kernelTimeoutMs,
+    // Opt-in via `npm run test:coverage`; plain `npm test` is unaffected.
+    // Consumed by .github/workflows/test-coverage-bot.yml — informational
+    // only, no thresholds: testing discipline (AGENTS.md) treats tests as a
+    // budget, so coverage numbers must never gate a merge.
+    coverage: {
+      provider: 'v8',
+      // `include` makes files the suite never loads report as 0% instead of
+      // being invisible — that gap is exactly what the coverage bot reads.
+      include: ['src/**/*.ts', 'packages/*/src/**/*.{ts,tsx}'],
+      exclude: [...coverageConfigDefaults.exclude, 'src/test-kernel/**'],
+      reporter: ['text-summary', 'json-summary'],
+    },
   },
 });
 
