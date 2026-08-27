@@ -607,7 +607,7 @@ export class MainApp extends MainAppBase {
           .editedFile=${sf.editedFile}
           .editedFileOptions=${fo.editedFile ?? []}
           .commit=${commit$.get()}
-          .commitOptions=${fo.commit ?? []}
+          .commitOptions=${fo.commit}
           .isGitRepo=${isGitRepo$.get()}
           @latexdiffs-toggle=${this.onLatexDiffsToggle}
           @latexdiffs-action=${({

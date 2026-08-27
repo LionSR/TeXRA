@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import {
   passesFileFilters,
   prepareFileFilters,
-  type FileListConfig,
+  type FileFilterConfig,
 } from '@common/files/fileListingRules';
 import { normalizeFilePath } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -56,7 +56,7 @@ function getRelativePathPreservingSymlinks(
 
 export async function getFilesRecursively(
   root: string,
-  config: FileListConfig,
+  config: FileFilterConfig,
 ): Promise<string[]> {
   const filters = prepareFileFilters(config);
 

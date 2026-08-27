@@ -228,7 +228,7 @@ export type SingleFiles = z.infer<typeof SingleFilesSchema>;
 const FileOptionsSchema = z.object({
   baseFile: z.array(z.string()),
   editedFile: z.array(z.string()),
-  commit: z.array(z.string()).optional(),
+  commit: z.array(z.string()),
 });
 export type FileOptions = z.infer<typeof FileOptionsSchema>;
 
