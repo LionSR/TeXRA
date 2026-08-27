@@ -31,7 +31,6 @@ import {
   allocateConversationBottomPanelRows,
   allocateConversationPanelRows,
   allocateMiddleRows,
-  allocateSidePanelRows,
   shouldShowTodosPlanPanel,
   staticTranscriptRowBudget,
 } from '@cli/chat/tui/appLayout';
@@ -938,54 +937,6 @@ describe('CLI TUI row allocation', () => {
     expect(layout.foregroundRows).toBe(foregroundRows);
   });
 
-  it('sizes side panels to their content within the budget', () => {
-    // Everything fits: each panel takes exactly its content (no dead rows).
-    expect(
-      allocateSidePanelRows({
-        subagentContentRows: 3,
-        todosPlanContentRows: 4,
-        rows: 13,
-      }),
-    ).toEqual({ subagentRows: 3, todosPlanRows: 4 });
-
-    // A lone panel takes only what it needs; the rest is the conversation's.
-    expect(
-      allocateSidePanelRows({
-        subagentContentRows: 0,
-        todosPlanContentRows: 4,
-        rows: 13,
-      }),
-    ).toEqual({ subagentRows: 0, todosPlanRows: 4 });
-
-    // Over budget, a lone panel is capped at the available rows.
-    expect(
-      allocateSidePanelRows({
-        subagentContentRows: 0,
-        todosPlanContentRows: 20,
-        rows: 13,
-      }),
-    ).toEqual({ subagentRows: 0, todosPlanRows: 13 });
-
-    // Over budget with both present: keep at least one row each, split the
-    // remainder proportionally to need.
-    expect(
-      allocateSidePanelRows({
-        subagentContentRows: 10,
-        todosPlanContentRows: 10,
-        rows: 13,
-      }),
-    ).toEqual({ subagentRows: 7, todosPlanRows: 6 });
-
-    // A single row with both present goes to the todos/plan panel.
-    expect(
-      allocateSidePanelRows({
-        subagentContentRows: 5,
-        todosPlanContentRows: 5,
-        rows: 1,
-      }),
-    ).toEqual({ subagentRows: 0, todosPlanRows: 1 });
-  });
-
   it.each([
     {
       transcriptRows: 1,
@@ -1014,13 +965,15 @@ describe('CLI TUI row allocation', () => {
         todosPlanRows: 0,
       },
     },
+    // The focused list takes its full content (4 sessions + separator) and
+    // never shares the panel with todos, which hide while it has focus.
     {
       transcriptRows: 8,
       expected: {
-        bottomPanelRows: 7,
-        conversationRows: 1,
-        sessionPanelRows: 4,
-        todosPlanRows: 3,
+        bottomPanelRows: 5,
+        conversationRows: 3,
+        sessionPanelRows: 5,
+        todosPlanRows: 0,
       },
     },
   ])(
@@ -1125,24 +1078,6 @@ describe('CLI TUI row allocation', () => {
     ).toMatchObject({ bottomPanelRows: 3, todosPlanRows: 3 });
   });
 
-  it('borrows a focused child-list row so an active todo stays visible', () => {
-    // Many children plus one todo under the 10-row cap: the proportional
-    // split grants todos a single row, too small for separator plus content,
-    // so one row shifts from the ample child list instead.
-    const allocation = allocateConversationBottomPanelRows({
-      maxRows: 10,
-      sessionCount: 11,
-      childListFocused: true,
-      todosPlanContentRows: 1,
-      transcriptRows: 30,
-    });
-    expect(allocation.todosPlanRows).toBe(2);
-    expect(allocation.sessionPanelRows).toBeGreaterThanOrEqual(2);
-    expect(allocation.bottomPanelRows).toBe(
-      allocation.sessionPanelRows + allocation.todosPlanRows,
-    );
-  });
-
   it('hands a lone todos row back instead of rendering a dead separator', () => {
     // The grant would be exactly one row — too small for separator + content.
     const allocation = allocateConversationBottomPanelRows({
@@ -1156,22 +1091,6 @@ describe('CLI TUI row allocation', () => {
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
-    });
-  });
-
-  it('preserves todo content when the focused child list can yield one row', () => {
-    expect(
-      allocateConversationBottomPanelRows({
-        maxRows: 10,
-        sessionCount: 11,
-        childListFocused: true,
-        todosPlanContentRows: 1,
-        transcriptRows: 20,
-      }),
-    ).toEqual({
-      bottomPanelRows: 10,
-      sessionPanelRows: 8,
-      todosPlanRows: 2,
     });
   });
 
@@ -1239,12 +1158,31 @@ describe('CLI TUI row allocation', () => {
       ],
       expected: true,
     },
+    {
+      name: 'the child list focused',
+      childListFocused: true,
+      foregroundOpen: false,
+      hasPlan: true,
+      todos: [openTodo],
+      expected: false,
+    },
   ])(
     'keeps unfinished todo and plan chrome across stream phases: $name',
-    ({ foregroundOpen, hasPlan, todos, expected }) => {
-      expect(shouldShowTodosPlanPanel({ foregroundOpen, hasPlan, todos })).toBe(
-        expected,
-      );
+    ({
+      childListFocused = false,
+      foregroundOpen,
+      hasPlan,
+      todos,
+      expected,
+    }) => {
+      expect(
+        shouldShowTodosPlanPanel({
+          childListFocused,
+          foregroundOpen,
+          hasPlan,
+          todos,
+        }),
+      ).toBe(expected);
     },
   );
 
