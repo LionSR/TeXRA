@@ -10,11 +10,12 @@ import type { MarkdownItInstance } from './createMarkdownRenderer';
 export interface TexmathPluginOptions {
   /** Math engine (e.g. `katex`). */
   readonly engine: unknown;
-  /** Delimiters argument forwarded to texmath. */
-  readonly delimiters?: ReadonlyArray<string>;
   /** Engine-specific options (e.g. katex `{ throwOnError, macros, ... }`). */
   readonly engineOptions?: Record<string, unknown>;
 }
+
+/** The delimiter set every host renders; texmath takes it verbatim. */
+const DELIMITERS = Object.freeze(['dollars', 'brackets', 'beg_end']);
 
 const PARAGRAPH_INTERRUPTION_CHAINS = Object.freeze([
   'paragraph',
@@ -23,15 +24,12 @@ const PARAGRAPH_INTERRUPTION_CHAINS = Object.freeze([
   'list',
 ]);
 
-/** Allow configured display-math rules to interrupt an adjacent paragraph. */
-function addDisplayMathParagraphInterruptions(
-  md: MarkdownItInstance,
-  delimiters: ReadonlyArray<string>,
-): void {
+/** Allow the display-math rules to interrupt an adjacent paragraph. */
+function addDisplayMathParagraphInterruptions(md: MarkdownItInstance): void {
   const blockRules = [
-    ...(delimiters.includes('dollars') ? texmath.rules.dollars.block : []),
-    ...(delimiters.includes('brackets') ? texmath.rules.brackets.block : []),
-    ...(delimiters.includes('beg_end') ? texmath.rules.beg_end.block : []),
+    ...texmath.rules.dollars.block,
+    ...texmath.rules.brackets.block,
+    ...texmath.rules.beg_end.block,
   ];
 
   for (const [index, rule] of blockRules.entries()) {
@@ -51,15 +49,14 @@ function addDisplayMathParagraphInterruptions(
 export function createTexmathPlugin(
   options: TexmathPluginOptions,
 ): (md: MarkdownItInstance) => MarkdownItInstance {
-  const delimiters = options.delimiters ?? ['dollars', 'brackets', 'beg_end'];
   type TexmathFn = Parameters<MarkdownItInstance['use']>[0];
   return (md) => {
     const configured = md.use(texmath as unknown as TexmathFn, {
       engine: options.engine,
-      delimiters,
+      delimiters: [...DELIMITERS],
       katexOptions: options.engineOptions,
     });
-    addDisplayMathParagraphInterruptions(configured, delimiters);
+    addDisplayMathParagraphInterruptions(configured);
     return configured;
   };
 }

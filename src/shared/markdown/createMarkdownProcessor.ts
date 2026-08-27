@@ -10,7 +10,10 @@ import MarkdownIt, { type StateBlock } from 'markdown-it';
 
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
-import type { MarkdownItInstance } from './createMarkdownRenderer';
+import {
+  MARKDOWN_PARSER_OPTIONS,
+  type MarkdownItInstance,
+} from './createMarkdownRenderer';
 
 const MAX_CACHE_ENTRIES = 2000;
 const MAX_CACHE_ENTRY_CHARS = 200_000;
@@ -263,19 +266,9 @@ interface BegEndEnvironmentProbe {
 // what lets `10. Formula:\n    \begin{align}` open an environment on the
 // indented continuation line. The probe returns true to consume a match (but
 // pushes no token), so the recorded match set follows texmath's parse exactly.
-function createProbeMarkdownIt(options: {
-  readonly breaks: boolean;
-  readonly linkify: boolean;
-  readonly html: boolean;
-}): MarkdownItInstance {
-  const probe = new MarkdownIt({
-    breaks: options.breaks,
-    linkify: options.linkify,
-    html: options.html,
-  });
-  if (options.linkify) {
-    probe.linkify.set({ fuzzyLink: true, urlAuth: true });
-  }
+function createProbeMarkdownIt(): MarkdownItInstance {
+  const probe = new MarkdownIt({ ...MARKDOWN_PARSER_OPTIONS });
+  probe.linkify.set({ fuzzyLink: true, urlAuth: true });
   return probe;
 }
 
@@ -731,7 +724,7 @@ export function protectLatexMathSpansForNormalize(content: string): {
 } {
   const source = content.replaceAll(/\r\n?/g, '\n');
   normalizeEnvironmentProbe ??= createBegEndEnvironmentProbe(
-    createProbeMarkdownIt({ breaks: false, linkify: true, html: false }),
+    createProbeMarkdownIt(),
   );
   return protectLatexMathSpansWithEnvironment(
     source,
@@ -800,11 +793,7 @@ export function createMarkdownProcessor(
       ? protectLatexMathSpansWithEnvironment(
           refProtected,
           (environmentProbe ??= createBegEndEnvironmentProbe(
-            createProbeMarkdownIt({
-              breaks: config.renderer.options.breaks,
-              linkify: config.renderer.options.linkify,
-              html: config.renderer.options.html,
-            }),
+            createProbeMarkdownIt(),
           )),
           DISPLAY_MATH_SPAN_PATTERNS,
           protectRenderInlineDollarSpans,
