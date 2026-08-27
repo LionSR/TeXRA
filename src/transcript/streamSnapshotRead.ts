@@ -152,6 +152,13 @@ function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
   }
   const version = raw.schemaVersion;
   if (typeof version === 'number' && version > STREAM_SNAPSHOT_SCHEMA_VERSION) {
+    // The ignore itself is the forward-compat gate and stays; what must not
+    // stay silent is that this build will overwrite that newer file on its
+    // next write, so the plan the user sees is not the plan on disk.
+    log.warn(
+      'Ignoring a work plan written by a newer schema version; this build will replace it on the next write.',
+      { data: { version, supported: STREAM_SNAPSHOT_SCHEMA_VERSION } },
+    );
     return EMPTY_WORK_PLAN;
   }
   if (version !== undefined && version !== STREAM_SNAPSHOT_SCHEMA_VERSION) {
