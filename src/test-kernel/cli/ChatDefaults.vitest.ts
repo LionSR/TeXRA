@@ -152,6 +152,65 @@ describe('CLI chat defaults', () => {
     );
   });
 
+  it('ignores a metadata-hidden workspace chat default', async () => {
+    const workspace = await workspaceWithConfig({
+      'texra.chat': { agent: 'builtInToolUse:changeReviewer' },
+    });
+
+    await expectChatDefaults(
+      {
+        cwd: workspace,
+        visibleToolUseAgents: [{ name: 'assistant', source: 'builtInToolUse' }],
+      },
+      { agent: 'assistant', agentSource: 'builtin-default' },
+    );
+  });
+
+  it('ignores a metadata-hidden user chat default', async () => {
+    mockedReadJson.mockResolvedValueOnce({
+      'texra.chat': { agent: 'builtInToolUse:changeReviewer' },
+    });
+
+    await expectChatDefaults(
+      {
+        cwd: NO_WORKSPACE,
+        visibleToolUseAgents: [{ name: 'assistant', source: 'builtInToolUse' }],
+      },
+      { agent: 'assistant', agentSource: 'builtin-default' },
+    );
+  });
+
+  it('ignores a metadata-hidden environment chat default', async () => {
+    await expectChatDefaults(
+      {
+        cwd: NO_WORKSPACE,
+        envAgent: 'builtInToolUse:changeReviewer',
+        visibleToolUseAgents: [{ name: 'assistant', source: 'builtInToolUse' }],
+      },
+      { agent: 'assistant', agentSource: 'builtin-default' },
+    );
+  });
+
+  it('keeps a visible source-qualified configured chat default', async () => {
+    const workspace = await workspaceWithConfig({
+      'texra.chat': { agent: 'builtInToolUse:review' },
+    });
+
+    await expectChatDefaults(
+      {
+        cwd: workspace,
+        visibleToolUseAgents: [
+          { name: 'assistant', source: 'builtInToolUse' },
+          { name: 'review', source: 'builtInToolUse' },
+        ],
+      },
+      {
+        agent: 'builtInToolUse:review',
+        agentSource: 'workspace-config',
+      },
+    );
+  });
+
   it('ignores non-llm-zoo model ids in workspace defaults', async () => {
     const workspace = await workspaceWithConfig({
       'texra.agent': 'assistant',
