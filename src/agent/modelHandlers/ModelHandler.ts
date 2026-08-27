@@ -130,12 +130,20 @@ interface ClientCompactionResult<M> {
   didCompact: boolean;
 }
 
-// Default continuation limits
-const DEFAULT_CONTINUE_LIMIT = 10;
+// Conversation stop limits. Fixed for every handler: nothing overrides them
+// per instance, so they are read straight from `checkStopConditions`.
+const CONTINUE_LIMIT = 10;
+const INPUT_TOKEN_LIMIT = 1500000;
+const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 
-// Default token limits
-const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
-const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
+/**
+ * A round's media content plus the entries behind it — what the transcript's
+ * attachment chips are derived from. Returned together so the two can't drift.
+ */
+export interface CreatedMedia<Media> {
+  readonly media: Media[];
+  readonly entries: readonly MediaEntry[];
+}
 
 interface AssistantTextAppendOptions {
   /**
@@ -215,9 +223,6 @@ export abstract class ModelHandler<
   private singleTurnInFlight = false;
   public config: ResolvedModelConfig;
   public capabilities: ModelCapabilities;
-  public continueLimit: number;
-  public inputTokenLimit: number;
-  public maxOutputTokensFactor: number;
   protected logger: AgentTrace;
   protected outputStreaming = false;
   protected backgroundModeSupported = false;
@@ -228,7 +233,6 @@ export abstract class ModelHandler<
     MediaAttachmentContext,
     MediaAttachmentKind[]
   >();
-  private createdMediaEntriesForAttachmentLog: MediaEntry[] = [];
   protected readonly normalizeResponseText: ResponseTextProcessing['normalizeResponseText'];
   protected readonly postProcessResponse: ResponseTextProcessing['postProcessResponse'];
 
@@ -281,9 +285,6 @@ export abstract class ModelHandler<
     this.normalizeResponseText = responseTextProcessing.normalizeResponseText;
     this.postProcessResponse = responseTextProcessing.postProcessResponse;
     this.capabilities = structuredClone(config.capabilities);
-    this.continueLimit = DEFAULT_CONTINUE_LIMIT;
-    this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
-    this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
     // Initialize with default channel, will be overwritten by agent. Log-only
     // module singletons now use `createLog`; remaining `createChannelTrace`
     // sites are genuine `AgentTrace`-typed fallbacks plus log-only callers
@@ -887,22 +888,16 @@ export abstract class ModelHandler<
    * Create image/audio messages for the conversation.
    * This is a shared implementation that can be used by all providers.
    * Individual providers can override if needed.
-   * @returns Array of media content objects in provider-specific format
+   * @returns The provider-specific media content and the entries behind it
    */
   protected async createMediaMessage(
     mediaFiles: FileLocation[],
-  ): Promise<Media[]> {
+  ): Promise<CreatedMedia<Media>> {
     const { entries, results } =
       await this.mediaProcessor.loadEntries(mediaFiles);
     this.mediaProcessor.logResults(results);
-    this.setCreatedMediaEntriesForAttachmentLog(entries);
-    return this.createMediaContent(entries);
-  }
-
-  protected setCreatedMediaEntriesForAttachmentLog(
-    entries: readonly MediaEntry[],
-  ): void {
-    this.createdMediaEntriesForAttachmentLog = [...entries];
+    // Reports every loaded entry, including any `createMediaContent` drops.
+    return { media: this.createMediaContent(entries), entries };
   }
 
   public consumeInsertedAttachmentKinds(
@@ -928,15 +923,12 @@ export abstract class ModelHandler<
     context: MediaAttachmentContext,
   ): Promise<Media[]> {
     this.insertedAttachmentKinds.set(context, []);
-    this.setCreatedMediaEntriesForAttachmentLog([]);
     try {
-      const media = await this.createMediaMessage(mediaFiles);
+      const { media, entries } = await this.createMediaMessage(mediaFiles);
       if (media.length > 0) {
         this.insertedAttachmentKinds.set(
           context,
-          mediaAttachmentKindsFromEntries(
-            this.createdMediaEntriesForAttachmentLog,
-          ),
+          mediaAttachmentKindsFromEntries(entries),
         );
       }
       return media;
@@ -961,22 +953,23 @@ export abstract class ModelHandler<
     const totals = stateGlobal.usageAccumulator.totals;
     const maxOutputTokens =
       totals.firstInputTokens > 0
-        ? this.maxOutputTokensFactor * totals.firstInputTokens
+        ? OUTPUT_TOKEN_LIMIT_FACTOR * totals.firstInputTokens
         : Number.POSITIVE_INFINITY;
     const continuationLimitExceeded =
-      stateRound.continuationCount > this.continueLimit;
-    const inputTokenLimitExceeded =
-      totals.totalInputTokens > this.inputTokenLimit;
+      stateRound.continuationCount > CONTINUE_LIMIT;
+    const inputTokenLimitExceeded = totals.totalInputTokens > INPUT_TOKEN_LIMIT;
     const maxOutputTokensExceeded = totals.totalOutputTokens > maxOutputTokens;
 
     // Detect stop markers in model output
     const endTurn = END_TURN_REASONS.includes(stopReason ?? '');
     const encounterDocumentTag = newResponse.includes(OUTPUT_END_TAG);
 
+    // Warn-only by design: this multiplier has never fed `shouldStop`, it just
+    // flags a run whose output has run away relative to its first input.
     if (maxOutputTokensExceeded) {
       this.logger.warn('Output tokens exceed input token multiplier', {
         data: {
-          maxOutputTokensFactor: this.maxOutputTokensFactor,
+          maxOutputTokensFactor: OUTPUT_TOKEN_LIMIT_FACTOR,
           totalOutputTokens: totals.totalOutputTokens,
           firstInputTokens: totals.firstInputTokens,
         },

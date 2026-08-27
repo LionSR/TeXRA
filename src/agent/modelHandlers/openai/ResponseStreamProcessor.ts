@@ -104,11 +104,9 @@ export class ResponseStreamProcessor {
       this.outputItems.push(item);
       if (item.type === 'reasoning') {
         this.closeThinkingStream();
-      } else if (
-        item.type === 'web_search_call' &&
-        !this.emittedWebSearchIds.has(item.id) &&
-        hasOpenAIWebSearchData(item)
-      ) {
+      } else if (item.type === 'web_search_call') {
+        // Phase boundary, same as the `.in_progress` arm above.
+        // emitWebSearchOnce owns the dedup and missing-data checks.
         this.closeThinkingStream();
         this.emitWebSearchOnce(item);
       }

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
+import type { CreatedMedia } from '@agent/modelHandlers/ModelHandler';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -64,14 +65,14 @@ class MediaProbeHandler extends ModelHandlerGoogleInteractions {
   }
 
   /** Invoke the media-upload pipeline directly. */
-  uploadEntries(entries: MediaEntry[]): Promise<Interactions.Content[]> {
-    return this.uploadMediaEntries(entries);
+  async uploadEntries(entries: MediaEntry[]): Promise<Interactions.Content[]> {
+    return (await this.uploadMediaEntries(entries)).media;
   }
 
   protected override async createMediaMessage(): Promise<
-    Interactions.Content[]
+    CreatedMedia<Interactions.Content>
   > {
-    return this.stubbedMedia;
+    return { media: this.stubbedMedia, entries: [] };
   }
 }
 

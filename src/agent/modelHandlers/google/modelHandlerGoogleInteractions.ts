@@ -15,7 +15,10 @@ import { ReasoningEffort } from 'llm-zoo';
 // Local imports
 import { logProgressStatus } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import {
+  ModelHandler,
+  type CreatedMedia,
+} from '@agent/modelHandlers/ModelHandler';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import { parseToolInputAsObject } from '@agent/core/flows/toolCallParsing';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -719,9 +722,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   protected override async createMediaMessage(
     mediaFiles: FileLocation[],
-  ): Promise<Content[]> {
+  ): Promise<CreatedMedia<Content>> {
     if (!this.canAttachMedia(mediaFiles)) {
-      return [];
+      return { media: [], entries: [] };
     }
 
     const { entries, results } =
@@ -729,16 +732,20 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     this.mediaProcessor.logResults(results);
 
     if (entries.length === 0) {
-      return [];
+      return { media: [], entries: [] };
     }
 
     return this.uploadMediaEntries(entries);
   }
 
-  /** Media blocks for the entries (inline when small enough, uploaded otherwise). */
+  /**
+   * Media blocks for the entries (inline when small enough, uploaded
+   * otherwise). Unlike the base template this reports only the entries that
+   * were actually appended, since an upload can drop one.
+   */
   protected async uploadMediaEntries(
     entries: MediaEntry[],
-  ): Promise<Content[]> {
+  ): Promise<CreatedMedia<Content>> {
     const insertedEntries: MediaEntry[] = [];
     const media = await uploadGoogleMediaEntries<Content>(entries, {
       getClient: () => this.getClient(),
@@ -751,8 +758,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         ),
       onInsertedEntry: (entry) => insertedEntries.push(entry),
     });
-    this.setCreatedMediaEntriesForAttachmentLog(insertedEntries);
-    return media;
+    return { media, entries: insertedEntries };
   }
 
   // ===========================================================================
@@ -1106,19 +1112,16 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         stopReason = status;
     }
 
-    // If the model completed naturally without the end tag, append it (mirrors
-    // the chat handler's STOP behavior, keyed on the terminal completion).
-    if (
-      stopReason === GOOGLE_FINISH.STOP &&
-      endTag &&
-      responseText.length > 0 &&
-      !responseText.endsWith(endTag)
-    ) {
-      this.logger.debug(
-        `Model completed but didn't include end tag. Appending ${endTag}.`,
-      );
-      responseText += `\n${endTag}`;
-    }
+    // A terminal 'completed' is this route's "natural stop" predicate for the
+    // end tag configured as a stop sequence above (`stop_sequences: [endTag]`).
+    // The empty-text guard is Google-specific: 'completed' here cannot tell a
+    // stop-sequence match from a natural end of turn, so an empty completion
+    // must not be stamped as finished.
+    responseText = this.appendEndTagIfNeeded(
+      responseText,
+      endTag,
+      stopReason === GOOGLE_FINISH.STOP && responseText.length > 0,
+    );
 
     return { text: responseText, usage, stopReason };
   }
