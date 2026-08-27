@@ -16,14 +16,12 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { RunScope } from '@agent/runtime/RunScope';
 import {
-  fileLocationDisplayPath,
   type CompileFailure,
   type FileLocation,
   type OutputFileInfo,
   type RoundIndexed,
   type RoundOutput,
 } from '@shared/schemas';
-import { pathToLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 export interface OutputState {
@@ -133,23 +131,4 @@ export function setCompileFailures(
   failures: CompileFailure[],
 ): void {
   ensureRoundData(state, round).compileFailures = failures;
-}
-
-export function collectRunSupportFiles(
-  agentConfig: AgentConfig,
-): FileLocation[] {
-  const allPaths = [
-    ...agentConfig.contextFiles,
-    ...agentConfig.mediaFiles,
-    ...agentConfig.inputFiles,
-  ];
-
-  const extras = new Map<string, FileLocation>();
-  for (const value of allPaths) {
-    if (!value) continue;
-    const location = pathToLocation(value);
-    extras.set(fileLocationDisplayPath(location), location);
-  }
-
-  return [...extras.values()];
 }

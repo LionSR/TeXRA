@@ -11,6 +11,7 @@ import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import {
   PersistedFlowStateError,
@@ -24,6 +25,7 @@ import {
   type RoundOutput,
   type RunOutcome,
   type FileLocation,
+  fileLocationDisplayPath,
   MESSAGE_TYPES,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -32,13 +34,13 @@ import {
   workflowOutputPath,
 } from '@shared/constants/workflowOutput';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
+import { pathToLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { LatexDiffManager } from './output/LatexDiffManager';
 import { XmlOutputManager } from './output/XmlOutputManager';
 import {
   createOutputState,
-  collectRunSupportFiles,
   getOutputFilesByRound,
   roundsFromPersisted,
 } from './output/outputState';
@@ -109,6 +111,23 @@ export interface RunReflectionFlowResult {
    * with it.
    */
   error?: RetryErrorInfo;
+}
+
+function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
+  const allPaths = [
+    ...agentConfig.contextFiles,
+    ...agentConfig.mediaFiles,
+    ...agentConfig.inputFiles,
+  ];
+
+  const extras = new Map<string, FileLocation>();
+  for (const value of allPaths) {
+    if (!value) continue;
+    const location = pathToLocation(value);
+    extras.set(fileLocationDisplayPath(location), location);
+  }
+
+  return [...extras.values()];
 }
 
 export async function runReflectionFlow(
