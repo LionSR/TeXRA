@@ -72,11 +72,11 @@ export interface DesktopSettingsUiHost {
    */
   getStreamLabel(streamId: string): string | undefined;
   /** Prompt for a secret (masked). Used for the GitHub personal access token. */
-  promptForSecret?(input: {
+  promptForSecret(input: {
     title: string;
     prompt: string;
   }): Promise<string | undefined>;
-  openExternal?(url: string): Promise<void>;
+  openExternal(url: string): Promise<void>;
   showInfoMessage(message: string): Promise<void>;
   showErrorMessage(message: string): Promise<void>;
   confirmAction(message: string, confirmLabel?: string): Promise<boolean>;
@@ -320,7 +320,7 @@ export function createDesktopSettingsIpc(
   // `refreshToolAvailability` emits `toolAvailabilityChanged`, which is what
   // repaints the dashboard.
   async function setGitHubToken(): Promise<void> {
-    const token = await options.ui.promptForSecret?.({
+    const token = await options.ui.promptForSecret({
       title: 'GitHub token',
       prompt: GITHUB_TOKEN_PROMPT,
     });
@@ -429,7 +429,7 @@ export function createDesktopSettingsIpc(
     setGitHubToken,
     removeGitHubToken,
     openGitHubTokenUrl: async () => {
-      await options.ui.openExternal?.(GITHUB_TOKEN_CREATE_URL);
+      await options.ui.openExternal(GITHUB_TOKEN_CREATE_URL);
     },
     getPRSubscriptions: postGitHubSubscriptions,
     unsubscribePR: unsubscribeGitHub,

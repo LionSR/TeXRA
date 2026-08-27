@@ -639,7 +639,7 @@ export class DesktopProgressBridge {
     result: FileOpResult,
     inputFile: string,
   ): Promise<void> {
-    const { verb, gerund } = operationLabel(operation);
+    const { verb } = operationLabel(operation);
     switch (result.status) {
       case 'success': {
         const folder = result.outputFolder;
@@ -654,11 +654,6 @@ export class DesktopProgressBridge {
       case 'noFiles':
         await this.options.host.showInfoMessage(
           `No files found to ${verb} for ${inputFile}`,
-        );
-        return;
-      case 'missingParams':
-        await this.options.host.showErrorMessage(
-          `Select an input file before ${gerund}.`,
         );
         return;
       case 'error':

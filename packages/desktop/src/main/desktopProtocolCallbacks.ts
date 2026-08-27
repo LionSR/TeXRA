@@ -53,7 +53,6 @@ export interface DesktopProtocolApp {
 
 export interface DesktopProtocolLifecycle {
   router: DesktopProtocolCallbackRouter;
-  shouldContinue: boolean;
   /** True only for the process holding Electron's single-instance lock. */
   ownsSingleInstanceLock: boolean;
 }
@@ -151,7 +150,7 @@ export function installDesktopProtocolCallbackLifecycle(
 
   if (!ownsSingleInstanceLock) {
     app.quit();
-    return { router, shouldContinue: false, ownsSingleInstanceLock };
+    return { router, ownsSingleInstanceLock };
   }
 
   registerProtocolClient(options);
@@ -163,15 +162,15 @@ export function installDesktopProtocolCallbackLifecycle(
 
   app.on('open-url', (event, url) => {
     event.preventDefault();
-    const didRoute = router.routeUrl(url);
-    if (didRoute || isDesktopProtocolUrl(url)) {
+    router.routeUrl(url);
+    if (isDesktopProtocolUrl(url)) {
       options.focusMainWindow?.();
     }
   });
 
   router.routeArgv(options.argv ?? []);
 
-  return { router, shouldContinue: true, ownsSingleInstanceLock };
+  return { router, ownsSingleInstanceLock };
 }
 
 function normalizeProtocolPath(url: URL): string {

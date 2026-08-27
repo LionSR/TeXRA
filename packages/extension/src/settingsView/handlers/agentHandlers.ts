@@ -100,7 +100,7 @@ export class AgentHandlers {
         await showLoggedMessage(this.ctx.channel, message);
       },
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
-      run: (_command, failureMessage, action) =>
+      run: (failureMessage, action) =>
         withHandlerErrorHandling(this.ctx, failureMessage, action),
     });
   }
