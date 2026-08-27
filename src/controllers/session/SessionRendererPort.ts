@@ -18,7 +18,7 @@ export type PresentedStreamId = StreamTabId | '';
 /**
  * A projection slice whose new value the host re-reads from the shared state
  * rather than receiving on the wire. Each key names the field the host reads
- * (`outputs.files`, `outputs.compileFailures`, `workPlan.queuedFollowUps`,
+ * (`outputs.files`, `outputs.missingOutputs`, `outputs.compileFailures`, `workPlan.queuedFollowUps`,
  * `SessionStreamMetadata.parentStreamId`,
  * `StreamExecutionState.contextState`) or the fact it reacts to
  * (`goalPaused`); nothing here is new vocabulary. Slices whose notification
@@ -28,6 +28,7 @@ export type PresentedStreamId = StreamTabId | '';
 export type SessionRenderSlice =
   | 'files'
   | 'compileFailures'
+  | 'missingOutputs'
   | 'queuedFollowUps'
   | 'parentStreamId'
   | 'contextState'
@@ -86,8 +87,6 @@ export interface SessionRendererPort {
   /** The stream's child-activity roster changed; hosts re-read
    *  `SessionState.getStreamState(streamId).subagents`. */
   onBadgesChanged(streamId: StreamTabId): void;
-
-  onMissingOutputsChanged(streamId: StreamTabId): void;
 
   onRunUsageChanged(
     streamId: StreamTabId,
