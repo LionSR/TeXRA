@@ -89,7 +89,7 @@ export class SettingsProfileController {
     return {
       ...base,
       authenticated: true,
-      user: { email: user?.email ?? storedEmail ?? 'N/A' },
+      user: { email: user?.email ?? storedEmail ?? '' },
       sessionProblem,
     };
   }

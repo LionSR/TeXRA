@@ -176,7 +176,7 @@ function renderToolSection(
       return buildToolUseSection(
         section.label,
         buildStatusBadge(
-          triStateStatusIcon(section.status, 'in_progress'),
+          triStateStatusIcon(section.status),
           section.status,
         ),
       );

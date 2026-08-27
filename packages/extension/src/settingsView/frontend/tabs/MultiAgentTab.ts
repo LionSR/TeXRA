@@ -50,10 +50,6 @@ export class MultiAgentTab extends LitElement {
         gap: var(--wa-space-xs);
       }
 
-      .setting-number-input {
-        width: 80px;
-      }
-
       /* Team cards */
       .preset-grid {
         display: grid;

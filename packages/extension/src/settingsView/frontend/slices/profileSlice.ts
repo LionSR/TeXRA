@@ -14,7 +14,7 @@ import {
 export const profileHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE]: (data) => {
     authenticated.set(data.authenticated);
-    userEmail.set(data.user?.email ?? 'N/A');
+    userEmail.set(data.user?.email ?? '');
     // Fields declared with `.prefault()` in UpdateProfileMessageSchema are
     // guaranteed present by the validating dispatcher — no fallback needed.
     sessionProblem.set(data.sessionProblem);

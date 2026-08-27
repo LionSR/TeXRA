@@ -50,13 +50,9 @@ export async function handleCleanMultiple(
   model: string,
   inputFiles: string[] = [],
 ): Promise<void> {
-  if (inputFiles.length > 0) {
-    log.debug(`Additional files: ${inputFiles.join(', ')}`);
-  }
-  const result =
-    inputFiles.length > 0
-      ? await runCleanMultiple(model, inputFile, agent, inputFiles)
-      : await runCleanSingle(model, inputFile, agent);
+  // `runCleanMultiple` with an empty batch already reduces to the single-file
+  // path, and it logs the batch itself, so no fallback or extra log here.
+  const result = await runCleanMultiple(model, inputFile, agent, inputFiles);
   showCleanResult(result, inputFile);
   // No missing-outputs clear: these invocations have no stream context, and
   // configuration-based fan-out to look-alike tabs was removed (#9590 A3).

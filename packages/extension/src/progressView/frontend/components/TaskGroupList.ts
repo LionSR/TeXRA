@@ -12,7 +12,6 @@ import {
   GETTING_STARTED_ACTION_PRESENTATION,
   GettingStartedActionSchema,
   STREAM_PHASE,
-  STREAM_STATUS,
   type GettingStartedAction,
   type StreamLifecycleStatus,
   type StreamLogEntry,
@@ -571,9 +570,7 @@ export class TaskGroupList extends LitElement {
       this.entries.length === 0 &&
       this.groups.length === 0
     ) {
-      const active =
-        this.streamStatus !== STREAM_STATUS.READY &&
-        isInFlightPhase(this.streamStatus ?? undefined);
+      const active = isInFlightPhase(this.streamStatus ?? undefined);
       return html`
         <div class="log-placeholder">
           ${

@@ -250,7 +250,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
   const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
-  agentDirectories.initialize(context);
+  agentDirectories.initialize();
   setOutputChannelFactory((name) => vscode.window.createOutputChannel(name));
   initializeBundledPrompts(path.join(context.extensionPath, 'resources'));
   const workspaceState = gitRepoRoot
@@ -376,8 +376,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   // Onboarding-funnel backfill (PRD: agent-native onboarding): upgraders who
   // already have a credential or run history must never see the welcome card
-  // or the setup auto-start, so firstRunDone is backfilled once when the flag
-  // first appears. Awaited: the main view's funnel derivation reads this flag
+  // or the preselected setup agent, so firstRunDone is backfilled once when
+  // the flag first appears. Awaited: the main view's funnel derivation reads this flag
   // at webview-ready, and awaiting here closes the only read-before-backfill
   // window. One-shot in practice — once the key exists the probes are skipped.
   if (
@@ -388,14 +388,15 @@ async function activateExtension(context: vscode.ExtensionContext) {
       const hasPriorInstall =
         context.globalState.get<string>(GlobalStateKey.LAST_KNOWN_VERSION) !==
         undefined;
+      // Neither probe is masked: a failed probe must not be recorded as
+      // "false" in a one-shot key. A rejection lands in the catch below,
+      // which logs the cause and leaves the key unset so the next
+      // activation re-evaluates.
       const [hasCredential, hasRunHistory] = await Promise.all([
         // Same non-blank provider-key/server-side-key check used by the
         // funnel and setup launch preflight.
-        hasAnyUsableSetupCredential().catch(() => false),
-        listExecutions().then(
-          (entries) => entries.length > 0,
-          () => false,
-        ),
+        hasAnyUsableSetupCredential(),
+        listExecutions().then((entries) => entries.length > 0),
       ]);
       await backfillFirstRunDone(context.globalState, {
         hasCredential,

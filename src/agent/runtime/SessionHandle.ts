@@ -52,7 +52,6 @@ import {
 } from '@shared/approvalPolicy';
 import {
   RUN_OUTCOME,
-  STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';

@@ -4,11 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import { nanoid } from 'nanoid';
 
-import {
-  type DiffSession,
-  type DiffSource,
-  type DiffViewHost,
-} from '@hosts/uiHosts';
+import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import { computeLineChangeSummary } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -151,7 +147,7 @@ export function createDesktopDiffHost(
     original: DiffSource,
     proposed: DiffSource,
     title: string,
-  ): Promise<DiffSession> {
+  ): Promise<void> {
     const settleFallbackSetup = trackFallbackSetup();
     try {
       const [originalContent, proposedContent] = await Promise.all([
@@ -179,7 +175,7 @@ export function createDesktopDiffHost(
           language: monacoLanguageForPath(proposed.filePath ?? ''),
         } satisfies DesktopShowDiffMessage,
       );
-      if (shownInRenderer) return { original, proposed, title };
+      if (shownInRenderer) return;
 
       // External-editor fallback: write a unified patch file and open it.
       const diffBody = unifiedDiffText(originalContent, proposedContent);
@@ -225,7 +221,6 @@ export function createDesktopDiffHost(
         throw error;
       }
 
-      return { original, proposed, title };
     } finally {
       settleFallbackSetup();
     }

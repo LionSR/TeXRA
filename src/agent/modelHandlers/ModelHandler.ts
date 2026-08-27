@@ -91,7 +91,7 @@ import {
   getProviderStreaming,
   getGlobalStreaming,
 } from '@utils/config/providerConfig';
-import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
+import { getValidatedConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import {

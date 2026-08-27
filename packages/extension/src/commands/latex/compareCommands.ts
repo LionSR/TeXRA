@@ -29,20 +29,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 const CHANNEL = 'CompareCommands';
 const log = createLog(CHANNEL);
 
-function validateFileLocations(
-  inputLocation: FileLocation | null | undefined,
-  baseLocation: FileLocation | null | undefined,
-  editedLocation: FileLocation,
-  errorMessage: string,
-): FileLocation | null {
-  const fileToUseLocation = baseLocation ?? inputLocation;
-  if (!fileToUseLocation) {
-    void showLoggedMessage(CHANNEL, errorMessage);
-    return null;
-  }
-  return fileToUseLocation;
-}
-
 /** Delete a workspace file, swallowing errors (already gone, locked) since
  *  diff-file cleanup is a best-effort side effect of accepting a file. */
 async function deleteDiffFileNonFatal(location: FileLocation): Promise<void> {
@@ -92,26 +78,17 @@ async function validateFilesExist(
 }
 
 export async function handleCompare(
-  inputLocation: FileLocation | null | undefined,
-  baseLocation: FileLocation | null | undefined,
+  baseLocation: FileLocation,
   editedLocation: FileLocation,
 ): Promise<void> {
   try {
-    const fileToUseLocation = validateFileLocations(
-      inputLocation,
-      baseLocation,
-      editedLocation,
-      'Both base file and edited file must be selected for comparison',
-    );
-    if (!fileToUseLocation) return;
-
-    if (!(await validateFilesExist(fileToUseLocation, editedLocation))) {
+    if (!(await validateFilesExist(baseLocation, editedLocation))) {
       return;
     }
 
-    const baseUri = vscode.Uri.file(fileToUseLocation.absolutePath);
+    const baseUri = vscode.Uri.file(baseLocation.absolutePath);
     const editedUri = vscode.Uri.file(editedLocation.absolutePath);
-    const baseFileName = path.basename(fileToUseLocation.absolutePath);
+    const baseFileName = path.basename(baseLocation.absolutePath);
     const editedFileName = path.basename(editedLocation.absolutePath);
     const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
 
@@ -216,27 +193,18 @@ async function pickReplaceOrCopyTarget(
 }
 
 export async function handleAcceptEdited(
-  inputLocation: FileLocation | null | undefined,
-  baseLocation: FileLocation | null | undefined,
+  baseLocation: FileLocation,
   editedLocation: FileLocation,
   copyMeta?: AcceptCopyMeta,
 ): Promise<boolean> {
   try {
-    const fileToUseLocation = validateFileLocations(
-      inputLocation,
-      baseLocation,
-      editedLocation,
-      'Both base file and edited file must be selected to accept changes',
-    );
-    if (!fileToUseLocation) return false;
-
-    if (!(await validateFilesExist(fileToUseLocation, editedLocation))) {
+    if (!(await validateFilesExist(baseLocation, editedLocation))) {
       return false;
     }
 
     // No run metadata: single-confirm replace flow shared with the desktop host.
     if (!copyMeta) {
-      return await acceptEditedFileReplace(fileToUseLocation, editedLocation, {
+      return await acceptEditedFileReplace(baseLocation, editedLocation, {
         ...COMMIT_PORTS,
         exists: (location) => AbsoluteFS.exists(location.absolutePath),
         confirm: (message) => confirmModal(message, 'Replace file', 'Cancel'),
@@ -246,7 +214,7 @@ export async function handleAcceptEdited(
     // Run metadata present: let the user replace the original or save a
     // postfixed copy, then commit the chosen target.
     const resolved = await pickReplaceOrCopyTarget(
-      fileToUseLocation,
+      baseLocation,
       editedLocation.absolutePath,
       copyMeta,
     );
@@ -257,7 +225,7 @@ export async function handleAcceptEdited(
     );
 
     await commitAcceptedFile(
-      fileToUseLocation,
+      baseLocation,
       editedLocation,
       resolved,
       targetExisted,

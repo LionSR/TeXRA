@@ -2834,12 +2834,11 @@ describe('DesktopProgressBridge', () => {
         sessionStores,
         resourcesPath: '/tmp/texra-test-resources',
         host: createStubDesktopAgentExecutionHost({
-          openDiff: async (original, proposed, title) => {
+          openDiff: async (original, proposed) => {
             diffPathsA.push({
               original: original.filePath,
               proposed: proposed.filePath,
             });
-            return { original, proposed, title };
           },
           showErrorMessage: async (message) => {
             errorsA.push(message);

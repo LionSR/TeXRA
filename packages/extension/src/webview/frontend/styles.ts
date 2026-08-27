@@ -372,10 +372,8 @@ export const mainViewStyles: CSSResult = css`
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .desktop-file-context-chevron {
-      transition: none;
-    }
-
+    /* Pierces wa-skeleton's own shadow root, which does not adopt
+       `designTokens`, so the shared `*` reduced-motion reset cannot reach it. */
     .launcher-loading-canvas wa-skeleton::part(indicator) {
       animation: none;
     }

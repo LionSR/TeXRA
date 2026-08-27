@@ -542,4 +542,17 @@ export const settingsRowStyles: CSSResult = css`
     align-self: center;
     gap: var(--wa-space-2xs);
   }
+
+  /* Skins for the hooks `renderSettingsNumberRow` hardcodes. They live here
+     rather than per-tab because every tab is its own shadow root and the
+     helper emits the classes for any caller. A tab that needs a different
+     width still overrides locally (latex-tab does). */
+  .setting-number-input {
+    width: 80px;
+  }
+
+  .setting-unit {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
 `;

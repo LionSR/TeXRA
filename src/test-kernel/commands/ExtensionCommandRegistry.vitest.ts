@@ -207,11 +207,6 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
   });
 
   describe('typed file-operation arguments', () => {
-    const WORKSPACE_INPUT = {
-      kind: 'workspace' as const,
-      absolutePath: '/workspace/main.tex',
-      relativePath: 'main.tex',
-    };
     const BASE_FILE = {
       kind: 'external' as const,
       absolutePath: '/tmp/base.tex',
@@ -308,31 +303,22 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       const actions = makeActions();
 
       await expect(
-        dispatch(
-          actions,
-          'texra.compare',
-          WORKSPACE_INPUT,
-          BASE_FILE,
-          EDITED_FILE,
-        ),
+        dispatch(actions, 'texra.compare', BASE_FILE, EDITED_FILE),
       ).resolves.toBe(true);
       await expect(
         dispatch(
           actions,
           'texra.acceptEdited',
-          WORKSPACE_INPUT,
           BASE_FILE,
           EDITED_FILE,
           COPY_META,
         ),
       ).resolves.toBe(true);
       expect(actions.compare).toHaveBeenCalledExactlyOnceWith(
-        WORKSPACE_INPUT,
         BASE_FILE,
         EDITED_FILE,
       );
       expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
-        WORKSPACE_INPUT,
         BASE_FILE,
         EDITED_FILE,
         COPY_META,
@@ -343,51 +329,10 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       const actions = makeActions();
 
       await expect(
-        dispatch(
-          actions,
-          'texra.acceptEdited',
-          WORKSPACE_INPUT,
-          BASE_FILE,
-          EDITED_FILE,
-        ),
+        dispatch(actions, 'texra.acceptEdited', BASE_FILE, EDITED_FILE),
       ).resolves.toBe(true);
       expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
-        WORKSPACE_INPUT,
         BASE_FILE,
-        EDITED_FILE,
-        undefined,
-      );
-    });
-
-    it('preserves the input-location fallback when base is omitted', async () => {
-      const actions = makeActions();
-
-      await expect(
-        dispatch(
-          actions,
-          'texra.compare',
-          WORKSPACE_INPUT,
-          undefined,
-          EDITED_FILE,
-        ),
-      ).resolves.toBe(true);
-      await expect(
-        dispatch(
-          actions,
-          'texra.acceptEdited',
-          WORKSPACE_INPUT,
-          undefined,
-          EDITED_FILE,
-        ),
-      ).resolves.toBe(true);
-      expect(actions.compare).toHaveBeenCalledExactlyOnceWith(
-        WORKSPACE_INPUT,
-        undefined,
-        EDITED_FILE,
-      );
-      expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
-        WORKSPACE_INPUT,
-        undefined,
         EDITED_FILE,
         undefined,
       );

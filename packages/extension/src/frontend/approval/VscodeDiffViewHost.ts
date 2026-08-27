@@ -28,8 +28,7 @@ export class VscodeDiffViewHost implements DiffViewHost {
     original: DiffSource,
     proposed: DiffSource,
     title: string,
-  ): Promise<DiffSession> {
-    const session = { original, proposed, title };
+  ): Promise<void> {
     await vscode.commands.executeCommand(
       'vscode.diff',
       this.toUri(original),
@@ -37,7 +36,6 @@ export class VscodeDiffViewHost implements DiffViewHost {
       title,
       { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
     );
-    return session;
   }
 
   async closeDiff(session: DiffSession): Promise<void> {

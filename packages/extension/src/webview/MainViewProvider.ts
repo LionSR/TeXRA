@@ -30,6 +30,7 @@ import {
 } from '@frontend/auth/agentCatalogRefreshScope';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
+import { createLog } from '@logger/logUtils';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -46,10 +47,13 @@ import {
 import { assertKnownOutboundMessage } from '@shared/utils/dispatcher';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { MainViewMessageHandler } from './MainViewMessageHandler';
 import type { ProgressViewProvider } from '../progressView/ProgressViewProvider';
+
+const log = createLog('MainViewProvider');
 
 export class MainViewProvider
   extends BaseWebviewProvider
@@ -205,10 +209,18 @@ export class MainViewProvider
     const canPost = view != null && this.mainWebviewReady;
 
     // Same usable-credential check the setup command uses: non-blank provider
-    // key or server-side key access.
-    const hasCredential = await hasAnyUsableSetupCredential().catch(
-      () => false,
-    );
+    // key or server-side key access. A probe failure (locked/absent OS keyring,
+    // subscription-status read) still has to resolve to `false` so the funnel
+    // renders something, but it must not do so silently: that answer blanks the
+    // launcher down to the first-run welcome card for a user who has keys.
+    let hasCredential = false;
+    try {
+      hasCredential = await hasAnyUsableSetupCredential();
+    } catch (error) {
+      log.warn(
+        `Credential probe failed; treating as no credential: ${toErrorMessage(error)}`,
+      );
+    }
     const transition = planOnboardingFunnelTransition(
       this.onboardingFunnelState,
       { hasCredential, ...readOnboardingFlags(this.context.globalState) },

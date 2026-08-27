@@ -51,11 +51,6 @@ interface ExtensionAuthAttempt {
   cancel(): void;
 }
 
-interface ClaimedAuthCallback {
-  attempt: ExtensionAuthAttempt;
-  flowId: string;
-}
-
 /** Notification operations injected at construction so tests can stub them. */
 interface AuthNotifier {
   showError(message: string): void;
@@ -190,10 +185,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     return values[0];
   }
 
+  /** Claim a persisted callback and hand back its PKCE flow id. */
   private async claimCallback(
     query: string,
     expectedAttempt?: ExtensionAuthAttempt,
-  ): Promise<ClaimedAuthCallback | null> {
+  ): Promise<string | null> {
     return this.callbackClaimQueue.add(async () => {
       const nonce = this.callbackNonce(query);
       if (!nonce || (expectedAttempt && expectedAttempt.nonce !== nonce)) {
@@ -222,20 +218,19 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           return null;
         }
 
-        const attempt = expectedAttempt ?? {
-          nonce,
-          createdAt: pending.createdAt,
-          cancel: () => {},
-        };
         await this.clearPendingAttempt(nonce);
-        if (expectedAttempt && this.activeAttempt !== attempt) return null;
-        return { attempt, flowId: pending.flowId };
+        // Re-check after the await: `activeAttempt` is mutated off-queue by
+        // `invalidateActiveAttempt`, so this is not a repeat of the check above.
+        if (expectedAttempt && this.activeAttempt !== expectedAttempt) {
+          return null;
+        }
+        return pending.flowId;
       } catch {
         throw new Error(
           'OAuth callback state could not be verified. Try again.',
         );
       }
-    }) as Promise<ClaimedAuthCallback | null>;
+    }) as Promise<string | null>;
   }
 
   private invalidateActiveAttempt(): void {
@@ -300,8 +295,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     if (nonce && this.activeAttempt?.nonce === nonce) return;
 
     try {
-      const claimed = await this.claimCallback(uri.query);
-      if (!claimed) return;
+      const flowId = await this.claimCallback(uri.query);
+      if (!flowId) return;
 
       const existingSession = await this.sessionCoordinator.loadSession();
       if (existingSession) return;
@@ -309,7 +304,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       const result = await SupabaseClient.runPkceOperation(() =>
         this.sessionCoordinator.createSessionFromCallback(
           { path: uri.path, query: uri.query },
-          claimed.flowId,
+          flowId,
         ),
       );
 
@@ -647,14 +642,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       const subscription = uriHandler.onDidReceiveCallback(async (uri) => {
         try {
-          const claimed = await this.claimCallback(uri.query, attempt);
-          if (!claimed) return;
+          const flowId = await this.claimCallback(uri.query, attempt);
+          if (!flowId) return;
           cleanupListeners();
 
           const result = await SupabaseClient.runPkceOperation(() =>
             this.sessionCoordinator.createSessionFromCallback(
               { path: uri.path, query: uri.query },
-              claimed.flowId,
+              flowId,
             ),
           );
 

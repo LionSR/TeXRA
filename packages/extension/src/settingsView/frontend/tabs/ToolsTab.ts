@@ -10,6 +10,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
+  parseTexraApprovalPolicy,
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_OPTIONS,
   type TexraApprovalPolicy,
@@ -42,7 +43,7 @@ import {
   postStateSetting,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
+import { readSelectValue } from '@shared/utils/selectTemplates';
 
 // Side-effect: register tool card component
 import '../components/tools/ToolCard';
@@ -172,12 +173,8 @@ export class ToolsTab extends LitElement {
   }
 
   private handleApprovalPolicyChange = (e: Event): void => {
-    const target = e.target as WaSelect | null;
-    const value = target?.value;
-    if (value !== 'ask' && value !== 'never' && value !== 'yolo') {
-      return;
-    }
-    postStateSetting(TEXRA_APPROVAL_POLICY_CONFIG_KEY, value);
+    const policy = parseTexraApprovalPolicy(readSelectValue(e));
+    if (policy) postStateSetting(TEXRA_APPROVAL_POLICY_CONFIG_KEY, policy);
   };
 
   private renderApprovalSettings(): TemplateResult {
@@ -190,13 +187,12 @@ export class ToolsTab extends LitElement {
         })}
         <div class="settings-section">
           <div class="setting-block">
-            <label class="setting-label" for="texra-approval-policy">
+            <label class="settings-row-label" for="texra-approval-policy">
               Approval policy
             </label>
             <wa-select
               id="texra-approval-policy"
               value=${this.approvalPolicy}
-              class="setting-enum-select"
               @change=${this.handleApprovalPolicyChange}
             >
               ${TEXRA_APPROVAL_POLICY_OPTIONS.map(

@@ -121,6 +121,39 @@ describe('user-question-panel', () => {
     ]);
   });
 
+  it('appends multi-select free text to the checked options instead of replacing them', async () => {
+    const element = await mountPanel(
+      createPermission([
+        {
+          question: 'Pick any',
+          options: [{ label: 'Red' }, { label: 'Blue' }],
+          multiSelect: true,
+          allowFreeText: true,
+        },
+      ]),
+    );
+
+    const [red] = [...(element.shadowRoot?.querySelectorAll('wa-checkbox') ??
+      [])] as (HTMLElement & { checked?: boolean })[];
+    red.checked = true;
+    dispatchChange(red);
+    const textarea = element.shadowRoot?.querySelector(
+      'wa-textarea',
+    ) as (HTMLElement & { value?: string }) | null;
+    if (!textarea) throw new Error('free-text box not rendered');
+    textarea.value = ' Purple ';
+    textarea.dispatchEvent(
+      new Event('input', { bubbles: true, composed: true }),
+    );
+    await element.updateComplete;
+
+    const actions = collectActions(element);
+    element.handleKeyboardShortcut('y');
+    expect(actions).toEqual([
+      { action: 'submit', answers: { 'Pick any': ['Red', 'Purple'] } },
+    ]);
+  });
+
   it('renders single-select options as wa-radio-group/wa-radio with no native inputs', async () => {
     const element = await mountPanel(
       createPermission([

@@ -120,7 +120,6 @@ export function handleFileOperation(message: FileOperationMessage): void {
       void vscode.commands.executeCommand(
         `texra.${message.command}`,
         pathToLocation(message.baseFile),
-        pathToLocation(message.baseFile),
         pathToLocation(message.editedFile),
       );
       return;
