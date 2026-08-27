@@ -69,8 +69,6 @@ export class VerifySetupTool extends defineTool({
       );
     }
 
-    // Authentication reports the stored session state and primes the shared
-    // status cache. Credential readiness must read that settled state.
     const [core, hasUsableCredential] = await Promise.all([
       collectCoreSetupStatus(platform),
       setupSecrets.anyUsableCredentialExists(),

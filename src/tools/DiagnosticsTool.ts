@@ -28,14 +28,18 @@ const DiagnosticsPathSchema = z
   .min(1)
   .describe('Workspace-relative or absolute file path.');
 
-const DiagnosticsListSchema = z.strictObject({
+// Branches use looseObject (not strictObject): provider conversion flattens
+// the union into one advertised object and OpenAI-compatible providers
+// null-fill the properties belonging to the other commands. See AGENTS.md
+// "Tool input schemas".
+const DiagnosticsListSchema = z.looseObject({
   command: z
     .literal('list')
     .describe('Retrieve full linter diagnostics for a file.'),
   path: DiagnosticsPathSchema,
 });
 
-const DiagnosticsCountSchema = z.strictObject({
+const DiagnosticsCountSchema = z.looseObject({
   command: z
     .literal('count')
     .describe(
@@ -44,7 +48,7 @@ const DiagnosticsCountSchema = z.strictObject({
   path: DiagnosticsPathSchema,
 });
 
-const DiagnosticsAddSchema = z.strictObject({
+const DiagnosticsAddSchema = z.looseObject({
   command: z
     .literal('add')
     .describe(

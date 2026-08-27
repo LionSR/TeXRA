@@ -16,10 +16,7 @@ import {
   usageLoggingOptOut,
   type UsageLoggingOptOut,
 } from '@telemetry/UsageLogService';
-import {
-  TEXRA_CLI_SUPPORTED_NODE_RANGE,
-  TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY,
-} from '@tools/externalToolDefs';
+import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@tools/externalToolDefs';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -160,7 +157,7 @@ function checkNode(version: string): DoctorCheck {
     'node',
     'Node.js',
     `Node ${version || 'unknown'} is outside the supported range.`,
-    `Install Node ${TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY} before running TeXRA CLI.`,
+    `Install Node ${TEXRA_CLI_SUPPORTED_NODE_RANGE} before running TeXRA CLI.`,
   );
 }
 

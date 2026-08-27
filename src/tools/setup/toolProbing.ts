@@ -65,9 +65,7 @@ function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
  * tool.
  */
 export async function collectCoreSetupStatus(platform: SetupPlatform) {
-  const auth = await getSetupAuthStatus().catch(() => ({
-    authenticated: false as const,
-  }));
+  const auth = await getSetupAuthStatus();
   const coreTools = await Promise.all(
     PROBED_CORE_TOOLS.map((name) => locateTool(name)),
   );

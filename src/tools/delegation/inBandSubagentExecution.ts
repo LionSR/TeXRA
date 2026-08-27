@@ -121,7 +121,7 @@ type SettledInBandTurn = Parameters<
 interface CompletedInBandSubagent {
   readonly executionId: ExecutionId;
   readonly result: AgentFinalResult;
-  readonly delivery?: string;
+  readonly delivery: string;
 }
 
 type StableAttemptInspection =
@@ -540,10 +540,17 @@ async function executeInBand(
       // 'launched' marker, so a later run refuses to repeat side-effectful
       // work rather than executing it twice.
       let persisted: ResultMeta | null;
+      // A read failure is NOT the same fact as a missing manifest: keep it so
+      // the thrown error names the I/O cause instead of blaming persistence.
+      let readFailure: unknown;
       try {
         persisted = await store.readResultMeta();
-      } catch {
+      } catch (cause) {
+        log.warn('Failed to read the persisted result manifest', {
+          data: { executionId, error: cause },
+        });
         persisted = null;
+        readFailure = cause;
       }
       if (!persisted) {
         if (childFailed) {
@@ -555,11 +562,17 @@ async function executeInBand(
               `Subagent ${executionId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
               {
                 cause: new AggregateError(
-                  [error],
+                  readFailure === undefined ? [error] : [error, readFailure],
                   `Subagent ${executionId} execution and persistence both failed.`,
                 ),
               },
             ),
+          );
+        }
+        if (readFailure !== undefined) {
+          throw new SubagentDurabilityError(
+            `Failed to verify the persisted result for subagent ${executionId}.`,
+            { cause: readFailure },
           );
         }
         throw new SubagentDurabilityError(
@@ -590,7 +603,7 @@ async function executeInBand(
     return {
       executionId,
       result,
-      ...(mode === 'best-effort-delivery' && { delivery: turnMessage }),
+      delivery: turnMessage,
     };
   })();
 
@@ -725,8 +738,8 @@ export async function executeStableSubagentInBand(
         `Prepared subagent ${executionId} changed its parent execution.`,
       );
     }
-    // The in-band driver never attaches a delivery in required-result mode, so
-    // the completed record already matches the typed result contract.
+    // The completed record always carries the child's delivery message; the
+    // required-result contract simply does not expose it.
     return executeInBand(prepared, 'required-result', executionId, attempt);
   });
 }
@@ -735,18 +748,5 @@ export async function executeStableSubagentInBand(
 export async function executeSubagentForDeliveryInBand(
   options: InBandSubagentDeliveryOptions,
 ): Promise<InBandSubagentDeliveryResult> {
-  const executionId = generateExecutionId();
-  const completed = await executeInBand(
-    options,
-    'best-effort-delivery',
-    executionId,
-  );
-  if (completed.delivery === undefined) {
-    throw new Error('Subagent delivery was not constructed.');
-  }
-  return {
-    executionId: completed.executionId,
-    result: completed.result,
-    delivery: completed.delivery,
-  };
+  return executeInBand(options, 'best-effort-delivery', generateExecutionId());
 }

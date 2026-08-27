@@ -71,18 +71,15 @@ export class ExtractTikzFiguresTool extends defineTool({
         const compiledPathStrings = compiledPaths.map(
           (loc) => loc.absolutePath,
         );
-        const {
-          attachments: compiledAttachments,
-          limitedPaths,
-          limitReached,
-        } = await buildLimitedAttachments(compiledPathStrings, {
-          limit: DEFAULT_TIKZ_MAX_FILES,
-          describe: () => `Standalone TikZ figure derived from ${display}`,
-          mimeType: 'application/pdf',
-        });
+        const { attachments: compiledAttachments, limitReached } =
+          await buildLimitedAttachments(compiledPathStrings, {
+            limit: DEFAULT_TIKZ_MAX_FILES,
+            describe: () => `Standalone TikZ figure derived from ${display}`,
+            mimeType: 'application/pdf',
+          });
         attachments = compiledAttachments;
         summaryParts.push(
-          `Compiled ${formatResultCount(limitedPaths.length, 'standalone PDF')}.`,
+          `Compiled ${formatResultCount(compiledPathStrings.length, 'standalone PDF')}.`,
         );
         outputs.push(
           formatToolOutput(
@@ -92,7 +89,7 @@ export class ExtractTikzFiguresTool extends defineTool({
         );
         if (limitReached) {
           summaryParts.push(
-            `Limited attachments to ${formatResultCount(compiledAttachments.length, 'file')}.`,
+            `Limited attachments to ${compiledAttachments.length} of ${compiledPathStrings.length} files.`,
           );
         }
       } else {

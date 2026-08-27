@@ -39,6 +39,7 @@ import {
 } from '@shared/schemas';
 import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -59,7 +60,11 @@ const logger = createLog('InquiryTool');
 // Schemas
 // ============================================================================
 
-const AskSchema = z.strictObject({
+// Branches use looseObject (not strictObject): provider conversion flattens
+// the union into one advertised object and OpenAI-compatible providers
+// null-fill the properties belonging to the other commands. See AGENTS.md
+// "Tool input schemas".
+const AskSchema = z.looseObject({
   command: z
     .literal('ask')
     .describe(
@@ -100,7 +105,7 @@ const AskSchema = z.strictObject({
     ),
 });
 
-const ReadSchema = z.strictObject({
+const ReadSchema = z.looseObject({
   command: z
     .literal('read')
     .describe(
@@ -111,7 +116,7 @@ const ReadSchema = z.strictObject({
   thread_id: InquiryThreadIdSchema.describe('The thread to read.'),
 });
 
-const ListSchema = z.strictObject({
+const ListSchema = z.looseObject({
   command: z
     .literal('list')
     .describe(
@@ -119,21 +124,18 @@ const ListSchema = z.strictObject({
         'answered, or what was dropped. Useful for self-orientation after multiple wake-ups, ' +
         'before starting a new turn after a long pause, or to recover a forgotten thread_id.',
     ),
-  status: z
-    .enum(['open', 'answered', 'dropped', 'any'])
-    .prefault('open')
-    .describe(
-      '"open" → awaiting user answer (default: matches the most common need). ' +
-        '"answered" → user has submitted an answer. ' +
-        '"dropped" → user rejected the inquiry. ' +
-        '"any" → all threads regardless of status.',
-    ),
-  scope: z
-    .enum(['stream', 'all'])
-    .prefault('stream')
-    .describe(
-      '"stream" → only threads belonging to this stream; "all" → every stream\'s threads.',
-    ),
+  status: nullishWithDefault(
+    z.enum(['open', 'answered', 'dropped', 'any']),
+    'open',
+  ).describe(
+    '"open" → awaiting user answer (default: matches the most common need). ' +
+      '"answered" → user has submitted an answer. ' +
+      '"dropped" → user rejected the inquiry. ' +
+      '"any" → all threads regardless of status.',
+  ),
+  scope: nullishWithDefault(z.enum(['stream', 'all']), 'stream').describe(
+    '"stream" → only threads belonging to this stream; "all" → every stream\'s threads.',
+  ),
 });
 
 const InquiryInputSchema = z.discriminatedUnion('command', [

@@ -14,11 +14,8 @@ const HIDDEN_CONFIG_FIELDS_BY_CATEGORY: Readonly<
   Record<string, ReadonlySet<string>>
 > = {
   toolUse: new Set([
-    'inputFile',
     'inputFiles',
-    'contextFile',
     'contextFiles',
-    'mediaFile',
     'mediaFiles',
     'outputFiles',
     'editedFile',

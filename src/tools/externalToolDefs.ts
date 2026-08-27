@@ -52,16 +52,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 /** Node.js semver range the `texra` CLI supports. */
 export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '>=22.9.0';
 
-/** Human-readable rendering of {@link TEXRA_CLI_SUPPORTED_NODE_RANGE}. */
-export const TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY = (() => {
-  const versions = TEXRA_CLI_SUPPORTED_NODE_RANGE.split(' || ');
-  const finalVersion = versions.at(-1);
-
-  return versions.length > 1 && finalVersion != null
-    ? `${versions.slice(0, -1).join(', ')}, or ${finalVersion}`
-    : TEXRA_CLI_SUPPORTED_NODE_RANGE;
-})();
-
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 
 // ============================================================
@@ -555,7 +545,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Local TeXRA command-line app integration. Detection is shown now; activation is coming soon.',
     installGuide:
       'Run the same agents on your .tex projects without an editor. This works well for scripts, CI, and remote machines.\n\n' +
-      `Install globally from npm (requires Node.js ${TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY}):\n` +
+      `Install globally from npm (requires Node.js ${TEXRA_CLI_SUPPORTED_NODE_RANGE}):\n` +
       '  npm install -g @texra-ai/cli\n\n' +
       'The CLI also ships with the TeXRA package. Make sure the `texra` command is on the PATH visible to VS Code or the desktop app.\n\n' +
       'Check from a terminal:\n' +

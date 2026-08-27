@@ -227,16 +227,11 @@ export async function requestToolEditApproval(
   }
 
   return session.approvals.toolEdit.enqueue(streamId, {
-    prompt: async () => {
-      const hostInteraction =
-        session.interactions.requestToolEditApproval(preparedRequest);
-      if (!hostInteraction) {
-        throw new Error(
-          'Tool edit approval requires session.interactions.requestToolEditApproval.',
-        );
-      }
-      return finalizeApprovalResult(await hostInteraction, preparedRequest);
-    },
+    prompt: async () =>
+      finalizeApprovalResult(
+        await session.interactions.requestToolEditApproval(preparedRequest),
+        preparedRequest,
+      ),
     bypassed: acceptProposedAsIs,
   });
 }

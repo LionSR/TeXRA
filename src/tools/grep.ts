@@ -193,7 +193,7 @@ export class GrepTool extends defineTool({
     const returnedCount = paginatedLines.length;
 
     const summary = `Found ${returnedCount} of ${totalCount} matches for "${input.pattern}" in ${display}`;
-    const hasMore = returnedCount < totalCount;
+    const hasMore = offset + returnedCount < totalCount;
     const output = hasMore
       ? `${paginatedLines.join('\n')}\n\n[Showing ${returnedCount} of ${totalCount} results. Use offset=${offset + returnedCount} to see more.]`
       : paginatedLines.join('\n');
