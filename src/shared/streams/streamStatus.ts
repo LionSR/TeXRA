@@ -69,8 +69,6 @@ export const STREAM_TRANSITION_CAUSE = {
   RESUME: 'resume',
   USER_STOP: 'user-stop',
   RESTART_REPAIR: 'restart-repair',
-  /** Restores a snapshot of this machine's own phases after a failed storage-root replacement. */
-  ROLLBACK: 'rollback',
 } as const;
 
 export type StreamTransitionCause =
@@ -157,10 +155,5 @@ export function canTransitionStreamPhase(
       if (from === undefined) return isTerminalOutcomePhase(to);
       if (from === to) return true;
       return from === STREAM_PHASE.RUNNING && to === STREAM_PHASE.CANCELLED;
-    case STREAM_TRANSITION_CAUSE.ROLLBACK:
-      // A rollback restores phases this process observed before the failed
-      // replacement, in one step: no synthetic RUNNING fact, which the
-      // applier would treat as a run start.
-      return from === undefined;
   }
 }
