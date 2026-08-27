@@ -377,6 +377,7 @@ export async function runToolUseFlow(
   let resumeStartupPreservation:
     'cancellation' | 'initial-read-failure' | undefined;
   let persistenceRecoveryPending = false;
+  let persistedFlowRecordExists = false;
   let flowRunStarted = false;
   let primaryFailure: { readonly error: unknown } | undefined;
   let earlyResult: RunToolUseFlowResult | undefined;
@@ -445,6 +446,7 @@ export async function runToolUseFlow(
     } else {
       persistenceRecoveryPending = true;
       const flowRecord = await readPersistedFlowRecord(kv, executionId);
+      persistedFlowRecordExists = flowRecord !== undefined;
       // Cancellation can also arrive while the recovery read is pending. Do
       // not start a repair write after that handoff.
       if (signal.aborted) {
@@ -607,10 +609,10 @@ export async function runToolUseFlow(
         'Flow record preserved after persistence recovery failure';
     } else if (outcome === STREAM_PHASE.WAITING) {
       preservationReason = 'Flow record preserved for native subagent WAITING';
-    } else if (signal.aborted && !flowRunStarted) {
+    } else if (signal.aborted && !flowRunStarted && persistedFlowRecordExists) {
       // Startup cancellation can happen before this invocation owns or starts
-      // the flow. Preserve any checkpoint that a reused executionId may carry;
-      // a fresh launch simply has no record for this no-op to retain (#11430).
+      // the flow. Preserve a checkpoint only when the recovery read confirmed
+      // that this executionId was reused (#11430).
       preservationReason = 'Flow record preserved after startup interruption';
     } else if (flowRunStarted && signal.aborted) {
       preservationReason = 'Flow record preserved after user interruption';

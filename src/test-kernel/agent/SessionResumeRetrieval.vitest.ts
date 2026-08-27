@@ -1377,22 +1377,42 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     await writeFlowRecord(executionId, storedShared);
     const store = getExecutionStore(executionId);
     const deleteSpy = vi.spyOn(store, 'delete');
+    const session = createTestSession();
+    const releaseSpy = vi.spyOn(session.followUps, 'release');
+    const realRead = store.read.bind(store);
+    let flowContext: ToolUseSetupContext | undefined;
+    const readSpy = vi.spyOn(store, 'read').mockImplementation(async (key) => {
+      const record = await realRead(key);
+      flowContext?.interrupt();
+      return record;
+    });
     const dispositions: Array<'preserve' | 'delete'> = [];
 
     try {
       const result = await runPersistedFlow(executionId, streamId, undefined, {
-        attachment: { attach: (flowContext) => flowContext.interrupt() },
+        attachment: {
+          attach: (context) => {
+            flowContext = context;
+          },
+        },
+        session,
         onFlowRecordDisposition: (value) => dispositions.push(value),
       });
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
       expect(dispositions).toEqual(['preserve']);
+      expect(releaseSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ streamId, kind: 'flow' }),
+        'recoverable',
+      );
       expect(await readFlowRecord(executionId)).toMatchObject({
         shared: storedShared,
       });
     } finally {
+      readSpy.mockRestore();
       deleteSpy.mockRestore();
+      releaseSpy.mockRestore();
     }
   });
 
@@ -1416,10 +1436,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(readSpy).not.toHaveBeenCalled();
       expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
-      expect(dispositions).toEqual(['preserve']);
+      expect(dispositions).toEqual(['delete']);
       expect(releaseSpy).toHaveBeenCalledWith(
         expect.objectContaining({ streamId, kind: 'flow' }),
-        'recoverable',
+        'terminal',
       );
     } finally {
       readSpy.mockRestore();
