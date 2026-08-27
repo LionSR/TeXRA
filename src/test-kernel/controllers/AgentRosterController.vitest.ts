@@ -5,6 +5,7 @@ import {
   type AgentRosterControllerDeps,
   type AgentRosterEntry,
 } from '@agent/roster/AgentRosterController';
+import * as logger from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import {
   agentMatchesIdentifier,
@@ -60,13 +61,14 @@ describe('AgentRosterController', () => {
     vi.restoreAllMocks();
   });
 
-  /** Silence console.warn and return the spy for warning assertions. */
+  /** Silence the roster log channel and return the spy for assertions. */
   function stubWarn(): ReturnType<typeof vi.spyOn> {
-    return vi.spyOn(console, 'warn').mockImplementation(() => {});
+    return vi.spyOn(logger, 'warn').mockImplementation(() => {});
   }
 
   function expectMalformedWarning(warn: ReturnType<typeof vi.spyOn>): void {
     expect(warn).toHaveBeenCalledWith(
+      'AgentRosterController',
       expect.stringContaining('malformed roster selection'),
     );
   }

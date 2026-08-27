@@ -1151,8 +1151,12 @@ export function startChildRunLoop<TTurn>(
           const handle =
             runSession.executions.getAgentHandleByStream(childStreamId);
           if (handle) {
+            // Same precedence as the agent-CLI branch above and as
+            // `deriveRunOutcome`'s own rule (failed > cancelled): a turn that
+            // failed and was then stopped is still a failure, and the stream
+            // phase still arbitrates a stop that already landed CANCELLED.
             const outcome = deriveRunOutcome({
-              failed: sawTurnFailure && !loop.isInterrupted(),
+              failed: sawTurnFailure,
               cancelled: loop.isInterrupted(),
             });
             await finalizeRunTerminal({

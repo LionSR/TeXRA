@@ -53,7 +53,6 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
 
 import type { WorkflowJournalEntry } from '@agent/workflowScript';
 import { getExecutionStore } from '@agent/storage';
-import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
 import {
   startChildRunLoop,
   type ChildRunLoopHandle,
@@ -74,8 +73,11 @@ import {
   type StreamPhase,
   type StreamTabId,
   AgentCategory,
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
+import { platform } from '@platform/platform';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import {
@@ -981,7 +983,8 @@ describe('childRunLoop E2E fixtures', () => {
   });
 
   it('gates budgeted child turns through the session child-run budget', async () => {
-    childRunBudgetFor(session, 1);
+    const config = platform().config as FakeConfigProvider;
+    config.set(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, 1);
     try {
       const first = loopIds('budget-first');
       const second = loopIds('budget-second');
@@ -1017,8 +1020,8 @@ describe('childRunLoop E2E fixtures', () => {
       await waitForLoopEnd(second.childStreamId);
       expect(started).toEqual(['first', 'second']);
     } finally {
-      childRunBudgetFor(
-        session,
+      config.set(
+        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
         CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
       );
     }

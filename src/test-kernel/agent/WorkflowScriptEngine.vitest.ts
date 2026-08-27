@@ -682,6 +682,23 @@ return await parallel([
     expect(order).toEqual(['runner', 'checkpoint:1', 'completed:call-1']);
   });
 
+  it('reports a synchronous snapshot-write failure instead of hanging', async () => {
+    // A synchronous `onSnapshot` throw runs the coalescing writer's drain to
+    // completion (`catch` and `finally` included) inside `publish`, so the
+    // handle `publish` then stores is already settled and nothing clears it
+    // again. A flush that waited on that handle unconditionally never
+    // returned, hanging the run instead of reporting its checkpoint failure.
+    await expect(
+      runWorkflowScript({
+        script: `${META}return 'done'`,
+        runAgent: echoRunner,
+        onSnapshot: () => {
+          throw new Error('snapshot sink offline');
+        },
+      }),
+    ).rejects.toMatchObject({ name: 'WorkflowRunAbortError' });
+  });
+
   it('surfaces a late checkpoint failure from an abandoned agent call', async () => {
     const snapshots: WorkflowScriptRunResult['snapshot'][] = [];
     await expect(

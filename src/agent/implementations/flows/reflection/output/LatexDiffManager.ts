@@ -171,7 +171,24 @@ export class LatexDiffManager {
       };
 
       if (this.agentSetting.isRewrite) {
-        const basePairs = collectPairs((entry) => entry.base);
+        // A base file the mapping named but the workspace never held (an
+        // agent whose declared output files are created by the run) has
+        // nothing to diff against. Skip those pairs rather than gating the
+        // whole call, so the between-round branch below still runs.
+        const candidatePairs = collectPairs((entry) => entry.base);
+        const baseExists = await Promise.all(
+          candidatePairs.map(([, base]) =>
+            AbsoluteFS.exists(base.absolutePath),
+          ),
+        );
+        const basePairs = candidatePairs.filter(
+          (_, index) => baseExists[index],
+        );
+        if (basePairs.length < candidatePairs.length) {
+          this.logger.debug(
+            `Skipping ${candidatePairs.length - basePairs.length} latexdiff base pair(s): base file not present`,
+          );
+        }
         this.logPairMatches(basePairs, 'base files to output files');
 
         for (const [outputPath, baseLocation] of basePairs) {

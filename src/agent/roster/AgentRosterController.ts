@@ -1,3 +1,4 @@
+import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import type {
   AgentCategory,
@@ -20,11 +21,14 @@ import {
   STARTER_AGENT_MODE_PRESET,
 } from '@shared/schemas';
 import {
+  clearDefaultTeamId,
   getDefaultTeamId,
   setDefaultTeamId,
 } from '@shared/state/onboardingState';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { KeyedMutex, unique } from '@utils/core';
+
+const log = createLog('AgentRosterController');
 
 export interface AgentRosterEntry {
   readonly name: string;
@@ -104,8 +108,8 @@ function readAgentRosterSelection(
   if (parsed.success) return parsed.data;
   const legacy = parseLegacySelection(raw);
   if (legacy) return legacy;
-  console.warn(
-    `[agentRoster] Ignoring malformed roster selection; falling back to ` +
+  log.warn(
+    `Ignoring malformed roster selection; falling back to ` +
       `the inherited roster: ${parsed.error.message}`,
   );
   return INHERITED_AGENT_ROSTER;
@@ -422,9 +426,6 @@ export class AgentRosterController<
   }
 
   async clearDefaultTeam(): Promise<void> {
-    await this.deps.globalState.update(
-      GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID,
-      undefined,
-    );
+    await clearDefaultTeamId(this.deps.globalState);
   }
 }

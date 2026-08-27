@@ -203,7 +203,8 @@ describe('buildUserVars runtime skill diagnostics', () => {
   });
 });
 
-// Pure function: resolveOutputFiles takes plain data in, plain data out.
+// resolveOutputFiles is pure: it returns the normalized list and the prompt
+// variable, and leaves writing the list back onto the config to buildUserVars.
 describe('output file prompt variables', () => {
   it.each([
     {
@@ -239,13 +240,13 @@ describe('output file prompt variables', () => {
     },
   ])('$name', ({ config, setting, expectedVars, expectedOutputFiles }) => {
     const agentConfig = config as unknown as AgentConfig;
-    const vars = resolveOutputFiles(
+    const resolved = resolveOutputFiles(
       agentConfig,
       setting as unknown as AgentSetting,
     );
 
-    expect(vars).toEqual(expectedVars);
-    expect(agentConfig.outputFiles).toEqual(expectedOutputFiles);
+    expect(resolved.vars).toEqual(expectedVars);
+    expect(resolved.outputFiles).toEqual(expectedOutputFiles);
   });
 });
 

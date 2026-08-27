@@ -273,7 +273,6 @@ function buildResponseResumeData(
 ): ToolUseResumeData {
   const shared = {
     messages: [{ role: 'assistant', content: response }],
-    lastResponse: response,
     continuationGenerationId: CONTINUATION_GENERATION_ID,
     shouldSkipCycle: false,
     stateSlices: defaultStateSlices(),
@@ -1175,7 +1174,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         message: 'provider failed after partial output',
         userRetryable: true,
       },
-      lastResponse: 'partial assistant response',
     };
     const snapshot: ToolUseResumeData = {
       ...base,

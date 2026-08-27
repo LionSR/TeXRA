@@ -23,13 +23,6 @@ import type { SessionHandle } from './SessionHandle';
 
 const budgets = new WeakMap<SessionHandle, PQueue>();
 
-/**
- * Queues whose limit was pinned by an explicit `concurrency` argument. Live
- * config reads must not re-pin these — the caller (today: the existing
- * explicit test seams) remains authoritative until it passes a new value.
- */
-const callerPinned = new WeakSet<PQueue>();
-
 function readConfiguredChildRunBudget(): number {
   return getValidatedConfig(
     CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
@@ -39,38 +32,21 @@ function readConfiguredChildRunBudget(): number {
 }
 
 /**
- * The session's shared child-run budget.
- *
- * - First call: creates the queue at the configured value, or at `concurrency`
- *   when a caller explicitly pins it.
- * - Later call with `concurrency`: re-pins the live queue's limit.
- * - Later call without `concurrency`: re-reads the configured value and
- *   re-pins only queues the caller has not explicitly pinned. A mid-session
- *   settings change therefore takes effect on the next call to
- *   `childRunBudgetFor` (the next child-run launch for that session); existing
- *   loops sharing that queue then pick up the new limit on their subsequent
- *   turns, without replacing queued work or overriding an authoritative caller
- *   pin.
+ * The session's shared child-run budget, created at the configured value on
+ * first call and re-pinned to it on every later call. A mid-session settings
+ * change therefore takes effect on the next call to `childRunBudgetFor` (the
+ * next child-run launch for that session); existing loops sharing that queue
+ * then pick up the new limit on their subsequent turns, without replacing
+ * queued work.
  */
-export function childRunBudgetFor(
-  session: SessionHandle,
-  concurrency?: number,
-): PQueue {
+export function childRunBudgetFor(session: SessionHandle): PQueue {
   const configured = readConfiguredChildRunBudget();
-  let queue = budgets.get(session);
-  if (!queue) {
-    queue = new PQueue({
-      concurrency: concurrency ?? configured,
-    });
-    budgets.set(session, queue);
-    if (concurrency !== undefined) {
-      callerPinned.add(queue);
-    }
-  } else if (concurrency !== undefined) {
-    queue.concurrency = concurrency;
-    callerPinned.add(queue);
-  } else if (!callerPinned.has(queue)) {
-    queue.concurrency = configured;
+  const existing = budgets.get(session);
+  if (existing) {
+    existing.concurrency = configured;
+    return existing;
   }
+  const queue = new PQueue({ concurrency: configured });
+  budgets.set(session, queue);
   return queue;
 }

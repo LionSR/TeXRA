@@ -383,7 +383,12 @@ export class WorkflowExecutionState {
         stage.lifecycle = WORKFLOW_EXECUTION_LIFECYCLE.SKIPPED;
         stage.completedAt = completedAt;
       } else {
-        this.#settleStage(stage.id, completedAt);
+        // Re-derive the lifecycle after the call sweep above, but keep a
+        // stage's own end instant: only the active stage, whose completedAt
+        // `enterStage` cleared on entry, ends with the run. Restamping every
+        // settled stage made the persisted snapshot (and /executions/{id})
+        // report the run's terminal instant as each stage's completion.
+        this.#settleStage(stage.id, stage.completedAt ?? completedAt);
       }
     }
     // Call-derived settlement alone can mark the active stage completed or

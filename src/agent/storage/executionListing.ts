@@ -423,7 +423,9 @@ export async function deleteAllExecutions(
   // Validate every present lease before the first irreversible deletion. A
   // malformed record fails closed without leaving callers with partial work
   // hidden behind an AggregateError.
-  await Promise.all(executionDirs.map(inspectExecutionLease));
+  await pMap(executionDirs, (id) => inspectExecutionLease(id), {
+    concurrency: EXECUTION_STORAGE_CONCURRENCY,
+  });
   const { beforeDelete } = options;
   const results = await pMap(
     executionDirs,

@@ -200,13 +200,10 @@ export class ModelInvocationNode<
   }
 
   /** Rebuilds the run's client for the configured credential, logging failure. */
-  private async rebindClient(
-    context: string,
-    signal?: AbortSignal,
-  ): Promise<void> {
+  private async rebindClient(context: string): Promise<void> {
     const { logger, modelCell } = this.services;
     try {
-      await modelCell.rebind(undefined, signal);
+      await modelCell.rebind();
       logger.debug(`Refreshed model client ${context}`);
     } catch (rebindError) {
       logger.warn(`Failed to refresh model client ${context}`, {
@@ -300,7 +297,6 @@ export class ModelInvocationNode<
   private recordResolvedAttempt(
     result: InvocationSuccess,
     attemptSource: RetryAttemptSource,
-    details: Record<string, unknown> = {},
   ): InvocationSuccess {
     // An empty response resolves the provider call but carries nothing the
     // cycle can use, so the lifecycle records it as a failed attempt.
@@ -308,7 +304,6 @@ export class ModelInvocationNode<
     this.logRetryLifecycle(succeeded ? 'attempt_succeeded' : 'attempt_failed', {
       decisionSource: attemptSource,
       ...(succeeded ? {} : { failureKind: 'invalid_result' }),
-      ...details,
     });
     return result;
   }
@@ -559,7 +554,7 @@ export class ModelInvocationNode<
     const kimiCodeRoutedOnFailure = isKimiCodeExclusiveModel(
       failedModel.config,
     );
-    const interaction = session.interactions.requestRetry(
+    const result = await session.interactions.requestRetry(
       {
         requestId: `retry-${generateShortId()}`,
         streamId,
@@ -580,10 +575,6 @@ export class ModelInvocationNode<
         },
       },
     );
-    if (!interaction) {
-      throw new Error('HostInteractions.requestRetry is required');
-    }
-    const result = await interaction;
     const retrySource =
       result.action === 'retry'
         ? (result.decisionSource ?? 'human')
