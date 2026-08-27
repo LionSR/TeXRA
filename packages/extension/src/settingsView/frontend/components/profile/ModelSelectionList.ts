@@ -139,7 +139,11 @@ export class ModelSelectionList extends LitElement {
         @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
       >
         <wa-option value=""> ${defaultLabel} </wa-option>
-        ${REASONING_LEVEL_OPTIONS.map(
+        ${REASONING_LEVEL_OPTIONS.filter(
+          (option) =>
+            !model.supportedReasoningLevels?.length ||
+            model.supportedReasoningLevels.includes(option.value),
+        ).map(
           (option) => html`
             <wa-option value=${option.value}> ${option.label} </wa-option>
           `,

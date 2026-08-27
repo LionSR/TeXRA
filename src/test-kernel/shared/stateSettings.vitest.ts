@@ -408,6 +408,7 @@ describe('state settings catalog', () => {
       ),
       [
         'none — None',
+        'minimal — Minimal',
         'low — Low',
         'medium — Medium',
         'high — High',

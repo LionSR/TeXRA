@@ -249,6 +249,16 @@ export class ModelHandlerOpenAI<
     return undefined;
   }
 
+  /** Provider-specific reasoning controls for the auxiliary summary call. */
+  protected getCompactionReasoningParameters(): Pick<
+    ChatCompletionSummaryParams,
+    'thinking' | 'reasoning_effort'
+  > {
+    return this.getThinkingParameter() || this.capabilities.supportsReasoning
+      ? { thinking: { type: 'disabled' } }
+      : {};
+  }
+
   protected buildCompactionSummaryParams(
     conversationMessages: ChatCompletionMessageParam[],
     systemPrompt: string,
@@ -262,12 +272,8 @@ export class ModelHandlerOpenAI<
       max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
       temperature: 0,
       stream: false,
+      ...this.getCompactionReasoningParameters(),
     };
-    // Disable thinking for the summary call — reasoning models
-    // (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization.
-    if (this.getThinkingParameter() || this.capabilities.supportsReasoning) {
-      summaryParams.thinking = { type: 'disabled' };
-    }
     return summaryParams;
   }
 
@@ -284,6 +290,19 @@ export class ModelHandlerOpenAI<
       this.config.provider === ModelProvider.XAI &&
       this.capabilities.supportsReasoning;
     return !this.isOReasoningModel && !isGrokReasoningModel;
+  }
+
+  /** Resolve the provider-facing reasoning effort, if this request should send one. */
+  protected getReasoningEffortParameter(): string | undefined {
+    const reasoningEffort = this.getEffectiveReasoningEffort();
+    if (!this.capabilities.supportsReasoning || !reasoningEffort)
+      return undefined;
+    return this.validateReasoningEffort(
+      toOpenAIReasoningEffort(
+        reasoningEffort,
+        getDeclaredMaxReasoningEffort(this.config.capabilities),
+      ),
+    );
   }
 
   protected buildChatBaseParams(
@@ -310,14 +329,10 @@ export class ModelHandlerOpenAI<
       baseParams.temperature = temperature;
     }
 
-    const reasoningEffort = this.getEffectiveReasoningEffort();
-    if (this.capabilities.supportsReasoning && reasoningEffort) {
-      baseParams.reasoning_effort = this.validateReasoningEffort(
-        toOpenAIReasoningEffort(
-          reasoningEffort,
-          getDeclaredMaxReasoningEffort(this.config.capabilities),
-        ),
-      ) as ChatCompletionRequestBase['reasoning_effort'];
+    const reasoningEffort = this.getReasoningEffortParameter();
+    if (reasoningEffort) {
+      baseParams.reasoning_effort =
+        reasoningEffort as ChatCompletionRequestBase['reasoning_effort'];
     }
 
     // Add thinking parameter if specified by subclass (Kimi K2.5, DeepSeek)
