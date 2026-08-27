@@ -386,8 +386,9 @@ is the execution substrate beneath those rulings.
 4. No adoption of `effect/unstable/*` modules in the foundation phases.
 5. No replacement of PocketFlow with Effect's experimental workflow module.
 6. No change to wire protocols, agent YAML, or public result schemas. Durable
-   flow formats remain unchanged through Phase 2; Phase 3 may introduce one
-   explicit version for finer checkpoints.
+   flow formats remain unchanged through Phase 2 and Stage 3a; Stage 3b may
+   introduce one explicit versioned representation for finer checkpoints
+   under the rollout section's reader-outlives-writer rule.
 7. No public `Effect` return types from `@texra-ai/agent` in the first release.
 8. No automatic retry expansion. Existing idempotency and retry ownership
    decisions remain binding.
@@ -540,9 +541,16 @@ before that step commits. No child may continue mutating shared state after the
 cursor has advanced.
 
 The flow record remains the sole authority. Derived session projections run
-after its commit and remain best-effort and rebuildable. Interruption between
-the two may leave a projection temporarily behind, but may not roll back the
-authoritative record.
+after its commit and remain best-effort and rebuildable. "Rebuildable" is a
+protocol, not a hope: a projection consumer that must not lose facts records
+a durable watermark naming the last committed coordinate it has projected,
+and resume re-derives any committed-but-unprojected facts from the record
+before new work starts. Re-derivation is idempotent because projections are
+keyed by round, activity, or cursor identity, never by emission time.
+Interruption between commit and projection therefore delays the projection
+until the next attach or resume; it can neither roll back the authoritative
+record nor lose the projection permanently. A purely cosmetic projection that
+tolerates loss may skip the watermark, but must say so where it is emitted.
 
 #### R4.2. Replay semantics are declared, not assumed
 
@@ -599,8 +607,10 @@ The existing side-effect barriers become durability barriers:
 This requires either a hierarchical cursor into the nested graph or an
 activity ledger referenced by the outer cursor. The choice, record schema, and
 recovery interface must be settled in a small persistence design amendment
-before the tool-use lifecycle moves to Effect. It is not acceptable to hide the
-nested flow in one larger Effect and call the migration complete.
+before the tool-use lifecycle moves to Effect; the recommended default and
+its rollback rationale are recorded in §15 and the rollout section. It is not
+acceptable to hide the nested flow in one larger Effect and call the
+migration complete.
 
 #### R4.4. Cursor identity is stable across refactoring
 
@@ -638,10 +648,14 @@ resource around that transition. Workspace reset, round increment, repair-grant
 consumption, and cursor movement form one durable next-round operation; process
 interruption cannot expose half of it.
 
-The duplicated `onRoundFinalized` fallback disappears. Canonical round facts
-and usage are committed once as domain state. Host progress and other derived
-notifications occur afterward as projections and cannot cause the round to be
-recorded twice.
+The duplicated `onRoundFinalized` fallback disappears — but only after the
+R4.1 watermark path exists. Today the duplicate call is the only mechanism
+that recovers a usage event when the process dies between the round commit
+and its projection; deleting it first would convert a temporary lag into a
+permanently missing usage fact. In the target, canonical round facts and
+usage are committed once as domain state, and host progress, usage logging,
+and other derived notifications occur afterward as watermark-tracked
+projections that cannot cause the round to be recorded twice.
 
 #### R4.6. Child-agent dispatch has one durable activity protocol
 
@@ -701,14 +715,23 @@ Resources acquired inside migrated code use `Effect.acquireRelease`, scoped
 layers, or scope finalizers. Finalizers state whether they run sequentially or
 in parallel and preserve the existing domain-specific cleanup order.
 
-The current `LifecycleHost` order is not the default Effect scope order. It
-runs the `BEFORE` phase to completion before `ON`, and handlers within each
-phase run sequentially in registration order. Effect scopes normally finalize
-in reverse registration order. Migration therefore uses either an explicit
-two-phase shutdown program or two phase-separated scopes with deliberate
-registration order; a direct transfer of callbacks into one scope is
-incorrect. Characterization tests pin the two phase boundaries and FIFO order
-before this code changes.
+The current `LifecycleHost` contract has three properties, not two. It runs
+the `BEFORE` phase to completion before `ON`; handlers within each phase run
+sequentially in registration order; and each phase is bounded by a
+five-second abort-then-advance deadline — at the deadline every handler's
+abort signal fires, the laggard is reported, and the drain advances without
+waiting further. Effect scopes normally finalize in reverse registration
+order and can wait indefinitely on an uninterruptible finalizer, so a direct
+transfer of callbacks into one scope is incorrect twice over: it inverts the
+order and it deletes the deadline.
+
+`LifecycleHost` therefore remains the single shutdown authority. The managed
+runtime's disposal registers as an ordinary `ON`-phase handler: on the phase
+deadline the disposal's root fiber is interrupted, and if disposal still does
+not settle, the host reports and abandons it exactly as it abandons any other
+laggard. The migration does not build a second, unbounded shutdown path out
+of scope finalization. Characterization tests pin the two phase boundaries,
+the FIFO order, and the deadline behavior before this code changes.
 
 `DisposableStore` remains for host APIs that synchronously return disposable
 objects until those edges migrate. It must not be used inside completed Effect
@@ -909,7 +932,9 @@ library substitutions:
 Queues and mutexes are not collapsed merely because Effect supplies similarly
 named primitives. A queue representing a real domain protocol remains a domain
 object. Only its generic scheduling, cancellation, and disposal mechanism is
-absorbed by the runtime.
+absorbed by the runtime. `LifecycleHost` is the same kind of survivor: it
+keeps its two-phase, FIFO, deadline-bounded shutdown authority (R6), and
+runtime disposal registers into it rather than beside it.
 
 ## 9. Functional requirements
 
@@ -1074,12 +1099,23 @@ unreleased compiler patch.
   the same underlying port objects.
 - Add a lint/architecture allowlist for the few legal `Effect.run*` boundary
   modules.
-- Forbid Effect imports from `src/shared/` and webview frontend entry trees;
-  wire contracts and browser-safe utilities remain runtime-independent.
+- Forbid Effect imports from `src/shared/`, webview frontend entry trees, and
+  the browser-reachable `src/utils` modules pinned by
+  `scripts/check-browser-safe-utils.mjs`; wire contracts and browser-safe
+  utilities remain runtime-independent.
+- Migrate one small authoritative seam — `fileLocks.runExclusive` and its
+  consumers — onto scoped Effect ownership, deleting its bespoke
+  acquisition-and-release machinery in the same PR. The Phase 0 spike is
+  throwaway; this seam is the production proof that the foundation deletes
+  more than it adds.
 - Document exact RC upgrade procedure and rollback.
 
 The phase changes no product behavior and introduces no Effect use in browser
-bundles.
+bundles. It is not exempt from R10: a repository paused after a Phase 1 that
+only added service declarations, process layers, and boundary allowlists
+beside an untouched `initPlatform()` would be exactly the wrapper-only dual
+runtime this PRD rejects. Either the Phase 1 seam has made some old machinery
+unreachable, or the foundation is reverted under the rollback rule.
 
 ### Phase 2 — PocketFlow execution kernel
 
@@ -1103,24 +1139,26 @@ bundles.
   `services`, `setServices()`, and service spreading.
 - Supply run services once at the flow boundary.
 
-This is the first phase with a mandatory net deletion. It is complete only when
-no production `setServices()` call remains. It does not yet change the version
-2 record schema or make nested tool operations more durable.
+Like every phase, this one must delete; its mandatory target is structural.
+The phase is complete only when no production `setServices()` call remains.
+It does not yet change the version 2 record schema or make nested tool
+operations more durable.
 
 ### Phase 3 — run lifecycle and cancellation
 
-- Ratify the nested-flow persistence amendment: stable activity identities,
-  hierarchical cursor or activity-ledger representation, recovery behavior for
-  an unknown external outcome, and version-retirement policy.
-- Checkpoint completed model responses before tool dispatch and completed
-  side-effecting tool calls before the next side-effecting call.
+Phase 3 lands as two separately revertible stages. Stage 3a changes no
+durable format: it converts the run interiors, collapses the dependency
+carriers onto `AgentRun`, moves lifecycle under scopes, and replaces internal
+abort choreography. Stage 3b carries the persistence amendment, the round
+commit, and the finer checkpoints — every item that writes a new durable
+shape. The split isolates the only rollback-constrained work of the program
+in one small stage; the rollout section defines what revertibility means for
+it.
+
+Stage 3a — lifecycle and carriers, no durable format change:
+
 - Convert `runReflectionFlow`, `runToolUseFlow`, `executeAgent`, and
   `AgentRunLifecycle` interiors.
-- Replace `RoundPersistedFlow` with the common durable transition kernel plus a
-  reflection-round transition; preserve the configured bound and the single
-  persisted compile-repair grant.
-- Collapse response-cycle finalization to one canonical round-state commit and
-  derived projections.
 - Replace the mirrored `AgentLaunchContext` / ambient `RunContext` /
   `AgentCore` / flow-service dependency path with plain launch inputs and one
   scoped `AgentRun` service.
@@ -1130,6 +1168,19 @@ no production `setServices()` call remains. It does not yet change the version
 - Preserve the explicit detached-subagent policy.
 - Delete the manual teardown-failure ledger once the common finalizer policy
   covers it.
+
+Stage 3b — durable rounds and finer checkpoints:
+
+- Ratify the nested-flow persistence amendment: stable activity identities,
+  hierarchical cursor or activity-ledger representation, recovery behavior for
+  an unknown external outcome, and version-retirement policy.
+- Checkpoint completed model responses before tool dispatch and completed
+  side-effecting tool calls before the next side-effecting call.
+- Replace `RoundPersistedFlow` with the common durable transition kernel plus a
+  reflection-round transition; preserve the configured bound and the single
+  persisted compile-repair grant.
+- Collapse response-cycle finalization to one canonical round-state commit and
+  watermark-tracked derived projections.
 
 The Promise-returning `runAgent` and SDK entry points remain adapters around the
 Effect program. Phase 3 cannot complete while the inner tool-use cycle remains
@@ -1170,7 +1221,10 @@ Migrate one subsystem at a time, in this order:
 Each subphase removes its superseded package imports immediately. A package is
 removed from `package.json` when its last justified production use disappears;
 UI-only uses may keep a package until their own code has a simpler native or
-Effect-independent replacement.
+Effect-independent replacement. Browser-reachable utility modules — for
+example `@utils/core/keyedMutex` — remain Effect-free whatever their backend
+callers do; the per-key serialization subphase collapses backend call sites
+only.
 
 ### Phase 6 — observability context
 
@@ -1204,9 +1258,21 @@ through typed host controllers rather than directly importing Effect.
 
 No feature flag is required because the migration does not introduce two
 user-selectable behaviors. Each phase is independently revertible and changes
-no durable format through Phase 2. A Phase 3 format change follows the
-repository's explicit compatibility and retirement policy and lands only with
-its recovery behavior. A phase lands only after all affected hosts have crossed
+no durable format through Phase 2 and Stage 3a. From the first durable-format
+writer onward, revertibility carries a qualification: reverting code must
+never orphan records that code has already written. Stage 3b therefore obeys
+a reader-outlives-writer rule — the code that reads the new checkpoint
+representation lands with or before the writer and is retained on rollback,
+so a reverted writer leaves every written session readable. The recommended
+sidecar-ledger representation (§15, decision 6) satisfies this cheaply: the
+version 2 record stays authoritative and readable by pre-amendment code, and
+rollback degrades fine-grained resume to today's coarse outer-cursor resume
+instead of producing unreadable sessions. If ratification instead selects a
+new record version, its reader ships ahead of its writer under the same rule,
+or the PRD's revertibility claim is explicitly withdrawn for that stage. A
+Stage 3b format change additionally follows the repository's explicit
+compatibility and retirement policy and lands only with its recovery
+behavior. A phase lands only after all affected hosts have crossed
 the same internal boundary; the repository does not ship one host on the Effect
 implementation and another on a separately maintained Promise implementation.
 
@@ -1265,7 +1331,12 @@ custom runtime machinery.
   launches a permitted attempt, or reports an unknown outcome; it never creates
   an unrecorded duplicate child.
 - Interrupting a run leaves no ordinary child fiber alive.
-- Host shutdown awaits all owned finalizers and does not hang.
+- Killing the process between a record commit and its derived projections
+  loses no round or usage fact: resume re-derives the missing projection from
+  the committed record through its watermark.
+- Host shutdown awaits owned finalizers up to the existing per-phase
+  deadline; a finalizer that exceeds it is interrupted, reported, and
+  abandoned, and shutdown itself never hangs.
 - Primary failures, finalizer failures, and interruption retain the precedence
   specified by the existing lifecycle contract.
 - Concurrent in-process SDK runs can receive different service layers without
@@ -1306,25 +1377,25 @@ custom runtime machinery.
 
 ## 12. Risks and mitigations
 
-| Risk                          | Consequence                                                                                 | Mitigation                                                                                                       |
-| ----------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| RC API churn                  | Repeated mechanical changes distract from product work.                                     | Exact pinning; dedicated upgrade PRs; stable modules only; no automatic dependency updates.                      |
-| Wrapper-only adoption         | The repository gains Effect without deleting complexity.                                    | Replacement-must-delete rule and phase acceptance gates.                                                         |
-| Layer multiplication          | Existing fields acquire tags, constructors, and test wrappers without changing ownership.   | Service census, semantic grouping, one carrier per lifetime, and rejection of trivial layer modules.             |
-| Two runtimes per host         | Stateful layers duplicate queues, caches, or resources.                                     | One managed runtime owned by each host process; architecture test for constructors.                              |
-| Effect leaks into public APIs | SDK consumers acquire a new programming model involuntarily.                                | Promise adapters remain the published surface.                                                                   |
-| Error semantics change        | Cancellation or defects become user-facing failures, or vice versa.                         | Preserve the current outer classifier; test `Exit` mapping at one boundary.                                      |
-| Catch-all migration           | Broad recovery handlers swallow interruption or defects under a new API.                    | Classify every touched catch; prefer tagged recovery; permit raw catch only in named foreign adapters.           |
-| Iteration conflation          | A durable round or paid model continuation is treated as an ephemeral retry.                | Distinct coordinate types and failure-injection tests at every durable iteration boundary.                       |
-| Workflow rewrite drift        | Script replay identity, sandbox behavior, or child delivery changes during runtime cleanup. | Keep the script/journal interpreter authoritative; extract only the common child activity and runtime mechanics. |
-| Durable flow behavior changes | Resume records or node identifiers become incompatible.                                     | Preserve version 2 exactly in Phase 2; require an explicit version and retirement decision for Phase 3.          |
-| External action is repeated   | Recovery duplicates a tool write, charge, or subagent launch.                               | Replay classification, stable idempotency keys, immediate checkpoints, and an explicit unknown-outcome state.    |
-| Interruption races a commit   | The caller retries while the previous atomic write is still running.                        | Keep node work interruptible but mask the short write-and-cache-publication critical region.                     |
-| Excess abstraction            | Fine-grained service classes make simple code harder to read.                               | Service boundaries follow existing ports and co-usage; pure arguments stay arguments.                            |
-| Bundle growth                 | Extension, CLI, or SDK distribution becomes materially larger.                              | Phase 0 size gate; tree-shaken imports; no Effect in browser code.                                               |
-| Finalizer-order drift         | Shutdown behavior changes subtly.                                                           | Record current order before conversion; use sequential scopes where ordering is semantic.                        |
-| Training cost                 | Contributors write unsafe or non-idiomatic Effect code.                                     | Small repository guide, boundary lint rules, and examples from migrated TeXRA code.                              |
-| False promise of correctness  | Teams expect Effect to repair domain ownership automatically.                               | Explicit non-solution list and unchanged single-authority rulings.                                               |
+| Risk                          | Consequence                                                                                 | Mitigation                                                                                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| RC API churn                  | Repeated mechanical changes distract from product work.                                     | Exact pinning; dedicated upgrade PRs; stable modules only; no automatic dependency updates.                                                |
+| Wrapper-only adoption         | The repository gains Effect without deleting complexity.                                    | Replacement-must-delete rule and phase acceptance gates.                                                                                   |
+| Layer multiplication          | Existing fields acquire tags, constructors, and test wrappers without changing ownership.   | Service census, semantic grouping, one carrier per lifetime, and rejection of trivial layer modules.                                       |
+| Two runtimes per host         | Stateful layers duplicate queues, caches, or resources.                                     | One managed runtime owned by each host process; architecture test for constructors.                                                        |
+| Effect leaks into public APIs | SDK consumers acquire a new programming model involuntarily.                                | Promise adapters remain the published surface.                                                                                             |
+| Error semantics change        | Cancellation or defects become user-facing failures, or vice versa.                         | Preserve the current outer classifier; test `Exit` mapping at one boundary.                                                                |
+| Catch-all migration           | Broad recovery handlers swallow interruption or defects under a new API.                    | Classify every touched catch; prefer tagged recovery; permit raw catch only in named foreign adapters.                                     |
+| Iteration conflation          | A durable round or paid model continuation is treated as an ephemeral retry.                | Distinct coordinate types and failure-injection tests at every durable iteration boundary.                                                 |
+| Workflow rewrite drift        | Script replay identity, sandbox behavior, or child delivery changes during runtime cleanup. | Keep the script/journal interpreter authoritative; extract only the common child activity and runtime mechanics.                           |
+| Durable flow behavior changes | Resume records or node identifiers become incompatible.                                     | Preserve version 2 exactly through Stage 3a; Stage 3b needs an explicit version, reader-outlives-writer rollback, and retirement decision. |
+| External action is repeated   | Recovery duplicates a tool write, charge, or subagent launch.                               | Replay classification, stable idempotency keys, immediate checkpoints, and an explicit unknown-outcome state.                              |
+| Interruption races a commit   | The caller retries while the previous atomic write is still running.                        | Keep node work interruptible but mask the short write-and-cache-publication critical region.                                               |
+| Excess abstraction            | Fine-grained service classes make simple code harder to read.                               | Service boundaries follow existing ports and co-usage; pure arguments stay arguments.                                                      |
+| Bundle growth                 | Extension, CLI, or SDK distribution becomes materially larger.                              | Phase 0 size gate; tree-shaken imports; no Effect in browser code.                                                                         |
+| Finalizer-order drift         | Shutdown behavior changes subtly.                                                           | Record current order before conversion; use sequential scopes where ordering is semantic.                                                  |
+| Training cost                 | Contributors write unsafe or non-idiomatic Effect code.                                     | Small repository guide, boundary lint rules, and examples from migrated TeXRA code.                                                        |
+| False promise of correctness  | Teams expect Effect to repair domain ownership automatically.                               | Explicit non-solution list and unchanged single-authority rulings.                                                                         |
 
 ## 13. Alternatives considered
 
@@ -1396,7 +1467,13 @@ unless the repository owner explicitly amends it.
 5. Whether a future optional Effect-native SDK entry point is desirable after
    Phase 7.
 6. Whether nested durable progress uses a hierarchical cursor, an activity
-   ledger, or both; this decision must be made before Phase 3 begins.
+   ledger, or both; this decision must be made before Stage 3b begins. The
+   PRD recommends the activity ledger as the default: an append-only sidecar
+   referenced by the outer cursor preserves version 2 cursor identity
+   (R4.4), keeps the flow record readable by pre-amendment code, and gives
+   rollback a defined degradation — coarse outer-cursor resume — rather than
+   unreadable sessions. A hierarchical cursor is admitted only with evidence
+   of a recovery need the ledger cannot express.
 7. Whether PocketFlow activities and workflow-script child calls share one
    physical activity record or only one protocol over their existing stores.
    Semantic unification is required; premature storage-schema unification is
