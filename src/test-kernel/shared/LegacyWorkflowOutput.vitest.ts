@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import { runCleanSingle } from '@housekeeping/clean';
+import { runCleanMultiple, runCleanSingle } from '@housekeeping/clean';
 import { runPackMultiple } from '@housekeeping/pack';
 import {
   findFilesFromPatterns,
@@ -171,5 +171,64 @@ describe('filename-era workflow output grammar', () => {
       code: 'ENOENT',
     });
     await expect(access(inputPath)).resolves.toBeUndefined();
+  });
+
+  it('cleans a nonempty batch without a primary input file', async () => {
+    const outputPath = path.join(workspacePath, 'chapter_polish_r0_gpt-4.tex');
+    await writeFile(outputPath, 'fixture');
+
+    await expect(
+      runCleanMultiple('gpt-4', '', 'custom:polish_long', ['chapter.tex']),
+    ).resolves.toEqual({ status: 'success' });
+    await expect(access(outputPath)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('keeps rejecting a multiple clean without any input files', async () => {
+    await expect(
+      runCleanMultiple('gpt-4', '', 'custom:polish_long', []),
+    ).resolves.toEqual({ status: 'missingParams' });
+  });
+
+  it.each([
+    ['model', '', 'custom:polish_long'],
+    ['agent', 'gpt-4', ''],
+  ])(
+    'rejects a primary-less batch with a missing %s',
+    async (_parameter, model, agent) => {
+      await expect(
+        runCleanMultiple(model, '', agent, ['chapter.tex']),
+      ).resolves.toEqual({ status: 'missingParams' });
+    },
+  );
+
+  it('rejects an empty batch entry before cleaning other files', async () => {
+    const outputPath = path.join(workspacePath, 'chapter_polish_r0_gpt-4.tex');
+    await writeFile(outputPath, 'fixture');
+
+    await expect(
+      runCleanMultiple('gpt-4', '', 'custom:polish_long', ['chapter.tex', '']),
+    ).resolves.toEqual({ status: 'missingParams' });
+    await expect(access(outputPath)).resolves.toBeUndefined();
+  });
+
+  it('cleans both the primary input and additional batch', async () => {
+    const outputPaths = [
+      path.join(workspacePath, 'paper_polish_r0_gpt-4.tex'),
+      path.join(workspacePath, 'chapter_polish_r0_gpt-4.tex'),
+    ];
+    for (const outputPath of outputPaths) {
+      await writeFile(outputPath, 'fixture');
+    }
+
+    await expect(
+      runCleanMultiple('gpt-4', 'paper.tex', 'custom:polish_long', [
+        'chapter.tex',
+      ]),
+    ).resolves.toEqual({ status: 'success' });
+    for (const outputPath of outputPaths) {
+      await expect(access(outputPath)).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    }
   });
 });

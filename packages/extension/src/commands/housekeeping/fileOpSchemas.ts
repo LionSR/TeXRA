@@ -57,7 +57,7 @@ export const MultiFileOpCommandArgsSchema = z
     z.string().prefault(''),
     FileOpParamsSchema.shape.agent,
     FileOpParamsSchema.shape.model,
-    z.array(z.string()).prefault([]),
+    z.array(RequiredString).prefault([]),
   ])
   .refine(([inputFile, , , inputFiles]) => inputFile || inputFiles.length > 0, {
     error: 'inputFile or inputFiles required',
