@@ -196,9 +196,16 @@ export class LatexMediaManager {
             },
           });
           return pdfLocation;
-        } catch {
-          // Silent skip: pMap with stopOnError: false continues past
-          // individual compile failures (compileLatex2Pdf already logs).
+        } catch (error) {
+          // Compile failures do not land here: compileLatex2Pdf returns
+          // { ok: false } and is logged above. This arm catches the
+          // build-directory and existence-probe I/O (and path resolution),
+          // so it must be loud; pMap's stopOnError: false then carries on
+          // to the remaining files.
+          this.logger.warn(
+            `Skipping PDF compile for ${file.absolutePath}: ${toErrorMessage(error)}`,
+            { data: { sourceFile: file.absolutePath, error } },
+          );
           return undefined;
         }
       },

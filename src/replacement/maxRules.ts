@@ -201,8 +201,8 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       [`\\mbox{${op}}`, `\\${op}`],
       [`\\textrm{${op}}`, `\\${op}`],
       [`{\\rm ${op}}`, `\\${op}`],
-      [`_\\op`, `_{\\${op}}`],
-      [`^\\op`, `^{\\${op}}`],
+      [`_\\${op}`, `_{\\${op}}`],
+      [`^\\${op}`, `^{\\${op}}`],
     ]),
     // Combined eq/st shortcuts: keep these before the textCommands block so
     // the AUTO \text{eq} -> \eq / \text{st} -> \st rules cannot consume
@@ -408,7 +408,7 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   // Arrow spacing
   '\\quad\\Ra': '~~~\\Ra',
   '    &\\quad ': '    &~~~ ',
-  '\\Ra\,': '\\Ra~',
+  '\\Ra\\,': '\\Ra~',
 
   '{\\ddt}': '{\\dd t}',
   '\\int_0^\\tauf dt': '\\int_0^{\\tauf} \\ddt',
@@ -432,7 +432,7 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   '\\rho^{st}': '\\rhost',
   '\\rho^{eq}': '\\rhoeq',
   '\\rho^{\\eq}': '\\rhoeq',
-  '\\rho^{\\st}': '\\rhoeq',
+  '\\rho^{\\st}': '\\rhost',
   '\\rho^{ss}': '\\rhost',
   '\\rho_{ss}': '\\rhost',
   '\\ln': '\\log',
@@ -460,7 +460,7 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   '+ O(': '+ \\cO(',
 
   // However, use a hyphen when closing up the word might lead to confusion, where the closed-up word would be cumbersome, or where the second element begins with a capital letter or number, e.g. un-ionized, pre-loss, pseudo-objectivity, sub-Gaussian.
-  unionized: 'uni-ionized',
+  unionized: 'un-ionized',
   preloss: 'pre-loss',
   subgaussian: 'sub-gaussian',
   nongaussian: 'non-gaussian',

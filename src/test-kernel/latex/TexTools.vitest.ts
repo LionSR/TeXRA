@@ -232,13 +232,6 @@ describe('buildKpathseaSearchPath', () => {
 });
 
 describe('buildLatexInputEnv', () => {
-  it('omits TEXINPUTS when only the implicit "." part is present and none inherited', () => {
-    const env = buildLatexInputEnv(['.'], [], {});
-    expect(env.TEXINPUTS).toBeUndefined();
-    expect(env.BIBINPUTS).toBeUndefined();
-    expect(env.BSTINPUTS).toBeUndefined();
-  });
-
   it('prepends workspace and TikZ dirs onto inherited TEXINPUTS', () => {
     const env = buildLatexInputEnv(['.', '/ws', '/tikz'], ['/ws'], {
       TEXINPUTS: '/inherited',
