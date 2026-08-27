@@ -80,8 +80,8 @@ cleanup callbacks, and ambient readers.
 
 ### 2.1 Survey method
 
-The survey was run on 2026-08-26 against the current working tree. Counts below
-include production TypeScript under `src/` and `packages/`, exclude
+The survey was re-run on 2026-08-27 against main commit `af31933740c7`. Counts
+below include production TypeScript under `src/` and `packages/`, exclude
 `src/test-kernel`, `*.vitest.ts`, package test directories, generated `dist/`,
 and dependencies. They are indicators of repeated mechanisms, not targets to
 reduce blindly.
@@ -97,17 +97,17 @@ as historical evidence but not treated as descriptions of the present tree.
 
 | Mechanism                       | Production files | Occurrences | Interpretation                                                                        |
 | ------------------------------- | ---------------: | ----------: | ------------------------------------------------------------------------------------- |
-| `platform()`                    |              111 |         232 | Process-global dependency reads are widespread.                                       |
+| `platform()`                    |              105 |         221 | Process-global dependency reads are widespread.                                       |
 | `tryPlatform()`                 |                5 |           6 | Some callers must tolerate missing global initialization.                             |
 | `setServices()`                 |                7 |          10 | PocketFlow has a second dependency carrier; tests amplify this surface substantially. |
 | `AbortSignal`                   |               88 |         173 | Cancellation is part of many APIs but has no single execution owner.                  |
 | `new AbortController()`         |               17 |          20 | Several subsystems construct their own cancellation trees.                            |
 | Explicit abort checks/listeners |               46 |         109 | Cooperative cancellation is manually maintained.                                      |
-| `Promise.all`                   |              126 |         206 | Parallelism is common but has no uniform supervision policy.                          |
+| `Promise.all`                   |              124 |         203 | Parallelism is common but has no uniform supervision policy.                          |
 | `Promise.allSettled`            |               14 |          18 | Some call sites manually preserve sibling failures.                                   |
 | `Promise.race`                  |                8 |           9 | Timeout and cancellation races are assembled locally.                                 |
-| `catch` clauses                 |              371 |         895 | Failure classification and recovery are widely distributed.                           |
-| `throw new Error` / `TypeError` |              187 |         402 | Most asynchronous signatures erase expected failure types.                            |
+| `catch` clauses                 |              368 |         884 | Failure classification and recovery are widely distributed.                           |
+| `throw new Error` / `TypeError` |              189 |         405 | Most asynchronous signatures erase expected failure types.                            |
 | `finally` blocks                |               98 |         145 | Resource and state cleanup depend heavily on local control flow.                      |
 
 Seven small concurrency packages have 76 production import sites in total:
@@ -132,14 +132,23 @@ optional catch bindings. Its largest concentrations are:
 
 | Zone                       | Catch clauses |
 | -------------------------- | ------------: |
-| `src/agent`                |           271 |
+| `src/agent`                |           264 |
 | `src/tools`                |           128 |
 | `packages/extension`       |           102 |
 | `packages/cli`             |           100 |
 | `packages/desktop`         |            69 |
 | `src/transcript`           |            46 |
-| `src/controllers`          |            42 |
-| Remaining production zones |           137 |
+| `src/controllers`          |            40 |
+| Remaining production zones |           135 |
+
+The independently verified predecessor assessment supplies a second useful
+snapshot at commit `d8c6dfc`: 53 module-level mutable bindings in production
+`src/`, 33 exported global `set*` / `register*` / `install*` / `init*`
+functions, a 642-line fake-platform implementation, and a five-entry
+composition-root lint allowlist. These are historical indicators rather than
+current exit counts. Phase 0 remeasures them with a checked script and assigns
+each item to one of three sets: eliminated by scoped ownership, retained as a
+justified process singleton, or outside the migration.
 
 ### 2.3 The clearest local examples
 
@@ -319,7 +328,7 @@ remain workflow-script policy.
 
 ### P12. Catch clauses encode several incompatible meanings
 
-The survey found 895 production catch clauses. Their count is not itself a
+The survey found 884 production catch clauses. Their count is not itself a
 defect: filesystem and SDK boundaries genuinely throw, best-effort projections
 must not replace primary outcomes, and sandbox errors cross JavaScript realms.
 The problem is that the syntax does not reveal whether a catch is translating a
@@ -385,6 +394,9 @@ is the execution substrate beneath those rulings.
 9. No generic repository-wide conversion of every `Promise` or `Error`.
 10. No duplicate "Effect service" wrapper around a global singleton as the
     final state.
+11. No migration of `appSignals` without a concrete deletion case. It already
+    has one documented synchronous signal protocol and abort-aware
+    unsubscription; changing its notation alone has no runtime benefit.
 
 ## 7. Governing design rules
 
@@ -688,6 +700,15 @@ Ordinary `fork` operations remain scoped to their parent.
 Resources acquired inside migrated code use `Effect.acquireRelease`, scoped
 layers, or scope finalizers. Finalizers state whether they run sequentially or
 in parallel and preserve the existing domain-specific cleanup order.
+
+The current `LifecycleHost` order is not the default Effect scope order. It
+runs the `BEFORE` phase to completion before `ON`, and handlers within each
+phase run sequentially in registration order. Effect scopes normally finalize
+in reverse registration order. Migration therefore uses either an explicit
+two-phase shutdown program or two phase-separated scopes with deliberate
+registration order; a direct transfer of callbacks into one scope is
+incorrect. Characterization tests pin the two phase boundaries and FIFO order
+before this code changes.
 
 `DisposableStore` remains for host APIs that synchronously return disposable
 objects until those edges migrate. It must not be used inside completed Effect
@@ -1022,7 +1043,9 @@ Build a throwaway, non-product spike that proves:
 2. esbuild, Vite, Electron, the VSIX build, and the agent package preserve
    tree shaking and module format.
 3. One service, one scoped resource, one interrupted child, one retry schedule,
-   and one test-clock test work under repository settings.
+   and one test-clock test work under repository settings. `fileLocks` is the
+   preferred service spike because `runExclusive` already has a scoped-resource
+   shape and a small consumer surface.
 4. `ManagedRuntime` shuts down correctly in all three hosts and the SDK test
    harness.
 5. Bundle sizes, startup time, and idle memory are measured before and after.
@@ -1032,6 +1055,9 @@ Build a throwaway, non-product spike that proves:
 7. The spike models one reflection-round transition and one workflow-script
    child call, including interruption and durable completion, without using an
    unstable Effect module.
+8. Three warm runs of the full `npm run typecheck` establish the before/after
+   median. A regression above 10% closes the feasibility gate unless separately
+   ratified with compiler-profile evidence.
 
 No migration code lands if the spike needs an unstable Effect module or an
 unreleased compiler patch.
@@ -1048,6 +1074,8 @@ unreleased compiler patch.
   the same underlying port objects.
 - Add a lint/architecture allowlist for the few legal `Effect.run*` boundary
   modules.
+- Forbid Effect imports from `src/shared/` and webview frontend entry trees;
+  wire contracts and browser-safe utilities remain runtime-independent.
 - Document exact RC upgrade procedure and rollback.
 
 The phase changes no product behavior and introduces no Effect use in browser
@@ -1160,6 +1188,12 @@ Effect-independent replacement.
   tolerance.
 - Delete `initPlatform`, the module-global `_platform`, and global platform
   test setup after all production readers are gone.
+- Convert the existing fake platform implementation into reusable service
+  values/layers supplied by affected suites; do not rewrite unrelated tests
+  merely to demonstrate Effect.
+- Remove host `vi.mock` sites only when a service substitution covers the same
+  behavior, then shrink and finally delete the `host-agent-mock` ratchet and
+  obsolete composition-root lint rule.
 - Retain a plain `Platform` construction type only if hosts benefit from it as
   an input to `makeApplicationLayer`.
 
@@ -1202,6 +1236,12 @@ custom runtime machinery.
   workflow-script runner after Phase 4.
 - Zero `platform()` or `tryPlatform()` calls in migrated host-neutral zones;
   zero repository-wide after Phase 7.
+- Every production global installer found by the Phase 0 census is deleted,
+  replaced by scoped construction, or retained with a written process-lifetime
+  justification.
+- The `host-agent-mock` ratchet and composition-root lint allowlist shrink as
+  their underlying global seams disappear; empty enforcement machinery is
+  deleted rather than retained as historical structure.
 - Zero internal `Effect.run*` calls outside the named boundary allowlist.
 - Zero new module-global dependency setters in host-neutral code.
 - Zero new `AbortController` constructions inside completed Effect zones.
@@ -1243,6 +1283,9 @@ custom runtime machinery.
 
 ### Cost and performance
 
+- Full-workspace type checking regresses by no more than 10% at the median of
+  three warm runs without a separately ratified exception supported by a
+  compiler profile.
 - No distributable grows by more than 5% compressed without a separately
   ratified exception supported by the Phase 0 measurements.
 - CLI startup time and host activation time regress by no more than 10% at the
