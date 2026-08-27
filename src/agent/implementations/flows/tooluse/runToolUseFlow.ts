@@ -607,6 +607,11 @@ export async function runToolUseFlow(
         'Flow record preserved after persistence recovery failure';
     } else if (outcome === STREAM_PHASE.WAITING) {
       preservationReason = 'Flow record preserved for native subagent WAITING';
+    } else if (signal.aborted && !flowRunStarted) {
+      // Startup cancellation can happen before this invocation owns or starts
+      // the flow. Preserve any checkpoint that a reused executionId may carry;
+      // a fresh launch simply has no record for this no-op to retain (#11430).
+      preservationReason = 'Flow record preserved after startup interruption';
     } else if (flowRunStarted && signal.aborted) {
       preservationReason = 'Flow record preserved after user interruption';
     } else if (shared.userCancelledRetry) {

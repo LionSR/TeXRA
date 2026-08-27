@@ -1370,7 +1370,33 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
   });
 
-  it('cleans up a fresh launch cancelled before persistence recovery', async () => {
+  it('preserves a reused checkpoint when a fresh launch is cancelled during setup', async () => {
+    const executionId = 'abc-reused-cancel-setup' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-reused-cancel-setup' as StreamTabId;
+    const storedShared = activeHandlerShared();
+    await writeFlowRecord(executionId, storedShared);
+    const store = getExecutionStore(executionId);
+    const deleteSpy = vi.spyOn(store, 'delete');
+    const dispositions: Array<'preserve' | 'delete'> = [];
+
+    try {
+      const result = await runPersistedFlow(executionId, streamId, undefined, {
+        attachment: { attach: (flowContext) => flowContext.interrupt() },
+        onFlowRecordDisposition: (value) => dispositions.push(value),
+      });
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
+      expect(dispositions).toEqual(['preserve']);
+      expect(await readFlowRecord(executionId)).toMatchObject({
+        shared: storedShared,
+      });
+    } finally {
+      deleteSpy.mockRestore();
+    }
+  });
+
+  it('keeps a fresh launch cancelled during setup harmless', async () => {
     const executionId = 'abc-fresh-cancel-setup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-fresh-cancel-setup' as StreamTabId;
     const store = getExecutionStore(executionId);
@@ -1390,10 +1416,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(readSpy).not.toHaveBeenCalled();
       expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
-      expect(dispositions).toEqual(['delete']);
+      expect(dispositions).toEqual(['preserve']);
       expect(releaseSpy).toHaveBeenCalledWith(
         expect.objectContaining({ streamId, kind: 'flow' }),
-        'terminal',
+        'recoverable',
       );
     } finally {
       readSpy.mockRestore();
