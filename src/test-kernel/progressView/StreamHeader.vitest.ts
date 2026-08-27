@@ -15,6 +15,10 @@ import {
 } from '@shared/schemas';
 import { APPROVAL_BYPASS_BADGE } from '@shared/copy/approvalBypass';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+import {
+  streamHeldMessage,
+  streamUnreadableMessage,
+} from '@shared/streams/streamStatusDisplay';
 
 // Local file imports
 import {
@@ -283,6 +287,53 @@ describe('stream-header', () => {
       expect(badgeText(element)).toBe(text);
       expect(badgeTooltip(element)).toBe(tooltip);
     });
+  });
+
+  /**
+   * Clean only removes workflow output files. An unavailable run is owned by
+   * another process or unreadable here, so the header must not offer the
+   * workflow-only operation to a ToolUse chat. The tab rail's Delete action
+   * remains the home for removing either unavailable run.
+   */
+  it('offers Clean only to a completed Workflow stream, not unavailable runs', async () => {
+    const [heldToolUse, unreadableWorkflow, completedWorkflow] =
+      await Promise.all([
+        mount({
+          stream: baseStream({ agentCategory: AgentCategory.ToolUse }),
+          state: baseState({
+            status: 'unavailable',
+            statusDetail: streamHeldMessage({
+              pid: 123,
+              hostname: 'other-host',
+            }),
+          }),
+        }),
+        mount({
+          state: workflowState({
+            status: 'unavailable',
+            statusDetail: streamUnreadableMessage('malformed snapshot'),
+          }),
+        }),
+        mount({ state: workflowState() }),
+      ]);
+    const unavailableWorkflowClean =
+      unreadableWorkflow.shadowRoot?.querySelector(
+        `#${ELEMENT_IDS.CLEAN_STREAM_BTN}`,
+      );
+
+    expect(
+      heldToolUse.shadowRoot?.querySelector(`#${ELEMENT_IDS.CLEAN_STREAM_BTN}`),
+    ).toBeNull();
+    expect(
+      unavailableWorkflowClean?.classList.contains('toolbar-button--hidden'),
+    ).toBe(false);
+    expect(unavailableWorkflowClean?.getAttribute('aria-hidden')).toBe('false');
+    expect(unavailableWorkflowClean?.hasAttribute('disabled')).toBe(true);
+    expect(
+      completedWorkflow.shadowRoot
+        ?.querySelector(`#${ELEMENT_IDS.CLEAN_STREAM_BTN}`)
+        ?.hasAttribute('disabled'),
+    ).toBe(false);
   });
 
   /**
