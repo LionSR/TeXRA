@@ -389,10 +389,8 @@ describe('requiredFilesInternal custom variables', () => {
   });
 
   // A required file named after a file category generates the fixed X_FILE /
-  // X_CONTENT variables and would silently override them, producing
-  // checkpoints the persisted channel schema's per-key validators reject and
-  // making the session impossible to resume. The guard fails loudly at
-  // variable-build time instead.
+  // X_CONTENT variables and would silently override them. The guard fails
+  // loudly at variable-build time instead.
   it.each(['INPUT', 'CONTEXT', 'EDITED', 'MEDIA'])(
     'rejects a required file named %s whose generated variables collide with the fixed vocabulary',
     async (varName) => {
