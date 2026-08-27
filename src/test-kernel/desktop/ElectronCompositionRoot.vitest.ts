@@ -5,7 +5,7 @@ import { join, relative } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { bootstrapDesktopWindowLifecycle } from '@desktop/main/desktopWindowLifecycle';
+import { bootstrapDesktopWindow } from '@desktop/main/desktopWindowBootstrap';
 import { sourceFilesUnder } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { normalizeFilePath } from '@utils/core';
@@ -66,8 +66,9 @@ describe('desktop composition root and launch environment', () => {
     const disposeRendererResources = vi.fn();
     const discard = { preventDefault: vi.fn() };
 
-    bootstrapDesktopWindowLifecycle({
-      webContents,
+    const window = { webContents };
+    bootstrapDesktopWindow({
+      window,
       workspaceIpc: { disposeRendererResources },
       showDiscardDialog: () => 1,
       isFatalShutdownRequested: () => false,
