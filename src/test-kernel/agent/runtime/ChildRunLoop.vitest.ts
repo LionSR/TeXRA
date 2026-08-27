@@ -66,6 +66,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { platform } from '@platform/platform';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -76,7 +77,6 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
-import { platform } from '@platform/platform';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
