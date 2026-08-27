@@ -141,8 +141,9 @@ export function extractContentFromXMLbyTagMultiple(
       // fast-xml-parser yields an object for a single <document> and an array
       // for several, and a bare string for a document with no attributes (which
       // carries no name and no content, so it falls through to the regex tier).
-      const documents =
-        ensureArray(container[OUTPUT_DOCUMENT_TAG]).filter(isObject);
+      const documents = ensureArray(container[OUTPUT_DOCUMENT_TAG]).filter(
+        isObject,
+      );
       if (documents.length > 0) {
         return documents.map((entry) => ({
           content: entry.content?.toString().trim() ?? '',

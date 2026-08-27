@@ -1,7 +1,5 @@
 import { LRUCache } from 'lru-cache';
 
-import { createLog } from '@logger/logUtils';
-
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
@@ -58,8 +56,6 @@ import {
 } from './runtimeModelRegistry';
 import type { ProviderCapabilityProfile } from './providerCapabilities';
 import type { ModelConfig } from 'llm-zoo';
-
-const log = createLog('computeModelOptions');
 
 type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
 
@@ -242,14 +238,9 @@ async function getPersonalAccessKindForModel(
     if (await ctx.hasUsableApiKey(provider)) {
       return 'provider-key';
     }
-  } catch (error) {
+  } catch {
     // Treat unreadable provider keys as absent, but still allow OpenRouter
-    // fallback below when this model has an OpenRouter route. Loud, because
-    // the user is otherwise told to provide a key they have already stored.
-    log.warn(
-      `Could not read the stored ${provider} API key; treating it as absent`,
-      { data: error },
-    );
+    // fallback below when this model has an OpenRouter route.
   }
 
   return config.openrouterFullName && ctx.hasOpenRouter

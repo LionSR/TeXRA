@@ -215,9 +215,7 @@ export function createDesktopFileSelection(
           // Electron's dialog filter extensions must not include the leading
           // dot (unlike getFileListConfig's `.tex`-style entries); the VS
           // Code picker gets this right via getFilterExtensions.
-          extensions: listConfig.include.map((ext) =>
-            ext.replace(/^\./, ''),
-          ),
+          extensions: listConfig.include.map((ext) => ext.replace(/^\./, '')),
         },
       ],
     });

@@ -215,30 +215,30 @@ flowchart TB
 
 ### Full inventory
 
-| Setter (file:line)                                                   | Default                   | Class       | Multi-root?           | Silent no-op?            |
-| -------------------------------------------------------------------- | ------------------------- | ----------- | --------------------- | ------------------------ |
-| `setLinterProvider` `DiagnosticsTool.ts:12`                          | `async () => []`          | P           | —                     | **yes**                  |
-| `setAddCriticismSink` `AddCriticismTool.ts:48`                       | `{accepted:false}`        | P           | —                     | **yes**                  |
-| `setOpenPdfOpener` `OpenPdfTool.ts:42`                               | undefined                 | P           | —                     | no (guarded error)       |
-| `setOpenBuildDisplay` `approval/latexPreview.ts:34`                  | `async () => {}`          | P           | **ext+desktop**       | **yes** (no-ops in CLI)  |
-| `setToolMissingHandler` `utils/system/toolUtils.ts:58`               | `() => {}`                | P           | —                     | **yes**                  |
-| `setToolNotificationHandler` `toolUnavailableNotification.ts:28`     | `() => {}`                | P           | —                     | **yes**                  |
-| `setGitHubTokenProvider` `github/githubAuth.ts:15`                   | `() => undefined`         | P           | —                     | **yes**                  |
-| `setLeanLanguageServices` `lean/leanLanguageServices.ts:53`          | undefined (getter throws) | P           | **ext+desktop+cli**   | no                       |
-| `setSetupPlatform` `setup/platform.ts:104`                           | undefined (getter throws) | P           | —                     | no                       |
-| `setRunStorageService` `runtime/RunStorageService.ts:17`             | `isViewVisible:()=>false` | P           | **ext+desktop**       | **yes**                  |
-| `setGitAuthorEnv` `utils/system/gitAuthorEnv.ts:16`                  | `{}`                      | P           | **3 funnels**         | benign                   |
-| `setWorktreeSupportEnabled` `worktreeConfig.ts:14`                   | `false`                   | P           | **3 funnels**         | intended off             |
-| `setOutputChannelFactory` `logger/logUtils.ts:140`                   | `null`                    | P           | **ext+cli**           | null sink (desktop)      |
-| `setAgentDirectories` `index/agentDirectoriesRegistry.ts:11`         | `null` (getter throws)    | P           | **ext + core module** | no                       |
-| `setRuntimeSkillSources` `skills/runtimeSkills.ts:13`                | `[]`                      | P           | cli only              | silent (cli-only)        |
-| `setRuntimeExtensionId` `auth/config.ts:102`                         | `null` (const fallback)   | P           | —                     | benign                   |
-| `setExternalAuthCallbackResolver` _(removed; inlined into the provider)_ | `null`                | P           | —                     | benign                   |
-| `setToolEditApprovalHandler` `approval/toolEditApproval.ts:118`      | undefined                 | **R**       | **4 sites / 3 hosts** | falls back to controller |
-| `setDesktopAgentResumeHandler` `desktop/.../desktopAgentResume.ts:7` | undefined (`?? false`)    | P (desktop) | —                     | benign                   |
-| `setDefaultStreamLogStore` `transcript/StreamLogStore.ts:789`        | lazy `new`                | T           | —                     | no                       |
-| `setTierService` `auth/tier/index.ts:46`                             | lazy `new`                | T           | —                     | no                       |
-| `setServerSideKeyService` `auth/serverKeys/index.ts:52`              | `null` (getter throws)    | T           | —                     | no                       |
+| Setter (file:line)                                                       | Default                   | Class       | Multi-root?           | Silent no-op?            |
+| ------------------------------------------------------------------------ | ------------------------- | ----------- | --------------------- | ------------------------ |
+| `setLinterProvider` `DiagnosticsTool.ts:12`                              | `async () => []`          | P           | —                     | **yes**                  |
+| `setAddCriticismSink` `AddCriticismTool.ts:48`                           | `{accepted:false}`        | P           | —                     | **yes**                  |
+| `setOpenPdfOpener` `OpenPdfTool.ts:42`                                   | undefined                 | P           | —                     | no (guarded error)       |
+| `setOpenBuildDisplay` `approval/latexPreview.ts:34`                      | `async () => {}`          | P           | **ext+desktop**       | **yes** (no-ops in CLI)  |
+| `setToolMissingHandler` `utils/system/toolUtils.ts:58`                   | `() => {}`                | P           | —                     | **yes**                  |
+| `setToolNotificationHandler` `toolUnavailableNotification.ts:28`         | `() => {}`                | P           | —                     | **yes**                  |
+| `setGitHubTokenProvider` `github/githubAuth.ts:15`                       | `() => undefined`         | P           | —                     | **yes**                  |
+| `setLeanLanguageServices` `lean/leanLanguageServices.ts:53`              | undefined (getter throws) | P           | **ext+desktop+cli**   | no                       |
+| `setSetupPlatform` `setup/platform.ts:104`                               | undefined (getter throws) | P           | —                     | no                       |
+| `setRunStorageService` `runtime/RunStorageService.ts:17`                 | `isViewVisible:()=>false` | P           | **ext+desktop**       | **yes**                  |
+| `setGitAuthorEnv` `utils/system/gitAuthorEnv.ts:16`                      | `{}`                      | P           | **3 funnels**         | benign                   |
+| `setWorktreeSupportEnabled` `worktreeConfig.ts:14`                       | `false`                   | P           | **3 funnels**         | intended off             |
+| `setOutputChannelFactory` `logger/logUtils.ts:140`                       | `null`                    | P           | **ext+cli**           | null sink (desktop)      |
+| `setAgentDirectories` `index/agentDirectoriesRegistry.ts:11`             | `null` (getter throws)    | P           | **ext + core module** | no                       |
+| `setRuntimeSkillSources` `skills/runtimeSkills.ts:13`                    | `[]`                      | P           | cli only              | silent (cli-only)        |
+| `setRuntimeExtensionId` `auth/config.ts:102`                             | `null` (const fallback)   | P           | —                     | benign                   |
+| `setExternalAuthCallbackResolver` _(removed; inlined into the provider)_ | `null`                    | P           | —                     | benign                   |
+| `setToolEditApprovalHandler` `approval/toolEditApproval.ts:118`          | undefined                 | **R**       | **4 sites / 3 hosts** | falls back to controller |
+| `setDesktopAgentResumeHandler` `desktop/.../desktopAgentResume.ts:7`     | undefined (`?? false`)    | P (desktop) | —                     | benign                   |
+| `setDefaultStreamLogStore` `transcript/StreamLogStore.ts:789`            | lazy `new`                | T           | —                     | no                       |
+| `setTierService` `auth/tier/index.ts:46`                                 | lazy `new`                | T           | —                     | no                       |
+| `setServerSideKeyService` `auth/serverKeys/index.ts:52`                  | `null` (getter throws)    | T           | —                     | no                       |
 
 **Correctly-scoped already (not the anti-pattern, listed for completeness):** `setBashApprovalSessionBypass` / `setToolEditApprovalSessionBypass` are stream-keyed controllers (`createStreamApprovalController` map keyed by `streamId`), not singletons.
 
