@@ -8,12 +8,6 @@
       "name": "allocateConversationBottomPanelRows"
     },
     {
-      "file": "packages/cli/src/chat/tui/appLayout.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "allocateSidePanelRows"
-    },
-    {
       "file": "packages/cli/src/chat/tui/chatSubmitDriver.ts",
       "category": "production-dead",
       "kind": "exports",
