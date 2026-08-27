@@ -30,6 +30,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSelectValue } from '@shared/utils/selectTemplates';
 import { groupBy } from '@utils/core';
 
 // Side-effect imports - register WA button, icon, and switch components
@@ -43,7 +44,6 @@ import {
   postStateSetting,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
-import { readSelectValue } from '@shared/utils/selectTemplates';
 
 // Side-effect: register tool card component
 import '../components/tools/ToolCard';

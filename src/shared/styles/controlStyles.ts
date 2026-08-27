@@ -543,7 +543,7 @@ export const settingsRowStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
   }
 
-  /* Skins for the hooks `renderSettingsNumberRow` hardcodes. They live here
+  /* Skins for the hooks renderSettingsNumberRow hardcodes. They live here
      rather than per-tab because every tab is its own shadow root and the
      helper emits the classes for any caller. A tab that needs a different
      width still overrides locally (latex-tab does). */

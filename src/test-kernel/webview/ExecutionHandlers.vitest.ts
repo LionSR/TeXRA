@@ -125,14 +125,15 @@ describe('MainView execution handlers', () => {
       editedFile: '/tmp/edited.tex',
     });
 
+    // Two calls, not three: the dead leading `inputFile` argument (passed as a
+    // duplicate of baseFile, and documented "inputFile unused" at the other
+    // caller) left compare/acceptEdited with their parameter.
     expect(mocks.pathToLocation.mock.calls).toEqual([
-      ['/workspace/main.tex'],
       ['/workspace/main.tex'],
       ['/tmp/edited.tex'],
     ]);
     expect(mocks.executeCommand).toHaveBeenCalledExactlyOnceWith(
       `texra.${command}`,
-      { kind: 'external', absolutePath: '/workspace/main.tex' },
       { kind: 'external', absolutePath: '/workspace/main.tex' },
       { kind: 'external', absolutePath: '/tmp/edited.tex' },
     );

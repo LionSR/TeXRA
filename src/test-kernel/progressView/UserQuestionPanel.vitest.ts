@@ -133,13 +133,13 @@ describe('user-question-panel', () => {
       ]),
     );
 
-    const [red] = [...(element.shadowRoot?.querySelectorAll('wa-checkbox') ??
-      [])] as (HTMLElement & { checked?: boolean })[];
+    const [red] = [
+      ...(element.shadowRoot?.querySelectorAll('wa-checkbox') ?? []),
+    ] as (HTMLElement & { checked?: boolean })[];
     red.checked = true;
     dispatchChange(red);
-    const textarea = element.shadowRoot?.querySelector(
-      'wa-textarea',
-    ) as (HTMLElement & { value?: string }) | null;
+    const textarea = element.shadowRoot?.querySelector('wa-textarea') as
+      (HTMLElement & { value?: string }) | null;
     if (!textarea) throw new Error('free-text box not rendered');
     textarea.value = ' Purple ';
     textarea.dispatchEvent(

@@ -108,7 +108,7 @@ export const unsupportedProgressCommands$ =
 export const streamById$ = select(appState, (s) => s.streamById);
 export const streamStates$ = select(appState, (s) => s.streamStates);
 const streamLogs$ = select(appState, (s) => s.streamLogs);
-const activeStreamId$ = select(appState, (s) => s.activeStreamId);
+export const activeStreamId$ = select(appState, (s) => s.activeStreamId);
 const pendingStreamSelection$ = select(
   appState,
   (s) => s.pendingStreamSelection,

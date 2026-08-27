@@ -220,7 +220,6 @@ export function createDesktopDiffHost(
         );
         throw error;
       }
-
     } finally {
       settleFallbackSetup();
     }
