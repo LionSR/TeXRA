@@ -349,6 +349,7 @@ export class WorkflowExecutionState {
     this.#snapshot.currentStageId = undefined;
     this.#snapshot.timestamps.completedAt = completedAt;
     if (error) this.#snapshot.error = error;
+    const sweepSettledStageIds = new Set<string>();
     for (const call of this.#snapshot.calls) {
       const latestAttempt = call.attempts.at(-1);
       if (latestAttempt && latestAttempt.completedAt === undefined) {
@@ -360,6 +361,7 @@ export class WorkflowExecutionState {
       ) {
         call.status = WORKFLOW_CALL_STATUS.SKIPPED;
         call.settledBySweep = true;
+        if (call.stageId) sweepSettledStageIds.add(call.stageId);
         call.blockedReason = WORKFLOW_CALL_NOT_REACHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
@@ -373,6 +375,7 @@ export class WorkflowExecutionState {
             ? WORKFLOW_CALL_STATUS.CANCELLED
             : WORKFLOW_CALL_STATUS.FAILED;
         call.settledBySweep = true;
+        if (call.stageId) sweepSettledStageIds.add(call.stageId);
         call.error ??= WORKFLOW_CALL_UNFINISHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
@@ -383,12 +386,15 @@ export class WorkflowExecutionState {
         stage.lifecycle = WORKFLOW_EXECUTION_LIFECYCLE.SKIPPED;
         stage.completedAt = completedAt;
       } else {
-        // Re-derive the lifecycle after the call sweep above, but keep a
-        // stage's own end instant: only the active stage, whose completedAt
-        // `enterStage` cleared on entry, ends with the run. Restamping every
-        // settled stage made the persisted snapshot (and /executions/{id})
-        // report the run's terminal instant as each stage's completion.
-        this.#settleStage(stage.id, stage.completedAt ?? completedAt);
+        // Re-derive the lifecycle after the call sweep above. A stage whose
+        // call the sweep just terminalized ends now; genuinely settled stages
+        // keep their own end instant rather than taking the run's terminal one.
+        this.#settleStage(
+          stage.id,
+          sweepSettledStageIds.has(stage.id)
+            ? completedAt
+            : (stage.completedAt ?? completedAt),
+        );
       }
     }
     // Call-derived settlement alone can mark the active stage completed or

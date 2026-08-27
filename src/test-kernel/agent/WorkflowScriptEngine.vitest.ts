@@ -1443,6 +1443,69 @@ return 'done'`,
     expect(sawAbort).toBe(true);
   });
 
+  it('restamps sweep-settled stages without restamping settled stages', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    let run: WorkflowScriptRunResult;
+    let runnerStarted = false;
+    try {
+      const runPromise = runWorkflowScript({
+        script: `export const meta = {
+  name: 'sweep-stage',
+  description: 'distinguishes settled work from terminal-sweep work',
+  phases: ['Settled', 'A', 'B'],
+  tasks: [
+    { id: 'settled', label: 'Settled normally', phase: 'Settled' },
+    { id: 'live', label: 'Ignores cancellation', phase: 'A' },
+    { id: 'unreached', label: 'Never issued', phase: 'B' },
+  ],
+}
+phase('Settled')
+await agent('settles normally', { id: 'settled' })
+phase('A')
+agent('ignores cancellation', { id: 'live' })
+phase('B')
+return 'done'`,
+        runAgent: (invocation) => {
+          if (invocation.prompt === 'settles normally') {
+            vi.setSystemTime(new Date('2026-01-01T00:00:01.000Z'));
+            return Promise.resolve('done');
+          }
+          runnerStarted = true;
+          return new Promise<never>(() => undefined);
+        },
+      });
+
+      await vi.waitFor(() => expect(runnerStarted).toBe(true));
+      await vi.advanceTimersByTimeAsync(5_000);
+      run = await runPromise;
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(run.snapshot.calls).toMatchObject([
+      { id: 'settled', status: 'completed' },
+      { id: 'live', status: 'failed', settledBySweep: true },
+      { id: 'unreached', status: 'skipped', settledBySweep: true },
+    ]);
+    expect(run.snapshot.calls[0]).not.toHaveProperty('settledBySweep', true);
+    const [settledStage, sweptStage, plannedStage] = run.snapshot.stages;
+    const terminalAt = run.snapshot.timestamps.completedAt;
+    expect(settledStage).toMatchObject({ lifecycle: 'completed' });
+    expect(settledStage?.completedAt).not.toBe(terminalAt);
+    expect(Date.parse(settledStage?.completedAt ?? '')).toBeLessThan(
+      Date.parse(terminalAt ?? ''),
+    );
+    expect(sweptStage).toMatchObject({
+      lifecycle: 'failed',
+      completedAt: terminalAt,
+    });
+    expect(plannedStage).toMatchObject({
+      lifecycle: 'skipped',
+      completedAt: terminalAt,
+    });
+  });
+
   it('gives scripts realm-local agent results, not host objects', async () => {
     const runner = () => Promise.resolve({ nested: { data: 42 } });
     const run = await runScript(
