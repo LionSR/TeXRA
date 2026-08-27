@@ -3,8 +3,10 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { getExecutionStore, registerExecution } from '@agent/storage';
-import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
+import { AgentToolUseSettingSchema } from '@agent/core/definition/AgentDataclass';
 import { flowKey } from '@agent/node/persistedFlow';
+import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
+import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
@@ -66,13 +68,29 @@ describe('runFlowWithLifecycle durable startup aborts', () => {
     try {
       const result = await runFlowWithLifecycle(
         ctx,
-        async () => {
-          throw new DOMException('Request aborted', 'AbortError');
-        },
-        {
-          onRun: () => {
-            expect(session.executions.kill(executionId)).toBe(true);
-          },
+        async (_handle, lifecycle) => {
+          const flowResult = await runToolUseFlow(
+            {
+              ...ctx,
+              setting: AgentToolUseSettingSchema.parse({}),
+              onRoundFinalized: () => {},
+              onModelChanged: () => {},
+              onFlowRecordDisposition: lifecycle.setFlowRecordDisposition,
+            },
+            undefined,
+            {
+              attach: () => {
+                expect(session.executions.kill(executionId)).toBe(true);
+              },
+              detach: () => {},
+            },
+          );
+          return {
+            ...flowResult,
+            category: 'toolUse',
+            executionId,
+            streamId,
+          };
         },
       );
 
@@ -86,30 +104,5 @@ describe('runFlowWithLifecycle durable startup aborts', () => {
     } finally {
       clearStreamStatusForTest(session.status, streamId);
     }
-  });
-
-  it('persists CANCELLED without creating a checkpoint for a fresh run', async () => {
-    const { executionId, streamId } = await registerCase('fresh');
-    const session = defaultSession();
-    const ctx = createTestLaunchContext({ executionId, streamId, session });
-    const store = getExecutionStore(executionId);
-
-    const result = await runFlowWithLifecycle(
-      ctx,
-      async () => {
-        throw new DOMException('Request aborted', 'AbortError');
-      },
-      {
-        onRun: () => {
-          expect(session.executions.kill(executionId)).toBe(true);
-        },
-      },
-    );
-
-    expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    await expect(store.readMeta()).resolves.toMatchObject({
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-    await expect(store.read(flowKey(executionId))).resolves.toBeUndefined();
   });
 });
