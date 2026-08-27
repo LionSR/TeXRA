@@ -343,7 +343,7 @@ export async function runToolUseFlow(
   // destructive clear. Whether that clear actually happens is the lifecycle's
   // call: it alone knows whether this flow owns the queue or borrowed an outer
   // consumer's.
-  let inResumeStartupWindow = true;
+  let inStartupWindow = true;
 
   const flowContext: ToolUseFlowContext = {
     ownerSession: runSession,
@@ -354,7 +354,7 @@ export async function runToolUseFlow(
     interrupt(): void {
       input.interrupt();
       runSession.interactions.cancel({ streamId, cause: 'Run interrupted.' });
-      sessionLifecycle.interrupt(inResumeStartupWindow ? 'preserve' : 'clear');
+      sessionLifecycle.interrupt(inStartupWindow ? 'preserve' : 'clear');
     },
     requestImmediateCompaction(): void {
       services.modelCell.handler.requestCompaction();
@@ -468,7 +468,7 @@ export async function runToolUseFlow(
     // Past both startup cancellation guards: any later interrupt() is a
     // genuine mid-run cancellation, so go back to the normal destructive
     // queue clear instead of the resume-startup rescue above.
-    inResumeStartupWindow = false;
+    inStartupWindow = false;
 
     let resumedFollowUps: readonly FollowUpQueueBatchItem[] = [
       ...(input.drainedFollowUps ?? []),
