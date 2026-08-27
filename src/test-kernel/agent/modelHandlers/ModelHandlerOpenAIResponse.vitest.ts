@@ -1294,25 +1294,21 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     // Mirrors ModelHandler.validateTokenLimits (#8078, followed up in #8100):
     // isContextWindowError() must recognize this throw via its typed marker,
     // not by string-matching wording that this method owns and may reword
-    // freely. Without the marker, a future reword of "exceeds context
-    // window" would silently break the
+    // freely. Without the marker, this throw would silently break the
     // `isContextWindowError(error) && this.chainState.hasPreviousResponseId()`
-    // compaction-recovery check that reads this throw upstream.
-    class FailOnReducedBudgetHandler extends ModelHandlerOpenAIResponse {
-      protected override shouldFailWhenFallbackOutputBudgetIsReduced(): boolean {
-        return true;
-      }
-    }
-    const handler = createHandlerOf(FailOnReducedBudgetHandler, {
+    // compaction-recovery check that reads it upstream.
+    const handler = createHandler({
       openRouterOnly: false,
       maxOutputTokens: 200,
       contextWindow: 1000,
     });
+    // 990 + TOKEN_SAFETY_BUFFER (10) reaches the route input limit, which with
+    // no capability profile is the context window itself.
     (
       handler as unknown as {
         chainState: { setCumulativeInputTokens: (tokens: number) => void };
       }
-    ).chainState.setCumulativeInputTokens(900);
+    ).chainState.setCumulativeInputTokens(990);
 
     let caught: unknown;
     try {
@@ -1326,12 +1322,11 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     }
 
     assert.ok(caught instanceof Error);
-    assert.match(caught.message, /exceeds context window/);
-    // Load-bearing assertion: the typed marker itself, independent of the
-    // fenced-string fallback that `isContextWindowError` also happens to
-    // match today (this exact message currently contains "exceeds context
-    // window"). The marker is what keeps classification correct if that
-    // wording is ever reworded on the assumption it's Anthropic-only.
+    assert.match(caught.message, /exceeds route input limit/);
+    // Load-bearing assertion: the typed marker itself. This message does NOT
+    // contain the fenced "exceeds context window" string that
+    // `isContextWindowError` also matches, so the marker is the only thing
+    // keeping classification correct here.
     assert.equal(hasContextWindowErrorMarker(caught), true);
     assert.equal(isContextWindowError(caught), true);
   });

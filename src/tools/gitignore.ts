@@ -20,13 +20,11 @@ type GitignoreSource = {
 };
 
 export type GitignoreMatcher = {
-  hasRules: boolean;
   ignores: (relativePath: string) => boolean;
   ignoreFiles: string[];
 };
 
 const EMPTY_GITIGNORE_MATCHER: GitignoreMatcher = {
-  hasRules: false,
   ignores: () => false,
   ignoreFiles: [],
 };
@@ -94,7 +92,6 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
   }
 
   return {
-    hasRules: true,
     ignores: (relativePath: string): boolean => {
       if (!relativePath || relativePath === '.') {
         return false;

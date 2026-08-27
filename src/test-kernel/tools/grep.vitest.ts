@@ -45,7 +45,6 @@ describe('GrepTool execution', () => {
 
   function mockWorkspaceGitignore(): void {
     vi.spyOn(gitignoreUtils, 'getGitignoreMatcher').mockResolvedValue({
-      hasRules: true,
       ignores: () => false,
       ignoreFiles: ['/workspace/.gitignore'],
     });

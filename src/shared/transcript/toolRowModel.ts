@@ -194,7 +194,6 @@ export interface ToolRowModel {
   readonly isUserFeedback: boolean;
   readonly isInProgress: boolean;
   readonly exitCode?: number;
-  readonly spillPath?: string;
 }
 
 export interface ToolRowModelContext {
@@ -998,6 +997,5 @@ export function toolRowModel(
     ...(normalized.exitCode !== undefined
       ? { exitCode: normalized.exitCode }
       : {}),
-    ...(normalized.spillPath ? { spillPath: normalized.spillPath } : {}),
   };
 }

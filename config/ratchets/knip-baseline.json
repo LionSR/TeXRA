@@ -2162,24 +2162,6 @@
       "name": "DiagnosticsInputSchema"
     },
     {
-      "file": "src/tools/fileEditFlow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "findOccurrenceLineNumbers"
-    },
-    {
-      "file": "src/tools/fileEditFlow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "replaceAllLiteral"
-    },
-    {
-      "file": "src/tools/fileEditFlow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "replaceFirstLiteral"
-    },
-    {
       "file": "src/tools/github/githubSubscriptionTool.ts",
       "category": "production-dead",
       "kind": "exports",

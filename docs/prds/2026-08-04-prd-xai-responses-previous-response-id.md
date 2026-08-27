@@ -117,7 +117,6 @@ Use the existing `openAIResponses` profile knobs (name is historical):
 | `supportsManualCompaction`              | `true` only after compact smoke; else client path or off |
 | `supportsInlineInputFileUpload`         | `false` until proven                                     |
 | `supportsToolResultFileUpload`          | `false` until proven                                     |
-| `failWhenFallbackOutputBudgetIsReduced` | start `false`; tighten if needed                         |
 
 ### 5.3 Request shape (MVP)
 

@@ -5,7 +5,6 @@ import type {
   LaunchTarget,
   MultiFiles,
   SessionType,
-  SingleFiles,
 } from '../schemas/mainView/state';
 
 export interface MainViewExecutionFormState {
@@ -13,7 +12,6 @@ export interface MainViewExecutionFormState {
   readonly agent: ByCategory<string>;
   readonly model: string;
   readonly instruction: string;
-  readonly singleFiles: SingleFiles;
   readonly multiFiles: MultiFiles;
   readonly checkboxValues: CheckboxValues;
   /**
@@ -27,7 +25,6 @@ export interface MainViewExecutionFormState {
   };
 }
 
-/** Output files aren't user-selectable at execute time, so that list is always empty. */
 export function buildMainViewExecuteMessage(
   state: MainViewExecutionFormState,
 ): MainViewExecuteMessage {
@@ -40,8 +37,6 @@ export function buildMainViewExecuteMessage(
     instruction: state.instruction,
     agentCategory: state.sessionType,
     files: {
-      editedFile: state.singleFiles.editedFile,
-      baseFile: state.singleFiles.baseFile,
       inputFiles,
       contextFiles,
       mediaFiles,

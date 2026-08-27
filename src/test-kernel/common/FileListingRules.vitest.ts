@@ -19,7 +19,7 @@ describe('shared file-listing rules', () => {
       include: ['.txt', '.tex', '.md'],
       excludeFiles: ['command.tex', 'commands.tex', 'preamble.tex', 'yaml'],
     });
-    expect(config?.excludeDirs).toContain('node_modules');
+    expect(config.excludeDirs).toContain('node_modules');
   });
 
   it('normalizes filters once and applies file and directory rules', () => {

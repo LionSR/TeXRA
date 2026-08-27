@@ -108,7 +108,6 @@ class ClientSideCompactionHandler extends ModelHandlerOpenAIResponse {
         storesResponsesServerSide: false,
         supportsInlineInputFileUpload: false,
         supportsToolResultFileUpload: false,
-        failWhenFallbackOutputBudgetIsReduced: false,
       },
     };
   }

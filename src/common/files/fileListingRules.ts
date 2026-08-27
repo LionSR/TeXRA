@@ -3,7 +3,10 @@ import { getBasename, getFileStem, normalizeFilePath } from '@utils/core';
 import { FILE_HANDLING_RULES } from './fileHandlingRules';
 import { getIncludedExtensions, type ExtensionCategory } from './fileTypeUtils';
 
-export type ListableFileType = Exclude<ExtensionCategory, 'audio'>;
+// Edited files have their own entry point (getEditedFileListConfig), so they
+// are not listable through getFileListConfig. The surviving vocabulary matches
+// DocumentFileTypeSchema ('input' | 'context' | 'media').
+export type ListableFileType = Exclude<ExtensionCategory, 'audio' | 'edited'>;
 
 export interface FileListSettings {
   ignoredFileExtensions: string[];
@@ -78,7 +81,7 @@ function buildInputLikeConfig(
 export function getFileListConfig(
   fileType: ListableFileType,
   settings: FileListSettings,
-): FileFilterConfig | null {
+): FileFilterConfig {
   switch (fileType) {
     case 'input':
       return buildInputLikeConfig('input', settings);
@@ -98,8 +101,6 @@ export function getFileListConfig(
         excludeKeywords: settings.ignoredKeywords,
         excludeFiles: [],
       };
-    case 'edited':
-      return null;
   }
 }
 
