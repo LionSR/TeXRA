@@ -70,7 +70,7 @@ import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { createDesktopBrowserViews } from './desktopBrowserViews.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
-import { handoffDesktopWorkspaceRelaunch } from './desktopWorkspaceRelaunch.js';
+import { handoffDesktopWorkspaceRelaunchFromMainProcess } from './desktopWorkspaceRelaunch.js';
 import {
   installDesktopBeforeQuitWiring,
   installDesktopWindowLifecycleWiring,
@@ -1177,7 +1177,7 @@ function createWindow(options: {
         }
         // The development supervisor owns Vite and the Electron child. Let it
         // replace the child so the new process keeps a live renderer URL.
-        handoffDesktopWorkspaceRelaunch(workspaceRelaunch.args, {
+        handoffDesktopWorkspaceRelaunchFromMainProcess(workspaceRelaunch.args, {
           supervised: process.env.TEXRA_DESKTOP_DEV_SUPERVISED === '1',
           send:
             typeof process.send === 'function'

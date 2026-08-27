@@ -14,7 +14,7 @@ interface BeforeUnloadWindow {
   ): void;
 }
 
-export function installUnsavedCloseVeto(
+function installUnsavedCloseVeto(
   window: BeforeUnloadWindow,
   editor: UnsavedChangesEditor,
 ): void {
@@ -23,4 +23,11 @@ export function installUnsavedCloseVeto(
     event.preventDefault();
     event.returnValue = '';
   });
+}
+
+export function installDesktopUnsavedCloseWiring(
+  window: BeforeUnloadWindow,
+  editor: UnsavedChangesEditor,
+): void {
+  installUnsavedCloseVeto(window, editor);
 }

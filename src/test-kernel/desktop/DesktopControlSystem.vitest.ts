@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { installUnsavedCloseVeto } from '@desktop/renderer/desktopUnsavedClose';
+import { installDesktopUnsavedCloseWiring } from '@desktop/renderer/desktopUnsavedClose';
 
 // Local imports - desktop test paths
 import { repoPath } from './desktopTestPaths.ts';
@@ -48,14 +48,18 @@ describe('desktop control system', () => {
   it('vetoes renderer closes only while the editor has unsaved changes', () => {
     const dirtyWindow = createBeforeUnloadWindow();
     const dirtyEvent = { preventDefault: vi.fn(), returnValue: 'unchanged' };
-    installUnsavedCloseVeto(dirtyWindow, { hasUnsavedChanges: () => true });
+    installDesktopUnsavedCloseWiring(dirtyWindow, {
+      hasUnsavedChanges: () => true,
+    });
     dirtyWindow.dispatch(dirtyEvent);
     expect(dirtyEvent.preventDefault).toHaveBeenCalledOnce();
     expect(dirtyEvent.returnValue).toBe('');
 
     const cleanWindow = createBeforeUnloadWindow();
     const cleanEvent = { preventDefault: vi.fn(), returnValue: 'unchanged' };
-    installUnsavedCloseVeto(cleanWindow, { hasUnsavedChanges: () => false });
+    installDesktopUnsavedCloseWiring(cleanWindow, {
+      hasUnsavedChanges: () => false,
+    });
     cleanWindow.dispatch(cleanEvent);
     expect(cleanEvent.preventDefault).not.toHaveBeenCalled();
     expect(cleanEvent.returnValue).toBe('unchanged');

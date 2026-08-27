@@ -92,7 +92,7 @@ import {
 } from './desktopShortcutRegistry';
 import { createStartupTeamPanel } from './desktopOnboarding';
 import { createEditorPane } from './editorPane';
-import { installUnsavedCloseVeto } from './desktopUnsavedClose';
+import { installDesktopUnsavedCloseWiring } from './desktopUnsavedClose';
 import { createTerminalPane } from './terminalPane';
 import './taskShell.css';
 import {
@@ -1502,7 +1502,7 @@ if (!bootstrapFailed) {
 
 // Sole owner of "the workspace has unsaved editor changes": the main process
 // keeps no copy and learns of it only when this veto raises will-prevent-unload.
-installUnsavedCloseVeto(window, editorPane);
+installDesktopUnsavedCloseWiring(window, editorPane);
 
 window.addEventListener(
   'unload',

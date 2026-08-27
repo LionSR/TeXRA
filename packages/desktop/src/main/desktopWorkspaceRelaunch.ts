@@ -4,7 +4,7 @@ export interface DesktopWorkspaceRelaunchHandoff {
   relaunch(args: string[]): void;
 }
 
-export function handoffDesktopWorkspaceRelaunch(
+function handoffDesktopWorkspaceRelaunch(
   args: string[],
   handoff: DesktopWorkspaceRelaunchHandoff,
 ): void {
@@ -13,4 +13,11 @@ export function handoffDesktopWorkspaceRelaunch(
     return;
   }
   handoff.relaunch(args);
+}
+
+export function handoffDesktopWorkspaceRelaunchFromMainProcess(
+  args: string[],
+  handoff: DesktopWorkspaceRelaunchHandoff,
+): void {
+  handoffDesktopWorkspaceRelaunch(args, handoff);
 }

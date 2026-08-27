@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { handoffDesktopWorkspaceRelaunch } from '@desktop/main/desktopWorkspaceRelaunch';
+import { handoffDesktopWorkspaceRelaunchFromMainProcess } from '@desktop/main/desktopWorkspaceRelaunch';
 import { withWorkspacePathArg } from '@desktop/shared/workspacePath';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
@@ -208,7 +208,7 @@ describe('desktop development launcher', () => {
     const send = vi.fn();
     const relaunch = vi.fn();
 
-    handoffDesktopWorkspaceRelaunch(args, {
+    handoffDesktopWorkspaceRelaunchFromMainProcess(args, {
       supervised: true,
       send,
       relaunch,
@@ -224,7 +224,7 @@ describe('desktop development launcher', () => {
     const send = vi.fn();
     const relaunch = vi.fn();
 
-    handoffDesktopWorkspaceRelaunch(args, {
+    handoffDesktopWorkspaceRelaunchFromMainProcess(args, {
       supervised: false,
       send,
       relaunch,
