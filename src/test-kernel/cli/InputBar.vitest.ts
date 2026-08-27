@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
 import { BaseTextInput } from '@cli/chat/tui/input/BaseTextInput';
+import type { PastedImageEntry } from '@cli/chat/tui/input/draftAttachments';
 import {
   ActiveDraftScope,
   createActiveDraftRegistry,
@@ -25,6 +26,7 @@ import {
 } from '@cli/chat/tui/commands/slashRegistry';
 import {
   activeForm,
+  requestDraftRestore,
   resetCliState,
   streams,
 } from '@cli/chat/tui/state/cliState';
@@ -328,6 +330,111 @@ describe('InputBar draft discard', () => {
     expect(submitted).toEqual([]);
     expect(imagePasteQueue.hasPending).toBe(false);
     expect(imagePasteQueue.hasDeferredAction).toBe(false);
+  });
+
+  it('restores queued drafts with the image entries captured by each submission', async () => {
+    clipboardMock.attachClipboardImage
+      .mockResolvedValueOnce({
+        ok: true,
+        path: '/tmp/first.png',
+        mediaType: 'image/png',
+        displayName: 'first.png',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        path: '/tmp/second.png',
+        mediaType: 'image/png',
+        displayName: 'second.png',
+      });
+    const submitted: Array<{
+      readonly text: string;
+      readonly mediaFiles: readonly string[] | undefined;
+      readonly images: readonly PastedImageEntry[] | undefined;
+    }> = [];
+    const { ink, React } = await loadInk();
+    const { instance, stdin, stdout } = renderInteractive(
+      ink,
+      React.createElement(InputBar, {
+        onSubmit: (...args: unknown[]) => {
+          const [text, mediaFiles, images] = args as [
+            string,
+            readonly string[] | undefined,
+            readonly PastedImageEntry[] | undefined,
+          ];
+          submitted.push({ text, mediaFiles, images });
+        },
+      }),
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('\u0016');
+      await waitFor(() => stdout.output.includes('[Image #1]'));
+      stdin.write(' first');
+      stdin.write('\r');
+      await waitFor(() => submitted.length === 1);
+      await waitFor(
+        () => !latestRenderedFrame(stdout).includes('[Image #1] first'),
+      );
+      stdout.output = '';
+
+      stdin.write('\u0016');
+      await waitFor(
+        () => clipboardMock.attachClipboardImage.mock.calls.length === 2,
+      );
+      await waitFor(() => stdout.output.includes('[Image #1]'));
+      stdin.write(' second');
+      stdin.write('\r');
+      await waitFor(() => submitted.length === 2);
+
+      expect(submitted.slice(0, 2)).toMatchObject([
+        {
+          mediaFiles: ['/tmp/first.png'],
+          images: [{ path: '/tmp/first.png', displayName: 'first.png' }],
+        },
+        {
+          mediaFiles: ['/tmp/second.png'],
+          images: [{ path: '/tmp/second.png', displayName: 'second.png' }],
+        },
+      ]);
+      const [first, second] = submitted;
+      if (!first?.images || !second?.images) {
+        throw new Error('submitted image entries were not captured');
+      }
+
+      stdout.output = '';
+      requestDraftRestore(first.text, first.images);
+      requestDraftRestore(second.text, second.images);
+      await waitFor(
+        () =>
+          stdout.output.includes('first') && stdout.output.includes('second'),
+      );
+      stdin.write('\r');
+      await waitFor(() => submitted.length === 3);
+
+      expect(submitted[2]?.text).toMatch(/first\n.*second/);
+      expect(submitted[2]?.mediaFiles).toEqual([
+        '/tmp/first.png',
+        '/tmp/second.png',
+      ]);
+
+      stdout.output = '';
+      requestDraftRestore(
+        `[Image #999] unmatched [Image #${first.images[0]?.id}] valid [Image #${first.images[0]?.id}] duplicate`,
+        first.images,
+      );
+      await waitFor(() => stdout.output.includes('duplicate'));
+      stdin.write('\r');
+      await waitFor(() => submitted.length === 4);
+
+      expect(submitted[3]).toMatchObject({
+        text: '[Image #999] unmatched [Image #1] valid [Image #1] duplicate',
+        mediaFiles: ['/tmp/first.png'],
+      });
+    } finally {
+      instance.unmount();
+      resetCliState();
+    }
   });
 
   it('discards a pending image submit from an otherwise empty mounted input', async () => {

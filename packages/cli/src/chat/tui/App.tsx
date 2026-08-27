@@ -106,6 +106,7 @@ import {
 import { streamLabelForId, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
+import type { PastedImageEntry } from './input/draftAttachments';
 
 // Narrow subset of Ink's internal stdin emitter used to synthesize Enter.
 interface InputEventEmitterLike {
@@ -131,7 +132,11 @@ function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
 }
 
 export interface AppProps {
-  readonly onSubmit: (line: string, mediaFiles?: readonly string[]) => void;
+  readonly onSubmit: (
+    line: string,
+    mediaFiles?: readonly string[],
+    images?: readonly PastedImageEntry[],
+  ) => void;
   readonly onKillExecution: (executionId: string) => void;
   /** Skip or retry a focused, in-flight workflow-script grandchild `agent()` call. */
   readonly onWorkflowControl: (

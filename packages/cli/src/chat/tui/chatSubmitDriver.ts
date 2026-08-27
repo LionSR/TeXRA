@@ -57,6 +57,7 @@ import {
 } from './state/transcript';
 import type { ChatSessionController } from '../chatSessionController';
 import type { SkillActivation } from './forms/SkillsListForm';
+import type { PastedImageEntry } from './input/draftAttachments';
 
 interface PreparedChatInstruction {
   readonly instruction: string;
@@ -132,6 +133,7 @@ interface ChatSubmitDriver {
   readonly handleSubmittedLine: (
     line: string,
     mediaFiles?: readonly string[],
+    images?: readonly PastedImageEntry[],
   ) => Promise<void>;
   /** Reserve a skill activation for the next submitted message. */
   readonly activateSkill: (selection: SkillActivation) => void;
@@ -223,6 +225,7 @@ export function createChatSubmitDriver(
   const submitChatMessage = async (
     line: string,
     mediaFiles?: readonly string[],
+    images?: readonly PastedImageEntry[],
   ): Promise<void> => {
     const focusedChildRoute = chatTuiFocusedChildFollowUpRoute();
     if (focusedChildRoute.kind === 'reject') {
@@ -303,7 +306,7 @@ export function createChatSubmitDriver(
         if (session.stopRequested) {
           // The user's own interrupt explains the outcome, so hand the draft
           // back without a notice rather than dropping a typed message.
-          requestDraftRestore(line);
+          requestDraftRestore(line, images);
           return;
         }
         if (!followUpTarget) {
@@ -311,7 +314,7 @@ export function createChatSubmitDriver(
           // stream id (a failed launch, config parse, or auth failure), so
           // there is nothing to queue against. Same treatment as a refused
           // send: the draft is the user's until admitted.
-          requestDraftRestore(line);
+          requestDraftRestore(line, images);
           setTransientNotice(
             'The conversation ended before the message could be sent. The message has been restored to the input.',
             { ttlMs: Infinity },
@@ -337,7 +340,7 @@ export function createChatSubmitDriver(
         } else {
           // The draft is the user's until admitted: hand it back before any
           // notice, so a refused send never costs a retype.
-          requestDraftRestore(line);
+          requestDraftRestore(line, images);
           setTransientNotice(
             `${describeFollowUpFailure(result.reason)} The message has been restored to the input.`,
             { ttlMs: Infinity },
@@ -363,11 +366,12 @@ export function createChatSubmitDriver(
   const handleSubmittedLine = async (
     line: string,
     mediaFiles?: readonly string[],
+    images?: readonly PastedImageEntry[],
   ): Promise<void> => {
     if (await handleTuiSlashCommand(line, getSlashCommandContext())) {
       return;
     }
-    await submitChatMessage(line, mediaFiles);
+    await submitChatMessage(line, mediaFiles, images);
   };
 
   const activateSkill = (selection: SkillActivation): void => {

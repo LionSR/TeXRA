@@ -18,7 +18,7 @@ import {
   handOffCliShutdownSignalHandlers,
   runCliPlatformShutdownSequence,
 } from '@cli/runtime/initPlatform';
-import { writeTextStdout } from '@cli/runtime/logSinks';
+import { writeTextStderrAndWait, writeTextStdout } from '@cli/runtime/logSinks';
 import {
   cleanupTerminalModes,
   restoreTuiInputModes,
@@ -189,8 +189,8 @@ export function createSessionExitController(
       // Signal exit remains best-effort, but platform shutdown must still run.
       // The resume hint is printed before this runs, so a silent failure hands
       // the user a `texra resume` for a session whose tail was never written.
-      log.warn(
-        `Transcript flush failed during signal exit; the session tail may be missing: ${toErrorMessage(error)}`,
+      await writeTextStderrAndWait(
+        `[warn] [cli.lifecycle] Transcript flush failed during signal exit; the session tail may be missing: ${toErrorMessage(error)}`,
       );
     }
     // `runCliPlatformShutdownSequence` catches its own failures and never
