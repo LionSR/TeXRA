@@ -51,11 +51,13 @@ export const EMPTY_ROUND_INDEXED: ReadonlyRoundIndexed<never> = Object.freeze(
  * every consumer that reads a `RoundIndexed<T>` record via plain
  * `Object.keys()`/`for...in` enumeration (rather than {@link
  * roundIndexedEntries}) relies on the ES2015+ spec guarantee that
- * non-negative-integer-string keys enumerate in ascending numeric order —
- * that guarantee does NOT hold for negative or non-integer keys, so this is
- * a structural invariant, not just a naming convention. Canonical record
- * schemas enforce it through {@link RoundKeyStringSchema}; the persisted-file
- * parser applies this schema directly while salvaging individual keys.
+ * canonical non-negative-integer-string keys enumerate in ascending numeric
+ * order — that guarantee does NOT hold for negative or non-integer keys.
+ * {@link RoundKeyStringSchema} accepts anything this schema can COERCE (see
+ * its own note), so a record straight off the wire is not guaranteed to hold
+ * canonical keys: iterate with {@link roundIndexedEntries}, or re-key through
+ * `Number(round)` the way {@link cloneRoundIndexed} and
+ * {@link parsePersistedRoundIndexed} do, which restores the ordering.
  */
 export const RoundKeySchema = z.coerce.number().int().nonnegative();
 
@@ -81,6 +83,11 @@ export const RoundNumberSchema = z.int().nonnegative();
  * to round `100000`) is accepted or rejected identically by canonical record
  * schemas and persisted-file parsing instead of drifting between a strict
  * `/^\d+$/`-style regex in one place and looser numeric coercion in another.
+ * That deliberate width (#7532) is why acceptance is NOT canonicality: this
+ * schema also admits `" 1"`, `"1.0"`, `"0x10"` and `""`, which the record
+ * keeps verbatim while any re-keying path folds them onto their canonical
+ * twin. Producers must therefore key by `String(round)`; readers must not
+ * assume enumeration order without re-keying.
  */
 export const RoundKeyStringSchema = z
   .string()
@@ -93,8 +100,9 @@ export const RoundKeyStringSchema = z
  * Trusted-input role (IPC messages, live state, snapshots): callers attach
  * their own field policy (`.prefault({})`, `.optional()`). Untrusted persisted
  * files go through {@link parsePersistedRoundIndexed} instead. Keys are
- * validated against {@link RoundKeyStringSchema} so every consumer of a
- * parsed record can rely on the ascending-iteration-order invariant.
+ * validated against {@link RoundKeyStringSchema}, which admits every
+ * coercible key rather than only canonical ones — see its note before relying
+ * on enumeration order.
  */
 export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
   return z.record(RoundKeyStringSchema, z.array(valueSchema));

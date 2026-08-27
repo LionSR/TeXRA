@@ -233,7 +233,7 @@ flowchart TB
 | `setAgentDirectories` `index/agentDirectoriesRegistry.ts:11`         | `null` (getter throws)    | P           | **ext + core module** | no                       |
 | `setRuntimeSkillSources` `skills/runtimeSkills.ts:13`                | `[]`                      | P           | cli only              | silent (cli-only)        |
 | `setRuntimeExtensionId` `auth/config.ts:102`                         | `null` (const fallback)   | P           | —                     | benign                   |
-| `setExternalAuthCallbackResolver` `auth/config.ts:151`               | `null`                    | P           | —                     | benign                   |
+| `setExternalAuthCallbackResolver` _(removed; inlined into the provider)_ | `null`                | P           | —                     | benign                   |
 | `setToolEditApprovalHandler` `approval/toolEditApproval.ts:118`      | undefined                 | **R**       | **4 sites / 3 hosts** | falls back to controller |
 | `setDesktopAgentResumeHandler` `desktop/.../desktopAgentResume.ts:7` | undefined (`?? false`)    | P (desktop) | —                     | benign                   |
 | `setDefaultStreamLogStore` `transcript/StreamLogStore.ts:789`        | lazy `new`                | T           | —                     | no                       |

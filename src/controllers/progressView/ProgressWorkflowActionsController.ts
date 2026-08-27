@@ -5,9 +5,12 @@ import type {
   ReadonlyRoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
+import { createLog } from '@logger/logUtils';
 import { AgentCategory, cloneRoundIndexed } from '@shared/schemas';
 import { unique } from '@utils/core';
 import type { StreamOutputsSource } from './streamOutputs';
+
+const log = createLog('ProgressWorkflowActions');
 
 export interface WorkflowDiffRequest {
   agent: string;
@@ -100,7 +103,15 @@ export class ProgressWorkflowActionsController {
   ): Promise<void> {
     await this.deps.state.preload?.(stream);
     const { config, executionId } = this.deps.state.getRunMetadata(stream);
-    if (!config || config.agentCategory !== AgentCategory.Workflow) return;
+    if (!config) {
+      // This controller holds no messaging port, so the refusal is at least
+      // recorded rather than dropped: the toolbar action does nothing.
+      log.warn(
+        `Workflow action skipped for stream ${stream}: the run has no persisted config.`,
+      );
+      return;
+    }
+    if (config.agentCategory !== AgentCategory.Workflow) return;
 
     await action(config, executionId);
   }

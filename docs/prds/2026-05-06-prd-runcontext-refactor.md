@@ -68,7 +68,7 @@ A May 2026 audit of `src/agent/`, `src/tools/approval/`, `src/auth/`, `src/event
 | Worktree support flag           | `setWorktreeSupportEnabled`       | `src/tools/worktreeConfig.ts:12,14`                |
 | Server-side key service         | `setServerSideKeyService`         | `src/auth/serverKeys/index.ts:34`                  |
 | Tier service                    | `setTierService`                  | `src/auth/tier/index.ts:31`                        |
-| Auth callback resolver          | `setExternalAuthCallbackResolver` | `src/auth/config.ts:183`                           |
+| Auth callback resolver          | _removed_ (inlined into `SupabaseAuthProvider`) | —                    |
 | Runtime extension id            | `setRuntimeExtensionId`           | `src/auth/config.ts:137`                           |
 | Output-channel factory (logger) | `setOutputChannelFactory`         | `src/logger/logUtils.ts:108`                       |
 | Default stream-log store        | `setDefaultStreamLogStore`        | `src/logger/StreamLogStore.ts:668,675`             |
