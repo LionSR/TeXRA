@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   prepareMainViewExecutionLaunch: vi.fn(),
   showErrorMessage: vi.fn(),
   showInformationMessage: vi.fn(),
+  warn: vi.fn(),
   pathToLocation: vi.fn((absolutePath: string) => ({
     kind: 'external' as const,
     absolutePath,
@@ -65,7 +66,7 @@ vi.mock('@logger/logUtils', () => ({
   createLog: () => ({
     debug: vi.fn(),
     info: vi.fn(),
-    warn: vi.fn(),
+    warn: mocks.warn,
     error: vi.fn(),
   }),
   info: vi.fn(),
@@ -96,8 +97,13 @@ describe('MainView execution handlers', () => {
     expect(mocks.executeCommand).not.toHaveBeenCalled();
   });
 
-  it('presents launch information before executing the prepared request', async () => {
+  it('executes the prepared request before launch information settles', async () => {
     const request = { agentName: 'team-root' };
+    let settleInfo!: () => void;
+    const infoPromise = new Promise<void>((resolve) => {
+      settleInfo = resolve;
+    });
+    mocks.showInformationMessage.mockReturnValue(infoPromise);
     mocks.prepareMainViewExecutionLaunch.mockResolvedValue({
       status: 'prepared',
       preparation: { valid: true, request },
@@ -113,6 +119,26 @@ describe('MainView execution handlers', () => {
       'texra.execute',
       request,
     );
+
+    settleInfo();
+    await infoPromise;
+  });
+
+  it('logs rejected launch information without creating an unhandled rejection', async () => {
+    const rejection = new Error('toast dismissed unexpectedly');
+    mocks.showInformationMessage.mockReturnValue(Promise.reject(rejection));
+    mocks.prepareMainViewExecutionLaunch.mockResolvedValue({
+      status: 'prepared',
+      preparation: { valid: true, request: { agentName: 'team-root' } },
+      infoMessage: 'Continuing without writer',
+    });
+
+    await handleExecute({});
+    await vi.waitFor(() => {
+      expect(mocks.warn).toHaveBeenCalledExactlyOnceWith(
+        'Information notification failed: toast dismissed unexpectedly',
+      );
+    });
   });
 
   it.each([

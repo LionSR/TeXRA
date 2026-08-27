@@ -13,10 +13,22 @@ import type {
   MainViewExecuteMessage,
   MainViewInboundMessage,
 } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocation } from '@utils/files/fileLocation';
 
 const CHANNEL = 'ExecutionHandlers';
 const log = createLog(CHANNEL);
+
+function observeNotification(
+  notification: Thenable<unknown>,
+  kind: 'information' | 'error',
+): void {
+  void Promise.resolve(notification).catch((err: unknown) => {
+    log.warn(
+      `${kind[0].toUpperCase()}${kind.slice(1)} notification failed: ${toErrorMessage(err)}`,
+    );
+  });
+}
 
 type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   MainViewInboundMessage,
@@ -71,11 +83,17 @@ export async function handleExecute(
   });
   if (launch.status === 'cancelled') return;
   if (launch.status === 'error') {
-    await vscode.window.showErrorMessage(launch.message);
+    observeNotification(
+      vscode.window.showErrorMessage(launch.message),
+      'error',
+    );
     return;
   }
   if (launch.infoMessage) {
-    await vscode.window.showInformationMessage(launch.infoMessage);
+    observeNotification(
+      vscode.window.showInformationMessage(launch.infoMessage),
+      'information',
+    );
   }
   const { preparation } = launch;
   if (!preparation.valid) {
