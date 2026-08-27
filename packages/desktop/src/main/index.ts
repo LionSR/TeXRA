@@ -70,6 +70,8 @@ import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { createDesktopBrowserViews } from './desktopBrowserViews.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
+import { handoffDesktopWorkspaceRelaunchFromMainProcess } from './desktopWorkspaceRelaunch.js';
+import { installDesktopLifecycleComposition } from './desktopLifecycleComposition.js';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
@@ -503,32 +505,7 @@ function createWindow(options: {
   initializeDesktopSetupAuth();
   windowResources.add(registerDesktopSetupSignIn(signInForRemoteAgentCatalog));
   const folderPickerDefaultPath = options.workspacePath ?? app.getPath('home');
-  // The renderer owns editor dirtiness. This event is the main process's only
-  // reading of it: Chromium emits it after the renderer's beforeunload handler
-  // observes a dirty Monaco buffer and refuses the unload, so every close path
-  // (quit, workspace switch, window close) asks here and nowhere else.
-  window.webContents.on('will-prevent-unload', (event) => {
-    if (isFatalDesktopShutdownRequested()) {
-      pendingWorkspaceRelaunch = undefined;
-      event.preventDefault();
-      return;
-    }
-    const response = dialog.showMessageBoxSync(window, {
-      type: 'warning',
-      buttons: ['Keep Editing', 'Discard Changes'],
-      defaultId: 0,
-      cancelId: 0,
-      title: 'Unsaved Changes',
-      message: 'This workspace has unsaved editor changes.',
-      detail: 'Discard the changes and continue?',
-    });
-    if (response === 1) {
-      event.preventDefault();
-      return;
-    }
-    pendingWorkspaceRelaunch = undefined;
-    continueQuitAfterWindowClose = undefined;
-  });
+
   const openWorkspaceFolder = async () => {
     const result = await dialog.showOpenDialog(window, {
       title: 'Open Workspace Folder',
@@ -1100,16 +1077,32 @@ function createWindow(options: {
   // reload: the app-signal subscription must survive a reload and die with the
   // window, or macOS dock reactivation would stack one listener per reopen.
   windowResources.add(() => workspaceIpc.dispose());
-  let initialRendererNavigationComplete = false;
-  window.webContents.on('did-navigate', () => {
-    if (!initialRendererNavigationComplete) {
-      initialRendererNavigationComplete = true;
-      return;
-    }
-    // A fresh renderer has its own terminal IDs and browser-tab layout. Tear
-    // down the previous document's main-process resources before those IDs can
-    // be reused or an old WebContentsView can cover the new page.
-    workspaceIpc.disposeRendererResources();
+  // The renderer owns editor dirtiness. This event is the main process's only
+  // reading of it: Chromium emits it after the renderer's beforeunload handler
+  // observes a dirty Monaco buffer and refuses the unload, so every close path
+  // (quit, workspace switch, window close) asks here and nowhere else.
+  installDesktopLifecycleComposition({
+    window: {
+      window,
+      workspaceIpc,
+      showDiscardDialog: () =>
+        dialog.showMessageBoxSync(window, {
+          type: 'warning',
+          buttons: ['Keep Editing', 'Discard Changes'],
+          defaultId: 0,
+          cancelId: 0,
+          title: 'Unsaved Changes',
+          message: 'This workspace has unsaved editor changes.',
+          detail: 'Discard the changes and continue?',
+        }),
+      isFatalShutdownRequested: isFatalDesktopShutdownRequested,
+      clearPendingWorkspaceRelaunch: () => {
+        pendingWorkspaceRelaunch = undefined;
+      },
+      clearContinueQuitAfterWindowClose: () => {
+        continueQuitAfterWindowClose = undefined;
+      },
+    },
   });
   const mainViewIpc = installDesktopMainViewIpc(window, {
     workspace: workspaceIpc,
@@ -1183,14 +1176,14 @@ function createWindow(options: {
         }
         // The development supervisor owns Vite and the Electron child. Let it
         // replace the child so the new process keeps a live renderer URL.
-        if (
-          process.env.TEXRA_DESKTOP_DEV_SUPERVISED === '1' &&
-          typeof process.send === 'function'
-        ) {
-          process.send(workspaceRelaunch.args);
-        } else {
-          app.relaunch({ args: workspaceRelaunch.args });
-        }
+        handoffDesktopWorkspaceRelaunchFromMainProcess(workspaceRelaunch.args, {
+          supervised: process.env.TEXRA_DESKTOP_DEV_SUPERVISED === '1',
+          send:
+            typeof process.send === 'function'
+              ? (args) => process.send?.(args)
+              : undefined,
+          relaunch: (args) => app.relaunch({ args }),
+        });
         // Use the lifecycle-aware path so the process session drains before
         // Electron starts the replacement process.
         app.quit();
@@ -1302,23 +1295,15 @@ if (protocolLifecycle.shouldContinue) {
         // editor can veto that close and remain fully operational. Once the
         // window really closes, its handler calls app.quit() again and this
         // listener proceeds with the ordinary shutdown chain.
-        let shutdownStarted = false;
-        let quitting = false;
-        app.on('before-quit', (event) => {
-          if (quitting) return;
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            event.preventDefault();
-            continueQuitAfterWindowClose = () => app.quit();
-            mainWindow.close();
-            return;
-          }
-          event.preventDefault();
-          if (shutdownStarted) return;
-          shutdownStarted = true;
-          void lifecycle.runShutdown().finally(() => {
-            quitting = true;
-            app.quit();
-          });
+        installDesktopLifecycleComposition({
+          beforeQuit: {
+            app,
+            getMainWindow: () => mainWindow,
+            lifecycle,
+            continueAfterWindowClose: (continueQuit) => {
+              continueQuitAfterWindowClose = continueQuit;
+            },
+          },
         });
 
         void initializeDesktopCrashReporting({

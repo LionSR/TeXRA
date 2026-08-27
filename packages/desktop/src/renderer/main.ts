@@ -92,6 +92,7 @@ import {
 } from './desktopShortcutRegistry';
 import { createStartupTeamPanel } from './desktopOnboarding';
 import { createEditorPane } from './editorPane';
+import { installDesktopUnsavedCloseWiring } from './desktopUnsavedClose';
 import { createTerminalPane } from './terminalPane';
 import './taskShell.css';
 import {
@@ -1501,11 +1502,7 @@ if (!bootstrapFailed) {
 
 // Sole owner of "the workspace has unsaved editor changes": the main process
 // keeps no copy and learns of it only when this veto raises will-prevent-unload.
-window.addEventListener('beforeunload', (event) => {
-  if (!editorPane.hasUnsavedChanges()) return;
-  event.preventDefault();
-  event.returnValue = '';
-});
+installDesktopUnsavedCloseWiring(window, editorPane);
 
 window.addEventListener(
   'unload',

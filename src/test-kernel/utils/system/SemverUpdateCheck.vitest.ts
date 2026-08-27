@@ -88,6 +88,64 @@ describe('runDailyUpdateCheck', () => {
     expect(state.get(lastCheckedAtKey)).toBe(nowMs);
   });
 
+  it('throttles a repeat check within the same day', async () => {
+    const state = new FakeStateStore();
+    const fetchLatest = vi.fn(async () => ({
+      version: '1.0.0',
+      refreshed: true,
+    }));
+    let clockMs = nowMs;
+    const options = checkOptions(state, { fetchLatest, now: () => clockMs });
+
+    await runDailyUpdateCheck(options);
+    expect(fetchLatest).toHaveBeenCalledTimes(1);
+
+    // Ten minutes later: still inside the daily window, no fetch.
+    clockMs += 10 * 60 * 1000;
+    await runDailyUpdateCheck(options);
+    expect(fetchLatest).toHaveBeenCalledTimes(1);
+
+    // A full day later: the throttle window has elapsed.
+    clockMs += 24 * 60 * 60 * 1000;
+    await runDailyUpdateCheck(options);
+    expect(fetchLatest).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not notify when the latest version is not newer', async () => {
+    const state = new FakeStateStore();
+    const notify = vi.fn();
+
+    await expect(
+      runDailyUpdateCheck(checkOptions(state, { notify })),
+    ).resolves.toBeUndefined();
+
+    expect(notify).not.toHaveBeenCalled();
+    // A live refresh still stamps the throttle even without a notification.
+    expect(state.get(lastCheckedAtKey)).toBe(nowMs);
+  });
+
+  it('retries a failed release notification before recording it as notified', async () => {
+    // A thrown notify must reject the check and leave no stamp or release key,
+    // so the next launch retries instead of silently skipping the announcement.
+    const state = new FakeStateStore();
+    const notify = vi.fn().mockImplementationOnce(() => {
+      throw new Error('dialog failed');
+    });
+    const options = checkOptions(state, {
+      lastNotifiedVersionKey,
+      fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
+      notify,
+    });
+
+    await expect(runDailyUpdateCheck(options)).rejects.toThrow('dialog failed');
+    expect(state.get(lastCheckedAtKey)).toBeUndefined();
+    expect(state.get(lastNotifiedVersionKey)).toBeUndefined();
+
+    await expect(runDailyUpdateCheck(options)).resolves.toBe('1.1.0');
+    expect(notify).toHaveBeenCalledTimes(2);
+    expect(state.get(lastNotifiedVersionKey)).toBe('1.1.0');
+  });
+
   it('can offer stale source metadata without stamping the check', async () => {
     const state = new FakeStateStore();
     const notify = vi.fn();

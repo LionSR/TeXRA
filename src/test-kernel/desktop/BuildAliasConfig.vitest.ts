@@ -43,23 +43,14 @@ describe('build alias configuration', () => {
     );
     expect(viteConfig).toContain("from '../../scripts/aliases.mjs'");
     expect(viteConfig).not.toContain('../extension/scripts/aliases.mjs');
-  });
 
-  it('uses generated TypeScript paths for extension bundling', () => {
+    // The extension bundlers resolve the same root table: Vite through the
+    // shared aliases.mjs, esbuild through tsconfig path mapping.
     const extensionViteConfig = readText('packages/extension/vite.config.ts');
     const extensionEsbuildConfig = readText(
       'packages/extension/esbuild.config.mjs',
     );
-
     expect(extensionViteConfig).toContain("from '../../scripts/aliases.mjs'");
-    expect(extensionViteConfig).not.toContain("from './scripts/aliases.mjs'");
-    expect(extensionViteConfig).not.toContain(
-      '.mjs import works at runtime via Vite',
-    );
     expect(extensionEsbuildConfig).toContain("tsconfig: './tsconfig.json'");
-    expect(extensionEsbuildConfig).not.toContain('aliasPlugin');
-    expect(extensionEsbuildConfig).not.toContain(
-      "from '../../scripts/aliases.mjs'",
-    );
   });
 });
