@@ -54,6 +54,7 @@ export interface AgentRosterFormProps {
   readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
+  readonly load?: () => Promise<AgentRosterData>;
 }
 
 function selectionLabel(record: CliAgentRosterRecord): string {
@@ -70,9 +71,9 @@ function selectableAgents(
 
 export function buildChatDefaultAgentItems(
   agents: readonly AgentEntry[],
-  effectiveKeys: readonly string[],
+  selection: AgentRosterCategorySelection,
 ): SelectItem<string>[] {
-  const effective = new Set(effectiveKeys);
+  const effective = new Set(selectedAgentKeys(selection, agents));
   return [
     {
       value: '',
@@ -137,7 +138,7 @@ export function AgentRosterForm(
   const [mode, setMode] = useState<AgentRosterFormMode>('overview');
   const { data, error, reload, reportError } =
     useAsyncListForm<AgentRosterData>({
-      load: loadRosterData,
+      load: props.load ?? loadRosterData,
       onClose: props.onClose,
       onError: props.onError,
     });
@@ -296,7 +297,7 @@ export function AgentRosterForm(
     return frame(
       buildChatDefaultAgentItems(
         data.agents.toolUse,
-        selectedAgentKeys(data.record.agentKeys.toolUse, data.agents.toolUse),
+        data.record.agentKeys.toolUse,
       ),
       (value) => {
         const cwd = platform().workspace.getWorkspacePath();

@@ -1,26 +1,5 @@
 import stripAnsi from 'strip-ansi';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const mocks = vi.hoisted(() => ({
-  allPresets: vi.fn(() => []),
-  getAgentsByCategory: vi.fn(),
-  loadAgents: vi.fn(),
-  readCliAgentRoster: vi.fn(),
-}));
-
-vi.mock('@agent/index', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/index')>()),
-  createWorkspaceAgentRosterController: () => ({
-    allPresets: mocks.allPresets,
-  }),
-  getAgentsByCategory: mocks.getAgentsByCategory,
-  loadAgents: mocks.loadAgents,
-}));
-
-vi.mock('@cli/runtime/agentRoster', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/agentRoster')>()),
-  readCliAgentRoster: mocks.readCliAgentRoster,
-}));
+import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentEntry } from '@agent/index';
 import {
@@ -28,11 +7,12 @@ import {
   agentRosterSelectWindow,
   buildChatDefaultAgentItems,
   setChatDefaultAgent,
+  type AgentRosterFormProps,
 } from '@cli/chat/tui/forms/AgentRosterForm';
 import { formatCliAgentRoster } from '@cli/runtime/agentRoster';
-import { waitForCondition } from '@test/support/asyncTestUtils';
 import {
   loadInk,
+  renderOutputAtTerminalSize,
   renderWithTerminalSize,
 } from '@test/support/inkTestHarness.ts';
 
@@ -53,21 +33,23 @@ const agents: AgentEntry[] = [
   },
 ];
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.loadAgents.mockResolvedValue(undefined);
-  mocks.getAgentsByCategory.mockImplementation((category: string) =>
-    category === 'toolUse' ? agents : [],
-  );
-  mocks.readCliAgentRoster.mockResolvedValue({
-    selection: { kind: 'custom' },
-    effectiveSelection: { kind: 'custom' },
+const loadStaleRoster: NonNullable<
+  AgentRosterFormProps['load']
+> = async () => ({
+  record: {
+    selection: { kind: 'all' },
+    effectiveSelection: { kind: 'all' },
     agentKeys: {
       workflow: [],
-      toolUse: ['builtInToolUse:assistant'],
+      toolUse: ['builtInToolUse:assistant', 'builtInToolUse:changeReviewer'],
     },
     unresolvedNames: [],
-  });
+  },
+  presets: [],
+  agents: {
+    workflow: [],
+    toolUse: [agents[0]!],
+  },
 });
 
 describe('AgentRosterForm', () => {
@@ -98,41 +80,36 @@ describe('AgentRosterForm', () => {
   });
 
   it('excludes stale hidden keys from custom-selection counts and chat picker', async () => {
-    mocks.readCliAgentRoster.mockResolvedValue({
-      selection: { kind: 'custom' },
-      effectiveSelection: { kind: 'custom' },
-      agentKeys: {
-        workflow: [],
-        toolUse: ['builtInToolUse:assistant', 'builtInToolUse:changeReviewer'],
-      },
-      unresolvedNames: [],
-    });
     const { ink, React } = await loadInk();
-    const { instance, stdin, stdout } = renderWithTerminalSize(
+    const output = await renderOutputAtTerminalSize(
       ink,
-      React.createElement(AgentRosterForm, { onClose: () => undefined }),
+      React.createElement(AgentRosterForm, {
+        load: loadStaleRoster,
+        onClose: () => undefined,
+      }),
       80,
-      24,
-      { debug: true },
+      { until: (frame) => frame.includes('Custom selection') },
     );
 
-    try {
-      await waitForCondition(() =>
-        stripAnsi(stdout.output).includes('0 workflow, 1 tool-use'),
-      );
-      stdin.write('3');
-      await waitForCondition(() =>
-        stripAnsi(stdout.output).includes('Automatic'),
-      );
-
-      const output = stripAnsi(stdout.output);
-      expect(output).toContain('0 workflow, 1 tool-use');
-      expect(output).not.toContain('2 tool-use');
-      expect(output).toContain('assistant');
-      expect(output).not.toContain('changeReviewer');
-    } finally {
-      instance.unmount();
-    }
+    expect(output).toContain('0 workflow, 1 tool-use');
+    expect(output).not.toContain('2 tool-use');
+    expect(
+      buildChatDefaultAgentItems(agents, [
+        'builtInToolUse:assistant',
+        'builtInToolUse:changeReviewer',
+      ]),
+    ).toEqual([
+      {
+        value: '',
+        label: 'Automatic',
+        description: 'Choose from the effective workspace roster',
+      },
+      {
+        value: 'builtInToolUse:assistant',
+        label: 'assistant',
+        description: 'General assistant',
+      },
+    ]);
   });
 
   it('offers chat defaults only from the effective tool-use roster', () => {
