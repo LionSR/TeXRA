@@ -20,6 +20,8 @@ import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import { setRuntimeExtensionId } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
+import { signIn as authSignIn } from '@commands/auth/authCommands';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
@@ -42,6 +44,7 @@ import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
+import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
 import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTools';
@@ -83,6 +86,7 @@ import {
   TEXRA_APPROVAL_POLICY_OPTIONS,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import type { CommandId } from '@shared/commands/catalog';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -190,6 +194,95 @@ async function refreshApiKeyStatus() {
   }
 }
 
+/**
+ * Workspace-bound commands the getting-started walkthrough exposes as buttons.
+ * The walkthrough opens right after install even when no folder is open — the
+ * state where activation stops at the welcome view and never reaches
+ * `registerCommands` — so without fallbacks every one of these buttons is a
+ * dead click. The credential commands are registered for real in that state
+ * (sign-in needs no folder); these need the workspace-backed platform, so each
+ * fallback says why nothing can run yet and offers the two ways forward.
+ */
+const WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE = [
+  EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT,
+  'texra.showMultiAgent',
+  'texra.showMainView',
+  'texra.extractTikzFigures',
+  'texra.execute',
+  'texra.showProgressView',
+  'texra.cleanOutput',
+  'texra.cleanBuild',
+] as const satisfies readonly CommandId[];
+
+async function explainWorkspaceRequired(extensionPath: string): Promise<void> {
+  const openFolder = 'Open Folder';
+  const createSample = 'Create Sample Project';
+  const choice = await vscode.window.showInformationMessage(
+    'TeXRA agents run inside a single-folder workspace. Open your LaTeX project folder or create the sample project first.',
+    openFolder,
+    createSample,
+  );
+  if (choice === openFolder) {
+    await vscode.commands.executeCommand('workbench.action.files.openFolder');
+  } else if (choice === createSample) {
+    await createSampleProjectWithoutWorkspace(extensionPath);
+  }
+}
+
+/**
+ * Register the TeXRA account (Supabase) authentication provider and its OAuth
+ * URI handler. Both activation paths run this: signing in stores the session
+ * in SecretStorage, which needs no workspace, so the welcome (no-folder) path
+ * offers the same sign-in the full path does.
+ */
+function registerSupabaseAuth(context: vscode.ExtensionContext): void {
+  try {
+    setRuntimeExtensionId(context.extension.id);
+    const authProvider = new SupabaseAuthProvider({
+      showError: (msg) => void vscode.window.showErrorMessage(msg),
+      showInfo: (msg) => void vscode.window.showInformationMessage(msg),
+      showSignInPrompt: async (reason) => {
+        const message =
+          reason === 'expired'
+            ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
+            : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
+        const action = await vscode.window.showWarningMessage(
+          message,
+          'Sign In',
+        );
+        if (action === 'Sign In') {
+          await vscode.commands
+            .executeCommand('texra.auth.signIn')
+            .then(undefined, (err: unknown) =>
+              authLog.error(
+                `Failed to trigger sign-in: ${toErrorMessage(err)}`,
+              ),
+            );
+        }
+      },
+    });
+    context.subscriptions.push(
+      vscode.authentication.registerAuthenticationProvider(
+        AUTH_PROVIDER_ID,
+        'TeXRA Account',
+        authProvider,
+        { supportsMultipleAccounts: false },
+      ),
+    );
+
+    const uriHandler = new SupabaseUriHandler();
+    context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
+    authProvider.setUriHandler(uriHandler);
+
+    log.info('Supabase authentication provider registered');
+  } catch (error) {
+    SupabaseClient.setInitError(ensureError(error));
+    log.error(
+      `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
+    );
+  }
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   try {
     await activateExtension(context);
@@ -213,6 +306,35 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   if (!workspaceFolders || workspaceFolders.length !== 1) {
     registerWelcomeView(context);
+    // Credential-only platform. Every sign-in path stores into SecretStorage
+    // (`platform().secrets`) and the global `~/.texra` config — none of it
+    // needs a folder — so the walkthrough's credential buttons work before
+    // one is open. Agents still require the workspace-backed platform below;
+    // opening a folder reloads the window into that path (welcomeView.ts).
+    const lifecycle = createLifecycleHost({
+      onError: (phase, error) =>
+        log.error(`Lifecycle ${phase} handler failed`, { data: error }),
+    });
+    lifecycleHost = lifecycle;
+    agentDirectories.initialize();
+    const storage = createNodeStorageProvider();
+    const config = await createExtensionTexraConfig(storage, undefined);
+    initPlatform(
+      createNodePlatform({
+        config,
+        globalState: context.globalState,
+        workspaceState: context.workspaceState,
+        getWorkspacePath: () => undefined,
+        storage,
+        secrets: new VscodeSecrets(context),
+        lifecycle,
+        agentDirectories,
+        agentResume: {
+          tryResumeStream: tryResumeFromResumeData,
+        },
+      }),
+    );
+    registerSupabaseAuth(context);
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
     // path below, so the welcome view registers its own standalone variant:
@@ -226,6 +348,22 @@ async function activateExtension(context: vscode.ExtensionContext) {
       vscode.commands.registerCommand(
         EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
         () => openGettingStarted(context.extension.id),
+      ),
+      vscode.commands.registerCommand(AUTH_COMMANDS.SIGN_IN, () =>
+        authSignIn(),
+      ),
+      vscode.commands.registerCommand('texra.auth.chatgpt.signIn', () =>
+        signInWithSubscription('welcomeView', 'chatgpt'),
+      ),
+      // No settings view exists before a folder is open, so there is no
+      // credential surface to refresh after the key write.
+      vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
+        apiSetApiKey(async () => {}),
+      ),
+      ...WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE.map((command) =>
+        vscode.commands.registerCommand(command, () =>
+          explainWorkspaceRequired(context.extensionPath),
+        ),
       ),
     );
     return;
@@ -449,51 +587,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     })(),
   ]);
 
-  try {
-    setRuntimeExtensionId(context.extension.id);
-    const authProvider = new SupabaseAuthProvider({
-      showError: (msg) => void vscode.window.showErrorMessage(msg),
-      showInfo: (msg) => void vscode.window.showInformationMessage(msg),
-      showSignInPrompt: async (reason) => {
-        const message =
-          reason === 'expired'
-            ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
-            : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
-        const action = await vscode.window.showWarningMessage(
-          message,
-          'Sign In',
-        );
-        if (action === 'Sign In') {
-          await vscode.commands
-            .executeCommand('texra.auth.signIn')
-            .then(undefined, (err: unknown) =>
-              authLog.error(
-                `Failed to trigger sign-in: ${toErrorMessage(err)}`,
-              ),
-            );
-        }
-      },
-    });
-    context.subscriptions.push(
-      vscode.authentication.registerAuthenticationProvider(
-        AUTH_PROVIDER_ID,
-        'TeXRA Account',
-        authProvider,
-        { supportsMultipleAccounts: false },
-      ),
-    );
-
-    const uriHandler = new SupabaseUriHandler();
-    context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
-    authProvider.setUriHandler(uriHandler);
-
-    log.info('Supabase authentication provider registered');
-  } catch (error) {
-    SupabaseClient.setInitError(ensureError(error));
-    log.error(
-      `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
-    );
-  }
+  registerSupabaseAuth(context);
 
   // Usage logging is a runtime service, not an authentication-provider
   // capability. Initialize it even when Supabase sign-in is not configured,
