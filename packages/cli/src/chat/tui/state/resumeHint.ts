@@ -22,7 +22,7 @@ import {
   visibleSubagentRows,
   type ChildRosters,
 } from './childExecutions';
-import { streamPreferredUsage } from './subscribeStreamArtifacts';
+import { readStreamArtifacts } from './subscribeStreamArtifacts';
 import type { StreamSlice } from './cliState';
 
 export interface ResumeTarget {
@@ -94,11 +94,9 @@ export function collectResumeUsage(
 ): TokenUsageStats | undefined {
   const usages: TokenUsageStats[] = [];
 
-  for (const [streamId, slice] of streams) {
-    const usage: TokenUsageStats | undefined = streamPreferredUsage(
-      streamId,
-      slice,
-    );
+  for (const streamId of streams.keys()) {
+    const usage: TokenUsageStats | undefined =
+      readStreamArtifacts(streamId)?.cumulativeUsage;
     if (!usage || !usageHasTokens(usage)) continue;
     usages.push(usage);
   }

@@ -58,6 +58,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { clearApprovals } from './tui/state/approvalQueue';
 import {
+  establishWorkPlanReaderAuthority,
   focusStream,
   rootStreamId,
   patchSessionMeta,
@@ -77,10 +78,7 @@ import {
   moveLocalTranscriptToStream,
 } from './tui/state/transcript';
 import { syncStreamLog } from './tui/state/subscribeStreamLog';
-import {
-  beginLoadedStreamsReconcile,
-  markArtifactStreamHydrated,
-} from './tui/state/subscribeStreamArtifacts';
+import { bumpStreamArtifactRevision } from './tui/state/subscribeStreamArtifacts';
 
 type InterruptedFollowUp = Pick<
   FollowUpQueueInput,
@@ -553,32 +551,26 @@ export function createChatSessionController(
 
       const sessionContext = beginRunContext(config, 'history');
 
-      const loadedStreamsReconcile = beginLoadedStreamsReconcile([streamId]);
-
       await runtimeSession.transcripts.ensureLoaded(streamId);
-      // `load` evicts synchronously before its async seed. Drop those markers
-      // before the await yields so `readStreamArtifacts` cannot project an
-      // evicted/unseeded record (and re-emit warnIfUnseeded) mid-seed. On
-      // rejection the retained root stays unmarked — it was never seeded. A
-      // previously hydrated retained root deliberately remains marked during
-      // reseeding: this keeps its canonical pre-resume projection visible at
-      // the cost of bounded warnIfUnseeded notices until the seed completes.
-      loadedStreamsReconcile.dropStale();
+      // `load` evicts every other record synchronously before its async seed,
+      // and the store reports no provenance for an evicted record, so nothing
+      // projects an evicted/unseeded stream (or re-emits warnIfUnseeded)
+      // mid-seed without any marker bookkeeping here. A previously seeded
+      // retained root deliberately keeps its provenance during reseeding:
+      // this keeps its canonical pre-resume projection visible at the cost of
+      // bounded warnIfUnseeded notices until the seed completes.
       await snapshotStore.load([streamId]);
-      // Mark the retained root before the log sync below can render a stale
-      // pre-resume projection.
-      loadedStreamsReconcile.reconcile();
+      // Promote an open `/plan` reader's failure-time mask for the retained
+      // root and drop the projection memo before the log sync below can
+      // render a stale pre-resume projection.
+      establishWorkPlanReaderAuthority(streamId, ['plan', 'todos']);
+      bumpStreamArtifactRevision();
       // A resumed stream may be one the user /clear-ed; the empty patch mints
       // the slice and drops the retired mark so `syncStreamLog` and
       // `focusStream` accept it again.
       patchStream(streamId, (slice) => ({ ...slice }));
       syncStreamLog(runtimeSession, streamId);
       focusStream(streamId);
-      // Re-reconcile now that focus has moved: a stale in-flight preload for the
-      // previous stream that re-added it during the awaited load above is cleared
-      // again, while any stream preloaded in the meantime is preserved. Later
-      // hydrations for the old stream also fail requestIsCurrent.
-      loadedStreamsReconcile.reconcile();
 
       const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
@@ -725,7 +717,7 @@ export function createChatSessionController(
         await snapshotStore.preload([streamId]);
         // Invalidate the memo immediately after the direct seed, before the
         // awaited metadata/patch/focus below can render a stale projection.
-        markArtifactStreamHydrated(streamId);
+        bumpStreamArtifactRevision();
         const runMetadata = snapshotStore.getRunMetadata(streamId);
         const executionId =
           runMetadata.executionId ??

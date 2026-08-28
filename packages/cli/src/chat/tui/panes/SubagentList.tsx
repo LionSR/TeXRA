@@ -54,8 +54,8 @@ import {
   streamStateFor,
 } from '../state/childExecutions';
 import {
+  readStreamArtifacts,
   streamArtifactRevision,
-  streamPreferredUsage,
 } from '../state/subscribeStreamArtifacts';
 import {
   childListStreamId,
@@ -82,8 +82,8 @@ import {
   workflowPhaseTallyText,
 } from './SubagentListDisplay';
 import { useSignal } from '../state/useSignal';
+import { streamPhaseFor, type StreamSlice } from '../state/cliState';
 import type { PendingApprovalKind } from '../state/approvalQueue';
-import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
@@ -175,18 +175,15 @@ function SessionRow({
   useSignal(sessionStateRevision);
   const metadata = streamMetadataFor(session.id);
   const streamState = streamStateFor(session.id);
-  const status = session.slice?.status;
-  const substate = session.slice?.substate;
+  const phase = streamPhaseFor(session.id);
+  const status = phase?.phase;
   const statusLabel = formatCliStatusLabel(
     status,
-    substate,
+    phase?.substate,
     session.parentId !== undefined,
   );
   const elapsed = childElapsed(
-    {
-      status,
-      startedAt: session.slice?.runStartedAt,
-    },
+    { status, startedAt: phase?.runStartedAt },
     nowMs,
   );
   // Significance order — informational counts shed first, then the summary,
@@ -282,7 +279,6 @@ function SessionRow({
 
 function workflowTaskMetadata(
   call: WorkflowCallProgress,
-  child: StreamSlice | undefined,
   streamId: StreamTabId | undefined,
   nowMs: number,
 ): string | undefined {
@@ -291,11 +287,14 @@ function workflowTaskMetadata(
   // in-flight window the card itself cannot: elapsed, generated tokens, and
   // the running spend read off the child stream.
   const live = !isTerminalWorkflowCallProgress(call);
-  const usage = streamPreferredUsage(streamId, child);
+  const usage = streamId
+    ? readStreamArtifacts(streamId)?.cumulativeUsage
+    : undefined;
+  const runStartedAt = streamPhaseFor(streamId)?.runStartedAt;
   const parts = [
     ...formatWorkflowCallMetadataParts(call),
-    live && child?.runStartedAt !== undefined
-      ? formatCompactDuration(nowMs - child.runStartedAt)
+    live && runStartedAt !== undefined
+      ? formatCompactDuration(nowMs - runStartedAt)
       : undefined,
     usage && usage.outputTokens > 0
       ? `${TOKENS_GENERATED}${formatCompactTokenCount(usage.outputTokens)}`
@@ -308,14 +307,12 @@ function workflowTaskMetadata(
 }
 
 function WorkflowTaskRow({
-  child,
   entry,
   focused,
   nowMs,
   pendingKinds,
   streamId,
 }: {
-  readonly child: StreamSlice | undefined;
   readonly entry: WorkflowTaskEntry;
   readonly focused: boolean;
   readonly nowMs: number;
@@ -324,7 +321,7 @@ function WorkflowTaskRow({
 }): React.JSX.Element {
   useSignal(sessionStateRevision);
   const style = WORKFLOW_TASK_STATUS_STYLE[entry.call.status];
-  const metadata = workflowTaskMetadata(entry.call, child, streamId, nowMs);
+  const metadata = workflowTaskMetadata(entry.call, streamId, nowMs);
   const approval = pendingApprovalRowDisplay(pendingKinds);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
@@ -398,12 +395,7 @@ function WorkflowDashboard({
   const uniqueChildId = (entry: WorkflowTaskEntry): StreamTabId | undefined =>
     uniqueWorkflowChildStreamId(entry, model.childTaskIndex, streams);
   const nowMs = useLiveNowMsSince(
-    tasks.map((entry) => {
-      const childStreamId = uniqueChildId(entry);
-      return childStreamId === undefined
-        ? undefined
-        : streams.get(childStreamId)?.runStartedAt;
-    }),
+    tasks.map((entry) => streamPhaseFor(uniqueChildId(entry))?.runStartedAt),
   );
   const phaseItems: SelectItem<ChildListValue>[] = groups.map((group) => ({
     label: group.heading.phaseLabel,
@@ -487,9 +479,6 @@ function WorkflowDashboard({
     const childStreamId = uniqueChildId(entry);
     return (
       <WorkflowTaskRow
-        child={
-          childStreamId === undefined ? undefined : streams.get(childStreamId)
-        }
         entry={entry}
         focused={state.focused}
         nowMs={nowMs}
@@ -660,7 +649,7 @@ export function SubagentList(
   const sessions = props.sessions ?? [];
   useSignal(streamArtifactRevision);
   const startedAts = useMemo(
-    () => sessions.map((session) => session.slice?.runStartedAt),
+    () => sessions.map((session) => streamPhaseFor(session.id)?.runStartedAt),
     [sessions],
   );
   const { items, sessionsByValue } = useMemo(() => {
@@ -778,7 +767,7 @@ export function SubagentList(
             <SessionRow
               isListRoot={session.id === props.listRootStreamId}
               active={state.active}
-              cumulativeUsage={streamPreferredUsage(session.id, session.slice)}
+              cumulativeUsage={readStreamArtifacts(session.id)?.cumulativeUsage}
               focused={state.focused}
               hiddenRowSummary={hiddenRowSummary}
               metadataColumn={metadataColumn}

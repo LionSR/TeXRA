@@ -18,6 +18,7 @@ import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
   sessionMeta as sessionMetaSignal,
+  streamPhaseFor,
   streams as streamsSignal,
   type SessionMeta,
   type StreamSlice,
@@ -742,6 +743,11 @@ function ensureStaticSessionHeader({
 
 interface BuildStaticTranscriptItemsOptions {
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+  /** Lifecycle phase of `scrollbackStreamId`, read by the caller from the
+   *  session status machine (`streamPhaseFor`) — this projection stays pure.
+   *  Absent is a real value: a stream with no phase yet, which is also what a
+   *  fixture that does not care about settlement passes. */
+  readonly status?: StreamPhase;
   readonly childRosters?: ChildRosters;
   readonly executionLabels?: ExecutionLabels;
   readonly meta: SessionMeta;
@@ -768,6 +774,7 @@ export function buildStaticTranscriptItems(
 ): StaticTranscriptBuildResult {
   const {
     streams,
+    status,
     childRosters = new Map(),
     executionLabels,
     meta,
@@ -816,7 +823,7 @@ export function buildStaticTranscriptItems(
   const orderedStaticEntries = orderedStaticTranscriptEntries(
     slice?.entries ?? [],
     slice?.finalizedFrontier ?? 0,
-    slice?.status,
+    status,
   );
   // Dedupe by the entry's own stable id, as the incremental path does.
   const seen = new Set<string>();
@@ -909,6 +916,7 @@ export function buildStaticTranscriptState({
   repaintEpoch,
   ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
   scrollbackStreamId,
+  status,
   streams,
   width,
 }: {
@@ -921,12 +929,14 @@ export function buildStaticTranscriptState({
   readonly repaintEpoch: number;
   readonly ringBudgets?: StaticTranscriptRingBudgets;
   readonly scrollbackStreamId: StreamTabId | undefined;
+  readonly status?: StreamPhase;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly width?: number;
   readonly eraseRequest?: number;
 }): StaticTranscriptState {
   const built = buildStaticTranscriptItems({
     streams,
+    status,
     childRosters,
     executionLabels,
     meta,
@@ -953,13 +963,13 @@ export function buildStaticTranscriptState({
     ? incrementalStaticTranscriptEntries(
         slice?.entries,
         slice?.finalizedFrontier ?? 0,
-        slice?.status,
+        status,
         undefined,
       ).cursor
     : scanStaticTranscriptFromStart(
         slice?.entries,
         slice?.finalizedFrontier ?? 0,
-        slice?.status,
+        status,
       );
   return {
     ownerKey,
@@ -986,6 +996,7 @@ export function advanceStaticTranscriptState(
     parentStream,
     ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
     scrollbackStreamId,
+    status,
     streams,
     width,
   }: {
@@ -998,6 +1009,7 @@ export function advanceStaticTranscriptState(
     readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
     readonly ringBudgets?: StaticTranscriptRingBudgets;
     readonly scrollbackStreamId: StreamTabId | undefined;
+    readonly status?: StreamPhase;
     readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
     readonly width: number;
   },
@@ -1012,7 +1024,6 @@ export function advanceStaticTranscriptState(
   // scrollback slice is absent.
   const entries = slice?.entries;
   const finalizedFrontier = slice?.finalizedFrontier ?? 0;
-  const status = slice?.status;
 
   // Rebuilds below share every render input; only the repaint epoch differs
   // per call site.
@@ -1028,6 +1039,7 @@ export function advanceStaticTranscriptState(
       repaintEpoch,
       ringBudgets,
       scrollbackStreamId,
+      status,
       streams,
       width,
     });
@@ -1231,10 +1243,14 @@ export function StaticConversationTranscript({
   // bound SessionState; the revision drives the advance effect when metadata
   // (e.g. a focused child's model) lands without any other dependency moving.
   const sessionRevision = useSignal(sessionStateRevision);
+  // The one status read for this component: the session status machine owns
+  // the phase, gated on the scrollback owner having a slice at all.
+  const status = streamPhaseFor(scrollbackStreamId)?.phase;
 
   const buildFreshItems = (): readonly StaticTranscriptItem[] =>
     buildStaticTranscriptItems({
       streams,
+      status,
       childRosters,
       executionLabels: subagentExecutionLabels,
       meta: sessionMeta,
@@ -1255,6 +1271,7 @@ export function StaticConversationTranscript({
       parentStream,
       repaintEpoch: 0,
       scrollbackStreamId,
+      status,
       streams,
       width: normalizedWidth,
     }),
@@ -1273,6 +1290,7 @@ export function StaticConversationTranscript({
         ownerKey,
         parentStream,
         scrollbackStreamId,
+        status,
         streams,
         width: normalizedWidth,
       }),
@@ -1286,6 +1304,7 @@ export function StaticConversationTranscript({
     scrollbackStreamId,
     sessionMeta,
     sessionRevision,
+    status,
     streams,
     subagentExecutionLabels,
     normalizedWidth,

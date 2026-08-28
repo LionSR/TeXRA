@@ -13,7 +13,11 @@ import {
 } from '@cli/runtime/modelAccessRoute';
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
-import { STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
+  type StreamPhase,
+} from '@shared/schemas';
 
 // The bar renders the short access-route label.
 const INCLUDED_ACCESS_LABEL = shortCliModelAccessRoute('included');
@@ -1002,11 +1006,16 @@ describe('CLI StatusBar display model', () => {
   // `displaySlice` by identity so the live-ancestor fallback stays
   // distinguishable from a structurally equal slice.
   describe('statusBarStreamTarget', () => {
+    // Lifecycle phase is the session status machine's, not the slice's, so a
+    // fixture tags its intended phase here and the injected `phaseOf` answers
+    // from the same map the case already declares.
+    type PhasedSlice = StreamSlice & { readonly testPhase?: StreamPhase };
+
     function streamSlice(
       streamId: string,
-      status: StreamSlice['status'],
-    ): StreamSlice {
-      return { streamId, status } as StreamSlice;
+      testPhase: StreamPhase | undefined,
+    ): PhasedSlice {
+      return { streamId, testPhase } as PhasedSlice;
     }
 
     function streamMap(
@@ -1049,7 +1058,10 @@ describe('CLI StatusBar display model', () => {
 
     const cases: ReadonlyArray<{
       readonly name: string;
-      readonly input: Parameters<typeof statusBarStreamTarget>[0];
+      readonly input: Omit<
+        Parameters<typeof statusBarStreamTarget>[0],
+        'phaseOf'
+      >;
       readonly ctrlCAction: ReturnType<
         typeof statusBarStreamTarget
       >['ctrlCAction'];
@@ -1256,7 +1268,11 @@ describe('CLI StatusBar display model', () => {
     ];
 
     it.each(cases)('$name', ({ input, ...expected }) => {
-      const target = statusBarStreamTarget(input);
+      const target = statusBarStreamTarget({
+        ...input,
+        phaseOf: (streamId) =>
+          (input.streams.get(streamId) as PhasedSlice | undefined)?.testPhase,
+      });
 
       expect(target.ctrlCAction).toBe(expected.ctrlCAction);
       expect(target.displaySlice).toBe(expected.displaySlice);

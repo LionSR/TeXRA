@@ -37,7 +37,6 @@ import {
   patchStream,
   streams,
   transientNotice,
-  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
   bindChildStreamState,
@@ -67,7 +66,9 @@ import {
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
 import {
   StreamSnapshotPreloadError,
@@ -90,15 +91,19 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+/** Bind a `SessionState` over the default session on first use: /status reads
+ *  child rosters, parent edges, and the stream's lifecycle phase through it. */
+function ensureBoundChildState(): SessionState {
+  childState ??= new SessionState(defaultSession());
+  bindChildStreamState(childState);
+  return childState;
+}
+
 function seedChildRoster(
   parentStreamId: StreamTabId,
   rows: readonly ActiveChildInfo[],
 ): void {
-  if (!childState) {
-    childState = new SessionState(defaultSession());
-    bindChildStreamState(childState);
-  }
-  const state = childState;
+  const state = ensureBoundChildState();
   state.streamLogs.ensureStream(parentStreamId);
   state.getOrCreateStreamState(parentStreamId, AgentCategory.ToolUse);
   state.updateStreamState(parentStreamId, (prev) => ({
@@ -944,7 +949,7 @@ describe('handleTuiSlashCommand', () => {
     session.streamId = streamId;
     session.executionId = 'exec-1' as ExecutionId;
     activeStreamId.set(streamId);
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId,
       status: STREAM_PHASE.WAITING,
     });
@@ -966,11 +971,11 @@ describe('handleTuiSlashCommand', () => {
     const rootStreamId = 'stream-root' as StreamTabId;
     const childStreamId = 'stream-child' as StreamTabId;
     activeStreamId.set(rootStreamId);
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: rootStreamId,
       status: STREAM_PHASE.WAITING,
     });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: childStreamId,
       status: STREAM_PHASE.RUNNING,
     });
@@ -1005,20 +1010,20 @@ describe('handleTuiSlashCommand', () => {
     const waitingChildId = 'stream-child-waiting' as StreamTabId;
     activeStreamId.set(parentStreamId);
     for (const streamId of rootSiblingIds) {
-      setStreamStatusInCliState({
+      setCliStreamPhase({
         streamId,
         status: STREAM_PHASE.RUNNING,
       });
     }
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: parentStreamId,
       status: STREAM_PHASE.WAITING,
     });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: runningChildId,
       status: STREAM_PHASE.RUNNING,
     });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: waitingChildId,
       status: STREAM_PHASE.WAITING,
     });
@@ -1061,12 +1066,12 @@ describe('handleTuiSlashCommand', () => {
       'stream-child-2',
     ] as StreamTabId[];
     activeStreamId.set(rootStreamId);
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: rootStreamId,
       status: STREAM_PHASE.WAITING,
     });
     for (const [index, childStreamId] of childStreamIds.entries()) {
-      setStreamStatusInCliState({
+      setCliStreamPhase({
         streamId: childStreamId,
         status: index === 0 ? STREAM_PHASE.WAITING : STREAM_PHASE.COMPLETED,
       });
@@ -1098,7 +1103,7 @@ describe('handleTuiSlashCommand', () => {
     const siblingChildId = 'stream-sibling-child' as StreamTabId;
     activeStreamId.set(focusedChildId);
     for (const streamId of [focusedChildId, siblingChildId]) {
-      setStreamStatusInCliState({
+      setCliStreamPhase({
         streamId,
         status: STREAM_PHASE.RUNNING,
       });
@@ -1130,15 +1135,15 @@ describe('handleTuiSlashCommand', () => {
     const runningSiblingId = 'stream-running-sibling' as StreamTabId;
     const idleSiblingId = 'stream-idle-sibling' as StreamTabId;
     activeStreamId.set(focusedChildId);
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: focusedChildId,
       status: STREAM_PHASE.WAITING,
     });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: runningSiblingId,
       status: STREAM_PHASE.RUNNING,
     });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: idleSiblingId,
       status: STREAM_PHASE.WAITING,
     });
@@ -1178,7 +1183,7 @@ describe('handleTuiSlashCommand', () => {
     const grandchildId = 'stream-grandchild' as StreamTabId;
     activeStreamId.set(parentStreamId);
     for (const streamId of [parentStreamId, ...rootSiblingIds, grandchildId]) {
-      setStreamStatusInCliState({
+      setCliStreamPhase({
         streamId,
         status: STREAM_PHASE.RUNNING,
       });
@@ -1211,16 +1216,20 @@ describe('handleTuiSlashCommand', () => {
     const streamId = 'stream-access' as StreamTabId;
     activeStreamId.set(streamId);
     patchSessionMeta({ model: 'gpt55' });
-    patchStream(streamId, (slice) => ({
-      ...slice,
-      usage: {
+    ensureBoundChildState();
+    patchStream(streamId, (slice) => ({ ...slice }));
+    // The access route comes off the store's cumulative usage projection.
+    snapshotFacts(defaultSession().snapshots).addUsage(
+      streamId,
+      'stream-access-run' as ExecutionId,
+      {
         inputTokens: 1_000,
         outputTokens: 100,
         cost: 0,
         usageRoute: 'relay',
       },
-    }));
-    setStreamStatusInCliState({
+    );
+    setCliStreamPhase({
       streamId,
       status: STREAM_PHASE.WAITING,
     });
@@ -1257,7 +1266,7 @@ describe('handleTuiSlashCommand', () => {
     session.executionId = 'exec-ephemeral' as ExecutionId;
     activeStreamId.set(streamId);
     patchSessionMeta({ transcriptMode: 'ephemeral' });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId,
       status: STREAM_PHASE.WAITING,
     });

@@ -11,6 +11,7 @@
 // `CHILD_STREAMS` state machine — single-substrate plan, Wave A.)
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
+import type { StreamPhaseState } from '@agent/runtime';
 import type {
   SessionState,
   SessionStreamMetadata,
@@ -78,6 +79,16 @@ export function streamStateFor(
   streamId: StreamTabId,
 ): StreamExecutionState | undefined {
   return BOUND.get()?.state.getStreamState(streamId);
+}
+
+/** Lifecycle state for a stream — phase, substate, and the run-window start
+ *  elapsed time is rendered from — straight off the session's status machine,
+ *  the single owner that stamps all three. Renderers go through
+ *  `streamPhaseFor` in `cliState`, which adds the no-slice-no-paint gate. */
+export function sessionStreamPhase(
+  streamId: StreamTabId,
+): StreamPhaseState | undefined {
+  return BOUND.get()?.state.streamStatus.getStreamState(streamId);
 }
 
 /** Queued follow-up messages for a stream, from the session-owned queue. */

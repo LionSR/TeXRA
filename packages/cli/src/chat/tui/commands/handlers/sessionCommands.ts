@@ -22,10 +22,14 @@ import {
   openInfoPane,
   sessionMeta,
   setTransientNotice,
+  streamPhaseFor,
   streams,
   workPlanReaderRequestIsCurrent,
 } from '@cli/chat/tui/state/cliState';
-import { hydrateStreamArtifacts } from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import {
+  hydrateStreamArtifacts,
+  readStreamArtifacts,
+} from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { activeStreamParentOrSelfId } from '@cli/chat/tui/state/streamViews';
@@ -131,6 +135,7 @@ export async function showCliSessionStatus(
   const activeStreamId = activeStreamIdSignal.get();
   const streamSlices = streams.get();
   const slice = activeStreamId ? streamSlices.get(activeStreamId) : undefined;
+  const activePhase = slice ? streamPhaseFor(activeStreamId) : undefined;
   const rosters = childRosters.get();
   const directActiveChildren = activeStreamId
     ? activeSubagentsFor(activeStreamId, rosters)
@@ -159,13 +164,15 @@ export async function showCliSessionStatus(
       model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        usageRoute: slice?.usage?.usageRoute,
+        usageRoute: activeStreamId
+          ? readStreamArtifacts(activeStreamId)?.cumulativeUsage?.usageRoute
+          : undefined,
         prospectiveRoute,
       }),
       approval: formatTexraApprovalPolicy(context.getApprovalPolicy()),
       approvalBypasses: slice?.bypass,
-      status: slice?.status,
-      substate: slice?.substate,
+      status: activePhase?.phase,
+      substate: activePhase?.substate,
       activeChildSessions,
       goal: activeStreamId ? GoalStore.getForStream(activeStreamId) : undefined,
       activeSkills: activeSkillNamesFor(activeStreamId),

@@ -23,7 +23,7 @@ import {
   resetCliState,
   patchStream,
   setTransientNotice,
-  setStreamStatusInCliState,
+  streamPhaseFor,
   streams,
   transientNotice,
 } from '@cli/chat/tui/state/cliState';
@@ -55,7 +55,7 @@ import { advanceSettledPrefixIndex } from '@cli/chat/tui/state/transcriptFold';
 import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
-  markArtifactStreamHydrated,
+  bumpStreamArtifactRevision,
   readStreamArtifacts,
   streamArtifactRevision,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
@@ -111,6 +111,7 @@ import {
 } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import {
   splitTranscriptEntries,
@@ -201,8 +202,17 @@ function runTrace(
 type TraceLogger = ReturnType<typeof runTrace>;
 
 /** Drive a stream to a phase through the production fact-application path. */
+/** The session whose status machine the CLI is currently bound to, while a
+ *  `withRunFacts` body runs against its own `SessionHandle`. */
+let boundFactSession: SessionHandle | undefined;
+
 function setStatus(streamId: StreamTabId, status: StreamPhase): void {
-  setStreamStatusInCliState({ streamId, status });
+  if (boundFactSession) {
+    setCliStreamPhase({ streamId, status, session: boundFactSession });
+    return;
+  }
+  ensureBoundSessionState();
+  setCliStreamPhase({ streamId, status });
 }
 
 /** Drive a status transition on `session`'s machine; the resulting status
@@ -433,15 +443,20 @@ function markToolUseAgent(hub: SessionEventHub, streamId: StreamTabId): void {
 // and write through its public API.
 let metadataState: SessionState | undefined;
 
+/** Bind a `SessionState` over the default session on first use, so the CLI's
+ *  shared reads (metadata, and the status machine `streamPhaseFor` consults)
+ *  resolve without an adapter attached. */
+function ensureBoundSessionState(): SessionState {
+  metadataState ??= new SessionState(defaultSession());
+  bindChildStreamState(metadataState);
+  return metadataState;
+}
+
 function seedStreamMetadata(
   streamId: StreamTabId,
   patch: Parameters<SessionState['updateStreamMetadata']>[1],
 ): void {
-  if (!metadataState) {
-    metadataState = new SessionState(defaultSession());
-    bindChildStreamState(metadataState);
-  }
-  metadataState.updateStreamMetadata(streamId, patch);
+  ensureBoundSessionState().updateStreamMetadata(streamId, patch);
   invalidateChildStreams();
 }
 
@@ -478,9 +493,11 @@ function withRunFacts(
     transcripts: StreamLogStore.ephemeral('TUI session signals test'),
   });
   const detach = attachSessionSignalsAdapter(session);
+  boundFactSession = session;
   try {
     body(hub, session);
   } finally {
+    boundFactSession = undefined;
     detach();
     snapshots.evictAll();
   }
@@ -670,7 +687,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
       transitionStatus(session, child1, STREAM_PHASE.FAILED, 'restart-repair');
 
       expect(activeRows(root)).toEqual([]);
-      expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.FAILED);
+      expect(streamPhaseFor(child1)?.phase).toBe(STREAM_PHASE.FAILED);
       expect(visibleRows(root)).toMatchObject([
         {
           executionId: 'agent-1',
@@ -1653,7 +1670,7 @@ describe('CLI TUI row allocation', () => {
           agentCategory: fixture.category,
           creationTimestamp: 0,
         },
-        streams: streams.get(),
+        phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
       }),
     ).toEqual({ kind: fixture.expected, streamId: child1 });
   });
@@ -1688,7 +1705,7 @@ describe('CLI TUI row allocation', () => {
         activeStreamId: child1,
         parentStream: new Map([[child1, root]]),
         metadata: { creationTimestamp: 0, ...metadata },
-        streams: streams.get(),
+        phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
       }),
     ).toEqual({ kind: 'reject', streamId: child1 });
   });
@@ -1729,7 +1746,7 @@ describe('CLI TUI row allocation', () => {
       emitParentEdge(hub, child1, root);
 
       activeStreamId.set(child1);
-      expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.RUNNING);
+      expect(streamPhaseFor(child1)?.phase).toBe(STREAM_PHASE.RUNNING);
       expect(retainedRows(root)[0]?.status).toBe(STREAM_PHASE.RUNNING);
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'accept',
@@ -1758,7 +1775,7 @@ describe('CLI TUI row allocation', () => {
       );
 
       activeStreamId.set(child1);
-      expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.CANCELLED);
+      expect(streamPhaseFor(child1)?.phase).toBe(STREAM_PHASE.CANCELLED);
       expect(retainedRows(root)[0]?.status).toBe(STREAM_PHASE.CANCELLED);
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'reject',
@@ -2886,8 +2903,8 @@ describe('CLI transcript state', () => {
     expect(streams.get().get(child1)).toMatchObject({
       latestLine: 'The second lemma is valid.',
       entries: [],
-      status: STREAM_PHASE.WAITING,
     });
+    expect(streamPhaseFor(child1)?.phase).toBe(STREAM_PHASE.WAITING);
   });
 
   it('restores an exact dormant transcript when it is requested', () => {
@@ -3433,7 +3450,7 @@ describe('sessionSignalsAdapter run facts', () => {
           todos: previousTodos,
         },
       });
-      markArtifactStreamHydrated(streamId);
+      bumpStreamArtifactRevision();
       expect(readStreamArtifacts(streamId)?.todos).toEqual(previousTodos);
 
       // The event changes the canonical snapshot store and must clear the
@@ -3590,7 +3607,6 @@ describe('sessionSignalsAdapter run facts', () => {
 
       emitUsage(hub, root, storageKey, usage);
 
-      expect(streams.get().get(root)?.usage).toEqual(usage);
       // Cumulative usage is the snapshot store's per-run accumulator summed;
       // reasoningTokens is part of the one accumulated vocabulary.
       expect(
@@ -3837,7 +3853,6 @@ describe('sessionSignalsAdapter run facts', () => {
       emitUsage(hub, root, storageKey, firstUsage);
       emitUsage(hub, root, storageKey, secondUsage);
 
-      expect(streams.get().get(root)?.usage).toEqual(secondUsage);
       // Summed from the store's per-run map — the one accumulator, which
       // carries reasoningTokens — not a second running sum in the slice.
       expect(
@@ -3941,13 +3956,6 @@ describe('sessionSignalsAdapter run facts', () => {
         cacheCreationInputTokens: 7,
       });
 
-      expect(streams.get().get(root)?.usage).toEqual({
-        inputTokens: 40,
-        outputTokens: 10,
-        cost: 2,
-        cacheReadInputTokens: 5,
-        cacheCreationInputTokens: 7,
-      });
       expect(
         projectStreamArtifacts(session.snapshots, root).cumulativeUsage,
       ).toEqual({

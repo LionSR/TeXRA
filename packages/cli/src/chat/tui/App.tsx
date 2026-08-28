@@ -78,6 +78,7 @@ import {
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   streams as streamsSignal,
+  streamPhaseFor,
 } from './state/cliState';
 import { appendLocalAssistantTranscript } from './state/transcript';
 import {
@@ -220,7 +221,7 @@ export function App(props: AppProps): React.JSX.Element {
       activeStreamId,
       parentStream,
       metadata: activeStreamId ? streamMetadataFor(activeStreamId) : undefined,
-      streams,
+      phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
     }).kind === 'reject';
   const appInputDisabled = foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
@@ -287,7 +288,7 @@ export function App(props: AppProps): React.JSX.Element {
     (view) =>
       view.parentId !== undefined &&
       view.slice !== undefined &&
-      isActivePhase(view.slice.status),
+      isActivePhase(streamPhaseFor(view.id)?.phase),
   ).length;
   const activeSubagentExecutionIds = useMemo(() => {
     const executionIds = new Map<StreamTabId, string>();
