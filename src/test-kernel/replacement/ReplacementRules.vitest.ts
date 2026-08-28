@@ -13,9 +13,11 @@ import {
   EQUATION_STYLE_REPLACEMENTS,
   FENCED_LATEX_BLOCK_REPLACEMENTS,
 } from '@replacement/rulesRegex';
+import { MAX_STYLE_REPLACEMENTS } from '@replacement/maxRules';
 import {
   HTML_ENTITY_REPLACEMENTS,
   LATEX_FORBIDDEN_REPLACEMENTS,
+  LATEX_SPACING_REPLACEMENTS,
   LATEX_XML_REPLACEMENTS,
 } from '@replacement/rules';
 import {
@@ -75,6 +77,27 @@ describe('replacement category registry completeness', () => {
         `regex category "${name}" is accepted by config but never runs`,
       );
     }
+  });
+});
+
+describe('max-style operator formatting', () => {
+  it('formats TransformerEncoder before the Tr prefix', () => {
+    assert.strictEqual(
+      applyReplacements(
+        String.raw`x_\TransformerEncoder`,
+        MAX_STYLE_REPLACEMENTS,
+      ),
+      String.raw`x_{\TransformerEncoder}`,
+    );
+  });
+});
+
+describe('LaTeX operator spacing', () => {
+  it('cleans a left operator before the generic delimiter rule', () => {
+    assert.strictEqual(
+      applyReplacements(String.raw`)\!\left\!(`, LATEX_SPACING_REPLACEMENTS),
+      String.raw`) \left (`,
+    );
   });
 });
 
