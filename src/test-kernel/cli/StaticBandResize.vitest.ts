@@ -251,7 +251,9 @@ describe('Static band resize', () => {
       current?: { repaint(options: TuiRepaintOptions): void };
     } = {};
     function App({ labels }: { labels: ReadonlyMap<string, string> }): unknown {
-      const renderKey = JSON.stringify([...labels]);
+      // The render key is label-agnostic, as in ConversationRegion: the
+      // transcript state owns the label-change repaint through its epoch.
+      const renderKey = 'execution-label-render';
       return createElement(StaticConversationTranscript, {
         onRenderKeyChange: () => {
           inkRef.current?.repaint({

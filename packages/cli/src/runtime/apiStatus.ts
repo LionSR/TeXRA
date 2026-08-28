@@ -9,7 +9,6 @@ import type {
 } from '@shared/schemas';
 import { providerDisplayName } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
-import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 
 import {
@@ -108,47 +107,17 @@ export function formatPersonalApiKeysLine(
   return `${label}: ${providers}`;
 }
 
-const CLI_API_STATUS_ACTION_HINTS: Record<
-  'signedIn' | 'signedOut' | 'signedOutWithPersonalKey',
-  string
-> = {
-  signedIn: 'actions: choose Model access below; `texra logout` signs out',
-  signedOut: `actions: ${RESEARCHER_ACCESS_AUTH.actionHintLoginOrKey}`,
-  signedOutWithPersonalKey:
-    'actions: choose Model access below; provider keys are configured',
-};
-
-export function formatCliApiStatusActionHint(
-  profile: Pick<CliAuthProfile, 'authenticated'>,
-  options: { readonly hasPersonalKey?: boolean } = {},
-): string {
-  if (profile.authenticated) return CLI_API_STATUS_ACTION_HINTS.signedIn;
-  return options.hasPersonalKey === true
-    ? CLI_API_STATUS_ACTION_HINTS.signedOutWithPersonalKey
-    : CLI_API_STATUS_ACTION_HINTS.signedOut;
-}
-
 async function personalKeyProviders(): Promise<string[]> {
   return configuredApiKeyProviders(platform().secrets);
 }
 
-interface LoadCliApiStatusOptions {
-  readonly includeActionHint?: boolean;
-}
-
 /** Compact status lines used by the launcher. */
-export async function loadCliApiStatus(
-  options: LoadCliApiStatusOptions = {},
-): Promise<readonly string[]> {
+export async function loadCliApiStatus(): Promise<readonly string[]> {
   const [profile, configuredPersonalKeyProviders] = await Promise.all([
     getCliAuthProfile(),
     personalKeyProviders(),
   ]);
   const authLine = formatCliAuthStatusLine(profile);
-  const hasPersonalKey = configuredPersonalKeyProviders.length > 0;
-  const actionHint = options.includeActionHint
-    ? formatCliApiStatusActionHint(profile, { hasPersonalKey })
-    : undefined;
 
   const personalKeysLine = formatPersonalApiKeysLine(
     configuredPersonalKeyProviders,
@@ -159,7 +128,6 @@ export async function loadCliApiStatus(
     ...(personalKeysLine ? [personalKeysLine] : []),
     authLine,
     ...(profile.note ? [profile.note] : []),
-    ...(actionHint ? [actionHint] : []),
   ];
 }
 

@@ -65,7 +65,7 @@ const OUTPUT_LINE_MAX_CHARS = 2000;
  *  row instead of the historical fixed 80 columns, so wide terminals show the
  *  whole command and narrow ones truncate to fit a single row. Returns 0 (no
  *  preview) when the tool name plus chrome already eat the row. */
-export function toolHeaderPreviewBudget(
+function toolHeaderPreviewBudget(
   columns: number | undefined,
   displayName: string,
 ): number {

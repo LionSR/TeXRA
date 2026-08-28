@@ -13,7 +13,12 @@ import { isActivePhase } from '@shared/streams/streamStatus';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 import { approvalQueueStatus } from './state/approvalQueue';
-import { rootRunPending, rootRunStreamId, streams } from './state/cliState';
+import {
+  rootRunPending,
+  rootRunStreamId,
+  streamPhaseFor,
+  streams,
+} from './state/cliState';
 import { chatTuiCanStopActiveRun } from './state/sessionRunState';
 import { terminalCapabilities } from './state/terminalCapabilities';
 
@@ -65,9 +70,11 @@ function currentTerminalTitleState(): SessionTitleState {
     chatTuiCanStopActiveRun({
       runPending: rootRunPending.get(),
       streamId: rootStreamId,
-      status: rootStreamId ? streamSlices.get(rootStreamId)?.status : undefined,
+      status: streamPhaseFor(rootStreamId)?.phase,
     }) ||
-    [...streamSlices.values()].some((stream) => isActivePhase(stream.status))
+    [...streamSlices.keys()].some((streamId) =>
+      isActivePhase(streamPhaseFor(streamId)?.phase),
+    )
   ) {
     return 'running';
   }

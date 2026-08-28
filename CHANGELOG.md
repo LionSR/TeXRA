@@ -103,6 +103,13 @@ All notable changes to this project will be documented in this file.
 
 ### CLI
 
+#### Features
+
+- **Workflow dashboard rows read like the board's** — each phase shows
+  `done/total · N running · N failed` plus one marker per call, the panel
+  heading's tally is labelled as the whole run, a call's status word no longer
+  gets clipped by its metadata, and phase and task rows line up in one column.
+
 #### Bug Fixes
 
 - **Queued follow-ups survive a root run ending early** — a submission waiting
@@ -117,6 +124,22 @@ All notable changes to this project will be documented in this file.
   narrow terminal layouts reserve enough room for the full TeXRA header.
 - **Shutdown and export failures are visible** — transcript, usage, lifecycle,
   and trace-viewer read failures are reported with their actual cause.
+- **The terminal shows the same run the progress view does** — a workflow
+  agent's transcript no longer hides its reasoning, replies, and prompts, a
+  relaunched workflow keeps its earlier attempt on screen as a closed group,
+  and phases are the phases the run actually opened rather than rows grouped by
+  a repeated label.
+- **Workflow review prompts remain clear and reliable** — review keys stay
+  visible in narrow terminals, cards show readable model names and approval
+  scope, failed inquiry persistence no longer crashes the CLI, and prompt
+  failures are reported instead of being mistaken for feedback-free rejection.
+- **Configuration and help commands follow their documented inputs** — approval
+  policies tolerate surrounding whitespace and case differences, global flags
+  no longer confuse `texra help`, and unreadable setup paths are reported
+  instead of being treated as absent.
+- **Live transcript ordering remains stable after repainting** — completed tool
+  and file rows keep the same order after a resize, label update, or scrollback
+  trim.
 
 ## [0.40.5] - 2026-08-26
 

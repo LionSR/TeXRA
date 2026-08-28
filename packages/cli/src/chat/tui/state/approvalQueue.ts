@@ -15,6 +15,7 @@
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
 
+import { warn as logWarning } from '@logger/logUtils';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { QuotaFallbackRouteId } from '@shared/quotaFallbackRoutes';
 import type {
@@ -26,8 +27,8 @@ import type {
   WorkflowCallReviewScope,
 } from '@shared/schemas';
 import { assertNever } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export type { ApprovalBypassKind };
 export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 /**
@@ -221,9 +222,13 @@ function presentForeground(): void {
     item.presented = true;
     try {
       item.onPresent?.(item.payload);
-    } catch {
+    } catch (error) {
       // Presentation hooks update surrounding TUI state only; approval
       // resolution must remain available even if focus activation fails.
+      logWarning(
+        'cli.tui',
+        `Approval presentation hook failed: ${toErrorMessage(error)}`,
+      );
     }
   }
   if (foregroundItem() !== item) return;

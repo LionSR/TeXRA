@@ -57,38 +57,9 @@ const WORKFLOW_DASHBOARD_KINDS = new Set<TranscriptRowKind>([
   'workflowTask',
 ]);
 
-// Row kinds a workflow-agent stream keeps when it projects an operational feed
-// instead of a model transcript. `compactionActivity` is here for the same
-// reason it is a dashboard kind: a run that compacted its context says so on
-// every surface.
-const WORKFLOW_OPERATIONAL_KINDS = new Set<TranscriptRowKind>([
-  'compactionActivity',
-  'error',
-  'fileList',
-  'phase',
-  'tool',
-  'workflowTask',
-]);
-
-/** Membership is one allowlist; this is the container filter a workflow-agent
- *  stream applies on top of it. Script log lines stay (they are the run's
- *  narration) unless they are debug chatter. */
-function isWorkflowOperationalRow(row: TranscriptRow): boolean {
-  if (row.kind === 'log') return row.level !== 'debug';
-  return WORKFLOW_OPERATIONAL_KINDS.has(row.kind);
-}
-
 // Compact inactive streams must not retain an unbounded operational transcript,
 // but the dashboard needs canonical phase/call identity while a child is open.
 const MAX_COMPACT_WORKFLOW_DASHBOARD_ENTRIES = 2_000;
-
-const LIVE_ACTIVITY_MESSAGE_TYPES = new Set<string>([
-  MESSAGE_TYPES.THINKING,
-  MESSAGE_TYPES.MODEL_RESPONSE,
-  MESSAGE_TYPES.TOOL_USE,
-  MESSAGE_TYPES.ERROR,
-  MESSAGE_TYPES.USER_MESSAGE,
-]);
 
 /**
  * Detached child runs that surface their full log output when focused: a
@@ -136,14 +107,6 @@ export function workflowOperationalLatestLine(
     }
   }
   return undefined;
-}
-
-export function logEntryStreamIsRunning(entry: StreamLogEntry): boolean {
-  const data = entry.data;
-  if (typeof data !== 'object' || data === null || !('status' in data)) {
-    return (entry.text ?? '').trim().length > 0;
-  }
-  return data.status === 'running';
 }
 
 /**
@@ -265,8 +228,13 @@ function projectCompactionIncrementally(
   );
   state.appliedHead = log.size;
   if (streamTerminal && !state.terminal) {
+    // One settle shape across hosts: the boundary is the projection's own
+    // applied head (the default) and the stream's last entry timestamp — the
+    // same two facts `logSlice` passes in the progress view.
     settleCompactionActivities(state.projection, {
-      throughSeqNo: log.size,
+      ...(log.lastTimestamp === undefined
+        ? {}
+        : { finishedAt: log.lastTimestamp }),
     });
   }
   state.terminal = streamTerminal;
@@ -307,9 +275,6 @@ export function createTranscriptFoldState(): TranscriptFoldState {
     finalizedFrontier: 0,
     latestUserPos: -1,
     latestResponsePos: -1,
-    workflowAttemptSeqNo: -1,
-    workflowAttemptBoundaryDeclared: false,
-    workflowOperationalOnly: false,
     projectLifecycleToTaskGroups: false,
     synthetics: [],
   };
@@ -324,10 +289,6 @@ export function resetTranscriptFoldState(state: TranscriptFoldState): void {
   state.finalizedFrontier = 0;
   state.latestUserPos = -1;
   state.latestResponsePos = -1;
-  state.workflowAttemptId = undefined;
-  state.workflowAttemptBoundaryDeclared = false;
-  state.workflowAttemptSeqNo = -1;
-  state.liveActivityEntry = undefined;
   state.synthetics = [];
   state.lastOutputFull = undefined;
   state.lastEntriesOutput = undefined;
@@ -569,96 +530,12 @@ function mergeChangedBySeqNo(
   return merged;
 }
 
-/**
- * The tracked live-activity row was mutated away from its tracked message
- * type: re-derive it from the full log (rare, producer-anomaly path; keeps
- * the ordinary fold allocation-free).
- */
-function retrackLiveActivityEntry(
-  state: TranscriptFoldState,
-  log: StreamLog,
-): void {
-  state.liveActivityEntry = log
-    .getRange(0)
-    .findLast((entry) =>
-      LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? ''),
-    );
-}
-
-/** Once a boundary is declared only rows stamped with the current attempt
- *  are current: rows from an earlier attempt, rows without a stamp, and every
- *  row after a malformed boundary are superseded. Streams without a boundary
- *  (ordinary workflow agents) keep every row. */
-function isSupersededAttemptId(
-  state: TranscriptFoldState,
-  attemptId: string | undefined,
-): boolean {
-  if (!state.workflowAttemptBoundaryDeclared) return false;
-  return (
-    state.workflowAttemptId === undefined ||
-    attemptId !== state.workflowAttemptId
-  );
-}
-
-function isPriorWorkflowAttemptRow(
-  state: TranscriptFoldState,
-  row: TranscriptRow,
-): boolean {
-  if (!state.workflowAttemptBoundaryDeclared) return false;
-  if (row.kind === 'phase') return isSupersededAttemptId(state, row.attemptId);
-  if (row.kind === 'workflowTask') {
-    return isSupersededAttemptId(state, row.call.attemptId);
-  }
-  return (
-    row.messageType === MESSAGE_TYPES.DEFAULT &&
-    row.seqNo !== undefined &&
-    row.seqNo < state.workflowAttemptSeqNo
-  );
-}
-
-function evictPriorWorkflowAttemptItems(
-  state: TranscriptFoldState,
-  flags: FoldChangeFlags,
-): void {
-  if (!state.workflowAttemptBoundaryDeclared) return;
-  for (let index = state.items.length - 1; index >= 0; index -= 1) {
-    if (isPriorWorkflowAttemptRow(state, state.items[index]!.rendered)) {
-      removeFoldItemAt(state, index, flags);
-    }
-  }
-}
-
 /** Fold one changed (appended or dirtied) log entry into the items array. */
 function applyChangedLogEntry(
   state: TranscriptFoldState,
   entry: StreamLogEntry,
   ctx: FoldContext,
 ): void {
-  const messageType = entry.messageType ?? '';
-  const data = entry.data;
-  const isAttemptBoundary =
-    messageType === MESSAGE_TYPES.INTERNAL &&
-    typeof data === 'object' &&
-    data !== null &&
-    'kind' in data &&
-    data.kind === 'workflowAttempt' &&
-    entry.seqNo >= state.workflowAttemptSeqNo;
-  if (isAttemptBoundary) {
-    // A malformed declared boundary must supersede the preceding attempt.
-    // Retaining its identifier would project prior-run rows as current.
-    const attemptId = 'attemptId' in data ? data.attemptId : undefined;
-    state.workflowAttemptId =
-      typeof attemptId === 'string' && attemptId.length > 0
-        ? attemptId
-        : undefined;
-    state.workflowAttemptBoundaryDeclared = true;
-    state.workflowAttemptSeqNo = entry.seqNo;
-    // The dashboard already shows only the current attempt. The live
-    // transcript must match: a retry that appends a fresh attempt would
-    // otherwise leave the failed first-attempt task cards and their
-    // default-log leftovers in the streaming feed.
-    evictPriorWorkflowAttemptItems(state, ctx.flags);
-  }
   const trackedPos = state.indexById.get(entry.id);
   const existingPos =
     trackedPos !== undefined && state.items[trackedPos].rank === 1
@@ -680,17 +557,11 @@ function applyChangedLogEntry(
     ...(prev ? { previousRow: prev } : {}),
     projectLifecycleToTaskGroups: state.projectLifecycleToTaskGroups,
   });
-  if (row === undefined || isPriorWorkflowAttemptRow(state, row)) {
+  if (row === undefined) {
     drop();
     return;
   }
-  // Workflow-agent details are an operational feed, not a model transcript.
-  // Detached workflow-script runs intentionally keep their full child log,
-  // including Running/Finished and error rows.
-  const rendered =
-    state.workflowOperationalOnly && !isWorkflowOperationalRow(row)
-      ? null
-      : transcriptRowForPaint(row);
+  const rendered = transcriptRowForPaint(row);
   if (rendered === null) {
     drop();
     return;
@@ -718,11 +589,6 @@ function reconcileCompactionRows(
     if (pos !== undefined && state.items[pos].block === block) continue;
     const rendered = transcriptRowForPaint(row);
     if (rendered === null) continue;
-    // Same container filter the log and local paths apply, so a
-    // workflow-agent stream has one membership rule rather than three.
-    if (state.workflowOperationalOnly && !isWorkflowOperationalRow(row)) {
-      continue;
-    }
     if (pos !== undefined) {
       state.items[pos].block = block;
       replaceFoldRendered(state, pos, rendered, flags);
@@ -750,12 +616,7 @@ function reconcileSynthetics(
 ): void {
   const current: TranscriptRow[] = [];
   for (const row of sliceEntries) {
-    if (
-      row.origin === 'local' &&
-      (!state.workflowOperationalOnly || isWorkflowOperationalRow(row))
-    ) {
-      current.push(row);
-    }
+    if (row.origin === 'local') current.push(row);
   }
   const previous = state.synthetics;
   if (
@@ -835,21 +696,6 @@ export function applyStreamChanges(
   compaction: CompactionActivityProjection;
 } {
   const changed = mergeChangedBySeqNo(dirtied, appended);
-  let retrack = false;
-  for (const entry of changed) {
-    if (LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? '')) {
-      if (
-        !state.liveActivityEntry ||
-        entry.seqNo >= state.liveActivityEntry.seqNo
-      ) {
-        state.liveActivityEntry = entry;
-      }
-    } else if (state.liveActivityEntry?.id === entry.id) {
-      retrack = true;
-    }
-  }
-  if (retrack) retrackLiveActivityEntry(state, ctx.log);
-
   const taskGroups = projectTaskGroupsIncrementally(state, changed);
   const compaction = projectCompactionIncrementally(
     state,

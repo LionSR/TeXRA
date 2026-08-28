@@ -86,7 +86,19 @@ export class StreamStatusMachine {
   constructor(private readonly eventHub: SessionEventHub) {}
 
   get(stream: StreamTabId): StreamPhase | undefined {
-    return this.stateFor(stream)?.phase;
+    return this.getStreamState(stream)?.phase;
+  }
+
+  /**
+   * This stream's combined phase + substate + run-window start, including an
+   * in-flight reservation. The per-stream read every host renders from: the
+   * entry is written before the matching `status` fact is published, so a
+   * consumer reacting to that fact reads the phase the fact announced without
+   * mirroring it, and `getAllStreamStates()` stays for the whole-map cases.
+   */
+  getStreamState(stream: StreamTabId): StreamPhaseState | undefined {
+    const entry = this.streams.get(stream);
+    return entry ? effectiveState(entry) : undefined;
   }
 
   /** Opaque identity replaced whenever this stream's status entry changes. */
@@ -95,7 +107,7 @@ export class StreamStatusMachine {
   }
 
   getSubstate(stream: StreamTabId): StreamSubstate | undefined {
-    return this.stateFor(stream)?.substate;
+    return this.getStreamState(stream)?.substate;
   }
 
   tryAcquire(
@@ -318,11 +330,6 @@ export class StreamStatusMachine {
 
   isInFlight(stream: StreamTabId): boolean {
     return isInFlightPhase(this.get(stream));
-  }
-
-  private stateFor(stream: StreamTabId): StreamPhaseState | undefined {
-    const entry = this.streams.get(stream);
-    return entry ? effectiveState(entry) : undefined;
   }
 
   private publishStatus(

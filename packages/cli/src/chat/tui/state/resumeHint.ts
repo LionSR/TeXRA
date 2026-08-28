@@ -22,7 +22,7 @@ import {
   visibleSubagentRows,
   type ChildRosters,
 } from './childExecutions';
-import { streamPreferredUsage } from './subscribeStreamArtifacts';
+import { readStreamArtifacts } from './subscribeStreamArtifacts';
 import type { StreamSlice } from './cliState';
 
 export interface ResumeTarget {
@@ -32,7 +32,7 @@ export interface ResumeTarget {
   readonly isRoot: boolean;
 }
 
-export interface ResumeTargetsInput {
+interface ResumeTargetsInput {
   readonly childRosters: ChildRosters;
   readonly rootExecutionId: string | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -78,10 +78,6 @@ export function formatResumeCommand(
   return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${interopFlag}${sourceFlags}`;
 }
 
-function formatInteger(value: number): string {
-  return new Intl.NumberFormat('en-US').format(value);
-}
-
 function usageHasTokens(usage: TokenUsageStats): boolean {
   return (
     usage.inputTokens > 0 ||
@@ -98,11 +94,9 @@ export function collectResumeUsage(
 ): TokenUsageStats | undefined {
   const usages: TokenUsageStats[] = [];
 
-  for (const [streamId, slice] of streams) {
-    const usage: TokenUsageStats | undefined = streamPreferredUsage(
-      streamId,
-      slice,
-    );
+  for (const streamId of streams.keys()) {
+    const usage: TokenUsageStats | undefined =
+      readStreamArtifacts(streamId)?.cumulativeUsage;
     if (!usage || !usageHasTokens(usage)) continue;
     usages.push(usage);
   }
@@ -119,12 +113,13 @@ export function formatResumeUsage(
   const cached = usage.cacheReadInputTokens ?? 0;
   const reasoning = usage.reasoningTokens ?? 0;
   const lines = [
-    `total=${formatInteger(total)}`,
-    `input=${formatInteger(usage.inputTokens)}`,
+    `total=${total.toLocaleString('en-US')}`,
+    `input=${usage.inputTokens.toLocaleString('en-US')}`,
   ];
-  if (cached > 0) lines.push(`(+ ${formatInteger(cached)} cached)`);
-  lines.push(`output=${formatInteger(usage.outputTokens)}`);
-  if (reasoning > 0) lines.push(`(reasoning ${formatInteger(reasoning)})`);
+  if (cached > 0) lines.push(`(+ ${cached.toLocaleString('en-US')} cached)`);
+  lines.push(`output=${usage.outputTokens.toLocaleString('en-US')}`);
+  if (reasoning > 0)
+    lines.push(`(reasoning ${reasoning.toLocaleString('en-US')})`);
   // Empty when there is no cost to report and no known route to attribute.
   const costLine = usageCostLabel(usage.cost, usage.usageRoute);
   return costLine

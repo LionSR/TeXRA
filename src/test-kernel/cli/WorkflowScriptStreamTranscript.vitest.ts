@@ -15,19 +15,18 @@ import '@test/support/defaultSessionTestSetup';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 
 import {
-  buildStaticTranscriptItems,
+  advanceStaticTranscriptState,
+  buildStaticTranscriptState,
   StaticConversationTranscript,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
 import {
   isFinalizedTranscriptRow,
-  splitTranscriptEntries,
   transcriptRowHeadline,
 } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   patchStream,
   resetCliState,
   streams,
-  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
   bindChildStreamState,
@@ -48,8 +47,10 @@ import {
 } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import { loadInk } from '@test/support/inkTestHarness.ts';
+import { splitTranscriptEntries } from '@test/support/transcriptRowFixtures';
 import { createRunTrace } from '@transcript';
 import type { StreamSummaryMeta } from '@transcript/StreamLogStore';
 
@@ -116,33 +117,49 @@ async function renderStaticTranscript(): Promise<string> {
   );
 }
 
-type StaticItems = ReturnType<typeof buildStaticTranscriptItems>['items'];
+type StaticState = ReturnType<typeof buildStaticTranscriptState>;
 
+const STATIC_INPUTS = {
+  childRosters: new Map(),
+  meta: SESSION_META,
+  ownerKey: 'root',
+  parentStream: new Map(),
+  scrollbackStreamId: STREAM_ID,
+  width: 80,
+} as const;
+
+/** A cold build over the current slice, or one ordinary stream-sync tick
+ *  advancing `previous` to it. */
 function appendItems(
-  currentItems: StaticItems = [],
-  overrides: Partial<Parameters<typeof buildStaticTranscriptItems>[0]> = {},
-): StaticItems {
-  return buildStaticTranscriptItems({
-    currentItems,
-    meta: SESSION_META,
-    scrollbackStreamId: STREAM_ID,
-    streams: streams.get(),
-    ...overrides,
-  }).items;
+  previous?: StaticState,
+  overrides: Partial<Parameters<typeof buildStaticTranscriptState>[0]> = {},
+): StaticState {
+  return previous === undefined
+    ? buildStaticTranscriptState({
+        ...STATIC_INPUTS,
+        repaintEpoch: 0,
+        streams: streams.get(),
+        ...overrides,
+      })
+    : advanceStaticTranscriptState(previous, {
+        ...STATIC_INPUTS,
+        streams: streams.get(),
+        ...overrides,
+      });
 }
 
-function staticEntries(items: StaticItems): readonly TranscriptRow[] {
+function staticEntries({ items }: StaticState): readonly TranscriptRow[] {
   return items
     .filter((item) => item.kind === 'entry')
     .map((item) => item.entry);
 }
 
-function entryIds(items: StaticItems): string[] {
-  return staticEntries(items).map((entry) => entry.id);
+function entryIds(state: StaticState): string[] {
+  return staticEntries(state).map((entry) => entry.id);
 }
 
-function entryTexts(items: StaticItems): string[] {
-  return staticEntries(items).map(transcriptRowHeadline);
+function entryTexts(state: StaticState): string[] {
+  return staticEntries(state).map(transcriptRowHeadline);
 }
 
 function transcriptEntry(id: string): StreamLogEntry | undefined {
@@ -157,7 +174,7 @@ function streamSlice() {
 }
 
 function setStatus(status: StreamPhase): void {
-  setStreamStatusInCliState({ streamId: STREAM_ID, status });
+  setCliStreamPhase({ streamId: STREAM_ID, status });
 }
 
 function streamEntries(): readonly TranscriptRow[] {
@@ -905,7 +922,15 @@ describe('CLI workflow-script child-stream transcript', () => {
       ).pending,
     ).toEqual([]);
 
-    const staticItems = appendItems([], {
+    // A run's open phase is the shared stage fact, which the applier writes
+    // from the same `stage.start` this test's `openStage` emitted; the header
+    // reads it there rather than scanning for a phase row of its own.
+    boundState.getOrCreateStreamState(STREAM_ID, AgentCategory.Workflow);
+    boundState.updateStreamState(STREAM_ID, (prev) => ({
+      ...prev,
+      stage: { kind: 'phase', label: 'Draft sections' },
+    }));
+    const staticItems = appendItems(undefined, {
       childRosters: new Map([
         [
           PARENT_STREAM_ID,
@@ -922,7 +947,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       parentStream: new Map([[STREAM_ID, PARENT_STREAM_ID]]),
       streams: streams.get(),
     });
-    expect(staticItems.at(0)).toMatchObject({
+    expect(staticItems.items.at(0)).toMatchObject({
       identityLine:
         'workflow script: draft-sections · Draft sections · parent: main · model: DeepSeek V4 Flash (Thinking)',
       kind: 'header',

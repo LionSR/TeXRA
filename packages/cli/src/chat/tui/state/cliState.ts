@@ -3,6 +3,7 @@
  * focus, overlays, exit hints) lives here as signals.
  */
 import { computed, signal, type Signal } from '@lit-labs/signals';
+import type { StreamPhaseState } from '@agent/runtime';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -11,11 +12,8 @@ import {
 import type {
   AgentDelegationScope,
   StreamLogEntry,
-  StreamPhase,
-  StreamSubstate,
   StreamTabId,
   TaskGroup,
-  TokenUsageStats,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
@@ -24,7 +22,7 @@ import type {
   CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
 import type { StreamArtifactAuthority } from '@transcript';
-import { isChildStreamRemoved } from './childExecutions';
+import { isChildStreamRemoved, sessionStreamPhase } from './childExecutions';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
 // ---------------------------------------------------------------------------
@@ -105,15 +103,8 @@ export interface TranscriptFoldState {
   latestUserPos: number;
   /** Index of the last finalized model-response row with text, or -1. */
   latestResponsePos: number;
-  /** Projection-mode bits `items` was built under; a flip forces a rebuild. */
-  workflowOperationalOnly: boolean;
+  /** Projection-mode bit `items` was built under; a flip forces a rebuild. */
   projectLifecycleToTaskGroups: boolean;
-  /** Highest-seq live-activity entry (drives the thinking indicator). */
-  liveActivityEntry?: StreamLogEntry;
-  /** Latest durable workflow-attempt marker and its source order. */
-  workflowAttemptId?: string;
-  workflowAttemptBoundaryDeclared: boolean;
-  workflowAttemptSeqNo: number;
   /** Local rows reconciled into `items`, in slice order, by identity. */
   synthetics: readonly TranscriptRow[];
   /** Incremental task-group / compaction memos. Unlike the fold fields above
@@ -154,9 +145,10 @@ export interface BypassState {
 
 /**
  * CLI-only per-stream view state. Everything the shared substrate owns —
- * identity/config/description metadata (`streamMetadataFor`), conversation
- * progress and stage (`streamStateFor`), workflow artifacts and cumulative
- * usage (`readStreamArtifacts`/`StreamArtifactProjection`), queued follow-ups
+ * identity/config/description metadata (`streamMetadataFor`), lifecycle phase,
+ * substate and run-window start (`streamPhaseFor`), conversation progress and
+ * stage (`streamStateFor`), workflow artifacts and cumulative usage
+ * (`readStreamArtifacts`/`StreamArtifactProjection`), queued follow-ups
  * (`queuedFollowUpsFor`) — is read from it at paint and has no field here.
  * What remains is transcript-rail projection output (the fold rail stays
  * separate from the fact rail by design) and terminal modality.
@@ -165,21 +157,10 @@ export interface StreamSlice {
   readonly streamId: StreamTabId;
   /** Run/round/phase lifecycle projected from the canonical StreamLog. */
   readonly taskGroups: readonly TaskGroup[];
-  readonly status: StreamPhase | undefined;
-  readonly substate?: StreamSubstate;
-  /** Run-window start mirrored verbatim from the `status` fact — the session
-   *  status machine stamps and clears it (`StreamPhaseState.runStartedAt`).
-   *  Drives the StatusBar's live elapsed-time segment so a long token-less
-   *  "thinking" turn still shows liveness. */
-  readonly runStartedAt: number | undefined;
   /** CLI-only live status: the newest meaningful transcript line for this
    *  stream, recomputed on every log sync. Fills the stream-list summary slot
    *  until the runtime supplies a `description`. */
   readonly latestLine: string | undefined;
-  /** Latest model usage snapshot, carried by the usage fact (no synchronous
-   *  shared read exists for the latest gauge). The StatusBar treats this as
-   *  current context occupancy, so it must not be accumulated across turns. */
-  readonly usage: TokenUsageStats | undefined;
   /** True while the latest hidden provider-side reasoning/thinking stream is
    *  the current live activity. The CLI never renders the content directly;
    *  this only drives a lightweight liveness indicator. */
@@ -214,14 +195,10 @@ export const NO_BYPASS: BypassState = {
 export function emptySlice(streamId: StreamTabId): StreamSlice {
   return {
     streamId,
-    status: undefined,
-    substate: undefined,
-    runStartedAt: undefined,
     latestLine: undefined,
     taskGroups: [],
     thinkingActive: false,
     compactingActive: false,
-    usage: undefined,
     entries: [],
     finalizedFrontier: 0,
     bypass: NO_BYPASS,
@@ -246,107 +223,44 @@ export function isCliStreamRetired(streamId: StreamTabId): boolean {
   return RETIRED_STREAMS.has(streamId);
 }
 
-/** A stream slice minus the lifecycle triple. `status`, its `substate`, and
- *  the `runStartedAt` the status machine stamps beside them belong to
- *  {@link setStreamStatusInCliState}, which is the only writer that enforces
- *  the removed/retired liveness rule. */
-type PatchableStreamSlice = Omit<
-  StreamSlice,
-  'status' | 'substate' | 'runStartedAt'
->;
-
-/** What a `patchStream` updater may return: the patchable fields, with the
- *  lifecycle triple closed off so re-writing `status` from a patch is a
- *  compile error rather than a second, unguarded status owner. */
-type StreamSlicePatch = PatchableStreamSlice & {
-  readonly status?: never;
-  readonly substate?: never;
-  readonly runStartedAt?: never;
-};
-
-/**
- * Patch one stream's view state. The updater receives the same slice twice:
- * once typed for patching (no lifecycle fields to spread back) and once whole,
- * for the patches that derive from the current status.
- */
+/** Patch one stream's view state. */
 export function patchStream(
   streamId: StreamTabId,
-  update: (
-    slice: PatchableStreamSlice,
-    lifecycle: Readonly<
-      Pick<StreamSlice, 'status' | 'substate' | 'runStartedAt'>
-    >,
-  ) => StreamSlicePatch,
+  update: (slice: StreamSlice) => StreamSlice,
 ): void {
   RETIRED_STREAMS.delete(streamId);
   const current = streams.get();
   const slice = current.get(streamId) ?? emptySlice(streamId);
-  const next = update(slice, slice);
+  const next = update(slice);
   if (next === slice) return;
   const out = new Map(current);
-  out.set(streamId, {
-    ...next,
-    status: slice.status,
-    substate: slice.substate,
-    runStartedAt: slice.runStartedAt,
-  });
+  out.set(streamId, next);
   streams.set(out);
 }
 
-function streamSliceWithStatus(
-  slice: StreamSlice,
-  status: StreamPhase,
-  substate: StreamSubstate | undefined,
-  runStartedAt: number | undefined,
-): StreamSlice {
-  if (
-    slice.status === status &&
-    slice.substate === substate &&
-    slice.runStartedAt === runStartedAt
-  ) {
-    return slice;
-  }
-  return { ...slice, status, substate, runStartedAt };
+/** Whether this stream identity is still live in the current state lifetime.
+ *  A stream tombstoned by `removeStream`, or retired by `resetCliState`, is
+ *  final: it accepts no further status, folds no log, and paints no phase. */
+export function cliStreamAcceptsStatus(streamId: StreamTabId): boolean {
+  return !isChildStreamRemoved(streamId) && !RETIRED_STREAMS.has(streamId);
 }
 
 /**
- * Apply a stream-status event once to the CLI state mirror.
+ * Lifecycle state for a stream at paint: phase, substate, and the run-window
+ * start elapsed time is rendered from, all read from the session's status
+ * machine — the single owner that stamps them and writes its entry before
+ * publishing the matching `status` fact.
  *
- * Runtime status still originates in the default session's status machine
- * (`defaultSession().status`), but TUI renderers should read only
- * StreamSlice data, so the slice is the single status owner at paint.
- * A status for a stream tombstoned by `removeStream`, or retired by
- * `resetCliState`, is ignored — both are final for that stream identity.
+ * Gated on this state lifetime holding a slice for the identity, which is how
+ * the removed/retired rule the deleted status mirror enforced still holds: the
+ * machine remembers the last phase of a stream `removeStream` dropped or
+ * `resetCliState` retired, and no slice means no paint.
  */
-export function setStreamStatusInCliState({
-  runStartedAt,
-  status,
-  substate,
-  streamId,
-}: {
-  /** Run-window start stamped by the session status machine and carried on the
-   *  `status` fact; absent for any non-active phase. */
-  readonly runStartedAt?: number;
-  readonly status: StreamPhase;
-  readonly substate?: StreamSubstate;
-  readonly streamId: StreamTabId;
-}): boolean {
-  if (isChildStreamRemoved(streamId) || RETIRED_STREAMS.has(streamId)) {
-    return false;
-  }
-  const current = streams.get();
-  const existingSlice = current.get(streamId);
-  const targetSlice = streamSliceWithStatus(
-    existingSlice ?? emptySlice(streamId),
-    status,
-    substate,
-    runStartedAt,
-  );
-  if (targetSlice === existingSlice) return true;
-  const out = new Map(current);
-  out.set(streamId, targetSlice);
-  streams.set(out);
-  return true;
+export function streamPhaseFor(
+  streamId: StreamTabId | undefined,
+): StreamPhaseState | undefined {
+  if (streamId === undefined || !streams.get().has(streamId)) return undefined;
+  return sessionStreamPhase(streamId);
 }
 
 // ---------------------------------------------------------------------------
@@ -420,8 +334,6 @@ export function focusStream(
 
 /** The top-level stream the current session rooted at. */
 export const rootStreamId = signal<StreamTabId | undefined>(undefined);
-/** Whether starting a new root run is currently available. */
-export const rootRunStartAvailable = signal<boolean>(true);
 /** Whether the root session holds an unfinished run claim (run promise
  *  pending). Published only by `TuiSession`, so renders read the session
  *  run-state reactively instead of calling impure session closures that
@@ -804,7 +716,6 @@ export function resetCliState(
   activeStreamId.set(undefined);
   rootStreamId.set(undefined);
   streams.set(new Map());
-  rootRunStartAvailable.set(true);
   rootRunPending.set(false);
   rootRunStreamId.set(undefined);
   activeForm.set(undefined);

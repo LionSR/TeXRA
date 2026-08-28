@@ -151,12 +151,8 @@ export interface StatusBarDisplayInput {
 interface StatusBarForegroundInput {
   /** True while a modal, form, palette, or search surface owns input. */
   readonly inputActive?: boolean;
-  /** Label for the foreground surface's Escape action while `shortcutsActive`
-   *  is false. */
+  /** Label for the foreground surface's Escape action while `inputActive`. */
   readonly escapeAction?: string;
-  /** False while a foreground surface owns input and global chat shortcuts
-   *  are intentionally inactive. */
-  readonly shortcutsActive?: boolean;
 }
 
 interface StatusBarChildListInput {
@@ -775,7 +771,7 @@ function childListBindingsText(
   );
 }
 
-export function ctrlCActionForFocus({
+function ctrlCActionForFocus({
   activeStreamId,
   canStopActiveRun,
   parentStream,
@@ -847,12 +843,15 @@ export function statusBarStreamTarget({
   canStopActiveRun,
   canStopPendingRunWithoutStream = false,
   parentStream,
+  phaseOf,
   streams,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly canStopActiveRun: boolean;
   readonly canStopPendingRunWithoutStream?: boolean;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  /** Lifecycle phase for a stream, from the session status machine. */
+  readonly phaseOf: (streamId: StreamTabId) => StreamPhase | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): StatusBarStreamTarget {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
@@ -860,11 +859,12 @@ export function statusBarStreamTarget({
     activeStreamId,
     parentStream,
     values: streams,
-    canUseValue: (stream) => isActivePhase(stream.status),
+    canUseValue: (_stream, streamId) => isActivePhase(phaseOf(streamId)),
   });
   let hasPendingOrLiveStream = false;
-  for (const stream of streams.values()) {
-    if (stream.status === undefined || isActivePhase(stream.status)) {
+  for (const streamId of streams.keys()) {
+    const phase = phaseOf(streamId);
+    if (phase === undefined || isActivePhase(phase)) {
       hasPendingOrLiveStream = true;
       break;
     }
@@ -936,13 +936,6 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   }
   if (input.childList.focused) {
     return childListBindingsText(input.childList, ctrlCAction, maxColumns);
-  }
-  if (input.foreground.shortcutsActive === false) {
-    return foregroundBindingsText(
-      ctrlCAction,
-      maxColumns,
-      input.foreground.escapeAction,
-    );
   }
   return statusBarBindingsText(input.shortcuts, ctrlCAction, maxColumns);
 }

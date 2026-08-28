@@ -2,7 +2,7 @@ import type { SubscriptionUsageWindow } from '@shared/schemas';
 
 import {
   asObject,
-  assertSubscriptionUsageResponse,
+  fetchSubscriptionUsage,
   numberField,
   stringField,
   timestampField,
@@ -165,16 +165,16 @@ export async function fetchGlmCodingPlanUsage(
   signal: AbortSignal,
   usageUrl = GLM_CODING_PLAN_USAGE_URL,
 ): Promise<ParsedSubscriptionUsage> {
-  const response = await http(usageUrl, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
-      'Accept-Language': 'en-US,en',
-      Authorization: apiKey,
-      'Content-Type': 'application/json',
-    },
-    signal,
-  });
-  assertSubscriptionUsageResponse(response);
-  return parseGlmCodingPlanUsage(await response.json());
+  return parseGlmCodingPlanUsage(
+    await fetchSubscriptionUsage(http, {
+      url: usageUrl,
+      headers: {
+        Accept: 'application/json',
+        'Accept-Language': 'en-US,en',
+        Authorization: apiKey,
+        'Content-Type': 'application/json',
+      },
+      signal,
+    }),
+  );
 }

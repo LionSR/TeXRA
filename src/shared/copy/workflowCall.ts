@@ -1,6 +1,7 @@
 import {
   isTerminalWorkflowCallProgress,
   WORKFLOW_TASK_STATUS_LABEL,
+  type TaskGroup,
   type WorkflowCallKind,
   type WorkflowCallProgress,
 } from '@shared/schemas';
@@ -105,6 +106,22 @@ export interface WorkflowPhaseHeading {
   readonly phaseIndex?: number;
   /** Total phase count for the run, when the emitter provides it. */
   readonly phaseTotal?: number;
+}
+
+/**
+ * One phase task group's heading facts, under the names the heading copy uses.
+ * Both hosts hold a phase as a `TaskGroup` — the board's group tree and the
+ * terminal's dashboard — so the field mapping is stated once here rather than
+ * inlined at each call to `formatWorkflowPhaseHeading`.
+ */
+export function workflowPhaseHeadingOfGroup(
+  group: Pick<TaskGroup, 'name' | 'index' | 'total'>,
+): WorkflowPhaseHeading {
+  return {
+    phaseLabel: group.name,
+    ...(group.index !== undefined ? { phaseIndex: group.index } : {}),
+    ...(group.total !== undefined ? { phaseTotal: group.total } : {}),
+  };
 }
 
 /**

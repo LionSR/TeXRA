@@ -1,6 +1,14 @@
+import '@test/support/defaultSessionTestSetup';
+
 import { writeSync } from 'node:fs';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  bindChildStreamState,
+  unbindChildStreamState,
+} from '@cli/chat/tui/state/childExecutions';
 
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
@@ -11,7 +19,6 @@ import {
   resetCliState,
   rootRunPending,
   rootRunStreamId,
-  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
   installTerminalRestoreOnExit,
@@ -22,7 +29,10 @@ import {
   installTerminalTitleUpdates,
   terminalTitleText,
 } from '@cli/chat/tui/terminalTitle';
+import { SessionState } from '@controllers/session/SessionState';
 import { STREAM_PHASE } from '@shared/schemas';
+import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -34,7 +44,18 @@ const NO_TERMINAL_CAPABILITIES = {
   oscColorReports: false,
 };
 
+// The title projects stream phases, which live on the session status machine
+// and reach the CLI through the bound `SessionState`.
+let sessionState: SessionState;
+
+beforeEach(() => {
+  sessionState = new SessionState(defaultSession());
+  bindChildStreamState(sessionState);
+});
+
 afterEach(() => {
+  unbindChildStreamState(sessionState);
+  clearAllStreamStatusesForTest(defaultSession().status);
   clearApprovals();
   resetCliState();
   vi.useRealTimers();
@@ -143,11 +164,11 @@ describe('installTerminalTitleUpdates', () => {
     const updates = installTerminalTitleUpdates('/work/coauthor');
     rootRunPending.set(true);
     rootRunStreamId.set('transition-root');
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'transition-root',
       status: STREAM_PHASE.WAITING,
     });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'transition-child',
       status: STREAM_PHASE.RUNNING,
     });
@@ -162,7 +183,7 @@ describe('installTerminalTitleUpdates', () => {
     await flushTitleUpdate();
     expectLastTitle('⠋ {T}·coauthor');
 
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'transition-child',
       status: STREAM_PHASE.WAITING,
     });
@@ -176,7 +197,7 @@ describe('installTerminalTitleUpdates', () => {
     vi.setSystemTime(0);
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'animated-root',
       status: STREAM_PHASE.RUNNING,
     });
@@ -207,7 +228,7 @@ describe('installTerminalTitleUpdates', () => {
 
     updates.resume();
     expectLastTitle('⠹ {T}·coauthor');
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'animated-root',
       status: STREAM_PHASE.WAITING,
     });
@@ -215,7 +236,7 @@ describe('installTerminalTitleUpdates', () => {
     expectLastTitle('{T}·coauthor');
     expectNoTitleWrites();
 
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'animated-root',
       status: STREAM_PHASE.RUNNING,
     });
@@ -231,12 +252,12 @@ describe('installTerminalTitleUpdates', () => {
     const off = vi.spyOn(process, 'off');
     const updates = installTerminalTitleUpdates('/work/coauthor');
     const exitListener = on.mock.calls.find(([event]) => event === 'exit')?.[1];
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'dedup-root',
       status: STREAM_PHASE.RUNNING,
     });
     await flushTitleUpdate();
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'dedup-child',
       status: STREAM_PHASE.RUNNING,
     });
@@ -256,7 +277,7 @@ describe('installTerminalTitleUpdates', () => {
     const exitListener = on.mock.calls.find(
       ([event]) => event === 'exit',
     )?.[1] as ((code: number) => void) | undefined;
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'exit-root',
       status: STREAM_PHASE.RUNNING,
     });
@@ -273,7 +294,7 @@ describe('installTerminalTitleUpdates', () => {
   it('shows the idle title while suspended and re-projects live state on resume', async () => {
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'suspend-root',
       status: STREAM_PHASE.RUNNING,
     });

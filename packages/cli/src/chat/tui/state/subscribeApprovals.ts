@@ -411,9 +411,13 @@ async function requestRetryInteraction(
                 platform().secrets,
                 provider,
               );
-            } catch {
+            } catch (error) {
               // A keychain failure must not permit an automatic credential
               // switch.
+              logWarning(
+                'cli.tui',
+                `Keychain lookup for ${provider} failed: ${toErrorMessage(error)}`,
+              );
               missingPersonalApiKeyMessage = missingApiKeyRetryMessage(
                 provider,
                 'unavailable',
@@ -865,33 +869,24 @@ function handleExternalInquiry(
     (decision) => {
       // User-accept with text submits an answer; empty text, reject, and
       // modal-cancel all drop the durable inquiry thread.
+      let action: Parameters<typeof handleExternalInquiryAction>[0];
       if (decision.accepted && decision.userMessage) {
-        void handleExternalInquiryAction({
-          action: 'submit',
-          threadId,
-          answer: decision.userMessage,
-        });
-        return;
+        action = { action: 'submit', threadId, answer: decision.userMessage };
+      } else if (decision.rejectionCause !== undefined) {
+        action = { action: 'drop', threadId, cause: decision.rejectionCause };
+      } else if (decision.userMessage) {
+        action = { action: 'drop', threadId, feedback: decision.userMessage };
+      } else {
+        action = { action: 'drop', threadId };
       }
-      if (decision.rejectionCause !== undefined) {
-        void handleExternalInquiryAction({
-          action: 'drop',
-          threadId,
-          cause: decision.rejectionCause,
-        });
-        return;
-      }
-      if (decision.userMessage) {
-        void handleExternalInquiryAction({
-          action: 'drop',
-          threadId,
-          feedback: decision.userMessage,
-        });
-        return;
-      }
-      void handleExternalInquiryAction({
-        action: 'drop',
-        threadId,
+      // Persisting the action writes the inquiry thread; nothing else owns
+      // this promise, so its rejection is logged here instead of surfacing as
+      // an unhandled rejection.
+      handleExternalInquiryAction(action).catch((error: unknown) => {
+        logWarning(
+          'cli.tui',
+          `External inquiry ${threadId} ${action.action} failed: ${toErrorMessage(error)}`,
+        );
       });
     },
   );

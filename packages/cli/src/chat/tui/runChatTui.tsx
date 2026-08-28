@@ -90,6 +90,7 @@ import {
   patchSessionMeta,
   sessionMeta as sessionMetaSignal,
   streams as streamsSignal,
+  streamPhaseFor,
 } from './state/cliState';
 import { subscribeStreamArtifacts } from './state/subscribeStreamArtifacts';
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
@@ -342,9 +343,7 @@ export async function runChat(
 
   const followUpQueue = new PQueue({ concurrency: 1 });
   const rootStreamStatus = (): StreamPhase | undefined =>
-    session.streamId
-      ? streamsSignal.get().get(session.streamId)?.status
-      : undefined;
+    streamPhaseFor(session.streamId)?.phase;
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
       session.streamId &&
@@ -418,9 +417,7 @@ export async function runChat(
 
   const resetSessionForClear = (): void => {
     const currentStreamId = session.streamId ?? activeStreamIdSignal.get();
-    const activeStatus = currentStreamId
-      ? streamsSignal.get().get(currentStreamId)?.status
-      : undefined;
+    const activeStatus = streamPhaseFor(currentStreamId)?.phase;
     const isRunPending = chatTuiRunPending(session);
 
     if (

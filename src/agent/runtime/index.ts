@@ -31,6 +31,11 @@ export {
 export { SessionEventHub } from './SessionEventHub';
 export type { SessionEvent, SessionFact } from './SessionEventHub';
 
+// StreamStatusMachine — the per-stream lifecycle record hosts render from
+// (`SessionState.streamStatus.getStreamState`). Type only: the machine itself
+// is reached through the session, never constructed by a host.
+export type { StreamPhaseState } from './StreamStatusService';
+
 // HostInteractions
 export {
   SessionHostInteractions,
@@ -90,9 +95,6 @@ export type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
-
-// executionRegistry
-export type { ManualCompactionRequestResult } from './executionRegistry';
 
 // textEnhancement
 export { polishTextWithAI } from './textEnhancement';

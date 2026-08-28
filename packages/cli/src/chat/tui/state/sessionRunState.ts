@@ -7,11 +7,7 @@ import {
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 
-import {
-  rootRunPending,
-  rootRunStartAvailable,
-  rootRunStreamId,
-} from './cliState';
+import { rootRunPending, rootRunStreamId } from './cliState';
 
 /**
  * Root-run state of one chat TUI session.
@@ -114,7 +110,6 @@ export class TuiSession {
    */
   private publish(): void {
     const runPending = chatTuiRunPending(this);
-    rootRunStartAvailable.set(!runPending);
     rootRunPending.set(runPending);
     rootRunStreamId.set(this._streamId);
   }
@@ -144,7 +139,7 @@ export function chatTuiCanInterruptActiveRun(
  * and the StatusBar derives it from the `rootRunPending`/`rootRunStreamId`
  * signals so the Ctrl-C hint recomputes reactively during renders.
  */
-export interface ChatTuiRunStopFacts {
+interface ChatTuiRunStopFacts {
   readonly runPending: boolean;
   readonly streamId: StreamTabId | undefined;
   readonly status: StreamPhase | undefined;
@@ -193,7 +188,7 @@ export function chatTuiCanSelectModel(input: {
   );
 }
 
-export type ChatTuiSigintAction =
+type ChatTuiSigintAction =
   'clean-exit' | 'force-exit' | 'preserve-exit' | 'interrupt-and-arm-exit';
 
 export function chatTuiSigintAction(input: {

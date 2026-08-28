@@ -70,6 +70,11 @@ import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
+// The status machine stamps its own `Date.now()` run window and no production
+// fact lets a caller supply one, so a display fixture that needs a plausible
+// elapsed time reaches for the same seeding helper the kernel suites use.
+// Dev-harness only — this file is never part of the shipped CLI bundle.
+import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { GoalStore } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
@@ -97,7 +102,6 @@ import {
 import {
   activeStreamId as activeStreamIdSignal,
   rootRunPending,
-  rootRunStartAvailable,
   rootRunStreamId,
   rootStreamId,
   resetCliState,
@@ -105,15 +109,17 @@ import {
   setCliSessionModelOverride,
   patchStream,
   streams,
-  setStreamStatusInCliState,
+  streamPhaseFor,
 } from '../src/chat/tui/state/cliState';
 import {
   activeSubagentsFor,
   childRosters,
+  invalidateChildStreams,
   streamMetadataFor,
   parentStream,
   visibleSubagentRows,
 } from '../src/chat/tui/state/childExecutions';
+import { readStreamArtifacts } from '../src/chat/tui/state/subscribeStreamArtifacts';
 import { focusedChildFollowUpRoute } from '../src/chat/tui/state/focusedChildFollowUp';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
@@ -139,10 +145,7 @@ import {
   resolveCliModelAccessRoute,
 } from '../src/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
-import {
-  formatCliApiStatusActionHint,
-  formatCliAuthStatusLine,
-} from '../src/runtime/apiStatus';
+import { formatCliAuthStatusLine } from '../src/runtime/apiStatus';
 import {
   buildCliAgentItems,
   buildCliOrchestrationItems,
@@ -268,7 +271,6 @@ const AGENT_PROPOSAL_INSTRUCTION =
     '6. Include a short independent enumeration so the orchestrator can compare results.',
   ].join('\n');
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
-const CAN_SELECT_AGENT = process.env.HARNESS_CAN_SELECT_AGENT === '1';
 const CAN_SELECT_MODEL = process.env.HARNESS_CAN_SELECT_MODEL === '1';
 const DISABLED_MODEL_SWITCHES = new Set(
   parseList(process.env.HARNESS_DISABLED_MODEL_SWITCHES),
@@ -630,7 +632,6 @@ function harnessOrchestrationStatusLines(): readonly string[] {
   return [
     `api: ${formatCliModelAccessRouteInline('personal')}`,
     formatCliAuthStatusLine(profile),
-    formatCliApiStatusActionHint(profile),
   ];
 }
 
@@ -1170,10 +1171,7 @@ async function appendHarnessPlanDecision(
       ...slice,
       bypass: { ...slice.bypass, bash: true },
     }));
-    setStreamStatusInCliState({
-      streamId: STREAM_ID,
-      status: STREAM_PHASE.RUNNING,
-    });
+    seedHarnessStreamPhase(STREAM_ID, STREAM_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');
     return;
   }
@@ -1226,12 +1224,12 @@ patchStream(STREAM_ID, (slice) => ({
 }));
 const HARNESS_INITIAL_STREAM_STATUS = harnessInitialStreamStatus();
 if (HARNESS_INITIAL_STREAM_STATUS) {
-  setStreamStatusInCliState({
-    streamId: STREAM_ID,
-    status: HARNESS_INITIAL_STREAM_STATUS,
+  seedHarnessStreamPhase(
+    STREAM_ID,
+    HARNESS_INITIAL_STREAM_STATUS,
     // Backdated so the status bar shows a plausible elapsed time.
-    ...(HARNESS_RUN_ACTIVE ? { runStartedAt: Date.now() - 42_000 } : {}),
-  });
+    HARNESS_RUN_ACTIVE ? Date.now() - 42_000 : undefined,
+  );
 }
 
 if (SHOW_LIVE_TOOL_ONLY) {
@@ -1473,10 +1471,7 @@ function seedRunningProcessChild(): void {
     category: AgentCategory.ToolUse,
     description: 'sleep 30',
   }));
-  setStreamStatusInCliState({
-    streamId: childStreamId,
-    status: STREAM_PHASE.RUNNING,
-  });
+  seedHarnessStreamPhase(childStreamId, STREAM_PHASE.RUNNING);
   emitChildRoster(STREAM_ID, [
     {
       executionId: 'aaaa0003f10e',
@@ -1589,6 +1584,27 @@ function emitSetActiveStream(
   });
 }
 
+/**
+ * Place a stream in a phase for a *display* fixture: write the session status
+ * machine — the single owner every renderer reads — the way a real transition
+ * does before it publishes, but without the fact. These fixtures own their
+ * synthetic transcript rows and their scenario's elapsed values, and a
+ * published status would make the adapter re-fold the stream from a log that
+ * has none of those rows and restamp the run window at `Date.now()`. Fixtures
+ * that exercise the fact pipeline itself use the real transitions below.
+ */
+function seedHarnessStreamPhase(
+  streamId: StreamTabId,
+  phase: StreamPhase,
+  runStartedAt?: number,
+): void {
+  seedStreamStatusForTest(defaultSession().status, streamId, {
+    phase,
+    ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+  });
+  invalidateChildStreams();
+}
+
 // Real status-machine transitions on the default session — the session
 // adapter's status rail projects these into `cliState` (see
 // `runChildEventOrderFixture`), exactly as `chatSessionController.ts` wires
@@ -1611,10 +1627,10 @@ function transitionStreamTerminal(streamId: StreamTabId): void {
 
 // Late resume-transition attempt for an already-removed stream: unlike a
 // repeated terminal transition (a same-value no-op the status machine drops
-// before it ever reaches `cliState`), COMPLETED -> RUNNING via `resume` is a
-// transition the machine itself allows, so it reaches
-// `setStreamStatusInCliState` and actually exercises that function's
-// `isChildStreamRemoved` tombstone guard (see `completion-remove` below).
+// before it publishes anything), COMPLETED -> RUNNING via `resume` is a
+// transition the machine itself allows, so the fact reaches the CLI adapter
+// and actually exercises its `cliStreamAcceptsStatus` tombstone guard (see
+// `completion-remove` below).
 function attemptChildEventOrderLateResume(streamId: StreamTabId): void {
   defaultSession().status.transition(
     streamId,
@@ -1829,14 +1845,15 @@ if (SHOW_CHILDREN) {
   // survives.
   emitChildRoster(STREAM_ID, childStreams);
   emitChildRoster(STREAM_ID, activeSubagents);
-  setStreamStatusInCliState({
-    streamId: STREAM_ID,
-    status: STREAM_PHASE.RUNNING,
-    // The status machine stamps a run window once and holds it across every
-    // later active phase, so a scenario that already seeded an initial RUNNING
-    // keeps that backdated start rather than restarting the clock here.
-    runStartedAt: streams.get().get(STREAM_ID)?.runStartedAt ?? startedAt,
-  });
+  seedHarnessStreamPhase(
+    STREAM_ID,
+    STREAM_PHASE.RUNNING,
+    // The status machine holds one run window across every later active
+    // phase, so a scenario that already seeded an initial RUNNING keeps that
+    // backdated start rather than restarting the clock here.
+    defaultSession().status.getStreamState(STREAM_ID)?.runStartedAt ??
+      startedAt,
+  );
   for (const child of childStreams) {
     const streamId = child.childStreamId;
     const addNestedChildren =
@@ -1848,19 +1865,31 @@ if (SHOW_CHILDREN) {
     patchStream(streamId, (slice) => ({
       ...slice,
       entries: makeChildEntries(child.agentName, child.executionId),
-      // One child carries usage so scenarios pin the row metadata column's
-      // generated-token figure (`↓40k`).
-      usage:
-        child.agentName === 'reviewer'
-          ? { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 }
-          : slice.usage,
     }));
-    setStreamStatusInCliState({
-      streamId: streamId,
-      status: child.status,
-      runStartedAt:
+    // One child carries usage so scenarios pin the row metadata column's
+    // generated-token figure (`↓40k`). Usage lives on the snapshot store, so
+    // it arrives as the run fact the store accumulates.
+    if (child.agentName === 'reviewer') {
+      defaultSession().events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'usage',
+          payload: {
+            streamId,
+            storageKey: child.executionId as ExecutionId,
+            usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
+          },
+        },
+      });
+    }
+    if (child.status !== undefined) {
+      seedHarnessStreamPhase(
+        streamId,
+        child.status,
         child.status === STREAM_PHASE.RUNNING ? child.startedAt : undefined,
-    });
+      );
+    }
   }
   if (SHOW_NESTED_CHILDREN) {
     emitSetActiveStream(
@@ -1879,11 +1908,11 @@ if (SHOW_CHILDREN) {
       ...slice,
       entries: makeChildEntries('localChecker', 'nested proof check'),
     }));
-    setStreamStatusInCliState({
-      streamId: 'harness-nested-local-checker-stream',
-      status: STREAM_PHASE.RUNNING,
-      runStartedAt: nestedStartedAt,
-    });
+    seedHarnessStreamPhase(
+      'harness-nested-local-checker-stream',
+      STREAM_PHASE.RUNNING,
+      nestedStartedAt,
+    );
   }
 }
 
@@ -2079,11 +2108,7 @@ function markHarnessInterrupted(): void {
   // the phase-merge of the real per-child transitions below.
   emitChildRoster(STREAM_ID, []);
   appendHarnessAssistantTranscript('Harness interrupt requested.', STREAM_ID);
-  setStreamStatusInCliState({
-    streamId: STREAM_ID,
-    status: STREAM_PHASE.CANCELLED,
-    runStartedAt: undefined,
-  });
+  seedHarnessStreamPhase(STREAM_ID, STREAM_PHASE.CANCELLED);
   for (const streamId of childStreamIds) {
     defaultSession().status.transition(
       streamId,
@@ -2094,7 +2119,7 @@ function markHarnessInterrupted(): void {
 }
 
 function canInterruptHarnessStream(streamId: StreamTabId): boolean {
-  return isInFlightPhase(streams.get().get(streamId)?.status);
+  return isInFlightPhase(streamPhaseFor(streamId)?.phase);
 }
 
 function markHarnessStreamInterrupted(streamId: StreamTabId): void {
@@ -2116,11 +2141,6 @@ function markHarnessStreamInterrupted(streamId: StreamTabId): void {
     `Harness focused interrupt requested for ${streamId}.`,
     streamId,
   );
-  setStreamStatusInCliState({
-    streamId: streamId,
-    status: STREAM_PHASE.CANCELLED,
-    runStartedAt: undefined,
-  });
   defaultSession().status.transition(
     streamId,
     STREAM_PHASE.CANCELLED,
@@ -2139,7 +2159,7 @@ function appendHarnessChildSubmitAck(
   text: string,
   streamId: StreamTabId,
 ): void {
-  const isLive = isActivePhase(streams.get().get(streamId)?.status);
+  const isLive = isActivePhase(streamPhaseFor(streamId)?.phase);
   appendHarnessTranscript('assistant', text, streamId, { finalized: !isLive });
 }
 
@@ -2255,7 +2275,7 @@ function handleHarnessSubmit(line: string): void {
     metadata: focusedActiveStreamId
       ? streamMetadataFor(focusedActiveStreamId)
       : undefined,
-    streams: streams.get(),
+    phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
   });
   if (focusedChildRoute.kind === 'reject') {
     appendHarnessAssistantTranscript(
@@ -2284,11 +2304,11 @@ function appendHarnessStatus(): void {
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        usageRoute: slice?.usage?.usageRoute,
+        usageRoute: readStreamArtifacts(streamId)?.cumulativeUsage?.usageRoute,
       }),
       approval: formatTexraApprovalPolicy(harnessRuntimeSession.approvalPolicy),
       approvalBypasses: slice?.bypass,
-      status: slice?.status,
+      status: streamPhaseFor(streamId)?.phase,
       goal: GoalStore.getForStream(streamId),
       // The harness never emits an ACTIVE_SKILLS snapshot.
       activeSkills: [],
@@ -2372,7 +2392,9 @@ function handleHarnessSlashCommand(line: string): boolean {
 }
 
 registerBuiltinSlashCommands({
-  canSelectAgent: () => CAN_SELECT_AGENT,
+  // Mirror `texra chat`: agent selection is open exactly while no root run
+  // is pending, the same fact the status bar's `/agent` hint derives from.
+  canSelectAgent: () => !rootRunPending.get(),
   canSelectModel: () => CAN_SELECT_MODEL,
   getModelSwitchDisabledReason: getHarnessModelSwitchDisabledReason,
   getApprovalPolicy: () => harnessRuntimeSession.approvalPolicy,
@@ -2416,7 +2438,6 @@ registerBuiltinSlashCommands({
     );
   },
 });
-rootRunStartAvailable.set(CAN_SELECT_AGENT);
 // Mirror the real publisher's run facts: an interruptible harness run is a
 // pending root-run claim on the harness stream, so the status bar derives
 // the Ctrl-C stop hint from these signals exactly as `texra chat` does.

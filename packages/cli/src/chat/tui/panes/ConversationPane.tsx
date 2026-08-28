@@ -7,13 +7,16 @@ import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import {
+  formatWorkflowPhaseHeading,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
+  workflowPhaseHeadingOfGroup,
 } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import {
   activeStreamId as activeStreamIdSignal,
+  streamPhaseFor,
   streams as streamsSignal,
   type StreamSlice,
 } from '../state/cliState';
@@ -21,7 +24,6 @@ import {
   sessionStateRevision,
   streamMetadataFor,
 } from '../state/childExecutions';
-import { currentWorkflowPhaseHeading } from '../state/workflowPhase';
 import {
   readStreamArtifacts,
   streamArtifactRevision,
@@ -34,10 +36,9 @@ import {
   TranscriptEntry,
 } from './TranscriptEntry';
 import { ToolUseRow } from './ToolUseRow';
-import { splitTranscriptEntries } from './transcriptEntries';
+import { pendingTranscriptEntries } from './transcriptEntries';
 import {
   estimateLiveTranscriptEntryRows,
-  estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
 } from './transcriptViewport';
 import {
@@ -99,6 +100,10 @@ function renderConversationPaneEntry({
       case 'log':
         return <LiveTranscriptEntry entry={entry} width={width} />;
       case 'user':
+      case 'compactionActivity':
+      case 'error':
+      case 'fileList':
+      case 'workflowTask':
         return (
           <TranscriptEntry
             colorEnabled={colorEnabled}
@@ -112,22 +117,6 @@ function renderConversationPaneEntry({
           <TranscriptEntry
             colorEnabled={colorEnabled}
             entry={entry}
-            width={width}
-          />
-        );
-      case 'compactionActivity':
-      case 'error':
-      case 'fileList':
-      case 'workflowTask':
-        return (
-          <BoundedTranscriptEntry
-            colorEnabled={colorEnabled}
-            entry={entry}
-            maxRows={estimateTranscriptEntryRows(
-              entry,
-              width,
-              subagentExecutionLabels,
-            )}
             width={width}
           />
         );
@@ -164,6 +153,14 @@ interface WorkflowStatusSegment {
  * rather than on the `◆` divider because that divider prints once into
  * scrollback and can never be rewritten.
  *
+ * The phase and its calls both come from the run's own phase task groups — the
+ * band names the last phase the run opened and counts the calls whose
+ * `groupId` names it, which is the classification the progress view's group
+ * tree makes and the dashboard's phase rows reuse. Matching on the call's
+ * `phase` *label* instead would fuse two same-named phases into one tally.
+ * Naming the phase is also what keeps this number distinct from the
+ * dashboard heading's, which counts the whole run.
+ *
  * A whole-run failure tally is appended in a warning tone the moment any call
  * fails. The engine deliberately keeps the run going after a failed subagent
  * (it resolves to `null`), so the lifecycle stays `completed` — but the status
@@ -174,16 +171,25 @@ export function workflowRunStatusSummary(
   category: AgentCategory | undefined,
 ): readonly WorkflowStatusSegment[] | undefined {
   if (!slice || category !== AgentCategory.Workflow) return undefined;
-  const phase = currentWorkflowPhaseHeading(slice, category);
+  const phase = slice.taskGroups.findLast((group) => group.kind === 'phase');
   const currentCalls = slice.entries.flatMap((row) =>
     row.kind === 'workflowTask' ? [row.call] : [],
   );
   const { done, total } = workflowPhaseCallProgress(
-    phase ? currentCalls.filter((call) => call.phase === phase.phaseLabel) : [],
+    phase
+      ? slice.entries.flatMap((row) =>
+          row.kind === 'workflowTask' && row.groupId === phase.id
+            ? [row.call]
+            : [],
+        )
+      : [],
   );
   const segments: WorkflowStatusSegment[] = [];
   if (phase) {
-    segments.push({ text: phase.heading, tone: 'muted' });
+    segments.push({
+      text: formatWorkflowPhaseHeading(workflowPhaseHeadingOfGroup(phase)),
+      tone: 'muted',
+    });
   }
   if (total > 0) {
     segments.push({ text: `${done}/${total} done`, tone: 'muted' });
@@ -215,11 +221,11 @@ export function ConversationPane(
   const artifacts =
     activeStreamId && slice ? readStreamArtifacts(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
-  const displayEntries = splitTranscriptEntries(
+  const displayEntries = pendingTranscriptEntries(
     entries,
     slice?.finalizedFrontier ?? 0,
-    slice?.status,
-  ).pending;
+    slice && streamPhaseFor(activeStreamId)?.phase,
+  );
 
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
   const metadataWidth =

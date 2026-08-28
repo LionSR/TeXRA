@@ -26,7 +26,7 @@ function isInvisibleTranscriptChar(char: string | undefined): boolean {
   return char !== undefined && INVISIBLE_TRANSCRIPT_CHARS.has(char);
 }
 
-export function terminalVisibleTranscriptText(text: string): string {
+function terminalVisibleTranscriptText(text: string): string {
   let out = '';
   for (const char of stripAnsi(text)) {
     if (!isInvisibleTranscriptChar(char)) out += char;
@@ -272,24 +272,22 @@ export function orderedStaticTranscriptEntries(
   return ordered.map(({ entry }) => entry);
 }
 
-export function splitTranscriptEntries(
+/**
+ * Non-finalized entries in original stream order — the live pane's rows. The
+ * renderer must walk this list (rather than rendering tool rows and the live
+ * assistant as separate buckets) so that text emitted before a tool call
+ * appears above the tool row instead of below it. Tool entries defer
+ * finalization until the stream itself finalizes — promoting them earlier
+ * would let a fast tool jump ahead of still-streaming assistant text in
+ * `<Static>` scrollback, where insertion order is fixed. The complement (the
+ * settled prefix) is {@link orderedStaticTranscriptEntries}.
+ */
+export function pendingTranscriptEntries(
   entries: readonly TranscriptRow[],
   finalizedFrontier: number,
   status: StreamPhase | undefined,
-): {
-  readonly finalized: TranscriptRow[];
-  /** Non-finalized entries in original stream order. The renderer must
-   *  walk this list (rather than rendering tool rows and the live
-   *  assistant as separate buckets) so that text emitted before a tool
-   *  call appears above the tool row instead of below it. Tool entries
-   *  defer finalization until the stream itself finalizes — promoting
-   *  them earlier would let a fast tool jump ahead of still-streaming
-   *  assistant text in `<Static>` scrollback, where insertion order is
-   *  fixed. */
-  readonly pending: TranscriptRow[];
-} {
+): TranscriptRow[] {
   const showLiveAssistant = isActivePhase(status);
-  const finalized: TranscriptRow[] = [];
   const pending: TranscriptRow[] = [];
   let canPromoteToStatic = true;
   for (const [index, entry] of entries.entries()) {
@@ -310,7 +308,7 @@ export function splitTranscriptEntries(
       continue;
     }
     if (entryFinalized) {
-      (canPromoteToStatic ? finalized : pending).push(entry);
+      if (!canPromoteToStatic) pending.push(entry);
       continue;
     }
     if (
@@ -328,7 +326,7 @@ export function splitTranscriptEntries(
       pending.push(entry);
     }
   }
-  return { finalized, pending };
+  return pending;
 }
 
 const EMPTY_TRANSCRIPT_ENTRIES: readonly TranscriptRow[] = Object.freeze([]);
@@ -347,6 +345,9 @@ export interface StaticTranscriptScanCursor {
   readonly lastScannedEntry: TranscriptRow | undefined;
   /** Stream phase at scan time; a phase change forces a rescan of the tail. */
   readonly status: StreamPhase | undefined;
+  /** Order key of the last row this cursor's scans appended to scrollback.
+   *  A later suffix that sorts before it cannot be appended in place. */
+  readonly lastAppendedKey: readonly [number, number] | undefined;
 }
 
 interface StaticTranscriptScanResult {
@@ -361,6 +362,7 @@ function makeStaticTranscriptScanCursor(
   entriesRef: readonly TranscriptRow[] | undefined,
   scannedIndex: number,
   status: StreamPhase | undefined,
+  lastAppendedKey: readonly [number, number] | undefined,
 ): StaticTranscriptScanCursor {
   return {
     entriesRef,
@@ -370,6 +372,7 @@ function makeStaticTranscriptScanCursor(
         ? entriesRef[scannedIndex - 1]
         : undefined,
     status,
+    lastAppendedKey,
   };
 }
 
@@ -393,7 +396,7 @@ export function incrementalStaticTranscriptEntries(
   if (previous === undefined) {
     return {
       appended: [],
-      cursor: makeStaticTranscriptScanCursor(source, 0, status),
+      cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
       rebuild: true,
     };
   }
@@ -415,7 +418,7 @@ export function incrementalStaticTranscriptEntries(
   if (!canContinue) {
     return {
       appended: [],
-      cursor: makeStaticTranscriptScanCursor(source, 0, status),
+      cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
       rebuild: true,
     };
   }
@@ -432,7 +435,11 @@ export function incrementalStaticTranscriptEntries(
     }
   }
 
-  const appended: TranscriptRow[] = [];
+  const appended: Array<{
+    entry: TranscriptRow;
+    index: number;
+    key: readonly [number, number];
+  }> = [];
   let scannedIndex = start;
   for (let index = 0; index < suffix.length; index += 1) {
     const entry = suffix[index]!;
@@ -450,12 +457,52 @@ export function incrementalStaticTranscriptEntries(
       !hasLaterRenderable[index];
     if (defersLiveUserPrompt) break;
     scannedIndex = start + index + 1;
-    appended.push(entry);
+    appended.push({
+      entry,
+      index: start + index,
+      key: transcriptOrderKey(entry, start + index),
+    });
+  }
+  // Print the suffix in the same settlement order the rebuild oracle uses
+  // (`orderedStaticTranscriptEntries`): a row that settled while an earlier
+  // tool was still running must not swap places across a repaint. Sorting
+  // covers a reorder inside one tick; a suffix whose first row belongs before
+  // rows an earlier tick already printed cannot be appended at all, so it
+  // falls back to the oracle rebuild (a known-origin repaint).
+  const alreadyOrdered = appended.every(
+    (candidate, i) =>
+      i === 0 ||
+      compareTranscriptOrderKeys(appended[i - 1]!.key, candidate.key) <= 0,
+  );
+  const ordered = alreadyOrdered
+    ? appended
+    : appended.toSorted(
+        (left, right) =>
+          compareTranscriptOrderKeys(left.key, right.key) ||
+          left.index - right.index,
+      );
+
+  const first = ordered[0];
+  if (
+    first !== undefined &&
+    previous.lastAppendedKey !== undefined &&
+    compareTranscriptOrderKeys(first.key, previous.lastAppendedKey) < 0
+  ) {
+    return {
+      appended: [],
+      cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
+      rebuild: true,
+    };
   }
 
   return {
-    appended,
-    cursor: makeStaticTranscriptScanCursor(source, scannedIndex, status),
+    appended: ordered.map(({ entry }) => entry),
+    cursor: makeStaticTranscriptScanCursor(
+      source,
+      scannedIndex,
+      status,
+      ordered.at(-1)?.key ?? previous.lastAppendedKey,
+    ),
     rebuild: false,
   };
 }

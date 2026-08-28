@@ -91,6 +91,20 @@ export abstract class BaseViewMessageHandler<
   }
 
   /**
+   * Post a message to the active view's webview, awaiting delivery. A `null`
+   * or `undefined` message posts nothing, so callers can forward an optional
+   * response payload without a guard of their own. Unlike
+   * {@link postToActiveView}, this resolves only after the post settles —
+   * mutation paths that run a follow-up step depend on that ordering.
+   */
+  protected async postMessageToActiveWebview(message: unknown): Promise<void> {
+    if (message == null) return;
+    await this.withActiveWebview(async (webview) => {
+      await webview.postMessage(message);
+    });
+  }
+
+  /**
    * Schema-driven dispatch shared by views that route through a typed
    * {@link DispatcherFn}. Tracks the active view, runs the dispatcher, logs
    * Zod validation failures at debug (expected, frequent) and handler

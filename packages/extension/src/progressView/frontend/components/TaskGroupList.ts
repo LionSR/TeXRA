@@ -23,6 +23,7 @@ import { designTokens } from '@shared/styles';
 import {
   formatWorkflowPhaseHeading,
   workflowPhaseCallProgress,
+  workflowPhaseHeadingOfGroup,
   workflowCallFailureTally,
 } from '@shared/copy/workflowCall';
 
@@ -493,11 +494,7 @@ export class TaskGroupList extends LitElement {
             index: group.index,
             total: group.total,
           })
-        : formatWorkflowPhaseHeading({
-            phaseLabel: group.name,
-            phaseIndex: group.index,
-            phaseTotal: group.total,
-          });
+        : formatWorkflowPhaseHeading(workflowPhaseHeadingOfGroup(group));
     return html`
       <span class="group-status-icon">
         ${waIcon(statusIcon, {

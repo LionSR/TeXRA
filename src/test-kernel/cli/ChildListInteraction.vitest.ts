@@ -27,6 +27,7 @@ import {
   type InkRenderHandles,
 } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import { workflowPhaseGrouping } from '@test/support/transcriptRowFixtures';
 
 const root = 'root' as StreamTabId;
 const child = 'child' as StreamTabId;
@@ -83,9 +84,11 @@ function controlledList(
   return { Harness, current: () => selected };
 }
 
-function workflowRootSlice(entries: StreamSlice['entries']): StreamSlice {
+function workflowRootSlice(rows: StreamSlice['entries']): StreamSlice {
+  const { taskGroups, entries } = workflowPhaseGrouping(rows);
   return {
     ...emptySlice(root),
+    taskGroups,
     entries,
   };
 }

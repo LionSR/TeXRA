@@ -108,6 +108,7 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
       },
       extensionContext: {} as never,
       withActiveWebview: async () => {},
+      postMessageToActiveWebview: async () => {},
     },
     refreshAfterAgentMutation,
   );

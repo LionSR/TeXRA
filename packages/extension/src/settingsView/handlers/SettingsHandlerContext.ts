@@ -18,6 +18,8 @@ export interface SettingsHandlerContext {
   withActiveWebview: (
     fn: (w: vscode.Webview) => Promise<void>,
   ) => Promise<void>;
+  /** Post a message to the active webview; a nullish message posts nothing. */
+  postMessageToActiveWebview: (message: unknown) => Promise<void>;
 }
 
 /**

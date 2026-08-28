@@ -42,7 +42,7 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.241",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.245",
     "@anthropic-ai/sdk": "^0.120.0",
     "@cantoo/pdf-lib": "^2.9.1",
     "@google/genai": "^2.18.0",
@@ -51,7 +51,7 @@
     "@octokit/request": "^10.0.15",
     "@octokit/request-error": "^7.1.1",
     "@openai/codex-sdk": "^0.149.1",
-    "@openrouter/sdk": "^1.2.57",
+    "@openrouter/sdk": "^1.2.66",
     "@supabase/supabase-js": "2.112.4",
     "acorn": "^8.18.0",
     "acorn-walk": "^8.3.5",

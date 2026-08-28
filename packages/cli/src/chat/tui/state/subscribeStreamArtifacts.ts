@@ -5,7 +5,8 @@
 // replays any live deltas recorded meanwhile on top. Hydration copies none of
 // the round-artifact fields into `StreamSlice`, and no other mirror of them
 // exists: the live-fact adapter lands its writes on the shared store directly,
-// and renderers read the canonical projection (`projectStreamArtifacts`). This
+// renderers read the canonical projection (`projectStreamArtifacts`), and the
+// store answers whether a record has provenance yet (`hasProvenance`). This
 // module owns only the async preload edge plus the invalidation that makes
 // those reads repaint. Exit summaries and workflow-task metadata read
 // `readStreamArtifacts` the same way the renderers do.
@@ -13,7 +14,7 @@
 import { signal } from '@lit-labs/signals';
 
 import { tryDefaultSession } from '@agent/runtime';
-import { type StreamTabId, type TokenUsageStats } from '@shared/schemas';
+import { type StreamTabId } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import {
   StreamSnapshotPreloadError,
@@ -33,7 +34,6 @@ import {
   isCliStreamRetired,
   registerCliStateResetHook,
   setTransientNotice,
-  type StreamSlice,
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
 
@@ -41,15 +41,6 @@ import { isChildStreamRemoved } from './childExecutions';
  *  preload completes or when a live fact mutates the snapshot store. Renderers
  *  subscribe to this to repaint, and the projection memo keys on it. */
 export const streamArtifactRevision = signal<number>(0);
-
-/** Streams whose artifacts have established provenance this session: a
- *  completed preload, an authoritative `load` (resume reconciliation), or a
- *  live artifact write the adapter marked hydrated (see
- *  `readStreamArtifacts`). A stream absent here has no established disk
- *  provenance yet, so render-time reads return `undefined` — callers fall
- *  back to empty defaults — instead of hitting unseeded getters (and their
- *  `warnIfUnseeded` noise) mid-preload (#10730). */
-const hydratedArtifactStreams = new Set<StreamTabId>();
 
 /** Per-stream projection memo, invalidated on `streamArtifactRevision`. The
  *  four renderers share one projection per revision instead of re-summing usage
@@ -60,24 +51,17 @@ const hydratedArtifactStreams = new Set<StreamTabId>();
 const artifactProjectionMemo = new Map<StreamTabId, StreamArtifactProjection>();
 
 registerCliStateResetHook(() => {
-  hydratedArtifactStreams.clear();
   artifactProjectionMemo.clear();
   streamArtifactRevision.set(0);
 });
 
-/** Invalidate the projection memo and repaint artifact readers. */
-function bumpStreamArtifactRevision(): void {
+/** Invalidate the projection memo and repaint artifact readers. Called after
+ *  any write the store has already accepted — a live artifact fact, a
+ *  completed focus preload, or a resume `load` — since the store, not this
+ *  module, owns whether a record has provenance. */
+export function bumpStreamArtifactRevision(): void {
   artifactProjectionMemo.clear();
   streamArtifactRevision.set(streamArtifactRevision.get() + 1);
-}
-
-/** Mark a stream's durable artifacts hydrated and invalidate the projection
- *  memo. The focus-hydration owner calls this on success; direct store
- *  preload paths (resume) call it after their own seed so a focused stream
- *  loaded outside the focus subscription still repaints. */
-export function markArtifactStreamHydrated(streamId: StreamTabId): void {
-  hydratedArtifactStreams.add(streamId);
-  bumpStreamArtifactRevision();
 }
 
 /** Record a live plan/todo write as authority for an already-open partial
@@ -87,79 +71,28 @@ export function markWorkPlanArtifactHydrated(
   field: 'plan' | 'todos',
 ): void {
   establishWorkPlanReaderAuthority(streamId, [field]);
-  markArtifactStreamHydrated(streamId);
-}
-
-/** Prepare reconciliation for an authoritative full-set `load` of `retained`.
- *  `load` evicts every other record, so capture the markers it will evict up
- *  front (plus the active stream, whose first focus preload may still be in
- *  flight with no marker yet). Call `dropStale()` before awaiting `load` so the
- *  hydration gate stays honest across the async seed window (eviction is sync
- *  at the start of `load`); `reconcile()` after a successful `load` (and again
- *  after focus) re-drops those stale markers and marks the retained streams
- *  hydrated. A stale in-flight preload that re-adds an evicted stream is
- *  cleared either way, while a stream legitimately preloaded after the load is
- *  preserved (it was never in the captured stale set). */
-export function beginLoadedStreamsReconcile(retained: readonly StreamTabId[]): {
-  readonly dropStale: () => void;
-  readonly reconcile: () => void;
-} {
-  const retainedSet = new Set(retained);
-  const stale = new Set<StreamTabId>();
-  for (const streamId of hydratedArtifactStreams) {
-    if (!retainedSet.has(streamId)) stale.add(streamId);
-  }
-  const active = activeStreamId.get();
-  if (active !== undefined && !retainedSet.has(active)) stale.add(active);
-
-  const apply = (markRetained: boolean): void => {
-    for (const streamId of stale) hydratedArtifactStreams.delete(streamId);
-    if (markRetained) {
-      for (const streamId of retained) {
-        hydratedArtifactStreams.add(streamId);
-        establishWorkPlanReaderAuthority(streamId, ['plan', 'todos']);
-      }
-    }
-    bumpStreamArtifactRevision();
-  };
-  return {
-    dropStale: () => apply(false),
-    reconcile: () => apply(true),
-  };
+  bumpStreamArtifactRevision();
 }
 
 /** Read the canonical artifact projection for one stream from the live session.
  *  Returns `undefined` when no default session exists yet (harness/tests) or
- *  when the stream has no established provenance this session: no completed
- *  preload or resume `load`, and no live artifact write. `sessionSignalsAdapter` marks a stream
- *  hydrated on every live files, missing-outputs, compile-failures, usage,
- *  todos, or plan write, so a never-focused stream with live writes projects
- *  here too; callers default to empty values (`artifacts?.todos ?? []`) while
- *  the gate holds. */
+ *  when the store reports no provenance for the record: no completed preload
+ *  or resume `load`, and no live write eagerly applied ahead of a seed. The
+ *  store is the single owner of that fact (`hasProvenance`), so a
+ *  never-focused stream with live writes projects here too; callers default to
+ *  empty values (`artifacts?.todos ?? []`) while the gate holds — instead of
+ *  hitting unseeded getters (and their `warnIfUnseeded` noise) mid-preload
+ *  (#10730). */
 export function readStreamArtifacts(
   streamId: StreamTabId,
 ): StreamArtifactProjection | undefined {
   const session = tryDefaultSession();
-  if (!session || !hydratedArtifactStreams.has(streamId)) return undefined;
+  if (!session || !session.snapshots.hasProvenance(streamId)) return undefined;
   const cached = artifactProjectionMemo.get(streamId);
   if (cached !== undefined) return cached;
   const projection = projectStreamArtifacts(session.snapshots, streamId);
   artifactProjectionMemo.set(streamId, projection);
   return projection;
-}
-
-/** The usage a caller presents for one stream: the canonical store projection
- *  (durable + live) first, then the latest per-run usage gauge. Owned here so
- *  the exit summary and the workflow dashboard can't drift in precedence. */
-export function streamPreferredUsage(
-  streamId: StreamTabId | undefined,
-  slice: StreamSlice | undefined,
-): TokenUsageStats | undefined {
-  const projected =
-    streamId !== undefined
-      ? readStreamArtifacts(streamId)?.cumulativeUsage
-      : undefined;
-  return projected ?? slice?.usage;
 }
 
 function streamCanReceiveArtifacts(
@@ -216,7 +149,7 @@ export async function hydrateStreamArtifacts(
         ),
       );
       if (Object.values(error.authoritativeFields).every(Boolean)) {
-        markArtifactStreamHydrated(streamId);
+        bumpStreamArtifactRevision();
       }
       return {
         kind: 'partial',
@@ -230,7 +163,7 @@ export async function hydrateStreamArtifacts(
     return undefined;
   }
   establishWorkPlanReaderAuthority(streamId, ['plan', 'todos']);
-  markArtifactStreamHydrated(streamId);
+  bumpStreamArtifactRevision();
   return { kind: 'complete' };
 }
 

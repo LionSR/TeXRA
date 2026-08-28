@@ -342,13 +342,7 @@ export class MainViewProvider
     this._view = webviewView;
 
     this.mainWebviewReady = false;
-    webviewView.webview.html = this.contentProvider.getHtmlContent(
-      webviewView.webview,
-    );
-
-    this._messageDisposable = webviewView.webview.onDidReceiveMessage(
-      (message) => this.messageHandler.handleMessage(message, webviewView),
-    );
+    this._messageDisposable = this.setupWebviewContent(webviewView);
 
     this._viewDisposables.add(
       webviewView.onDidDispose(this.cleanupView.bind(this)),
@@ -439,21 +433,11 @@ export class MainViewProvider
       // finished across an await (polished instruction text, a transcription)
       // would be posted into the progress document that replaced it.
       this.messageHandler.clearActiveView();
-      const pvp = this._progressViewProvider!;
-      webviewView.webview.html = pvp
-        .getContentProvider()
-        .getHtmlContent(webviewView.webview);
-      this._messageDisposable = webviewView.webview.onDidReceiveMessage(
-        (message) => pvp.handleSidebarMessage(message, webviewView),
-      );
+      this._messageDisposable =
+        this._progressViewProvider!.setupWebviewContent(webviewView);
     } else {
       this._progressViewProvider?.resetSidebarReady();
-      webviewView.webview.html = this.contentProvider.getHtmlContent(
-        webviewView.webview,
-      );
-      this._messageDisposable = webviewView.webview.onDidReceiveMessage(
-        (message) => this.messageHandler.handleMessage(message, webviewView),
-      );
+      this._messageDisposable = this.setupWebviewContent(webviewView);
     }
   }
 

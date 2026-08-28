@@ -403,32 +403,6 @@ export async function deleteCliHistory(options: {
   };
 }
 
-/**
- * `texra history delete --all` is destructive and unrecoverable. The command
- * handler must call this first: if `--all` is set without `--yes`, it should
- * refuse and quote the count back to the user; otherwise it can pass `count`
- * into the confirmation message before deletion.
- */
-interface CliHistoryDeleteAllPreflight {
-  readonly proceed: boolean;
-  readonly count: number;
-}
-
-export async function preflightCliHistoryDeleteAll(options: {
-  all?: boolean;
-  yes?: boolean;
-}): Promise<CliHistoryDeleteAllPreflight> {
-  if (!options.all) return { proceed: false, count: 0 };
-  // Unlike list, a full wipe intentionally counts (and later clears) every
-  // stored execution, including `isUserVisibleExecution`-hidden
-  // process-bookkeeping entries and agent-spawned child runs — don't add the
-  // visibility filter here.
-  // (`show`/`export` were never filtered either — both are explicit-id
-  // lookups, a different contract from browsing a list.)
-  const count = (await listExecutions()).length;
-  return { proceed: options.yes === true, count };
-}
-
 export function formatCliHistoryText(
   entries: readonly CliHistoryEntry[],
 ): string {

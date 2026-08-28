@@ -144,9 +144,11 @@ describe('attachWorkflowPlainOutput', () => {
     );
     completeWorkflow(events, STREAM_PHASE.COMPLETED);
 
+    // A log reader wants "started" and "finished": the pre-start states are
+    // dropped, and the second running card (which only resolves the navigation
+    // target) does not repeat the `Running:` line.
     expect(lines).toEqual([
       '◆ Map (1/2)',
-      'Planned: Read the argument',
       'Running: Read the argument',
       'Found two boundary cases.',
       'Finished: Read the argument · GPT-5.6 Terra',
@@ -187,7 +189,7 @@ describe('attachWorkflowPlainOutput', () => {
       type: 'workflow.call',
       stageId: 'run',
       logId: 'loose',
-      call: { id: 'loose', label: 'Loose check', status: 'planned' },
+      call: { id: 'loose', label: 'Loose check', status: 'running' },
     });
     logMessage(events, 'Preparing the phase-less check.', { stageId: 'run' });
     emit(events, {
@@ -198,16 +200,43 @@ describe('attachWorkflowPlainOutput', () => {
         id: 'draft',
         label: 'Draft proof',
         phase: 'Write',
-        status: 'planned',
+        status: 'running',
       },
     });
     completeWorkflow(events, STREAM_PHASE.CANCELLED);
 
     expect(lines).toEqual([
-      'Planned: Loose check',
+      'Running: Loose check',
       'Preparing the phase-less check.',
-      'Planned: Draft proof',
+      'Running: Draft proof',
       'Cancelled: proof-workflow',
+    ]);
+    detach();
+  });
+
+  it('prints one running line per call even when a later card adds the model', () => {
+    const { events, lines, detach } = startProjection();
+    startWorkflow(events);
+
+    emit(events, readTask('planned'));
+    emit(events, readTask('running'));
+    emit(events, {
+      type: 'workflow.call',
+      stageId: 'phase-map',
+      logId: 'task-read',
+      call: {
+        id: 'read',
+        label: 'Read the argument',
+        phase: 'Map',
+        status: 'running',
+        model: 'gpt56-',
+      },
+    });
+    completeWorkflow(events, STREAM_PHASE.COMPLETED);
+
+    expect(lines).toEqual([
+      'Running: Read the argument',
+      'Finished: proof-workflow',
     ]);
     detach();
   });

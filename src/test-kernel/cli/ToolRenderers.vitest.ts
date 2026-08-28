@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - CLI TUI rendering
 import {
-  toolHeaderPreviewBudget,
   toolUseDisplayLines,
   toolUseStyledLines,
 } from '@cli/chat/tui/panes/toolRenderers';
 import { toolDisplaySpanTextProps } from '@cli/chat/tui/panes/ToolUseRow';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas
 import type { NormalizedToolUse } from '@shared/schemas';
@@ -414,15 +414,22 @@ describe('CLI tool display lines', () => {
   });
 
   it('sizes live header previews to the terminal width', () => {
+    const command = 'x'.repeat(300);
+    const header = (width: number | undefined, toolName = 'bash'): string =>
+      toolUseDisplayLines(toolUse(toolName, { command }), { width })[0] ?? '';
+
     // Wide terminals show more of the command than the historical 80 columns.
-    expect(toolHeaderPreviewBudget(200, 'bash')).toBe(191);
+    expect(textDisplayWidth(header(200))).toBeGreaterThan(150);
+    expect(textDisplayWidth(header(200))).toBeLessThanOrEqual(200);
     // Narrow terminals truncate to fit one row instead of wrapping.
-    expect(toolHeaderPreviewBudget(60, 'bash')).toBe(51);
+    expect(textDisplayWidth(header(60))).toBeLessThanOrEqual(60);
+    expect(textDisplayWidth(header(60))).toBeGreaterThan(40);
     // When the name + chrome already eat the row, drop the preview entirely
     // instead of overflowing into a second row.
-    expect(toolHeaderPreviewBudget(20, 'a-rather-long-tool-name')).toBe(0);
+    expect(header(20, 'a-rather-long-tool-name')).not.toContain('x');
     // Unknown width falls back to the historical fixed budget.
-    expect(toolHeaderPreviewBudget(undefined, 'bash')).toBe(80);
+    expect(textDisplayWidth(header(undefined))).toBeLessThanOrEqual(80 + 12);
+    expect(textDisplayWidth(header(undefined))).toBeGreaterThan(60);
   });
 });
 

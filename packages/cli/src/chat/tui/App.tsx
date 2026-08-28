@@ -38,7 +38,6 @@ import {
   selectedChildRowWorkflowControllable,
   shouldDeferEscapeInterruptForMetaChord,
   triggerAppCtrlC,
-  visibleApprovalRootStreamId,
   type EscapeInterruptState,
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
@@ -67,7 +66,6 @@ import {
 import {
   activeStreamId as activeStreamIdSignal,
   focusStream,
-  rootRunStartAvailable as rootRunStartAvailableSignal,
   rootStreamId as rootStreamIdSignal,
   activeForm as activeFormSignal,
   closeInfoPane,
@@ -79,6 +77,7 @@ import {
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   streams as streamsSignal,
+  streamPhaseFor,
 } from './state/cliState';
 import { appendLocalAssistantTranscript } from './state/transcript';
 import {
@@ -177,7 +176,6 @@ export function App(props: AppProps): React.JSX.Element {
   const foregroundReader = useSignal(foregroundReaderSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
-  const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
   // Render reads shared stream metadata through `streamMetadataFor`; the
   // revision signal re-renders on metadata changes the roster signal misses.
   useSignal(sessionStateRevision);
@@ -221,7 +219,7 @@ export function App(props: AppProps): React.JSX.Element {
       activeStreamId,
       parentStream,
       metadata: activeStreamId ? streamMetadataFor(activeStreamId) : undefined,
-      streams,
+      phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
     }).kind === 'reject';
   const appInputDisabled = foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
@@ -288,7 +286,7 @@ export function App(props: AppProps): React.JSX.Element {
     (view) =>
       view.parentId !== undefined &&
       view.slice !== undefined &&
-      isActivePhase(view.slice.status),
+      isActivePhase(streamPhaseFor(view.id)?.phase),
   ).length;
   const activeSubagentExecutionIds = useMemo(() => {
     const executionIds = new Map<StreamTabId, string>();
@@ -320,11 +318,14 @@ export function App(props: AppProps): React.JSX.Element {
         : undefined,
     [columns, workflowDashboardRoot],
   );
+  // Stream-less approvals fold onto the root of the visible surface: the
+  // scoped child-list root while one replaces the session list, else the
+  // session root.
   const pendingApprovalsForRows = useMemo(
     () =>
       groupPendingApprovalsByRow(
         pendingSummaries,
-        visibleApprovalRootStreamId(rootStreamId, childListTarget.streamId),
+        childListTarget.streamId ?? rootStreamId,
       ),
     [childListTarget.streamId, pendingSummaries, rootStreamId],
   );
@@ -585,7 +586,6 @@ export function App(props: AppProps): React.JSX.Element {
     return appEscapeInterruptActive({
       inputDisabled: state.inputDisabled,
       reverseSearchOpen: state.reverseSearchOpen,
-      runPending: true,
       slashPaletteOpen: state.slashPaletteOpen,
     });
   };
@@ -800,7 +800,6 @@ export function App(props: AppProps): React.JSX.Element {
               keyboardActive={!childListFocused}
             />
             <StatusBar
-              agentSelectionAvailable={rootRunStartAvailable}
               chatInputAvailable={!childInputHidden}
               commandName={props.commandName}
               foregroundEscapeAction={foregroundEscapeAction({
@@ -820,7 +819,6 @@ export function App(props: AppProps): React.JSX.Element {
               }
               childNavigationAvailable={childListAvailable}
               runningSessions={childRunningCount}
-              shortcutsActive={focusShortcutsActive}
               streamFocusAvailable={sessionViews.length > 0}
               transcriptAvailable={(activeSlice?.entries.length ?? 0) > 0}
             />

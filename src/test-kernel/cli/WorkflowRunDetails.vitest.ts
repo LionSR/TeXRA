@@ -13,7 +13,6 @@ import {
   activeStreamId,
   patchStream,
   resetCliState,
-  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import { SessionState } from '@controllers/session/SessionState';
 import {
@@ -26,6 +25,7 @@ import {
   type StreamTabId,
   type TaskGroup,
 } from '@shared/schemas';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { loadInk } from '@test/support/inkTestHarness.ts';
 import {
   projectTaskGroupsFromStreamLog,
@@ -282,7 +282,7 @@ describe('selectWorkflowRunDetailLines', () => {
       // slice's `finalizedFrontier` still at 0.
       entries: [textRowFixture('live', 'log', 'live workflow log')],
     }));
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: STREAM_ID,
       status: STREAM_PHASE.RUNNING,
     });

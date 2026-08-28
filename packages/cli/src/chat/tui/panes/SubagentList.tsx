@@ -33,7 +33,6 @@ import {
   formatWorkflowPhaseHeading,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
-  type WorkflowPhaseHeading,
 } from '@shared/copy/workflowCall';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
 import { filterNotNullish, formatCompactTokenCount } from '@utils/core';
@@ -55,8 +54,8 @@ import {
   streamStateFor,
 } from '../state/childExecutions';
 import {
+  readStreamArtifacts,
   streamArtifactRevision,
-  streamPreferredUsage,
 } from '../state/subscribeStreamArtifacts';
 import {
   childListStreamId,
@@ -77,37 +76,132 @@ import {
   CHILD_STATUS_MARKER,
   childRowMetadataText,
   childStatusColor,
+  dashboardMarkerCell,
   pendingApprovalRowDisplay,
+  workflowPhaseStatusStrip,
+  workflowPhaseTallyText,
 } from './SubagentListDisplay';
 import { useSignal } from '../state/useSignal';
+import { streamPhaseFor, type StreamSlice } from '../state/cliState';
 import type { PendingApprovalKind } from '../state/approvalQueue';
-import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 
-interface PhaseHeaderDetails extends WorkflowPhaseHeading {
-  readonly progress?: string;
+/** Emphasis a row segment inherits from its host row: the dashboard heading
+ *  renders bold and warning-colored, plain rows do neither. */
+interface SegmentStyle {
+  readonly bold?: boolean;
+  readonly color?: string;
 }
 
-function PhaseHeader({
-  details,
-  focused = false,
-}: {
-  readonly details: PhaseHeaderDetails;
-  readonly focused?: boolean;
+/** One inline segment of a single-line row: a cell that may shrink to nothing
+ *  and truncates rather than wrapping. `flexShrink` carries the significance
+ *  order — higher numbers yield first as the row narrows. */
+function RowSegment({
+  bold,
+  children,
+  color,
+  dimColor,
+  flexShrink,
+}: SegmentStyle & {
+  readonly children: React.ReactNode;
+  readonly dimColor?: boolean;
+  readonly flexShrink: number;
 }): React.JSX.Element {
-  const inlineProgress = details.progress ? ` · ${details.progress}` : '';
   return (
-    <Box flexDirection="row" flexGrow={1} minWidth={0}>
-      <Box minWidth={0} flexShrink={1}>
-        <Text aria-hidden dimColor>
-          {focused ? `${POINTER} ${STATUS_DIAMOND} ` : `    ${STATUS_DIAMOND} `}
+    <Box minWidth={0} flexShrink={flexShrink}>
+      <Text bold={bold} color={color} dimColor={dimColor} wrap="truncate-end">
+        {children}
+      </Text>
+    </Box>
+  );
+}
+
+/** The ` · <kind>` pending-approval suffix shared by session rows, workflow
+ *  task rows, and the dashboard heading. The kind is actionable so it never
+ *  shrinks; the overflow count is informational and yields early. */
+function ApprovalSegments({
+  approval,
+  bold,
+  color,
+}: SegmentStyle & {
+  readonly approval: ReturnType<typeof pendingApprovalRowDisplay>;
+}): React.JSX.Element | null {
+  if (!approval) return null;
+  return (
+    <>
+      <Box flexShrink={0}>
+        <Text bold={bold} color={color}>{` · ${approval.label}`}</Text>
+      </Box>
+      {approval.overflow ? (
+        <RowSegment bold={bold} color={color} flexShrink={3}>
+          {` ${approval.overflow}`}
+        </RowSegment>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * One phase row of the dashboard, in both layouts: name, the phase's own
+ * `done/total · N running · N failed`, and one glyph per issued call — the
+ * same three things the progress view's phase header shows, folded from the
+ * same call cards. The tally reads as the phase because the phase names it;
+ * the panel heading's tally reads as the run for the same reason.
+ *
+ * The marker cell is shared with the task rows, so a phase and the tasks under
+ * it start their text in the same screen column whether or not the row is
+ * focused.
+ */
+function PhaseHeader({
+  group,
+  focused = false,
+  showStatusStrip,
+}: {
+  readonly group: WorkflowPhaseGroup;
+  readonly focused?: boolean;
+  /** The strip is the phase row's own account of its calls, so it belongs to
+   *  the full-width list. The two-column layout paints one marker per call in
+   *  the task column beside it and gives the narrow phase column to the name. */
+  readonly showStatusStrip: boolean;
+}): React.JSX.Element {
+  const calls = group.tasks.map((entry) => entry.call);
+  const strip = showStatusStrip ? workflowPhaseStatusStrip(calls) : undefined;
+  return (
+    <Box
+      flexDirection="row"
+      flexGrow={1}
+      height={1}
+      minWidth={0}
+      overflowY="hidden"
+    >
+      {/* One rigid gutter: Ink trims leading whitespace off a row it has to
+          wrap, so the pointer and marker only keep their columns while they
+          sit in a box that never shrinks. */}
+      <Box flexShrink={0}>
+        <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
+          {focused ? POINTER : ' '}
         </Text>
-        <Text dimColor wrap="truncate-end">
-          {`${formatWorkflowPhaseHeading(details)}${inlineProgress}`}
+        <Text aria-hidden dimColor>
+          {dashboardMarkerCell(STATUS_DIAMOND)}
         </Text>
       </Box>
+      <Box minWidth={0} flexShrink={1}>
+        <Text dimColor wrap="truncate-end">
+          {formatWorkflowPhaseHeading(group.heading)}
+        </Text>
+      </Box>
+      <Box minWidth={0} flexShrink={2}>
+        <Text dimColor wrap="truncate-end">
+          {` · ${workflowPhaseTallyText(calls)}`}
+        </Text>
+      </Box>
+      {strip ? (
+        <Box minWidth={0} flexShrink={3}>
+          <Text dimColor wrap="truncate-end">{` ${strip}`}</Text>
+        </Box>
+      ) : null}
     </Box>
   );
 }
@@ -136,18 +230,15 @@ function SessionRow({
   useSignal(sessionStateRevision);
   const metadata = streamMetadataFor(session.id);
   const streamState = streamStateFor(session.id);
-  const status = session.slice?.status;
-  const substate = session.slice?.substate;
+  const phase = streamPhaseFor(session.id);
+  const status = phase?.phase;
   const statusLabel = formatCliStatusLabel(
     status,
-    substate,
+    phase?.substate,
     session.parentId !== undefined,
   );
   const elapsed = childElapsed(
-    {
-      status,
-      startedAt: session.slice?.runStartedAt,
-    },
+    { status, startedAt: phase?.runStartedAt },
     nowMs,
   );
   // Significance order — informational counts shed first, then the summary,
@@ -198,36 +289,23 @@ function SessionRow({
       <Text aria-hidden color={childStatusColor(status)}>
         {CHILD_STATUS_MARKER}
       </Text>
-      <Box minWidth={0} flexShrink={1}>
-        <Text bold={active} wrap="truncate-end">
-          {session.label}
-          {statusLabel ? ` ${statusLabel}` : ''}
-          {stageLabel ? ` · ${stageLabel}` : ''}
-          {modelLabel ? ` · ${modelLabel}` : ''}
-          {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
-        </Text>
-      </Box>
+      <RowSegment bold={active} flexShrink={1}>
+        {session.label}
+        {statusLabel ? ` ${statusLabel}` : ''}
+        {stageLabel ? ` · ${stageLabel}` : ''}
+        {modelLabel ? ` · ${modelLabel}` : ''}
+        {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
+      </RowSegment>
       {summary ? (
-        <Box minWidth={0} flexShrink={2}>
-          <Text dimColor wrap="truncate-end">
-            {` · ${truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)}`}
-          </Text>
-        </Box>
+        <RowSegment dimColor flexShrink={2}>
+          {` · ${truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)}`}
+        </RowSegment>
       ) : null}
-      {approval ? (
-        <Box flexShrink={0}>
-          <Text>{` · ${approval.label}`}</Text>
-        </Box>
-      ) : null}
-      {approval?.overflow ? (
-        <Box minWidth={0} flexShrink={3}>
-          <Text wrap="truncate-end">{` ${approval.overflow}`}</Text>
-        </Box>
-      ) : null}
+      <ApprovalSegments approval={approval} />
       {focused && hiddenRowSummary ? (
-        <Box minWidth={0} flexShrink={4}>
-          <Text dimColor wrap="truncate-end">{` · ${hiddenRowSummary}`}</Text>
-        </Box>
+        <RowSegment dimColor flexShrink={4}>
+          {` · ${hiddenRowSummary}`}
+        </RowSegment>
       ) : null}
       {metadataText ? (
         <>
@@ -243,7 +321,6 @@ function SessionRow({
 
 function workflowTaskMetadata(
   call: WorkflowCallProgress,
-  child: StreamSlice | undefined,
   streamId: StreamTabId | undefined,
   nowMs: number,
 ): string | undefined {
@@ -252,11 +329,14 @@ function workflowTaskMetadata(
   // in-flight window the card itself cannot: elapsed, generated tokens, and
   // the running spend read off the child stream.
   const live = !isTerminalWorkflowCallProgress(call);
-  const usage = streamPreferredUsage(streamId, child);
+  const usage = streamId
+    ? readStreamArtifacts(streamId)?.cumulativeUsage
+    : undefined;
+  const runStartedAt = streamPhaseFor(streamId)?.runStartedAt;
   const parts = [
     ...formatWorkflowCallMetadataParts(call),
-    live && child?.runStartedAt !== undefined
-      ? formatCompactDuration(nowMs - child.runStartedAt)
+    live && runStartedAt !== undefined
+      ? formatCompactDuration(nowMs - runStartedAt)
       : undefined,
     usage && usage.outputTokens > 0
       ? `${TOKENS_GENERATED}${formatCompactTokenCount(usage.outputTokens)}`
@@ -269,14 +349,12 @@ function workflowTaskMetadata(
 }
 
 function WorkflowTaskRow({
-  child,
   entry,
   focused,
   nowMs,
   pendingKinds,
   streamId,
 }: {
-  readonly child: StreamSlice | undefined;
   readonly entry: WorkflowTaskEntry;
   readonly focused: boolean;
   readonly nowMs: number;
@@ -285,33 +363,29 @@ function WorkflowTaskRow({
 }): React.JSX.Element {
   useSignal(sessionStateRevision);
   const style = WORKFLOW_TASK_STATUS_STYLE[entry.call.status];
-  const metadata = workflowTaskMetadata(entry.call, child, streamId, nowMs);
+  const metadata = workflowTaskMetadata(entry.call, streamId, nowMs);
   const approval = pendingApprovalRowDisplay(pendingKinds);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
-      <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
-        {focused ? POINTER : ' '}
-      </Text>
-      <Text aria-hidden color={style.color}>{` ${style.marker} `}</Text>
-      <Box minWidth={0} flexShrink={1}>
-        <Text wrap="truncate-end">
-          {entry.call.label} · {WORKFLOW_TASK_STATUS_LABEL[entry.call.status]}
+      <Box flexShrink={0}>
+        <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
+          {focused ? POINTER : ' '}
+        </Text>
+        <Text aria-hidden color={style.color}>
+          {dashboardMarkerCell(style.marker)}
         </Text>
       </Box>
-      {approval ? (
-        <Box flexShrink={0}>
-          <Text>{` · ${approval.label}`}</Text>
-        </Box>
-      ) : null}
-      {approval?.overflow ? (
-        <Box minWidth={0} flexShrink={3}>
-          <Text wrap="truncate-end">{` ${approval.overflow}`}</Text>
-        </Box>
-      ) : null}
+      <RowSegment flexShrink={1}>{entry.call.label}</RowSegment>
+      {/* The status word outranks the metadata column: it is its own segment
+          at the label's shrink weight, so a wide row sheds metadata (weight 2)
+          long before it clips `· Running`, instead of the two sharing one
+          truncating box where the status was always the half that was cut. */}
+      <RowSegment flexShrink={1}>
+        {` · ${WORKFLOW_TASK_STATUS_LABEL[entry.call.status]}`}
+      </RowSegment>
+      <ApprovalSegments approval={approval} />
       {metadata ? (
-        <Box minWidth={0} flexShrink={2}>
-          <Text dimColor wrap="truncate-end">{`  ${metadata}`}</Text>
-        </Box>
+        <RowSegment dimColor flexShrink={2}>{`  ${metadata}`}</RowSegment>
       ) : null}
     </Box>
   );
@@ -348,15 +422,10 @@ function WorkflowDashboard({
   const uniqueChildId = (entry: WorkflowTaskEntry): StreamTabId | undefined =>
     uniqueWorkflowChildStreamId(entry, model.childTaskIndex, streams);
   const nowMs = useLiveNowMsSince(
-    tasks.map((entry) => {
-      const childStreamId = uniqueChildId(entry);
-      return childStreamId === undefined
-        ? undefined
-        : streams.get(childStreamId)?.runStartedAt;
-    }),
+    tasks.map((entry) => streamPhaseFor(uniqueChildId(entry))?.runStartedAt),
   );
   const phaseItems: SelectItem<ChildListValue>[] = groups.map((group) => ({
-    label: group.label,
+    label: group.heading.phaseLabel,
     value: group.value,
   }));
   const taskItems: SelectItem<ChildListValue>[] = (
@@ -367,7 +436,7 @@ function WorkflowDashboard({
   }));
   const narrowItems: SelectItem<ChildListValue>[] = groups.flatMap((group) => [
     {
-      label: group.label,
+      label: group.heading.phaseLabel,
       value: group.value,
       disabled: group.tasks.length > 0,
     },
@@ -417,19 +486,16 @@ function WorkflowDashboard({
   ) {
     return null;
   }
-  const headingPhase = activeGroup?.heading
-    ? formatWorkflowPhaseHeading(activeGroup.heading)
-    : undefined;
   // The heading leads with the run identity's display name — for a
   // multi-agent workflow root that is the workflow name, matching what the
-  // retired slice `agent` field carried from `run.config`.
+  // retired slice `agent` field carried from `run.config`. Its tally is the
+  // whole run's; each phase row carries its own, so the two numbers on screen
+  // are never the same number twice.
   const rootIdentity = streamMetadataFor(model.root.streamId)?.identity;
   const rootAgent = rootIdentity
     ? runIdentityDisplayName(rootIdentity)
     : undefined;
-  const heading = headingPhase
-    ? `${rootAgent ?? 'Workflow'} · ${headingPhase} · ${done}/${total} done`
-    : `${rootAgent ?? 'Workflow'} · ${done}/${total} done`;
+  const heading = `${rootAgent ?? 'Workflow'} · ${done}/${total} done`;
   const { failed } = workflowCallFailureTally(calls);
   const renderTask = (
     item: SelectItem<ChildListValue>,
@@ -440,9 +506,6 @@ function WorkflowDashboard({
     const childStreamId = uniqueChildId(entry);
     return (
       <WorkflowTaskRow
-        child={
-          childStreamId === undefined ? undefined : streams.get(childStreamId)
-        }
         entry={entry}
         focused={state.focused}
         nowMs={nowMs}
@@ -455,15 +518,18 @@ function WorkflowDashboard({
       />
     );
   };
-  const groupDetails = (group: WorkflowPhaseGroup): PhaseHeaderDetails => {
-    const progress = workflowPhaseCallProgress(
-      group.tasks.map((entry) => entry.call),
-    );
-    return {
-      phaseLabel: group.label,
-      ...group.heading,
-      progress: `${progress.done}/${progress.total}`,
-    };
+  const renderPhase = (
+    item: SelectItem<ChildListValue>,
+    state: { readonly focused: boolean },
+  ): React.JSX.Element | null => {
+    const group = groupByValue.get(item.value);
+    return group ? (
+      <PhaseHeader
+        group={group}
+        focused={state.focused}
+        showStatusStrip={!wide}
+      />
+    ) : null;
   };
   const selectProps = {
     hotkeys: false,
@@ -481,38 +547,25 @@ function WorkflowDashboard({
       width={columns}
     >
       <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
-        <Box minWidth={0} flexShrink={1}>
-          <Text bold wrap="truncate-end">
-            {heading}
-          </Text>
-        </Box>
+        <RowSegment bold flexShrink={1}>
+          {heading}
+        </RowSegment>
         {failed > 0 ? (
           // A pending approval needs action, so this tally yields before the
           // fixed approval suffix when the two cannot both fit.
-          <Box minWidth={0} flexShrink={2}>
-            <Text bold color={COLOR_WARNING} wrap="truncate-end">
-              {` · ${failed} failed`}
-            </Text>
-          </Box>
+          <RowSegment bold color={COLOR_WARNING} flexShrink={2}>
+            {` · ${failed} failed`}
+          </RowSegment>
         ) : null}
-        {sessionApproval ? (
-          <Box flexShrink={0}>
-            <Text bold color={COLOR_WARNING}>
-              {` · ${sessionApproval.label}`}
-            </Text>
-          </Box>
-        ) : null}
-        {sessionApproval?.overflow ? (
-          <Box minWidth={0} flexShrink={3}>
-            <Text bold color={COLOR_WARNING} wrap="truncate-end">
-              {` ${sessionApproval.overflow}`}
-            </Text>
-          </Box>
-        ) : null}
+        <ApprovalSegments
+          approval={sessionApproval}
+          bold
+          color={COLOR_WARNING}
+        />
       </Box>
       {wide ? (
         <Box flexDirection="row" height={contentRows} minWidth={0}>
-          <Box flexDirection="column" width="32%" paddingRight={1}>
+          <Box flexDirection="column" width="36%" paddingRight={1}>
             <Select
               {...selectProps}
               isActive={keyboardActive && selectedTask === undefined}
@@ -520,23 +573,10 @@ function WorkflowDashboard({
               items={phaseItems}
               onHighlightChange={(value) => onSelectionChange?.(value)}
               onSelect={enterPhase}
-              renderItem={(item, state) => {
-                const group = groupByValue.get(item.value);
-                if (!group) return null;
-                const details = groupDetails(group);
-                return (
-                  <Box minWidth={0}>
-                    <Text aria-hidden>{state.focused ? POINTER : ' '}</Text>
-                    <Text wrap="truncate-end">
-                      {' '}
-                      {formatWorkflowPhaseHeading(details)} · {details.progress}
-                    </Text>
-                  </Box>
-                );
-              }}
+              renderItem={renderPhase}
             />
           </Box>
-          <Box flexDirection="column" minWidth={0} width="68%">
+          <Box flexDirection="column" minWidth={0} width="64%">
             <Select
               {...selectProps}
               isActive={keyboardActive && selectedTask !== undefined}
@@ -556,17 +596,9 @@ function WorkflowDashboard({
           items={narrowItems}
           onHighlightChange={(value) => onSelectionChange?.(value)}
           onSelect={selectTask}
-          renderItem={(item, state) => {
-            const group = groupByValue.get(item.value);
-            return group ? (
-              <PhaseHeader
-                details={groupDetails(group)}
-                focused={state.focused}
-              />
-            ) : (
-              renderTask(item, state)
-            );
-          }}
+          renderItem={(item, state) =>
+            renderPhase(item, state) ?? renderTask(item, state)
+          }
         />
       )}
     </Box>
@@ -631,7 +663,7 @@ export function SubagentList(
   const sessions = props.sessions ?? [];
   useSignal(streamArtifactRevision);
   const startedAts = useMemo(
-    () => sessions.map((session) => session.slice?.runStartedAt),
+    () => sessions.map((session) => streamPhaseFor(session.id)?.runStartedAt),
     [sessions],
   );
   const { items, sessionsByValue } = useMemo(() => {
@@ -749,7 +781,7 @@ export function SubagentList(
             <SessionRow
               isListRoot={session.id === props.listRootStreamId}
               active={state.active}
-              cumulativeUsage={streamPreferredUsage(session.id, session.slice)}
+              cumulativeUsage={readStreamArtifacts(session.id)?.cumulativeUsage}
               focused={state.focused}
               hiddenRowSummary={hiddenRowSummary}
               metadataColumn={metadataColumn}

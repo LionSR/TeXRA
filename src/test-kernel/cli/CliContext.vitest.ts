@@ -186,6 +186,21 @@ describe('CLI context config defaults', () => {
     ).resolves.toMatchObject({ approvalPolicy: 'yolo' });
   });
 
+  it('normalizes a hand-edited approval policy spelling in the workspace config', async () => {
+    const workspace = await workspaceWithConfig(
+      JSON.stringify({ 'texra.approvalPolicy': ' Yolo ' }),
+    );
+
+    const context = await cliContext({
+      ambient,
+      env: {},
+      globalArgs: { cwd: workspace },
+    });
+
+    expect(context.approvalPolicy).toBe('yolo');
+    expect(context.configWarnings).toEqual([]);
+  });
+
   it('reports unknown and invalid workspace config fields without failing', async () => {
     const workspace = await workspaceWithConfig(
       JSON.stringify({

@@ -53,16 +53,25 @@ import {
   AgentCategory,
   STREAM_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
+  type ExecutionId,
+  type StreamPhase,
   type StreamStage,
   type StreamTabId,
+  type TokenUsageStats,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { TranscriptRowOf } from '@shared/transcript';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
+import {
+  clearAllStreamStatusesForTest,
+  seedStreamStatusForTest,
+} from '@test/support/streamStatusTestUtils';
 import { buildChildRosters } from '@test/support/childRosters';
 import {
   fileListRowFixture,
   toolRowFixture,
+  workflowPhaseGrouping,
 } from '@test/support/transcriptRowFixtures';
 import {
   loadInk,
@@ -78,14 +87,43 @@ function session(id: string, active = false): StreamView {
   };
 }
 
+/**
+ * A workflow root as its own run emits it — see `workflowPhaseGrouping`. The
+ * lifecycle phase (status machine) and cumulative usage (snapshot store) are
+ * seeded on the shared substrate beside the slice, which carries neither.
+ */
 function workflowAgentSlice(
   id: string,
-  overrides: Partial<StreamSlice>,
+  overrides: Partial<StreamSlice> & {
+    readonly status?: StreamPhase;
+    readonly runStartedAt?: number;
+    readonly usage?: TokenUsageStats;
+  },
 ): StreamSlice {
+  const {
+    status = STREAM_PHASE.COMPLETED,
+    runStartedAt,
+    usage,
+    ...sliceOverrides
+  } = overrides;
+  const streamId = id as StreamTabId;
+  seedStreamStatusForTest(defaultSession().status, streamId, {
+    phase: status,
+    ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+  });
+  if (usage) {
+    snapshotFacts(defaultSession().snapshots).addUsage(
+      streamId,
+      `${id}-usage` as ExecutionId,
+      usage,
+    );
+  }
+  const grouping = workflowPhaseGrouping(sliceOverrides.entries ?? []);
   return {
-    ...emptySlice(id as StreamTabId),
-    status: STREAM_PHASE.COMPLETED,
-    ...overrides,
+    ...emptySlice(streamId),
+    ...sliceOverrides,
+    entries: grouping.entries,
+    ...(sliceOverrides.taskGroups ? {} : { taskGroups: grouping.taskGroups }),
   };
 }
 
@@ -100,6 +138,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   unbindChildStreamState(sessionState);
+  streamsSignal.set(new Map());
+  clearAllStreamStatusesForTest(defaultSession().status);
 });
 
 function seedStream(
@@ -175,6 +215,17 @@ async function renderSubagentList(
   options: { readonly until?: (frame: string) => boolean } = {},
 ): Promise<string> {
   const { ink, React } = await loadInk();
+  // In production the list's `streams` prop is the signal itself, and the row
+  // renderers read lifecycle phase through `streamPhaseFor`, which paints only
+  // identities that signal holds. Publish the fixture's slices so a rendered
+  // row can reach its phase.
+  const published = new Map(props.streams ?? []);
+  for (const session of props.sessions ?? []) {
+    if (!published.has(session.id)) {
+      published.set(session.id, session.slice ?? emptySlice(session.id));
+    }
+  }
+  streamsSignal.set(published);
   return renderOutputAtTerminalSize(
     ink,
     React.createElement(SubagentList, props),
@@ -540,8 +591,7 @@ describe('CLI child list display model', () => {
   it('renders held media in the live pending pane behind an unfinished tool', async () => {
     const { ink, React } = await loadInk();
     const streamId = 'media-holder' as StreamTabId;
-    const slice: StreamSlice = {
-      ...emptySlice(streamId),
+    const slice: StreamSlice = workflowAgentSlice(streamId, {
       status: STREAM_PHASE.RUNNING,
       entries: [
         toolRowFixture('blocking-tool', {
@@ -558,7 +608,7 @@ describe('CLI child list display model', () => {
           },
         ]),
       ],
-    };
+    });
     activeStreamId.set(streamId);
     streamsSignal.set(new Map([[streamId, slice]]));
 
@@ -578,8 +628,7 @@ describe('CLI child list display model', () => {
   it('renders held workflow phases in the live pending pane behind an unfinished tool', async () => {
     const { ink, React } = await loadInk();
     const streamId = 'phase-holder' as StreamTabId;
-    const slice: StreamSlice = {
-      ...emptySlice(streamId),
+    const slice: StreamSlice = workflowAgentSlice(streamId, {
       status: STREAM_PHASE.RUNNING,
       entries: [
         toolRowFixture('blocking-tool', {
@@ -593,7 +642,7 @@ describe('CLI child list display model', () => {
           phaseTotal: 2,
         }),
       ],
-    };
+    });
     activeStreamId.set(streamId);
     streamsSignal.set(new Map([[streamId, slice]]));
 
@@ -1077,8 +1126,16 @@ describe('CLI child list display model', () => {
     const wideOutput = await renderAtColumns(100);
     const narrowOutput = await renderAtColumns(99);
 
-    expect(wideOutput).toContain('research-workflow · Map (1/2) · 2/4 done');
-    expect(wideOutput).toContain('Map (1/2) · 0/2');
+    // The panel heading tallies the run; each phase row tallies its own calls
+    // with the same `done/total · N running · N failed` fold the board's phase
+    // headers use, so the two numbers on screen are never the same number.
+    expect(wideOutput).toContain('research-workflow · 2/4 done');
+    expect(wideOutput).toContain('Map (1/2) · 0/2 · 1 running');
+    expect(wideOutput).toContain('Write (2/2) · 2/2');
+    // Focused and unfocused phase rows start their text in the same column,
+    // and so do the task rows under them.
+    expect(wideOutput).toContain('\n › ◆ Map (1/2)');
+    expect(wideOutput).toContain('\n   ◆ Write (2/2)');
     expect(wideOutput).toContain('Duplicate · Planned');
     expect(wideOutput).toContain('Duplicate · Running');
     expect(wideOutput).toContain('exact-live-model');
@@ -1100,6 +1157,8 @@ describe('CLI child list display model', () => {
     expect(narrowOutput).toContain('↓999');
     expect(narrowOutput).toContain('$0.125');
     expect(narrowOutput).toContain('Cached without child · Saved result');
+    // The full-width list adds one marker per call beside the phase tally.
+    expect(narrowOutput).toContain('Map (1/2) · 0/2 · 1 running □☐');
     for (const [output, columns] of [
       [wideOutput, 100],
       [narrowOutput, 99],
@@ -1111,7 +1170,7 @@ describe('CLI child list display model', () => {
     }
   });
 
-  it('collapses phase labels, synthesizes missing groups, and rejects ambiguous child facts', async () => {
+  it('keeps same-named phase stages apart and collects call-less phases, rejecting ambiguous child facts', async () => {
     const run = 'grouped-run' as StreamTabId;
     const shared = 'shared-child' as StreamTabId;
     const fallback = 'fallback-child' as StreamTabId;
@@ -1253,13 +1312,18 @@ describe('CLI child list display model', () => {
       { until: (frame) => frame.includes('Fallback · Finished') },
     );
 
-    expect(wideOutput.match(/Map \(1\/2\) · 0\/1/g)).toHaveLength(1);
-    expect(wideOutput).toContain('Synthesis · 0/1');
-    expect(wideOutput).toContain('Unphased · 3/7');
+    // Two stages that share the label `Map` are two phases, because the run
+    // opened two of them — the board's group tree says the same. A call whose
+    // declared phase never opened a stage (`Synthesis`) belongs to no group at
+    // all, and joins the trailing collection with the phase-less ones rather
+    // than conjuring a phase nothing entered.
+    expect(wideOutput.match(/Map \(1\/2\) · 0\/0/g)).toHaveLength(1);
+    expect(wideOutput.match(/Map · 0\/1/g)).toHaveLength(1);
+    expect(wideOutput).not.toContain('Synthesis');
+    expect(wideOutput).toContain('Unphased · 3/8 · 3 running');
     expect(wideOutput).toContain('Synthesize · Planned');
-    expect(narrowOutput.match(/Map \(1\/2\) · 0\/1/g)).toHaveLength(1);
-    expect(narrowOutput).toContain('Synthesis · 0/1');
-    expect(narrowOutput).toContain('Unphased · 3/7');
+    expect(narrowOutput.match(/Map \(1\/2\) · 0\/0/g)).toHaveLength(1);
+    expect(narrowOutput).toContain('Unphased · 3/8 · 3 running');
     expect(narrowOutput).toContain('Loose · Planned');
 
     const reusedLine = narrowOutput

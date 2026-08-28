@@ -1443,6 +1443,25 @@ export class StreamSnapshotStore {
     });
   }
 
+  /**
+   * Whether this stream's accumulators answer from memory rather than from
+   * unread defaults: its disk provenance is established, or a live fact has
+   * already been eagerly applied ahead of any seed (the overlay this store
+   * replays after seeding). That is the disk-provenance condition
+   * {@link warnIfUnseeded} checks plus any live overlay, so it is the weaker
+   * of the two: an overlay-only record answers here but still emits
+   * unseeded-read warnings for the fields it holds no overlay for. Published
+   * so a caller can gate its reads on this bookkeeping instead of shadowing
+   * it with a hydration set of its own. A usage-only seed does not count: it
+   * leaves every round artifact unread.
+   */
+  hasProvenance(stream: StreamTabId): boolean {
+    const record = this.records.get(stream);
+    if (!record) return false;
+    if (record.diskState !== 'unknown') return true;
+    return Object.values(record.overlays).some((patch) => patch !== undefined);
+  }
+
   /** Streams with persisted sidecars under `streamData/`. */
   async listPersistedStreams(): Promise<StreamTabId[]> {
     return this.listStreamsUnder(STREAM_DATA_DIR);

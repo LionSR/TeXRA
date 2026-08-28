@@ -505,19 +505,6 @@ describe('loadCliApiStatus', () => {
     expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
   });
 
-  it('does not ask signed-out personal-key users to add another key', async () => {
-    setPersonalKeys('deepseek');
-
-    await expect(
-      loadCliApiStatus({ includeActionHint: true }),
-    ).resolves.toEqual([
-      'api: your own API keys',
-      'your own API keys: DeepSeek',
-      'auth: signed out',
-      'actions: choose Model access below; provider keys are configured',
-    ]);
-  });
-
   it('lists providers configured by secret or env origin', async () => {
     const originsByProvider: Record<string, 'secret' | 'env' | 'none'> = {
       deepseek: 'secret',
