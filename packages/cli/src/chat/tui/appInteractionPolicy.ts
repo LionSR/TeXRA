@@ -42,17 +42,13 @@ export function appFocusShortcutsActive({
 export function appEscapeInterruptActive({
   inputDisabled,
   reverseSearchOpen,
-  runPending,
   slashPaletteOpen,
 }: {
   readonly inputDisabled: boolean;
   readonly reverseSearchOpen: boolean;
-  readonly runPending: boolean;
   readonly slashPaletteOpen: boolean;
 }): boolean {
-  return (
-    runPending && !inputDisabled && !slashPaletteOpen && !reverseSearchOpen
-  );
+  return !inputDisabled && !slashPaletteOpen && !reverseSearchOpen;
 }
 
 // Bare Esc must give a numbered stream-focus chord a chance to resolve while
@@ -77,8 +73,6 @@ export interface EscapeInterruptState {
   readonly onInterruptStream: (streamId: StreamTabId) => void;
 }
 
-type AppCtrlCAction = 'clear-draft' | 'delegate' | 'interrupt' | 'exit';
-
 export interface AppCtrlCState {
   readonly discardDraft: () => boolean;
   readonly canStopActiveRun: () => boolean;
@@ -100,23 +94,17 @@ export function appDraftDiscardActive({
 }
 
 /** Apply the root TUI's complete Ctrl+C policy from the latest composer state. */
-export function triggerAppCtrlC(state: AppCtrlCState): AppCtrlCAction {
-  if (state.discardDraft()) {
-    return 'clear-draft';
-  }
-
+export function triggerAppCtrlC(state: AppCtrlCState): void {
+  if (state.discardDraft()) return;
   if (state.onCtrlC) {
     state.onCtrlC();
-    return 'delegate';
+    return;
   }
-
   if (state.canStopActiveRun()) {
     state.onInterruptActive();
-    return 'interrupt';
+    return;
   }
-
   state.onExit();
-  return 'exit';
 }
 
 export function digitFromMetaShortcut(value: string): number | undefined {
@@ -257,14 +245,6 @@ export function groupPendingApprovalsByRow(
     (entry) => entry.key,
     (entry) => entry.summary.kind,
   );
-}
-
-/** Row key that owns stream-less approvals on the currently visible surface. */
-export function visibleApprovalRootStreamId(
-  sessionRootStreamId: StreamTabId | undefined,
-  childListRootStreamId: StreamTabId | undefined,
-): StreamTabId | undefined {
-  return childListRootStreamId ?? sessionRootStreamId;
 }
 
 // A workflow-script grandchild `agent()` call is the only interactively

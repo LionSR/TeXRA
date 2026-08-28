@@ -5,20 +5,18 @@ import { describe, expect, it } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
-  LIVE_TAIL_ROWS,
   boundedTranscriptEntryLayout,
   fullTranscriptEntryLayout,
-  liveAssistantDisplayLines,
   transcriptEntryLayout,
   transcriptEntryLayoutRows,
 } from '@cli/chat/tui/panes/transcriptEntryLayout';
-import { formatRenderError } from '@cli/chat/tui/panes/EntryErrorBoundary';
+import { EntryErrorBoundary } from '@cli/chat/tui/panes/EntryErrorBoundary';
 import {
   incrementalStaticTranscriptEntries,
   isInquiryContinuationText,
+  isRenderableTranscriptEntry,
   orderedStaticTranscriptEntries,
   splitTranscriptEntries,
-  terminalVisibleTranscriptText,
   transcriptRowHeadline,
   trimAssistantTranscriptLead,
 } from '@cli/chat/tui/panes/transcriptEntries';
@@ -76,6 +74,10 @@ import {
 } from '@shared/schemas';
 import type { ToolRow, TranscriptRow } from '@shared/transcript';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
+import {
+  loadInk,
+  renderOutputAtTerminalSize,
+} from '@test/support/inkTestHarness.ts';
 import { buildChildRosters } from '@test/support/childRosters';
 import {
   compactionRowFixture,
@@ -486,14 +488,28 @@ describe('CLI conversation transcript', () => {
     expect(selected.rowLimits.has('tool')).toBe(false);
   });
 
-  it('formats unprintable render errors without throwing', () => {
+  it('formats unprintable render errors without throwing', async () => {
     const unprintable = {
       toString() {
         throw new Error('cannot stringify');
       },
     };
+    const { ink, React } = await loadInk();
+    function Boom(): never {
+      throw unprintable;
+    }
 
-    expect(formatRenderError(unprintable)).toBe('');
+    const frame = await renderOutputAtTerminalSize(
+      ink,
+      React.createElement(
+        EntryErrorBoundary,
+        { label: 'entry' },
+        React.createElement(Boom),
+      ),
+      80,
+    );
+    expect(frame).toContain('failed to render entry');
+    expect(frame).not.toContain('failed to render entry:');
   });
 
   it('renders bounded finalized assistant tails through markdown', () => {
@@ -551,11 +567,8 @@ describe('CLI conversation transcript', () => {
     ].join('\n');
     const assistant = entry('a1', 'assistant', text, false);
     const width = 52;
-    const liveRows = liveAssistantDisplayLines({
-      rows: LIVE_TAIL_ROWS,
-      text,
-      width,
-    }).length;
+    const liveRows = transcriptEntryLayout(assistant, { mode: 'live', width })
+      .lines.length;
 
     const selected = selectTranscriptEntriesForViewport(
       [assistant],
@@ -791,7 +804,7 @@ describe('CLI conversation transcript', () => {
     const tool = toolEntry('t1', 'in_progress');
 
     const invisibleText = transcriptRowHeadline(invisibleAssistant);
-    expect(terminalVisibleTranscriptText(invisibleText)).toBe('');
+    expect(isRenderableTranscriptEntry(invisibleAssistant)).toBe(false);
     expect(trimAssistantTranscriptLead(invisibleText)).toBe('');
     expect(trimAssistantTranscriptLead('\u001B[2m\u200B\nvisible')).toBe(
       '\u001B[2mvisible',

@@ -34,7 +34,7 @@ interface EntryErrorBoundaryState {
   readonly error: unknown;
 }
 
-export function formatRenderError(error: unknown): string {
+function formatRenderError(error: unknown): string {
   let message: string;
   try {
     message = toErrorMessage(error);

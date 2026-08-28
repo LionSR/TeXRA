@@ -26,7 +26,7 @@ function isInvisibleTranscriptChar(char: string | undefined): boolean {
   return char !== undefined && INVISIBLE_TRANSCRIPT_CHARS.has(char);
 }
 
-export function terminalVisibleTranscriptText(text: string): string {
+function terminalVisibleTranscriptText(text: string): string {
   let out = '';
   for (const char of stripAnsi(text)) {
     if (!isInvisibleTranscriptChar(char)) out += char;

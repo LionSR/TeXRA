@@ -38,7 +38,6 @@ import {
   selectedChildRowWorkflowControllable,
   shouldDeferEscapeInterruptForMetaChord,
   triggerAppCtrlC,
-  visibleApprovalRootStreamId,
   type EscapeInterruptState,
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
@@ -320,11 +319,14 @@ export function App(props: AppProps): React.JSX.Element {
         : undefined,
     [columns, workflowDashboardRoot],
   );
+  // Stream-less approvals fold onto the root of the visible surface: the
+  // scoped child-list root while one replaces the session list, else the
+  // session root.
   const pendingApprovalsForRows = useMemo(
     () =>
       groupPendingApprovalsByRow(
         pendingSummaries,
-        visibleApprovalRootStreamId(rootStreamId, childListTarget.streamId),
+        childListTarget.streamId ?? rootStreamId,
       ),
     [childListTarget.streamId, pendingSummaries, rootStreamId],
   );
@@ -585,7 +587,6 @@ export function App(props: AppProps): React.JSX.Element {
     return appEscapeInterruptActive({
       inputDisabled: state.inputDisabled,
       reverseSearchOpen: state.reverseSearchOpen,
-      runPending: true,
       slashPaletteOpen: state.slashPaletteOpen,
     });
   };
@@ -820,7 +821,6 @@ export function App(props: AppProps): React.JSX.Element {
               }
               childNavigationAvailable={childListAvailable}
               runningSessions={childRunningCount}
-              shortcutsActive={focusShortcutsActive}
               streamFocusAvailable={sessionViews.length > 0}
               transcriptAvailable={(activeSlice?.entries.length ?? 0) > 0}
             />
