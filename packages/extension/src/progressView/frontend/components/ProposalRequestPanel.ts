@@ -29,10 +29,12 @@ import type {
   AgentProposalPermission,
   PermissionPayload,
   WorkflowAgentProposalPermission,
+  WorkflowCallReviewScope,
 } from '@shared/schemas';
 import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
 import { postMessage } from '@shared/hostBridge';
 import {
+  WORKFLOW_CALL_REVIEW_COPY,
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptDeclaredItemsByPhase,
   workflowScriptPlanSummary,
@@ -119,6 +121,20 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     this.emitAction(this.approveAllDelegatedWorkDecision);
   }
 
+  protected override get canReviewWorkflowCalls(): boolean {
+    const data = this.permission.data;
+    return (
+      data.agentCategory === AgentCategory.Workflow &&
+      data.workflowScript !== undefined
+    );
+  }
+
+  protected override reviewWorkflowCallsHandler(
+    scope: Exclude<WorkflowCallReviewScope, 'none'>,
+  ): void {
+    this.emitAction({ action: 'approve', callReview: scope });
+  }
+
   override render(): TemplateResult {
     const data = this.permission.data;
     const modelOptions = this.permission.modelOptionsData ?? [];
@@ -128,6 +144,8 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     let categoryLabel = 'Tool-Use';
     if (workflowScript) {
       categoryLabel = 'Multi-agent workflow';
+    } else if (data.workflowCall) {
+      categoryLabel = 'Workflow call';
     } else if (isWorkflow) {
       categoryLabel = 'Workflow';
     }
@@ -183,6 +201,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
                 >`
           }
         </div>
+        ${this.renderWorkflowCallContext(data)}
         ${
           workflowScript
             ? this.renderWorkflowScriptSummary(data)
@@ -277,6 +296,19 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
         ${this.renderProposalFileList('Script', [workflow.scriptPath], true)}
       </wa-details>
     `;
+  }
+
+  /** One issued call of a multi-agent workflow under per-call/phase review. */
+  private renderWorkflowCallContext(
+    data: AgentProposalPermission,
+  ): TemplateResult | typeof nothing {
+    const call = data.workflowCall;
+    if (!call) return nothing;
+    return html`<div class="workflow-proposal__plan-note">
+      <strong>${call.label}</strong> —
+      ${WORKFLOW_CALL_REVIEW_COPY.callCardNote(call.workflowName, call.phase)}
+      ${call.admitsPhase ? ` ${WORKFLOW_CALL_REVIEW_COPY.phaseAdmitsNote}` : ''}
+    </div>`;
   }
 
   private renderInstruction(instruction: string): TemplateResult {

@@ -31,6 +31,7 @@ import {
   RUN_OUTCOME,
   ToolError,
   USER_FOLLOW_UP_SUPPORT,
+  WORKFLOW_CALL_REVIEW_SCOPE,
   WorkflowScriptFilesSchema,
 } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
@@ -51,7 +52,10 @@ import {
 
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
-import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
+import {
+  createWorkflowCallAdmission,
+  createWorkflowScriptAgentRunner,
+} from './workflowScriptAgentRunner';
 import {
   createWorkflowScriptStrategy,
   formatWorkflowScriptReference,
@@ -419,6 +423,11 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       proposal,
     );
     if (declined) return withScriptReference(declined, scriptPath);
+    const callReview =
+      proposalDecision.result.action === 'approve'
+        ? (proposalDecision.result.callReview ??
+          WORKFLOW_CALL_REVIEW_SCOPE.NONE)
+        : WORKFLOW_CALL_REVIEW_SCOPE.NONE;
 
     // Capture any prior workflow snapshot *before* registerExecution overwrites
     // meta.json. Deterministic meta.name reuses the same execution id, so a
@@ -544,6 +553,18 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
                 files,
                 name: meta.name,
                 workflowControls: runScope.session.workflowControls,
+                ...(callReview !== WORKFLOW_CALL_REVIEW_SCOPE.NONE && {
+                  admitCall: createWorkflowCallAdmission({
+                    parent,
+                    defaultAgent,
+                    run: {
+                      executionId: runExecutionId,
+                      streamId: childStream.childStreamId,
+                    },
+                    workflowName: meta.name,
+                    scope: callReview,
+                  }),
+                }),
                 initialSnapshot,
                 onSnapshot: (snapshot) =>
                   writeWorkflowExecutionSnapshot(runExecutionId, snapshot),

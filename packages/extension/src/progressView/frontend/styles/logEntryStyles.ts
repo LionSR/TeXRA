@@ -79,6 +79,11 @@ export const logEntryStyles = css`
     opacity: var(--opacity-subtle);
   }
 
+  .workflow-task--awaitingApproval {
+    border-inline-start-color: var(--wa-color-warning-border-loud);
+    background: var(--wa-color-warning-fill-quiet);
+  }
+
   .workflow-task--running {
     border-inline-start-color: var(--wa-color-focus);
     background: var(--wa-color-neutral-fill-quiet);

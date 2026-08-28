@@ -15,6 +15,7 @@ import {
 } from '@shared/schemas';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import {
+  WORKFLOW_CALL_REVIEW_COPY,
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
 } from '@shared/copy/workflowScriptProposal';
@@ -93,6 +94,15 @@ export function agentProposalMetadataRows({
       `Model: ${payload.model} · Category: ${agentProposalCategoryLabel(payload.agentCategory)}`,
       width,
     ) +
+    (payload.workflowCall
+      ? wrappedRows(
+          `${WORKFLOW_CALL_REVIEW_COPY.callCardNote(
+            payload.workflowCall.workflowName,
+            payload.workflowCall.phase,
+          )}${payload.workflowCall.admitsPhase ? ` ${WORKFLOW_CALL_REVIEW_COPY.phaseAdmitsNote}` : ''}`,
+          width,
+        )
+      : 0) +
     (payload.workingDirectory
       ? wrappedRows(`Directory: ${payload.workingDirectory}`, width)
       : 0) +
@@ -130,9 +140,13 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
     props.payload.agentCategory === AgentCategory.Workflow
       ? props.payload.workflowScript
       : undefined;
-  const title = workflowScript
-    ? `Approve multi-agent workflow ${workflowScript.name}?`
-    : `Spawn ${props.payload.agent}?`;
+  const workflowCall = props.payload.workflowCall;
+  let title = `Spawn ${props.payload.agent}?`;
+  if (workflowScript) {
+    title = `Approve multi-agent workflow ${workflowScript.name}?`;
+  } else if (workflowCall) {
+    title = `Run workflow call ${workflowCall.label}?`;
+  }
   const instructionWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
@@ -158,6 +172,22 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
         kind: 'superYolo',
         label: DELEGATION_APPROVAL_COPY.cliAction,
       }}
+      extraActions={
+        workflowScript
+          ? [
+              {
+                key: 'p',
+                label: WORKFLOW_CALL_REVIEW_COPY.phase,
+                decision: { accepted: true, callReview: 'phase' },
+              },
+              {
+                key: 'c',
+                label: WORKFLOW_CALL_REVIEW_COPY.call,
+                decision: { accepted: true, callReview: 'call' },
+              },
+            ]
+          : []
+      }
       onFeedbackModeChange={setFeedbackMode}
       onDecide={props.onDecide}
     >
@@ -208,6 +238,17 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
               <Text bold>Category: </Text>
               {agentProposalCategoryLabel(props.payload.agentCategory)}
             </Text>
+            {workflowCall ? (
+              <Text dimColor>
+                {WORKFLOW_CALL_REVIEW_COPY.callCardNote(
+                  workflowCall.workflowName,
+                  workflowCall.phase,
+                )}
+                {workflowCall.admitsPhase
+                  ? ` ${WORKFLOW_CALL_REVIEW_COPY.phaseAdmitsNote}`
+                  : ''}
+              </Text>
+            ) : null}
             {props.payload.workingDirectory ? (
               <Text>
                 <Text bold>Directory: </Text>

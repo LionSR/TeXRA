@@ -62,6 +62,8 @@ function projectWorkflowCallStatus(
       return call.issued ? 'planned' : 'declared';
     case WORKFLOW_CALL_STATUS.STAGE_BLOCKED:
       return 'declared';
+    case WORKFLOW_CALL_STATUS.AWAITING_APPROVAL:
+      return 'awaitingApproval';
     case WORKFLOW_CALL_STATUS.QUEUED:
       return 'queued';
     case WORKFLOW_CALL_STATUS.STARTING:

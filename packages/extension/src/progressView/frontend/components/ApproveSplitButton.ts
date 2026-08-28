@@ -13,6 +13,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports - shared styles + helpers
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+import { WORKFLOW_CALL_REVIEW_COPY } from '@shared/copy/workflowScriptProposal';
 import { createEvent } from '@shared/utils/events';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderSplitButtonMenuParts } from '@shared/wa/splitButton';
@@ -22,6 +23,8 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 const YOLO_VALUE = 'approve-session';
 /** Internal dropdown-item value for the delegated-task approval entry. */
 const DELEGATED_WORK_VALUE = 'approve-all-delegated-work';
+const REVIEW_PHASE_VALUE = 'review-phase';
+const REVIEW_CALL_VALUE = 'review-call';
 
 /**
  * Approve control for approval prompts, used declaratively:
@@ -101,12 +104,21 @@ export class ApproveSplitButton extends LitElement {
   /** When true, surface the proposal's run-scoped approve-all action. */
   @property({ type: Boolean }) canApproveAllDelegatedWork = false;
 
+  /**
+   * Multi-agent workflow proposals only: approve, but review the calls the
+   * script issues — the first of each phase, or every one.
+   */
+  @property({ type: Boolean }) canReviewWorkflowCalls = false;
+
   /** Read-only trace-viewer export: render inert, no bypass split-menu. */
   @property({ type: Boolean }) disabled = false;
 
   override render(): TemplateResult {
     const hasMenu =
-      !this.disabled && (this.canBypass || this.canApproveAllDelegatedWork);
+      !this.disabled &&
+      (this.canBypass ||
+        this.canApproveAllDelegatedWork ||
+        this.canReviewWorkflowCalls);
     const approveButton = renderLabeledActionButton({
       icon: 'check',
       text: 'Approve',
@@ -146,6 +158,16 @@ export class ApproveSplitButton extends LitElement {
               ${waIcon('rocket')} ${DELEGATION_APPROVAL_COPY.progressViewAction}
             </wa-dropdown-item>`,
         )}
+        ${when(
+          this.canReviewWorkflowCalls,
+          () =>
+            html`<wa-dropdown-item value=${REVIEW_PHASE_VALUE}>
+                ${waIcon('list-ul')} ${WORKFLOW_CALL_REVIEW_COPY.phase}
+              </wa-dropdown-item>
+              <wa-dropdown-item value=${REVIEW_CALL_VALUE}>
+                ${waIcon('list-check')} ${WORKFLOW_CALL_REVIEW_COPY.call}
+              </wa-dropdown-item>`,
+        )}
       `,
       onSelect: this.handleSelect,
     });
@@ -163,11 +185,20 @@ export class ApproveSplitButton extends LitElement {
       this.emit('approve-session');
     } else if (value === DELEGATED_WORK_VALUE) {
       this.emit('approve-all-delegated-work');
+    } else if (value === REVIEW_PHASE_VALUE) {
+      this.emit('approve-review-phase');
+    } else if (value === REVIEW_CALL_VALUE) {
+      this.emit('approve-review-call');
     }
   };
 
   private emit(
-    type: 'approve' | 'approve-session' | 'approve-all-delegated-work',
+    type:
+      | 'approve'
+      | 'approve-session'
+      | 'approve-all-delegated-work'
+      | 'approve-review-phase'
+      | 'approve-review-call',
   ): void {
     // Dispatch via the shared typed factory (bubbles + composed) like every
     // other ProgressView component, not a hand-rolled CustomEvent.

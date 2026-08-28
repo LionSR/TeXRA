@@ -86,6 +86,15 @@ return await parallel(
   tool-use agent (name one via `agentName`) that finishes by calling
   `submit_output`; the call resolves to an envelope whose `.structured` is the
   validated object rather than edited files.
+- Admission (`WorkflowScriptRunOptions.admitCall`) — an optional per-call
+  gate the host installs when the user approved the workflow with call or
+  phase review. The engine awaits it after journal replay is ruled out and
+  before the call takes a concurrency slot, so a pending review holds no
+  slot, charges no cap, and reserves no child attempt; the run abort ends the
+  wait. `'skip'` takes the interactive-skip path (skipped sentinel, never
+  journaled — a resumed run asks again). The production host resolves the
+  call exactly as launch will and shows it through the ordinary delegation
+  proposal on the run's stream (`createWorkflowCallAdmission`).
 - `parallel(thunks)` — concurrent barrier. Failed `agent()` calls resolve to
   `null`; other thrown errors reject the workflow.
 - Ordinary JavaScript loops and awaited `agent()` calls own sequential control
