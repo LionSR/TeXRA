@@ -7,10 +7,6 @@ export interface BrowserLaunchCommand {
   readonly args: string[];
 }
 
-interface BrowserLog {
-  debug(channel: string, message: string): void;
-}
-
 export function resolveBrowserLaunch(
   url: string,
   platform: NodeJS.Platform = process.platform,
@@ -56,13 +52,11 @@ async function launchBrowser(url: string): Promise<void> {
 
 export function openBrowser(
   url: string,
-  log: BrowserLog | undefined,
   manualBrowserHint: string,
 ): Promise<void> {
   return launchBrowser(url).catch((error: unknown) => {
     const message =
       extractErrorMessage(error) ?? 'unknown browser launch error';
-    log?.debug('cli-auth', message);
     throw new Error(
       `${message}. Run ${manualBrowserHint} to open the sign-in URL manually.`,
     );

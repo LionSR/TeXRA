@@ -40,9 +40,12 @@ export const CHATGPT_AUTH = {
 export const GROK_AUTH = {
   label: 'Grok',
   subscriptionLabel: 'Grok subscription',
+  subscriptionDescription: 'xAI models via Grok/SuperGrok',
   signInLabel: 'Sign in with Grok',
   signOutLabel: 'Sign out of Grok',
   preferLabel: 'Prefer Grok subscription',
+  deviceCodeLabel: 'Grok device code',
+  logoutDescription: 'Sign out and disable subscription preference',
   startingDevice: 'Starting Grok device-code sign-in.',
   startingNoBrowser: 'Starting Grok sign-in.',
   startingBrowser: 'Opening browser for Grok sign-in...',

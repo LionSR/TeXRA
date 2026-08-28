@@ -43,6 +43,11 @@ export async function setDefaultTeamId(
   await state.update(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID, teamId);
 }
 
+/** Drop the user-level default team, restoring the inherited roster. */
+export async function clearDefaultTeamId(state: StateStore): Promise<void> {
+  await state.update(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID, undefined);
+}
+
 export function readOnboardingFlags(state: StateStore): {
   /** The user saw the credential picker and chose "Skip for now". */
   declined: boolean;

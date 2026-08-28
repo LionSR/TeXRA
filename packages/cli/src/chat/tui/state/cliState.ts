@@ -26,6 +26,7 @@ import type {
 } from '@shared/streams/compactionActivityProjection';
 import type { StreamArtifactAuthority } from '@transcript';
 import { isChildStreamRemoved } from './childExecutions';
+import type { PastedImageEntry } from '../input/draftAttachments';
 
 // ---------------------------------------------------------------------------
 // types
@@ -636,17 +637,27 @@ export function closeForegroundReader(): void {
 export const slashPaletteOpen = signal<boolean>(false);
 export const reverseSearchOpen = signal<boolean>(false);
 
-/** A refused follow-up handing its submitted text back to the InputBar,
- *  image chips included. `seq` makes two identical restores distinguishable;
- *  the InputBar consumes and clears. */
-export const draftRestoreRequest = signal<{
+/** Refused follow-ups handing their submitted drafts back to the InputBar.
+ * Requests stay ordered until the InputBar atomically drains the whole batch. */
+interface DraftRestoreRequest {
   readonly text: string;
-  readonly seq: number;
-} | null>(null);
-let draftRestoreSeq = 0;
-export function requestDraftRestore(text: string): void {
-  draftRestoreSeq += 1;
-  draftRestoreRequest.set({ text, seq: draftRestoreSeq });
+  readonly images: readonly PastedImageEntry[];
+}
+export const draftRestoreRequest = signal<readonly DraftRestoreRequest[]>([]);
+export function requestDraftRestore(
+  text: string,
+  images: readonly PastedImageEntry[] = [],
+): void {
+  draftRestoreRequest.set([
+    ...draftRestoreRequest.get(),
+    { text, images: [...images] },
+  ]);
+}
+
+export function takeDraftRestoreRequests(): readonly DraftRestoreRequest[] {
+  const requests = draftRestoreRequest.get();
+  if (requests.length > 0) draftRestoreRequest.set([]);
+  return requests;
 }
 
 /** Windowed content rows of the chat input's current draft (≥ 1), reported
@@ -827,6 +838,7 @@ export function resetCliState(
   FOREGROUND_READER.set(undefined);
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
+  draftRestoreRequest.set([]);
   clearTransientNotice();
   for (const resetHook of RESET_HOOKS) resetHook();
 }

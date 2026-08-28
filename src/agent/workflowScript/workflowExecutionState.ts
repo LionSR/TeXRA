@@ -20,7 +20,10 @@ interface WorkflowCallDefinition {
   readonly id: string;
   readonly label: string;
   readonly phase?: string;
+  readonly kind: WorkflowExecutionCall['kind'];
   readonly agent?: string;
+  /** Model the script declared for this call; the host may still substitute. */
+  readonly model?: string;
   readonly files: WorkflowExecutionCall['files'];
 }
 
@@ -198,8 +201,11 @@ export class WorkflowExecutionState {
     const canonical = {
       label: definition.label,
       stageId: stageIndex < 0 ? undefined : stageIdFor(stageIndex),
+      issued: true as const,
+      kind: definition.kind,
       files: definition.files,
       ...(definition.agent !== undefined && { agent: definition.agent }),
+      ...(definition.model !== undefined && { model: definition.model }),
     };
     if (!call) {
       call = {
@@ -256,7 +262,13 @@ export class WorkflowExecutionState {
     });
   }
 
-  queueCall(id: string): void {
+  /**
+   * Queue a call for a concurrency slot. Live-attempt facts of a prior attempt
+   * are dropped — a stale resolved model must not describe the attempt about
+   * to start — while the model the script itself declared stays visible
+   * until the host reports what it resolved.
+   */
+  queueCall(id: string, declared: { readonly model?: string } = {}): void {
     const call = this.#call(id);
     const queuedAt = now();
     // Interactive retry re-queues a still-live call: keep the logical start so
@@ -269,7 +281,7 @@ export class WorkflowExecutionState {
       status: WORKFLOW_CALL_STATUS.QUEUED,
       childExecutionId: undefined,
       childStreamId: undefined,
-      model: undefined,
+      model: declared.model,
       settledBySweep: undefined,
       blockedReason: undefined,
       error: undefined,
@@ -349,6 +361,7 @@ export class WorkflowExecutionState {
     this.#snapshot.currentStageId = undefined;
     this.#snapshot.timestamps.completedAt = completedAt;
     if (error) this.#snapshot.error = error;
+    const sweepSettledStageIds = new Set<string>();
     for (const call of this.#snapshot.calls) {
       const latestAttempt = call.attempts.at(-1);
       if (latestAttempt && latestAttempt.completedAt === undefined) {
@@ -360,6 +373,7 @@ export class WorkflowExecutionState {
       ) {
         call.status = WORKFLOW_CALL_STATUS.SKIPPED;
         call.settledBySweep = true;
+        if (call.stageId) sweepSettledStageIds.add(call.stageId);
         call.blockedReason = WORKFLOW_CALL_NOT_REACHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
@@ -373,6 +387,7 @@ export class WorkflowExecutionState {
             ? WORKFLOW_CALL_STATUS.CANCELLED
             : WORKFLOW_CALL_STATUS.FAILED;
         call.settledBySweep = true;
+        if (call.stageId) sweepSettledStageIds.add(call.stageId);
         call.error ??= WORKFLOW_CALL_UNFINISHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
@@ -383,7 +398,15 @@ export class WorkflowExecutionState {
         stage.lifecycle = WORKFLOW_EXECUTION_LIFECYCLE.SKIPPED;
         stage.completedAt = completedAt;
       } else {
-        this.#settleStage(stage.id, completedAt);
+        // Re-derive the lifecycle after the call sweep above. A stage whose
+        // call the sweep just terminalized ends now; genuinely settled stages
+        // keep their own end instant rather than taking the run's terminal one.
+        this.#settleStage(
+          stage.id,
+          sweepSettledStageIds.has(stage.id)
+            ? completedAt
+            : (stage.completedAt ?? completedAt),
+        );
       }
     }
     // Call-derived settlement alone can mark the active stage completed or
@@ -505,6 +528,11 @@ function resetRecoveredLiveFields(
 ) {
   return (
     !reusable && {
+      // Not yet issued by this attempt: the script re-issues (and re-stamps)
+      // every invocation fact of each call it reaches.
+      issued: undefined,
+      kind: undefined,
+      agent: undefined,
       childExecutionId: undefined,
       childStreamId: undefined,
       model: undefined,

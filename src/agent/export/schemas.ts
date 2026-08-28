@@ -2,7 +2,8 @@
  * Format-agnostic intermediate representation schemas for chat export.
  *
  * These describe the `ExportNode` produced by normalization and consumed by
- * every renderer (markdown, LaTeX, HTML). They are host-neutral and carry no
+ * every format spec (markdown, LaTeX). The HTML export path uses
+ * `assembleTrace` instead. They are host-neutral and carry no
  * provider-specific types — the command-layer export package imports these
  * without pulling in `openai/*`, `@agent/modelHandlers/openai/*`, or
  * `@google/genai`.
@@ -48,8 +49,7 @@ export type ChatExportInput = z.infer<typeof ChatExportInputSchema>;
 /**
  * One rendered search hit in the exported document: the title/url projection
  * of the canonical provider result entry ({@link WebSearchResultEntrySchema}
- * in `@agent/types/ServerTools`). Snippet, domain, and page age never reach
- * the export IR.
+ * in `@agent/types/ServerTools`). Domain never reaches the export IR.
  */
 const ExportWebSearchResultSchema = WebSearchResultEntrySchema.pick({
   title: true,

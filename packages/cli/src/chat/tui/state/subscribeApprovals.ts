@@ -471,7 +471,6 @@ async function requestRetryInteraction(
       // the user must not be told a switch happened that did not.
       if (
         retryDecision.source === 'automatic' &&
-        decision.disableQuotaRoute !== undefined &&
         isCodingPlanQuotaRoute(decision.disableQuotaRoute)
       ) {
         notify('credentialSwitched');
@@ -683,11 +682,14 @@ async function applyRetryCredentialCommit(
   signal: AbortSignal,
   codingPlanRollback?: RetrySettingRollbackConfig,
 ): Promise<void> {
-  signal.throwIfAborted();
   const oauth = oauthCliPreference(decision.disableQuotaRoute);
   const previousOauthPreference = oauth?.isPrefer() ?? false;
   let subscriptionWriteStarted = false;
   try {
+    // Inside the try: a cancel landing on the coding-plan branch (where there
+    // is no oauth write and so nothing else can throw here) must still roll
+    // the already-disabled plan back rather than escape past the rollback.
+    signal.throwIfAborted();
     if (oauth) {
       subscriptionWriteStarted = true;
       const update = await runRetryTask(() => oauth.setPrefer(false), signal);

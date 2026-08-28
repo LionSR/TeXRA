@@ -33,7 +33,6 @@ export async function summarizeRound(
   outputFile: FileLocation,
   currRound: number,
   options: {
-    endTurn: boolean;
     mapping?: RoundFileMapping;
     isRewrite?: boolean;
     /** Snapshot-resolved base files. Required for in-place workflows so

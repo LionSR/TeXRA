@@ -90,11 +90,11 @@ async function toWorkspaceOrigin(
 /** Computes diff stats for all output files in a round.
  *
  *  Callers in workflows must pass snapshot-resolved baseFiles (via
- *  resolveBaseFilesForDiff) when an executionId is available; passing
- *  the live workspace path would collapse in-place diffs to 0/0. The
- *  precomputedMapping, if provided, must have been built against the
- *  same snapshot-resolved baseFiles — otherwise the mapping's base
- *  locations still point at the overwritten files. */
+ *  resolveBaseFilesForDiff); passing the live workspace path would
+ *  collapse in-place diffs to 0/0. The precomputedMapping, if provided,
+ *  must have been built against the same snapshot-resolved baseFiles —
+ *  otherwise the mapping's base locations still point at the overwritten
+ *  files. */
 export async function computeOutputDiffStats(
   state: OutputState,
   baseFiles: FileLocation[],

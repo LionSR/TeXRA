@@ -13,7 +13,6 @@ import {
   resetCycleState,
   saveCycleDebug,
   type SkippableNodeResult,
-  type CycleDebugFileOptions,
 } from '@agent/core/flows/CommonCycleTypes';
 import {
   isContextWindowExceededStopReason,
@@ -86,21 +85,6 @@ interface ResponsePrepResult {
 }
 
 /**
- * Debug-file identity for one cycle. The request messages and the response are
- * saved from different nodes and must land on the same base name and round.
- */
-function responseDebugFileOptions(
-  shared: ResponseCycleShared,
-  continuationCount: number,
-): CycleDebugFileOptions {
-  return {
-    continuationCount,
-    baseName: 'response',
-    outputFile: shared.outputLocation.relativePath,
-  };
-}
-
-/**
  * Prepares a response cycle by hydrating prompts, checking interruptions, and
  * establishing debug metadata before invoking the model.
  */
@@ -137,12 +121,12 @@ class ResponsePrepNode extends BaseNode<
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
 
-    await saveCycleDebug(
-      shared.messages,
-      'messages',
-      this.services,
-      responseDebugFileOptions(shared, round.continuationCount),
-    );
+    // The request messages and the response are saved from different nodes;
+    // each names its own file so neither round nor object kind collides.
+    await saveCycleDebug(shared.messages, 'messages', this.services, {
+      continuationCount: round.continuationCount,
+      baseName: `r${round.roundIndex}_messages`,
+    });
 
     return FlowTransition.DEFAULT;
   }
@@ -606,8 +590,10 @@ export function createResponseCycleFlow(): Flow<
       shared.responseObject = response;
     },
     getPostCompactionContext: defaultPostCompactionContext,
-    getDebugFileOptions: (shared, services) =>
-      responseDebugFileOptions(shared, services.round.continuationCount),
+    getDebugFileOptions: (_shared, services) => ({
+      continuationCount: services.round.continuationCount,
+      baseName: `r${services.round.roundIndex}_response`,
+    }),
   });
   const processNode = new ResponseProcessNode();
   const continuationNode = new ResponseContinuationNode();

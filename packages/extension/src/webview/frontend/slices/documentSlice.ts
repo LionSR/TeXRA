@@ -144,7 +144,6 @@ export const documentHandlers = {
 
     // Base/edited are single-slot fields: they select out of fileOptions.
     const key = SINGLE_FILE_TYPE_TO_KEY[fileType];
-    if (!key) return;
     const sf = singleFiles$.get();
     const options = fileOptions$.get()[key] ?? [];
     if (!options.includes(filePath)) {

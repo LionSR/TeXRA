@@ -106,6 +106,35 @@ describe('install-github-action command', () => {
     );
   });
 
+  it('does not switch branches before the GitHub App installer opens', async () => {
+    const repo = makeRepo();
+    git(
+      repo,
+      'remote',
+      'add',
+      'origin',
+      'https://github.com/example/project.git',
+    );
+    let rejectBrowser: ((error: Error) => void) | undefined;
+    browserMocks.tryOpenBrowser.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((_resolve, reject) => {
+          rejectBrowser = reject;
+        }),
+    );
+
+    const install = runInstall(repo);
+    await vi.waitFor(() =>
+      expect(browserMocks.tryOpenBrowser).toHaveBeenCalledOnce(),
+    );
+    expect(git(repo, 'branch', '--show-current')).toBe('main');
+
+    rejectBrowser?.(new Error('installer interrupted'));
+    await expect(install).resolves.toEqual({
+      exitCode: CliExitCode.AgentError,
+    });
+  });
+
   it('creates the install branch from the requested base', async () => {
     const repo = makeRepo();
     git(repo, 'checkout', '-b', 'feature');

@@ -10,6 +10,7 @@ import type {
   WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import {
+  WORKFLOW_CALL_KIND,
   WORKFLOW_CALL_STATUS,
   WORKFLOW_EXECUTION_LIFECYCLE,
   WorkflowScriptFilesSchema,
@@ -231,7 +232,17 @@ class CoalescedSnapshotWriter {
   }
 
   async flush(): Promise<void> {
-    while (this.#running) await this.#running;
+    // `#drain()` can settle synchronously — a synchronous `onSnapshot` throw
+    // runs the whole body, `catch` and `finally` included, before `publish`'s
+    // `??=` stores the handle, so `#running` ends up holding an already
+    // settled promise that nothing will clear. Stop once the handle stops
+    // changing, or that stale handle spins this loop forever and the run
+    // hangs instead of reporting its `kind: 'checkpoint'` failure.
+    let awaited: Promise<void> | undefined;
+    while (this.#running && this.#running !== awaited) {
+      awaited = this.#running;
+      await awaited;
+    }
   }
 
   throwIfFailed(): void {
@@ -264,10 +275,10 @@ class CoalescedSnapshotWriter {
       this.#pending = undefined;
       this.#onFailure(failure);
     } finally {
+      // The loop exits only with `#pending` already undefined (the `catch`
+      // clears it too) and nothing awaits between that test and here, so
+      // there is never a leftover snapshot left to re-drain.
       this.#running = undefined;
-      if (this.#pending && this.#failure === undefined) {
-        this.#running = this.#drain();
-      }
     }
   }
 }
@@ -535,7 +546,12 @@ export async function runWorkflowScript(
         id: progressId,
         label,
         phase: callOptions.phase,
+        kind:
+          callOptions.schema === undefined
+            ? WORKFLOW_CALL_KIND.DOCUMENT
+            : WORKFLOW_CALL_KIND.STRUCTURED,
         agent: callOptions.agentName,
+        model: callOptions.model,
         files: {
           input: (callOptions.inputFiles ?? []).map((file) => basename(file)),
           context: (callOptions.contextFiles ?? []).map((file) =>
@@ -643,7 +659,7 @@ export async function runWorkflowScript(
     }
     // The execution snapshot solely owns the queued fact (QUEUED status); no
     // event duplicates it.
-    executionState.queueCall(progressId);
+    executionState.queueCall(progressId, { model: callOptions.model });
 
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
     // runAgent call for this same index/key; skip() and normal settlement exit.
@@ -755,7 +771,7 @@ export async function runWorkflowScript(
       // did: a deliberate skip/retry discards this attempt's outcome.
       const action = call.action;
       if (action === 'retry') {
-        executionState.queueCall(progressId);
+        executionState.queueCall(progressId, { model: callOptions.model });
         continue;
       }
       if (action === 'skip') {

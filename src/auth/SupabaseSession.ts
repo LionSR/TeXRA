@@ -167,7 +167,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   /**
    * Read the stored session's account label without attempting a token
    * refresh. Returns null when no session is stored or the data is
-   * unreadable — the caller decides whether to surface "N/A".
+   * unreadable — the caller decides what to show in its place.
    */
   async getStoredAccountLabel(): Promise<string | null> {
     const session = await this.loadSession();

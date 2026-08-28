@@ -4,10 +4,11 @@
  * Both the CLI (`texra history show <id> --export`) and the progress-view
  * toolbar export need to read the same execution triple (config,
  * conversation, meta) and assemble the same format-agnostic
- * {@link ChatExportInput} the html/markdown/LaTeX formatters consume, so the
- * two hosts render a stored conversation identically. This module is the
- * single place that does that read + assemble; each host wraps it with its
- * own status vocabulary (see `readCliHistoryExportInput` in
+ * {@link ChatExportInput} the markdown and LaTeX formatters consume (the HTML
+ * export path uses `assembleTrace` instead), so the two hosts render a stored
+ * conversation identically. This module is the single place that does that
+ * read + assemble; each host wraps it with its own status vocabulary (see
+ * `readCliHistoryExportInput` in
  * `packages/cli/src/runtime/history.ts` and
  * `ChatExportController.buildExportInput` in
  * `src/controllers/progressView/ChatExportController.ts`).

@@ -125,9 +125,7 @@ Issue #10640 lands the previously-cut user-facing setting:
   CLI `/config` panel does not surface it, but the CLI still recognizes and
   honors the key because the runtime reads it.
 - Runtime: `childRunBudgetFor` re-reads the configured value on every call and
-  live re-pins the session queue unless the caller explicitly pinned it with an
-  explicit `concurrency` argument (tracked by a `WeakSet`, so the existing
-  explicit test seams stay authoritative). Absent and invalid persisted values
-  both resolve to 16.
+  live re-pins the session queue to it, so the queue always tracks the
+  configured value. Absent and invalid persisted values both resolve to 16.
 - Provider-key partitioning remains rejected (maintainer ruling) — this
   implementation is per-session count-based only.

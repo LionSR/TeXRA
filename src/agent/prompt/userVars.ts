@@ -169,6 +169,16 @@ export async function buildUserVars(
     logger.emit({ type: 'skills.snapshot', skills: runtimeSkills.skills });
   }
 
+  // The resolved output list is also the run's normalized `config.outputFiles`:
+  // the reflection flow, output validation, and the XML manager all read it
+  // back off the config after this point, so the write happens here in the
+  // open rather than inside a helper the spread below hides.
+  const { outputFiles, vars: outputFileVars } = resolveOutputFiles(
+    agentConfig,
+    agentSetting,
+  );
+  agentConfig.outputFiles = outputFiles;
+
   // Merge all variable sources using spread operator.
   // LATEX_STYLE_RULES is placed last to prevent silent overrides from spreads.
   // The custom `requiredFilesInternal` keys ride beside the fixed vocabulary
@@ -177,7 +187,7 @@ export async function buildUserVars(
     ...getBasicVars(agentConfig, providerFlags, options),
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
-    ...resolveOutputFiles(agentConfig, agentSetting),
+    ...outputFileVars,
     ...getToolFlags(agentSetting, agentPrompt),
     LATEX_STYLE_RULES: latexStyleRules,
     ATTACHED_MEMORIES: attachedMemories.xml,
@@ -524,30 +534,32 @@ async function getAttachedMemories(
   };
 }
 
+/**
+ * The run's normalized output list plus the prompt variable derived from it.
+ * The caller owns writing the list back onto the config; see `buildUserVars`.
+ */
 export function resolveOutputFiles(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-): Pick<UserVars, 'OUTPUT_FILES'> {
-  const userVars: Pick<UserVars, 'OUTPUT_FILES'> = {};
+): { outputFiles: string[]; vars: Pick<UserVars, 'OUTPUT_FILES'> } {
   const explicitOutputFiles = (agentConfig.outputFiles ?? []).filter(Boolean);
   const defaultOutputFiles = (agentSetting.defaultOutputFiles ?? []).filter(
     Boolean,
   );
   const inputFiles = (agentConfig.inputFiles ?? []).filter(Boolean);
-  const explicitFilesAreSubsetOfInputs =
-    explicitOutputFiles.length > 0 &&
-    explicitOutputFiles.every((file) => inputFiles.includes(file));
+  const explicitFilesAreSubsetOfInputs = explicitOutputFiles.every((file) =>
+    inputFiles.includes(file),
+  );
   // An empty defaultOutputFiles is already `[]`, so this single ternary covers
   // the "no usable outputs" case without a nested fallback branch.
   const useExplicit =
     explicitOutputFiles.length > 0 && !explicitFilesAreSubsetOfInputs;
   const outputFiles = useExplicit ? explicitOutputFiles : defaultOutputFiles;
 
-  agentConfig.outputFiles = outputFiles;
-  if (outputFiles.length > 0) {
-    userVars.OUTPUT_FILES = outputFiles;
-  }
-  return userVars;
+  return {
+    outputFiles,
+    vars: outputFiles.length > 0 ? { OUTPUT_FILES: outputFiles } : {},
+  };
 }
 
 type ToolFlagVars = Pick<

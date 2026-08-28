@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import { runCleanSingle } from '@housekeeping/clean';
+import { runCleanMultiple, runCleanSingle } from '@housekeeping/clean';
 import { runPackMultiple } from '@housekeeping/pack';
 import {
   findFilesFromPatterns,
@@ -171,5 +171,15 @@ describe('filename-era workflow output grammar', () => {
       code: 'ENOENT',
     });
     await expect(access(inputPath)).resolves.toBeUndefined();
+  });
+
+  it('cleans a nonempty batch without a primary input file', async () => {
+    const outputPath = path.join(workspacePath, 'chapter_polish_r0_gpt-4.tex');
+    await writeFile(outputPath, 'fixture');
+
+    await expect(
+      runCleanMultiple('gpt-4', '', 'custom:polish_long', ['chapter.tex']),
+    ).resolves.toEqual({ status: 'success' });
+    await expect(access(outputPath)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });

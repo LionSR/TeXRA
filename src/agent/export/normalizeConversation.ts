@@ -408,7 +408,8 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
  *
  * Handles Anthropic, OpenAI (Chat Completions and Response API), Google GenAI,
  * and VS Code language-model message shapes. The resulting nodes are consumed
- * by every format renderer (markdown, LaTeX, HTML).
+ * by every format spec (markdown, LaTeX); the HTML export path uses
+ * `assembleTrace` instead.
  */
 export function normalizeConversationForExport(
   messages: unknown[],

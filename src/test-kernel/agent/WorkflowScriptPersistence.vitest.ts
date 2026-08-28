@@ -520,7 +520,9 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
       for (const snapshot of rerunSnapshots) {
         expect(snapshot.calls[0]?.childExecutionId).toBeUndefined();
         expect(snapshot.calls[0]?.childStreamId).toBeUndefined();
-        expect(snapshot.calls[0]?.model).toBeUndefined();
+        // The rerun shows the script's own declaration, never the model the
+        // prior attempt resolved.
+        expect(snapshot.calls[0]?.model).toBe('changed-model');
         expect(snapshot.calls[0]?.costUsd).toBe(3.75);
         expect(snapshot.calls[0]?.attempts[0]).toMatchObject({
           id: 'cccccccccccc',

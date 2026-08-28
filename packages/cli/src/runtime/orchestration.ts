@@ -25,8 +25,8 @@ import {
   type CliHistoryEntry,
 } from './history';
 import {
-  modelAccessLaunchBlockDescription,
   modelSelectItemsForCli,
+  NO_RUNNABLE_MODEL_ACCESS_COPY,
   type CliModelAccess,
   type CliModelPickerItem,
 } from './modelAccess';
@@ -131,7 +131,7 @@ export function orchestrationModelAccessView(
     return { items, modelItems };
   }
 
-  const description = modelAccessLaunchBlockDescription();
+  const description = NO_RUNNABLE_MODEL_ACCESS_COPY;
   return {
     modelItems,
     items: items.map((item) => {

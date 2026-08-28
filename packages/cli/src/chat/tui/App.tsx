@@ -38,7 +38,6 @@ import {
   selectedChildRowWorkflowControllable,
   shouldDeferEscapeInterruptForMetaChord,
   triggerAppCtrlC,
-  triggerEscapeInterrupt,
   visibleApprovalRootStreamId,
   type EscapeInterruptState,
 } from './appInteractionPolicy';
@@ -107,6 +106,7 @@ import {
 import { streamLabelForId, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
+import type { PastedImageEntry } from './input/draftAttachments';
 
 // Narrow subset of Ink's internal stdin emitter used to synthesize Enter.
 interface InputEventEmitterLike {
@@ -132,18 +132,21 @@ function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
 }
 
 export interface AppProps {
-  readonly onSubmit: (line: string, mediaFiles?: readonly string[]) => void;
+  readonly onSubmit: (
+    line: string,
+    mediaFiles?: readonly string[],
+    images?: readonly PastedImageEntry[],
+  ) => void;
   readonly onKillExecution: (executionId: string) => void;
   /** Skip or retry a focused, in-flight workflow-script grandchild `agent()` call. */
   readonly onWorkflowControl: (
     executionId: string,
     action: WorkflowControlAction,
   ) => void;
-  /** Whether Ctrl-C may stop the current root run. */
-  readonly canInterruptActiveRun: () => boolean;
   /** Whether bare Escape may stop the identified focused stream. */
   readonly canInterruptStream: (streamId: StreamTabId) => boolean;
-  readonly canStopActiveRun?: () => boolean;
+  /** Whether Ctrl-C may stop the current root run. */
+  readonly canStopActiveRun: () => boolean;
   readonly colorEnabled?: boolean;
   readonly commandName?: string;
   /** Apply the existing root-run interruption used by Ctrl-C. */
@@ -190,8 +193,6 @@ export function App(props: AppProps): React.JSX.Element {
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
-  const canStopActiveRun =
-    props.canStopActiveRun ?? props.canInterruptActiveRun;
   const activeApprovalVisible = approvalVisibleForActiveStream({
     activeStreamId,
     pending,
@@ -616,7 +617,11 @@ export function App(props: AppProps): React.JSX.Element {
       }
       return true;
     }
-    return triggerEscapeInterrupt(escapeInterruptStateRef.current, streamId);
+    // `bareEscapeActive` already proved `canInterruptStream(streamId)` for a
+    // parentless stream: `parentStream` never stores an undefined value, so
+    // once `.get()` returned undefined the `has` disjunct is false too.
+    escapeInterruptStateRef.current.onInterruptStream(streamId);
+    return true;
   };
 
   const handlePendingBareEscape = (
@@ -718,7 +723,7 @@ export function App(props: AppProps): React.JSX.Element {
               childListFocused,
             }) &&
               (inputBarRef.current?.discardDraft() ?? false)),
-          canStopActiveRun,
+          canStopActiveRun: props.canStopActiveRun,
           onInterruptActive: props.onInterruptActive,
           onExit: exit,
           onCtrlC: props.onCtrlC,

@@ -47,12 +47,13 @@ import {
 import { assertKnownOutboundMessage } from '@shared/utils/dispatcher';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { MainViewMessageHandler } from './MainViewMessageHandler';
 import type { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
-const logger = createLog('MainViewProvider');
+const log = createLog('MainViewProvider');
 
 export class MainViewProvider
   extends BaseWebviewProvider
@@ -208,16 +209,17 @@ export class MainViewProvider
     const canPost = view != null && this.mainWebviewReady;
 
     // Same usable-credential check the setup command uses: non-blank provider
-    // key or server-side key access. A failed probe still has to paint the
-    // funnel, but never silently: it demotes a mid-setup user back to the
-    // sign-in card, and the two states look identical on screen.
+    // key or server-side key access. A probe failure (locked/absent OS keyring,
+    // subscription-status read) still has to resolve to `false` so the funnel
+    // renders something, but it must not do so silently: that answer blanks the
+    // launcher down to the first-run welcome card for a user who has keys.
     let hasCredential = false;
     try {
       hasCredential = await hasAnyUsableSetupCredential();
     } catch (error) {
-      logger.warn('Credential probe failed; treating as no credential', {
-        data: error,
-      });
+      log.warn(
+        `Credential probe failed; treating as no credential: ${toErrorMessage(error)}`,
+      );
     }
     const transition = planOnboardingFunnelTransition(
       this.onboardingFunnelState,

@@ -618,14 +618,16 @@ export async function runToolUseFlow(
     } else if (shared.userCancelledRetry) {
       preservationReason =
         'Flow record preserved for resume after retry cancellation';
-    } else if (primaryFailure !== undefined) {
+    } else if (primaryFailure !== undefined && !flowRunStarted) {
       // Setup can fail before `persistenceRecoveryPending` is armed --
       // `liveAttachment.attach()` and `takePendingFollowUps()` both run ahead
       // of the existing-record guard. A non-resume launch reusing an
       // executionId that already has a checkpoint would otherwise fall through
       // to `'delete'` and destroy a record this run never owned (#11313).
       // Preserving is safe in the ordinary case too: a genuinely fresh launch
-      // has no record, so this is a no-op rather than a leak.
+      // has no record, so this is a no-op rather than a leak. Scoped to a
+      // failure before the flow ran: a mid-run failure is preserved by the
+      // arm below, which names the checkpoint it can be retried from.
       preservationReason = 'Flow record preserved after setup failure';
     } else if (flowRunStarted || input.resume) {
       // A checkpoint can exist once the flow ran or a resume snapshot was

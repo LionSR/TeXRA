@@ -1,14 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  emptyModelListMessage,
   findCliModelAccessEntry,
   formatCliModelDetails,
   formatCliNoAvailableModelsRecovery,
   formatCliNoRunnableModelsMessage,
   formatModelStatusForCli,
   getCliModelAccessList,
-  modelAccessLaunchBlockDescription,
   modelSelectItemsForCli,
   runnableCliModelAccessEntries,
   loadCliModelAccessEntry,
@@ -405,8 +403,7 @@ describe('CLI model access resolution', () => {
     ).toEqual([]);
   });
 
-  it('formats no-runnable model reasons for launch and model picker views', () => {
-    expect(modelAccessLaunchBlockDescription()).toBe('No models are available');
+  it('formats no-runnable model reasons for the model picker view', () => {
     expect(formatCliNoRunnableModelsMessage(INTERACTIVE_RECOVERY)).toBe(
       'No models are available. Configure a provider API key.',
     );
@@ -430,12 +427,6 @@ describe('CLI model access resolution', () => {
       formatCliNoRunnableModelsMessage(runtimeNullishActions),
     ).toBe(
       'No models are available. Add a provider API key with `texra setup`.',
-    );
-  });
-
-  it('formats empty model picker messages with caller-owned recovery actions', () => {
-    expect(emptyModelListMessage(INTERACTIVE_RECOVERY)).toBe(
-      'No models are available. Configure a provider API key.',
     );
   });
 

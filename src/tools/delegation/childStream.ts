@@ -13,7 +13,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { classifyAgentError } from '@common/errors';
-import { RUN_OUTCOME, STREAM_PHASE, type AgentCategory } from '@shared/schemas';
+import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
 import type {
   ExecutionId,
   RunIdentity,

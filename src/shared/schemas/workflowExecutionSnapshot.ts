@@ -68,17 +68,39 @@ const WorkflowExecutionAttemptSchema = z.strictObject({
   startedAt: z.iso.datetime(),
   completedAt: z.iso.datetime().optional(),
 });
+export const WORKFLOW_CALL_KIND = {
+  /** Whole-document workflow-agent run: file inputs in, edited files out. */
+  DOCUMENT: 'document',
+  /** Tool-use run that finishes by submitting a schema-validated value. */
+  STRUCTURED: 'structured',
+} as const;
+const WorkflowCallKindSchema = z.enum(WORKFLOW_CALL_KIND);
+export type WorkflowCallKind = z.infer<typeof WorkflowCallKindSchema>;
+
+/** File basenames one issued call was handed, by workflow-agent role. */
+export const WorkflowCallFilesSchema = z.strictObject({
+  input: z.array(z.string()),
+  context: z.array(z.string()),
+  media: z.array(z.string()),
+});
+
 const WorkflowExecutionCallShape = z.strictObject({
   id: z.string().min(1),
   label: z.string(),
   stageId: z.string().min(1).optional(),
+  /**
+   * Set the moment the script actually issues `agent()` for this call. A
+   * call without it is a `meta.tasks` plan label the run has not reached —
+   * first-class, so no consumer infers "declared only" from empty files or
+   * an absent agent (both also true of a structured call).
+   */
+  issued: z.literal(true).optional(),
+  /** Result contract of the call; absent until the call is issued. */
+  kind: WorkflowCallKindSchema.optional(),
   agent: z.string().optional(),
+  /** Declared by the script at issue time, then the host-resolved model. */
   model: z.string().optional(),
-  files: z.strictObject({
-    input: z.array(z.string()),
-    context: z.array(z.string()),
-    media: z.array(z.string()),
-  }),
+  files: WorkflowCallFilesSchema,
   childExecutionId: ExecutionIdSchema.optional(),
   childStreamId: StreamTabIdSchema.optional(),
   attempts: z.array(WorkflowExecutionAttemptSchema),

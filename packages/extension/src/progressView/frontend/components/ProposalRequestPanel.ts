@@ -32,6 +32,11 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
 import { postMessage } from '@shared/hostBridge';
+import {
+  WORKFLOW_SCRIPT_PROPOSAL_COPY,
+  workflowScriptDeclaredItemsByPhase,
+  workflowScriptPlanSummary,
+} from '@shared/copy/workflowScriptProposal';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import {
   readSelectValue,
@@ -210,10 +215,8 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       return nothing;
     }
     const workflow = data.workflowScript;
-    const phaseCount = workflow.phases.length;
-    const taskCount = workflow.tasks.length;
-    const activeSummary = workflow.phases[0]?.title ?? 'No declared phases';
     const fullName = `${workflow.name}: ${workflow.description}`;
+    const declaredGroups = workflowScriptDeclaredItemsByPhase(workflow);
 
     return html`
       <div class="workflow-proposal__workflow-summary">
@@ -222,15 +225,13 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
           >${workflow.name}</span
         >
         <span class="workflow-proposal__workflow-progress"
-          >${taskCount} tasks · ${phaseCount} phases</span
-        >
-        <span class="workflow-proposal__workflow-phase" title=${activeSummary}
-          >${activeSummary}</span
+          >${workflowScriptPlanSummary(workflow)}</span
         >
       </div>
       <div class="workflow-proposal__cost-warning">
-        ${waIcon('triangle-exclamation')} May run tasks concurrently and incur
-        high model cost. Default agent: ${data.agent} (${data.model}).
+        ${waIcon('triangle-exclamation')}
+        ${WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
+        ${WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(data.agent, data.model)}
       </div>
       <wa-details
         class="workflow-proposal__workflow-details"
@@ -238,17 +239,38 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       >
         ${this.renderInstruction(workflow.description)}
         ${
-          workflow.tasks.length > 0
+          declaredGroups.length > 0
             ? html`<ul class="workflow-proposal__task-list">
                 ${repeat(
-                  workflow.tasks,
-                  (task) => task.id,
-                  (task) =>
+                  declaredGroups,
+                  (group) => group.phase ?? '',
+                  (group) =>
                     html`<li>
-                      ${task.label}${task.phase ? ` · ${task.phase}` : ''}
+                      ${group.phase ?? 'No phase'}
+                      <ul>
+                        ${repeat(
+                          group.items,
+                          (task) => task.id,
+                          (task) => html`<li>${task.label}</li>`,
+                        )}
+                      </ul>
                     </li>`,
                 )}
               </ul>`
+            : nothing
+        }
+        <div class="workflow-proposal__plan-note">
+          ${
+            workflow.tasks.length > 0
+              ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
+              : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote
+          }
+        </div>
+        ${
+          getProposalFileGroups(data).length > 0
+            ? html`<div class="workflow-proposal__plan-note">
+                ${WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading}:
+              </div>`
             : nothing
         }
         ${this.renderProposalFiles(data)}

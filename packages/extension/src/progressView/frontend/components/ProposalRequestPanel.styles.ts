@@ -70,25 +70,16 @@ export const proposalRequestPanelStyles: CSSResult = css`
     flex: 0 0 auto;
   }
 
-  .workflow-proposal__workflow-name,
-  .workflow-proposal__workflow-phase {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
   .workflow-proposal__workflow-name {
     min-width: 4rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-weight: var(--font-weight-semibold);
   }
 
   .workflow-proposal__workflow-progress {
     flex: 0 0 auto;
     font-variant-numeric: tabular-nums;
-    color: var(--color-text-secondary);
-  }
-
-  .workflow-proposal__workflow-phase {
-    min-width: 0;
     color: var(--color-text-secondary);
   }
 
@@ -110,10 +101,10 @@ export const proposalRequestPanelStyles: CSSResult = css`
     padding-inline-start: var(--wa-space-l);
   }
 
-  @container (max-width: 420px) {
-    .workflow-proposal__workflow-phase {
-      display: none;
-    }
+  .workflow-proposal__plan-note {
+    margin-block: ${sp.small};
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
   }
 
   .workflow-proposal__instruction {
