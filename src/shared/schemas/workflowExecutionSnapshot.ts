@@ -122,10 +122,17 @@ const WorkflowExecutionCallShape = z.strictObject({
  * so a `meta.json` snapshot of an interrupted run `hydrate()` must still
  * recover keeps parsing instead of failing strictObject's unrecognized-key
  * check. Dropped keys: `stageTitle` (a denormalized duplicate of the
- * referenced stage's title — resolve it with `stageTitleFor`), `blockedReason`
- * (derivable from `status`, the stage, and `settledBySweep`), and
- * `timestamps.queuedAt` (never read). Dropped value: the transient `starting`
- * call status, folded into `running`.
+ * referenced stage's title — resolve it with `stageTitleFor`; removed
+ * 2026-08-18), `blockedReason` (derivable from `status`, the stage, and
+ * `settledBySweep`) and `timestamps.queuedAt` (never read) — both removed
+ * 2026-08-28. Dropped value: the transient `starting` call status, folded
+ * into `running` (removed 2026-08-28; last written by 0.40.5).
+ *
+ * Compatibility reader, not a contract: delete this preprocess (and pass the
+ * strict shape directly) once every release that wrote these shapes is
+ * three months old — on or after 2026-11-28 — per AGENTS.md "Compatibility
+ * and format retirement". A snapshot from an interrupted run that old is
+ * disposable; the strict shape then fails it loudly.
  */
 const WorkflowExecutionCallSchema = z.preprocess((value) => {
   if (!value || typeof value !== 'object') return value;
