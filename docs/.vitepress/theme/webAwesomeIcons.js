@@ -1,9 +1,15 @@
 // Web Awesome icon registration for the VitePress site.
 //
-// Mirrors the codicon -> Font Awesome alias map used by the rest of the TeXRA
-// repo (see src/shared/wa/webAwesomeIcons.ts) so markdown that says
-//   <wa-icon library="texra" name="sparkle"></wa-icon>
-// resolves to the closest Font Awesome glyph.
+// Independent from packages/desktop/src/renderer/desktopIconLibrary.ts by
+// necessity, not by drift: that module resolves TeXRAIconName to Lucide
+// stroke glyphs for the Electron renderer, while this one resolves a wider
+// codicon-style alias vocabulary (kept for markdown ergonomics, e.g.
+// <wa-icon library="texra" name="sparkle"></wa-icon>) to Font Awesome glyphs
+// for the statically-built VitePress site, which cannot import from
+// packages/desktop or bundle Lucide's icon-nodes.json. Keep the two tables'
+// canonical-name overlap in sync by hand — see
+// docs/proposals/2026-08-25-simplification-survey-49-candidates.md and
+// issue #11424 for the last reconciliation pass.
 //
 // Imported from ./index.js for its side effects (calls registerIconLibrary
 // once per page load).
@@ -256,7 +262,9 @@ const icons = {
 
 // Codicon-name aliases. Lets markdown keep using familiar codicon names
 // (e.g. <wa-icon name="warning">) while resolving to the closest Font Awesome
-// glyph in the registry above. Mirrors src/shared/wa/webAwesomeIcons.ts.
+// glyph in the registry above. Docs-site-only: there is no repo-wide
+// codicon-alias table left to mirror (src/shared/wa/webAwesomeIcons.ts
+// resolves TeXRAIconName directly, not codicon names).
 const CODICON_ALIASES = {
   account: 'circle-user',
   add: 'plus',
@@ -265,7 +273,6 @@ const CODICON_ALIASES = {
   beaker: 'flask',
   'check-all': 'check-double',
   checklist: 'list-check',
-  'circle-large-outline': 'circle',
   'circle-outline': 'circle',
   'circle-slash': 'circle-xmark',
   'clear-all': 'eraser',
