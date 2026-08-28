@@ -34,8 +34,8 @@ import type {
 import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
 import { postMessage } from '@shared/hostBridge';
 import {
-  WORKFLOW_CALL_REVIEW_COPY,
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
+  workflowCallCardLine,
   workflowScriptDeclaredItemsByPhase,
   workflowScriptPlanSummary,
 } from '@shared/copy/workflowScriptProposal';
@@ -312,9 +312,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     const call = data.workflowCall;
     if (!call) return nothing;
     return html`<div class="workflow-proposal__plan-note">
-      <strong>${call.label}</strong> —
-      ${WORKFLOW_CALL_REVIEW_COPY.callCardNote(call.workflowName, call.phase)}
-      ${call.admitsPhase ? ` ${WORKFLOW_CALL_REVIEW_COPY.phaseAdmitsNote}` : ''}
+      <strong>${call.label}</strong> — ${workflowCallCardLine(call)}
     </div>`;
   }
 

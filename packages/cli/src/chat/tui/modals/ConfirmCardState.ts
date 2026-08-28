@@ -8,6 +8,7 @@ import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { APPROVAL_PULSE_FRAMES } from '@cli/tui/ui/glyphs';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+import { WORKFLOW_CALL_REVIEW_COPY } from '@shared/copy/workflowScriptProposal';
 
 type ConfirmCardKeyAction =
   'approve' | 'reject' | 'approveAlways' | 'feedback' | 'ignore';
@@ -121,6 +122,8 @@ const COMPACT_HINT_ACTIONS: Readonly<Record<string, string>> = {
   'approve edits for session': 'all edits',
   [DELEGATION_APPROVAL_COPY.cliAction]:
     DELEGATION_APPROVAL_COPY.cliCompactAction,
+  [WORKFLOW_CALL_REVIEW_COPY.phase]: WORKFLOW_CALL_REVIEW_COPY.phaseCompact,
+  [WORKFLOW_CALL_REVIEW_COPY.call]: WORKFLOW_CALL_REVIEW_COPY.callCompact,
 };
 
 function isCoreApprovalHint(hint: KeyHint): boolean {

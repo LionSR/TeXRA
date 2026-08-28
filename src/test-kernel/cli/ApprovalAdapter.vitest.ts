@@ -825,7 +825,9 @@ describe('buildAgentProposalApprovalContent', () => {
     expect(summary).toContain(
       'Agent proposal requested: review (tool-use agent)',
     );
-    expect(summary).toContain('Model: deepseekT');
+    // The summary names the model the way the transcript does, by its
+    // registry label rather than its persisted id.
+    expect(summary).toContain('Model: DeepSeek V4 Flash (Thinking)');
     expect(summary).toContain('Instruction:');
     expect(summary).toContain('  Please verify the proof carefully.');
     expect(summary).not.toContain('requestId');

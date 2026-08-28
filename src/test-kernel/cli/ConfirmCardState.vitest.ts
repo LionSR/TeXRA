@@ -9,6 +9,7 @@ import {
   confirmCardPulsedTitle,
 } from '@cli/chat/tui/modals/ConfirmCardState';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+import { WORKFLOW_CALL_REVIEW_COPY } from '@shared/copy/workflowScriptProposal';
 
 describe('confirmCardPulsedTitle', () => {
   it('alternates a solid/hollow dot ahead of the title every second', () => {
@@ -205,6 +206,29 @@ describe('CLI confirm-card key handling', () => {
     expect(hintsForWidth(sessionCommandsLabel, 10)).toEqual([
       { key: 'Esc', action: 'reject' },
     ]);
+  });
+
+  it('keeps the workflow review keys in the footer by compacting their labels', () => {
+    // The workflow proposal card's full footer at 90 columns (ConfirmCard
+    // reserves four columns for its border and padding).
+    const hints = confirmCardKeyHintsForWidth({
+      alwaysAllowLabel: DELEGATION_APPROVAL_COPY.cliAction,
+      extraActions: [
+        { key: 'p', action: WORKFLOW_CALL_REVIEW_COPY.phase },
+        { key: 'c', action: WORKFLOW_CALL_REVIEW_COPY.call },
+      ],
+      maxColumns: 86,
+    });
+
+    expect(hints).toEqual([
+      { key: 'y', action: 'approve' },
+      { key: 'n', action: 'reject' },
+      { key: 'a', action: DELEGATION_APPROVAL_COPY.cliCompactAction },
+      { key: 'p', action: WORKFLOW_CALL_REVIEW_COPY.phaseCompact },
+      { key: 'c', action: WORKFLOW_CALL_REVIEW_COPY.callCompact },
+      { key: 'Esc', action: 'reject' },
+    ]);
+    expect(renderHints(hints).length).toBeLessThanOrEqual(86);
   });
 
   it('reports stacked compact chrome rows for long extra actions', () => {

@@ -2,6 +2,7 @@ import type {
   HostBashApprovalRequest,
   HostUserQuestionRequest,
 } from '@agent/runtime';
+import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   AgentCategory,
   agentProposalCategoryLabel,
@@ -10,8 +11,8 @@ import {
   type RetryPermission,
 } from '@shared/schemas';
 import {
-  WORKFLOW_CALL_REVIEW_COPY,
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
+  workflowCallCardLine,
   workflowScriptPlanSummary,
 } from '@shared/copy/workflowScriptProposal';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -145,7 +146,10 @@ function agentProposalApprovalSummary(
   const header = workflow
     ? [
         `Multi-agent workflow proposal requested: ${workflow.name} · ${workflowScriptPlanSummary(workflow)}`,
-        WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(proposal.agent, proposal.model),
+        WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
+          proposal.agent,
+          getRuntimeModelLabel(proposal.model),
+        ),
         WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning,
         `Script: ${workflow.scriptPath}`,
       ]
@@ -153,10 +157,11 @@ function agentProposalApprovalSummary(
         `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
           proposal.agentCategory,
         )})`,
-        `Model: ${proposal.model}`,
+        `Model: ${getRuntimeModelLabel(proposal.model)}`,
         ...(proposal.workflowCall
           ? [
-              `Workflow call: ${proposal.workflowCall.label} — ${WORKFLOW_CALL_REVIEW_COPY.callCardNote(proposal.workflowCall.workflowName, proposal.workflowCall.phase)}`,
+              `Workflow call: ${proposal.workflowCall.label}`,
+              workflowCallCardLine(proposal.workflowCall),
             ]
           : []),
       ];
